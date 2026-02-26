@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SEO WIBE Admin</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260226h" />
+</head>
+<body>
+  <div class="app-bg"></div>
+
+  <section id="adminAuthSection" class="auth-wrap">
+    <div class="auth-card auth-hero">
+      <div class="auth-pitch">
+        <h1 class="logo-mark"><span class="logo-a">SEO</span> <span class="logo-b">WIBE</span> Admin</h1>
+        <p class="lead">Отдельная зона администратора: управление пользователями, доступами модулей, ключами и аудитом действий.</p>
+        <div class="pitch-grid">
+          <article>
+            <h4>Доступы</h4>
+            <ul>
+              <li>Выдача/отключение модулей по пользователям.</li>
+              <li>Смена ролей `client/admin` и паролей.</li>
+              <li>Управление API ключами клиентов.</li>
+            </ul>
+          </article>
+          <article>
+            <h4>Контроль</h4>
+            <ul>
+              <li>Статистика по базе и задачам.</li>
+              <li>Журнал административных операций.</li>
+              <li>Работа со списками без ручного ввода ID.</li>
+            </ul>
+          </article>
+        </div>
+      </div>
+      <div class="auth-grid">
+        <div class="auth-box">
+          <h3>Вход администратора</h3>
+          <input id="adminEmail" placeholder="Email администратора" />
+          <input id="adminPassword" placeholder="Пароль" type="password" />
+          <button onclick="adminLogin()">Войти в админку</button>
+          <a class="admin-link" href="/">Открыть пользовательский сервис</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="adminPanelSection" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="brand">
+        <h2 class="logo-mark"><span class="logo-a">SEO</span> <span class="logo-b">WIBE</span></h2>
+        <p>Admin Console</p>
+      </div>
+      <nav class="side-nav">
+        <button class="nav-btn admin-nav active" data-admin-tab="dashboard" onclick="showAdminTab('dashboard', this)">Дашборд</button>
+        <button class="nav-btn admin-nav" data-admin-tab="users" onclick="showAdminTab('users', this)">Пользователи</button>
+        <button class="nav-btn admin-nav" data-admin-tab="modules" onclick="showAdminTab('modules', this)">Модули</button>
+        <button class="nav-btn admin-nav" data-admin-tab="appearance" onclick="showAdminTab('appearance', this)">Оформление</button>
+        <button class="nav-btn admin-nav" data-admin-tab="credentials" onclick="showAdminTab('credentials', this)">API ключи</button>
+        <button class="nav-btn admin-nav" data-admin-tab="audit" onclick="showAdminTab('audit', this)">Аудит</button>
+      </nav>
+      <button class="btn-danger full" onclick="adminLogout()">Выйти</button>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div>
+          <h1 id="adminSectionTitle">Админ дашборд</h1>
+          <p id="adminSectionSubtitle">Обзор системы и быстрый контроль</p>
+        </div>
+        <div class="topbar-controls">
+          <select id="adminUiLangSelect" class="chip-select" onchange="adminChangeLanguage()">
+            <option value="ru">RU</option>
+            <option value="en">EN</option>
+          </select>
+          <select id="adminUiThemeSelect" class="chip-select" onchange="adminChangeTheme()">
+            <option value="classic">Классика</option>
+            <option value="dark">Темная</option>
+            <option value="light">Светлая</option>
+            <option value="newyear">Новогодняя</option>
+            <option value="summer">Лето</option>
+            <option value="autumn">Осень</option>
+            <option value="winter">Зима</option>
+            <option value="spring">Весна</option>
+          </select>
+        </div>
+      </header>
+
+      <section id="adminTab-dashboard" class="admin-tab">
+        <div class="kpis" id="adminKpis"></div>
+        <div class="panel trend-panel">
+          <div class="panel-head">
+            <h3>Новые пользователи за 7 дней</h3>
+            <span class="hint">По данным текущей базы</span>
+          </div>
+          <svg id="adminUsersTrendChart" class="trend-chart" viewBox="0 0 720 180" preserveAspectRatio="none"></svg>
+          <div id="adminTrendMeta" class="trend-meta"></div>
+        </div>
+        <div class="cols-2">
+          <div class="panel">
+            <h3>Распределение ролей</h3>
+            <div id="adminRoleBars" class="bar-list"></div>
+          </div>
+          <div class="panel">
+            <h3>Модули доступа</h3>
+            <div id="adminModuleBars" class="bar-list"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>RAW статистика</h3>
+          <pre id="adminStatsView">-</pre>
+        </div>
+      </section>
+
+      <section id="adminTab-users" class="admin-tab hidden">
+        <div class="panel">
+          <h3>Пользователи</h3>
+          <div class="grid-3">
+            <button class="btn-secondary" onclick="loadAdminAll()">Обновить таблицу</button>
+            <input id="adminUsersSearch" placeholder="Поиск email / id / компания / город" oninput="renderAdminUsersTable()" />
+            <div id="adminUsersMeta" class="hint">-</div>
+          </div>
+          <div class="table-card">
+            <table>
+              <thead>
+                <tr><th>ID</th><th>Email</th><th>Роль</th><th>Создан</th><th>Действия</th></tr>
+              </thead>
+              <tbody id="adminUsersTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="adminTab-modules" class="admin-tab hidden">
+        <div class="panel">
+          <h3>Модули доступа</h3>
+          <div class="grid-3">
+            <select id="adminModuleUserSelect"></select>
+            <div class="hint">Выберите пользователя и переключайте статусы модулей в таблице ниже.</div>
+            <button class="btn-secondary" onclick="loadAdminAll()">Обновить таблицу</button>
+          </div>
+          <div class="table-card">
+            <table>
+              <thead>
+                <tr><th>Код</th><th>Название</th><th>Статус</th><th>Действие</th></tr>
+              </thead>
+              <tbody id="adminModulesTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="adminTab-appearance" class="admin-tab hidden">
+        <div class="panel">
+          <h3>Оформление интерфейса</h3>
+          <div class="grid-3">
+            <label class="check"><input id="adminThemeChoiceEnabled" type="checkbox" /> Разрешить выбор темы пользователям</label>
+            <select id="adminDefaultThemeSelect"></select>
+            <button onclick="adminSaveUiSettings()">Сохранить оформление</button>
+          </div>
+          <div class="hint">Разрешенные темы для выбора:</div>
+          <div id="adminAllowedThemes" class="theme-picks"></div>
+          <pre id="adminUiSettingsRaw">-</pre>
+        </div>
+      </section>
+
+      <section id="adminTab-credentials" class="admin-tab hidden">
+        <div class="panel">
+          <h3>API ключи пользователей</h3>
+          <div class="grid-4">
+            <select id="adminCredUserSelect"></select>
+            <select id="adminCredMarketplace2"><option value="wb">wb</option><option value="ozon">ozon</option></select>
+            <input id="adminCredKey2" placeholder="api_key" />
+            <button onclick="adminSaveCredential2()">Сохранить ключ</button>
+          </div>
+          <div class="grid-2">
+            <button class="btn-secondary" onclick="loadAdminAll()">Обновить таблицу</button>
+            <div></div>
+          </div>
+          <div class="table-card">
+            <table>
+              <thead>
+                <tr><th>ID</th><th>Пользователь</th><th>МП</th><th>Ключ</th><th>Статус</th><th>Создан</th><th>Действие</th></tr>
+              </thead>
+              <tbody id="adminCredsTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="adminTab-audit" class="admin-tab hidden">
+        <div class="panel">
+          <h3>Журнал действий</h3>
+          <div class="grid-4">
+            <select id="adminAuditLimit">
+              <option value="100">100</option>
+              <option value="200" selected>200</option>
+              <option value="500">500</option>
+            </select>
+            <input id="adminAuditActionFilter" placeholder="Фильтр по действию (action)" oninput="renderAdminAuditTable()" />
+            <input id="adminAuditTextFilter" placeholder="Текст в деталях / user_id" oninput="renderAdminAuditTable()" />
+            <button onclick="loadAdminAudit()">Обновить журнал</button>
+          </div>
+          <div id="adminAuditMeta" class="hint">-</div>
+          <div class="table-card">
+            <table>
+              <thead>
+                <tr><th>ID</th><th>Время</th><th>User</th><th>Действие</th><th>Детали</th></tr>
+              </thead>
+              <tbody id="adminAuditTable"></tbody>
+            </table>
+          </div>
+          <details class="admin-debug">
+            <summary>RAW JSON</summary>
+            <pre id="adminAuditView">-</pre>
+          </details>
+        </div>
+      </section>
+    </main>
+  </section>
+
+  <script src="/static/admin.js?v=20260226h"></script>
+</body>
+</html>

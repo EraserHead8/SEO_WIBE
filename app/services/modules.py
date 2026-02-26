@@ -1,0 +1,15 @@
+DEFAULT_MODULES = [
+    "seo_generation",
+    "rank_tracking",
+    "competitor_insights",
+    "auto_apply",
+    "sales_stats",
+    "user_profile",
+    "wb_reviews_ai",
+    "wb_questions_ai",
+    "wb_ads",
+    "wb_ads_analytics",
+    "wb_ads_recommendations",
+    "help_center",
+    "billing",
+]

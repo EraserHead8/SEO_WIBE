@@ -1,0 +1,731 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SEO WIBE</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260226h" />
+</head>
+<body>
+  <div class="app-bg"></div>
+
+  <section id="authSection" class="auth-wrap">
+    <div class="landing-wrap">
+      <div class="auth-card auth-hero">
+        <div class="auth-pitch">
+          <h1 class="logo-mark"><span class="logo-a">SEO</span> <span class="logo-b">WIBE</span></h1>
+          <p class="lead">Автопилот SEO для продавцов WB/Ozon: ключи, описания, позиции и конкурентный мониторинг в одном кабинете.</p>
+          <div class="pitch-grid">
+            <article>
+              <h4>Что делает</h4>
+              <ul>
+                <li>Автоматически собирает поисковые ключи по карточке.</li>
+                <li>Генерирует человеческие SEO-описания без переспама.</li>
+                <li>Проверяет позиции и показывает динамику по товарам.</li>
+              </ul>
+            </article>
+            <article>
+              <h4>Как начать</h4>
+              <ol>
+                <li>Создайте аккаунт.</li>
+                <li>Подключите API ключи WB/Ozon.</li>
+                <li>Импортируйте товары и запустите SEO-задачи.</li>
+              </ol>
+            </article>
+          </div>
+          <div class="pitch-note">Для магазинов от 50 до 50 000 SKU. Интерфейс на русском, сценарии под РФ/СНГ.</div>
+        </div>
+
+        <div class="auth-grid">
+          <div class="auth-box">
+            <h3>Регистрация</h3>
+            <input id="regEmail" placeholder="Email" />
+            <input id="regPassword" placeholder="Пароль" type="password" />
+            <button onclick="register()">Создать аккаунт</button>
+          </div>
+          <div class="auth-box">
+            <h3>Вход</h3>
+            <input id="loginEmail" placeholder="Email" />
+            <input id="loginPassword" placeholder="Пароль" type="password" />
+            <button onclick="login()">Войти в кабинет</button>
+          </div>
+        </div>
+      </div>
+
+      <section class="landing-grid">
+        <article class="landing-card">
+          <h3>Рост позиций</h3>
+          <p>Контроль позиций по ключам с автоматическими recheck-циклами и отчетом по динамике.</p>
+          <div class="landing-chart">
+            <i style="height:20%"></i><i style="height:28%"></i><i style="height:36%"></i><i style="height:46%"></i><i style="height:58%"></i><i style="height:76%"></i><i style="height:86%"></i>
+          </div>
+        </article>
+        <article class="landing-card">
+          <h3>Партнерские каналы</h3>
+          <p>Подключение к кабинетам маркетплейсов и централизованное управление карточками.</p>
+          <div class="partners">
+            <span>Wildberries</span><span>Ozon</span><span>Seller API</span><span>BI Export</span>
+          </div>
+        </article>
+        <article class="landing-card">
+          <h3>Отзывы клиентов</h3>
+          <div class="review">
+            <strong>«Сократили ручную SEO-рутину на 80%»</strong>
+            <small>Магазин инженерных товаров, 2 400 SKU</small>
+          </div>
+          <div class="review">
+            <strong>«Стало понятно, что реально влияет на выдачу»</strong>
+            <small>Категория “Отопление и сантехника”</small>
+          </div>
+        </article>
+        <article class="landing-card">
+          <h3>Частые вопросы</h3>
+          <ul class="faq-list">
+            <li><b>Нужны ли свои API ключи?</b> Да, пользователь подключает их в кабинете.</li>
+            <li><b>Можно проверить 1 товар?</b> Да, или весь каталог целиком.</li>
+            <li><b>Есть админ-панель?</b> Да, отдельный вход на `/admin`.</li>
+          </ul>
+        </article>
+      </section>
+
+      <section class="landing-band">
+        <div>
+          <h3>Коммерческий эффект</h3>
+          <p>SEO WIBE помогает быстрее доводить карточки до рабочих позиций, снижать ручную нагрузку команды и стандартизировать качество описаний.</p>
+        </div>
+        <div class="band-stats">
+          <span><b>+31%</b> средний рост кликов</span>
+          <span><b>до 10x</b> быстрее массовые SEO-правки</span>
+          <span><b>24/7</b> мониторинг позиций</span>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <section id="appSection" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="brand">
+        <h2 class="logo-mark"><span class="logo-a">SEO</span> <span class="logo-b">WIBE</span></h2>
+        <p>Seller OS</p>
+      </div>
+      <nav class="side-nav">
+        <button class="nav-btn" data-tab="dashboard" onclick="showTab('dashboard', this)">Дашборд</button>
+        <button class="nav-btn" data-tab="products" onclick="showTab('products', this)">Товары</button>
+        <button class="nav-btn" data-tab="seo" onclick="showTab('seo', this)">SEO задачи</button>
+        <button class="nav-btn" data-tab="sales" data-module="sales_stats" onclick="showTab('sales', this)">Статистика продаж</button>
+        <button class="nav-btn" data-tab="reviews" data-module="wb_reviews_ai" onclick="showTab('reviews', this)">Отзывы WB/Ozon</button>
+        <button class="nav-btn" data-tab="questions" data-module="wb_questions_ai" onclick="showTab('questions', this)">Вопросы WB/Ozon</button>
+        <button class="nav-btn" data-tab="ads" data-module="wb_ads" onclick="showTab('ads', this)">Реклама WB</button>
+        <button class="nav-btn" data-tab="ads-analytics" data-module="wb_ads_analytics" onclick="showTab('ads-analytics', this)">Аналитика WB Ads</button>
+        <button class="nav-btn" data-tab="ads-recommendations" data-module="wb_ads_recommendations" onclick="showTab('ads-recommendations', this)">Рекомендации WB Ads</button>
+        <button class="nav-btn" data-tab="profile" data-module="user_profile" onclick="showTab('profile', this)">Профиль</button>
+        <button class="nav-btn" data-tab="help" data-module="help_center" onclick="showTab('help', this)">Справка</button>
+        <button class="nav-btn" data-tab="keywords" onclick="showTab('keywords', this)">Ключевики</button>
+      </nav>
+      <button class="btn-danger full" onclick="logout()">Выйти</button>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div>
+          <h1 id="sectionTitle">Дашборд</h1>
+          <p id="sectionSubtitle">Контроль позиций, карточек и SEO-итераций</p>
+        </div>
+        <div class="topbar-controls">
+          <select id="uiLangSelect" class="chip-select" onchange="changeUiLang()">
+            <option value="ru">RU</option>
+            <option value="en">EN</option>
+          </select>
+          <select id="uiThemeSelect" class="chip-select" onchange="changeTheme()">
+            <option value="classic">Классика</option>
+            <option value="dark">Темная</option>
+            <option value="light">Светлая</option>
+            <option value="newyear">Новогодняя</option>
+            <option value="summer">Лето</option>
+            <option value="autumn">Осень</option>
+            <option value="winter">Зима</option>
+            <option value="spring">Весна</option>
+          </select>
+        </div>
+      </header>
+
+      <section id="dashboard" class="tab">
+        <div class="kpis" id="stats"></div>
+        <div class="panel trend-panel">
+          <div class="panel-head">
+            <h3>Тренд позиций (21 день)</h3>
+            <span class="hint">Средняя позиция и плотность проверок</span>
+          </div>
+          <svg id="dashboardTrendChart" class="trend-chart" viewBox="0 0 720 180" preserveAspectRatio="none"></svg>
+          <div id="dashboardTrendMeta" class="trend-meta"></div>
+        </div>
+        <div class="panel">
+          <h3>Быстрые действия</h3>
+          <div class="quick-actions">
+            <button onclick="showTab('products', document.querySelector('[data-tab=products]'))">Импортировать товары</button>
+            <button onclick="showTab('seo', document.querySelector('[data-tab=seo]'))">Запустить SEO-генерацию</button>
+            <button class="btn-secondary" onclick="checkCurrentPositions(true)">Проверить позиции всех</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="products" class="tab hidden">
+        <div class="panel">
+          <div class="grid-6 reviews-controls">
+            <select id="importMarketplace"><option value="wb">WB</option><option value="ozon">Ozon</option></select>
+            <input id="articles" placeholder="Артикулы через запятую (или пусто)" />
+            <label class="check"><input id="importAll" type="checkbox" /> Импортировать все</label>
+            <button id="productsImportBtn" class="icon-only-btn" type="button" data-tip="Импорт" onclick="importProducts()">&#8681;</button>
+            <button id="productsReloadBtn" class="btn-secondary icon-only-btn" type="button" data-tip="Перезагрузить базу" onclick="reloadProducts()">&#10227;</button>
+            <button id="productsSelectAllBtn" class="btn-secondary icon-only-btn" type="button" data-tip="Выбрать все" onclick="selectAllProducts()">&#9745;</button>
+          </div>
+          <div class="grid-4">
+            <input id="productFilter" placeholder="Фильтр: артикул/название" oninput="loadProducts()" />
+            <input id="positionKeywords" placeholder="Ключи для проверки (опционально)" />
+            <button id="productsCheckSelectedBtn" class="btn-secondary icon-only-btn" type="button" data-tip="Проверить выбранные" onclick="checkCurrentPositions(false)">&#128269;</button>
+            <button id="productsCheckAllBtn" class="btn-secondary icon-only-btn" type="button" data-tip="Проверить все" onclick="checkCurrentPositions(true)">&#128640;</button>
+          </div>
+        </div>
+
+        <div class="products-split">
+          <div class="table-card">
+            <table class="products-table">
+              <thead>
+                <tr><th></th><th>Фото</th><th>ID</th><th>МП</th><th>Артикул</th><th>Баркод</th><th>Название</th><th>Позиция</th></tr>
+              </thead>
+              <tbody id="productsTable"></tbody>
+            </table>
+          </div>
+        </div>
+        <pre id="positionCheckResult"></pre>
+      </section>
+
+      <section id="seo" class="tab hidden">
+        <div class="panel">
+          <div class="grid-5">
+            <input id="extraKeywords" placeholder="Доп. ключи (опционально)" />
+            <input id="targetPosition" type="number" value="5" min="1" max="50" />
+            <button onclick="generateSeo(false)">Сгенерировать для выбранных</button>
+            <button onclick="generateSeo(true)">Сгенерировать для всех</button>
+            <button onclick="applySeo()">Применить</button>
+          </div>
+          <div class="grid-5">
+            <input id="seoFilter" placeholder="Фильтр: артикул/товар/статус" oninput="loadSeoJobs()" />
+            <button class="btn-secondary" onclick="recheckSelected()">Recheck выбранных</button>
+            <button class="btn-secondary" onclick="recheckDue()">Recheck просроченных</button>
+            <button class="btn-secondary" onclick="selectAllJobs()">Выбрать все</button>
+            <button class="btn-danger" onclick="deleteSeoSelected()">Удалить выбранные</button>
+          </div>
+          <div class="grid-1">
+            <button class="btn-danger" onclick="deleteSeoAll()">Очистить все SEO задачи</button>
+          </div>
+        </div>
+
+        <div class="kanban" id="seoKanban"></div>
+
+        <div class="seo-split">
+          <div class="table-card">
+            <table class="seo-table">
+              <thead>
+                <tr><th></th><th>ID</th><th>Артикул</th><th>Товар</th><th>Статус</th><th>Поз.</th><th>След.проверка</th></tr>
+              </thead>
+              <tbody id="seoTable"></tbody>
+            </table>
+          </div>
+          <div class="preview-card">
+            <h3>Предпросмотр</h3>
+            <pre id="seoPreview"></pre>
+            <div class="competitor-block">
+              <h4>Конкуренты в топе</h4>
+              <div id="competitorLinks" class="competitor-links"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="sales" class="tab hidden">
+        <div class="panel">
+          <h3>Статистика продаж</h3>
+          <div class="grid-4">
+            <select id="salesMarketplace">
+              <option value="all">all</option>
+              <option value="wb">wb</option>
+              <option value="ozon">ozon</option>
+            </select>
+            <input id="salesDateFrom" type="date" />
+            <input id="salesDateTo" type="date" />
+            <button class="btn-secondary" onclick="loadSalesStats()">Загрузить статистику</button>
+          </div>
+          <div class="sales-quick-range">
+            <button class="chip-btn" data-sales-range="day" onclick="setSalesRange('day')">День</button>
+            <button class="chip-btn" data-sales-range="week" onclick="setSalesRange('week')">Неделя</button>
+            <button class="chip-btn" data-sales-range="month" onclick="setSalesRange('month')">Месяц</button>
+            <button class="chip-btn" data-sales-range="quarter" onclick="setSalesRange('quarter')">Квартал</button>
+            <button class="chip-btn" data-sales-range="halfyear" onclick="setSalesRange('halfyear')">6 месяцев</button>
+            <button class="chip-btn" data-sales-range="year" onclick="setSalesRange('year')">Год</button>
+          </div>
+          <div class="sales-chart-controls">
+            <select id="salesMetricMode" onchange="renderSalesStats()">
+              <option value="units">Штуки</option>
+              <option value="revenue">Выручка</option>
+              <option value="orders">Заказы</option>
+              <option value="returns">Отказы</option>
+              <option value="ad_spend">Реклама</option>
+              <option value="other_costs">Прочие траты</option>
+            </select>
+            <label class="check"><input id="salesShowTotal" type="checkbox" checked onchange="renderSalesStats()" /> Всего</label>
+            <label class="check"><input id="salesShowWb" type="checkbox" checked onchange="renderSalesStats()" /> WB</label>
+            <label class="check"><input id="salesShowOzon" type="checkbox" checked onchange="renderSalesStats()" /> Ozon</label>
+            <label class="sales-cost-field">
+              <span>Прочие траты</span>
+              <input id="salesOtherCosts" type="number" min="0" step="0.01" value="0" />
+            </label>
+          </div>
+          <div id="salesTotalsCards" class="sales-kpis"></div>
+          <div id="salesStatsMeta" class="hint">-</div>
+          <svg id="salesTrendChart" class="trend-chart mini" viewBox="0 0 720 150" preserveAspectRatio="none"></svg>
+          <div id="salesTrendMeta" class="trend-meta"></div>
+        </div>
+        <div class="table-card">
+          <table class="sales-table">
+            <thead>
+              <tr><th>Дата</th><th>МП</th><th>Заказы</th><th>Шт.</th><th>Выручка</th><th>Отказы</th><th>Реклама</th><th>Прочие траты</th></tr>
+            </thead>
+            <tbody id="salesTable"></tbody>
+          </table>
+        </div>
+        <pre id="salesRaw">-</pre>
+      </section>
+
+      <section id="reviews" class="tab hidden">
+        <div class="panel">
+          <h3>Отзывы и ответы WB/Ozon</h3>
+          <div class="grid-6 questions-controls">
+            <select id="reviewMarketplace" onchange="loadWbReviews()">
+              <option value="wb">WB</option>
+              <option value="ozon">Ozon</option>
+            </select>
+            <select id="reviewStarsFilter" onchange="loadWbReviews()">
+              <option value="">Все оценки</option>
+              <option value="5">5</option>
+              <option value="4">4</option>
+              <option value="3">3</option>
+              <option value="2">2</option>
+              <option value="1">1</option>
+            </select>
+            <select id="reviewStatusFilter" onchange="renderWbReviews()">
+              <option value="all">Все</option>
+              <option value="new">Новые</option>
+              <option value="unanswered">Неотвеченные</option>
+              <option value="answered">Отвеченные</option>
+            </select>
+            <select id="reviewDateSort" onchange="renderWbReviews()">
+              <option value="newest">Сначала новые</option>
+              <option value="oldest">Сначала старые</option>
+            </select>
+            <input id="reviewDateFrom" type="date" onchange="renderWbReviews()" />
+            <input id="reviewDateTo" type="date" onchange="renderWbReviews()" />
+            <select id="reviewAiMode">
+              <option value="manual">manual</option>
+              <option value="suggest">suggest</option>
+              <option value="auto">auto</option>
+            </select>
+            <button class="btn-secondary" onclick="loadWbReviews()">Обновить отзывы</button>
+          </div>
+          <div class="grid-2">
+            <button onclick="saveReviewAiSettings()">Сохранить AI-настройки</button>
+          </div>
+          <textarea id="reviewAiPrompt" rows="3" placeholder="Промпт для генерации ответов (опционально)"></textarea>
+          <p class="hint">Кнопка «Сгенерировать» формирует ответ по тексту отзыва, «Отправить/Обновить» публикует ответ в маркетплейс.</p>
+          <div id="reviewLoadStatus" class="hint load-status">-</div>
+        </div>
+        <div class="table-card">
+          <table class="reviews-table">
+            <thead>
+              <tr><th>Статус</th><th>Дата</th><th>Товар</th><th>Оценка</th><th>Отзыв</th><th>Ответ</th><th>Действия</th></tr>
+            </thead>
+            <tbody id="wbReviewsTable"></tbody>
+          </table>
+        </div>
+        <pre id="wbReviewsRaw"></pre>
+      </section>
+
+      <section id="questions" class="tab hidden">
+        <div class="panel">
+          <h3>Вопросы и ответы WB/Ozon</h3>
+          <div class="grid-6">
+            <select id="questionMarketplace" onchange="loadWbQuestions()">
+              <option value="wb">WB</option>
+              <option value="ozon">Ozon</option>
+            </select>
+            <select id="questionStatusFilter" onchange="renderWbQuestions()">
+              <option value="all">Все</option>
+              <option value="new">Новые</option>
+              <option value="unanswered">Неотвеченные</option>
+              <option value="answered">Отвеченные</option>
+            </select>
+            <select id="questionDateSort" onchange="renderWbQuestions()">
+              <option value="newest">Сначала новые</option>
+              <option value="oldest">Сначала старые</option>
+            </select>
+            <input id="questionDateFrom" type="date" onchange="renderWbQuestions()" />
+            <input id="questionDateTo" type="date" onchange="renderWbQuestions()" />
+            <select id="questionAiMode">
+              <option value="manual">manual</option>
+              <option value="suggest">suggest</option>
+              <option value="auto">auto</option>
+            </select>
+            <button class="btn-secondary" onclick="loadWbQuestions()">Обновить вопросы</button>
+          </div>
+          <div class="grid-2">
+            <button onclick="saveQuestionAiSettings()">Сохранить AI-настройки</button>
+          </div>
+          <textarea id="questionAiPrompt" rows="3" placeholder="Промпт для генерации ответов на вопросы (опционально)"></textarea>
+          <div class="grid-4 ads-toolbar-main">
+            <input id="aiDocUploadInput" type="file" accept=".pdf,.txt,.md,.csv,.tsv,.json,.xml,.yml,.yaml,text/plain,application/pdf" />
+            <button class="btn-secondary" onclick="uploadAiDoc()">Загрузить в базу знаний</button>
+            <select id="aiDocDeleteSelect"></select>
+            <button class="btn-danger" onclick="deleteAiDoc()">Удалить выбранный документ</button>
+          </div>
+          <pre id="aiDocsList">[]</pre>
+          <p class="hint">Кнопка «Сгенерировать» формирует ответ по тексту вопроса, «Отправить/Обновить» публикует ответ в маркетплейс.</p>
+          <div id="questionLoadStatus" class="hint load-status">-</div>
+        </div>
+        <div class="table-card">
+          <table class="reviews-table questions-table">
+            <thead>
+              <tr><th>Статус</th><th>Дата</th><th>Товар</th><th>Вопрос</th><th>Ответ</th><th>Действия</th></tr>
+            </thead>
+            <tbody id="wbQuestionsTable"></tbody>
+          </table>
+        </div>
+        <pre id="wbQuestionsRaw"></pre>
+      </section>
+
+      <section id="ads" class="tab hidden">
+        <div class="panel">
+          <h3>Рекламные кампании WB</h3>
+          <div class="grid-4 ads-toolbar-main">
+            <button onclick="loadWbAdCampaigns()">Загрузить кампании</button>
+            <input id="wbRateCampaignId" type="number" min="1" placeholder="campaign_id" />
+            <select id="wbRateCampaignType">
+              <option value="search">search</option>
+              <option value="auto-cpm">auto-cpm</option>
+            </select>
+            <button class="btn-secondary" onclick="loadWbCampaignRates()">Получить ставки</button>
+          </div>
+          <div class="grid-6 ads-toolbar-filters">
+            <input id="wbAdsSearch" placeholder="Поиск по ID/названию" oninput="renderWbCampaignRows()" />
+            <select id="wbAdsStatusFilter" onchange="renderWbCampaignRows()">
+              <option value="all">Все статусы</option>
+              <option value="-1">-1 удалена</option>
+              <option value="1">1 черновик (медиа)</option>
+              <option value="2">2 модерация (медиа)</option>
+              <option value="3">3 отклонена (медиа)</option>
+              <option value="4">4 готова к запуску</option>
+              <option value="5">5 запланирована (медиа)</option>
+              <option value="6">6 идут показы (медиа)</option>
+              <option value="7">7 завершена</option>
+              <option value="8">8 отменена</option>
+              <option value="9">9 активна</option>
+              <option value="10">10 дневной лимит (медиа)</option>
+              <option value="11">11 пауза</option>
+            </select>
+            <select id="wbAdsTypeFilter" onchange="renderWbCampaignRows()">
+              <option value="all">Все типы</option>
+              <option value="4">4 search</option>
+              <option value="5">5 catalog</option>
+              <option value="6">6 cards</option>
+              <option value="7">7 recommendation</option>
+              <option value="8">8 auto-cpm</option>
+              <option value="9">9 search+catalog</option>
+              <option value="search">search</option>
+              <option value="catalog">catalog</option>
+              <option value="cards">cards</option>
+              <option value="auto-cpm">auto-cpm</option>
+            </select>
+            <select id="wbAdsWorkingFilter" onchange="renderWbCampaignRows()">
+              <option value="all">Работает: все</option>
+              <option value="yes">Только работает</option>
+              <option value="no">Только не работает</option>
+            </select>
+            <input id="wbAdsBudgetMin" type="number" min="0" placeholder="Бюджет от" oninput="renderWbCampaignRows()" />
+            <input id="wbAdsBudgetMax" type="number" min="0" placeholder="Бюджет до" oninput="renderWbCampaignRows()" />
+          </div>
+          <div class="grid-3 ads-toolbar-meta">
+            <select id="wbAdsSortBy" onchange="renderWbCampaignRows()">
+              <option value="id_desc">ID: новые сверху</option>
+              <option value="id_asc">ID: старые сверху</option>
+              <option value="budget_desc">Бюджет: больше -> меньше</option>
+              <option value="budget_asc">Бюджет: меньше -> больше</option>
+              <option value="name_asc">Название: А -> Я</option>
+              <option value="name_desc">Название: Я -> А</option>
+              <option value="status_asc">Статус: по коду ↑</option>
+              <option value="status_desc">Статус: по коду ↓</option>
+            </select>
+            <button class="btn-secondary" onclick="resetAdsFilters()">Сбросить фильтры</button>
+            <div id="wbAdsMeta" class="hint">-</div>
+          </div>
+          <div id="wbAdsLoadStatus" class="hint load-status">-</div>
+        </div>
+        <div class="table-card">
+          <table class="ads-table">
+            <thead>
+              <tr><th>ID</th><th>Название</th><th>Статус</th><th>Тип</th><th>Бюджет</th><th>Работает</th><th>Показы</th><th>Клики</th><th>CTR</th><th>Заказы</th><th>Расход</th></tr>
+            </thead>
+            <tbody id="wbAdsCampaignsTable"></tbody>
+          </table>
+        </div>
+        <pre id="wbAdsRatesResult"></pre>
+      </section>
+
+      <section id="ads-analytics" class="tab hidden">
+        <div class="panel">
+          <h3>Аналитика рекламы WB</h3>
+          <div class="grid-4">
+            <input id="adsAnalyticsFrom" type="date" />
+            <input id="adsAnalyticsTo" type="date" />
+            <input id="adsAnalyticsCampaignId" type="number" min="1" placeholder="campaign_id (опционально)" />
+            <button class="btn-secondary" onclick="loadAdsAnalytics()">Построить отчет</button>
+          </div>
+          <pre id="adsAnalyticsTotals">-</pre>
+        </div>
+        <div class="table-card">
+          <table class="ads-table">
+            <thead>
+              <tr><th>ID</th><th>Название</th><th>Статус</th><th>Тип</th><th>Бюджет</th><th>Показы</th><th>Клики</th><th>CTR</th><th>Заказы</th><th>Расход</th><th>CPC</th><th>CPO</th></tr>
+            </thead>
+            <tbody id="adsAnalyticsTable"></tbody>
+          </table>
+        </div>
+        <pre id="adsAnalyticsRaw">-</pre>
+      </section>
+
+      <section id="ads-recommendations" class="tab hidden">
+        <div class="panel">
+          <h3>Рекомендации WB Ads</h3>
+          <div class="grid-4">
+            <input id="adsRecFrom" type="date" />
+            <input id="adsRecTo" type="date" />
+            <input id="adsRecMinSpent" type="number" min="0" step="50" value="200" placeholder="Мин. расход" />
+            <button class="btn-secondary" onclick="loadAdsRecommendations()">Построить рекомендации</button>
+          </div>
+          <div id="adsRecLoadStatus" class="hint load-status">-</div>
+          <pre id="adsRecMeta">-</pre>
+        </div>
+        <div class="table-card">
+          <table class="ads-table">
+            <thead>
+              <tr><th>ID</th><th>Название</th><th>Статус</th><th>Тип</th><th>Показы</th><th>Клики</th><th>CTR</th><th>Заказы</th><th>Расход</th><th>CPC</th><th>CPO</th><th>Приоритет</th><th>Рекомендация</th><th>Причина</th></tr>
+            </thead>
+            <tbody id="adsRecTable"></tbody>
+          </table>
+        </div>
+        <pre id="adsRecRaw">-</pre>
+      </section>
+
+      <section id="profile" class="tab hidden">
+        <div class="panel">
+          <h3>Профиль пользователя</h3>
+          <div class="cols-2">
+            <div>
+              <input id="profileFullName" placeholder="ФИО" />
+            </div>
+            <div>
+              <input id="profilePositionTitle" placeholder="Должность" />
+            </div>
+          </div>
+          <div class="cols-2">
+            <div>
+              <input id="profileCompanyName" placeholder="Название компании" />
+            </div>
+            <div>
+              <input id="profileCity" placeholder="Город" />
+            </div>
+          </div>
+          <div class="cols-2">
+            <div>
+              <input id="profileLegalName" placeholder="Юридическое наименование" />
+            </div>
+            <div>
+              <input id="profileLegalAddress" placeholder="Юридический адрес" />
+            </div>
+          </div>
+          <div class="grid-4">
+            <input id="profileTaxId" placeholder="ИНН" />
+            <input id="profileTaxRate" type="number" min="0" max="100" step="0.1" placeholder="Налоговая ставка, %" />
+            <input id="profilePhone" placeholder="Телефон" />
+            <input id="profileTeamSize" type="number" min="1" step="1" placeholder="Состав компании, чел." />
+          </div>
+          <div class="grid-3">
+            <input id="profileAvatarUrl" placeholder="Ссылка на аватар" />
+            <button onclick="saveProfileData()">Сохранить профиль</button>
+            <button class="btn-secondary" onclick="loadProfile()">Обновить профиль</button>
+          </div>
+          <textarea id="profileCompanyStructure" rows="4" placeholder="Структура компании, роли, отделы"></textarea>
+        </div>
+
+        <div class="panel">
+          <h3>Тариф</h3>
+          <div class="grid-4">
+            <select id="profilePlanSelect"></select>
+            <button onclick="changeProfilePlan()">Сменить тариф</button>
+            <button class="btn-secondary" onclick="renewProfilePlan()">Продлить на 30 дней</button>
+            <button class="btn-secondary" onclick="loadProfile()">Обновить</button>
+          </div>
+          <pre id="profilePlanSummary">-</pre>
+        </div>
+
+        <div class="panel">
+          <h3>API ключи</h3>
+          <p class="hint">WB: токен. Ozon: <code>client_id:api_key</code>.</p>
+          <div class="cols-2">
+            <div>
+              <h3>WB</h3>
+              <input id="profileWbKey" placeholder="WB API key" />
+              <div class="actions"><button onclick="saveProfileKey('wb')">Сохранить</button><button class="btn-secondary" onclick="testProfileKey('wb')">Проверить</button><button class="btn-danger" onclick="deleteProfileKey('wb')">Удалить</button></div>
+            </div>
+            <div>
+              <h3>Ozon</h3>
+              <input id="profileOzonKey" placeholder="client_id:api_key" />
+              <div class="actions"><button onclick="saveProfileKey('ozon')">Сохранить</button><button class="btn-secondary" onclick="testProfileKey('ozon')">Проверить</button><button class="btn-danger" onclick="deleteProfileKey('ozon')">Удалить</button></div>
+            </div>
+          </div>
+          <pre id="profileKeysList">-</pre>
+        </div>
+
+        <div class="panel">
+          <h3>Безопасность</h3>
+          <div class="grid-3">
+            <input id="profileCurrentPassword" type="password" placeholder="Текущий пароль" />
+            <input id="profileNewPassword" type="password" placeholder="Новый пароль (>=8)" />
+            <button onclick="changeProfilePassword()">Сменить пароль</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="billing" class="tab hidden">
+        <div class="panel">
+          <h3>Биллинг</h3>
+          <div class="grid-4">
+            <select id="billingPlanSelect">
+              <option value="starter">starter</option>
+              <option value="pro">pro</option>
+              <option value="business">business</option>
+            </select>
+            <button onclick="changeBillingPlan()">Сменить тариф</button>
+            <button class="btn-secondary" onclick="renewBilling()">Продлить на 30 дней</button>
+            <button class="btn-secondary" onclick="loadBilling()">Обновить</button>
+          </div>
+          <p class="hint">Тариф, лимиты и история операций по аккаунту.</p>
+        </div>
+        <div class="panel">
+          <h3>Статус и лимиты</h3>
+          <pre id="billingSummary">-</pre>
+        </div>
+        <div class="panel">
+          <h3>История</h3>
+          <pre id="billingHistory">-</pre>
+        </div>
+      </section>
+
+      <section id="keys" class="tab hidden">
+        <div class="panel">
+          <p class="hint">WB: токен. Ozon: <code>client_id:api_key</code>.</p>
+          <div class="cols-2">
+            <div>
+              <h3>WB</h3>
+              <input id="wbKey" placeholder="WB API key" />
+              <div class="actions"><button onclick="saveKey('wb')">Сохранить</button><button class="btn-secondary" onclick="testKey('wb')">Проверить</button><button class="btn-danger" onclick="deleteKey('wb')">Удалить</button></div>
+            </div>
+            <div>
+              <h3>Ozon</h3>
+              <input id="ozonKey" placeholder="client_id:api_key" />
+              <div class="actions"><button onclick="saveKey('ozon')">Сохранить</button><button class="btn-secondary" onclick="testKey('ozon')">Проверить</button><button class="btn-danger" onclick="deleteKey('ozon')">Удалить</button></div>
+            </div>
+          </div>
+          <pre id="keysList"></pre>
+        </div>
+      </section>
+
+      <section id="keywords" class="tab hidden">
+        <div class="panel">
+          <p class="hint">Автоподбор работает без этой вкладки. Здесь ручное усиление.</p>
+          <div class="grid-3">
+            <select id="kwMarketplace"><option value="all">all</option><option value="wb">wb</option><option value="ozon">ozon</option></select>
+            <input id="kwText" placeholder="например: утеплитель для труб" />
+            <button onclick="addKeyword()">Добавить</button>
+          </div>
+          <pre id="keywordsList"></pre>
+        </div>
+      </section>
+
+      <section id="help" class="tab hidden">
+        <div class="panel">
+          <h3>Справка по модулям</h3>
+          <div class="grid-3">
+            <select id="helpModuleSelect" onchange="loadHelpDocs()"></select>
+            <select id="helpLangSelect" onchange="loadHelpDocs()">
+              <option value="ru">ru</option>
+              <option value="en">en</option>
+            </select>
+            <button class="btn-secondary" onclick="loadHelpDocs()">Обновить справку</button>
+          </div>
+          <div id="helpDocsView" class="help-rich">-</div>
+        </div>
+      </section>
+
+    </main>
+  </section>
+
+  <div id="busyOverlay" class="busy-overlay hidden" aria-live="polite">
+    <div class="busy-card">
+      <div id="busyTitle" class="busy-title">Выполняем операцию…</div>
+      <div class="busy-progress"><i></i></div>
+      <p id="busyHint" class="busy-hint">Обычно это занимает до 20-40 секунд.</p>
+    </div>
+  </div>
+
+  <div id="reviewPhotoModal" class="photo-modal hidden">
+    <button class="photo-nav prev" onclick="reviewPhotoPrev()">‹</button>
+    <img id="reviewPhotoModalImg" alt="review-photo" />
+    <button class="photo-nav next" onclick="reviewPhotoNext()">›</button>
+    <button class="photo-close" onclick="closeReviewPhotoViewer()">✕</button>
+    <div id="reviewPhotoModalCounter" class="photo-counter">1 / 1</div>
+  </div>
+
+  <div id="campaignDetailModal" class="campaign-modal hidden">
+      <div class="campaign-modal-card">
+        <div class="campaign-modal-head">
+          <h3>Детали кампании WB</h3>
+          <button class="campaign-close" onclick="closeCampaignDetailModal()">✕</button>
+        </div>
+      <div class="actions">
+        <button class="btn-secondary" onclick="applyCampaignAction('start')">Запустить</button>
+        <button class="btn-secondary" onclick="applyCampaignAction('pause')">Пауза</button>
+        <button class="btn-danger" onclick="applyCampaignAction('stop')">Остановить</button>
+        <button onclick="refreshCampaignDetails()">Обновить детали</button>
+      </div>
+      <div id="campaignDetailSummary" class="hint">-</div>
+      <div class="table-card">
+        <table>
+          <thead>
+            <tr><th>nmId</th><th>offer</th><th>name</th></tr>
+          </thead>
+          <tbody id="campaignProductsTable"></tbody>
+        </table>
+      </div>
+      <h4>Ставки</h4>
+      <pre id="campaignRatesRaw">-</pre>
+      <h4>Статистика (7 дней)</h4>
+      <pre id="campaignStatsRaw">-</pre>
+      <h4>RAW детали кампании</h4>
+      <pre id="campaignDetailRaw">-</pre>
+    </div>
+  </div>
+
+  <div id="hoverTip" class="hover-tip hidden"></div>
+
+  <script src="/static/app.js?v=20260226h"></script>
+</body>
+</html>
