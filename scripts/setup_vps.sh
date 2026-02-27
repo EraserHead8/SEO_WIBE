@@ -20,6 +20,8 @@ if [[ ! -d "${APP_DIR}/.git" ]]; then
   git clone "${REPO_URL}" "${APP_DIR}"
 fi
 
+git config --global --add safe.directory "${APP_DIR}" || true
+
 cd "${APP_DIR}"
 git fetch origin main
 git checkout main

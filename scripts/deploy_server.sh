@@ -6,6 +6,8 @@ cd "${ROOT_DIR}"
 APP_USER="${APP_USER:-seo}"
 FORCE_DEPLOY="${FORCE_DEPLOY:-0}"
 
+git config --global --add safe.directory "${ROOT_DIR}" || true
+
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD || echo main)"
 if [[ "${CURRENT_BRANCH}" != "main" ]]; then
   git checkout main
