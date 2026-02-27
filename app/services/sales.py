@@ -10,8 +10,16 @@ from app.services.wb_modules import fetch_wb_campaign_stats_bulk, fetch_wb_campa
 
 
 SALES_TIMEOUT = httpx.Timeout(connect=6.0, read=25.0, write=25.0, pool=25.0)
+WB_SALES_TIMEOUT = httpx.Timeout(connect=4.0, read=12.0, write=12.0, pool=12.0)
 WB_SALES_CACHE_TTL_SEC = 180
 _WB_SALES_CACHE: dict[tuple[str, str, str], tuple[float, list[dict[str, Any]], list[str]]] = {}
+WB_SALES_MAX_PAGES = 3
+WB_SALES_CONTINUATION_THRESHOLD = 79_500
+WB_ADS_TIMEOUT = httpx.Timeout(connect=4.0, read=9.0, write=9.0, pool=9.0)
+WB_AD_SPEND_CACHE_TTL_SEC = 180
+WB_ADS_MAX_CAMPAIGNS = 120
+WB_ADS_MAX_STATS_CHUNKS = 3
+_WB_AD_SPEND_CACHE: dict[tuple[str, str, str], tuple[float, float, list[str]]] = {}
 
 
 def build_sales_report(
@@ -83,110 +91,99 @@ def _fetch_wb_sales_rows(api_key: str, date_from: date, date_to: date) -> tuple[
     rows: list[dict[str, Any]] = []
     warnings: list[str] = []
     endpoint = "https://statistics-api.wildberries.ru/api/v1/supplier/sales"
-    params = {"dateFrom": date_from.isoformat()}
-    payload: Any = None
+    cursor = date_from.isoformat()
+    seen_cursors: set[str] = set()
+    response_pages: list[list[dict[str, Any]]] = []
     last_error = "WB sales API недоступен."
-    for auth_value in (api_key.strip(), f"Bearer {api_key.strip()}"):
-        if not auth_value.strip():
-            continue
-        headers = {"Authorization": auth_value}
-        response = None
-        for attempt in range(4):
-            try:
-                with httpx.Client(timeout=SALES_TIMEOUT, follow_redirects=True) as client:
-                    response = client.get(endpoint, headers=headers, params=params)
-            except Exception:
-                response = None
-            if response is None:
-                if attempt < 3:
-                    time.sleep(0.6 * (attempt + 1))
-                continue
-            if response.status_code == 429:
-                if attempt < 3:
-                    time.sleep(0.85 * (attempt + 1))
-                    continue
-                last_error = "WB sales API временно ограничил запросы (429)."
+    for page_idx in range(WB_SALES_MAX_PAGES):
+        params = {"dateFrom": cursor, "flag": 0}
+        payload, status = _request_wb_sales_payload(api_key=api_key, endpoint=endpoint, params=params)
+        if payload is None:
+            if status == "rate_limited":
+                warnings.append("WB sales API вернул 429, показана частичная статистика.")
                 break
+            if page_idx == 0:
+                if cached:
+                    return list(cached[1]), list(cached[2]) + ["WB sales API недоступен, показаны кэшированные данные."]
+                return [], [last_error if status == "unavailable" else status]
+            warnings.append("WB sales API недоступен, показана частичная статистика.")
             break
-        if response is None:
-            continue
-        if response.status_code in {401, 403}:
-            last_error = "WB sales API отклонил ключ (401/403)."
-            continue
-        if response.status_code == 429:
-            continue
-        if response.status_code >= 400:
-            return [], [f"WB sales API error {response.status_code}"]
-        try:
-            payload = response.json()
-        except Exception:
-            payload = None
-        if payload is not None:
+        if not isinstance(payload, list) or not payload:
             break
-    if payload is None:
-        if cached:
-            return list(cached[1]), list(cached[2]) + ["WB sales API вернул лимит, показаны кэшированные данные."]
-        return [], [last_error]
+        response_pages.append(payload)
 
-    if not isinstance(payload, list):
-        return rows, warnings
+        if len(payload) < WB_SALES_CONTINUATION_THRESHOLD:
+            break
+        next_cursor = _extract_wb_sales_cursor(payload[-1])
+        if not next_cursor or next_cursor in seen_cursors:
+            break
+        seen_cursors.add(next_cursor)
+        cursor = next_cursor
+        if page_idx == 0:
+            warnings.append("WB sales: период большой, догружаем данные порциями.")
 
-    for item in payload:
-        if not isinstance(item, dict):
-            continue
-        day = _parse_any_date(
-            item.get("date")
-            or item.get("saleDate")
-            or item.get("lastChangeDate")
-        )
-        if not day or day < date_from or day > date_to:
-            continue
+    dedupe_keys: set[str] = set()
+    for payload in response_pages:
+        for item in payload:
+            if not isinstance(item, dict):
+                continue
+            day = _parse_any_date(
+                item.get("date")
+                or item.get("saleDate")
+                or item.get("lastChangeDate")
+            )
+            if not day or day < date_from or day > date_to:
+                continue
+            unique_key = _wb_sale_row_key(item)
+            if unique_key in dedupe_keys:
+                continue
+            dedupe_keys.add(unique_key)
 
-        units_raw = _to_float(item.get("quantity") or item.get("saleQty") or item.get("quantityFull") or 0)
-        units = int(round(abs(units_raw)))
-        if units <= 0:
-            units = 1
-        revenue = _to_float(
-            item.get("forPay")
-            or item.get("totalPrice")
-            or item.get("finishedPrice")
-            or item.get("priceWithDisc")
-            or 0.0
-        )
-        is_return = bool(
-            _is_truthy(item.get("isReturn"))
-            or _is_truthy(item.get("is_return"))
-            or units_raw < 0
-            or revenue < 0
-            or str(item.get("saleID") or "").upper().startswith("R")
-        )
-        safe_revenue = abs(float(round(revenue, 2)))
-        if is_return:
+            units_raw = _to_float(item.get("quantity") or item.get("saleQty") or item.get("quantityFull") or 0)
+            units = int(round(abs(units_raw)))
+            if units <= 0:
+                units = 1
+            revenue = _to_float(
+                item.get("forPay")
+                or item.get("totalPrice")
+                or item.get("finishedPrice")
+                or item.get("priceWithDisc")
+                or 0.0
+            )
+            is_return = bool(
+                _is_truthy(item.get("isReturn"))
+                or _is_truthy(item.get("is_return"))
+                or units_raw < 0
+                or revenue < 0
+                or str(item.get("saleID") or "").upper().startswith("R")
+            )
+            safe_revenue = abs(float(round(revenue, 2)))
+            if is_return:
+                rows.append(
+                    {
+                        "date": day.isoformat(),
+                        "marketplace": "wb",
+                        "orders": 0,
+                        "units": 0,
+                        "revenue": 0.0,
+                        "returns": units,
+                        "ad_spend": 0.0,
+                        "other_costs": safe_revenue,
+                    }
+                )
+                continue
             rows.append(
                 {
                     "date": day.isoformat(),
                     "marketplace": "wb",
-                    "orders": 0,
-                    "units": 0,
-                    "revenue": 0.0,
-                    "returns": units,
+                    "orders": 1,
+                    "units": units,
+                    "revenue": safe_revenue,
+                    "returns": 0,
                     "ad_spend": 0.0,
-                    "other_costs": safe_revenue,
+                    "other_costs": 0.0,
                 }
             )
-            continue
-        rows.append(
-            {
-                "date": day.isoformat(),
-                "marketplace": "wb",
-                "orders": 1,
-                "units": units,
-                "revenue": safe_revenue,
-                "returns": 0,
-                "ad_spend": 0.0,
-                "other_costs": 0.0,
-            }
-        )
     _WB_SALES_CACHE[cache_key] = (time.monotonic(), list(rows), list(warnings))
     return rows, warnings
 
@@ -325,10 +322,22 @@ def _build_chart(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _fetch_wb_ad_spent_total(api_key: str, date_from: date, date_to: date) -> tuple[float, list[str]]:
+    cache_key = (api_key[-12:], date_from.isoformat(), date_to.isoformat())
+    cached = _WB_AD_SPEND_CACHE.get(cache_key)
+    now = time.monotonic()
+    if cached and now - cached[0] <= WB_AD_SPEND_CACHE_TTL_SEC:
+        return float(cached[1]), list(cached[2])
+
     warnings: list[str] = []
     spent_total = 0.0
     try:
-        campaign_rows = fetch_wb_campaigns(api_key, enrich=False)
+        campaign_rows = fetch_wb_campaigns(
+            api_key,
+            enrich=False,
+            fast_mode=True,
+            request_timeout=WB_ADS_TIMEOUT,
+            max_attempts=1,
+        )
     except Exception:
         return 0.0, ["WB Ads API недоступен для расчета рекламных расходов."]
     ids: list[int] = []
@@ -339,7 +348,7 @@ def _fetch_wb_ad_spent_total(api_key: str, date_from: date, date_to: date) -> tu
     ids = sorted(set(ids))
     if not ids:
         return 0.0, warnings
-    max_campaigns = 300
+    max_campaigns = WB_ADS_MAX_CAMPAIGNS
     if len(ids) > max_campaigns:
         warnings.append(f"WB Ads: кампаний много ({len(ids)}), для скорости учитываем первые {max_campaigns}.")
         ids = ids[:max_campaigns]
@@ -349,14 +358,22 @@ def _fetch_wb_ad_spent_total(api_key: str, date_from: date, date_to: date) -> tu
             campaign_ids=ids,
             date_from=date_from.isoformat(),
             date_to=date_to.isoformat(),
+            fast_mode=True,
+            request_timeout=WB_ADS_TIMEOUT,
+            max_attempts=1,
+            max_chunks=WB_ADS_MAX_STATS_CHUNKS,
         )
     except Exception:
         return 0.0, ["WB Ads статистика недоступна для расчета расходов."]
     if not isinstance(stats, dict) or not stats:
         return 0.0, ["WB Ads статистика недоступна для расчета расходов (пустой ответ/лимит API)."]
+    if len(stats) < len(ids):
+        warnings.append(f"WB Ads: обработано кампаний {len(stats)}/{len(ids)} для ускорения ответа.")
     for payload in stats.values() if isinstance(stats, dict) else []:
         spent_total += float(payload.get("spent") or 0.0)
-    return float(round(max(0.0, spent_total), 2)), warnings
+    result = float(round(max(0.0, spent_total), 2))
+    _WB_AD_SPEND_CACHE[cache_key] = (time.monotonic(), result, list(warnings))
+    return result, warnings
 
 
 def _campaign_id_from_any(row: Any) -> int:
@@ -371,6 +388,60 @@ def _campaign_id_from_any(row: Any) -> int:
         if num > 0:
             return num
     return 0
+
+
+def _request_wb_sales_payload(api_key: str, endpoint: str, params: dict[str, Any]) -> tuple[list[dict[str, Any]] | None, str]:
+    token = (api_key or "").strip()
+    if not token:
+        return None, "WB ключ не подключен."
+    auth_variants = (token, f"Bearer {token}")
+    last_error = "WB sales API недоступен."
+    for auth_value in auth_variants:
+        headers = {"Authorization": auth_value}
+        response = None
+        try:
+            with httpx.Client(timeout=WB_SALES_TIMEOUT, follow_redirects=True) as client:
+                response = client.get(endpoint, headers=headers, params=params)
+        except Exception:
+            response = None
+        if response is None:
+            continue
+        if response.status_code in {401, 403}:
+            last_error = "WB sales API отклонил ключ (401/403)."
+            continue
+        if response.status_code == 429:
+            return None, "rate_limited"
+        if response.status_code >= 400:
+            return None, f"WB sales API error {response.status_code}"
+        try:
+            payload = response.json()
+        except Exception:
+            return None, "WB sales API вернул некорректный ответ."
+        if isinstance(payload, list):
+            return payload, "ok"
+        return None, "WB sales API вернул неожиданный формат."
+    return None, last_error if last_error else "unavailable"
+
+
+def _extract_wb_sales_cursor(item: dict[str, Any]) -> str:
+    for key in ("lastChangeDate", "last_change_date", "date", "saleDate"):
+        value = item.get(key)
+        text = str(value or "").strip()
+        if text:
+            return text
+    return ""
+
+
+def _wb_sale_row_key(item: dict[str, Any]) -> str:
+    return "|".join(
+        [
+            str(item.get("srid") or ""),
+            str(item.get("saleID") or item.get("saleId") or ""),
+            str(item.get("lastChangeDate") or ""),
+            str(item.get("date") or ""),
+            str(item.get("nmId") or ""),
+        ]
+    )
 
 
 def _iter_days(left: date, right: date) -> list[date]:

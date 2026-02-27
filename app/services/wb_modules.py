@@ -486,28 +486,50 @@ def generate_review_reply(
         return fallback
 
 
-def fetch_wb_campaigns(api_key: str, enrich: bool = True) -> list[dict[str, Any]]:
-    attempts: list[tuple[str, str, dict[str, Any] | list[Any] | None]] = [
-        ("GET", "https://advert-api.wb.ru/adv/v1/promotion/count", None),
-        ("POST", "https://advert-api.wb.ru/adv/v1/promotion/count", {}),
-        ("POST", "https://advert-api.wb.ru/adv/v1/promotion/count", {"status": [9, 10, 11]}),
-        ("GET", "https://advert-api.wb.ru/api/v1/adverts", None),
-        ("GET", "https://advert-api.wb.ru/adv/v0/adverts", None),
-        ("GET", "https://advert-api.wb.ru/api/v1/adv/list", None),
-        ("POST", "https://advert-api.wb.ru/api/v1/adv/list", {}),
-        ("GET", "https://advert-api.wb.ru/adv/v1/adv/list", None),
-        ("POST", "https://advert-api.wb.ru/adv/v1/adv/list", {}),
-        ("POST", "https://advert-api.wb.ru/adv/v1/adv/list", {"order": "create", "direction": "desc"}),
-        ("POST", "https://advert-api.wb.ru/adv/v1/promotion/adverts", {}),
-        ("POST", "https://advert-api.wb.ru/adv/v1/promotion/adverts", []),
-        ("GET", "https://advert-api.wildberries.ru/adv/v1/promotion/count", None),
-        ("POST", "https://advert-api.wildberries.ru/adv/v1/promotion/count", {}),
-        ("GET", "https://advert-api.wildberries.ru/api/v1/adverts", None),
-    ]
+def fetch_wb_campaigns(
+    api_key: str,
+    enrich: bool = True,
+    fast_mode: bool = False,
+    request_timeout: httpx.Timeout | None = None,
+    max_attempts: int = 4,
+) -> list[dict[str, Any]]:
+    safe_attempts = max(1, int(max_attempts or 1))
+    if fast_mode:
+        attempts: list[tuple[str, str, dict[str, Any] | list[Any] | None]] = [
+            ("GET", "https://advert-api.wb.ru/adv/v1/promotion/count", None),
+            ("POST", "https://advert-api.wb.ru/adv/v1/promotion/count", {}),
+            ("GET", "https://advert-api.wildberries.ru/adv/v1/promotion/count", None),
+            ("POST", "https://advert-api.wildberries.ru/adv/v1/promotion/count", {}),
+        ]
+    else:
+        attempts = [
+            ("GET", "https://advert-api.wb.ru/adv/v1/promotion/count", None),
+            ("POST", "https://advert-api.wb.ru/adv/v1/promotion/count", {}),
+            ("POST", "https://advert-api.wb.ru/adv/v1/promotion/count", {"status": [9, 10, 11]}),
+            ("GET", "https://advert-api.wb.ru/api/v1/adverts", None),
+            ("GET", "https://advert-api.wb.ru/adv/v0/adverts", None),
+            ("GET", "https://advert-api.wb.ru/api/v1/adv/list", None),
+            ("POST", "https://advert-api.wb.ru/api/v1/adv/list", {}),
+            ("GET", "https://advert-api.wb.ru/adv/v1/adv/list", None),
+            ("POST", "https://advert-api.wb.ru/adv/v1/adv/list", {}),
+            ("POST", "https://advert-api.wb.ru/adv/v1/adv/list", {"order": "create", "direction": "desc"}),
+            ("POST", "https://advert-api.wb.ru/adv/v1/promotion/adverts", {}),
+            ("POST", "https://advert-api.wb.ru/adv/v1/promotion/adverts", []),
+            ("GET", "https://advert-api.wildberries.ru/adv/v1/promotion/count", None),
+            ("POST", "https://advert-api.wildberries.ru/adv/v1/promotion/count", {}),
+            ("GET", "https://advert-api.wildberries.ru/api/v1/adverts", None),
+        ]
 
     discovered_ids: list[int] = []
     for method, endpoint, payload in attempts:
-        data = _request_wb_json(method, endpoint, api_key=api_key, payload=payload)
+        data = _request_wb_json(
+            method,
+            endpoint,
+            api_key=api_key,
+            payload=payload,
+            timeout=request_timeout,
+            max_attempts=safe_attempts,
+        )
         if data is None:
             continue
         discovered_ids.extend(_extract_campaign_ids(data))
@@ -522,7 +544,14 @@ def fetch_wb_campaigns(api_key: str, enrich: bool = True) -> list[dict[str, Any]
         ("GET", "https://advert-api.wildberries.ru/adv/v1/promotion/count", None),
         ("POST", "https://advert-api.wildberries.ru/adv/v1/promotion/count", {}),
     ):
-        count_data = _request_wb_json(method, endpoint, api_key=api_key, payload=payload)
+        count_data = _request_wb_json(
+            method,
+            endpoint,
+            api_key=api_key,
+            payload=payload,
+            timeout=request_timeout,
+            max_attempts=safe_attempts,
+        )
         if count_data is None:
             continue
         discovered_ids.extend(_extract_campaign_ids(count_data))
@@ -592,11 +621,18 @@ def fetch_wb_campaign_stats_bulk(
     campaign_ids: list[int],
     date_from: str | None = None,
     date_to: str | None = None,
+    fast_mode: bool = False,
+    request_timeout: httpx.Timeout | None = None,
+    max_attempts: int = 4,
+    chunk_size: int = 40,
+    max_chunks: int | None = None,
 ) -> dict[str, dict[str, Any]]:
     ids = [int(x) for x in campaign_ids if int(x) > 0]
     ids = sorted(set(ids))
     if not ids:
         return {}
+    safe_chunk_size = max(1, int(chunk_size or 1))
+    safe_attempts = max(1, int(max_attempts or 1))
 
     left = _parse_iso_date(date_from) or (date.today() - timedelta(days=6))
     right = _parse_iso_date(date_to) or date.today()
@@ -607,28 +643,56 @@ def fetch_wb_campaign_stats_bulk(
         "https://advert-api.wb.ru/adv/v3/fullstats",
         "https://advert-api.wildberries.ru/adv/v3/fullstats",
     ]
+    payload_variants: list[dict[str, Any]]
+    if fast_mode:
+        payload_variants = [{"ids": [], "from": left.isoformat(), "to": right.isoformat()}]
+    else:
+        payload_variants = [
+            {"ids": [], "from": left.isoformat(), "to": right.isoformat()},
+            {"id": [], "from": left.isoformat(), "to": right.isoformat()},
+            {"advertIds": [], "from": left.isoformat(), "to": right.isoformat()},
+        ]
+
     rows: list[dict[str, Any]] = []
-    for chunk_start in range(0, len(ids), 40):
-        chunk = ids[chunk_start:chunk_start + 40]
+    for chunk_idx, chunk_start in enumerate(range(0, len(ids), safe_chunk_size)):
+        if max_chunks is not None and chunk_idx >= max(0, int(max_chunks)):
+            break
+        chunk = ids[chunk_start:chunk_start + safe_chunk_size]
         ids_csv = ",".join(str(x) for x in chunk)
         got_chunk = False
         for endpoint in endpoints:
             params = {"ids": ids_csv, "beginDate": left.isoformat(), "endDate": right.isoformat()}
-            data = _request_wb_json("GET", endpoint, api_key=api_key, params=params)
+            data = _request_wb_json(
+                "GET",
+                endpoint,
+                api_key=api_key,
+                params=params,
+                timeout=request_timeout,
+                max_attempts=safe_attempts,
+            )
             dict_rows = _as_dict_list(data) if data is not None else []
             if dict_rows:
                 rows.extend(dict_rows)
                 got_chunk = True
                 break
 
-            payload_variants: list[dict[str, Any]] = [
-                {"ids": chunk, "from": left.isoformat(), "to": right.isoformat()},
-                {"id": chunk, "from": left.isoformat(), "to": right.isoformat()},
-                {"advertIds": chunk, "from": left.isoformat(), "to": right.isoformat()},
-            ]
             posted = False
-            for payload in payload_variants:
-                pdata = _request_wb_json("POST", endpoint, api_key=api_key, payload=payload)
+            for payload_template in payload_variants:
+                payload = dict(payload_template)
+                if "ids" in payload:
+                    payload["ids"] = chunk
+                if "id" in payload:
+                    payload["id"] = chunk
+                if "advertIds" in payload:
+                    payload["advertIds"] = chunk
+                pdata = _request_wb_json(
+                    "POST",
+                    endpoint,
+                    api_key=api_key,
+                    payload=payload,
+                    timeout=request_timeout,
+                    max_attempts=safe_attempts,
+                )
                 dict_rows = _as_dict_list(pdata) if pdata is not None else []
                 if dict_rows:
                     rows.extend(dict_rows)
@@ -1326,17 +1390,22 @@ def _request_wb_json(
     api_key: str,
     params: dict[str, Any] | None = None,
     payload: dict[str, Any] | list[Any] | None = None,
+    timeout: httpx.Timeout | None = None,
+    max_attempts: int = 4,
+    auth_variants: list[str] | None = None,
 ) -> dict[str, Any] | list[dict[str, Any]] | None:
     token = api_key.strip()
     if not token:
         return None
-    auth_variants = [token, f"Bearer {token}"]
-    for auth_value in auth_variants:
+    auth_values = auth_variants or [token, f"Bearer {token}"]
+    safe_attempts = max(1, int(max_attempts or 1))
+    timeout_cfg = timeout or WB_TIMEOUT
+    for auth_value in auth_values:
         headers = {"Authorization": auth_value, "Content-Type": "application/json"}
-        for attempt in range(4):
+        for attempt in range(safe_attempts):
             response = None
             try:
-                with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
+                with httpx.Client(timeout=timeout_cfg, follow_redirects=True) as client:
                     if method == "POST":
                         response = client.post(url, headers=headers, params=params, json=payload)
                     else:
@@ -1344,11 +1413,11 @@ def _request_wb_json(
             except Exception:
                 response = None
             if response is None:
-                if attempt < 3:
+                if attempt < safe_attempts - 1:
                     time.sleep(0.35 * (attempt + 1))
                 continue
             if response.status_code == 429:
-                if attempt < 3:
+                if attempt < safe_attempts - 1:
                     time.sleep(0.65 * (attempt + 1))
                     continue
                 break
