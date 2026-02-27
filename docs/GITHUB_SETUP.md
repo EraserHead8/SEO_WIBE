@@ -61,10 +61,16 @@ Helper script:
 scripts/release.sh "feat: short description"
 ```
 
+Release with tag:
+
+```bash
+scripts/release.sh --tag v0.1.3 "feat: short description"
+```
+
 ## 5) GitHub Actions already prepared
 Configured workflows:
 - `.github/workflows/ci.yml` -> syntax checks on push/PR.
-- `.github/workflows/deploy.yml` -> auto-deploy on push to `main`.
+- `.github/workflows/deploy.yml` -> optional SSH deploy on push to `main`.
 
 Deploy workflow is safe now: if deploy secrets are missing, it skips deployment.
 
@@ -75,6 +81,26 @@ Add repository secrets:
 - `DEPLOY_SSH_KEY` -> private SSH key (multiline)
 - `DEPLOY_PATH` -> path to app on server, e.g. `/opt/seo_wibe`
 - `DEPLOY_PORT` -> optional, default `22`
-- `DEPLOY_RESTART_CMD` -> optional, e.g. `sudo systemctl restart seo_wibe`
 
 After that, every push to `main` will auto-deploy.
+
+## 7) VPS bootstrap and autonomous deploy loop
+For Ubuntu server:
+
+```bash
+sudo bash scripts/setup_vps.sh
+```
+
+What it configures:
+- systemd service `seo_wibe` (uvicorn on `0.0.0.0:8016`)
+- nginx proxy on port `80`
+- timer `seo_wibe-autodeploy.timer` (checks `origin/main` every minute)
+- deploy script `scripts/deploy_server.sh` for pull/install/restart/health-check
+
+Useful checks on server:
+
+```bash
+systemctl status seo_wibe --no-pager
+systemctl status seo_wibe-autodeploy.timer --no-pager
+journalctl -u seo_wibe -n 100 --no-pager
+```

@@ -42,6 +42,8 @@ uvicorn app.main:app --reload --port 8011
 ## GitHub и релизы
 - Полная инструкция: `docs/GITHUB_SETUP.md`
 - Быстрый релиз-коммит: `scripts/release.sh "feat: описание изменений"`
+- Релиз с тегом: `scripts/release.sh --tag v0.1.3 "feat: описание изменений"`
+- VPS bootstrap: `sudo bash scripts/setup_vps.sh`
 
 ## Формат ключей
 - WB: `api_key`
