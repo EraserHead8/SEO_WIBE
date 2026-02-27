@@ -368,6 +368,68 @@ class HelpDocOut(BaseModel):
     content: str
 
 
+class AiServiceIn(BaseModel):
+    name: str = ""
+    provider: str = "openai"
+    api_key: str = ""
+    model: str = ""
+    base_url: str = ""
+
+
+class AiServiceOut(BaseModel):
+    id: int
+    scope: str
+    user_id: int | None = None
+    name: str
+    provider: str
+    model: str
+    base_url: str
+    api_key_masked: str
+    is_active: bool = True
+    created_at: str | None = None
+
+
+class AiSelectionIn(BaseModel):
+    use_global_default: bool = True
+    mode: str = "builtin"
+    service_id: int | None = None
+
+
+class AiSelectionOut(BaseModel):
+    use_global_default: bool
+    mode: str
+    service_id: int | None = None
+
+
+class AiEffectiveOut(BaseModel):
+    mode: str
+    service_id: int | None = None
+    service_name: str = ""
+    provider: str = "builtin"
+    model: str = ""
+    source: str = "builtin"
+
+
+class AiProfileOut(BaseModel):
+    selection: AiSelectionOut
+    global_default: AiSelectionOut
+    effective: AiEffectiveOut
+    user_services: list[AiServiceOut] = Field(default_factory=list)
+    global_services: list[AiServiceOut] = Field(default_factory=list)
+
+
+class AiAssistantIn(BaseModel):
+    question: str = ""
+    module_code: str = ""
+
+
+class AiAssistantOut(BaseModel):
+    answer: str
+    provider: str
+    mode: str
+    service_name: str = ""
+
+
 class SalesStatsRowOut(BaseModel):
     date: str
     marketplace: str

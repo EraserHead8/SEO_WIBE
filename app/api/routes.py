@@ -15,6 +15,7 @@ from app.auth import create_access_token, decode_access_token, get_password_hash
 from app.db import get_db
 from app.deps import get_admin_user, get_current_user, oauth2_scheme
 from app.models import (
+    AiServiceAccount,
     ApiCredential,
     AuditLog,
     BillingAccount,
@@ -25,6 +26,7 @@ from app.models import (
     SeoJob,
     User,
     UserAiSettings,
+    UserAiPreference,
     UserKnowledgeDoc,
     UserProfile,
     TeamMember,
@@ -33,6 +35,14 @@ from app.models import (
     SystemSetting,
 )
 from app.schemas import (
+    AiAssistantIn,
+    AiAssistantOut,
+    AiEffectiveOut,
+    AiProfileOut,
+    AiSelectionIn,
+    AiSelectionOut,
+    AiServiceIn,
+    AiServiceOut,
     AdminUserProfileOut,
     AdminCredentialRowOut,
     AdminCredentialIn,
@@ -114,6 +124,7 @@ from app.services.seo import (
     schedule_next_check,
 )
 from app.services.wb_modules import (
+    generate_help_assistant_reply,
     probe_ozon_feedback_access,
     probe_wb_feedback_access,
     fetch_ozon_reviews,
@@ -150,6 +161,7 @@ BILLING_PLANS: dict[str, dict[str, Any]] = {
     "pro": {"title": "Pro", "price": 2990, "limits": {"products": 5000, "seo_jobs_month": 10000, "ai_replies_month": 5000}},
     "business": {"title": "Business", "price": 8990, "limits": {"products": 50000, "seo_jobs_month": 100000, "ai_replies_month": 50000}},
 }
+AI_PROVIDER_CODES = ("openai", "openrouter", "deepseek", "groq", "together", "mistral", "xai", "custom")
 
 HELP_DOCS_RU: dict[str, dict[str, str]] = {
     "dashboard": {
@@ -383,6 +395,21 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
             "Совет: фильтруйте справку по одному модулю, чтобы команда работала по единому чек-листу."
         ),
     },
+    "ai_assistant": {
+        "title": "AI помощник",
+        "content": (
+            "Назначение: быстрые ответы по WB/Ozon, маркетплейсам и работе внутри SEO WIBE.\n\n"
+            "Как использовать:\n"
+            "- Откройте вкладку «Справка» -> «AI помощник».\n"
+            "- Задайте вопрос простым языком.\n"
+            "- Уточните маркетплейс, период и модуль, если нужен точный ответ.\n\n"
+            "Важно:\n"
+            "- Ответы строятся на выбранном AI-провайдере (профиль/админка).\n"
+            "- При смене провайдера ответ может отличаться по стилю и детализации.\n"
+            "- Для задач с API/метриками проверяйте ключи и фильтры периода.\n\n"
+            "Пример: «Почему WB статистика за месяц грузится частично и что проверить в первую очередь?»"
+        ),
+    },
 }
 
 HELP_DOCS_EN: dict[str, dict[str, str]] = {
@@ -614,6 +641,21 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
             "Tip: keep documentation filtered to one module during onboarding."
         ),
     },
+    "ai_assistant": {
+        "title": "AI Assistant",
+        "content": (
+            "Purpose: quick assistant for WB/Ozon, marketplace operations, and SEO WIBE usage.\n\n"
+            "How to use:\n"
+            "- Open Help -> AI Assistant submodule.\n"
+            "- Ask your question in plain language.\n"
+            "- Mention marketplace, period, and module for better precision.\n\n"
+            "Important:\n"
+            "- Replies depend on currently selected AI provider (profile/admin).\n"
+            "- Different providers may produce different style/detail.\n"
+            "- For API/metrics topics, always verify keys and date filters.\n\n"
+            "Example: \"Why does monthly WB stats load partially and what should I check first?\""
+        ),
+    },
 }
 
 
@@ -690,7 +732,11 @@ def me(user: User = Depends(get_current_user)):
 @router.get("/modules/current", response_model=list[CurrentModuleOut])
 def current_modules(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     rows = db.scalars(select(ModuleAccess).where(ModuleAccess.user_id == user.id)).all()
-    return [CurrentModuleOut(module_code=x.module_code, enabled=x.enabled) for x in rows]
+    out: list[CurrentModuleOut] = []
+    for row in rows:
+        allowed = bool(row.enabled) and _actor_can_use_module(user, row.module_code)
+        out.append(CurrentModuleOut(module_code=row.module_code, enabled=allowed))
+    return out
 
 
 @router.get("/ui/settings", response_model=UiSettingsOut)
@@ -808,7 +854,7 @@ def wb_reviews(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    ensure_module_enabled(db, user.id, "wb_reviews_ai")
+    ensure_module_enabled(db, user, "wb_reviews_ai")
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
@@ -847,7 +893,7 @@ def wb_reviews(
 
 @router.post("/wb/reviews/reply", response_model=WbReviewReplyOut)
 def wb_reply_review(payload: WbReviewReplyIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "wb_reviews_ai")
+    ensure_module_enabled(db, user, "wb_reviews_ai")
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
@@ -861,8 +907,9 @@ def wb_reply_review(payload: WbReviewReplyIn, user: User = Depends(get_current_u
 
 @router.post("/wb/reviews/generate-reply", response_model=GenerateReviewReplyOut)
 def wb_generate_reply(payload: GenerateReviewReplyIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "wb_reviews_ai")
+    ensure_module_enabled(db, user, "wb_reviews_ai")
     settings_row = _get_or_create_ai_settings(db, user.id)
+    runtime = _resolve_user_ai_runtime(db, user.id)
     knowledge_ctx = _build_user_knowledge_context(db, user.id)
     prompt = _compose_ai_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", knowledge_ctx, content_kind="review")
     reply = generate_review_reply(
@@ -873,8 +920,18 @@ def wb_generate_reply(payload: GenerateReviewReplyIn, user: User = Depends(get_c
         reviewer_name=payload.reviewer_name,
         marketplace="wb",
         content_kind="review",
+        api_key=str(runtime.get("api_key") or ""),
+        model=str(runtime.get("model") or ""),
+        provider=str(runtime.get("provider") or ""),
+        base_url=str(runtime.get("base_url") or ""),
     )
-    db.add(AuditLog(user_id=user.id, action="wb_review_reply_generated", details=f"model={settings.openai_model}"))
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            action="wb_review_reply_generated",
+            details=f"provider={runtime.get('provider') or 'builtin'};model={runtime.get('model') or settings.openai_model};mode={runtime.get('mode') or 'builtin'}",
+        )
+    )
     db.commit()
     return GenerateReviewReplyOut(reply=reply)
 
@@ -888,7 +945,7 @@ def ozon_reviews(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    ensure_module_enabled(db, user.id, "wb_reviews_ai")
+    ensure_module_enabled(db, user, "wb_reviews_ai")
     ozon_key = _get_active_marketplace_api_key(db, user.id, "ozon")
     if not ozon_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для ozon")
@@ -920,7 +977,7 @@ def ozon_reviews(
 
 @router.post("/ozon/reviews/reply", response_model=WbReviewReplyOut)
 def ozon_reply_review(payload: WbReviewReplyIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "wb_reviews_ai")
+    ensure_module_enabled(db, user, "wb_reviews_ai")
     ozon_key = _get_active_marketplace_api_key(db, user.id, "ozon")
     if not ozon_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для ozon")
@@ -934,8 +991,9 @@ def ozon_reply_review(payload: WbReviewReplyIn, user: User = Depends(get_current
 
 @router.post("/ozon/reviews/generate-reply", response_model=GenerateReviewReplyOut)
 def ozon_generate_reply(payload: GenerateReviewReplyIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "wb_reviews_ai")
+    ensure_module_enabled(db, user, "wb_reviews_ai")
     settings_row = _get_or_create_ai_settings(db, user.id)
+    runtime = _resolve_user_ai_runtime(db, user.id)
     knowledge_ctx = _build_user_knowledge_context(db, user.id)
     prompt = _compose_ai_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", knowledge_ctx, content_kind="review")
     reply = generate_review_reply(
@@ -946,8 +1004,18 @@ def ozon_generate_reply(payload: GenerateReviewReplyIn, user: User = Depends(get
         reviewer_name=payload.reviewer_name,
         marketplace="ozon",
         content_kind="review",
+        api_key=str(runtime.get("api_key") or ""),
+        model=str(runtime.get("model") or ""),
+        provider=str(runtime.get("provider") or ""),
+        base_url=str(runtime.get("base_url") or ""),
     )
-    db.add(AuditLog(user_id=user.id, action="ozon_review_reply_generated", details=f"model={settings.openai_model}"))
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            action="ozon_review_reply_generated",
+            details=f"provider={runtime.get('provider') or 'builtin'};model={runtime.get('model') or settings.openai_model};mode={runtime.get('mode') or 'builtin'}",
+        )
+    )
     db.commit()
     return GenerateReviewReplyOut(reply=reply)
 
@@ -960,7 +1028,7 @@ def wb_questions(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    ensure_module_enabled(db, user.id, "wb_questions_ai")
+    ensure_module_enabled(db, user, "wb_questions_ai")
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
@@ -994,7 +1062,7 @@ def wb_questions(
 
 @router.post("/wb/questions/reply", response_model=WbReviewReplyOut)
 def wb_reply_question(payload: WbReviewReplyIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "wb_questions_ai")
+    ensure_module_enabled(db, user, "wb_questions_ai")
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
@@ -1008,8 +1076,9 @@ def wb_reply_question(payload: WbReviewReplyIn, user: User = Depends(get_current
 
 @router.post("/wb/questions/generate-reply", response_model=GenerateReviewReplyOut)
 def wb_generate_question_reply(payload: GenerateReviewReplyIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "wb_questions_ai")
+    ensure_module_enabled(db, user, "wb_questions_ai")
     settings_row = _get_or_create_question_ai_settings(db, user.id)
+    runtime = _resolve_user_ai_runtime(db, user.id)
     knowledge_ctx = _build_user_knowledge_context(db, user.id)
     prompt = _compose_ai_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", knowledge_ctx, content_kind="question")
     reply = generate_review_reply(
@@ -1020,8 +1089,18 @@ def wb_generate_question_reply(payload: GenerateReviewReplyIn, user: User = Depe
         reviewer_name=payload.reviewer_name,
         marketplace="wb",
         content_kind="question",
+        api_key=str(runtime.get("api_key") or ""),
+        model=str(runtime.get("model") or ""),
+        provider=str(runtime.get("provider") or ""),
+        base_url=str(runtime.get("base_url") or ""),
     )
-    db.add(AuditLog(user_id=user.id, action="wb_question_reply_generated", details=f"model={settings.openai_model}"))
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            action="wb_question_reply_generated",
+            details=f"provider={runtime.get('provider') or 'builtin'};model={runtime.get('model') or settings.openai_model};mode={runtime.get('mode') or 'builtin'}",
+        )
+    )
     db.commit()
     return GenerateReviewReplyOut(reply=reply)
 
@@ -1034,7 +1113,7 @@ def ozon_questions(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    ensure_module_enabled(db, user.id, "wb_questions_ai")
+    ensure_module_enabled(db, user, "wb_questions_ai")
     ozon_key = _get_active_marketplace_api_key(db, user.id, "ozon")
     if not ozon_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для ozon")
@@ -1062,7 +1141,7 @@ def ozon_questions(
 
 @router.post("/ozon/questions/reply", response_model=WbReviewReplyOut)
 def ozon_reply_question(payload: WbReviewReplyIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "wb_questions_ai")
+    ensure_module_enabled(db, user, "wb_questions_ai")
     ozon_key = _get_active_marketplace_api_key(db, user.id, "ozon")
     if not ozon_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для ozon")
@@ -1076,8 +1155,9 @@ def ozon_reply_question(payload: WbReviewReplyIn, user: User = Depends(get_curre
 
 @router.post("/ozon/questions/generate-reply", response_model=GenerateReviewReplyOut)
 def ozon_generate_question_reply(payload: GenerateReviewReplyIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "wb_questions_ai")
+    ensure_module_enabled(db, user, "wb_questions_ai")
     settings_row = _get_or_create_question_ai_settings(db, user.id)
+    runtime = _resolve_user_ai_runtime(db, user.id)
     knowledge_ctx = _build_user_knowledge_context(db, user.id)
     prompt = _compose_ai_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", knowledge_ctx, content_kind="question")
     reply = generate_review_reply(
@@ -1088,15 +1168,25 @@ def ozon_generate_question_reply(payload: GenerateReviewReplyIn, user: User = De
         reviewer_name=payload.reviewer_name,
         marketplace="ozon",
         content_kind="question",
+        api_key=str(runtime.get("api_key") or ""),
+        model=str(runtime.get("model") or ""),
+        provider=str(runtime.get("provider") or ""),
+        base_url=str(runtime.get("base_url") or ""),
     )
-    db.add(AuditLog(user_id=user.id, action="ozon_question_reply_generated", details=f"model={settings.openai_model}"))
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            action="ozon_question_reply_generated",
+            details=f"provider={runtime.get('provider') or 'builtin'};model={runtime.get('model') or settings.openai_model};mode={runtime.get('mode') or 'builtin'}",
+        )
+    )
     db.commit()
     return GenerateReviewReplyOut(reply=reply)
 
 
 @router.get("/wb/questions/ai-settings", response_model=ReviewAiSettingsOut)
 def wb_questions_get_ai_settings(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "wb_questions_ai")
+    ensure_module_enabled(db, user, "wb_questions_ai")
     row = _get_or_create_question_ai_settings(db, user.id)
     db.commit()
     return ReviewAiSettingsOut(reply_mode=row.reply_mode, prompt=row.prompt)
@@ -1104,7 +1194,7 @@ def wb_questions_get_ai_settings(user: User = Depends(get_current_user), db: Ses
 
 @router.post("/wb/questions/ai-settings", response_model=ReviewAiSettingsOut)
 def wb_questions_save_ai_settings(payload: ReviewAiSettingsIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "wb_questions_ai")
+    ensure_module_enabled(db, user, "wb_questions_ai")
     row = _get_or_create_question_ai_settings(db, user.id)
     mode = payload.reply_mode.strip().lower()
     if mode not in {"manual", "suggest", "auto"}:
@@ -1118,7 +1208,7 @@ def wb_questions_save_ai_settings(payload: ReviewAiSettingsIn, user: User = Depe
 
 @router.get("/wb/reviews/ai-settings", response_model=ReviewAiSettingsOut)
 def wb_get_ai_settings(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "wb_reviews_ai")
+    ensure_module_enabled(db, user, "wb_reviews_ai")
     row = _get_or_create_ai_settings(db, user.id)
     db.commit()
     return ReviewAiSettingsOut(reply_mode=row.reply_mode, prompt=row.prompt)
@@ -1126,7 +1216,7 @@ def wb_get_ai_settings(user: User = Depends(get_current_user), db: Session = Dep
 
 @router.post("/wb/reviews/ai-settings", response_model=ReviewAiSettingsOut)
 def wb_save_ai_settings(payload: ReviewAiSettingsIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "wb_reviews_ai")
+    ensure_module_enabled(db, user, "wb_reviews_ai")
     row = _get_or_create_ai_settings(db, user.id)
     mode = payload.reply_mode.strip().lower()
     if mode not in {"manual", "suggest", "auto"}:
@@ -1140,7 +1230,7 @@ def wb_save_ai_settings(payload: ReviewAiSettingsIn, user: User = Depends(get_cu
 
 @router.get("/wb/ads/campaigns", response_model=WbCampaignsOut)
 def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "wb_ads")
+    ensure_module_enabled(db, user, "wb_ads")
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
@@ -1159,7 +1249,7 @@ def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depen
 
 @router.post("/wb/ads/campaigns/enrich", response_model=WbCampaignEnrichOut)
 def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "wb_ads")
+    ensure_module_enabled(db, user, "wb_ads")
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
@@ -1194,7 +1284,7 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
 
 @router.post("/wb/ads/rates", response_model=WbCampaignRatesOut)
 def wb_ads_rates(payload: WbCampaignRatesIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "wb_ads")
+    ensure_module_enabled(db, user, "wb_ads")
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
@@ -1214,7 +1304,7 @@ def wb_ads_rates(payload: WbCampaignRatesIn, user: User = Depends(get_current_us
 
 @router.get("/wb/ads/campaign-details", response_model=WbCampaignDetailOut)
 def wb_ads_campaign_details(campaign_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "wb_ads")
+    ensure_module_enabled(db, user, "wb_ads")
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
@@ -1229,7 +1319,7 @@ def wb_ads_campaign_details(campaign_id: int, user: User = Depends(get_current_u
 
 @router.get("/wb/ads/balance", response_model=WbAdsBalanceOut)
 def wb_ads_balance(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "wb_ads")
+    ensure_module_enabled(db, user, "wb_ads")
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
@@ -1243,7 +1333,7 @@ def wb_ads_balance(user: User = Depends(get_current_user), db: Session = Depends
 
 @router.post("/wb/ads/action", response_model=WbAdsActionOut)
 def wb_ads_action(payload: WbAdsActionIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "wb_ads")
+    ensure_module_enabled(db, user, "wb_ads")
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
@@ -1271,7 +1361,7 @@ def wb_ads_analytics(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    ensure_module_enabled(db, user.id, "wb_ads_analytics")
+    ensure_module_enabled(db, user, "wb_ads_analytics")
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
@@ -1377,7 +1467,7 @@ def wb_ads_recommendations(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    ensure_module_enabled(db, user.id, "wb_ads_recommendations")
+    ensure_module_enabled(db, user, "wb_ads_recommendations")
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
@@ -1701,7 +1791,7 @@ def get_help_docs(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    ensure_module_enabled(db, user.id, "help_center")
+    ensure_module_enabled(db, user, "help_center")
     docs = HELP_DOCS_EN if (lang or "").strip().lower() == "en" else HELP_DOCS_RU
     items = []
     for code, payload in docs.items():
@@ -1711,6 +1801,50 @@ def get_help_docs(
             continue
         items.append(HelpDocOut(module_code=code, title=payload["title"], content=payload["content"]))
     return items
+
+
+@router.post("/help/assistant", response_model=AiAssistantOut)
+def help_assistant(payload: AiAssistantIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "ai_assistant")
+    question = " ".join((payload.question or "").split()).strip()
+    if len(question) < 3:
+        raise HTTPException(status_code=400, detail="Введите более подробный вопрос (минимум 3 символа).")
+    module_code = str(payload.module_code or "").strip().lower()
+    docs_map = HELP_DOCS_RU
+    context_parts: list[str] = []
+    if module_code and module_code in docs_map:
+        context_parts.append(f"[{docs_map[module_code]['title']}] {docs_map[module_code]['content']}")
+    if not context_parts:
+        for code, row in docs_map.items():
+            if code == "dashboard":
+                continue
+            context_parts.append(f"[{row['title']}] {row['content']}")
+            if len(" ".join(context_parts)) > 12000:
+                break
+    runtime = _resolve_user_ai_runtime(db, user.id)
+    answer = generate_help_assistant_reply(
+        question=question,
+        context_text="\n\n".join(context_parts),
+        prompt="",
+        api_key=str(runtime.get("api_key") or ""),
+        model=str(runtime.get("model") or ""),
+        provider=str(runtime.get("provider") or ""),
+        base_url=str(runtime.get("base_url") or ""),
+    )
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            action="help_assistant_asked",
+            details=f"module={module_code or '-'};provider={runtime.get('provider') or 'builtin'};mode={runtime.get('mode') or 'builtin'}",
+        )
+    )
+    db.commit()
+    return AiAssistantOut(
+        answer=answer,
+        provider=str(runtime.get("provider") or "builtin"),
+        mode=str(runtime.get("mode") or "builtin"),
+        service_name=str(runtime.get("service_name") or ""),
+    )
 
 
 def _resolve_credential(db: Session, user_id: int, marketplace: str) -> ApiCredential:
@@ -1832,7 +1966,7 @@ def product_keyword_suggestions(product_id: int, user: User = Depends(get_curren
 
 @router.post("/seo/positions/check", response_model=list[PositionCheckOut])
 def check_current_positions(payload: PositionCheckRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "rank_tracking")
+    ensure_module_enabled(db, user, "rank_tracking")
 
     product_ids = payload.product_ids
     if payload.apply_to_all:
@@ -1962,7 +2096,7 @@ def check_current_positions(payload: PositionCheckRequest, user: User = Depends(
 
 @router.post("/seo/generate", response_model=list[SeoJobOut])
 def generate_seo(payload: SeoGenerateRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "seo_generation")
+    ensure_module_enabled(db, user, "seo_generation")
 
     product_ids = payload.product_ids
     if payload.apply_to_all:
@@ -2090,7 +2224,7 @@ def clear_seo_jobs_alias_v2(payload: SeoDeleteRequest, user: User = Depends(get_
 
 @router.post("/seo/apply", response_model=list[SeoJobOut])
 def apply_seo(payload: SeoApplyRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "auto_apply")
+    ensure_module_enabled(db, user, "auto_apply")
 
     if not payload.job_ids:
         raise HTTPException(status_code=400, detail="Выберите хотя бы одну SEO-задачу")
@@ -2123,7 +2257,7 @@ def apply_seo(payload: SeoApplyRequest, user: User = Depends(get_current_user), 
 
 @router.post("/seo/recheck", response_model=list[SeoJobOut])
 def recheck_seo(payload: SeoRecheckRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "rank_tracking")
+    ensure_module_enabled(db, user, "rank_tracking")
 
     if payload.recheck_all_due:
         jobs = db.scalars(
@@ -2240,7 +2374,7 @@ def sales_stats(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    ensure_module_enabled(db, user.id, "sales_stats")
+    ensure_module_enabled(db, user, "sales_stats")
     selected_market = (marketplace or "all").strip().lower()
     if selected_market not in {"all", "wb", "ozon"}:
         raise HTTPException(status_code=400, detail="marketplace должен быть all, wb или ozon")
@@ -2308,7 +2442,7 @@ def sales_stats(
 
 @router.get("/profile", response_model=UserProfileOut)
 def profile_state(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "user_profile")
+    ensure_module_enabled(db, user, "user_profile")
     profile = _get_or_create_user_profile(db, user.id)
     account = _get_or_create_billing_account(db, user.id)
     payload = _build_user_profile_payload(db, user, profile, account)
@@ -2318,7 +2452,7 @@ def profile_state(user: User = Depends(get_current_user), db: Session = Depends(
 
 @router.put("/profile", response_model=UserProfileOut)
 def profile_update(payload: UserProfileUpdateIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "user_profile")
+    ensure_module_enabled(db, user, "user_profile")
     profile = _get_or_create_user_profile(db, user.id)
 
     profile.full_name = payload.full_name.strip()[:255]
@@ -2346,9 +2480,76 @@ def profile_update(payload: UserProfileUpdateIn, user: User = Depends(get_curren
     return _build_user_profile_payload(db, user, profile, account)
 
 
+@router.get("/profile/ai", response_model=AiProfileOut)
+def profile_ai_state(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "user_profile")
+    payload = _build_ai_profile_payload(db, user.id)
+    db.commit()
+    return payload
+
+
+@router.post("/profile/ai/select", response_model=AiProfileOut)
+def profile_ai_select(payload: AiSelectionIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "user_profile")
+    _save_user_ai_selection(
+        db,
+        user.id,
+        use_global_default=bool(payload.use_global_default),
+        mode=payload.mode,
+        service_id=payload.service_id,
+    )
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            action="profile_ai_selected",
+            details=f"use_global_default={bool(payload.use_global_default)};mode={payload.mode};service_id={payload.service_id}",
+        )
+    )
+    db.commit()
+    return _build_ai_profile_payload(db, user.id)
+
+
+@router.post("/profile/ai/services", response_model=AiServiceOut)
+def profile_ai_service_add(payload: AiServiceIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "user_profile")
+    row = _upsert_ai_service(
+        db,
+        user_id=user.id,
+        payload=payload,
+    )
+    db.add(AuditLog(user_id=user.id, action="profile_ai_service_added", details=f"service_id={row.id};provider={row.provider}"))
+    db.commit()
+    return _ai_service_to_out(row, scope="user")
+
+
+@router.put("/profile/ai/services/{service_id}", response_model=AiServiceOut)
+def profile_ai_service_update(service_id: int, payload: AiServiceIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "user_profile")
+    row = db.get(AiServiceAccount, service_id)
+    if not row or row.user_id != user.id:
+        raise HTTPException(status_code=404, detail="AI сервис не найден")
+    _update_ai_service_row(row, payload)
+    db.add(AuditLog(user_id=user.id, action="profile_ai_service_updated", details=f"service_id={row.id};provider={row.provider}"))
+    db.commit()
+    return _ai_service_to_out(row, scope="user")
+
+
+@router.delete("/profile/ai/services/{service_id}", response_model=MessageOut)
+def profile_ai_service_delete(service_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "user_profile")
+    row = db.get(AiServiceAccount, service_id)
+    if not row or row.user_id != user.id:
+        raise HTTPException(status_code=404, detail="AI сервис не найден")
+    _reset_ai_selection_if_deleted_service(db, user.id, service_id)
+    db.delete(row)
+    db.add(AuditLog(user_id=user.id, action="profile_ai_service_deleted", details=f"service_id={service_id}"))
+    db.commit()
+    return MessageOut(message="AI сервис удален")
+
+
 @router.get("/profile/team", response_model=list[TeamMemberOut])
 def profile_team_list(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "user_profile")
+    ensure_module_enabled(db, user, "user_profile")
     rows = _list_team_members(db, user.id)
     db.commit()
     return rows
@@ -2356,7 +2557,7 @@ def profile_team_list(user: User = Depends(get_current_user), db: Session = Depe
 
 @router.post("/profile/team", response_model=TeamMemberOut)
 def profile_team_add(payload: TeamMemberIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "user_profile")
+    ensure_module_enabled(db, user, "user_profile")
     email = payload.email.strip().lower()
     _ensure_team_email_is_available(db, email, user_id=user.id)
     exists = db.scalar(select(TeamMember).where(TeamMember.user_id == user.id, TeamMember.email == email))
@@ -2383,7 +2584,7 @@ def profile_team_add(payload: TeamMemberIn, user: User = Depends(get_current_use
 
 @router.put("/profile/team/{member_id}", response_model=TeamMemberOut)
 def profile_team_update(member_id: int, payload: TeamMemberIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "user_profile")
+    ensure_module_enabled(db, user, "user_profile")
     row = db.get(TeamMember, member_id)
     if not row or row.user_id != user.id:
         raise HTTPException(status_code=404, detail="Сотрудник не найден")
@@ -2415,7 +2616,7 @@ def profile_team_update(member_id: int, payload: TeamMemberIn, user: User = Depe
 
 @router.delete("/profile/team/{member_id}", response_model=MessageOut)
 def profile_team_delete(member_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "user_profile")
+    ensure_module_enabled(db, user, "user_profile")
     row = db.get(TeamMember, member_id)
     if not row or row.user_id != user.id:
         raise HTTPException(status_code=404, detail="Сотрудник не найден")
@@ -2434,7 +2635,7 @@ def profile_change_password(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    ensure_module_enabled(db, user.id, "user_profile")
+    ensure_module_enabled(db, user, "user_profile")
     if len(payload.new_password or "") < 8:
         raise HTTPException(status_code=400, detail="Новый пароль должен быть минимум 8 символов")
 
@@ -2468,7 +2669,7 @@ def profile_change_password(
 
 @router.post("/profile/plan", response_model=UserProfileOut)
 def profile_change_plan(payload: BillingPlanChangeIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "user_profile")
+    ensure_module_enabled(db, user, "user_profile")
     plan_code = (payload.plan_code or "").strip().lower()
     if plan_code not in BILLING_PLANS:
         raise HTTPException(status_code=400, detail=f"Неизвестный план: {plan_code}")
@@ -2496,7 +2697,7 @@ def profile_change_plan(payload: BillingPlanChangeIn, user: User = Depends(get_c
 
 @router.post("/profile/renew", response_model=UserProfileOut)
 def profile_renew_plan(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "user_profile")
+    ensure_module_enabled(db, user, "user_profile")
     account = _get_or_create_billing_account(db, user.id)
     base = account.renew_at if account.renew_at and account.renew_at > datetime.utcnow() else datetime.utcnow()
     account.renew_at = base + timedelta(days=30)
@@ -2518,7 +2719,7 @@ def profile_renew_plan(user: User = Depends(get_current_user), db: Session = Dep
 
 @router.get("/billing", response_model=BillingOut)
 def billing_state(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "billing")
+    ensure_module_enabled(db, user, "billing")
     account = _get_or_create_billing_account(db, user.id)
     payload = _build_billing_payload(db, user.id, account)
     db.commit()
@@ -2527,7 +2728,7 @@ def billing_state(user: User = Depends(get_current_user), db: Session = Depends(
 
 @router.post("/billing/plan", response_model=BillingOut)
 def billing_change_plan(payload: BillingPlanChangeIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "billing")
+    ensure_module_enabled(db, user, "billing")
     plan_code = (payload.plan_code or "").strip().lower()
     if plan_code not in BILLING_PLANS:
         raise HTTPException(status_code=400, detail=f"Неизвестный план: {plan_code}")
@@ -2554,7 +2755,7 @@ def billing_change_plan(payload: BillingPlanChangeIn, user: User = Depends(get_c
 
 @router.post("/billing/renew", response_model=BillingOut)
 def billing_renew(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ensure_module_enabled(db, user.id, "billing")
+    ensure_module_enabled(db, user, "billing")
     account = _get_or_create_billing_account(db, user.id)
     base = account.renew_at if account.renew_at and account.renew_at > datetime.utcnow() else datetime.utcnow()
     account.renew_at = base + timedelta(days=30)
@@ -2934,6 +3135,173 @@ def admin_delete_credential(credential_id: int, _: User = Depends(get_admin_user
     return MessageOut(message="Ключ удален")
 
 
+@router.get("/admin/ai/global", response_model=dict[str, Any])
+def admin_ai_global_state(_: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    default = _get_global_ai_default(db)
+    services = db.scalars(
+        select(AiServiceAccount)
+        .where(AiServiceAccount.user_id.is_(None))
+        .order_by(AiServiceAccount.id.desc())
+    ).all()
+    return {
+        "global_default": {
+            "use_global_default": False,
+            "mode": str(default.get("mode") or "builtin"),
+            "service_id": _to_int_safe(default.get("service_id")),
+        },
+        "global_services": [_ai_service_to_out(x, scope="global") for x in services],
+    }
+
+
+@router.post("/admin/ai/global/default", response_model=dict[str, Any])
+def admin_ai_global_default_save(payload: AiSelectionIn, me: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    mode = _normalize_ai_mode(payload.mode)
+    if mode == "user":
+        raise HTTPException(status_code=400, detail="Глобальный default не может ссылаться на user-сервис")
+    service_id = _validate_ai_service_binding(db, mode=mode, service_id=payload.service_id, user_id=None)
+    _set_system_setting(db, "ai_global_default", json.dumps({"mode": mode, "service_id": service_id}, ensure_ascii=False))
+    db.add(AuditLog(user_id=me.id, action="admin_ai_global_default_saved", details=f"mode={mode};service_id={service_id}"))
+    db.commit()
+    return {
+        "global_default": {
+            "use_global_default": False,
+            "mode": mode,
+            "service_id": service_id,
+        }
+    }
+
+
+@router.post("/admin/ai/global/services", response_model=AiServiceOut)
+def admin_ai_global_service_add(payload: AiServiceIn, me: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    row = _upsert_ai_service(db, user_id=None, payload=payload)
+    db.add(AuditLog(user_id=me.id, action="admin_ai_global_service_added", details=f"service_id={row.id};provider={row.provider}"))
+    db.commit()
+    return _ai_service_to_out(row, scope="global")
+
+
+@router.put("/admin/ai/global/services/{service_id}", response_model=AiServiceOut)
+def admin_ai_global_service_update(service_id: int, payload: AiServiceIn, me: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    row = db.get(AiServiceAccount, service_id)
+    if not row or row.user_id is not None:
+        raise HTTPException(status_code=404, detail="AI сервис не найден")
+    _update_ai_service_row(row, payload)
+    db.add(AuditLog(user_id=me.id, action="admin_ai_global_service_updated", details=f"service_id={row.id};provider={row.provider}"))
+    db.commit()
+    return _ai_service_to_out(row, scope="global")
+
+
+@router.delete("/admin/ai/global/services/{service_id}", response_model=MessageOut)
+def admin_ai_global_service_delete(service_id: int, me: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    row = db.get(AiServiceAccount, service_id)
+    if not row or row.user_id is not None:
+        raise HTTPException(status_code=404, detail="AI сервис не найден")
+    global_default = _get_global_ai_default(db)
+    if str(global_default.get("mode") or "") == "global" and _to_int_safe(global_default.get("service_id")) == service_id:
+        _set_system_setting(db, "ai_global_default", json.dumps({"mode": "builtin", "service_id": None}, ensure_ascii=False))
+    prefs = db.scalars(
+        select(UserAiPreference).where(
+            UserAiPreference.mode == "global",
+            UserAiPreference.service_id == service_id,
+            UserAiPreference.use_global_default.is_(False),
+        )
+    ).all()
+    for pref in prefs:
+        pref.use_global_default = True
+        pref.mode = "builtin"
+        pref.service_id = None
+    db.delete(row)
+    db.add(AuditLog(user_id=me.id, action="admin_ai_global_service_deleted", details=f"service_id={service_id}"))
+    db.commit()
+    return MessageOut(message="AI сервис удален")
+
+
+@router.get("/admin/users/{user_id}/ai", response_model=AiProfileOut)
+def admin_user_ai_state(user_id: int, _: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    target = db.get(User, user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    return _build_ai_profile_payload(db, user_id)
+
+
+@router.post("/admin/users/{user_id}/ai/select", response_model=AiProfileOut)
+def admin_user_ai_select(
+    user_id: int,
+    payload: AiSelectionIn,
+    me: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    target = db.get(User, user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    _save_user_ai_selection(
+        db,
+        user_id,
+        use_global_default=bool(payload.use_global_default),
+        mode=payload.mode,
+        service_id=payload.service_id,
+    )
+    db.add(
+        AuditLog(
+            user_id=me.id,
+            action="admin_user_ai_selected",
+            details=f"user_id={user_id};use_global_default={bool(payload.use_global_default)};mode={payload.mode};service_id={payload.service_id}",
+        )
+    )
+    db.commit()
+    return _build_ai_profile_payload(db, user_id)
+
+
+@router.post("/admin/users/{user_id}/ai/services", response_model=AiServiceOut)
+def admin_user_ai_service_add(
+    user_id: int,
+    payload: AiServiceIn,
+    me: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    target = db.get(User, user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    row = _upsert_ai_service(db, user_id=user_id, payload=payload)
+    db.add(AuditLog(user_id=me.id, action="admin_user_ai_service_added", details=f"user_id={user_id};service_id={row.id};provider={row.provider}"))
+    db.commit()
+    return _ai_service_to_out(row, scope="user")
+
+
+@router.put("/admin/users/{user_id}/ai/services/{service_id}", response_model=AiServiceOut)
+def admin_user_ai_service_update(
+    user_id: int,
+    service_id: int,
+    payload: AiServiceIn,
+    me: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    target = db.get(User, user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    row = db.get(AiServiceAccount, service_id)
+    if not row or row.user_id != user_id:
+        raise HTTPException(status_code=404, detail="AI сервис не найден")
+    _update_ai_service_row(row, payload)
+    db.add(AuditLog(user_id=me.id, action="admin_user_ai_service_updated", details=f"user_id={user_id};service_id={row.id};provider={row.provider}"))
+    db.commit()
+    return _ai_service_to_out(row, scope="user")
+
+
+@router.delete("/admin/users/{user_id}/ai/services/{service_id}", response_model=MessageOut)
+def admin_user_ai_service_delete(user_id: int, service_id: int, me: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    target = db.get(User, user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    row = db.get(AiServiceAccount, service_id)
+    if not row or row.user_id != user_id:
+        raise HTTPException(status_code=404, detail="AI сервис не найден")
+    _reset_ai_selection_if_deleted_service(db, user_id, service_id)
+    db.delete(row)
+    db.add(AuditLog(user_id=me.id, action="admin_user_ai_service_deleted", details=f"user_id={user_id};service_id={service_id}"))
+    db.commit()
+    return MessageOut(message="AI сервис удален")
+
+
 @router.get("/admin/audit", response_model=list[AuditLogOut])
 def admin_audit(limit: int = 200, _: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     clamped = max(10, min(limit, 1000))
@@ -3305,6 +3673,7 @@ def _safe_team_scope(values: list[str] | None) -> list[str]:
         "wb_ads_recommendations",
         "user_profile",
         "help_center",
+        "ai_assistant",
     }
     out: list[str] = []
     seen: set[str] = set()
@@ -3710,16 +4079,302 @@ def _sanitize_generated_description(text: str) -> str:
     return raw
 
 
-def ensure_module_enabled(db: Session, user_id: int, module_code: str):
+def _actor_scope(user: User) -> list[str]:
+    raw = getattr(user, "_actor_member_scope", ["*"])
+    if not isinstance(raw, list):
+        return ["*"]
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        code = str(item or "").strip().lower()
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        out.append(code)
+    return out or ["*"]
+
+
+def _actor_can_use_module(user: User, module_code: str) -> bool:
+    code = str(module_code or "").strip().lower()
+    if not code:
+        return True
+    scope = _actor_scope(user)
+    return "*" in scope or code in scope
+
+
+def _normalize_ai_mode(value: str) -> str:
+    mode = str(value or "").strip().lower()
+    if mode not in {"builtin", "global", "user"}:
+        return "builtin"
+    return mode
+
+
+def _normalize_ai_provider(value: str) -> str:
+    code = str(value or "").strip().lower()
+    if not code:
+        return "openai"
+    if code not in AI_PROVIDER_CODES:
+        return "custom"
+    return code
+
+
+def _sanitize_ai_service_name(value: str) -> str:
+    text = " ".join(str(value or "").split()).strip()
+    if not text:
+        return "AI service"
+    return text[:120]
+
+
+def _sanitize_ai_service_model(value: str) -> str:
+    text = " ".join(str(value or "").split()).strip()
+    if not text:
+        return settings.openai_model
+    return text[:120]
+
+
+def _sanitize_ai_base_url(value: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if text.startswith("http://") or text.startswith("https://"):
+        return text[:500]
+    return f"https://{text[:490]}"
+
+
+def _get_global_ai_default(db: Session) -> dict[str, Any]:
+    raw = _get_system_setting(db, "ai_global_default")
+    if not raw:
+        payload = {"mode": "builtin", "service_id": None}
+        _set_system_setting(db, "ai_global_default", json.dumps(payload, ensure_ascii=False))
+        return payload
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        parsed = {}
+    mode = _normalize_ai_mode(str(parsed.get("mode") or "builtin"))
+    service_id = _to_int_safe(parsed.get("service_id")) or None
+    payload = {"mode": mode, "service_id": service_id}
+    if payload != parsed:
+        _set_system_setting(db, "ai_global_default", json.dumps(payload, ensure_ascii=False))
+    return payload
+
+
+def _get_or_create_user_ai_preference(db: Session, user_id: int) -> UserAiPreference:
+    row = db.scalar(select(UserAiPreference).where(UserAiPreference.user_id == user_id))
+    if row:
+        return row
+    row = UserAiPreference(
+        user_id=user_id,
+        use_global_default=True,
+        mode="builtin",
+        service_id=None,
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def _validate_ai_service_binding(db: Session, *, mode: str, service_id: int | None, user_id: int | None) -> int | None:
+    if mode == "builtin":
+        return None
+    sid = _to_int_safe(service_id)
+    if sid <= 0:
+        raise HTTPException(status_code=400, detail="Выберите AI сервис для выбранного режима")
+    row = db.get(AiServiceAccount, sid)
+    if not row:
+        raise HTTPException(status_code=404, detail="AI сервис не найден")
+    if mode == "global" and row.user_id is not None:
+        raise HTTPException(status_code=400, detail="Для режима global нужен глобальный AI сервис")
+    if mode == "user" and (user_id is None or row.user_id != user_id):
+        raise HTTPException(status_code=400, detail="Для режима user нужен AI сервис текущего пользователя")
+    return sid
+
+
+def _save_user_ai_selection(
+    db: Session,
+    user_id: int,
+    *,
+    use_global_default: bool,
+    mode: str,
+    service_id: int | None,
+) -> UserAiPreference:
+    row = _get_or_create_user_ai_preference(db, user_id)
+    row.use_global_default = bool(use_global_default)
+    if row.use_global_default:
+        row.mode = "builtin"
+        row.service_id = None
+        return row
+    safe_mode = _normalize_ai_mode(mode)
+    safe_id = _validate_ai_service_binding(db, mode=safe_mode, service_id=service_id, user_id=user_id)
+    row.mode = safe_mode
+    row.service_id = safe_id
+    return row
+
+
+def _ai_service_to_out(row: AiServiceAccount, *, scope: str) -> AiServiceOut:
+    return AiServiceOut(
+        id=row.id,
+        scope=scope,
+        user_id=row.user_id,
+        name=row.name or "",
+        provider=row.provider or "openai",
+        model=row.model or "",
+        base_url=row.base_url or "",
+        api_key_masked=mask_key(row.api_key or ""),
+        is_active=bool(row.is_active),
+        created_at=row.created_at.isoformat() if row.created_at else None,
+    )
+
+
+def _update_ai_service_row(row: AiServiceAccount, payload: AiServiceIn) -> None:
+    row.name = _sanitize_ai_service_name(payload.name)
+    row.provider = _normalize_ai_provider(payload.provider)
+    row.api_key = str(payload.api_key or "").strip()[:255]
+    row.model = _sanitize_ai_service_model(payload.model)
+    row.base_url = _sanitize_ai_base_url(payload.base_url)
+    row.is_active = True
+
+
+def _upsert_ai_service(db: Session, *, user_id: int | None, payload: AiServiceIn) -> AiServiceAccount:
+    row = AiServiceAccount(
+        user_id=user_id,
+        name="",
+        provider="openai",
+        api_key="",
+        model=settings.openai_model,
+        base_url="",
+        is_active=True,
+    )
+    _update_ai_service_row(row, payload)
+    if not row.api_key:
+        raise HTTPException(status_code=400, detail="API ключ AI сервиса обязателен")
+    db.add(row)
+    db.flush()
+    return row
+
+
+def _reset_ai_selection_if_deleted_service(db: Session, user_id: int, service_id: int) -> None:
+    pref = db.scalar(select(UserAiPreference).where(UserAiPreference.user_id == user_id))
+    if pref and not pref.use_global_default and _to_int_safe(pref.service_id) == service_id:
+        pref.use_global_default = True
+        pref.mode = "builtin"
+        pref.service_id = None
+
+
+def _resolve_user_ai_runtime(db: Session, user_id: int) -> dict[str, Any]:
+    global_default = _get_global_ai_default(db)
+    pref = db.scalar(select(UserAiPreference).where(UserAiPreference.user_id == user_id))
+    use_global_default = True
+    mode = "builtin"
+    service_id = None
+    if pref:
+        use_global_default = bool(pref.use_global_default)
+        if not use_global_default:
+            mode = _normalize_ai_mode(pref.mode)
+            service_id = _to_int_safe(pref.service_id) or None
+    if use_global_default:
+        mode = _normalize_ai_mode(str(global_default.get("mode") or "builtin"))
+        service_id = _to_int_safe(global_default.get("service_id")) or None
+
+    service_row: AiServiceAccount | None = None
+    if mode == "global" and service_id:
+        candidate = db.get(AiServiceAccount, service_id)
+        if candidate and candidate.user_id is None and candidate.is_active:
+            service_row = candidate
+    elif mode == "user" and service_id:
+        candidate = db.get(AiServiceAccount, service_id)
+        if candidate and candidate.user_id == user_id and candidate.is_active:
+            service_row = candidate
+
+    if mode != "builtin" and not service_row:
+        mode = "builtin"
+        service_id = None
+
+    if mode == "builtin":
+        return {
+            "mode": "builtin",
+            "service_id": None,
+            "service_name": "Built-in OpenAI",
+            "provider": "openai",
+            "api_key": settings.openai_api_key or "",
+            "model": settings.openai_model or "gpt-4o-mini",
+            "base_url": "",
+            "source": "builtin",
+        }
+    if not service_row:
+        return {
+            "mode": "builtin",
+            "service_id": None,
+            "service_name": "Built-in OpenAI",
+            "provider": "openai",
+            "api_key": settings.openai_api_key or "",
+            "model": settings.openai_model or "gpt-4o-mini",
+            "base_url": "",
+            "source": "builtin",
+        }
+    return {
+        "mode": mode,
+        "service_id": service_row.id,
+        "service_name": service_row.name or f"AI #{service_row.id}",
+        "provider": service_row.provider or "openai",
+        "api_key": service_row.api_key or "",
+        "model": service_row.model or settings.openai_model,
+        "base_url": service_row.base_url or "",
+        "source": "service",
+    }
+
+
+def _build_ai_profile_payload(db: Session, user_id: int) -> AiProfileOut:
+    pref = _get_or_create_user_ai_preference(db, user_id)
+    global_default = _get_global_ai_default(db)
+    user_services = db.scalars(
+        select(AiServiceAccount)
+        .where(AiServiceAccount.user_id == user_id)
+        .order_by(AiServiceAccount.id.desc())
+    ).all()
+    global_services = db.scalars(
+        select(AiServiceAccount)
+        .where(AiServiceAccount.user_id.is_(None))
+        .order_by(AiServiceAccount.id.desc())
+    ).all()
+    runtime = _resolve_user_ai_runtime(db, user_id)
+    return AiProfileOut(
+        selection=AiSelectionOut(
+            use_global_default=bool(pref.use_global_default),
+            mode=str(pref.mode or "builtin"),
+            service_id=_to_int_safe(pref.service_id) or None,
+        ),
+        global_default=AiSelectionOut(
+            use_global_default=False,
+            mode=str(global_default.get("mode") or "builtin"),
+            service_id=_to_int_safe(global_default.get("service_id")) or None,
+        ),
+        effective=AiEffectiveOut(
+            mode=str(runtime.get("mode") or "builtin"),
+            service_id=_to_int_safe(runtime.get("service_id")) or None,
+            service_name=str(runtime.get("service_name") or ""),
+            provider=str(runtime.get("provider") or "builtin"),
+            model=str(runtime.get("model") or ""),
+            source=str(runtime.get("source") or "builtin"),
+        ),
+        user_services=[_ai_service_to_out(x, scope="user") for x in user_services],
+        global_services=[_ai_service_to_out(x, scope="global") for x in global_services],
+    )
+
+
+def ensure_module_enabled(db: Session, user: User, module_code: str):
+    code = str(module_code or "").strip().lower()
     row = db.scalar(
         select(ModuleAccess).where(
-            ModuleAccess.user_id == user_id,
-            ModuleAccess.module_code == module_code,
+            ModuleAccess.user_id == user.id,
+            ModuleAccess.module_code == code,
             ModuleAccess.enabled.is_(True),
         )
     )
     if not row:
         raise HTTPException(status_code=403, detail=f"Модуль '{module_code}' отключен для вашего тарифа")
+    if not _actor_can_use_module(user, code):
+        raise HTTPException(status_code=403, detail=f"Доступ к модулю '{module_code}' ограничен для вашего сотрудника")
 
 
 def validate_marketplace(value: str) -> str:

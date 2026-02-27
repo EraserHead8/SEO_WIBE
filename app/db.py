@@ -46,7 +46,7 @@ def run_lightweight_migrations():
 
         module_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(module_access)"))}
         if module_cols:
-            for code in ("sales_stats", "user_profile"):
+            for code in ("sales_stats", "user_profile", "ai_assistant"):
                 conn.execute(
                     text(
                         """
@@ -84,6 +84,18 @@ def run_lightweight_migrations():
                     """
                 ),
                 {"key": "ui_settings", "value": default_ui},
+            )
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO system_settings (key, value, updated_at)
+                    SELECT :key, :value, CURRENT_TIMESTAMP
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM system_settings s WHERE s.key = :key
+                    )
+                    """
+                ),
+                {"key": "ai_global_default", "value": json.dumps({"mode": "builtin", "service_id": None}, ensure_ascii=False)},
             )
 
 

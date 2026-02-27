@@ -35,9 +35,11 @@ let salesLoadState = "idle";
 let salesLoadToken = 0;
 let salesAutoLoadTimer = null;
 let teamMembers = [];
+let profileAiState = null;
 let reviewPhotoItems = [];
 let reviewPhotoIndex = 0;
 let helpDocsRows = [];
+let helpAssistantHistory = [];
 let currentLang = (localStorage.getItem("ui_lang") || "ru").toLowerCase() === "en" ? "en" : "ru";
 let currentTheme = (localStorage.getItem("ui_theme") || "classic").toLowerCase();
 let uiThemeSettings = {
@@ -49,6 +51,7 @@ let currentTab = "sales";
 let currentProductsSubtab = "catalog";
 let currentReviewsSubtab = "reviews";
 let currentAdsSubtab = "campaigns";
+let currentHelpSubtab = "docs";
 const moduleLoadState = new Map();
 const moduleInflightState = new Map();
 const MODULE_CACHE_TTL_MS = 30 * 60 * 1000;
@@ -92,6 +95,7 @@ const TEAM_ACCESS_MODULES = [
   "wb_ads_recommendations",
   "user_profile",
   "help_center",
+  "ai_assistant",
 ];
 
 const NAV_BUTTON_ICONS = {
@@ -166,6 +170,7 @@ function moduleLabel(code) {
     wb_ads_recommendations: tr("Рекомендации Ads", "Ads Recommendations"),
     user_profile: tr("Профиль", "Profile"),
     help_center: tr("Справка", "Help"),
+    ai_assistant: tr("AI помощник", "AI Assistant"),
   };
   return labels[key] || key;
 }
@@ -375,20 +380,28 @@ function applyUiLanguage() {
   setText("#adsSubtabRecommendations .panel h3", isEn ? "WB Ads Recommendations" : "Рекомендации WB Ads");
   setText("#adsSubtabRecommendations .grid-4 button", isEn ? "Build Recommendations" : "Построить рекомендации");
   setText("#adsSubtabOzon .panel h3", isEn ? "Ozon Ads (beta)" : "Реклама Ozon (бета)");
-  setText("#profile .panel:nth-of-type(1) h3", isEn ? "User Profile" : "Профиль пользователя");
-  setText("#profile .panel:nth-of-type(1) .grid-3 button:nth-of-type(1)", isEn ? "Save Profile" : "Сохранить профиль");
-  setText("#profile .panel:nth-of-type(1) .grid-3 button:nth-of-type(2)", isEn ? "Refresh Profile" : "Обновить профиль");
-  setText("#profile .panel:nth-of-type(2) h3", isEn ? "Plan" : "Тариф");
-  setText("#profile .panel:nth-of-type(2) .grid-4 button:nth-of-type(1)", isEn ? "Change Plan" : "Сменить тариф");
-  setText("#profile .panel:nth-of-type(2) .grid-4 button:nth-of-type(2)", isEn ? "Renew for 30 days" : "Продлить на 30 дней");
-  setText("#profile .panel:nth-of-type(2) .grid-4 button:nth-of-type(3)", isEn ? "Refresh" : "Обновить");
-  setText("#profile .panel:nth-of-type(3) h3", isEn ? "API Keys" : "API ключи");
-  setText("#profile .panel:nth-of-type(4) h3", isEn ? "Security" : "Безопасность");
-  setText("#profile .panel:nth-of-type(4) .grid-3 button", isEn ? "Change Password" : "Сменить пароль");
+  setText("#profileMainPanel h3", isEn ? "User Profile" : "Профиль пользователя");
+  setText("#profileMainPanel .grid-3 button:nth-of-type(1)", isEn ? "Save Profile" : "Сохранить профиль");
+  setText("#profileMainPanel .grid-3 button:nth-of-type(2)", isEn ? "Refresh Profile" : "Обновить профиль");
+  setText("#profilePlanPanel h3", isEn ? "Plan" : "Тариф");
+  setText("#profilePlanPanel .grid-4 button:nth-of-type(1)", isEn ? "Change Plan" : "Сменить тариф");
+  setText("#profilePlanPanel .grid-4 button:nth-of-type(2)", isEn ? "Renew for 30 days" : "Продлить на 30 дней");
+  setText("#profilePlanPanel .grid-4 button:nth-of-type(3)", isEn ? "Refresh" : "Обновить");
+  setText("#profileKeysPanel h3", isEn ? "API Keys" : "API ключи");
+  setText("#profileAiPanel h3", isEn ? "AI Services" : "AI сервисы");
+  setText("#profileAiPanel .grid-4 button:nth-of-type(1)", isEn ? "Save AI Selection" : "Сохранить выбор AI");
+  setText("#profileAiPanel .grid-4 button:nth-of-type(2)", isEn ? "Refresh AI" : "Обновить AI");
+  setText("#profileAiPanel .grid-6 button", isEn ? "Add AI Service" : "Добавить AI сервис");
+  setText("#profileSecurityPanel h3", isEn ? "Security" : "Безопасность");
+  setText("#profileSecurityPanel .grid-3 button", isEn ? "Change Password" : "Сменить пароль");
   setText("#profileTeamPanel h3", isEn ? "Workspace Team" : "Сотрудники кабинета");
   setText("#profileTeamPanel .grid-6 button", isEn ? "Add employee" : "Добавить сотрудника");
-  setText("#help .panel h3", isEn ? "Module Help Center" : "Справка по модулям");
-  setText("#help .grid-2 button", isEn ? "Refresh Help" : "Обновить справку");
+  setText("#helpSubtabDocs .panel h3", isEn ? "Module Help Center" : "Справка по модулям");
+  setText("#helpSubtabDocs .grid-2 button", isEn ? "Refresh Help" : "Обновить справку");
+  setText("#helpSubtabAssistant .panel h3", isEn ? "AI assistant for marketplaces and service" : "AI помощник по маркетплейсам и сервису");
+  setText("#helpSubtabAssistant .grid-3 button", isEn ? "Ask" : "Спросить");
+  setText("#helpSubtabDocsBtn", isEn ? "Help" : "Справка");
+  setText("#helpSubtabAssistantBtn", isEn ? "AI assistant" : "AI помощник");
   setText("#reviewsSubtabReviewsBtn", isEn ? "Reviews" : "Отзывы");
   setText("#reviewsSubtabQuestionsBtn", isEn ? "Questions" : "Вопросы");
   setText("#productsSubtabCatalogBtn", isEn ? "Products" : "Товары");
@@ -454,11 +467,11 @@ function applyUiLanguage() {
   setText("#sales thead th:nth-child(6)", isEn ? "Returns" : "Отказы");
   setText("#sales thead th:nth-child(7)", isEn ? "Ads Spend" : "Реклама");
   setText("#sales thead th:nth-child(8)", isEn ? "Other Costs" : "Прочие траты");
-  setText("#profile .panel:nth-of-type(3) .cols-2 > div:nth-of-type(1) h3", "WB");
-  setText("#profile .panel:nth-of-type(3) .cols-2 > div:nth-of-type(2) h3", "Ozon");
-  setTextAll("#profile .panel:nth-of-type(3) .actions button:nth-of-type(1)", isEn ? "Save" : "Сохранить");
-  setTextAll("#profile .panel:nth-of-type(3) .actions button:nth-of-type(2)", isEn ? "Test" : "Проверить");
-  setTextAll("#profile .panel:nth-of-type(3) .actions button:nth-of-type(3)", isEn ? "Delete" : "Удалить");
+  setText("#profileKeysPanel .cols-2 > div:nth-of-type(1) h3", "WB");
+  setText("#profileKeysPanel .cols-2 > div:nth-of-type(2) h3", "Ozon");
+  setTextAll("#profileKeysPanel .actions button:nth-of-type(1)", isEn ? "Save" : "Сохранить");
+  setTextAll("#profileKeysPanel .actions button:nth-of-type(2)", isEn ? "Test" : "Проверить");
+  setTextAll("#profileKeysPanel .actions button:nth-of-type(3)", isEn ? "Delete" : "Удалить");
 
   setOptions("#reviewStarsFilter", [
     isEn ? "All ratings" : "Все оценки",
@@ -486,6 +499,12 @@ function applyUiLanguage() {
   ]);
   setOptions("#reviewAiMode", ["manual", "suggest", "auto"]);
   setOptions("#questionAiMode", ["manual", "suggest", "auto"]);
+  setOptions("#profileAiSourceSelect", [
+    isEn ? "Global default (admin)" : "Глобальный default (админ)",
+    isEn ? "Built-in OpenAI" : "Встроенный OpenAI",
+    isEn ? "Global service" : "Глобальный сервис",
+    isEn ? "My service" : "Мой сервис",
+  ]);
   setOptions("#wbAdsStatusFilter", [
     isEn ? "All statuses" : "Все статусы",
     isEn ? "-1 deleted" : "-1 удалена",
@@ -579,6 +598,11 @@ function applyUiLanguage() {
     ["#teamMemberFullName", isEn ? "Full name" : "ФИО"],
     ["#teamMemberNickname", isEn ? "Nickname" : "Ник"],
     ["#teamMemberAvatar", isEn ? "Avatar URL" : "Ссылка на аватар"],
+    ["#profileAiName", isEn ? "AI service name" : "Название AI сервиса"],
+    ["#profileAiModel", isEn ? "Model (e.g. gpt-4o-mini)" : "Модель (например gpt-4o-mini)"],
+    ["#profileAiBaseUrl", isEn ? "Base URL (optional)" : "Base URL (опционально)"],
+    ["#profileAiApiKey", isEn ? "Service API key" : "API key сервиса"],
+    ["#helpAssistantQuestion", isEn ? "Your question about WB/Ozon or service modules" : "Ваш вопрос по WB/Ozon или по модулю сервиса"],
   ];
   for (const [selector, text] of placeholders) {
     const el = document.querySelector(selector);
@@ -619,6 +643,9 @@ function applyUiLanguage() {
   applyUiThemeSettingsToSelect();
   renderTeamAccessOptions();
   renderTeamMembers();
+  if (profileAiState) renderProfileAiState(profileAiState);
+  renderHelpAssistantHistory();
+  renderHelpAssistantModuleOptions();
   applyModuleActionIcons();
 }
 
@@ -634,7 +661,7 @@ function changeUiLang() {
     renderAdsAnalyticsRows();
     renderAdsRecommendationsRows();
   }
-  if (currentTab === "help") loadHelpDocs();
+  if (currentTab === "help") loadHelpWorkspace();
   if (currentTab === "sales") renderSalesStats();
   if (currentTab === "profile") loadProfile();
 }
@@ -1169,6 +1196,8 @@ function applyModuleVisibility() {
       allowed = enabledModules.has("wb_reviews_ai") || enabledModules.has("wb_questions_ai");
     } else if (tab === "ads") {
       allowed = enabledModules.has("wb_ads") || enabledModules.has("wb_ads_analytics") || enabledModules.has("wb_ads_recommendations");
+    } else if (tab === "help") {
+      allowed = enabledModules.has("help_center") || enabledModules.has("ai_assistant");
     }
     btn.classList.toggle("hidden", !allowed);
   });
@@ -1252,7 +1281,7 @@ async function preloadModulesInBackground({ force = false } = {}) {
     { key: "reviews", load: loadReviewsWorkspace, enabled: () => enabledModules.has("wb_reviews_ai") || enabledModules.has("wb_questions_ai") },
     { key: "ads", load: loadAdsWorkspace, enabled: () => enabledModules.has("wb_ads") || enabledModules.has("wb_ads_analytics") || enabledModules.has("wb_ads_recommendations") },
     { key: "profile", load: loadProfile, enabled: () => enabledModules.has("user_profile") },
-    { key: "help", load: loadHelpDocs, enabled: () => enabledModules.has("help_center") },
+    { key: "help", load: loadHelpWorkspace, enabled: () => enabledModules.has("help_center") || enabledModules.has("ai_assistant") },
   ];
   for (const step of queue) {
     if (!step.enabled()) continue;
@@ -1317,7 +1346,7 @@ function showTab(name, btn = null) {
   if (targetTab === "ads") runModuleLoader("ads", loadAdsWorkspace);
   if (targetTab === "profile") runModuleLoader("profile", loadProfile);
   if (targetTab === "billing") runModuleLoader("billing", loadBilling);
-  if (targetTab === "help") runModuleLoader("help", loadHelpDocs, { maxAgeMs: MODULE_CACHE_TTL_MS });
+  if (targetTab === "help") runModuleLoader("help", loadHelpWorkspace, { maxAgeMs: MODULE_CACHE_TTL_MS });
   if (targetTab === "admin") loadAdmin();
   setTimeout(() => {
     applyModuleActionIcons();
@@ -1373,6 +1402,9 @@ function logout() {
   currentProductsSubtab = "catalog";
   currentReviewsSubtab = "reviews";
   currentAdsSubtab = "campaigns";
+  currentHelpSubtab = "docs";
+  helpAssistantHistory = [];
+  profileAiState = null;
   wbReviewDrafts.clear();
   wbQuestionDrafts.clear();
   selectedWbCampaignId = "";
@@ -1557,6 +1589,40 @@ function syncAdsSubtabAccess() {
   }
 }
 
+function syncHelpSubtabAccess() {
+  const canDocs = enabledModules.has("help_center");
+  const canAssistant = enabledModules.has("ai_assistant");
+  const docsBtn = document.getElementById("helpSubtabDocsBtn");
+  const aiBtn = document.getElementById("helpSubtabAssistantBtn");
+  if (docsBtn) docsBtn.classList.toggle("hidden", !canDocs);
+  if (aiBtn) aiBtn.classList.toggle("hidden", !canAssistant);
+  if (!canDocs && canAssistant) currentHelpSubtab = "assistant";
+  if (!canAssistant && canDocs) currentHelpSubtab = "docs";
+  if (!canDocs && !canAssistant) currentHelpSubtab = "docs";
+}
+
+function switchHelpSubtab(tab, preload = true) {
+  const canDocs = enabledModules.has("help_center");
+  const canAssistant = enabledModules.has("ai_assistant");
+  let next = tab === "assistant" ? "assistant" : "docs";
+  if (next === "assistant" && !canAssistant && canDocs) next = "docs";
+  if (next === "docs" && !canDocs && canAssistant) next = "assistant";
+  currentHelpSubtab = next;
+  const showDocs = next === "docs" && canDocs;
+  const showAssistant = next === "assistant" && canAssistant;
+  document.getElementById("helpSubtabDocs")?.classList.toggle("hidden", !showDocs);
+  document.getElementById("helpSubtabAssistant")?.classList.toggle("hidden", !showAssistant);
+  document.getElementById("helpSubtabDocsBtn")?.classList.toggle("active", showDocs);
+  document.getElementById("helpSubtabAssistantBtn")?.classList.toggle("active", showAssistant);
+  if (!preload) return;
+  if (showDocs) {
+    loadHelpDocs();
+  } else if (showAssistant) {
+    renderHelpAssistantHistory();
+    renderHelpAssistantModuleOptions();
+  }
+}
+
 async function loadAdsWorkspace() {
   const hasAnyAdsModule = enabledModules.has("wb_ads") || enabledModules.has("wb_ads_analytics") || enabledModules.has("wb_ads_recommendations");
   if (!hasAnyAdsModule) return;
@@ -1565,6 +1631,18 @@ async function loadAdsWorkspace() {
   if (enabledModules.has("wb_ads")) await loadWbAdCampaigns();
   if (enabledModules.has("wb_ads_analytics")) await loadAdsAnalytics();
   if (enabledModules.has("wb_ads_recommendations")) await loadAdsRecommendations();
+}
+
+async function loadHelpWorkspace() {
+  const canDocs = enabledModules.has("help_center");
+  const canAssistant = enabledModules.has("ai_assistant");
+  if (!canDocs && !canAssistant) return;
+  syncHelpSubtabAccess();
+  if (!canDocs && canAssistant) currentHelpSubtab = "assistant";
+  await loadHelpDocs();
+  renderHelpAssistantHistory();
+  renderHelpAssistantModuleOptions();
+  switchHelpSubtab(currentHelpSubtab || (canAssistant ? "assistant" : "docs"), false);
 }
 
 async function loadReviewsWorkspace() {
@@ -4850,6 +4928,101 @@ function renderProfileData(data) {
   renderTeamMembers();
 }
 
+function renderProfileAiServiceOptions(forcedMode = "") {
+  const sourceSelect = document.getElementById("profileAiSourceSelect");
+  const serviceSelect = document.getElementById("profileAiServiceSelect");
+  if (!sourceSelect || !serviceSelect) return;
+  const mode = String(forcedMode || sourceSelect.value || "global_default").trim().toLowerCase();
+  const globalRows = Array.isArray(profileAiState?.global_services) ? profileAiState.global_services : [];
+  const userRows = Array.isArray(profileAiState?.user_services) ? profileAiState.user_services : [];
+  const activeRows = mode === "global" ? globalRows : userRows;
+  const prev = String(serviceSelect.value || "").trim();
+  serviceSelect.innerHTML = activeRows.length
+    ? activeRows.map((row) => `<option value="${Number(row.id || 0)}">#${Number(row.id || 0)} ${escapeHtml(String(row.name || "-"))} (${escapeHtml(String(row.provider || "-"))})</option>`).join("")
+    : `<option value="">${tr("Сервисов нет", "No services")}</option>`;
+  if (prev && [...serviceSelect.options].some((x) => x.value === prev)) {
+    serviceSelect.value = prev;
+    return;
+  }
+  const selectionServiceId = Number(profileAiState?.selection?.service_id || 0);
+  if (selectionServiceId && [...serviceSelect.options].some((x) => Number(x.value) === selectionServiceId)) {
+    serviceSelect.value = String(selectionServiceId);
+  }
+}
+
+function renderProfileAiState(data) {
+  profileAiState = data && typeof data === "object" ? data : null;
+  const sourceSelect = document.getElementById("profileAiSourceSelect");
+  const serviceSelect = document.getElementById("profileAiServiceSelect");
+  const effectiveBox = document.getElementById("profileAiEffective");
+  const table = document.getElementById("profileAiServicesTable");
+  if (!sourceSelect || !serviceSelect || !effectiveBox || !table) return;
+
+  const globalRows = Array.isArray(profileAiState?.global_services) ? profileAiState.global_services : [];
+  const userRows = Array.isArray(profileAiState?.user_services) ? profileAiState.user_services : [];
+  const selection = profileAiState?.selection || { use_global_default: true, mode: "builtin", service_id: null };
+  const currentMode = selection.use_global_default ? "global_default" : String(selection.mode || "builtin");
+  sourceSelect.value = ["global_default", "builtin", "global", "user"].includes(currentMode) ? currentMode : "global_default";
+  renderProfileAiServiceOptions(sourceSelect.value);
+
+  const effective = profileAiState?.effective || {};
+  effectiveBox.textContent = `${tr("Эффективный AI", "Effective AI")}: ${effective.mode || "-"} | ${effective.provider || "-"} | ${effective.model || "-"} | ${effective.service_name || "-"}`;
+
+  const merged = [...globalRows, ...userRows];
+  table.innerHTML = merged.length
+    ? merged.map((row) => `
+      <tr>
+        <td>${Number(row.id || 0)}</td>
+        <td>${escapeHtml(String(row.scope || "-"))}</td>
+        <td>${escapeHtml(String(row.name || "-"))}</td>
+        <td>${escapeHtml(String(row.provider || "-"))}</td>
+        <td>${escapeHtml(String(row.model || "-"))}</td>
+        <td>${escapeHtml(String(row.base_url || "-"))}</td>
+        <td>${escapeHtml(String(row.api_key_masked || "-"))}</td>
+        <td>
+          ${row.scope === "user"
+            ? `<div class="actions">
+                <button class="btn-secondary" type="button" data-profile-ai-edit="${Number(row.id || 0)}">${tr("Изменить", "Edit")}</button>
+                <button class="btn-danger" type="button" data-profile-ai-del="${Number(row.id || 0)}">${tr("Удалить", "Delete")}</button>
+              </div>`
+            : "-"}
+        </td>
+      </tr>
+    `).join("")
+    : `<tr><td colspan="8">${tr("AI сервисов пока нет.", "No AI services yet.")}</td></tr>`;
+
+  table.querySelectorAll("[data-profile-ai-edit]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = Number(btn.dataset.profileAiEdit || 0);
+      const row = userRows.find((x) => Number(x.id) === id);
+      if (!row) return;
+      setInputValue("profileAiName", row.name || "");
+      const provider = document.getElementById("profileAiProvider");
+      if (provider) provider.value = String(row.provider || "openai");
+      setInputValue("profileAiModel", row.model || "");
+      setInputValue("profileAiBaseUrl", row.base_url || "");
+      const addBtn = document.querySelector("button[onclick='addProfileAiService()']");
+      if (addBtn) {
+        addBtn.dataset.editId = String(id);
+        addBtn.textContent = tr("Сохранить изменения", "Save changes");
+      }
+      document.getElementById("profileAiApiKey")?.focus();
+    });
+  });
+  table.querySelectorAll("[data-profile-ai-del]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = Number(btn.dataset.profileAiDel || 0);
+      if (!id) return;
+      if (!confirm(tr(`Удалить AI сервис #${id}?`, `Delete AI service #${id}?`))) return;
+      await requestJson(`/api/profile/ai/services/${id}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      }).catch((e) => alert(e.message));
+      await loadProfileAi();
+    });
+  });
+}
+
 function renderTeamAccessOptions(selected = []) {
   const host = document.getElementById("teamAccessPicks");
   if (!host) return;
@@ -4899,7 +5072,7 @@ function renderTeamMembers() {
       <td><input data-team-phone="${row.id}" value="${escapeHtml(String(row.phone || ""))}" /></td>
       <td><input data-team-nick="${row.id}" value="${escapeHtml(String(row.nickname || ""))}" /></td>
       <td>${row.is_owner ? tr("Владелец", "Owner") : `${tr("Сотрудник", "Employee")}${row.has_password ? " 🔒" : ""}`}</td>
-      <td><input data-team-access-input="${row.id}" value="${escapeHtml(access.join(", "))}" placeholder="products, seo_generation, wb_reviews_ai" /></td>
+      <td>${renderTeamMemberAccessPicks(row.id, access, row.is_owner)}</td>
       <td>${row.is_owner ? "-" : `<input type="password" data-team-password="${row.id}" placeholder="${escapeHtml(tr("Новый пароль (опц.)", "New password (optional)"))}" />`}</td>
       <td>
         <div class="actions">
@@ -4914,11 +5087,99 @@ function renderTeamMembers() {
   }
 }
 
-function parseAccessInput(raw) {
-  return String(raw || "")
-    .split(",")
-    .map((x) => x.trim().toLowerCase())
+function renderTeamMemberAccessPicks(memberId, selected = [], disabled = false) {
+  const selectedSet = new Set((Array.isArray(selected) ? selected : []).map((x) => String(x || "").trim().toLowerCase()).filter(Boolean));
+  return `<div class="team-access-picks">
+    ${TEAM_ACCESS_MODULES.map((code) => `
+      <label class="check">
+        <input type="checkbox" data-team-access-row="${Number(memberId || 0)}" data-code="${escapeHtml(code)}" ${selectedSet.has(code) ? "checked" : ""} ${disabled ? "disabled" : ""} />
+        ${escapeHtml(moduleLabel(code))}
+      </label>
+    `).join("")}
+  </div>`;
+}
+
+function collectTeamMemberAccess(memberId) {
+  return [...document.querySelectorAll(`[data-team-access-row="${Number(memberId || 0)}"]`)]
+    .filter((el) => el.checked)
+    .map((el) => String(el.dataset.code || "").trim().toLowerCase())
     .filter(Boolean);
+}
+
+async function loadProfileAi() {
+  if (!enabledModules.has("user_profile")) return;
+  const data = await requestJson("/api/profile/ai", {
+    headers: authHeaders(),
+    timeoutMs: 60000,
+  }).catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  if (!data) return;
+  renderProfileAiState(data);
+}
+
+async function saveProfileAiSelection() {
+  if (!enabledModules.has("user_profile")) return;
+  const source = String(document.getElementById("profileAiSourceSelect")?.value || "global_default").trim().toLowerCase();
+  const serviceId = Number(document.getElementById("profileAiServiceSelect")?.value || 0);
+  const payload = {
+    use_global_default: source === "global_default",
+    mode: source === "global_default" ? "builtin" : source,
+    service_id: source === "global" || source === "user" ? serviceId : null,
+  };
+  const data = await requestJson("/api/profile/ai/select", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+    timeoutMs: 60000,
+  }).catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  if (!data) return;
+  renderProfileAiState(data);
+  alert(tr("AI выбор сохранен", "AI selection saved"));
+}
+
+async function addProfileAiService() {
+  if (!enabledModules.has("user_profile")) return;
+  const btn = document.querySelector("button[onclick='addProfileAiService()']");
+  const editId = Number(btn?.dataset?.editId || 0);
+  const payload = {
+    name: String(document.getElementById("profileAiName")?.value || "").trim(),
+    provider: String(document.getElementById("profileAiProvider")?.value || "openai").trim().toLowerCase(),
+    model: String(document.getElementById("profileAiModel")?.value || "").trim(),
+    base_url: String(document.getElementById("profileAiBaseUrl")?.value || "").trim(),
+    api_key: String(document.getElementById("profileAiApiKey")?.value || "").trim(),
+  };
+  if (!payload.name || !payload.api_key) {
+    alert(tr("Укажите название и API key сервиса", "Provide service name and API key"));
+    return;
+  }
+  const url = editId ? `/api/profile/ai/services/${editId}` : "/api/profile/ai/services";
+  const method = editId ? "PUT" : "POST";
+  const data = await requestJson(url, {
+    method,
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+    timeoutMs: 60000,
+  }).catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  if (!data) return;
+  setInputValue("profileAiName", "");
+  setInputValue("profileAiModel", "");
+  setInputValue("profileAiBaseUrl", "");
+  setInputValue("profileAiApiKey", "");
+  const provider = document.getElementById("profileAiProvider");
+  if (provider) provider.value = "openai";
+  if (btn) {
+    btn.dataset.editId = "";
+    btn.textContent = tr("Добавить AI сервис", "Add AI service");
+  }
+  await loadProfileAi();
 }
 
 async function addTeamMember() {
@@ -4960,7 +5221,7 @@ async function updateTeamMember(memberId) {
     full_name: String(document.querySelector(`[data-team-full="${id}"]`)?.value || "").trim(),
     nickname: String(document.querySelector(`[data-team-nick="${id}"]`)?.value || "").trim(),
     avatar_url: String(current.avatar_url || "").trim(),
-    access_scope: parseAccessInput(document.querySelector(`[data-team-access-input="${id}"]`)?.value || ""),
+    access_scope: collectTeamMemberAccess(id),
   };
   const row = await requestJson(`/api/profile/team/${id}`, {
     method: "PUT",
@@ -5000,6 +5261,7 @@ async function loadProfile() {
   });
   if (!data) return;
   renderProfileData(data);
+  await loadProfileAi();
   markModuleLoaded("profile");
 }
 
@@ -5144,10 +5406,31 @@ async function deleteProfileKey(marketplace) {
 }
 
 async function loadHelpDocs() {
-  if (!enabledModules.has("help_center")) return;
+  const canDocs = enabledModules.has("help_center");
+  const canAssistant = enabledModules.has("ai_assistant");
+  if (!canDocs && !canAssistant) return;
   pruneLegacyUi();
-  const moduleCode = (document.getElementById("helpModuleSelect")?.value || "").trim();
   const lang = (currentLang || "ru").trim().toLowerCase();
+  if (!canDocs) {
+    helpDocsRows = [];
+    const select = document.getElementById("helpModuleSelect");
+    if (select) {
+      select.innerHTML = `<option value="">${lang === "en" ? "Help module is disabled" : "Модуль справки отключен"}</option>`;
+      select.value = "";
+    }
+    const view = document.getElementById("helpDocsView");
+    if (view) {
+      view.innerHTML = `<div class="help-empty">${
+        lang === "en"
+          ? "Help docs are disabled for your account."
+          : "Документация отключена для вашего доступа."
+      }</div>`;
+    }
+    renderHelpAssistantModuleOptions();
+    markModuleLoaded("help");
+    return;
+  }
+  const moduleCode = (document.getElementById("helpModuleSelect")?.value || "").trim();
   const qp = new URLSearchParams();
   qp.set("lang", lang === "en" ? "en" : "ru");
   const data = await requestJson(`/api/help/docs?${qp.toString()}`, { headers: authHeaders() }).catch((e) => {
@@ -5248,6 +5531,7 @@ async function loadHelpDocs() {
     </div>
     <div class="help-card-list">${cards || `<div class="help-empty">${lang === "en" ? "Module help not found." : "Справка по модулю не найдена."}</div>`}</div>
   `;
+  renderHelpAssistantModuleOptions();
   markModuleLoaded("help");
 }
 
@@ -5303,6 +5587,131 @@ function filterHelpModule(moduleCode) {
 
 function openHelpModule(moduleCode) {
   filterHelpModule(moduleCode);
+}
+
+function renderHelpAssistantModuleOptions() {
+  const select = document.getElementById("helpAssistantModuleSelect");
+  const hint = document.getElementById("helpAssistantHint");
+  if (!select) return;
+
+  const prev = String(select.value || "").trim();
+  const byCode = new Map();
+  for (const row of Array.isArray(helpDocsRows) ? helpDocsRows : []) {
+    const code = String(row?.module_code || "").trim();
+    if (!code || byCode.has(code)) continue;
+    byCode.set(code, String(row?.title || moduleLabel(code) || code).trim());
+  }
+  if (!byCode.size) {
+    for (const code of [...enabledModules]) {
+      const safe = String(code || "").trim();
+      if (!safe) continue;
+      byCode.set(safe, moduleLabel(safe));
+    }
+  }
+  const rows = [...byCode.entries()];
+  const allLabel = currentLang === "en" ? "All modules" : "Все модули";
+  select.innerHTML = `<option value="">${escapeHtml(allLabel)}</option>${rows
+    .map(([code, title]) => `<option value="${escapeHtml(code)}">${escapeHtml(title)} (${escapeHtml(code)})</option>`)
+    .join("")}`;
+  if (prev && [...select.options].some((x) => x.value === prev)) {
+    select.value = prev;
+  }
+
+  if (!hint) return;
+  if (!enabledModules.has("ai_assistant")) {
+    hint.textContent = currentLang === "en"
+      ? "AI assistant is disabled for your access."
+      : "AI помощник отключен для вашего доступа.";
+    return;
+  }
+  const effective = profileAiState?.effective || {};
+  const provider = String(effective.provider || "-");
+  const model = String(effective.model || "-");
+  const source = String(effective.service_name || effective.mode || "-");
+  hint.textContent = `${tr("Текущий AI", "Current AI")}: ${source} | ${provider} | ${model}`;
+}
+
+function renderHelpAssistantHistory() {
+  const host = document.getElementById("helpAssistantHistory");
+  if (!host) return;
+  if (!helpAssistantHistory.length) {
+    host.innerHTML = `<div class="help-empty">${currentLang === "en" ? "Ask your first question." : "Задайте первый вопрос."}</div>`;
+    return;
+  }
+  host.innerHTML = helpAssistantHistory
+    .slice()
+    .reverse()
+    .map((item) => {
+      const metaBits = [];
+      if (item?.module_code) metaBits.push(`#${String(item.module_code)}`);
+      if (item?.provider) metaBits.push(String(item.provider));
+      if (item?.service_name) metaBits.push(String(item.service_name));
+      const meta = metaBits.join(" • ");
+      return `
+        <article class="help-card selected">
+          <header class="help-card-head">
+            <div>
+              <h4>${escapeHtml(tr("Вопрос", "Question"))}</h4>
+              <small>${escapeHtml(meta || "-")}</small>
+            </div>
+          </header>
+          <div class="help-card-body">
+            <section class="help-block"><p>${escapeHtml(String(item?.question || "-"))}</p></section>
+            <section class="help-callout main"><strong>${escapeHtml(tr("Ответ", "Answer"))}:</strong> ${escapeHtml(String(item?.answer || "-"))}</section>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+async function askHelpAssistant() {
+  if (!enabledModules.has("ai_assistant")) {
+    alert(tr("Модуль AI помощника недоступен.", "AI assistant module is unavailable."));
+    return;
+  }
+  const input = document.getElementById("helpAssistantQuestion");
+  const moduleSel = document.getElementById("helpAssistantModuleSelect");
+  const askBtn = document.querySelector("#helpSubtabAssistant .grid-3 button");
+  const hint = document.getElementById("helpAssistantHint");
+  const question = " ".join(String(input?.value || "").split()).trim();
+  if (question.length < 3) {
+    alert(tr("Введите вопрос подробнее (минимум 3 символа).", "Enter a more detailed question (min 3 chars)."));
+    return;
+  }
+  const moduleCode = String(moduleSel?.value || "").trim();
+  if (askBtn) askBtn.disabled = true;
+  if (hint) hint.textContent = tr("Генерирую ответ...", "Generating response...");
+  const data = await requestJson("/api/help/assistant", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ question, module_code: moduleCode }),
+    timeoutMs: 120000,
+  }).catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  if (askBtn) askBtn.disabled = false;
+  if (!data) {
+    if (hint) hint.textContent = tr("Не удалось получить ответ. Повторите запрос.", "Failed to get response. Please retry.");
+    return;
+  }
+  helpAssistantHistory.push({
+    question,
+    answer: String(data.answer || ""),
+    provider: String(data.provider || ""),
+    mode: String(data.mode || ""),
+    service_name: String(data.service_name || ""),
+    module_code: moduleCode,
+  });
+  if (helpAssistantHistory.length > 20) {
+    helpAssistantHistory = helpAssistantHistory.slice(-20);
+  }
+  if (input) input.value = "";
+  if (hint) {
+    hint.textContent = `${tr("Ответ получен", "Response ready")}: ${data.service_name || data.mode || "-"} | ${data.provider || "-"}`;
+  }
+  renderHelpAssistantHistory();
 }
 
 window.openHelpModule = openHelpModule;
@@ -5423,6 +5832,22 @@ if (salesOtherCostsInput) {
   salesOtherCostsInput.addEventListener("change", () => renderSalesStats());
 }
 
+const profileAiSourceSelectEl = document.getElementById("profileAiSourceSelect");
+if (profileAiSourceSelectEl) {
+  profileAiSourceSelectEl.addEventListener("change", () => {
+    renderProfileAiServiceOptions(profileAiSourceSelectEl.value);
+  });
+}
+
+const helpAssistantQuestionInput = document.getElementById("helpAssistantQuestion");
+if (helpAssistantQuestionInput) {
+  helpAssistantQuestionInput.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || e.shiftKey) return;
+    e.preventDefault();
+    askHelpAssistant();
+  });
+}
+
 ["reviewDateFrom", "reviewDateTo", "questionDateFrom", "questionDateTo"].forEach((id) => {
   const el = document.getElementById(id);
   if (!el) return;
@@ -5454,3 +5879,9 @@ if (campaignDetailModal) {
     if (e.key === "Escape") closeCampaignDetailModal();
   });
 }
+
+window.switchHelpSubtab = switchHelpSubtab;
+window.askHelpAssistant = askHelpAssistant;
+window.loadProfileAi = loadProfileAi;
+window.saveProfileAiSelection = saveProfileAiSelection;
+window.addProfileAiService = addProfileAiService;

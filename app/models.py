@@ -23,6 +23,8 @@ class User(Base):
     knowledge_docs: Mapped[list["UserKnowledgeDoc"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     profile: Mapped["UserProfile | None"] = relationship(back_populates="user", cascade="all, delete-orphan")
     team_members: Mapped[list["TeamMember"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    ai_services: Mapped[list["AiServiceAccount"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    ai_preference: Mapped["UserAiPreference | None"] = relationship(back_populates="user", cascade="all, delete-orphan")
     billing_account: Mapped["BillingAccount | None"] = relationship(back_populates="user", cascade="all, delete-orphan")
     billing_events: Mapped[list["BillingEvent"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
@@ -188,6 +190,37 @@ class TeamMember(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user: Mapped["User"] = relationship(back_populates="team_members")
+
+
+class AiServiceAccount(Base):
+    __tablename__ = "ai_service_accounts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
+    name: Mapped[str] = mapped_column(String(120), default="")
+    provider: Mapped[str] = mapped_column(String(40), default="openai")
+    api_key: Mapped[str] = mapped_column(String(255), default="")
+    model: Mapped[str] = mapped_column(String(120), default="")
+    base_url: Mapped[str] = mapped_column(String(500), default="")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped["User | None"] = relationship(back_populates="ai_services")
+
+
+class UserAiPreference(Base):
+    __tablename__ = "user_ai_preferences"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, unique=True)
+    use_global_default: Mapped[bool] = mapped_column(Boolean, default=True)
+    mode: Mapped[str] = mapped_column(String(20), default="builtin")
+    service_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped["User"] = relationship(back_populates="ai_preference")
 
 
 class AuditLog(Base):

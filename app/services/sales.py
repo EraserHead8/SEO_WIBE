@@ -15,11 +15,13 @@ WB_SALES_CACHE_TTL_SEC = 180
 _WB_SALES_CACHE: dict[tuple[str, str, str], tuple[float, list[dict[str, Any]], list[str]]] = {}
 WB_SALES_MAX_PAGES = 3
 WB_SALES_CONTINUATION_THRESHOLD = 79_500
+WB_SALES_LONG_RANGE_DAYS = 10
 WB_REPORT_DETAIL_LIMIT = 50_000
 WB_REPORT_DETAIL_MAX_PAGES = 3
 WB_ADS_TIMEOUT = httpx.Timeout(connect=4.0, read=9.0, write=9.0, pool=9.0)
 WB_AD_SPEND_CACHE_TTL_SEC = 180
 WB_ADS_MAX_CAMPAIGNS = 120
+WB_ADS_MAX_CAMPAIGNS_LONG_RANGE = 60
 WB_ADS_MAX_STATS_CHUNKS = 3
 _WB_AD_SPEND_CACHE: dict[tuple[str, str, str], tuple[float, float, list[str]]] = {}
 
@@ -89,6 +91,8 @@ def _fetch_wb_sales_rows(api_key: str, date_from: date, date_to: date) -> tuple[
     now = time.monotonic()
     if cached and now - cached[0] <= WB_SALES_CACHE_TTL_SEC:
         return list(cached[1]), list(cached[2])
+    period_days = max(1, (date_to - date_from).days + 1)
+    max_pages = 1 if period_days >= WB_SALES_LONG_RANGE_DAYS else WB_SALES_MAX_PAGES
 
     rows: list[dict[str, Any]] = []
     warnings: list[str] = []
@@ -97,7 +101,7 @@ def _fetch_wb_sales_rows(api_key: str, date_from: date, date_to: date) -> tuple[
     seen_cursors: set[str] = set()
     response_pages: list[list[dict[str, Any]]] = []
     last_error = "WB sales API недоступен."
-    for page_idx in range(WB_SALES_MAX_PAGES):
+    for page_idx in range(max_pages):
         params = {"dateFrom": cursor, "flag": 0}
         payload, status = _request_wb_sales_payload(api_key=api_key, endpoint=endpoint, params=params)
         if payload is None:
@@ -115,6 +119,11 @@ def _fetch_wb_sales_rows(api_key: str, date_from: date, date_to: date) -> tuple[
         response_pages.append(payload)
 
         if len(payload) < WB_SALES_CONTINUATION_THRESHOLD:
+            break
+        if max_pages == 1:
+            warnings.append(
+                "WB sales: период большой, используем ускоренный одностраничный режим (ограничение WB 1 запрос/мин)."
+            )
             break
         next_cursor = _extract_wb_sales_cursor(payload[-1])
         if not next_cursor or next_cursor in seen_cursors:
@@ -341,6 +350,9 @@ def _fetch_wb_ad_spent_total(api_key: str, date_from: date, date_to: date) -> tu
 
     warnings: list[str] = []
     spent_total = 0.0
+    period_days = max(1, (date_to - date_from).days + 1)
+    max_campaigns = WB_ADS_MAX_CAMPAIGNS_LONG_RANGE if period_days >= 14 else WB_ADS_MAX_CAMPAIGNS
+    max_chunks = 2 if period_days >= 14 else WB_ADS_MAX_STATS_CHUNKS
     try:
         campaign_rows = fetch_wb_campaigns(
             api_key,
@@ -359,7 +371,6 @@ def _fetch_wb_ad_spent_total(api_key: str, date_from: date, date_to: date) -> tu
     ids = sorted(set(ids))
     if not ids:
         return 0.0, warnings
-    max_campaigns = WB_ADS_MAX_CAMPAIGNS
     if len(ids) > max_campaigns:
         warnings.append(f"WB Ads: кампаний много ({len(ids)}), для скорости учитываем первые {max_campaigns}.")
         ids = ids[:max_campaigns]
@@ -372,7 +383,7 @@ def _fetch_wb_ad_spent_total(api_key: str, date_from: date, date_to: date) -> tu
             fast_mode=True,
             request_timeout=WB_ADS_TIMEOUT,
             max_attempts=1,
-            max_chunks=WB_ADS_MAX_STATS_CHUNKS,
+            max_chunks=max_chunks,
         )
     except Exception:
         return 0.0, ["WB Ads статистика недоступна для расчета расходов."]

@@ -5,6 +5,8 @@ let adminModules = [];
 let adminCredentials = [];
 let adminUiSettings = null;
 let adminAuditRows = [];
+let adminAiGlobalState = null;
+let adminSelectedUserAiState = null;
 const adminUserProfileCache = new Map();
 
 const UI_THEMES = ["classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring", "japan", "greenland"];
@@ -26,6 +28,10 @@ const ADMIN_TABS = {
   modules: {
     ru: ["Модули", "Включение и отключение доступов"],
     en: ["Modules", "Enable and disable user access"],
+  },
+  ai: {
+    ru: ["AI", "Глобальные и пользовательские AI сервисы"],
+    en: ["AI", "Global and user AI services"],
   },
   appearance: {
     ru: ["Оформление", "Темы интерфейса и политика выбора темы"],
@@ -54,7 +60,22 @@ const DEFAULT_MODULE_CODES = [
   "wb_ads_analytics",
   "wb_ads_recommendations",
   "help_center",
+  "ai_assistant",
   "billing",
+];
+
+const TEAM_ACCESS_MODULES = [
+  "products",
+  "seo_generation",
+  "sales_stats",
+  "wb_reviews_ai",
+  "wb_questions_ai",
+  "wb_ads",
+  "wb_ads_analytics",
+  "wb_ads_recommendations",
+  "user_profile",
+  "help_center",
+  "ai_assistant",
 ];
 
 const MODULE_TITLES = {
@@ -70,6 +91,7 @@ const MODULE_TITLES = {
   wb_ads_analytics: { ru: "Аналитика рекламы WB", en: "WB Ads analytics" },
   wb_ads_recommendations: { ru: "Рекомендации WB Ads", en: "WB Ads recommendations" },
   help_center: { ru: "Справка по модулям", en: "Help center" },
+  ai_assistant: { ru: "AI помощник", en: "AI assistant" },
   billing: { ru: "Биллинг", en: "Billing" },
 };
 
@@ -113,6 +135,38 @@ function parseAdminTeamScope(raw) {
     .split(",")
     .map((x) => x.trim().toLowerCase())
     .filter(Boolean);
+}
+
+function normalizeAdminTeamScope(values) {
+  const source = Array.isArray(values) ? values : parseAdminTeamScope(values);
+  const allowed = new Set(TEAM_ACCESS_MODULES);
+  const seen = new Set();
+  const out = [];
+  for (const item of source) {
+    const code = String(item || "").trim().toLowerCase();
+    if (!code || !allowed.has(code) || seen.has(code)) continue;
+    seen.add(code);
+    out.push(code);
+  }
+  return out;
+}
+
+function renderAdminTeamScopePicks(selected = [], memberId = 0, disabled = false, key = "row") {
+  const selectedSet = new Set(normalizeAdminTeamScope(selected));
+  return `<div class="team-access-picks">${TEAM_ACCESS_MODULES.map((code) => `
+    <label class="check">
+      <input type="checkbox" data-team-scope-pick="${key}:${memberId}" data-code="${escapeHtml(code)}" ${selectedSet.has(code) ? "checked" : ""} ${disabled ? "disabled" : ""} />
+      ${escapeHtml(MODULE_TITLES[code]?.[adminLang] || code)}
+    </label>
+  `).join("")}</div>`;
+}
+
+function collectAdminTeamScope(root, memberId, key = "row") {
+  const selector = `[data-team-scope-pick="${key}:${memberId}"]`;
+  const values = [...(root?.querySelectorAll(selector) || [])]
+    .filter((el) => el.checked)
+    .map((el) => String(el.dataset.code || "").trim().toLowerCase());
+  return normalizeAdminTeamScope(values);
 }
 
 async function adminRequest(url, opts = {}) {
@@ -161,6 +215,7 @@ function applyAdminLanguage() {
     ["dashboard", aTr("Дашборд", "Dashboard")],
     ["users", aTr("Пользователи", "Users")],
     ["modules", aTr("Модули", "Modules")],
+    ["ai", aTr("AI", "AI")],
     ["appearance", aTr("Оформление", "Appearance")],
     ["credentials", aTr("API ключи", "API Keys")],
     ["audit", aTr("Аудит", "Audit")],
@@ -186,6 +241,13 @@ function applyAdminLanguage() {
     ["#adminTab-modules .panel h3", aTr("Модули доступа", "Module access")],
     ["#adminTab-modules .grid-3 .hint", aTr("Выберите пользователя и переключайте статусы модулей в таблице ниже.", "Select user and toggle module access below.")],
     ["#adminTab-modules .grid-3 button", aTr("Обновить таблицу", "Refresh table")],
+    ["#adminTab-ai .panel:nth-of-type(1) h3", aTr("Глобальные AI сервисы", "Global AI services")],
+    ["#adminTab-ai .panel:nth-of-type(1) .grid-4 button:nth-of-type(1)", aTr("Сохранить global default", "Save global default")],
+    ["#adminTab-ai .panel:nth-of-type(1) .grid-4 button:nth-of-type(2)", aTr("Обновить", "Refresh")],
+    ["#adminTab-ai .panel:nth-of-type(1) .grid-6 button", aTr("Добавить глобальный AI", "Add global AI")],
+    ["#adminTab-ai .panel:nth-of-type(2) h3", aTr("AI сервисы пользователей", "User AI services")],
+    ["#adminTab-ai .panel:nth-of-type(2) .grid-4 button", aTr("Сохранить выбор пользователя", "Save user selection")],
+    ["#adminTab-ai .panel:nth-of-type(2) .grid-6 button", aTr("Добавить AI пользователю", "Add AI for user")],
     ["#adminTab-appearance .panel h3", aTr("Оформление интерфейса", "UI appearance")],
     ["#adminThemeChoiceEnabled", aTr("Разрешить выбор темы пользователям", "Allow users to choose theme")],
     ["#adminTab-appearance .grid-3 button", aTr("Сохранить оформление", "Save appearance")],
@@ -229,6 +291,23 @@ function applyAdminLanguage() {
     th.textContent = labels[idx] || th.textContent;
   });
 
+  const aiGlobalMode = document.getElementById("adminAiGlobalMode");
+  if (aiGlobalMode) {
+    aiGlobalMode.innerHTML = [
+      `<option value="builtin">${escapeHtml(aTr("Встроенный OpenAI", "Built-in OpenAI"))}</option>`,
+      `<option value="global">${escapeHtml(aTr("Глобальный сервис", "Global service"))}</option>`,
+    ].join("");
+  }
+  const aiUserMode = document.getElementById("adminAiUserMode");
+  if (aiUserMode) {
+    aiUserMode.innerHTML = [
+      `<option value="global_default">${escapeHtml(aTr("Глобальный default (админ)", "Global default (admin)"))}</option>`,
+      `<option value="builtin">${escapeHtml(aTr("Встроенный OpenAI", "Built-in OpenAI"))}</option>`,
+      `<option value="global">${escapeHtml(aTr("Глобальный сервис", "Global service"))}</option>`,
+      `<option value="user">${escapeHtml(aTr("Сервис пользователя", "User service"))}</option>`,
+    ].join("");
+  }
+
   const activeBtn = document.querySelector(".admin-nav.active");
   if (activeBtn?.dataset?.adminTab) {
     const pack = ADMIN_TABS[activeBtn.dataset.adminTab] || ADMIN_TABS.dashboard;
@@ -244,6 +323,7 @@ function applyAdminLanguage() {
   renderAdminCredentialsTable();
   renderAdminAuditTable();
   renderAdminAppearance();
+  renderAdminAiTab();
 }
 
 function adminChangeLanguage() {
@@ -273,6 +353,12 @@ function showAdminTab(tab, btn = null) {
   if (tab === "audit" && !adminAuditRows.length) {
     loadAdminAudit();
   }
+  if (tab === "ai") {
+    renderAdminAiTab();
+    if (!adminSelectedUserAiState) {
+      loadAdminUserAi().catch(() => null);
+    }
+  }
 }
 
 function buildUserOption(user) {
@@ -282,7 +368,7 @@ function buildUserOption(user) {
 
 function refreshUserSelects() {
   const html = adminUsers.map(buildUserOption).join("");
-  ["adminModuleUserSelect", "adminCredUserSelect"].forEach((id) => {
+  ["adminModuleUserSelect", "adminCredUserSelect", "adminAiUserSelect"].forEach((id) => {
     const el = document.getElementById(id);
     if (!el) return;
     const prev = el.value;
@@ -317,6 +403,8 @@ function adminLogout() {
   adminModules = [];
   adminCredentials = [];
   adminAuditRows = [];
+  adminAiGlobalState = null;
+  adminSelectedUserAiState = null;
   adminUserProfileCache.clear();
   localStorage.removeItem("admin_token");
   setAdminVisible(false);
@@ -344,12 +432,13 @@ async function ensureAdminAuth() {
 }
 
 async function loadAdminAll() {
-  const [stats, users, modules, allCreds, uiSettings] = await Promise.all([
+  const [stats, users, modules, allCreds, uiSettings, aiGlobal] = await Promise.all([
     adminRequest("/api/admin/stats", { headers: adminHeaders() }).catch(() => null),
     adminRequest("/api/admin/users", { headers: adminHeaders() }).catch(() => null),
     adminRequest("/api/admin/modules", { headers: adminHeaders() }).catch(() => null),
     adminRequest("/api/admin/credentials/all", { headers: adminHeaders() }).catch(() => []),
     adminRequest("/api/admin/ui/settings", { headers: adminHeaders() }).catch(() => null),
+    adminRequest("/api/admin/ai/global", { headers: adminHeaders() }).catch(() => null),
   ]);
 
   const statsView = document.getElementById("adminStatsView");
@@ -364,12 +453,15 @@ async function loadAdminAll() {
   }
   adminCredentials = Array.isArray(allCreds) ? allCreds : [];
   adminUiSettings = uiSettings && typeof uiSettings === "object" ? uiSettings : null;
+  adminAiGlobalState = aiGlobal && typeof aiGlobal === "object" ? aiGlobal : null;
+  adminSelectedUserAiState = null;
 
   renderAdminDashboard(stats, users || [], modules || []);
   renderAdminUsersTable();
   renderAdminModulesTable();
   renderAdminCredentialsTable();
   renderAdminAppearance();
+  renderAdminAiTab();
 }
 
 function renderAdminDashboard(stats, users, modules) {
@@ -649,7 +741,7 @@ function renderAdminUserProfilePanel(payload, rowId) {
           <input data-team-new-phone placeholder="${escapeHtml(aTr("Телефон", "Phone"))}" />
           <input data-team-new-nick placeholder="${escapeHtml(aTr("Ник", "Nickname"))}" />
           <input data-team-new-avatar placeholder="${escapeHtml(aTr("Ссылка на аватар", "Avatar URL"))}" />
-          <input data-team-new-access placeholder="products, seo_generation, wb_reviews_ai" />
+          <div class="admin-team-access-wrap">${renderAdminTeamScopePicks([], payload.user_id, false, "new")}</div>
           <button type="button" data-team-add>${aTr("Добавить сотрудника", "Add employee")}</button>
         </div>
         <div class="table-card admin-team-table-wrap">
@@ -674,7 +766,7 @@ function renderAdminUserProfilePanel(payload, rowId) {
                       .map((member) => {
                         const memberId = Number(member.id || 0);
                         const isOwner = Boolean(member.is_owner);
-                        const access = Array.isArray(member.access_scope) ? member.access_scope.join(", ") : "";
+                        const access = Array.isArray(member.access_scope) ? member.access_scope : [];
                         return `
                           <tr data-team-row="${memberId}">
                             <td>${memberId || "-"}</td>
@@ -683,7 +775,7 @@ function renderAdminUserProfilePanel(payload, rowId) {
                             <td><input data-team-phone="${memberId}" value="${escapeHtml(String(member.phone || ""))}" /></td>
                             <td><input data-team-nick="${memberId}" value="${escapeHtml(String(member.nickname || ""))}" /></td>
                             <td>${isOwner ? aTr("Владелец", "Owner") : aTr("Сотрудник", "Employee")}</td>
-                            <td><input data-team-access="${memberId}" value="${escapeHtml(access)}" ${isOwner ? "disabled" : ""} /></td>
+                            <td>${renderAdminTeamScopePicks(access, memberId, isOwner, "row")}</td>
                             <td>${isOwner ? "-" : `<input type="password" data-team-pass="${memberId}" placeholder="${escapeHtml(aTr("Новый пароль", "New password"))}" />`}</td>
                             <td>
                               <div class="actions">
@@ -729,7 +821,7 @@ function renderAdminUserProfilePanel(payload, rowId) {
       phone: String(host.querySelector("[data-team-new-phone]")?.value || "").trim(),
       nickname: String(host.querySelector("[data-team-new-nick]")?.value || "").trim(),
       avatar_url: String(host.querySelector("[data-team-new-avatar]")?.value || "").trim(),
-      access_scope: parseAdminTeamScope(host.querySelector("[data-team-new-access]")?.value || ""),
+      access_scope: collectAdminTeamScope(host, payload.user_id, "new"),
     };
     if (!teamPayload.email) {
       alert(aTr("Укажите email сотрудника", "Enter employee email"));
@@ -757,7 +849,7 @@ function renderAdminUserProfilePanel(payload, rowId) {
         phone: String(host.querySelector(`[data-team-phone="${memberId}"]`)?.value || "").trim(),
         nickname: String(host.querySelector(`[data-team-nick="${memberId}"]`)?.value || "").trim(),
         avatar_url: "",
-        access_scope: parseAdminTeamScope(host.querySelector(`[data-team-access="${memberId}"]`)?.value || ""),
+        access_scope: collectAdminTeamScope(host, memberId, "row"),
       };
       const current = teamMembers.find((x) => Number(x.id) === memberId);
       updatePayload.avatar_url = String(current?.avatar_url || "").trim();
@@ -1046,6 +1138,301 @@ async function adminToggleModule(module_code, enabled) {
   await loadAdminAll();
 }
 
+function normalizeAiModeSelection(value) {
+  const mode = String(value || "").trim().toLowerCase();
+  return ["global_default", "builtin", "global", "user"].includes(mode) ? mode : "global_default";
+}
+
+function buildAiServicePayload(prefix) {
+  return {
+    name: String(document.getElementById(`${prefix}Name`)?.value || "").trim(),
+    provider: String(document.getElementById(`${prefix}Provider`)?.value || "openai").trim().toLowerCase(),
+    model: String(document.getElementById(`${prefix}Model`)?.value || "").trim(),
+    base_url: String(document.getElementById(`${prefix}BaseUrl`)?.value || "").trim(),
+    api_key: String(document.getElementById(`${prefix}ApiKey`)?.value || "").trim(),
+  };
+}
+
+function clearAiServiceForm(prefix) {
+  ["Name", "Model", "BaseUrl", "ApiKey"].forEach((suffix) => {
+    const el = document.getElementById(`${prefix}${suffix}`);
+    if (el) el.value = "";
+  });
+  const providerSel = document.getElementById(`${prefix}Provider`);
+  if (providerSel) providerSel.value = "openai";
+  const actionBtn = document.querySelector(`button[onclick^="${prefix.includes('Global') ? "adminAddGlobalAiService" : "adminAddUserAiService"}"]`);
+  if (actionBtn) {
+    actionBtn.dataset.editId = "";
+    actionBtn.textContent = prefix.includes("Global")
+      ? aTr("Добавить глобальный AI", "Add global AI")
+      : aTr("Добавить AI пользователю", "Add AI for user");
+  }
+}
+
+function renderAdminAiTab(preserveUserMode = false) {
+  const globalMode = document.getElementById("adminAiGlobalMode");
+  const globalServiceSel = document.getElementById("adminAiGlobalServiceSelect");
+  const globalTable = document.getElementById("adminAiGlobalTable");
+  if (!globalMode || !globalServiceSel || !globalTable) return;
+
+  const globalDefault = adminAiGlobalState?.global_default || { mode: "builtin", service_id: null };
+  const globalServices = Array.isArray(adminAiGlobalState?.global_services) ? adminAiGlobalState.global_services : [];
+  globalMode.value = String(globalDefault.mode || "builtin");
+  globalServiceSel.innerHTML = globalServices.length
+    ? globalServices.map((row) => `<option value="${Number(row.id || 0)}">#${Number(row.id || 0)} ${escapeHtml(String(row.name || "-"))} (${escapeHtml(String(row.provider || "-"))})</option>`).join("")
+    : `<option value="">${aTr("Сервисов нет", "No services")}</option>`;
+  if (globalDefault.service_id && [...globalServiceSel.options].some((x) => Number(x.value) === Number(globalDefault.service_id))) {
+    globalServiceSel.value = String(globalDefault.service_id);
+  }
+  globalTable.innerHTML = globalServices.length
+    ? globalServices.map((row) => `
+      <tr>
+        <td>${Number(row.id || 0)}</td>
+        <td>${escapeHtml(String(row.name || "-"))}</td>
+        <td>${escapeHtml(String(row.provider || "-"))}</td>
+        <td>${escapeHtml(String(row.model || "-"))}</td>
+        <td>${escapeHtml(String(row.base_url || "-"))}</td>
+        <td>${escapeHtml(String(row.api_key_masked || "-"))}</td>
+        <td>
+          <div class="actions">
+            <button class="btn-secondary" type="button" data-ai-global-edit="${Number(row.id || 0)}">${aTr("Изменить", "Edit")}</button>
+            <button class="btn-danger" type="button" data-ai-global-del="${Number(row.id || 0)}">${aTr("Удалить", "Delete")}</button>
+          </div>
+        </td>
+      </tr>
+    `).join("")
+    : `<tr><td colspan="7">${aTr("Глобальные AI сервисы не добавлены.", "No global AI services.")}</td></tr>`;
+
+  globalTable.querySelectorAll("[data-ai-global-edit]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = Number(btn.dataset.aiGlobalEdit || 0);
+      const row = globalServices.find((x) => Number(x.id) === id);
+      if (!row) return;
+      const map = {
+        adminAiGlobalName: row.name || "",
+        adminAiGlobalModel: row.model || "",
+        adminAiGlobalBaseUrl: row.base_url || "",
+      };
+      Object.entries(map).forEach(([idKey, val]) => {
+        const el = document.getElementById(idKey);
+        if (el) el.value = String(val || "");
+      });
+      const p = document.getElementById("adminAiGlobalProvider");
+      if (p) p.value = String(row.provider || "openai");
+      const actionBtn = document.querySelector("button[onclick='adminAddGlobalAiService()']");
+      if (actionBtn) {
+        actionBtn.dataset.editId = String(id);
+        actionBtn.textContent = aTr("Сохранить изменения", "Save changes");
+      }
+      const keyInput = document.getElementById("adminAiGlobalApiKey");
+      if (keyInput) keyInput.focus();
+    });
+  });
+  globalTable.querySelectorAll("[data-ai-global-del]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = Number(btn.dataset.aiGlobalDel || 0);
+      if (!id) return;
+      if (!confirm(aTr(`Удалить глобальный AI сервис #${id}?`, `Delete global AI service #${id}?`))) return;
+      await adminRequest(`/api/admin/ai/global/services/${id}`, {
+        method: "DELETE",
+        headers: adminHeaders(),
+      }).catch((e) => alert(e.message));
+      await loadAdminAll();
+    });
+  });
+
+  const userSelect = document.getElementById("adminAiUserSelect");
+  const userMode = document.getElementById("adminAiUserMode");
+  const userServiceSel = document.getElementById("adminAiUserServiceSelect");
+  const userTable = document.getElementById("adminAiUserTable");
+  if (!userSelect || !userMode || !userServiceSel || !userTable) return;
+  if (userSelect.value && !adminSelectedUserAiState) {
+    loadAdminUserAi().catch(() => null);
+    return;
+  }
+  const userState = adminSelectedUserAiState && typeof adminSelectedUserAiState === "object" ? adminSelectedUserAiState : null;
+  const stateMode = userState?.selection?.use_global_default
+    ? "global_default"
+    : (String(userState?.selection?.mode || "builtin"));
+  const selectedMode = preserveUserMode ? normalizeAiModeSelection(userMode.value || stateMode) : normalizeAiModeSelection(stateMode);
+  userMode.value = selectedMode;
+  const globalRows = Array.isArray(userState?.global_services) ? userState.global_services : [];
+  const userRows = Array.isArray(userState?.user_services) ? userState.user_services : [];
+  const activeRows = selectedMode === "global" ? globalRows : userRows;
+  userServiceSel.innerHTML = activeRows.length
+    ? activeRows.map((row) => `<option value="${Number(row.id || 0)}">#${Number(row.id || 0)} ${escapeHtml(String(row.name || "-"))} (${escapeHtml(String(row.provider || "-"))})</option>`).join("")
+    : `<option value="">${aTr("Сервисов нет", "No services")}</option>`;
+  if (userState?.selection?.service_id && [...userServiceSel.options].some((x) => Number(x.value) === Number(userState.selection.service_id))) {
+    userServiceSel.value = String(userState.selection.service_id);
+  }
+  const effective = userState?.effective || {};
+  const eff = document.getElementById("adminAiUserEffective");
+  if (eff) {
+    eff.textContent = `${aTr("Эффективно", "Effective")}: ${effective.mode || "-"} | ${effective.provider || "-"} | ${effective.model || "-"} | ${effective.service_name || "-"}`;
+  }
+  const mergedRows = [...globalRows, ...userRows];
+  userTable.innerHTML = mergedRows.length
+    ? mergedRows.map((row) => `
+      <tr>
+        <td>${Number(row.id || 0)}</td>
+        <td>${escapeHtml(String(row.scope || "-"))}</td>
+        <td>${escapeHtml(String(row.name || "-"))}</td>
+        <td>${escapeHtml(String(row.provider || "-"))}</td>
+        <td>${escapeHtml(String(row.model || "-"))}</td>
+        <td>${escapeHtml(String(row.base_url || "-"))}</td>
+        <td>${escapeHtml(String(row.api_key_masked || "-"))}</td>
+        <td>
+          ${row.scope === "user"
+            ? `<div class="actions">
+                <button class="btn-secondary" type="button" data-ai-user-edit="${Number(row.id || 0)}">${aTr("Изменить", "Edit")}</button>
+                <button class="btn-danger" type="button" data-ai-user-del="${Number(row.id || 0)}">${aTr("Удалить", "Delete")}</button>
+              </div>`
+            : "-"}
+        </td>
+      </tr>
+    `).join("")
+    : `<tr><td colspan="8">${aTr("AI сервисов у пользователя нет.", "No AI services for user.")}</td></tr>`;
+
+  userTable.querySelectorAll("[data-ai-user-edit]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = Number(btn.dataset.aiUserEdit || 0);
+      const row = userRows.find((x) => Number(x.id) === id);
+      if (!row) return;
+      const map = {
+        adminAiUserName: row.name || "",
+        adminAiUserModel: row.model || "",
+        adminAiUserBaseUrl: row.base_url || "",
+      };
+      Object.entries(map).forEach(([idKey, val]) => {
+        const el = document.getElementById(idKey);
+        if (el) el.value = String(val || "");
+      });
+      const p = document.getElementById("adminAiUserProvider");
+      if (p) p.value = String(row.provider || "openai");
+      const actionBtn = document.querySelector("button[onclick='adminAddUserAiService()']");
+      if (actionBtn) {
+        actionBtn.dataset.editId = String(id);
+        actionBtn.textContent = aTr("Сохранить изменения", "Save changes");
+      }
+      const keyInput = document.getElementById("adminAiUserApiKey");
+      if (keyInput) keyInput.focus();
+    });
+  });
+  userTable.querySelectorAll("[data-ai-user-del]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = Number(btn.dataset.aiUserDel || 0);
+      const userId = Number(document.getElementById("adminAiUserSelect")?.value || 0);
+      if (!id || !userId) return;
+      if (!confirm(aTr(`Удалить AI сервис пользователя #${id}?`, `Delete user AI service #${id}?`))) return;
+      await adminRequest(`/api/admin/users/${userId}/ai/services/${id}`, {
+        method: "DELETE",
+        headers: adminHeaders(),
+      }).catch((e) => alert(e.message));
+      await loadAdminUserAi();
+    });
+  });
+}
+
+async function loadAdminUserAi() {
+  const userId = Number(document.getElementById("adminAiUserSelect")?.value || 0);
+  if (!userId) {
+    adminSelectedUserAiState = null;
+    renderAdminAiTab();
+    return;
+  }
+  const data = await adminRequest(`/api/admin/users/${userId}/ai`, {
+    headers: adminHeaders(),
+  }).catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  if (!data) return;
+  adminSelectedUserAiState = data;
+  renderAdminAiTab();
+}
+
+async function adminSaveAiGlobalDefault() {
+  const mode = String(document.getElementById("adminAiGlobalMode")?.value || "builtin").trim().toLowerCase();
+  const serviceId = Number(document.getElementById("adminAiGlobalServiceSelect")?.value || 0);
+  const payload = {
+    use_global_default: false,
+    mode,
+    service_id: mode === "global" ? serviceId : null,
+  };
+  await adminRequest("/api/admin/ai/global/default", {
+    method: "POST",
+    headers: adminHeaders(),
+    body: JSON.stringify(payload),
+  }).catch((e) => alert(e.message));
+  await loadAdminAll();
+}
+
+async function adminAddGlobalAiService() {
+  const btn = document.querySelector("button[onclick='adminAddGlobalAiService()']");
+  const editId = Number(btn?.dataset?.editId || 0);
+  const payload = buildAiServicePayload("adminAiGlobal");
+  if (!payload.name || !payload.api_key) {
+    alert(aTr("Укажите название и API key", "Provide name and API key"));
+    return;
+  }
+  const url = editId ? `/api/admin/ai/global/services/${editId}` : "/api/admin/ai/global/services";
+  const method = editId ? "PUT" : "POST";
+  await adminRequest(url, {
+    method,
+    headers: adminHeaders(),
+    body: JSON.stringify(payload),
+  }).catch((e) => alert(e.message));
+  clearAiServiceForm("adminAiGlobal");
+  await loadAdminAll();
+}
+
+async function adminSaveUserAiSelection() {
+  const userId = Number(document.getElementById("adminAiUserSelect")?.value || 0);
+  if (!userId) {
+    alert(aTr("Выберите пользователя", "Select user"));
+    return;
+  }
+  const rawMode = normalizeAiModeSelection(document.getElementById("adminAiUserMode")?.value || "global_default");
+  const serviceId = Number(document.getElementById("adminAiUserServiceSelect")?.value || 0);
+  const payload = {
+    use_global_default: rawMode === "global_default",
+    mode: rawMode === "global_default" ? "builtin" : rawMode,
+    service_id: rawMode === "global" || rawMode === "user" ? serviceId : null,
+  };
+  await adminRequest(`/api/admin/users/${userId}/ai/select`, {
+    method: "POST",
+    headers: adminHeaders(),
+    body: JSON.stringify(payload),
+  }).catch((e) => alert(e.message));
+  await loadAdminUserAi();
+}
+
+async function adminAddUserAiService() {
+  const userId = Number(document.getElementById("adminAiUserSelect")?.value || 0);
+  if (!userId) {
+    alert(aTr("Выберите пользователя", "Select user"));
+    return;
+  }
+  const btn = document.querySelector("button[onclick='adminAddUserAiService()']");
+  const editId = Number(btn?.dataset?.editId || 0);
+  const payload = buildAiServicePayload("adminAiUser");
+  if (!payload.name || !payload.api_key) {
+    alert(aTr("Укажите название и API key", "Provide name and API key"));
+    return;
+  }
+  const url = editId
+    ? `/api/admin/users/${userId}/ai/services/${editId}`
+    : `/api/admin/users/${userId}/ai/services`;
+  const method = editId ? "PUT" : "POST";
+  await adminRequest(url, {
+    method,
+    headers: adminHeaders(),
+    body: JSON.stringify(payload),
+  }).catch((e) => alert(e.message));
+  clearAiServiceForm("adminAiUser");
+  await loadAdminUserAi();
+}
+
 function parseAuditDetails(raw) {
   const text = String(raw || "").trim();
   if (!text) return { summary: "-", kv: [] };
@@ -1191,6 +1578,11 @@ async function adminSaveUiSettings() {
 }
 
 document.getElementById("adminModuleUserSelect")?.addEventListener("change", () => renderAdminModulesTable());
+document.getElementById("adminAiUserSelect")?.addEventListener("change", () => {
+  adminSelectedUserAiState = null;
+  loadAdminUserAi().catch(() => null);
+});
+document.getElementById("adminAiUserMode")?.addEventListener("change", () => renderAdminAiTab(true));
 window.showAdminTab = showAdminTab;
 window.adminLogin = adminLogin;
 window.adminLogout = adminLogout;
@@ -1198,6 +1590,10 @@ window.loadAdminAll = loadAdminAll;
 window.loadAdminAudit = loadAdminAudit;
 window.adminSaveUiSettings = adminSaveUiSettings;
 window.adminSaveCredential2 = adminSaveCredential2;
+window.adminSaveAiGlobalDefault = adminSaveAiGlobalDefault;
+window.adminAddGlobalAiService = adminAddGlobalAiService;
+window.adminSaveUserAiSelection = adminSaveUserAiSelection;
+window.adminAddUserAiService = adminAddUserAiService;
 window.adminChangeLanguage = adminChangeLanguage;
 window.adminChangeTheme = adminChangeTheme;
 

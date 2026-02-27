@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SEO WIBE</title>
-  <link rel="stylesheet" href="/static/styles.css?v=20260227d" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260227e" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -564,7 +564,7 @@
       </section>
 
       <section id="profile" class="tab hidden">
-        <div class="panel">
+        <div class="panel" id="profileMainPanel">
           <h3>Профиль пользователя</h3>
           <div class="cols-2">
             <div>
@@ -604,7 +604,7 @@
           <textarea id="profileCompanyStructure" rows="4" placeholder="Структура компании, роли, отделы"></textarea>
         </div>
 
-        <div class="panel">
+        <div class="panel" id="profilePlanPanel">
           <h3>Тариф</h3>
           <div class="grid-4">
             <select id="profilePlanSelect"></select>
@@ -615,7 +615,7 @@
           <pre id="profilePlanSummary">-</pre>
         </div>
 
-        <div class="panel">
+        <div class="panel" id="profileKeysPanel">
           <h3>API ключи</h3>
           <p class="hint">WB: токен. Ozon: <code>client_id:api_key</code>.</p>
           <div class="cols-2">
@@ -633,7 +633,48 @@
           <pre id="profileKeysList">-</pre>
         </div>
 
-        <div class="panel">
+        <div class="panel" id="profileAiPanel">
+          <h3>AI сервисы</h3>
+          <div class="grid-4">
+            <select id="profileAiSourceSelect">
+              <option value="global_default">Глобальный default (админ)</option>
+              <option value="builtin">Встроенный OpenAI</option>
+              <option value="global">Глобальный сервис</option>
+              <option value="user">Мой сервис</option>
+            </select>
+            <select id="profileAiServiceSelect"></select>
+            <button onclick="saveProfileAiSelection()">Сохранить выбор AI</button>
+            <button class="btn-secondary" onclick="loadProfileAi()">Обновить AI</button>
+          </div>
+          <div id="profileAiEffective" class="hint">-</div>
+          <div class="grid-6 team-form-grid">
+            <input id="profileAiName" placeholder="Название AI сервиса" />
+            <select id="profileAiProvider">
+              <option value="openai">openai</option>
+              <option value="openrouter">openrouter</option>
+              <option value="deepseek">deepseek</option>
+              <option value="groq">groq</option>
+              <option value="together">together</option>
+              <option value="mistral">mistral</option>
+              <option value="xai">xai</option>
+              <option value="custom">custom</option>
+            </select>
+            <input id="profileAiModel" placeholder="Модель (например gpt-4o-mini)" />
+            <input id="profileAiBaseUrl" placeholder="Base URL (опционально)" />
+            <input id="profileAiApiKey" placeholder="API key сервиса" />
+            <button class="btn-secondary" onclick="addProfileAiService()">Добавить AI сервис</button>
+          </div>
+          <div class="table-card">
+            <table>
+              <thead>
+                <tr><th>ID</th><th>Scope</th><th>Название</th><th>Provider</th><th>Model</th><th>Base URL</th><th>Key</th><th>Действия</th></tr>
+              </thead>
+              <tbody id="profileAiServicesTable"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel" id="profileSecurityPanel">
           <h3>Безопасность</h3>
           <div class="grid-3">
             <input id="profileCurrentPassword" type="password" placeholder="Текущий пароль" />
@@ -692,12 +733,32 @@
 
       <section id="help" class="tab hidden">
         <div class="panel">
+          <div class="module-subtabs">
+            <button class="chip-btn active" id="helpSubtabDocsBtn" type="button" onclick="switchHelpSubtab('docs')">Справка</button>
+            <button class="chip-btn" id="helpSubtabAssistantBtn" type="button" onclick="switchHelpSubtab('assistant')">AI помощник</button>
+          </div>
+        </div>
+        <div id="helpSubtabDocs">
+        <div class="panel">
           <h3>Справка по модулям</h3>
           <div class="grid-2">
             <select id="helpModuleSelect" onchange="loadHelpDocs()"></select>
             <button class="btn-secondary" onclick="loadHelpDocs()">Обновить справку</button>
           </div>
           <div id="helpDocsView" class="help-rich">-</div>
+        </div>
+        </div>
+        <div id="helpSubtabAssistant" class="hidden">
+          <div class="panel">
+            <h3>AI помощник по маркетплейсам и сервису</h3>
+            <div class="grid-3">
+              <select id="helpAssistantModuleSelect"></select>
+              <input id="helpAssistantQuestion" placeholder="Ваш вопрос по WB/Ozon или по модулю сервиса" />
+              <button onclick="askHelpAssistant()">Спросить</button>
+            </div>
+            <div id="helpAssistantHint" class="hint">-</div>
+            <div id="helpAssistantHistory" class="help-rich">-</div>
+          </div>
         </div>
       </section>
 
@@ -752,6 +813,6 @@
 
   <div id="hoverTip" class="hover-tip hidden"></div>
 
-  <script src="/static/app.js?v=20260227d"></script>
+  <script src="/static/app.js?v=20260227f"></script>
 </body>
 </html>

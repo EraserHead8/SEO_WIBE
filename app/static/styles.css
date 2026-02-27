@@ -1806,6 +1806,27 @@ pre {
   background: rgba(10, 20, 50, 0.38);
 }
 
+.admin-team-access-wrap {
+  grid-column: 1 / -1;
+}
+
+.admin-team-access-wrap .team-access-picks {
+  margin: 4px 0 0;
+}
+
+.admin-team-table .team-access-picks {
+  margin: 0;
+  min-width: 220px;
+}
+
+#profileAiServicesTable .actions,
+#adminAiGlobalTable .actions,
+#adminAiUserTable .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .theme-picks {
   display: flex;
   flex-wrap: wrap;

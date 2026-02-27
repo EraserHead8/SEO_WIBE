@@ -410,6 +410,10 @@ def generate_review_reply(
     reviewer_name: str = "",
     marketplace: str = "wb",
     content_kind: str = "review",
+    api_key: str = "",
+    model: str = "",
+    provider: str = "openai",
+    base_url: str = "",
 ) -> str:
     review = (review_text or "").strip()
     product = (product_name or "").strip() or "товар"
@@ -420,8 +424,10 @@ def generate_review_reply(
     kind = "question" if (content_kind or "").strip().lower() == "question" else "review"
 
     fallback = _fallback_question_reply(review, product, customer_name) if kind == "question" else _fallback_reply(review, product, rating, customer_name)
-    if not settings.openai_api_key:
+    token = (api_key or "").strip() or (settings.openai_api_key or "").strip()
+    if not token:
         return fallback
+    resolved_model = (model or "").strip() or settings.openai_model
 
     if kind == "question":
         system_prompt = custom_prompt or (
@@ -455,7 +461,7 @@ def generate_review_reply(
             "Сформируй только текст ответа клиенту."
         )
     payload = {
-        "model": settings.openai_model,
+        "model": resolved_model,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -464,12 +470,13 @@ def generate_review_reply(
         "max_tokens": 260,
     }
     headers = {
-        "Authorization": f"Bearer {settings.openai_api_key}",
+        "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     }
+    endpoint = _resolve_ai_chat_endpoint(provider=provider, base_url=base_url)
     try:
         with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
-            response = client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+            response = client.post(endpoint, headers=headers, json=payload)
         if response.status_code >= 400:
             return fallback
         data = response.json()
@@ -484,6 +491,113 @@ def generate_review_reply(
         return " ".join(reply.split())
     except Exception:
         return fallback
+
+
+def generate_help_assistant_reply(
+    question: str,
+    context_text: str,
+    prompt: str = "",
+    *,
+    api_key: str = "",
+    model: str = "",
+    provider: str = "openai",
+    base_url: str = "",
+) -> str:
+    q = " ".join((question or "").split()).strip()
+    if not q:
+        return "Уточните вопрос, и я помогу пошагово."
+    token = (api_key or "").strip() or (settings.openai_api_key or "").strip()
+    fallback = _fallback_help_reply(q)
+    if not token:
+        return fallback
+    resolved_model = (model or "").strip() or settings.openai_model
+    sys_prompt = (prompt or "").strip() or (
+        "Ты AI-помощник сервиса SEO WIBE для продавцов маркетплейсов. "
+        "Помогай по WB, Ozon и по самому сервису. "
+        "Отвечай кратко, структурно, по шагам. "
+        "Если информации мало, сначала задай один уточняющий вопрос. "
+        "Не выдумывай факты и API-правила."
+    )
+    user_prompt = (
+        f"Вопрос пользователя:\n{q}\n\n"
+        f"Контекст справки сервиса:\n{(context_text or '').strip()[:9000] or '[контекст не передан]'}\n\n"
+        "Сформируй практичный ответ на русском языке."
+    )
+    payload = {
+        "model": resolved_model,
+        "messages": [
+            {"role": "system", "content": sys_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": 0.45,
+        "max_tokens": 550,
+    }
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+    endpoint = _resolve_ai_chat_endpoint(provider=provider, base_url=base_url)
+    try:
+        with httpx.Client(timeout=OZON_TIMEOUT, follow_redirects=True) as client:
+            response = client.post(endpoint, headers=headers, json=payload)
+        if response.status_code >= 400:
+            return fallback
+        data = response.json()
+        reply = (
+            data.get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+            .strip()
+        )
+        if not reply:
+            return fallback
+        return " ".join(reply.split())
+    except Exception:
+        return fallback
+
+
+def _resolve_ai_chat_endpoint(provider: str, base_url: str) -> str:
+    raw_base = str(base_url or "").strip()
+    if raw_base:
+        base = raw_base.rstrip("/")
+        if base.endswith("/chat/completions"):
+            return base
+        if base.endswith("/v1"):
+            return f"{base}/chat/completions"
+        return f"{base}/v1/chat/completions"
+    code = str(provider or "").strip().lower()
+    endpoints = {
+        "openai": "https://api.openai.com/v1/chat/completions",
+        "openrouter": "https://openrouter.ai/api/v1/chat/completions",
+        "deepseek": "https://api.deepseek.com/chat/completions",
+        "groq": "https://api.groq.com/openai/v1/chat/completions",
+        "together": "https://api.together.xyz/v1/chat/completions",
+        "mistral": "https://api.mistral.ai/v1/chat/completions",
+        "xai": "https://api.x.ai/v1/chat/completions",
+    }
+    return endpoints.get(code, endpoints["openai"])
+
+
+def _fallback_help_reply(question: str) -> str:
+    text = str(question or "").strip().lower()
+    if "api" in text and ("ключ" in text or "key" in text):
+        return (
+            "Проверьте API-ключи в «Профиль»: для WB нужен токен, для Ozon формат client_id:api_key. "
+            "После сохранения нажмите «Проверить» и обновите нужный модуль."
+        )
+    if "статист" in text or "sales" in text:
+        return (
+            "Откройте «Статистика и дашборд», выберите маркетплейс и период, затем нажмите обновление. "
+            "При предупреждении 429 повторите запрос позже."
+        )
+    if "отзыв" in text or "вопрос" in text:
+        return (
+            "В модуле «Отзывы/Вопросы» сначала обновите список, затем сгенерируйте текст кнопкой AI "
+            "и отправьте ответ кнопкой отправки в строке."
+        )
+    return (
+        "Я помогу. Уточните, пожалуйста: это вопрос по WB/Ozon, по статистике, по рекламе или по работе модулей SEO WIBE?"
+    )
 
 
 def fetch_wb_campaigns(

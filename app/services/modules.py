@@ -11,5 +11,6 @@ DEFAULT_MODULES = [
     "wb_ads_analytics",
     "wb_ads_recommendations",
     "help_center",
+    "ai_assistant",
     "billing",
 ]

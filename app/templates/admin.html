@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SEO WIBE Admin</title>
-  <link rel="stylesheet" href="/static/styles.css?v=20260227b" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260227e" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -55,6 +55,7 @@
         <button class="nav-btn admin-nav active" data-admin-tab="dashboard" onclick="showAdminTab('dashboard', this)">Дашборд</button>
         <button class="nav-btn admin-nav" data-admin-tab="users" onclick="showAdminTab('users', this)">Пользователи</button>
         <button class="nav-btn admin-nav" data-admin-tab="modules" onclick="showAdminTab('modules', this)">Модули</button>
+        <button class="nav-btn admin-nav" data-admin-tab="ai" onclick="showAdminTab('ai', this)">AI</button>
         <button class="nav-btn admin-nav" data-admin-tab="appearance" onclick="showAdminTab('appearance', this)">Оформление</button>
         <button class="nav-btn admin-nav" data-admin-tab="credentials" onclick="showAdminTab('credentials', this)">API ключи</button>
         <button class="nav-btn admin-nav" data-admin-tab="audit" onclick="showAdminTab('audit', this)">Аудит</button>
@@ -152,6 +153,87 @@
         </div>
       </section>
 
+      <section id="adminTab-ai" class="admin-tab hidden">
+        <div class="panel">
+          <h3>Глобальные AI сервисы</h3>
+          <div class="grid-4">
+            <select id="adminAiGlobalMode">
+              <option value="builtin">Встроенный OpenAI</option>
+              <option value="global">Глобальный сервис</option>
+            </select>
+            <select id="adminAiGlobalServiceSelect"></select>
+            <button onclick="adminSaveAiGlobalDefault()">Сохранить global default</button>
+            <button class="btn-secondary" onclick="loadAdminAll()">Обновить</button>
+          </div>
+          <div class="grid-6">
+            <input id="adminAiGlobalName" placeholder="Название сервиса" />
+            <select id="adminAiGlobalProvider">
+              <option value="openai">openai</option>
+              <option value="openrouter">openrouter</option>
+              <option value="deepseek">deepseek</option>
+              <option value="groq">groq</option>
+              <option value="together">together</option>
+              <option value="mistral">mistral</option>
+              <option value="xai">xai</option>
+              <option value="custom">custom</option>
+            </select>
+            <input id="adminAiGlobalModel" placeholder="Модель" />
+            <input id="adminAiGlobalBaseUrl" placeholder="Base URL (опц.)" />
+            <input id="adminAiGlobalApiKey" placeholder="API key" />
+            <button class="btn-secondary" onclick="adminAddGlobalAiService()">Добавить глобальный AI</button>
+          </div>
+          <div class="table-card">
+            <table>
+              <thead>
+                <tr><th>ID</th><th>Название</th><th>Provider</th><th>Model</th><th>Base URL</th><th>Key</th><th>Действия</th></tr>
+              </thead>
+              <tbody id="adminAiGlobalTable"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>AI сервисы пользователей</h3>
+          <div class="grid-4">
+            <select id="adminAiUserSelect"></select>
+            <select id="adminAiUserMode">
+              <option value="global_default">Глобальный default (админ)</option>
+              <option value="builtin">Встроенный OpenAI</option>
+              <option value="global">Глобальный сервис</option>
+              <option value="user">Сервис пользователя</option>
+            </select>
+            <select id="adminAiUserServiceSelect"></select>
+            <button onclick="adminSaveUserAiSelection()">Сохранить выбор пользователя</button>
+          </div>
+          <div class="grid-6">
+            <input id="adminAiUserName" placeholder="Название сервиса пользователя" />
+            <select id="adminAiUserProvider">
+              <option value="openai">openai</option>
+              <option value="openrouter">openrouter</option>
+              <option value="deepseek">deepseek</option>
+              <option value="groq">groq</option>
+              <option value="together">together</option>
+              <option value="mistral">mistral</option>
+              <option value="xai">xai</option>
+              <option value="custom">custom</option>
+            </select>
+            <input id="adminAiUserModel" placeholder="Модель" />
+            <input id="adminAiUserBaseUrl" placeholder="Base URL (опц.)" />
+            <input id="adminAiUserApiKey" placeholder="API key" />
+            <button class="btn-secondary" onclick="adminAddUserAiService()">Добавить AI пользователю</button>
+          </div>
+          <div id="adminAiUserEffective" class="hint">-</div>
+          <div class="table-card">
+            <table>
+              <thead>
+                <tr><th>ID</th><th>Scope</th><th>Название</th><th>Provider</th><th>Model</th><th>Base URL</th><th>Key</th><th>Действия</th></tr>
+              </thead>
+              <tbody id="adminAiUserTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <section id="adminTab-appearance" class="admin-tab hidden">
         <div class="panel">
           <h3>Оформление интерфейса</h3>
@@ -221,6 +303,6 @@
     </main>
   </section>
 
-  <script src="/static/admin.js?v=20260227b"></script>
+  <script src="/static/admin.js?v=20260227d"></script>
 </body>
 </html>
