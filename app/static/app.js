@@ -2682,13 +2682,17 @@ async function loadWbAdCampaigns() {
   wbAdsLoadProgress = { active: true, total: 0, loaded: 0, failed: 0 };
   updateWbAdsLoadStatus(tr("Загрузка списка кампаний…", "Loading campaign list..."));
 
-  const data = await requestJson("/api/wb/ads/campaigns", { headers: authHeaders(), timeoutMs: 120000 }).catch((e) => {
-    alert(e.message);
+  const data = await requestJson("/api/wb/ads/campaigns", { headers: authHeaders(), timeoutMs: 120000 }).catch(() => {
     return null;
   });
   if (!data) {
     wbAdsLoadProgress.active = false;
-    updateWbAdsLoadStatus(tr("Не удалось загрузить кампании.", "Failed to load campaigns."));
+    updateWbAdsLoadStatus(
+      tr(
+        "Не удалось обновить кампании сейчас. Повторим при следующем цикле загрузки.",
+        "Unable to refresh campaigns now. Will retry on next refresh cycle."
+      )
+    );
     return;
   }
   wbCampaignRows = Array.isArray(data.campaigns) ? data.campaigns : [];
@@ -3620,11 +3624,13 @@ async function loadAdsRecommendations() {
       );
       if (lastError && !adsRecommendationRows.length) {
         adsRecLoadProgress = { active: false, total: Math.max(0, seenTotal), loaded: Math.max(0, scanned) };
-        updateAdsRecLoadStatus(tr("Ошибка загрузки рекомендаций.", "Recommendations loading failed."));
+        updateAdsRecLoadStatus(tr("Рекомендации временно недоступны.", "Recommendations are temporarily unavailable."));
         renderAdsRecommendationsMeta({
-          error: tr("Ошибка загрузки рекомендаций. Проверьте API-ключ и период.", "Recommendations loading failed. Check API key and date range."),
+          error: tr(
+            "Рекомендации пока недоступны. Проверьте API-ключ и период, затем обновите модуль.",
+            "Recommendations are currently unavailable. Check API key and date range, then refresh the module."
+          ),
         });
-        alert(lastError);
         return;
       }
       break;

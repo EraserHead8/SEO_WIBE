@@ -1130,9 +1130,10 @@ tbody tr:hover {
 .review-reply-input {
   width: 100%;
   min-width: 210px;
-  min-height: 112px;
+  min-height: 124px;
   padding: 10px;
   font-size: 13px;
+  resize: vertical;
 }
 .review-actions {
   display: flex;
@@ -1190,13 +1191,13 @@ tbody tr:hover {
 .reviews-table td:nth-child(6),
 .questions-table th:nth-child(5),
 .questions-table td:nth-child(5) {
-  width: 420px;
+  width: 460px;
 }
 
 .reviews-table td:nth-child(6),
 .questions-table td:nth-child(5) {
-  min-width: 420px;
-  padding-right: 92px;
+  min-width: 460px;
+  padding-right: 16px;
   vertical-align: top;
 }
 .questions-table {
@@ -1209,12 +1210,12 @@ tbody tr:hover {
 }
 .questions-table th:nth-child(5),
 .questions-table td:nth-child(5) {
-  width: 420px;
+  width: 460px;
 }
 .questions-table .review-reply-input {
   width: 100%;
   min-width: 230px;
-  min-height: 112px;
+  min-height: 124px;
 }
 .questions-table .review-actions button {
   width: 32px;
@@ -1223,16 +1224,15 @@ tbody tr:hover {
 .reviews-table td:last-child,
 .questions-table th:last-child,
 .questions-table td:last-child {
-  position: sticky;
-  right: 0;
+  position: static;
   width: 82px;
   min-width: 82px;
-  background: rgba(9, 17, 40, 0.92);
-  z-index: 2;
+  background: transparent;
+  z-index: 1;
 }
 .reviews-table th:last-child,
 .questions-table th:last-child {
-  z-index: 3;
+  z-index: 1;
 }
 .review-photo-list {
   display: flex;

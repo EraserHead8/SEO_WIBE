@@ -302,6 +302,10 @@ def _wb_keyword_position(
         if time.monotonic() - started > 45.0:
             break
         products = _wb_search_products(query, page=page, per_page=per_page)
+        if products in (None, []):
+            html_rows = _wb_search_products_html(query, page=page, per_page=per_page)
+            if html_rows:
+                products = html_rows
         if products is None:
             break
         if not products:
@@ -638,14 +642,26 @@ def _wb_search_products_html(query: str, page: int = 1, per_page: int = 30) -> l
 
 
 def _extract_wb_ids_from_html(html: str) -> list[str]:
-    ids = re.findall(r"/catalog/(\d+)/detail\.aspx", html)
+    patterns = [
+        r"/catalog/(\d+)/detail\.aspx",
+        r"\\/catalog\\/(\d+)\\/detail\.aspx",
+        r'data-nm-id="(\d+)"',
+        r'"nmId"\s*:\s*(\d+)',
+        r'"nmID"\s*:\s*(\d+)',
+    ]
+    ids: list[str] = []
+    for pattern in patterns:
+        ids.extend(re.findall(pattern, html))
     unique: list[str] = []
     seen: set[str] = set()
     for nm_id in ids:
-        if nm_id in seen:
+        text_id = str(nm_id).strip()
+        if not text_id.isdigit() or len(text_id) < 5:
             continue
-        seen.add(nm_id)
-        unique.append(nm_id)
+        if text_id in seen:
+            continue
+        seen.add(text_id)
+        unique.append(text_id)
     return unique
 
 
