@@ -15,6 +15,8 @@ WB_SALES_CACHE_TTL_SEC = 180
 _WB_SALES_CACHE: dict[tuple[str, str, str], tuple[float, list[dict[str, Any]], list[str]]] = {}
 WB_SALES_MAX_PAGES = 3
 WB_SALES_CONTINUATION_THRESHOLD = 79_500
+WB_REPORT_DETAIL_LIMIT = 50_000
+WB_REPORT_DETAIL_MAX_PAGES = 3
 WB_ADS_TIMEOUT = httpx.Timeout(connect=4.0, read=9.0, write=9.0, pool=9.0)
 WB_AD_SPEND_CACHE_TTL_SEC = 180
 WB_ADS_MAX_CAMPAIGNS = 120
@@ -184,6 +186,15 @@ def _fetch_wb_sales_rows(api_key: str, date_from: date, date_to: date) -> tuple[
                     "other_costs": 0.0,
                 }
             )
+
+    if not rows and not response_pages:
+        fallback_rows, fallback_warning = _fetch_wb_sales_rows_report_detail(api_key=api_key, date_from=date_from, date_to=date_to)
+        if fallback_rows:
+            if fallback_warning:
+                warnings.append(fallback_warning)
+            _WB_SALES_CACHE[cache_key] = (time.monotonic(), list(fallback_rows), list(warnings))
+            return fallback_rows, warnings
+
     _WB_SALES_CACHE[cache_key] = (time.monotonic(), list(rows), list(warnings))
     return rows, warnings
 
@@ -390,6 +401,107 @@ def _campaign_id_from_any(row: Any) -> int:
     return 0
 
 
+def _fetch_wb_sales_rows_report_detail(api_key: str, date_from: date, date_to: date) -> tuple[list[dict[str, Any]], str]:
+    endpoint = "https://statistics-api.wildberries.ru/api/v5/supplier/reportDetailByPeriod"
+    rrdid = 0
+    source_rows: list[dict[str, Any]] = []
+    for _ in range(WB_REPORT_DETAIL_MAX_PAGES):
+        params = {
+            "dateFrom": date_from.isoformat(),
+            "dateTo": date_to.isoformat(),
+            "limit": WB_REPORT_DETAIL_LIMIT,
+            "rrdid": rrdid,
+        }
+        payload, status = _request_wb_sales_payload(api_key=api_key, endpoint=endpoint, params=params)
+        if payload is None:
+            return [], status
+        if not payload:
+            break
+        source_rows.extend(payload)
+        if len(payload) < WB_REPORT_DETAIL_LIMIT:
+            break
+        next_rrdid = _to_int(payload[-1].get("rrd_id") or payload[-1].get("rrdId") or payload[-1].get("rrdid") or 0)
+        if not next_rrdid or next_rrdid <= rrdid:
+            break
+        rrdid = next_rrdid
+
+    if not source_rows:
+        return [], ""
+
+    rows: list[dict[str, Any]] = []
+    dedupe_keys: set[str] = set()
+    for item in source_rows:
+        if not isinstance(item, dict):
+            continue
+        day = _parse_any_date(
+            item.get("sale_dt")
+            or item.get("saleDt")
+            or item.get("order_dt")
+            or item.get("rr_dt")
+            or item.get("date")
+            or item.get("date_from")
+        )
+        if not day or day < date_from or day > date_to:
+            continue
+        marker = "|".join(
+            [
+                str(item.get("rrd_id") or item.get("rrdId") or ""),
+                str(item.get("rid") or ""),
+                str(item.get("srid") or ""),
+                str(item.get("sale_dt") or item.get("order_dt") or item.get("rr_dt") or ""),
+                str(item.get("nm_id") or item.get("nmId") or ""),
+                str(item.get("quantity") or ""),
+            ]
+        )
+        if marker in dedupe_keys:
+            continue
+        dedupe_keys.add(marker)
+
+        units = int(round(abs(_to_float(item.get("quantity") or 0))))
+        if units <= 0:
+            units = 1
+        revenue = _to_float(
+            item.get("ppvz_for_pay")
+            or item.get("forPay")
+            or item.get("retail_amount")
+            or item.get("retail_price_withdisc_rub")
+            or 0.0
+        )
+        return_amount = abs(float(round(_to_float(item.get("return_amount") or item.get("returnAmount") or 0.0), 2)))
+        op_name = str(item.get("supplier_oper_name") or item.get("doc_type_name") or "").lower()
+        is_return = bool(return_amount > 0 or "возврат" in op_name or "return" in op_name or revenue < 0)
+        safe_revenue = abs(float(round(revenue, 2)))
+        if is_return:
+            rows.append(
+                {
+                    "date": day.isoformat(),
+                    "marketplace": "wb",
+                    "orders": 0,
+                    "units": 0,
+                    "revenue": 0.0,
+                    "returns": units,
+                    "ad_spend": 0.0,
+                    "other_costs": return_amount if return_amount > 0 else safe_revenue,
+                }
+            )
+            continue
+        rows.append(
+            {
+                "date": day.isoformat(),
+                "marketplace": "wb",
+                "orders": 1,
+                "units": units,
+                "revenue": safe_revenue,
+                "returns": 0,
+                "ad_spend": 0.0,
+                "other_costs": 0.0,
+            }
+        )
+    if not rows:
+        return [], ""
+    return rows, "WB sales: использован fallback API reportDetailByPeriod."
+
+
 def _request_wb_sales_payload(api_key: str, endpoint: str, params: dict[str, Any]) -> tuple[list[dict[str, Any]] | None, str]:
     token = (api_key or "").strip()
     if not token:
@@ -566,3 +678,10 @@ def _to_float(value: Any) -> float:
     if not math.isfinite(num):
         return 0.0
     return float(num)
+
+
+def _to_int(value: Any) -> int:
+    try:
+        return int(str(value).strip())
+    except Exception:
+        return 0
