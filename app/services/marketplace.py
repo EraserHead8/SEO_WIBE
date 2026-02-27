@@ -292,6 +292,8 @@ def _wb_keyword_position(
 
     normalized_article = _normalize_code(article)
     normalized_external = _normalize_code(external_id)
+    normalized_name = _normalize_code(product_name)
+    name_tokens = _topic_tokens(product_name)
     pages = WB_MAX_PAGES
     per_page = WB_PER_PAGE
     started = time.monotonic()
@@ -309,9 +311,30 @@ def _wb_keyword_position(
         if page_offset >= WB_POSITION_LIMIT:
             break
         page_limit = max(0, WB_POSITION_LIMIT - page_offset)
-        for idx, product in enumerate(products[:page_limit]):
-            if _wb_product_matches(normalized_article, normalized_external, product):
+        page_rows = products[:page_limit]
+        for idx, product in enumerate(page_rows):
+            if _wb_product_matches(normalized_article, normalized_external, normalized_name, name_tokens, product):
                 return _normalize_position(page_offset + idx + 1)
+        # Search payloads sometimes miss vendor/article fields.
+        # Enrich the current page with card details and try stable ID matching again.
+        if normalized_article and page_rows:
+            page_ids: list[str] = []
+            for product in page_rows:
+                nm_id = _extract_wb_nm_id(product)
+                if nm_id and nm_id not in page_ids:
+                    page_ids.append(nm_id)
+            if page_ids:
+                details = _wb_fetch_card_details(page_ids[:30])
+                if details:
+                    for idx, product in enumerate(page_rows):
+                        nm_id = _extract_wb_nm_id(product)
+                        detail = details.get(nm_id) if nm_id else None
+                        if not detail:
+                            continue
+                        candidate = dict(product)
+                        candidate.update(detail)
+                        if _wb_product_matches(normalized_article, normalized_external, normalized_name, name_tokens, candidate):
+                            return _normalize_position(page_offset + idx + 1)
     # Fallback: WB seller analytics report can return keyword position by nmID.
     analytics_pos = _wb_keyword_position_analytics(wb_api_key=wb_api_key, external_id=external_id, keyword=query)
     if analytics_pos is not None:
@@ -427,9 +450,10 @@ def _wb_keyword_position_browser(query: str, external_id: str, article: str = ""
                         browser.close()
                         return _normalize_position(scanned + idx + 1)
                 if normalized_article:
-                    details = _wb_fetch_card_details(ids[:30])
+                    details_limit = min(len(ids), 140)
+                    details = _wb_fetch_card_details(ids[:details_limit])
                     if details:
-                        for idx, nm_id in enumerate(ids[:30]):
+                        for idx, nm_id in enumerate(ids[:details_limit]):
                             card = details.get(str(nm_id), {})
                             vendor = _normalize_code(
                                 str(
@@ -666,18 +690,37 @@ def _wb_fetch_card_details(ids: list[str]) -> dict[str, dict[str, Any]]:
 def _wb_product_matches(
     normalized_article: str,
     normalized_external: str,
+    normalized_name: str,
+    name_tokens: list[str],
     product: dict[str, Any],
 ) -> bool:
     vendor = _extract_wb_vendor_code(product)
     nm_id = _extract_wb_nm_id(product)
+    name = _normalize_code(str(product.get("name") or product.get("title") or product.get("brand") or ""))
+    subject = _normalize_code(str(product.get("subjectName") or product.get("subject") or ""))
 
     if normalized_external and nm_id and _codes_equal(normalized_external, nm_id):
+        return True
+    if normalized_external and nm_id and len(normalized_external) >= 6 and (normalized_external in nm_id or nm_id in normalized_external):
         return True
 
     if normalized_article and vendor and _codes_equal(normalized_article, vendor):
         return True
+    if normalized_article and vendor and len(normalized_article) >= 6 and (normalized_article in vendor or vendor in normalized_article):
+        return True
     if normalized_article and nm_id and normalized_article.isdigit() and _codes_equal(normalized_article, nm_id):
         return True
+    if normalized_article and name and len(normalized_article) >= 6 and normalized_article in name:
+        return True
+    if normalized_article and subject and len(normalized_article) >= 6 and normalized_article in subject:
+        return True
+    if normalized_name and name:
+        shared = 0
+        for token in name_tokens[:4]:
+            if token and token in name:
+                shared += 1
+        if shared >= 2:
+            return True
     # Important: avoid fuzzy "name overlap" matches here to prevent false positives.
     # If we cannot match by stable identifiers, position should be considered not found.
     return False
@@ -1031,11 +1074,72 @@ def _build_marketplace_search_url(marketplace: str, query: str) -> str:
 def resolve_wb_external_id(api_key: str, article: str, product_name: str = "") -> str:
     if not httpx:
         return ""
-    products = _fetch_wb_products(api_key, [], True, limit=100, timeout_sec=6.0)
-    if not products:
+    token = (api_key or "").strip()
+    if not token:
         return ""
+
     norm_article = _normalize_code(article)
     norm_name = _normalize_code(product_name)
+    name_tokens = _topic_tokens(product_name)
+    endpoint = "https://content-api.wildberries.ru/content/v2/get/cards/list"
+    headers = {"Authorization": token, "Content-Type": "application/json"}
+    cursor: dict[str, Any] = {"limit": 100}
+    scanned = 0
+    timeout = httpx.Timeout(connect=6.0, read=12.0, write=12.0, pool=12.0)
+
+    try:
+        with httpx.Client(timeout=timeout, follow_redirects=True) as client:
+            for _ in range(8):
+                payload = {"settings": {"cursor": cursor, "filter": {"withPhoto": -1}}}
+                response = client.post(endpoint, headers=headers, json=payload)
+                if response.status_code >= 400:
+                    break
+                data = response.json()
+                cards = data.get("cards") or data.get("data", {}).get("cards") or []
+                if not isinstance(cards, list) or not cards:
+                    break
+                for card in cards:
+                    nm_id = str(card.get("nmID") or card.get("nmId") or "")
+                    if not nm_id:
+                        continue
+                    vendor = _normalize_code(str(card.get("vendorCode") or ""))
+                    title = _normalize_code(str(card.get("title") or card.get("object") or ""))
+                    if norm_article and vendor and _codes_equal(norm_article, vendor):
+                        return nm_id
+                    if norm_article and vendor and len(norm_article) >= 6 and (norm_article in vendor or vendor in norm_article):
+                        return nm_id
+                    if norm_name and title and name_tokens:
+                        shared = 0
+                        for token_part in name_tokens[:4]:
+                            if token_part and token_part in title:
+                                shared += 1
+                        if shared >= 2:
+                            return nm_id
+
+                scanned += len(cards)
+                if scanned >= 800:
+                    break
+                next_cursor = data.get("cursor") or data.get("data", {}).get("cursor") or {}
+                next_updated = next_cursor.get("updatedAt")
+                next_nm = next_cursor.get("nmID")
+                if next_nm in (None, ""):
+                    next_nm = next_cursor.get("nmId")
+                if next_updated in (None, "") and next_nm in (None, "", 0):
+                    break
+                next_payload: dict[str, Any] = {"limit": 100}
+                if next_updated not in (None, ""):
+                    next_payload["updatedAt"] = next_updated
+                if next_nm not in (None, "", 0):
+                    next_payload["nmID"] = next_nm
+                if next_payload == cursor:
+                    break
+                cursor = next_payload
+    except Exception:
+        pass
+
+    products = _fetch_wb_products(token, [], True, limit=100, timeout_sec=6.0)
+    if not products:
+        return ""
     for p in products:
         if _normalize_code(p.article) == norm_article and p.external_id:
             return p.external_id

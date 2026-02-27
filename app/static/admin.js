@@ -7,7 +7,7 @@ let adminUiSettings = null;
 let adminAuditRows = [];
 const adminUserProfileCache = new Map();
 
-const UI_THEMES = ["classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring"];
+const UI_THEMES = ["classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring", "japan", "greenland"];
 const BILLING_PLAN_CODES = ["starter", "pro", "business"];
 
 let adminLang = (localStorage.getItem("admin_ui_lang") || "ru").toLowerCase() === "en" ? "en" : "ru";
@@ -82,6 +82,8 @@ const THEME_LABELS = {
   autumn: { ru: "Осень", en: "Autumn" },
   winter: { ru: "Зима", en: "Winter" },
   spring: { ru: "Весна", en: "Spring" },
+  japan: { ru: "Япония", en: "Japan" },
+  greenland: { ru: "Гренландия", en: "Greenland" },
 };
 
 const adminHeaders = () => ({
@@ -104,6 +106,13 @@ function formatDateTime(raw) {
   if (!raw) return "-";
   const text = String(raw);
   return text.slice(0, 19).replace("T", " ");
+}
+
+function parseAdminTeamScope(raw) {
+  return String(raw || "")
+    .split(",")
+    .map((x) => x.trim().toLowerCase())
+    .filter(Boolean);
 }
 
 async function adminRequest(url, opts = {}) {
@@ -545,6 +554,7 @@ function renderAdminUserProfilePanel(payload, rowId) {
   const profile = payload?.profile && typeof payload.profile === "object" ? payload.profile : {};
   const plan = payload?.plan && typeof payload.plan === "object" ? payload.plan : {};
   const credentials = Array.isArray(payload?.credentials) ? payload.credentials : [];
+  const teamMembers = Array.isArray(payload?.team_members) ? payload.team_members : [];
 
   const fullName = String(profile.full_name || "").trim();
   const avatarUrl = String(profile.avatar_url || "").trim();
@@ -626,9 +636,82 @@ function renderAdminUserProfilePanel(payload, rowId) {
         <strong>${aTr("API ключи", "API keys")}:</strong>
         <div class="admin-chip-row">${credentialsHtml}</div>
       </div>
+
+      <div class="admin-team-box">
+        <div class="admin-team-head">
+          <strong>${aTr("Сотрудники кабинета", "Workspace employees")}</strong>
+          <span class="hint">${aTr("Владелец имеет полный доступ (*).", "Owner always has full access (*).")}</span>
+        </div>
+        <div class="admin-team-create">
+          <input data-team-new-email placeholder="${escapeHtml(aTr("Email сотрудника", "Employee email"))}" />
+          <input data-team-new-password type="password" placeholder="${escapeHtml(aTr("Пароль (>=8)", "Password (>=8)"))}" />
+          <input data-team-new-full placeholder="${escapeHtml(aTr("ФИО", "Full name"))}" />
+          <input data-team-new-phone placeholder="${escapeHtml(aTr("Телефон", "Phone"))}" />
+          <input data-team-new-nick placeholder="${escapeHtml(aTr("Ник", "Nickname"))}" />
+          <input data-team-new-avatar placeholder="${escapeHtml(aTr("Ссылка на аватар", "Avatar URL"))}" />
+          <input data-team-new-access placeholder="products, seo_generation, wb_reviews_ai" />
+          <button type="button" data-team-add>${aTr("Добавить сотрудника", "Add employee")}</button>
+        </div>
+        <div class="table-card admin-team-table-wrap">
+          <table class="admin-team-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>${aTr("EMAIL", "EMAIL")}</th>
+                <th>${aTr("ФИО", "FULL NAME")}</th>
+                <th>${aTr("Телефон", "PHONE")}</th>
+                <th>${aTr("Ник", "NICK")}</th>
+                <th>${aTr("Роль", "ROLE")}</th>
+                <th>${aTr("Доступ", "ACCESS")}</th>
+                <th>${aTr("Пароль", "PASSWORD")}</th>
+                <th>${aTr("Действия", "ACTIONS")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${
+                teamMembers.length
+                  ? teamMembers
+                      .map((member) => {
+                        const memberId = Number(member.id || 0);
+                        const isOwner = Boolean(member.is_owner);
+                        const access = Array.isArray(member.access_scope) ? member.access_scope.join(", ") : "";
+                        return `
+                          <tr data-team-row="${memberId}">
+                            <td>${memberId || "-"}</td>
+                            <td><input data-team-email="${memberId}" value="${escapeHtml(String(member.email || ""))}" ${isOwner ? "disabled" : ""} /></td>
+                            <td><input data-team-full="${memberId}" value="${escapeHtml(String(member.full_name || ""))}" /></td>
+                            <td><input data-team-phone="${memberId}" value="${escapeHtml(String(member.phone || ""))}" /></td>
+                            <td><input data-team-nick="${memberId}" value="${escapeHtml(String(member.nickname || ""))}" /></td>
+                            <td>${isOwner ? aTr("Владелец", "Owner") : aTr("Сотрудник", "Employee")}</td>
+                            <td><input data-team-access="${memberId}" value="${escapeHtml(access)}" ${isOwner ? "disabled" : ""} /></td>
+                            <td>${isOwner ? "-" : `<input type="password" data-team-pass="${memberId}" placeholder="${escapeHtml(aTr("Новый пароль", "New password"))}" />`}</td>
+                            <td>
+                              <div class="actions">
+                                <button class="btn-secondary" type="button" data-team-save="${memberId}">${aTr("Сохранить", "Save")}</button>
+                                ${
+                                  isOwner
+                                    ? ""
+                                    : `<button class="btn-danger" type="button" data-team-del="${memberId}">${aTr("Удалить", "Delete")}</button>`
+                                }
+                              </div>
+                            </td>
+                          </tr>
+                        `;
+                      })
+                      .join("")
+                  : `<tr><td colspan="9">${aTr("Сотрудники не добавлены.", "No employees added.")}</td></tr>`
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   `;
 
+  const refreshProfile = async () => {
+    adminUserProfileCache.delete(payload.user_id);
+    await adminToggleUserProfile(payload.user_id, rowId, true);
+  };
   host.querySelector("[data-save-profile]")?.addEventListener("click", async () => {
     await adminSaveUserProfileFromPanel(payload.user_id, rowId);
   });
@@ -636,8 +719,75 @@ function renderAdminUserProfilePanel(payload, rowId) {
     await adminSaveUserPlanFromPanel(payload.user_id, rowId);
   });
   host.querySelector("[data-refresh-profile]")?.addEventListener("click", async () => {
-    adminUserProfileCache.delete(payload.user_id);
-    await adminToggleUserProfile(payload.user_id, rowId, true);
+    await refreshProfile();
+  });
+  host.querySelector("[data-team-add]")?.addEventListener("click", async () => {
+    const teamPayload = {
+      email: String(host.querySelector("[data-team-new-email]")?.value || "").trim().toLowerCase(),
+      password: String(host.querySelector("[data-team-new-password]")?.value || ""),
+      full_name: String(host.querySelector("[data-team-new-full]")?.value || "").trim(),
+      phone: String(host.querySelector("[data-team-new-phone]")?.value || "").trim(),
+      nickname: String(host.querySelector("[data-team-new-nick]")?.value || "").trim(),
+      avatar_url: String(host.querySelector("[data-team-new-avatar]")?.value || "").trim(),
+      access_scope: parseAdminTeamScope(host.querySelector("[data-team-new-access]")?.value || ""),
+    };
+    if (!teamPayload.email) {
+      alert(aTr("Укажите email сотрудника", "Enter employee email"));
+      return;
+    }
+    const created = await adminRequest(`/api/admin/users/${payload.user_id}/team`, {
+      method: "POST",
+      headers: adminHeaders(),
+      body: JSON.stringify(teamPayload),
+    }).catch((e) => {
+      alert(e.message);
+      return null;
+    });
+    if (!created) return;
+    await refreshProfile();
+  });
+  host.querySelectorAll("[data-team-save]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const memberId = Number(btn.dataset.teamSave || 0);
+      if (!memberId) return;
+      const updatePayload = {
+        email: String(host.querySelector(`[data-team-email="${memberId}"]`)?.value || "").trim().toLowerCase(),
+        password: String(host.querySelector(`[data-team-pass="${memberId}"]`)?.value || ""),
+        full_name: String(host.querySelector(`[data-team-full="${memberId}"]`)?.value || "").trim(),
+        phone: String(host.querySelector(`[data-team-phone="${memberId}"]`)?.value || "").trim(),
+        nickname: String(host.querySelector(`[data-team-nick="${memberId}"]`)?.value || "").trim(),
+        avatar_url: "",
+        access_scope: parseAdminTeamScope(host.querySelector(`[data-team-access="${memberId}"]`)?.value || ""),
+      };
+      const current = teamMembers.find((x) => Number(x.id) === memberId);
+      updatePayload.avatar_url = String(current?.avatar_url || "").trim();
+      const updated = await adminRequest(`/api/admin/users/${payload.user_id}/team/${memberId}`, {
+        method: "PUT",
+        headers: adminHeaders(),
+        body: JSON.stringify(updatePayload),
+      }).catch((e) => {
+        alert(e.message);
+        return null;
+      });
+      if (!updated) return;
+      await refreshProfile();
+    });
+  });
+  host.querySelectorAll("[data-team-del]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const memberId = Number(btn.dataset.teamDel || 0);
+      if (!memberId) return;
+      if (!confirm(aTr("Удалить сотрудника из кабинета?", "Delete employee from workspace?"))) return;
+      const deleted = await adminRequest(`/api/admin/users/${payload.user_id}/team/${memberId}`, {
+        method: "DELETE",
+        headers: adminHeaders(),
+      }).catch((e) => {
+        alert(e.message);
+        return null;
+      });
+      if (!deleted) return;
+      await refreshProfile();
+    });
   });
 }
 

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import decode_access_token
 from app.db import get_db
-from app.models import User
+from app.models import TeamMember, User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
@@ -15,9 +15,22 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if not email:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Невалидный токен")
 
-    user = db.scalar(select(User).where(User.email == email))
+    subject_email = str(email or "").strip().lower()
+    user = db.scalar(select(User).where(User.email == subject_email))
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Пользователь не найден")
+        member = db.scalar(
+            select(TeamMember)
+            .where(
+                TeamMember.email == subject_email,
+                TeamMember.is_active.is_(True),
+            )
+            .order_by(TeamMember.id.desc())
+        )
+        if not member:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Пользователь не найден")
+        user = db.get(User, member.user_id)
+        if not user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Пользователь не найден")
     return user
 
 

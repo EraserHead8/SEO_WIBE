@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+import math
+import time
 from typing import Any
 
 import httpx
@@ -484,7 +486,7 @@ def generate_review_reply(
         return fallback
 
 
-def fetch_wb_campaigns(api_key: str) -> list[dict[str, Any]]:
+def fetch_wb_campaigns(api_key: str, enrich: bool = True) -> list[dict[str, Any]]:
     attempts: list[tuple[str, str, dict[str, Any] | list[Any] | None]] = [
         ("GET", "https://advert-api.wb.ru/adv/v1/promotion/count", None),
         ("POST", "https://advert-api.wb.ru/adv/v1/promotion/count", {}),
@@ -542,6 +544,11 @@ def fetch_wb_campaigns(api_key: str) -> list[dict[str, Any]]:
     ids = sorted(set(ids))
     if not ids:
         return count_rows
+
+    if not enrich:
+        if count_rows:
+            return count_rows
+        return [{"advertId": cid} for cid in ids]
 
     details = _fetch_wb_campaign_details(api_key, ids)
     if details:
@@ -1326,24 +1333,35 @@ def _request_wb_json(
     auth_variants = [token, f"Bearer {token}"]
     for auth_value in auth_variants:
         headers = {"Authorization": auth_value, "Content-Type": "application/json"}
-        try:
-            with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
-                if method == "POST":
-                    response = client.post(url, headers=headers, params=params, json=payload)
-                else:
-                    response = client.get(url, headers=headers, params=params)
-        except Exception:
-            continue
-        if response.status_code in {401, 403}:
-            continue
-        if response.status_code >= 400:
-            continue
-        try:
-            parsed = response.json()
-            if isinstance(parsed, (dict, list)):
-                return parsed
-        except Exception:
-            continue
+        for attempt in range(4):
+            response = None
+            try:
+                with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
+                    if method == "POST":
+                        response = client.post(url, headers=headers, params=params, json=payload)
+                    else:
+                        response = client.get(url, headers=headers, params=params)
+            except Exception:
+                response = None
+            if response is None:
+                if attempt < 3:
+                    time.sleep(0.35 * (attempt + 1))
+                continue
+            if response.status_code == 429:
+                if attempt < 3:
+                    time.sleep(0.65 * (attempt + 1))
+                    continue
+                break
+            if response.status_code in {401, 403}:
+                break
+            if response.status_code >= 400:
+                break
+            try:
+                parsed = response.json()
+                if isinstance(parsed, (dict, list)):
+                    return parsed
+            except Exception:
+                break
     return None
 
 
@@ -2075,12 +2093,14 @@ def _to_float(value: Any) -> float | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
-        return float(value)
+        num = float(value)
+        return num if math.isfinite(num) else None
     text = str(value or "").strip().replace(" ", "").replace(",", ".")
     if not text:
         return None
     try:
-        return float(text)
+        num = float(text)
+        return num if math.isfinite(num) else None
     except Exception:
         return None
 

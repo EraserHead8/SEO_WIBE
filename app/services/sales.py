@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+import math
+import time
 from typing import Any
 
 import httpx
@@ -8,6 +10,8 @@ from app.services.wb_modules import fetch_wb_campaign_stats_bulk, fetch_wb_campa
 
 
 SALES_TIMEOUT = httpx.Timeout(connect=6.0, read=25.0, write=25.0, pool=25.0)
+WB_SALES_CACHE_TTL_SEC = 180
+_WB_SALES_CACHE: dict[tuple[str, str, str], tuple[float, list[dict[str, Any]], list[str]]] = {}
 
 
 def build_sales_report(
@@ -70,6 +74,12 @@ def build_sales_report(
 
 
 def _fetch_wb_sales_rows(api_key: str, date_from: date, date_to: date) -> tuple[list[dict[str, Any]], list[str]]:
+    cache_key = (api_key[-12:], date_from.isoformat(), date_to.isoformat())
+    cached = _WB_SALES_CACHE.get(cache_key)
+    now = time.monotonic()
+    if cached and now - cached[0] <= WB_SALES_CACHE_TTL_SEC:
+        return list(cached[1]), list(cached[2])
+
     rows: list[dict[str, Any]] = []
     warnings: list[str] = []
     endpoint = "https://statistics-api.wildberries.ru/api/v1/supplier/sales"
@@ -80,13 +90,30 @@ def _fetch_wb_sales_rows(api_key: str, date_from: date, date_to: date) -> tuple[
         if not auth_value.strip():
             continue
         headers = {"Authorization": auth_value}
-        try:
-            with httpx.Client(timeout=SALES_TIMEOUT, follow_redirects=True) as client:
-                response = client.get(endpoint, headers=headers, params=params)
-        except Exception:
+        response = None
+        for attempt in range(4):
+            try:
+                with httpx.Client(timeout=SALES_TIMEOUT, follow_redirects=True) as client:
+                    response = client.get(endpoint, headers=headers, params=params)
+            except Exception:
+                response = None
+            if response is None:
+                if attempt < 3:
+                    time.sleep(0.6 * (attempt + 1))
+                continue
+            if response.status_code == 429:
+                if attempt < 3:
+                    time.sleep(0.85 * (attempt + 1))
+                    continue
+                last_error = "WB sales API временно ограничил запросы (429)."
+                break
+            break
+        if response is None:
             continue
         if response.status_code in {401, 403}:
             last_error = "WB sales API отклонил ключ (401/403)."
+            continue
+        if response.status_code == 429:
             continue
         if response.status_code >= 400:
             return [], [f"WB sales API error {response.status_code}"]
@@ -97,6 +124,8 @@ def _fetch_wb_sales_rows(api_key: str, date_from: date, date_to: date) -> tuple[
         if payload is not None:
             break
     if payload is None:
+        if cached:
+            return list(cached[1]), list(cached[2]) + ["WB sales API вернул лимит, показаны кэшированные данные."]
         return [], [last_error]
 
     if not isinstance(payload, list):
@@ -158,6 +187,7 @@ def _fetch_wb_sales_rows(api_key: str, date_from: date, date_to: date) -> tuple[
                 "other_costs": 0.0,
             }
         )
+    _WB_SALES_CACHE[cache_key] = (time.monotonic(), list(rows), list(warnings))
     return rows, warnings
 
 
@@ -298,7 +328,7 @@ def _fetch_wb_ad_spent_total(api_key: str, date_from: date, date_to: date) -> tu
     warnings: list[str] = []
     spent_total = 0.0
     try:
-        campaign_rows = fetch_wb_campaigns(api_key)
+        campaign_rows = fetch_wb_campaigns(api_key, enrich=False)
     except Exception:
         return 0.0, ["WB Ads API недоступен для расчета рекламных расходов."]
     ids: list[int] = []
@@ -309,6 +339,10 @@ def _fetch_wb_ad_spent_total(api_key: str, date_from: date, date_to: date) -> tu
     ids = sorted(set(ids))
     if not ids:
         return 0.0, warnings
+    max_campaigns = 300
+    if len(ids) > max_campaigns:
+        warnings.append(f"WB Ads: кампаний много ({len(ids)}), для скорости учитываем первые {max_campaigns}.")
+        ids = ids[:max_campaigns]
     try:
         stats = fetch_wb_campaign_stats_bulk(
             api_key=api_key,
@@ -318,6 +352,8 @@ def _fetch_wb_ad_spent_total(api_key: str, date_from: date, date_to: date) -> tu
         )
     except Exception:
         return 0.0, ["WB Ads статистика недоступна для расчета расходов."]
+    if not isinstance(stats, dict) or not stats:
+        return 0.0, ["WB Ads статистика недоступна для расчета расходов (пустой ответ/лимит API)."]
     for payload in stats.values() if isinstance(stats, dict) else []:
         spent_total += float(payload.get("spent") or 0.0)
     return float(round(max(0.0, spent_total), 2)), warnings
@@ -450,9 +486,12 @@ def _parse_any_date(value: Any) -> date | None:
 
 def _to_float(value: Any) -> float:
     try:
-        return float(value)
+        num = float(value)
     except Exception:
         try:
-            return float(str(value).replace(",", ".").strip())
+            num = float(str(value).replace(",", ".").strip())
         except Exception:
             return 0.0
+    if not math.isfinite(num):
+        return 0.0
+    return float(num)

@@ -40,6 +40,10 @@ def run_lightweight_migrations():
         if seo_cols and "competitor_snapshot" not in seo_cols:
             conn.execute(text("ALTER TABLE seo_jobs ADD COLUMN competitor_snapshot TEXT"))
 
+        team_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(team_members)"))}
+        if team_cols and "hashed_password" not in team_cols:
+            conn.execute(text("ALTER TABLE team_members ADD COLUMN hashed_password VARCHAR(255) DEFAULT ''"))
+
         module_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(module_access)"))}
         if module_cols:
             for code in ("sales_stats", "user_profile"):
@@ -65,7 +69,7 @@ def run_lightweight_migrations():
                 {
                     "theme_choice_enabled": True,
                     "default_theme": "classic",
-                    "allowed_themes": ["classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring"],
+                    "allowed_themes": ["classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring", "japan", "greenland"],
                 },
                 ensure_ascii=False,
             )

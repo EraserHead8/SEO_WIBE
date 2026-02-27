@@ -22,6 +22,7 @@ class User(Base):
     question_ai_settings: Mapped["UserQuestionAiSettings | None"] = relationship(back_populates="user", cascade="all, delete-orphan")
     knowledge_docs: Mapped[list["UserKnowledgeDoc"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     profile: Mapped["UserProfile | None"] = relationship(back_populates="user", cascade="all, delete-orphan")
+    team_members: Mapped[list["TeamMember"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     billing_account: Mapped["BillingAccount | None"] = relationship(back_populates="user", cascade="all, delete-orphan")
     billing_events: Mapped[list["BillingEvent"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
@@ -167,6 +168,26 @@ class UserProfile(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user: Mapped["User"] = relationship(back_populates="profile")
+
+
+class TeamMember(Base):
+    __tablename__ = "team_members"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    email: Mapped[str] = mapped_column(String(255), default="", index=True)
+    phone: Mapped[str] = mapped_column(String(40), default="")
+    full_name: Mapped[str] = mapped_column(String(255), default="")
+    nickname: Mapped[str] = mapped_column(String(120), default="")
+    avatar_url: Mapped[str] = mapped_column(String(500), default="")
+    hashed_password: Mapped[str] = mapped_column(String(255), default="")
+    access_scope: Mapped[str] = mapped_column(Text, default="")
+    is_owner: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped["User"] = relationship(back_populates="team_members")
 
 
 class AuditLog(Base):

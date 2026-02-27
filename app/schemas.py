@@ -419,6 +419,30 @@ class UserProfilePasswordIn(BaseModel):
     new_password: str
 
 
+class TeamMemberIn(BaseModel):
+    email: str
+    password: str = ""
+    phone: str = ""
+    full_name: str = ""
+    nickname: str = ""
+    avatar_url: str = ""
+    access_scope: list[str] = Field(default_factory=list)
+
+
+class TeamMemberOut(BaseModel):
+    id: int
+    email: str
+    has_password: bool = False
+    phone: str
+    full_name: str
+    nickname: str
+    avatar_url: str
+    access_scope: list[str] = Field(default_factory=list)
+    is_owner: bool
+    is_active: bool
+    created_at: str | None = None
+
+
 class UserProfileOut(BaseModel):
     email: str
     full_name: str
@@ -439,6 +463,7 @@ class UserProfileOut(BaseModel):
     renew_at: str | None
     available_plans: list[dict[str, Any]]
     credentials: list[ApiCredentialOut]
+    team_members: list[TeamMemberOut] = Field(default_factory=list)
 
 
 class AdminUserProfileOut(BaseModel):
@@ -448,6 +473,7 @@ class AdminUserProfileOut(BaseModel):
     profile: dict[str, Any]
     plan: dict[str, Any]
     credentials: list[ApiCredentialOut]
+    team_members: list[TeamMemberOut] = Field(default_factory=list)
 
 
 class UiSettingsOut(BaseModel):
@@ -459,4 +485,4 @@ class UiSettingsOut(BaseModel):
 class UiSettingsIn(BaseModel):
     theme_choice_enabled: bool = True
     default_theme: str = "classic"
-    allowed_themes: list[str] = Field(default_factory=lambda: ["classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring"])
+    allowed_themes: list[str] = Field(default_factory=lambda: ["classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring", "japan", "greenland"])

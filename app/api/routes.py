@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import math
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -10,9 +11,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.auth import create_access_token, get_password_hash, verify_password
+from app.auth import create_access_token, decode_access_token, get_password_hash, verify_password
 from app.db import get_db
-from app.deps import get_admin_user, get_current_user
+from app.deps import get_admin_user, get_current_user, oauth2_scheme
 from app.models import (
     ApiCredential,
     AuditLog,
@@ -26,6 +27,7 @@ from app.models import (
     UserAiSettings,
     UserKnowledgeDoc,
     UserProfile,
+    TeamMember,
     UserQuestionAiSettings,
     UserKeyword,
     SystemSetting,
@@ -73,6 +75,8 @@ from app.schemas import (
     TokenResponse,
     TrendOut,
     TrendPointOut,
+    TeamMemberIn,
+    TeamMemberOut,
     UserProfileOut,
     UserProfilePasswordIn,
     UserProfileUpdateIn,
@@ -134,7 +138,7 @@ from app.services.wb_modules import (
 
 router = APIRouter(prefix="/api")
 DISABLED_BY_DEFAULT_MODULES = {"billing", "wb_reviews_ai", "wb_questions_ai", "wb_ads", "wb_ads_analytics", "wb_ads_recommendations", "help_center"}
-AVAILABLE_THEMES = ("classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring")
+AVAILABLE_THEMES = ("classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring", "japan", "greenland")
 DEFAULT_UI_SETTINGS = {
     "theme_choice_enabled": True,
     "default_theme": "classic",
@@ -362,7 +366,6 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
             "Назначение: централизованная инструкция по всем модулям.\n\n"
             "Как пользоваться:\n"
             "- Выберите модуль в первом списке.\n"
-            "- Выберите язык (ru/en).\n"
             "- Нажмите «Обновить справку» для перезагрузки содержимого.\n\n"
             "Что есть в каждом разделе:\n"
             "- Назначение модуля и ожидаемый результат.\n"
@@ -370,15 +373,14 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
             "- Типовой рабочий сценарий по шагам.\n"
             "- Пример практического использования.\n\n"
             "Дополнительно:\n"
-            "- Кнопка «Открыть модуль» переводит сразу на нужную вкладку.\n"
-            "- Кнопка «Только этот модуль» фильтрует справку по одному разделу.\n"
+            "- Кнопки модуля подсвечивают выбранный раздел, не скрывая остальные карточки.\n"
             "- Чек-лист в карточке помогает быстро проверить, что вы не пропустили обязательные шаги.\n\n"
             "Как использовать справку в работе:\n"
-            "1) Откройте нужный модуль из карточки.\n"
+            "1) Отфильтруйте нужный модуль в карточке.\n"
             "2) Выполните действия из блока «Типовой сценарий».\n"
             "3) При ошибке сверяйтесь с блоком «Диагностика» в соответствующем разделе.\n"
             "4) Возвращайтесь в справку и фиксируйте рабочие сценарии команды.\n\n"
-            "Совет: используйте кнопку «Открыть модуль» прямо из справки, чтобы сразу перейти к нужному экрану."
+            "Совет: фильтруйте справку по одному модулю, чтобы команда работала по единому чек-листу."
         ),
     },
 }
@@ -595,7 +597,6 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
             "Purpose: centralized documentation for every module.\n\n"
             "Usage:\n"
             "- Select module in the first dropdown.\n"
-            "- Select language (ru/en).\n"
             "- Click Refresh Help.\n\n"
             "Each section includes:\n"
             "- Module purpose and expected result.\n"
@@ -603,15 +604,14 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
             "- Typical workflow.\n"
             "- Practical example.\n\n"
             "Additional tools:\n"
-            "- Open Module button jumps directly to module tab.\n"
-            "- Show only this button filters help to one module.\n"
+            "- Module buttons highlight the selected card while keeping all modules visible.\n"
             "- Built-in checklist helps verify required steps.\n\n"
             "How teams use it:\n"
-            "1) Open module from help card.\n"
-            "2) Execute the workflow section step by step.\n"
+            "1) Filter to the needed module in help card.\n"
+            "2) Execute workflow section step by step.\n"
             "3) Use troubleshooting notes when API/UI behavior is unexpected.\n"
             "4) Keep internal team SOPs aligned with these cards.\n\n"
-            "Tip: use Open Module buttons in help cards to jump directly to the required screen."
+            "Tip: keep documentation filtered to one module during onboarding."
         ),
     },
 }
@@ -619,15 +619,31 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
 
 @router.post("/auth/register", response_model=TokenResponse)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
-    exists = db.scalar(select(User).where(User.email == payload.email))
+    email = payload.email.strip().lower()
+    exists = db.scalar(select(User).where(User.email == email))
     if exists:
         raise HTTPException(status_code=400, detail="Пользователь уже существует")
+    member_exists = db.scalar(select(TeamMember).where(TeamMember.email == email))
+    if member_exists:
+        raise HTTPException(status_code=400, detail="Email уже используется сотрудником")
 
     users_count = db.scalar(select(func.count()).select_from(User)) or 0
     role = "admin" if users_count == 0 else "client"
-    user = User(email=payload.email, hashed_password=get_password_hash(payload.password), role=role)
+    user = User(email=email, hashed_password=get_password_hash(payload.password), role=role)
     db.add(user)
     db.flush()
+    db.add(
+        TeamMember(
+            user_id=user.id,
+            email=user.email,
+            full_name="",
+            nickname="owner",
+            hashed_password=get_password_hash(payload.password),
+            access_scope=json.dumps(["*"], ensure_ascii=False),
+            is_owner=True,
+            is_active=True,
+        )
+    )
 
     for module_code in DEFAULT_MODULES:
         db.add(
@@ -646,10 +662,24 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
 
 @router.post("/auth/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
-    user = db.scalar(select(User).where(User.email == payload.email))
-    if not user or not verify_password(payload.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Неверный email или пароль")
-    return TokenResponse(access_token=create_access_token(user.email))
+    email = payload.email.strip().lower()
+    user = db.scalar(select(User).where(User.email == email))
+    if user and verify_password(payload.password, user.hashed_password):
+        return TokenResponse(access_token=create_access_token(user.email))
+
+    member = db.scalar(
+        select(TeamMember)
+        .where(
+            TeamMember.email == email,
+            TeamMember.is_active.is_(True),
+        )
+        .order_by(TeamMember.id.desc())
+    )
+    if member and member.hashed_password and verify_password(payload.password, member.hashed_password):
+        owner = db.get(User, member.user_id)
+        if owner:
+            return TokenResponse(access_token=create_access_token(member.email))
+    raise HTTPException(status_code=401, detail="Неверный email или пароль")
 
 
 @router.get("/auth/me", response_model=UserOut)
@@ -1114,7 +1144,7 @@ def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depen
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
-    rows = fetch_wb_campaigns(wb_key)
+    rows = fetch_wb_campaigns(wb_key, enrich=False)
     ids = sorted({_to_int_safe(_campaign_id_from_any(row)) for row in rows if _to_int_safe(_campaign_id_from_any(row)) > 0})
     db.add(
         AuditLog(
@@ -1138,13 +1168,24 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
     if not ids:
         return WbCampaignEnrichOut(summaries={}, stats={})
 
-    summaries = fetch_wb_campaign_summaries(wb_key, ids, fallback_limit=40)
-    stats = fetch_wb_campaign_stats_bulk(wb_key, ids, date_from=None, date_to=None)
+    summaries: dict[str, dict[str, Any]] = {}
+    stats: dict[str, dict[str, Any]] = {}
+    error_flags: list[str] = []
+    try:
+        summaries = fetch_wb_campaign_summaries(wb_key, ids, fallback_limit=40)
+    except Exception:
+        summaries = {}
+        error_flags.append("summaries")
+    try:
+        stats = fetch_wb_campaign_stats_bulk(wb_key, ids, date_from=None, date_to=None)
+    except Exception:
+        stats = {}
+        error_flags.append("stats")
     db.add(
         AuditLog(
             user_id=user.id,
             action="wb_ads_campaigns_enrich",
-            details=f"ids={len(ids)};summaries={len(summaries)};stats={len(stats)}",
+            details=f"ids={len(ids)};summaries={len(summaries)};stats={len(stats)};errors={','.join(error_flags) if error_flags else '-'}",
         )
     )
     db.commit()
@@ -1225,6 +1266,8 @@ def wb_ads_analytics(
     date_from: date | None = None,
     date_to: date | None = None,
     campaign_id: int | None = None,
+    offset: int = 0,
+    limit: int = 80,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -1233,26 +1276,55 @@ def wb_ads_analytics(
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
 
-    rows = fetch_wb_campaigns(wb_key)
-    all_ids = sorted({_to_int_safe(_campaign_id_from_any(row)) for row in rows if _to_int_safe(_campaign_id_from_any(row)) > 0})
+    try:
+        rows = fetch_wb_campaigns(wb_key, enrich=False)
+    except Exception:
+        rows = []
+    base_summary_map: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        cid_text = _campaign_id_from_any(row)
+        cid = _to_int_safe(cid_text)
+        if cid <= 0:
+            continue
+        base_summary_map[str(cid)] = _campaign_summary_from_base_row(row, cid)
+    all_ids = sorted({_to_int_safe(x) for x in base_summary_map.keys() if _to_int_safe(x) > 0})
     if campaign_id is not None and campaign_id > 0:
         ids = [campaign_id]
     else:
-        ids = all_ids[:120]
+        safe_offset = max(0, int(offset or 0))
+        safe_limit = max(1, min(int(limit or 1), 160))
+        ids = all_ids[safe_offset:safe_offset + safe_limit]
     if not ids:
-        raise HTTPException(status_code=400, detail="Не удалось получить кампании WB Ads. Проверьте API-ключ и доступ в кабинете.")
-    summaries = fetch_wb_campaign_summaries(wb_key, ids, fallback_limit=120)
-    stats = fetch_wb_campaign_stats_bulk(
-        wb_key,
-        ids,
-        date_from=date_from.isoformat() if date_from else None,
-        date_to=date_to.isoformat() if date_to else None,
-    )
+        left = date_from.isoformat() if date_from else (date.today() - timedelta(days=6)).isoformat()
+        right = date_to.isoformat() if date_to else date.today().isoformat()
+        db.add(
+            AuditLog(
+                user_id=user.id,
+                action="wb_ads_analytics_read",
+                details=f"date_from={left};date_to={right};campaigns=0;note=no_ids",
+            )
+        )
+        db.commit()
+        return WbAdsAnalyticsOut(
+            date_from=left,
+            date_to=right,
+            rows=[],
+            totals={"views": 0.0, "clicks": 0.0, "orders": 0.0, "spent": 0.0, "ctr_avg": 0.0, "cr_avg": 0.0},
+        )
+    try:
+        stats = fetch_wb_campaign_stats_bulk(
+            wb_key,
+            ids,
+            date_from=date_from.isoformat() if date_from else None,
+            date_to=date_to.isoformat() if date_to else None,
+        )
+    except Exception:
+        stats = {}
 
     out_rows: list[dict[str, Any]] = []
     for cid in ids:
         key = str(cid)
-        summary = summaries.get(key, {"campaign_id": cid, "name": f"Кампания {cid}", "status": "-", "type": "-", "budget": "-"})
+        summary = base_summary_map.get(key, {"campaign_id": cid, "name": f"Кампания {cid}", "status": "-", "type": "-", "budget": "-"})
         stat = stats.get(key, {})
         out_rows.append(
             {
@@ -1261,14 +1333,14 @@ def wb_ads_analytics(
                 "status": summary.get("status") or "-",
                 "type": summary.get("type") or "-",
                 "budget": summary.get("budget") or "-",
-                "views": float(stat.get("views") or 0),
-                "clicks": float(stat.get("clicks") or 0),
-                "orders": float(stat.get("orders") or 0),
-                "spent": float(stat.get("spent") or 0),
-                "ctr": float(stat.get("ctr") or 0),
-                "cr": float(stat.get("cr") or 0),
-                "cpc": float(stat.get("cpc") or 0),
-                "cpo": float(stat.get("cpo") or 0),
+                "views": _to_float_safe(stat.get("views"), 0.0),
+                "clicks": _to_float_safe(stat.get("clicks"), 0.0),
+                "orders": _to_float_safe(stat.get("orders"), 0.0),
+                "spent": _to_float_safe(stat.get("spent"), 0.0),
+                "ctr": _to_float_safe(stat.get("ctr"), 0.0),
+                "cr": _to_float_safe(stat.get("cr"), 0.0),
+                "cpc": _to_float_safe(stat.get("cpc"), 0.0),
+                "cpo": _to_float_safe(stat.get("cpo"), 0.0),
             }
         )
     out_rows.sort(key=lambda x: x.get("spent", 0), reverse=True)
@@ -1310,8 +1382,20 @@ def wb_ads_recommendations(
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
 
-    base_rows = fetch_wb_campaigns(wb_key)
-    all_ids = sorted({_to_int_safe(_campaign_id_from_any(row)) for row in base_rows if _to_int_safe(_campaign_id_from_any(row)) > 0})
+    base_error = ""
+    try:
+        base_rows = fetch_wb_campaigns(wb_key, enrich=False)
+    except Exception as exc:
+        base_rows = []
+        base_error = str(exc or "")
+    base_summary_map: dict[str, dict[str, Any]] = {}
+    for row in base_rows:
+        cid_text = _campaign_id_from_any(row)
+        cid = _to_int_safe(cid_text)
+        if cid <= 0:
+            continue
+        base_summary_map[str(cid)] = _campaign_summary_from_base_row(row, cid)
+    all_ids = sorted({_to_int_safe(x) for x in base_summary_map.keys() if _to_int_safe(x) > 0})
     if campaign_id is not None and campaign_id > 0:
         ids = [campaign_id]
         total_available = 1
@@ -1325,28 +1409,86 @@ def wb_ads_recommendations(
         slice_offset = safe_offset
         slice_limit = safe_limit
     if not ids:
-        raise HTTPException(status_code=400, detail="Не удалось получить кампании WB Ads. Проверьте API-ключ и доступ в кабинете.")
-    summaries = fetch_wb_campaign_summaries(wb_key, ids, fallback_limit=120)
-    stats = fetch_wb_campaign_stats_bulk(
-        wb_key,
-        ids,
-        date_from=date_from.isoformat() if date_from else None,
-        date_to=date_to.isoformat() if date_to else None,
-    )
+        left = date_from.isoformat() if date_from else (date.today() - timedelta(days=6)).isoformat()
+        right = date_to.isoformat() if date_to else date.today().isoformat()
+        db.add(
+            AuditLog(
+                user_id=user.id,
+                action="wb_ads_recommendations_read",
+                details=f"date_from={left};date_to={right};rows=0;min_spent={max(0.0, float(min_spent or 0.0))};note=no_ids",
+            )
+        )
+        db.commit()
+        empty_meta: dict[str, Any] = {
+            "min_spent": max(0.0, float(min_spent or 0.0)),
+            "campaigns_scanned": 0,
+            "total_campaigns": 0,
+            "offset": 0,
+            "limit": 0,
+            "has_more": False,
+            "next_offset": None,
+        }
+        if base_error:
+            empty_meta["note"] = f"API campaigns unavailable: {base_error[:220]}"
+        return WbAdsRecommendationsOut(
+            date_from=left,
+            date_to=right,
+            rows=[],
+            meta=empty_meta,
+        )
+    stats_error = ""
+    try:
+        stats = fetch_wb_campaign_stats_bulk(
+            wb_key,
+            ids,
+            date_from=date_from.isoformat() if date_from else None,
+            date_to=date_to.isoformat() if date_to else None,
+        )
+    except Exception as exc:
+        stats = {}
+        stats_error = str(exc or "")
 
     safe_min_spent = max(0.0, float(min_spent or 0.0))
     recommendations: list[dict[str, Any]] = []
+    fallback_candidates: list[dict[str, Any]] = []
+
+    def _fallback_recommendation(row: dict[str, Any]) -> tuple[str, str, str, str]:
+        spent_v = float(row.get("spent") or 0.0)
+        views_v = float(row.get("views") or 0.0)
+        clicks_v = float(row.get("clicks") or 0.0)
+        orders_v = float(row.get("orders") or 0.0)
+        ctr_v = float(row.get("ctr") or 0.0)
+        cpo_v = float(row.get("cpo") or 0.0)
+        is_running_v = bool(row.get("is_running"))
+
+        if spent_v < safe_min_spent and (views_v <= 0 and clicks_v <= 0 and orders_v <= 0):
+            return ("Собрать данные", "low", "monitor", "За период почти нет трафика/расхода, рано принимать жесткие решения.")
+        if spent_v < safe_min_spent and orders_v <= 0:
+            return ("Наблюдать и накопить статистику", "low", "monitor", "Расход ниже порога для надежной оценки эффективности.")
+        if views_v > 0 and clicks_v <= 0:
+            return ("Проверить ставки и креатив", "medium", "increase_bids", "Есть показы, но нет кликов.")
+        if clicks_v > 0 and orders_v <= 0:
+            return ("Проверить карточку и семантику", "medium", "optimize_listing", "Есть клики, но нет заказов.")
+        if orders_v > 0 and cpo_v > 0 and cpo_v <= 1200:
+            return ("Поддерживать и масштабировать", "low", "scale", "Кампания приносит заказы с приемлемым CPO.")
+        if orders_v > 0 and cpo_v > 1200:
+            return ("Оптимизировать расходы", "medium", "decrease_bids", "Заказы есть, но CPO выше целевого.")
+        if (not is_running_v) and (views_v > 0 or clicks_v > 0):
+            return ("Проверить и возобновить", "low", "start", "Кампания сейчас не активна, но по ней была активность.")
+        if ctr_v < 0.3 and views_v > 0:
+            return ("Обновить креатив и заголовки", "medium", "refresh", "CTR низкий для текущего объема показов.")
+        return ("Ручной аудит", "low", "audit", "Недостаточно данных для автоматического сценария.")
     for cid in ids:
         key = str(cid)
-        summary = summaries.get(key, {})
+        summary = base_summary_map.get(key, {})
         stat = stats.get(key, {})
-        views = float(stat.get("views") or 0.0)
-        clicks = float(stat.get("clicks") or 0.0)
-        orders = float(stat.get("orders") or 0.0)
-        spent = float(stat.get("spent") or 0.0)
-        ctr = float(stat.get("ctr") or 0.0)
-        cpc = float(stat.get("cpc") or 0.0)
-        cpo = float(stat.get("cpo") or 0.0)
+        views = _to_float_safe(stat.get("views"), 0.0)
+        clicks = _to_float_safe(stat.get("clicks"), 0.0)
+        orders = _to_float_safe(stat.get("orders"), 0.0)
+        spent = _to_float_safe(stat.get("spent"), 0.0)
+        ctr = _to_float_safe(stat.get("ctr"), 0.0)
+        cpc = _to_float_safe(stat.get("cpc"), 0.0)
+        cpo = _to_float_safe(stat.get("cpo"), 0.0)
         status_text = str(summary.get("status") or "-")
         type_text = str(summary.get("type") or "-")
         status_label, is_running = _wb_status_label(status_text)
@@ -1356,6 +1498,20 @@ def wb_ads_recommendations(
         priority = "low"
         reason = ""
         action = ""
+        base_payload = {
+            "campaign_id": cid,
+            "name": summary.get("name") or f"Кампания {cid}",
+            "status": status_label,
+            "type": type_label,
+            "is_running": is_running,
+            "views": round(views, 3),
+            "clicks": round(clicks, 3),
+            "orders": round(orders, 3),
+            "spent": round(spent, 3),
+            "ctr": round(ctr, 4),
+            "cpc": round(cpc, 4),
+            "cpo": round(cpo, 4),
+        }
         if spent >= safe_min_spent and orders <= 0:
             recommendation = "Пауза и доработка"
             priority = "high"
@@ -1383,27 +1539,65 @@ def wb_ads_recommendations(
             reason = "Кампания на паузе/завершена, но метрики были рабочие."
 
         if not recommendation:
+            fallback_candidates.append(base_payload)
             continue
         recommendations.append(
             {
-                "campaign_id": cid,
-                "name": summary.get("name") or f"Кампания {cid}",
-                "status": status_label,
-                "type": type_label,
-                "is_running": is_running,
-                "views": round(views, 3),
-                "clicks": round(clicks, 3),
-                "orders": round(orders, 3),
-                "spent": round(spent, 3),
-                "ctr": round(ctr, 4),
-                "cpc": round(cpc, 4),
-                "cpo": round(cpo, 4),
+                **base_payload,
                 "priority": priority,
                 "recommendation": recommendation,
                 "action": action,
                 "reason": reason,
             }
         )
+
+    fallback_mode = False
+    if not recommendations and fallback_candidates:
+        fallback_mode = True
+        ranked_fallback = sorted(
+            fallback_candidates,
+            key=lambda row: (
+                -float(row.get("spent") or 0),
+                -float(row.get("clicks") or 0),
+                -float(row.get("views") or 0),
+            ),
+        )[: min(40, len(fallback_candidates))]
+        for row in ranked_fallback:
+            recommendation, priority, action, reason = _fallback_recommendation(row)
+            recommendations.append(
+                {
+                    **row,
+                    "priority": priority,
+                    "recommendation": recommendation,
+                    "action": action,
+                    "reason": reason,
+                }
+            )
+
+    # Safety fallback: keep table informative even if metrics API returned sparse/empty data.
+    if not recommendations and ids:
+        fallback_mode = True
+        for cid in ids[: min(30, len(ids))]:
+            summary = base_summary_map.get(str(cid), {})
+            row = {
+                "campaign_id": cid,
+                "name": summary.get("name") or f"Кампания {cid}",
+                "status": _wb_status_label(str(summary.get("status") or "-"))[0],
+                "type": _wb_type_label(str(summary.get("type") or "-")),
+                "is_running": _wb_status_label(str(summary.get("status") or "-"))[1],
+                "views": 0.0,
+                "clicks": 0.0,
+                "orders": 0.0,
+                "spent": 0.0,
+                "ctr": 0.0,
+                "cpc": 0.0,
+                "cpo": 0.0,
+                "priority": "low",
+                "recommendation": "Собрать данные",
+                "action": "monitor",
+                "reason": "Недостаточно данных за период: проверьте ставки и дайте кампании набрать статистику.",
+            }
+            recommendations.append(row)
 
     priority_weight = {"high": 3, "medium": 2, "low": 1}
     recommendations.sort(
@@ -1435,6 +1629,8 @@ def wb_ads_recommendations(
             "limit": slice_limit,
             "has_more": (slice_offset + slice_limit) < total_available,
             "next_offset": (slice_offset + slice_limit) if (slice_offset + slice_limit) < total_available else None,
+            "fallback_mode": fallback_mode,
+            "note": (f"partial stats fallback: {stats_error[:220]}") if stats_error else "",
         },
     )
 
@@ -1509,6 +1705,8 @@ def get_help_docs(
     docs = HELP_DOCS_EN if (lang or "").strip().lower() == "en" else HELP_DOCS_RU
     items = []
     for code, payload in docs.items():
+        if code == "dashboard":
+            continue
         if module_code and code != module_code:
             continue
         items.append(HelpDocOut(module_code=code, title=payload["title"], content=payload["content"]))
@@ -2048,7 +2246,7 @@ def sales_stats(
         raise HTTPException(status_code=400, detail="marketplace должен быть all, wb или ozon")
 
     right = date_to or date.today()
-    left = date_from or (right - timedelta(days=29))
+    left = date_from or right
     if left > right:
         left, right = right, left
     if (right - left).days > 365:
@@ -2056,13 +2254,30 @@ def sales_stats(
 
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     ozon_key = _get_active_marketplace_api_key(db, user.id, "ozon")
-    payload = build_sales_report(
-        marketplace=selected_market,
-        date_from=left,
-        date_to=right,
-        wb_api_key=wb_key,
-        ozon_api_key=ozon_key,
-    )
+    try:
+        payload = build_sales_report(
+            marketplace=selected_market,
+            date_from=left,
+            date_to=right,
+            wb_api_key=wb_key,
+            ozon_api_key=ozon_key,
+        )
+    except Exception as exc:
+        payload = {
+            "rows": [],
+            "chart": [],
+            "totals": {
+                "orders": 0,
+                "units": 0,
+                "revenue": 0.0,
+                "returns": 0,
+                "ad_spend": 0.0,
+                "other_costs": 0.0,
+                "days": 0,
+                "gross_profit": 0.0,
+            },
+            "warnings": [f"Ошибка загрузки статистики: {str(exc or '')[:220]}"],
+        }
     rows = payload.get("rows") if isinstance(payload, dict) else []
     chart = payload.get("chart") if isinstance(payload, dict) else []
     totals = payload.get("totals") if isinstance(payload, dict) else {}
@@ -2131,17 +2346,124 @@ def profile_update(payload: UserProfileUpdateIn, user: User = Depends(get_curren
     return _build_user_profile_payload(db, user, profile, account)
 
 
+@router.get("/profile/team", response_model=list[TeamMemberOut])
+def profile_team_list(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user.id, "user_profile")
+    rows = _list_team_members(db, user.id)
+    db.commit()
+    return rows
+
+
+@router.post("/profile/team", response_model=TeamMemberOut)
+def profile_team_add(payload: TeamMemberIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user.id, "user_profile")
+    email = payload.email.strip().lower()
+    _ensure_team_email_is_available(db, email, user_id=user.id)
+    exists = db.scalar(select(TeamMember).where(TeamMember.user_id == user.id, TeamMember.email == email))
+    if exists:
+        raise HTTPException(status_code=400, detail="Сотрудник с таким email уже добавлен")
+    password = _validate_team_member_password(payload.password, required=True)
+    row = TeamMember(
+        user_id=user.id,
+        email=email[:255],
+        phone=payload.phone.strip()[:40],
+        full_name=payload.full_name.strip()[:255],
+        nickname=payload.nickname.strip()[:120],
+        avatar_url=payload.avatar_url.strip()[:500],
+        hashed_password=get_password_hash(password),
+        access_scope=json.dumps(_safe_team_scope(payload.access_scope), ensure_ascii=False),
+        is_owner=False,
+        is_active=True,
+    )
+    db.add(row)
+    db.add(AuditLog(user_id=user.id, action="profile_team_member_added", details=f"email={row.email}"))
+    db.commit()
+    return _team_member_to_out(row)
+
+
+@router.put("/profile/team/{member_id}", response_model=TeamMemberOut)
+def profile_team_update(member_id: int, payload: TeamMemberIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user.id, "user_profile")
+    row = db.get(TeamMember, member_id)
+    if not row or row.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+    if row.is_owner:
+        row.phone = payload.phone.strip()[:40]
+        row.full_name = payload.full_name.strip()[:255]
+        row.nickname = (payload.nickname.strip() or "owner")[:120]
+        row.avatar_url = payload.avatar_url.strip()[:500]
+        row.access_scope = json.dumps(["*"], ensure_ascii=False)
+    else:
+        email = payload.email.strip().lower()
+        _ensure_team_email_is_available(db, email, user_id=user.id, exclude_member_id=row.id)
+        duplicate = db.scalar(select(TeamMember).where(TeamMember.user_id == user.id, TeamMember.email == email, TeamMember.id != row.id))
+        if duplicate:
+            raise HTTPException(status_code=400, detail="Сотрудник с таким email уже добавлен")
+        row.email = email[:255]
+        row.phone = payload.phone.strip()[:40]
+        row.full_name = payload.full_name.strip()[:255]
+        row.nickname = payload.nickname.strip()[:120]
+        row.avatar_url = payload.avatar_url.strip()[:500]
+        row.access_scope = json.dumps(_safe_team_scope(payload.access_scope), ensure_ascii=False)
+        password = _validate_team_member_password(payload.password, required=False)
+        if password:
+            row.hashed_password = get_password_hash(password)
+    db.add(AuditLog(user_id=user.id, action="profile_team_member_updated", details=f"member_id={row.id}"))
+    db.commit()
+    return _team_member_to_out(row)
+
+
+@router.delete("/profile/team/{member_id}", response_model=MessageOut)
+def profile_team_delete(member_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user.id, "user_profile")
+    row = db.get(TeamMember, member_id)
+    if not row or row.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+    if row.is_owner:
+        raise HTTPException(status_code=400, detail="Нельзя удалить владельца кабинета")
+    db.delete(row)
+    db.add(AuditLog(user_id=user.id, action="profile_team_member_deleted", details=f"member_id={member_id}"))
+    db.commit()
+    return MessageOut(message="Сотрудник удален")
+
+
 @router.post("/profile/password", response_model=MessageOut)
-def profile_change_password(payload: UserProfilePasswordIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def profile_change_password(
+    payload: UserProfilePasswordIn,
+    token: str = Depends(oauth2_scheme),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     ensure_module_enabled(db, user.id, "user_profile")
     if len(payload.new_password or "") < 8:
         raise HTTPException(status_code=400, detail="Новый пароль должен быть минимум 8 символов")
-    if not verify_password(payload.current_password, user.hashed_password):
+
+    subject = str(decode_access_token(token) or "").strip().lower()
+    if subject and subject == user.email:
+        if not verify_password(payload.current_password, user.hashed_password):
+            raise HTTPException(status_code=400, detail="Текущий пароль указан неверно")
+        user.hashed_password = get_password_hash(payload.new_password)
+        owner_member = db.scalar(select(TeamMember).where(TeamMember.user_id == user.id, TeamMember.is_owner.is_(True)))
+        if owner_member:
+            owner_member.hashed_password = user.hashed_password
+        db.add(AuditLog(user_id=user.id, action="profile_password_changed", details="kind=owner"))
+        db.commit()
+        return MessageOut(message="Пароль обновлен")
+
+    member = db.scalar(
+        select(TeamMember).where(
+            TeamMember.user_id == user.id,
+            TeamMember.email == subject,
+            TeamMember.is_active.is_(True),
+            TeamMember.is_owner.is_(False),
+        )
+    )
+    if not member or not member.hashed_password or not verify_password(payload.current_password, member.hashed_password):
         raise HTTPException(status_code=400, detail="Текущий пароль указан неверно")
-    user.hashed_password = get_password_hash(payload.new_password)
-    db.add(AuditLog(user_id=user.id, action="profile_password_changed", details="ok=1"))
+    member.hashed_password = get_password_hash(payload.new_password)
+    db.add(AuditLog(user_id=user.id, action="profile_password_changed", details=f"kind=team_member;member_id={member.id}"))
     db.commit()
-    return MessageOut(message="Пароль обновлен")
+    return MessageOut(message="Пароль сотрудника обновлен")
 
 
 @router.post("/profile/plan", response_model=UserProfileOut)
@@ -2341,6 +2663,93 @@ def admin_user_change_plan(
     return _build_admin_user_profile_payload(db, target)
 
 
+@router.post("/admin/users/{user_id}/team", response_model=TeamMemberOut)
+def admin_team_add(
+    user_id: int,
+    payload: TeamMemberIn,
+    me: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    target = db.get(User, user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    email = payload.email.strip().lower()
+    _ensure_team_email_is_available(db, email, user_id=user_id)
+    exists = db.scalar(select(TeamMember).where(TeamMember.user_id == user_id, TeamMember.email == email))
+    if exists:
+        raise HTTPException(status_code=400, detail="Сотрудник с таким email уже добавлен")
+    password = _validate_team_member_password(payload.password, required=True)
+    row = TeamMember(
+        user_id=user_id,
+        email=email[:255],
+        phone=payload.phone.strip()[:40],
+        full_name=payload.full_name.strip()[:255],
+        nickname=payload.nickname.strip()[:120],
+        avatar_url=payload.avatar_url.strip()[:500],
+        hashed_password=get_password_hash(password),
+        access_scope=json.dumps(_safe_team_scope(payload.access_scope), ensure_ascii=False),
+        is_owner=False,
+        is_active=True,
+    )
+    db.add(row)
+    db.add(AuditLog(user_id=me.id, action="admin_team_member_added", details=f"user_id={user_id};email={row.email}"))
+    db.commit()
+    return _team_member_to_out(row)
+
+
+@router.put("/admin/users/{user_id}/team/{member_id}", response_model=TeamMemberOut)
+def admin_team_update(
+    user_id: int,
+    member_id: int,
+    payload: TeamMemberIn,
+    me: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    target = db.get(User, user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    row = db.get(TeamMember, member_id)
+    if not row or row.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+    if row.is_owner:
+        row.phone = payload.phone.strip()[:40]
+        row.full_name = payload.full_name.strip()[:255]
+        row.nickname = (payload.nickname.strip() or "owner")[:120]
+        row.avatar_url = payload.avatar_url.strip()[:500]
+        row.access_scope = json.dumps(["*"], ensure_ascii=False)
+    else:
+        email = payload.email.strip().lower()
+        _ensure_team_email_is_available(db, email, user_id=user_id, exclude_member_id=row.id)
+        duplicate = db.scalar(select(TeamMember).where(TeamMember.user_id == user_id, TeamMember.email == email, TeamMember.id != row.id))
+        if duplicate:
+            raise HTTPException(status_code=400, detail="Сотрудник с таким email уже добавлен")
+        row.email = email[:255]
+        row.phone = payload.phone.strip()[:40]
+        row.full_name = payload.full_name.strip()[:255]
+        row.nickname = payload.nickname.strip()[:120]
+        row.avatar_url = payload.avatar_url.strip()[:500]
+        row.access_scope = json.dumps(_safe_team_scope(payload.access_scope), ensure_ascii=False)
+        password = _validate_team_member_password(payload.password, required=False)
+        if password:
+            row.hashed_password = get_password_hash(password)
+    db.add(AuditLog(user_id=me.id, action="admin_team_member_updated", details=f"user_id={user_id};member_id={member_id}"))
+    db.commit()
+    return _team_member_to_out(row)
+
+
+@router.delete("/admin/users/{user_id}/team/{member_id}", response_model=MessageOut)
+def admin_team_delete(user_id: int, member_id: int, me: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    row = db.get(TeamMember, member_id)
+    if not row or row.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+    if row.is_owner:
+        raise HTTPException(status_code=400, detail="Нельзя удалить владельца кабинета")
+    db.delete(row)
+    db.add(AuditLog(user_id=me.id, action="admin_team_member_deleted", details=f"user_id={user_id};member_id={member_id}"))
+    db.commit()
+    return MessageOut(message="Сотрудник удален")
+
+
 @router.get("/admin/stats", response_model=AdminStatsOut)
 def admin_stats(_: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     week_ago = datetime.utcnow() - timedelta(days=7)
@@ -2367,6 +2776,16 @@ def admin_reset_password(payload: AdminPasswordResetIn, _: User = Depends(get_ad
         raise HTTPException(status_code=400, detail="Пароль должен быть минимум 8 символов")
 
     user.hashed_password = get_password_hash(payload.new_password)
+    owner_member = db.scalar(
+        select(TeamMember)
+        .where(
+            TeamMember.user_id == user.id,
+            TeamMember.is_owner.is_(True),
+        )
+        .order_by(TeamMember.id.asc())
+    )
+    if owner_member:
+        owner_member.hashed_password = user.hashed_password
     db.add(AuditLog(user_id=user.id, action="admin_password_reset", details="password_updated"))
     db.commit()
     return MessageOut(message="Пароль пользователя обновлен")
@@ -2650,6 +3069,19 @@ def _to_int_safe(value: Any) -> int:
         return 0
 
 
+def _to_float_safe(value: Any, default: float = 0.0) -> float:
+    try:
+        num = float(value)
+    except Exception:
+        try:
+            num = float(str(value).strip().replace(",", "."))
+        except Exception:
+            return float(default)
+    if not math.isfinite(num):
+        return float(default)
+    return float(num)
+
+
 def _wb_status_label(raw_value: str) -> tuple[str, bool]:
     raw = (raw_value or "").strip()
     code = _to_int_safe(raw)
@@ -2710,8 +3142,38 @@ def _merge_campaign_row(row: dict[str, Any], summary: dict[str, Any], stat: dict
     if stat:
         for key in ("views", "clicks", "orders", "spent", "ctr", "cr", "cpc", "cpo", "add_to_cart"):
             if key in stat:
-                next_row[key] = stat.get(key)
+                next_row[key] = _to_float_safe(stat.get(key), 0.0)
     return next_row
+
+
+def _campaign_summary_from_base_row(row: dict[str, Any], campaign_id: int) -> dict[str, Any]:
+    if not isinstance(row, dict):
+        return {
+            "campaign_id": campaign_id,
+            "name": f"Кампания {campaign_id}",
+            "status": "-",
+            "type": "-",
+            "budget": "-",
+        }
+    settings_row = row.get("settings") if isinstance(row.get("settings"), dict) else {}
+    finance_row = row.get("finance") if isinstance(row.get("finance"), dict) else {}
+    name = (
+        str(row.get("name") or row.get("campaignName") or row.get("campaign_name") or settings_row.get("name") or settings_row.get("title") or "").strip()
+        or f"Кампания {campaign_id}"
+    )
+    status = str(row.get("status") or row.get("state") or row.get("statusName") or settings_row.get("status") or "").strip() or "-"
+    ctype = str(row.get("type") or row.get("campaignType") or row.get("adType") or row.get("typeName") or settings_row.get("type") or "").strip() or "-"
+    budget = (
+        str(row.get("dailyBudget") or row.get("budget") or row.get("sum") or row.get("balance") or finance_row.get("budget") or "").strip()
+        or "-"
+    )
+    return {
+        "campaign_id": campaign_id,
+        "name": name,
+        "status": status,
+        "type": ctype,
+        "budget": budget,
+    }
 
 
 def _build_user_knowledge_context(db: Session, user_id: int, max_chars: int = 12000) -> str:
@@ -2831,8 +3293,129 @@ def _get_or_create_user_profile(db: Session, user_id: int) -> UserProfile:
     return row
 
 
+def _safe_team_scope(values: list[str] | None) -> list[str]:
+    allowed = {
+        "products",
+        "seo_generation",
+        "sales_stats",
+        "wb_reviews_ai",
+        "wb_questions_ai",
+        "wb_ads",
+        "wb_ads_analytics",
+        "wb_ads_recommendations",
+        "user_profile",
+        "help_center",
+    }
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in values or []:
+        code = str(item or "").strip().lower()
+        if not code or code not in allowed or code in seen:
+            continue
+        seen.add(code)
+        out.append(code)
+    if not out:
+        return ["products", "sales_stats"]
+    return out
+
+
+def _ensure_team_email_is_available(
+    db: Session,
+    email: str,
+    *,
+    user_id: int,
+    exclude_member_id: int | None = None,
+) -> None:
+    candidate = (email or "").strip().lower()
+    if not candidate:
+        raise HTTPException(status_code=400, detail="Укажите email сотрудника")
+
+    owner_user = db.scalar(select(User).where(User.email == candidate))
+    if owner_user and owner_user.id != user_id:
+        raise HTTPException(status_code=400, detail="Этот email уже используется в другом кабинете")
+
+    duplicate = db.scalar(select(TeamMember).where(TeamMember.email == candidate))
+    if duplicate and duplicate.user_id != user_id:
+        raise HTTPException(status_code=400, detail="Этот email уже используется сотрудником другого кабинета")
+    if duplicate and exclude_member_id is not None and duplicate.id != exclude_member_id:
+        raise HTTPException(status_code=400, detail="Сотрудник с таким email уже добавлен")
+
+
+def _validate_team_member_password(raw_password: str, *, required: bool) -> str:
+    password = str(raw_password or "")
+    if not password:
+        if required:
+            raise HTTPException(status_code=400, detail="Укажите пароль сотрудника (минимум 8 символов)")
+        return ""
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Пароль сотрудника должен быть минимум 8 символов")
+    return password
+
+
+def _team_scope_from_row(row: TeamMember) -> list[str]:
+    raw = str(row.access_scope or "").strip()
+    if not raw:
+        return ["*"] if row.is_owner else ["products", "sales_stats"]
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        parsed = []
+    if row.is_owner:
+        return ["*"]
+    if not isinstance(parsed, list):
+        return ["products", "sales_stats"]
+    return _safe_team_scope([str(x) for x in parsed])
+
+
+def _team_member_to_out(row: TeamMember) -> TeamMemberOut:
+    return TeamMemberOut(
+        id=row.id,
+        email=row.email,
+        has_password=bool(str(row.hashed_password or "").strip()),
+        phone=row.phone or "",
+        full_name=row.full_name or "",
+        nickname=row.nickname or "",
+        avatar_url=row.avatar_url or "",
+        access_scope=_team_scope_from_row(row),
+        is_owner=bool(row.is_owner),
+        is_active=bool(row.is_active),
+        created_at=row.created_at.isoformat() if row.created_at else None,
+    )
+
+
+def _ensure_owner_team_member(db: Session, user: User) -> TeamMember:
+    owner = db.scalar(select(TeamMember).where(TeamMember.user_id == user.id, TeamMember.is_owner.is_(True)).order_by(TeamMember.id.asc()))
+    if owner:
+        owner.email = user.email
+        if not owner.hashed_password:
+            owner.hashed_password = user.hashed_password
+        owner.access_scope = json.dumps(["*"], ensure_ascii=False)
+        owner.is_active = True
+        return owner
+    owner = TeamMember(
+        user_id=user.id,
+        email=user.email,
+        full_name="",
+        nickname="owner",
+        avatar_url="",
+        hashed_password=user.hashed_password,
+        access_scope=json.dumps(["*"], ensure_ascii=False),
+        is_owner=True,
+        is_active=True,
+    )
+    db.add(owner)
+    db.flush()
+    return owner
+
+
+def _list_team_members(db: Session, user_id: int) -> list[TeamMemberOut]:
+    rows = db.scalars(select(TeamMember).where(TeamMember.user_id == user_id).order_by(TeamMember.is_owner.desc(), TeamMember.id.asc())).all()
+    return [_team_member_to_out(row) for row in rows]
+
+
 def _build_admin_user_profile_payload(db: Session, target: User) -> AdminUserProfileOut:
     profile = _get_or_create_user_profile(db, target.id)
+    _ensure_owner_team_member(db, target)
     account = _get_or_create_billing_account(db, target.id)
     credentials = db.scalars(select(ApiCredential).where(ApiCredential.user_id == target.id).order_by(ApiCredential.id.desc())).all()
     return AdminUserProfileOut(
@@ -2868,10 +3451,12 @@ def _build_admin_user_profile_payload(db: Session, target: User) -> AdminUserPro
             )
             for c in credentials
         ],
+        team_members=_list_team_members(db, target.id),
     )
 
 
 def _build_user_profile_payload(db: Session, user: User, profile: UserProfile, account: BillingAccount) -> UserProfileOut:
+    _ensure_owner_team_member(db, user)
     creds = db.scalars(select(ApiCredential).where(ApiCredential.user_id == user.id).order_by(ApiCredential.id.desc())).all()
     plans = [
         {
@@ -2910,6 +3495,7 @@ def _build_user_profile_payload(db: Session, user: User, profile: UserProfile, a
             )
             for c in creds
         ],
+        team_members=_list_team_members(db, user.id),
     )
 
 

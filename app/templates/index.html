@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SEO WIBE</title>
-  <link rel="stylesheet" href="/static/styles.css?v=20260226h" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260227c" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -109,18 +109,12 @@
         <p>Seller OS</p>
       </div>
       <nav class="side-nav">
-        <button class="nav-btn" data-tab="dashboard" onclick="showTab('dashboard', this)">Дашборд</button>
+        <button class="nav-btn" data-tab="sales" data-module="sales_stats" onclick="showTab('sales', this)">Статистика и дашборд</button>
         <button class="nav-btn" data-tab="products" onclick="showTab('products', this)">Товары</button>
-        <button class="nav-btn" data-tab="seo" onclick="showTab('seo', this)">SEO задачи</button>
-        <button class="nav-btn" data-tab="sales" data-module="sales_stats" onclick="showTab('sales', this)">Статистика продаж</button>
-        <button class="nav-btn" data-tab="reviews" data-module="wb_reviews_ai" onclick="showTab('reviews', this)">Отзывы WB/Ozon</button>
-        <button class="nav-btn" data-tab="questions" data-module="wb_questions_ai" onclick="showTab('questions', this)">Вопросы WB/Ozon</button>
-        <button class="nav-btn" data-tab="ads" data-module="wb_ads" onclick="showTab('ads', this)">Реклама WB</button>
-        <button class="nav-btn" data-tab="ads-analytics" data-module="wb_ads_analytics" onclick="showTab('ads-analytics', this)">Аналитика WB Ads</button>
-        <button class="nav-btn" data-tab="ads-recommendations" data-module="wb_ads_recommendations" onclick="showTab('ads-recommendations', this)">Рекомендации WB Ads</button>
+        <button class="nav-btn" data-tab="reviews" data-module="wb_reviews_ai" onclick="showTab('reviews', this)">Отзывы/Вопросы</button>
+        <button class="nav-btn" data-tab="ads" data-module="wb_ads" onclick="showTab('ads', this)">Реклама WB/Ozon</button>
         <button class="nav-btn" data-tab="profile" data-module="user_profile" onclick="showTab('profile', this)">Профиль</button>
         <button class="nav-btn" data-tab="help" data-module="help_center" onclick="showTab('help', this)">Справка</button>
-        <button class="nav-btn" data-tab="keywords" onclick="showTab('keywords', this)">Ключевики</button>
       </nav>
       <button class="btn-danger full" onclick="logout()">Выйти</button>
     </aside>
@@ -128,8 +122,8 @@
     <main class="workspace">
       <header class="topbar">
         <div>
-          <h1 id="sectionTitle">Дашборд</h1>
-          <p id="sectionSubtitle">Контроль позиций, карточек и SEO-итераций</p>
+          <h1 id="sectionTitle">Статистика и дашборд</h1>
+          <p id="sectionSubtitle">Продажи, KPI и динамика в одном модуле</p>
         </div>
         <div class="topbar-controls">
           <select id="uiLangSelect" class="chip-select" onchange="changeUiLang()">
@@ -145,31 +139,20 @@
             <option value="autumn">Осень</option>
             <option value="winter">Зима</option>
             <option value="spring">Весна</option>
+            <option value="japan">Япония</option>
+            <option value="greenland">Гренландия</option>
           </select>
         </div>
       </header>
 
-      <section id="dashboard" class="tab">
-        <div class="kpis" id="stats"></div>
-        <div class="panel trend-panel">
-          <div class="panel-head">
-            <h3>Тренд позиций (21 день)</h3>
-            <span class="hint">Средняя позиция и плотность проверок</span>
-          </div>
-          <svg id="dashboardTrendChart" class="trend-chart" viewBox="0 0 720 180" preserveAspectRatio="none"></svg>
-          <div id="dashboardTrendMeta" class="trend-meta"></div>
-        </div>
-        <div class="panel">
-          <h3>Быстрые действия</h3>
-          <div class="quick-actions">
-            <button onclick="showTab('products', document.querySelector('[data-tab=products]'))">Импортировать товары</button>
-            <button onclick="showTab('seo', document.querySelector('[data-tab=seo]'))">Запустить SEO-генерацию</button>
-            <button class="btn-secondary" onclick="checkCurrentPositions(true)">Проверить позиции всех</button>
-          </div>
-        </div>
-      </section>
-
       <section id="products" class="tab hidden">
+        <div class="panel">
+          <div class="module-subtabs">
+            <button class="chip-btn active" id="productsSubtabCatalogBtn" type="button" onclick="switchProductsSubtab('catalog')">Товары</button>
+            <button class="chip-btn" id="productsSubtabSeoBtn" type="button" onclick="switchProductsSubtab('seo')">SEO задачи</button>
+          </div>
+        </div>
+        <div id="productsSubtabCatalog">
         <div class="panel">
           <div class="grid-6 reviews-controls">
             <select id="importMarketplace"><option value="wb">WB</option><option value="ozon">Ozon</option></select>
@@ -198,6 +181,8 @@
           </div>
         </div>
         <pre id="positionCheckResult"></pre>
+        </div>
+        <div id="productsSubtabSeo" class="hidden"></div>
       </section>
 
       <section id="seo" class="tab hidden">
@@ -222,6 +207,16 @@
         </div>
 
         <div class="kanban" id="seoKanban"></div>
+        <div class="panel">
+          <h3>SEO семантика (подмодуль)</h3>
+          <p class="hint">Ручное усиление автоядра. Ключи учитываются при генерации и проверке позиций.</p>
+          <div class="grid-3">
+            <select id="kwMarketplace"><option value="all">all</option><option value="wb">wb</option><option value="ozon">ozon</option></select>
+            <input id="kwText" placeholder="например: утеплитель для труб" />
+            <button onclick="addKeyword()">Добавить ключ</button>
+          </div>
+          <div id="keywordsList" class="keywords-grid"></div>
+        </div>
 
         <div class="seo-split">
           <div class="table-card">
@@ -283,8 +278,26 @@
           </div>
           <div id="salesTotalsCards" class="sales-kpis"></div>
           <div id="salesStatsMeta" class="hint">-</div>
+          <div id="salesLoadStatus" class="hint load-status">-</div>
           <svg id="salesTrendChart" class="trend-chart mini" viewBox="0 0 720 150" preserveAspectRatio="none"></svg>
           <div id="salesTrendMeta" class="trend-meta"></div>
+        </div>
+        <div class="kpis" id="stats"></div>
+        <div class="panel trend-panel">
+          <div class="panel-head">
+            <h3>Тренд позиций (21 день)</h3>
+            <span class="hint">Средняя позиция и плотность проверок</span>
+          </div>
+          <svg id="dashboardTrendChart" class="trend-chart" viewBox="0 0 720 180" preserveAspectRatio="none"></svg>
+          <div id="dashboardTrendMeta" class="trend-meta"></div>
+        </div>
+        <div class="panel">
+          <h3>Быстрые действия</h3>
+          <div class="quick-actions">
+            <button onclick="showTab('products', document.querySelector('[data-tab=products]'))">Импортировать товары</button>
+            <button onclick="showTab('products', document.querySelector('[data-tab=products]')); switchProductsSubtab('seo');">Запустить SEO-генерацию</button>
+            <button class="btn-secondary" onclick="checkCurrentPositions(true)">Проверить позиции всех</button>
+          </div>
         </div>
         <div class="table-card">
           <table class="sales-table">
@@ -299,7 +312,14 @@
 
       <section id="reviews" class="tab hidden">
         <div class="panel">
-          <h3>Отзывы и ответы WB/Ozon</h3>
+          <div class="module-subtabs">
+            <button class="chip-btn active" id="reviewsSubtabReviewsBtn" type="button" onclick="switchReviewsSubtab('reviews')">Отзывы</button>
+            <button class="chip-btn" id="reviewsSubtabQuestionsBtn" type="button" onclick="switchReviewsSubtab('questions')">Вопросы</button>
+          </div>
+        </div>
+        <div id="reviewsSubtabReviews">
+        <div class="panel">
+          <h3>Отзывы WB/Ozon</h3>
           <div class="grid-6 questions-controls">
             <select id="reviewMarketplace" onchange="loadWbReviews()">
               <option value="wb">WB</option>
@@ -348,9 +368,9 @@
           </table>
         </div>
         <pre id="wbReviewsRaw"></pre>
-      </section>
+      </div>
 
-      <section id="questions" class="tab hidden">
+      <div id="reviewsSubtabQuestions" class="hidden">
         <div class="panel">
           <h3>Вопросы и ответы WB/Ozon</h3>
           <div class="grid-6">
@@ -400,9 +420,19 @@
           </table>
         </div>
         <pre id="wbQuestionsRaw"></pre>
+      </div>
       </section>
 
       <section id="ads" class="tab hidden">
+        <div class="panel">
+          <div class="module-subtabs">
+            <button class="chip-btn active" id="adsSubtabCampaignsBtn" type="button" onclick="switchAdsSubtab('campaigns')">Кампании</button>
+            <button class="chip-btn" id="adsSubtabAnalyticsBtn" type="button" onclick="switchAdsSubtab('analytics')">Аналитика</button>
+            <button class="chip-btn" id="adsSubtabRecommendationsBtn" type="button" onclick="switchAdsSubtab('recommendations')">Рекомендации</button>
+            <button class="chip-btn" id="adsSubtabOzonBtn" type="button" onclick="switchAdsSubtab('ozon')">Реклама Ozon</button>
+          </div>
+        </div>
+        <div id="adsSubtabCampaigns">
         <div class="panel">
           <h3>Рекламные кампании WB</h3>
           <div class="grid-4 ads-toolbar-main">
@@ -477,9 +507,9 @@
           </table>
         </div>
         <pre id="wbAdsRatesResult"></pre>
-      </section>
+      </div>
 
-      <section id="ads-analytics" class="tab hidden">
+      <div id="adsSubtabAnalytics" class="hidden">
         <div class="panel">
           <h3>Аналитика рекламы WB</h3>
           <div class="grid-4">
@@ -499,29 +529,38 @@
           </table>
         </div>
         <pre id="adsAnalyticsRaw">-</pre>
-      </section>
+      </div>
 
-      <section id="ads-recommendations" class="tab hidden">
+      <div id="adsSubtabRecommendations" class="hidden">
         <div class="panel">
           <h3>Рекомендации WB Ads</h3>
           <div class="grid-4">
             <input id="adsRecFrom" type="date" />
             <input id="adsRecTo" type="date" />
-            <input id="adsRecMinSpent" type="number" min="0" step="50" value="200" placeholder="Мин. расход" />
+            <input id="adsRecMinSpent" type="number" min="0" step="50" value="0" placeholder="Мин. расход" />
             <button class="btn-secondary" onclick="loadAdsRecommendations()">Построить рекомендации</button>
           </div>
           <div id="adsRecLoadStatus" class="hint load-status">-</div>
-          <pre id="adsRecMeta">-</pre>
+          <div id="adsRecMeta" class="ads-rec-meta">-</div>
+          <div id="adsRecInsights" class="ads-rec-insights">-</div>
         </div>
         <div class="table-card">
           <table class="ads-table">
             <thead>
               <tr><th>ID</th><th>Название</th><th>Статус</th><th>Тип</th><th>Показы</th><th>Клики</th><th>CTR</th><th>Заказы</th><th>Расход</th><th>CPC</th><th>CPO</th><th>Приоритет</th><th>Рекомендация</th><th>Причина</th></tr>
             </thead>
-            <tbody id="adsRecTable"></tbody>
+          <tbody id="adsRecTable"></tbody>
           </table>
         </div>
-        <pre id="adsRecRaw">-</pre>
+      </div>
+
+      <div id="adsSubtabOzon" class="hidden">
+        <div class="panel">
+          <h3>Реклама Ozon (бета)</h3>
+          <p class="hint">Блок подготовки интеграции: показываем единый интерфейс внутри модуля “Реклама”.</p>
+          <pre id="ozonAdsInfo">Модуль Ozon Ads подключается. Здесь появятся кампании, аналитика и рекомендации Ozon в единой логике с WB.</pre>
+        </div>
+      </div>
       </section>
 
       <section id="profile" class="tab hidden">
@@ -602,6 +641,28 @@
             <button onclick="changeProfilePassword()">Сменить пароль</button>
           </div>
         </div>
+
+        <div class="panel" id="profileTeamPanel">
+          <h3>Сотрудники кабинета</h3>
+          <div class="grid-6 team-form-grid">
+            <input id="teamMemberEmail" placeholder="Email сотрудника" />
+            <input id="teamMemberPassword" type="password" placeholder="Пароль сотрудника (>=8)" />
+            <input id="teamMemberPhone" placeholder="Телефон" />
+            <input id="teamMemberFullName" placeholder="ФИО" />
+            <input id="teamMemberNickname" placeholder="Ник" />
+            <input id="teamMemberAvatar" placeholder="Ссылка на аватар" />
+            <button class="btn-secondary" onclick="addTeamMember()">Добавить сотрудника</button>
+          </div>
+          <div class="team-access-picks" id="teamAccessPicks"></div>
+          <div class="table-card">
+            <table>
+              <thead>
+                <tr><th>ID</th><th>Email</th><th>ФИО</th><th>Телефон</th><th>Ник</th><th>Роль</th><th>Доступ</th><th>Пароль</th><th>Действия</th></tr>
+              </thead>
+              <tbody id="teamMembersTable"></tbody>
+            </table>
+          </div>
+        </div>
       </section>
 
       <section id="billing" class="tab hidden">
@@ -629,46 +690,11 @@
         </div>
       </section>
 
-      <section id="keys" class="tab hidden">
-        <div class="panel">
-          <p class="hint">WB: токен. Ozon: <code>client_id:api_key</code>.</p>
-          <div class="cols-2">
-            <div>
-              <h3>WB</h3>
-              <input id="wbKey" placeholder="WB API key" />
-              <div class="actions"><button onclick="saveKey('wb')">Сохранить</button><button class="btn-secondary" onclick="testKey('wb')">Проверить</button><button class="btn-danger" onclick="deleteKey('wb')">Удалить</button></div>
-            </div>
-            <div>
-              <h3>Ozon</h3>
-              <input id="ozonKey" placeholder="client_id:api_key" />
-              <div class="actions"><button onclick="saveKey('ozon')">Сохранить</button><button class="btn-secondary" onclick="testKey('ozon')">Проверить</button><button class="btn-danger" onclick="deleteKey('ozon')">Удалить</button></div>
-            </div>
-          </div>
-          <pre id="keysList"></pre>
-        </div>
-      </section>
-
-      <section id="keywords" class="tab hidden">
-        <div class="panel">
-          <p class="hint">Автоподбор работает без этой вкладки. Здесь ручное усиление.</p>
-          <div class="grid-3">
-            <select id="kwMarketplace"><option value="all">all</option><option value="wb">wb</option><option value="ozon">ozon</option></select>
-            <input id="kwText" placeholder="например: утеплитель для труб" />
-            <button onclick="addKeyword()">Добавить</button>
-          </div>
-          <pre id="keywordsList"></pre>
-        </div>
-      </section>
-
       <section id="help" class="tab hidden">
         <div class="panel">
           <h3>Справка по модулям</h3>
-          <div class="grid-3">
+          <div class="grid-2">
             <select id="helpModuleSelect" onchange="loadHelpDocs()"></select>
-            <select id="helpLangSelect" onchange="loadHelpDocs()">
-              <option value="ru">ru</option>
-              <option value="en">en</option>
-            </select>
             <button class="btn-secondary" onclick="loadHelpDocs()">Обновить справку</button>
           </div>
           <div id="helpDocsView" class="help-rich">-</div>
@@ -726,6 +752,6 @@
 
   <div id="hoverTip" class="hover-tip hidden"></div>
 
-  <script src="/static/app.js?v=20260226h"></script>
+  <script src="/static/app.js?v=20260227c"></script>
 </body>
 </html>

@@ -30,18 +30,29 @@ let adsRecLoadProgress = { active: false, total: 0, loaded: 0 };
 let adsRecLoadToken = 0;
 let salesRows = [];
 let salesChartRows = [];
+let salesLoadProgress = { active: false, total: 0, loaded: 0 };
 let salesLoadToken = 0;
 let salesAutoLoadTimer = null;
+let teamMembers = [];
 let reviewPhotoItems = [];
 let reviewPhotoIndex = 0;
+let helpDocsRows = [];
 let currentLang = (localStorage.getItem("ui_lang") || "ru").toLowerCase() === "en" ? "en" : "ru";
 let currentTheme = (localStorage.getItem("ui_theme") || "classic").toLowerCase();
 let uiThemeSettings = {
   theme_choice_enabled: true,
   default_theme: "classic",
-  allowed_themes: ["classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring"],
+  allowed_themes: ["classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring", "japan", "greenland"],
 };
-let currentTab = "dashboard";
+let currentTab = "sales";
+let currentProductsSubtab = "catalog";
+let currentReviewsSubtab = "reviews";
+let currentAdsSubtab = "campaigns";
+const moduleLoadState = new Map();
+const moduleInflightState = new Map();
+const MODULE_CACHE_TTL_MS = 30 * 60 * 1000;
+const MODULE_AUTO_REFRESH_MS = 60 * 60 * 1000;
+let moduleAutoRefreshTimer = null;
 const POSITION_LIMIT = 500;
 
 const authHeaders = () => ({
@@ -50,55 +61,55 @@ const authHeaders = () => ({
 });
 
 const TAB_TITLES = {
-  dashboard: { ru: ["Дашборд", "Контроль SEO-цикла и KPI"], en: ["Dashboard", "SEO lifecycle control and KPIs"] },
   products: { ru: ["Товары", "Импорт, обновление и проверка позиций"], en: ["Products", "Import, refresh and ranking checks"] },
-  seo: { ru: ["SEO задачи", "Генерация, recheck и управление итерациями"], en: ["SEO Jobs", "Generation, recheck and iteration control"] },
-  sales: { ru: ["Статистика продаж", "Продажи по периодам и маркетплейсам"], en: ["Sales Statistics", "Sales by period and marketplace"] },
-  reviews: { ru: ["Отзывы WB/Ozon", "Мониторинг отзывов, AI-ответы и отправка в кабинет маркетплейса"], en: ["WB/Ozon Reviews", "Review monitoring, AI replies and publishing"] },
-  questions: { ru: ["Вопросы WB/Ozon", "Мониторинг вопросов, AI-ответы и отправка в кабинет маркетплейса"], en: ["WB/Ozon Questions", "Question monitoring, AI replies and publishing"] },
-  ads: { ru: ["Реклама WB", "Кампании и текущие ставки из рекламного кабинета WB"], en: ["WB Ads", "Campaigns and rates from WB ads cabinet"] },
-  "ads-analytics": { ru: ["Аналитика WB Ads", "Статистика кампаний за период"], en: ["WB Ads Analytics", "Campaign statistics by period"] },
-  "ads-recommendations": { ru: ["Рекомендации WB Ads", "Действия по оптимизации рекламных кампаний"], en: ["WB Ads Recommendations", "Actionable optimization suggestions"] },
+  sales: { ru: ["Статистика и дашборд", "Продажи, KPI и динамика в одном модуле"], en: ["Statistics & Dashboard", "Sales, KPIs and trends in one module"] },
+  reviews: { ru: ["Отзывы/Вопросы", "Единый модуль обратной связи"], en: ["Reviews/Questions", "Unified customer feedback module"] },
+  ads: { ru: ["Реклама WB/Ozon", "Кампании, аналитика и рекомендации"], en: ["WB/Ozon Ads", "Campaigns, analytics and recommendations"] },
   profile: { ru: ["Профиль", "Личные данные, тариф, API ключи и безопасность"], en: ["Profile", "Personal data, plan, API keys and security"] },
   billing: { ru: ["Биллинг", "Тарифы, лимиты, продление и история операций"], en: ["Billing", "Plans, limits, renewals and history"] },
   help: { ru: ["Справка", "Документация по модулям"], en: ["Help Center", "Module usage documentation"] },
-  keywords: { ru: ["Ключевики", "Ручное усиление автоматического ядра"], en: ["Keywords", "Manual boost of auto semantic core"] },
   admin: { ru: ["Админка", "Управление пользователями и модулями"], en: ["Admin", "Users and modules management"] },
 };
 
-const HELP_MODULE_TAB_MAP = {
-  dashboard: "dashboard",
-  products: "products",
-  seo_generation: "seo",
-  rank_tracking: "products",
-  competitor_insights: "seo",
-  auto_apply: "seo",
-  sales_stats: "sales",
-  wb_reviews_ai: "reviews",
-  wb_questions_ai: "questions",
-  wb_ads: "ads",
-  wb_ads_analytics: "ads-analytics",
-  wb_ads_recommendations: "ads-recommendations",
-  user_profile: "profile",
-  billing: "billing",
-  help_center: "help",
-  keywords: "keywords",
+const LEGACY_TAB_REDIRECT = {
+  seo: { tab: "products", productsSubtab: "seo", reviewsSubtab: "", adsSubtab: "" },
+  dashboard: { tab: "sales", reviewsSubtab: "", adsSubtab: "" },
+  questions: { tab: "reviews", reviewsSubtab: "questions", adsSubtab: "" },
+  "ads-analytics": { tab: "ads", reviewsSubtab: "", adsSubtab: "analytics" },
+  "ads-recommendations": { tab: "ads", reviewsSubtab: "", adsSubtab: "recommendations" },
+  keywords: { tab: "products", productsSubtab: "seo", reviewsSubtab: "", adsSubtab: "" },
+};
+
+const TEAM_ACCESS_MODULES = [
+  "products",
+  "seo_generation",
+  "sales_stats",
+  "wb_reviews_ai",
+  "wb_questions_ai",
+  "wb_ads",
+  "wb_ads_analytics",
+  "wb_ads_recommendations",
+  "user_profile",
+  "help_center",
+];
+
+const NAV_BUTTON_ICONS = {
+  products: "▦",
+  sales: "◷",
+  reviews: "★",
+  ads: "◈",
+  profile: "☻",
+  help: "ⓘ",
 };
 
 const UI_TEXT = {
   ru: {
-    nav_dashboard: "Дашборд",
     nav_products: "Товары",
-    nav_seo: "SEO задачи",
-    nav_sales: "Статистика продаж",
-    nav_reviews: "Отзывы WB/Ozon",
-    nav_questions: "Вопросы WB/Ozon",
-    nav_ads: "Реклама WB",
-    nav_ads_analytics: "Аналитика WB Ads",
-    nav_ads_recommendations: "Рекомендации WB Ads",
+    nav_sales: "Статистика и дашборд",
+    nav_reviews: "Отзывы/Вопросы",
+    nav_ads: "Реклама WB/Ozon",
     nav_profile: "Профиль",
     nav_help: "Справка",
-    nav_keywords: "Ключевики",
     logout: "Выйти",
     theme_classic: "Классика",
     theme_dark: "Темная",
@@ -108,20 +119,16 @@ const UI_TEXT = {
     theme_autumn: "Осень",
     theme_winter: "Зима",
     theme_spring: "Весна",
+    theme_japan: "Япония",
+    theme_greenland: "Гренландия",
   },
   en: {
-    nav_dashboard: "Dashboard",
     nav_products: "Products",
-    nav_seo: "SEO Jobs",
-    nav_sales: "Sales Statistics",
-    nav_reviews: "WB/Ozon Reviews",
-    nav_questions: "WB/Ozon Questions",
-    nav_ads: "WB Ads",
-    nav_ads_analytics: "WB Ads Analytics",
-    nav_ads_recommendations: "WB Ads Recommendations",
+    nav_sales: "Statistics & Dashboard",
+    nav_reviews: "Reviews/Questions",
+    nav_ads: "WB/Ozon Ads",
     nav_profile: "Profile",
     nav_help: "Help Center",
-    nav_keywords: "Keywords",
     logout: "Logout",
     theme_classic: "Classic",
     theme_dark: "Dark",
@@ -131,6 +138,8 @@ const UI_TEXT = {
     theme_autumn: "Autumn",
     theme_winter: "Winter",
     theme_spring: "Spring",
+    theme_japan: "Japan",
+    theme_greenland: "Greenland",
   },
 };
 
@@ -143,10 +152,27 @@ function tr(ru, en) {
   return currentLang === "en" ? en : ru;
 }
 
+function moduleLabel(code) {
+  const key = String(code || "").trim().toLowerCase();
+  const labels = {
+    products: tr("Товары", "Products"),
+    seo_generation: tr("SEO задачи", "SEO Jobs"),
+    sales_stats: tr("Статистика продаж", "Sales Statistics"),
+    wb_reviews_ai: tr("Отзывы", "Reviews"),
+    wb_questions_ai: tr("Вопросы", "Questions"),
+    wb_ads: tr("Реклама", "Ads"),
+    wb_ads_analytics: tr("Аналитика Ads", "Ads Analytics"),
+    wb_ads_recommendations: tr("Рекомендации Ads", "Ads Recommendations"),
+    user_profile: tr("Профиль", "Profile"),
+    help_center: tr("Справка", "Help"),
+  };
+  return labels[key] || key;
+}
+
 function applyTheme(theme) {
   const configured = Array.isArray(uiThemeSettings.allowed_themes) && uiThemeSettings.allowed_themes.length
     ? uiThemeSettings.allowed_themes
-    : ["classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring"];
+    : ["classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring", "japan", "greenland"];
   const allowed = new Set(configured.map((x) => String(x || "").toLowerCase()).filter(Boolean));
   const requested = String(theme || "").toLowerCase();
   const fallback = String(uiThemeSettings.default_theme || "classic").toLowerCase();
@@ -175,7 +201,7 @@ function applyUiThemeSettingsToSelect() {
   if (!sel) return;
   const allowed = Array.isArray(uiThemeSettings.allowed_themes) && uiThemeSettings.allowed_themes.length
     ? uiThemeSettings.allowed_themes
-    : ["classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring"];
+    : ["classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring", "japan", "greenland"];
   const allowedSet = new Set(allowed.map((x) => String(x || "").toLowerCase()));
   [...sel.options].forEach((opt) => {
     opt.hidden = !allowedSet.has(String(opt.value || "").toLowerCase());
@@ -203,7 +229,71 @@ function applyProductToolbarIcons(isEn) {
   }
 }
 
+function iconByButtonLabel(labelRaw) {
+  const label = String(labelRaw || "").trim().toLowerCase();
+  if (!label) return "";
+  const rules = [
+    [/обнов|refresh|reload|renew/, "↻"],
+    [/загруз|load|import/, "⇩"],
+    [/сохран|save/, "⎘"],
+    [/удал|delete|clear/, "✖"],
+    [/примен|apply|publish/, "✓"],
+    [/провер|check|test|audit/, "⌕"],
+    [/генер|generate|ai/, "⚡"],
+    [/отправ|send|reply/, "➤"],
+    [/сменить|change|switch/, "⇄"],
+    [/выбрать|select/, "☑"],
+    [/построить|build|report|recommend/, "◈"],
+    [/статист|sales/, "◷"],
+  ];
+  for (const [pattern, icon] of rules) {
+    if (pattern.test(label)) return icon;
+  }
+  return "";
+}
+
+function applyNavIcons() {
+  document.querySelectorAll(".side-nav .nav-btn").forEach((btn) => {
+    const tabCode = String(btn.dataset.tab || "").trim();
+    const icon = NAV_BUTTON_ICONS[tabCode] || "•";
+    const labelNode = btn.querySelector(".nav-label");
+    const label = String((labelNode?.textContent || btn.textContent || "")).trim();
+    btn.innerHTML = `<span class="nav-icon" aria-hidden="true">${icon}</span><span class="nav-label">${escapeHtml(label)}</span>`;
+  });
+}
+
+function applyModuleActionIcons() {
+  const buttons = document.querySelectorAll(".workspace .panel button, .workspace .table-card button");
+  for (const btn of buttons) {
+    if (
+      btn.classList.contains("nav-btn")
+      || btn.classList.contains("icon-only-btn")
+      || btn.classList.contains("icon-action-btn")
+      || btn.classList.contains("chip-btn")
+      || btn.classList.contains("help-chip-btn")
+      || btn.classList.contains("help-filter-btn")
+      || btn.classList.contains("help-open-btn")
+      || btn.classList.contains("campaign-close")
+      || btn.closest(".review-actions")
+    ) {
+      continue;
+    }
+    const labelNode = btn.querySelector(".btn-label");
+    const label = String((labelNode?.textContent || btn.textContent || "")).trim();
+    const icon = iconByButtonLabel(label);
+    if (!icon) continue;
+    btn.classList.remove("btn-with-icon");
+    btn.classList.add("btn-icon-only-auto");
+    btn.innerHTML = `<span class="btn-icon" aria-hidden="true">${icon}</span>`;
+    if (!btn.dataset.tip) btn.dataset.tip = label;
+    if (!btn.getAttribute("aria-label")) btn.setAttribute("aria-label", label);
+    if (!btn.title) btn.title = label;
+  }
+}
+
 function applyUiLanguage() {
+  pruneLegacyUi();
+  ensureProfileTeamUi();
   const lang = currentLang === "en" ? "en" : "ru";
   currentLang = lang;
   localStorage.setItem("ui_lang", lang);
@@ -235,18 +325,13 @@ function applyUiLanguage() {
     if (input) el.appendChild(input);
     el.append(document.createTextNode(` ${labelText}`));
   };
-  setText(".nav-btn[data-tab='dashboard']", t("nav_dashboard"));
   setText(".nav-btn[data-tab='products']", t("nav_products"));
-  setText(".nav-btn[data-tab='seo']", t("nav_seo"));
   setText(".nav-btn[data-tab='sales']", t("nav_sales"));
   setText(".nav-btn[data-tab='reviews']", t("nav_reviews"));
-  setText(".nav-btn[data-tab='questions']", t("nav_questions"));
   setText(".nav-btn[data-tab='ads']", t("nav_ads"));
-  setText(".nav-btn[data-tab='ads-analytics']", t("nav_ads_analytics"));
-  setText(".nav-btn[data-tab='ads-recommendations']", t("nav_ads_recommendations"));
   setText(".nav-btn[data-tab='profile']", t("nav_profile"));
   setText(".nav-btn[data-tab='help']", t("nav_help"));
-  setText(".nav-btn[data-tab='keywords']", t("nav_keywords"));
+  applyNavIcons();
   setText(".btn-danger.full", t("logout"));
   setText("#authSection .auth-box:nth-of-type(1) h3", lang === "en" ? "Register" : "Регистрация");
   setText("#authSection .auth-box:nth-of-type(2) h3", lang === "en" ? "Login" : "Вход");
@@ -254,10 +339,10 @@ function applyUiLanguage() {
   setText("#authSection .auth-box:nth-of-type(2) button", lang === "en" ? "Sign In" : "Войти в кабинет");
 
   const isEn = lang === "en";
-  setText("#dashboard .panel h3", isEn ? "Quick Actions" : "Быстрые действия");
-  setText("#dashboard .quick-actions button:nth-of-type(1)", isEn ? "Import Products" : "Импортировать товары");
-  setText("#dashboard .quick-actions button:nth-of-type(2)", isEn ? "Run SEO Generation" : "Запустить SEO-генерацию");
-  setText("#dashboard .quick-actions button:nth-of-type(3)", isEn ? "Check All Rankings" : "Проверить позиции всех");
+  setText("#sales .panel:nth-of-type(3) h3", isEn ? "Quick Actions" : "Быстрые действия");
+  setText("#sales .panel:nth-of-type(3) .quick-actions button:nth-of-type(1)", isEn ? "Import Products" : "Импортировать товары");
+  setText("#sales .panel:nth-of-type(3) .quick-actions button:nth-of-type(2)", isEn ? "Run SEO Generation" : "Запустить SEO-генерацию");
+  setText("#sales .panel:nth-of-type(3) .quick-actions button:nth-of-type(3)", isEn ? "Check All Rankings" : "Проверить позиции всех");
   applyProductToolbarIcons(isEn);
   const importAllLabel = document.querySelector("#products .panel .grid-6 .check");
   if (importAllLabel) {
@@ -269,8 +354,8 @@ function applyUiLanguage() {
   setText("#seo .panel .grid-5 button:nth-of-type(1)", isEn ? "Generate Selected" : "Сгенерировать для выбранных");
   setText("#seo .panel .grid-5 button:nth-of-type(2)", isEn ? "Generate All" : "Сгенерировать для всех");
   setText("#seo .panel .grid-5 button:nth-of-type(3)", isEn ? "Apply" : "Применить");
-  setText("#sales .panel h3", isEn ? "Sales Statistics" : "Статистика продаж");
-  setText("#sales .grid-4 button", isEn ? "Load Stats" : "Загрузить статистику");
+  setText("#sales .panel:nth-of-type(4) h3", isEn ? "Sales Statistics" : "Статистика продаж");
+  setText("#sales .panel:nth-of-type(4) .grid-4 button", isEn ? "Load Stats" : "Загрузить статистику");
   setText("#sales .sales-cost-field span", isEn ? "Other costs" : "Прочие траты");
   setText("#sales [data-sales-range='day']", isEn ? "Day" : "День");
   setText("#sales [data-sales-range='week']", isEn ? "Week" : "Неделя");
@@ -278,16 +363,17 @@ function applyUiLanguage() {
   setText("#sales [data-sales-range='quarter']", isEn ? "Quarter" : "Квартал");
   setText("#sales [data-sales-range='halfyear']", isEn ? "6 months" : "6 месяцев");
   setText("#sales [data-sales-range='year']", isEn ? "Year" : "Год");
-  setText("#reviews .panel h3", isEn ? "Reviews & Replies WB/Ozon" : "Отзывы и ответы WB/Ozon");
-  setText("#questions .panel h3", isEn ? "Questions & Replies WB/Ozon" : "Вопросы и ответы WB/Ozon");
+  setText("#reviews .panel h3", isEn ? "Reviews WB/Ozon" : "Отзывы WB/Ozon");
+  setText("#reviewsSubtabQuestions .panel h3", isEn ? "Questions & Replies WB/Ozon" : "Вопросы и ответы WB/Ozon");
   setText("#ads .panel h3", isEn ? "WB Ad Campaigns" : "Рекламные кампании WB");
   setText("#ads .grid-4 button:nth-of-type(1)", isEn ? "Load Campaigns" : "Загрузить кампании");
   setText("#ads .grid-4 button:nth-of-type(2)", isEn ? "Get Rates" : "Получить ставки");
   setText("#ads .grid-3 button", isEn ? "Reset Filters" : "Сбросить фильтры");
-  setText("#ads-analytics .panel h3", isEn ? "WB Ads Analytics" : "Аналитика рекламы WB");
-  setText("#ads-analytics .grid-4 button", isEn ? "Build Report" : "Построить отчет");
-  setText("#ads-recommendations .panel h3", isEn ? "WB Ads Recommendations" : "Рекомендации WB Ads");
-  setText("#ads-recommendations .grid-4 button", isEn ? "Build Recommendations" : "Построить рекомендации");
+  setText("#adsSubtabAnalytics .panel h3", isEn ? "WB Ads Analytics" : "Аналитика рекламы WB");
+  setText("#adsSubtabAnalytics .grid-4 button", isEn ? "Build Report" : "Построить отчет");
+  setText("#adsSubtabRecommendations .panel h3", isEn ? "WB Ads Recommendations" : "Рекомендации WB Ads");
+  setText("#adsSubtabRecommendations .grid-4 button", isEn ? "Build Recommendations" : "Построить рекомендации");
+  setText("#adsSubtabOzon .panel h3", isEn ? "Ozon Ads (beta)" : "Реклама Ozon (бета)");
   setText("#profile .panel:nth-of-type(1) h3", isEn ? "User Profile" : "Профиль пользователя");
   setText("#profile .panel:nth-of-type(1) .grid-3 button:nth-of-type(1)", isEn ? "Save Profile" : "Сохранить профиль");
   setText("#profile .panel:nth-of-type(1) .grid-3 button:nth-of-type(2)", isEn ? "Refresh Profile" : "Обновить профиль");
@@ -298,14 +384,24 @@ function applyUiLanguage() {
   setText("#profile .panel:nth-of-type(3) h3", isEn ? "API Keys" : "API ключи");
   setText("#profile .panel:nth-of-type(4) h3", isEn ? "Security" : "Безопасность");
   setText("#profile .panel:nth-of-type(4) .grid-3 button", isEn ? "Change Password" : "Сменить пароль");
+  setText("#profileTeamPanel h3", isEn ? "Workspace Team" : "Сотрудники кабинета");
+  setText("#profileTeamPanel .grid-6 button", isEn ? "Add employee" : "Добавить сотрудника");
   setText("#help .panel h3", isEn ? "Module Help Center" : "Справка по модулям");
-  setText("#help .grid-3 button", isEn ? "Refresh Help" : "Обновить справку");
+  setText("#help .grid-2 button", isEn ? "Refresh Help" : "Обновить справку");
+  setText("#reviewsSubtabReviewsBtn", isEn ? "Reviews" : "Отзывы");
+  setText("#reviewsSubtabQuestionsBtn", isEn ? "Questions" : "Вопросы");
+  setText("#productsSubtabCatalogBtn", isEn ? "Products" : "Товары");
+  setText("#productsSubtabSeoBtn", isEn ? "SEO Jobs" : "SEO задачи");
+  setText("#adsSubtabCampaignsBtn", isEn ? "Campaigns" : "Кампании");
+  setText("#adsSubtabAnalyticsBtn", isEn ? "Analytics" : "Аналитика");
+  setText("#adsSubtabRecommendationsBtn", isEn ? "Recommendations" : "Рекомендации");
+  setText("#adsSubtabOzonBtn", isEn ? "Ozon Ads" : "Реклама Ozon");
   setText("#reviews .grid-6 button.btn-secondary", isEn ? "Refresh Reviews" : "Обновить отзывы");
   setText("#reviews .grid-2 button", isEn ? "Save AI Settings" : "Сохранить AI-настройки");
-  setText("#questions .grid-6 button.btn-secondary", isEn ? "Refresh Questions" : "Обновить вопросы");
-  setText("#questions .grid-2 button", isEn ? "Save AI Settings" : "Сохранить AI-настройки");
-  setText("#questions .grid-4 button:nth-of-type(1)", isEn ? "Upload to Knowledge Base" : "Загрузить в базу знаний");
-  setText("#questions .grid-4 button:nth-of-type(2)", isEn ? "Delete Selected Document" : "Удалить выбранный документ");
+  setText("#reviewsSubtabQuestions .grid-6 button.btn-secondary", isEn ? "Refresh Questions" : "Обновить вопросы");
+  setText("#reviewsSubtabQuestions .grid-2 button", isEn ? "Save AI Settings" : "Сохранить AI-настройки");
+  setText("#reviewsSubtabQuestions .grid-4 button:nth-of-type(1)", isEn ? "Upload to Knowledge Base" : "Загрузить в базу знаний");
+  setText("#reviewsSubtabQuestions .grid-4 button:nth-of-type(2)", isEn ? "Delete Selected Document" : "Удалить выбранный документ");
   setText("#campaignDetailModal .campaign-modal-head h3", isEn ? "WB Campaign Details" : "Детали кампании WB");
   setText("#campaignDetailModal .actions button:nth-of-type(1)", isEn ? "Start" : "Запустить");
   setText("#campaignDetailModal .actions button:nth-of-type(2)", isEn ? "Pause" : "Пауза");
@@ -318,12 +414,12 @@ function applyUiLanguage() {
   setText("#reviews thead th:nth-child(5)", isEn ? "Review" : "Отзыв");
   setText("#reviews thead th:nth-child(6)", isEn ? "Reply" : "Ответ");
   setText("#reviews thead th:nth-child(7)", isEn ? "Actions" : "Действия");
-  setText("#questions thead th:nth-child(1)", isEn ? "Status" : "Статус");
-  setText("#questions thead th:nth-child(2)", isEn ? "Date" : "Дата");
-  setText("#questions thead th:nth-child(3)", isEn ? "Product" : "Товар");
-  setText("#questions thead th:nth-child(4)", isEn ? "Question" : "Вопрос");
-  setText("#questions thead th:nth-child(5)", isEn ? "Reply" : "Ответ");
-  setText("#questions thead th:nth-child(6)", isEn ? "Actions" : "Действия");
+  setText("#reviewsSubtabQuestions thead th:nth-child(1)", isEn ? "Status" : "Статус");
+  setText("#reviewsSubtabQuestions thead th:nth-child(2)", isEn ? "Date" : "Дата");
+  setText("#reviewsSubtabQuestions thead th:nth-child(3)", isEn ? "Product" : "Товар");
+  setText("#reviewsSubtabQuestions thead th:nth-child(4)", isEn ? "Question" : "Вопрос");
+  setText("#reviewsSubtabQuestions thead th:nth-child(5)", isEn ? "Reply" : "Ответ");
+  setText("#reviewsSubtabQuestions thead th:nth-child(6)", isEn ? "Actions" : "Действия");
   setText("#ads thead th:nth-child(1)", "ID");
   setText("#ads thead th:nth-child(2)", isEn ? "Name" : "Название");
   setText("#ads thead th:nth-child(3)", isEn ? "Status" : "Статус");
@@ -335,20 +431,20 @@ function applyUiLanguage() {
   setText("#ads thead th:nth-child(9)", "CTR");
   setText("#ads thead th:nth-child(10)", isEn ? "Orders" : "Заказы");
   setText("#ads thead th:nth-child(11)", isEn ? "Spend" : "Расход");
-  setText("#ads-recommendations thead th:nth-child(1)", "ID");
-  setText("#ads-recommendations thead th:nth-child(2)", isEn ? "Name" : "Название");
-  setText("#ads-recommendations thead th:nth-child(3)", isEn ? "Status" : "Статус");
-  setText("#ads-recommendations thead th:nth-child(4)", isEn ? "Type" : "Тип");
-  setText("#ads-recommendations thead th:nth-child(5)", isEn ? "Views" : "Показы");
-  setText("#ads-recommendations thead th:nth-child(6)", isEn ? "Clicks" : "Клики");
-  setText("#ads-recommendations thead th:nth-child(7)", "CTR");
-  setText("#ads-recommendations thead th:nth-child(8)", isEn ? "Orders" : "Заказы");
-  setText("#ads-recommendations thead th:nth-child(9)", isEn ? "Spend" : "Расход");
-  setText("#ads-recommendations thead th:nth-child(10)", "CPC");
-  setText("#ads-recommendations thead th:nth-child(11)", "CPO");
-  setText("#ads-recommendations thead th:nth-child(12)", isEn ? "Priority" : "Приоритет");
-  setText("#ads-recommendations thead th:nth-child(13)", isEn ? "Recommendation" : "Рекомендация");
-  setText("#ads-recommendations thead th:nth-child(14)", isEn ? "Reason" : "Причина");
+  setText("#adsSubtabRecommendations thead th:nth-child(1)", "ID");
+  setText("#adsSubtabRecommendations thead th:nth-child(2)", isEn ? "Name" : "Название");
+  setText("#adsSubtabRecommendations thead th:nth-child(3)", isEn ? "Status" : "Статус");
+  setText("#adsSubtabRecommendations thead th:nth-child(4)", isEn ? "Type" : "Тип");
+  setText("#adsSubtabRecommendations thead th:nth-child(5)", isEn ? "Views" : "Показы");
+  setText("#adsSubtabRecommendations thead th:nth-child(6)", isEn ? "Clicks" : "Клики");
+  setText("#adsSubtabRecommendations thead th:nth-child(7)", "CTR");
+  setText("#adsSubtabRecommendations thead th:nth-child(8)", isEn ? "Orders" : "Заказы");
+  setText("#adsSubtabRecommendations thead th:nth-child(9)", isEn ? "Spend" : "Расход");
+  setText("#adsSubtabRecommendations thead th:nth-child(10)", "CPC");
+  setText("#adsSubtabRecommendations thead th:nth-child(11)", "CPO");
+  setText("#adsSubtabRecommendations thead th:nth-child(12)", isEn ? "Priority" : "Приоритет");
+  setText("#adsSubtabRecommendations thead th:nth-child(13)", isEn ? "Recommendation" : "Рекомендация");
+  setText("#adsSubtabRecommendations thead th:nth-child(14)", isEn ? "Reason" : "Причина");
   setText("#sales thead th:nth-child(1)", isEn ? "Date" : "Дата");
   setText("#sales thead th:nth-child(2)", isEn ? "Marketplace" : "МП");
   setText("#sales thead th:nth-child(3)", isEn ? "Orders" : "Заказы");
@@ -476,6 +572,12 @@ function applyUiLanguage() {
     ["#profileCompanyStructure", isEn ? "Team structure, roles, departments" : "Структура компании, роли, отделы"],
     ["#profileCurrentPassword", isEn ? "Current password" : "Текущий пароль"],
     ["#profileNewPassword", isEn ? "New password (>=8)" : "Новый пароль (>=8)"],
+    ["#teamMemberEmail", isEn ? "Employee email" : "Email сотрудника"],
+    ["#teamMemberPassword", isEn ? "Employee password (>=8)" : "Пароль сотрудника (>=8)"],
+    ["#teamMemberPhone", isEn ? "Phone" : "Телефон"],
+    ["#teamMemberFullName", isEn ? "Full name" : "ФИО"],
+    ["#teamMemberNickname", isEn ? "Nickname" : "Ник"],
+    ["#teamMemberAvatar", isEn ? "Avatar URL" : "Ссылка на аватар"],
   ];
   for (const [selector, text] of placeholders) {
     const el = document.querySelector(selector);
@@ -493,6 +595,8 @@ function applyUiLanguage() {
       ["autumn", t("theme_autumn")],
       ["winter", t("theme_winter")],
       ["spring", t("theme_spring")],
+      ["japan", t("theme_japan")],
+      ["greenland", t("theme_greenland")],
     ];
     for (const [value, label] of labels) {
       const opt = [...themeSel.options].find((x) => x.value === value);
@@ -500,11 +604,9 @@ function applyUiLanguage() {
     }
   }
 
-  const helpLang = document.getElementById("helpLangSelect");
-  if (helpLang) helpLang.value = lang;
   const helpModule = document.getElementById("helpModuleSelect");
   if (helpModule) delete helpModule.dataset.ready;
-  const titlePack = TAB_TITLES[currentTab] || TAB_TITLES.dashboard;
+  const titlePack = TAB_TITLES[currentTab] || TAB_TITLES.sales;
   const [title, subtitle] = titlePack[lang] || titlePack.ru;
   document.getElementById("sectionTitle").textContent = title;
   document.getElementById("sectionSubtitle").textContent = subtitle;
@@ -512,7 +614,11 @@ function applyUiLanguage() {
   updateQuestionLoadStatus();
   updateWbAdsLoadStatus();
   updateAdsRecLoadStatus();
+  updateSalesLoadStatus();
   applyUiThemeSettingsToSelect();
+  renderTeamAccessOptions();
+  renderTeamMembers();
+  applyModuleActionIcons();
 }
 
 function changeUiLang() {
@@ -521,11 +627,13 @@ function changeUiLang() {
   applyUiLanguage();
   applyButtonTooltips();
   if (currentTab === "reviews") renderWbReviews();
-  if (currentTab === "questions") renderWbQuestions();
-  if (currentTab === "ads") renderWbCampaignRows();
-  if (currentTab === "ads-analytics") renderAdsAnalyticsRows();
+  if (currentTab === "reviews") renderWbQuestions();
+  if (currentTab === "ads") {
+    renderWbCampaignRows();
+    renderAdsAnalyticsRows();
+    renderAdsRecommendationsRows();
+  }
   if (currentTab === "help") loadHelpDocs();
-  if (currentTab === "ads-recommendations") renderAdsRecommendationsRows();
   if (currentTab === "sales") renderSalesStats();
   if (currentTab === "profile") loadProfile();
 }
@@ -886,8 +994,7 @@ async function suggestKeywordsForSelectedProduct(productId) {
 
   const allowAutofill =
     !input.value.trim() ||
-    input.dataset.autofilled === "1" ||
-    autoKeywordProductId !== productId;
+    input.dataset.autofilled === "1";
   if (allowAutofill) {
     input.value = suggestions[0];
     input.dataset.autofilled = "1";
@@ -902,10 +1009,166 @@ function setActiveNav(tabName) {
   });
 }
 
+function ensureProfileTeamUi() {
+  if (document.getElementById("teamMembersTable")) return;
+  const profileTab = document.getElementById("profile");
+  if (!profileTab) return;
+  const panel = document.createElement("div");
+  panel.className = "panel";
+  panel.id = "profileTeamPanel";
+  panel.innerHTML = `
+    <h3>${tr("Сотрудники кабинета", "Workspace Team")}</h3>
+    <div class="grid-6 team-form-grid">
+      <input id="teamMemberEmail" placeholder="${escapeHtml(tr("Email сотрудника", "Employee email"))}" />
+      <input id="teamMemberPassword" type="password" placeholder="${escapeHtml(tr("Пароль сотрудника (>=8)", "Employee password (>=8)"))}" />
+      <input id="teamMemberPhone" placeholder="${escapeHtml(tr("Телефон", "Phone"))}" />
+      <input id="teamMemberFullName" placeholder="${escapeHtml(tr("ФИО", "Full name"))}" />
+      <input id="teamMemberNickname" placeholder="${escapeHtml(tr("Ник", "Nickname"))}" />
+      <input id="teamMemberAvatar" placeholder="${escapeHtml(tr("Ссылка на аватар", "Avatar URL"))}" />
+      <button class="btn-secondary" type="button" onclick="addTeamMember()">${tr("Добавить сотрудника", "Add employee")}</button>
+    </div>
+    <div class="team-access-picks" id="teamAccessPicks"></div>
+    <div class="table-card">
+      <table>
+        <thead>
+          <tr><th>ID</th><th>Email</th><th>ФИО</th><th>Телефон</th><th>Ник</th><th>Роль</th><th>Доступ</th><th>Пароль</th><th>Действия</th></tr>
+        </thead>
+        <tbody id="teamMembersTable"></tbody>
+      </table>
+    </div>
+  `;
+  profileTab.appendChild(panel);
+}
+
+function ensureProductsSeoSubtabUi() {
+  const seoHost = document.getElementById("productsSubtabSeo");
+  const seoLegacySection = document.getElementById("seo");
+  if (!seoHost) return;
+  if (seoHost.dataset.migrated === "1") return;
+  if (seoLegacySection) {
+    const nodes = [...seoLegacySection.children];
+    for (const node of nodes) {
+      seoHost.appendChild(node);
+    }
+    seoLegacySection.classList.add("hidden");
+  }
+  seoHost.dataset.migrated = "1";
+}
+
+function switchProductsSubtab(tab, preload = true) {
+  ensureProductsSeoSubtabUi();
+  const next = tab === "seo" ? "seo" : "catalog";
+  currentProductsSubtab = next;
+  const showCatalog = next === "catalog";
+  document.getElementById("productsSubtabCatalog")?.classList.toggle("hidden", !showCatalog);
+  document.getElementById("productsSubtabSeo")?.classList.toggle("hidden", showCatalog);
+  document.getElementById("productsSubtabCatalogBtn")?.classList.toggle("active", showCatalog);
+  document.getElementById("productsSubtabSeoBtn")?.classList.toggle("active", !showCatalog);
+  if (!preload) return;
+  if (showCatalog) {
+    loadProducts();
+    return;
+  }
+  loadSeoJobs();
+  loadKeywords();
+}
+
+function normalizeSalesLayout() {
+  const sales = document.getElementById("sales");
+  if (!sales) return;
+  const statsPanel = [...sales.querySelectorAll(":scope > .panel")]
+    .find((panel) => panel.querySelector("#salesMarketplace"));
+  if (!statsPanel) return;
+  const firstElement = sales.firstElementChild;
+  if (firstElement !== statsPanel) {
+    sales.insertBefore(statsPanel, firstElement);
+  }
+}
+
+function migrateLegacyModuleSection(legacyId, targetId, requiredSelector = "") {
+  const legacySection = document.getElementById(legacyId);
+  const targetSection = document.getElementById(targetId);
+  if (!legacySection || !targetSection) return;
+  if (requiredSelector && targetSection.querySelector(requiredSelector)) return;
+  const nodes = [...legacySection.children];
+  for (const node of nodes) {
+    targetSection.appendChild(node);
+  }
+}
+
+function migrateLegacyDashboardIntoSales() {
+  const legacyDashboard = document.getElementById("dashboard");
+  const salesSection = document.getElementById("sales");
+  if (!legacyDashboard || !salesSection) return;
+  const blocks = [...legacyDashboard.children];
+  for (let i = blocks.length - 1; i >= 0; i -= 1) {
+    const block = blocks[i];
+    const hasStats = block.id === "stats" || Boolean(block.querySelector?.("#stats"));
+    const hasTrend = Boolean(block.querySelector?.("#dashboardTrendChart"));
+    const hasQuick = Boolean(block.querySelector?.(".quick-actions"));
+    if (!hasStats && !hasTrend && !hasQuick) continue;
+    if (hasStats && salesSection.querySelector("#stats")) continue;
+    if (hasTrend && salesSection.querySelector("#dashboardTrendChart")) continue;
+    if (hasQuick && salesSection.querySelector(".quick-actions")) continue;
+    salesSection.insertBefore(block, salesSection.firstChild);
+  }
+}
+
+function pruneLegacyUi() {
+  ensureProductsSeoSubtabUi();
+  normalizeSalesLayout();
+  migrateLegacyDashboardIntoSales();
+  migrateLegacyModuleSection("questions", "reviewsSubtabQuestions", "#wbQuestionsTable");
+  migrateLegacyModuleSection("ads-analytics", "adsSubtabAnalytics", "#adsAnalyticsTable");
+  migrateLegacyModuleSection("ads-recommendations", "adsSubtabRecommendations", "#adsRecTable");
+  const legacyTabs = ["dashboard", "questions", "ads-analytics", "ads-recommendations", "keywords"];
+  const legacyTextPattern = /^(дашборд|dashboard|вопросы wb\/ozon|questions wb\/ozon|аналитика wb ads|wb ads analytics|рекомендации wb ads|wb ads recommendations|ключевики|keywords)$/i;
+  for (const btn of document.querySelectorAll(".side-nav .nav-btn")) {
+    const tab = String(btn.dataset.tab || "").trim();
+    if (tab === "seo") {
+      btn.remove();
+      continue;
+    }
+    if (legacyTabs.includes(tab)) {
+      btn.remove();
+      continue;
+    }
+    const label = String(btn.querySelector(".nav-label")?.textContent || btn.textContent || "").trim();
+    if (legacyTextPattern.test(label)) btn.remove();
+  }
+  for (const tab of legacyTabs) {
+    const section = document.getElementById(tab);
+    if (section) section.remove();
+  }
+  const langDup = document.getElementById("helpLangSelect");
+  if (langDup) {
+    const wrap = langDup.closest(".grid-2, .grid-3, .grid-4, .grid-5, .grid-6");
+    if (wrap && wrap.querySelectorAll("select").length === 1 && wrap.querySelectorAll("button").length === 0) {
+      wrap.remove();
+    } else {
+      langDup.remove();
+    }
+  }
+}
+
+function normalizeLegacyTabName(rawName) {
+  const key = String(rawName || "").trim();
+  const mapped = LEGACY_TAB_REDIRECT[key];
+  if (!mapped) return { tab: key, productsSubtab: "", reviewsSubtab: "", adsSubtab: "" };
+  return mapped;
+}
+
 function applyModuleVisibility() {
+  pruneLegacyUi();
   document.querySelectorAll(".nav-btn[data-module]").forEach((btn) => {
     const moduleCode = btn.dataset.module;
-    const allowed = enabledModules.has(moduleCode);
+    let allowed = enabledModules.has(moduleCode);
+    const tab = String(btn.dataset.tab || "");
+    if (tab === "reviews") {
+      allowed = enabledModules.has("wb_reviews_ai") || enabledModules.has("wb_questions_ai");
+    } else if (tab === "ads") {
+      allowed = enabledModules.has("wb_ads") || enabledModules.has("wb_ads_analytics") || enabledModules.has("wb_ads_recommendations");
+    }
     btn.classList.toggle("hidden", !allowed);
   });
 }
@@ -937,36 +1200,128 @@ async function loadUiThemeSettings() {
   applyTheme(desired);
 }
 
+function isModuleFresh(key, maxAgeMs = MODULE_CACHE_TTL_MS) {
+  const stamp = Number(moduleLoadState.get(key) || 0);
+  if (!stamp) return false;
+  return (Date.now() - stamp) <= Math.max(1000, Number(maxAgeMs || 0));
+}
+
+function markModuleLoaded(key) {
+  moduleLoadState.set(String(key), Date.now());
+}
+
+function invalidateModuleCache(...keys) {
+  for (const key of keys) {
+    if (!key) continue;
+    moduleLoadState.delete(String(key));
+  }
+}
+
+async function runModuleLoader(key, loader, { force = false, maxAgeMs = MODULE_CACHE_TTL_MS } = {}) {
+  const cacheKey = String(key || "");
+  if (!cacheKey || typeof loader !== "function") return;
+  if (!force && isModuleFresh(cacheKey, maxAgeMs)) return;
+  const existing = moduleInflightState.get(cacheKey);
+  if (existing) {
+    await existing;
+    return;
+  }
+  const task = (async () => {
+    await loader();
+    markModuleLoaded(cacheKey);
+  })()
+    .catch(() => null)
+    .finally(() => moduleInflightState.delete(cacheKey));
+  moduleInflightState.set(cacheKey, task);
+  await task;
+}
+
+async function loadProductsWorkspace() {
+  ensureProductsSeoSubtabUi();
+  switchProductsSubtab(currentProductsSubtab || "catalog", false);
+  await loadProducts();
+  await loadSeoJobs();
+  await loadKeywords();
+}
+
+async function preloadModulesInBackground({ force = false } = {}) {
+  const queue = [
+    { key: "sales", load: async () => { await loadDashboard(); await loadSalesStats(); }, enabled: () => enabledModules.has("sales_stats") },
+    { key: "products", load: loadProductsWorkspace, enabled: () => true },
+    { key: "reviews", load: loadReviewsWorkspace, enabled: () => enabledModules.has("wb_reviews_ai") || enabledModules.has("wb_questions_ai") },
+    { key: "ads", load: loadAdsWorkspace, enabled: () => enabledModules.has("wb_ads") || enabledModules.has("wb_ads_analytics") || enabledModules.has("wb_ads_recommendations") },
+    { key: "profile", load: loadProfile, enabled: () => enabledModules.has("user_profile") },
+    { key: "help", load: loadHelpDocs, enabled: () => enabledModules.has("help_center") },
+  ];
+  for (const step of queue) {
+    if (!step.enabled()) continue;
+    await runModuleLoader(step.key, step.load, {
+      force,
+      maxAgeMs: force ? 0 : MODULE_CACHE_TTL_MS,
+    });
+  }
+}
+
+async function refreshModulesInBackground() {
+  await preloadModulesInBackground({ force: true });
+}
+
+function stopModuleAutoRefresh() {
+  if (moduleAutoRefreshTimer) {
+    clearInterval(moduleAutoRefreshTimer);
+    moduleAutoRefreshTimer = null;
+  }
+}
+
+function startModuleAutoRefresh() {
+  stopModuleAutoRefresh();
+  moduleAutoRefreshTimer = setInterval(() => {
+    refreshModulesInBackground().catch(() => null);
+  }, MODULE_AUTO_REFRESH_MS);
+}
+
 function showTab(name, btn = null) {
-  currentTab = name;
+  const mapped = normalizeLegacyTabName(name);
+  if (mapped.productsSubtab) currentProductsSubtab = mapped.productsSubtab;
+  if (mapped.reviewsSubtab) currentReviewsSubtab = mapped.reviewsSubtab;
+  if (mapped.adsSubtab) currentAdsSubtab = mapped.adsSubtab;
+  const targetTab = mapped.tab;
+  currentTab = targetTab;
   document.querySelectorAll(".tab").forEach((el) => el.classList.add("hidden"));
-  const tab = document.getElementById(name);
+  const tab = document.getElementById(targetTab);
   if (!tab) return;
   tab.classList.remove("hidden");
 
-  const pack = TAB_TITLES[name] || TAB_TITLES.dashboard;
+  const pack = TAB_TITLES[targetTab] || TAB_TITLES.sales;
   const [title, subtitle] = pack[currentLang] || pack.ru;
   document.getElementById("sectionTitle").textContent = title;
   document.getElementById("sectionSubtitle").textContent = subtitle;
 
-  if (btn && btn.dataset.tab) setActiveNav(btn.dataset.tab);
-  else setActiveNav(name);
+  if (btn && btn.dataset.tab) {
+    const mappedBtn = normalizeLegacyTabName(btn.dataset.tab);
+    setActiveNav(mappedBtn.tab);
+  } else {
+    setActiveNav(targetTab);
+  }
 
-  if (name === "dashboard") loadDashboard();
-  if (name === "keys") loadKeys();
-  if (name === "keywords") loadKeywords();
-  if (name === "products") loadProducts();
-  if (name === "seo") loadSeoJobs();
-  if (name === "sales") loadSalesStats();
-  if (name === "reviews") loadReviewsWorkspace();
-  if (name === "questions") loadQuestionsWorkspace();
-  if (name === "ads") loadWbAdCampaigns();
-  if (name === "ads-analytics") loadAdsAnalytics();
-  if (name === "ads-recommendations") loadAdsRecommendations();
-  if (name === "profile") loadProfile();
-  if (name === "billing") loadBilling();
-  if (name === "help") loadHelpDocs();
-  if (name === "admin") loadAdmin();
+  if (targetTab === "sales") {
+    normalizeSalesLayout();
+    runModuleLoader("sales", async () => {
+      await loadDashboard();
+      await loadSalesStats();
+    });
+  }
+  if (targetTab === "products") runModuleLoader("products", loadProductsWorkspace);
+  if (targetTab === "reviews") runModuleLoader("reviews", loadReviewsWorkspace);
+  if (targetTab === "ads") runModuleLoader("ads", loadAdsWorkspace);
+  if (targetTab === "profile") runModuleLoader("profile", loadProfile);
+  if (targetTab === "billing") runModuleLoader("billing", loadBilling);
+  if (targetTab === "help") runModuleLoader("help", loadHelpDocs, { maxAgeMs: MODULE_CACHE_TTL_MS });
+  if (targetTab === "admin") loadAdmin();
+  setTimeout(() => {
+    applyModuleActionIcons();
+    applyButtonTooltips();
+  }, 0);
 }
 
 async function register() {
@@ -998,6 +1353,7 @@ async function login() {
 }
 
 function logout() {
+  stopModuleAutoRefresh();
   token = "";
   me = null;
   selectedProducts.clear();
@@ -1011,6 +1367,11 @@ function logout() {
   adsRecommendationRows = [];
   salesRows = [];
   salesChartRows = [];
+  moduleLoadState.clear();
+  moduleInflightState.clear();
+  currentProductsSubtab = "catalog";
+  currentReviewsSubtab = "reviews";
+  currentAdsSubtab = "campaigns";
   wbReviewDrafts.clear();
   wbQuestionDrafts.clear();
   selectedWbCampaignId = "";
@@ -1036,6 +1397,8 @@ async function ensureAuth() {
   me = user;
   document.getElementById("authSection").classList.add("hidden");
   document.getElementById("appSection").classList.remove("hidden");
+  pruneLegacyUi();
+  ensureProfileTeamUi();
 
   if (me.role !== "admin") {
     const adminBtn = document.querySelector(".nav-btn[data-tab='admin']");
@@ -1050,7 +1413,11 @@ async function ensureAuth() {
   applyTheme(currentTheme);
   applyUiLanguage();
   applyButtonTooltips();
-  showTab("dashboard", document.querySelector(".nav-btn[data-tab='dashboard']"));
+  startModuleAutoRefresh();
+  showTab("sales", document.querySelector(".nav-btn[data-tab='sales']"));
+  setTimeout(() => {
+    preloadModulesInBackground({ force: false });
+  }, 250);
 }
 
 async function saveKey(marketplace) {
@@ -1103,14 +1470,123 @@ async function addKeyword() {
 async function loadKeywords() {
   const data = await requestJson("/api/keywords", { headers: authHeaders() }).catch(() => null);
   if (!data) return;
-  document.getElementById("keywordsList").textContent = JSON.stringify(data, null, 2);
+  const host = document.getElementById("keywordsList");
+  if (!host) return;
+  const rows = Array.isArray(data) ? data : [];
+  if (!rows.length) {
+    host.innerHTML = `<div class="hint">${tr("Пока нет ручных ключей.", "No manual keywords yet.")}</div>`;
+    return;
+  }
+  host.innerHTML = rows
+    .slice()
+    .sort((a, b) => Number(b.id || 0) - Number(a.id || 0))
+    .map((row) => `
+      <article class="keyword-item">
+        <div>
+          <b>${escapeHtml(String(row.keyword || "-"))}</b>
+          <span>${escapeHtml(String(row.marketplace || "all").toUpperCase())}</span>
+        </div>
+        <button class="btn-danger icon-action-btn" type="button" data-tip="${tr("Удалить ключ", "Delete keyword")}" onclick="deleteKeyword(${Number(row.id || 0)})">✖</button>
+      </article>
+    `)
+    .join("");
+}
+
+async function deleteKeyword(keywordId) {
+  const id = Number(keywordId || 0);
+  if (!id) return;
+  await requestJson(`/api/keywords/${id}`, { method: "DELETE", headers: authHeaders() }).catch((e) => alert(e.message));
+  await loadKeywords();
+}
+
+function switchReviewsSubtab(tab, preload = true) {
+  const next = tab === "questions" ? "questions" : "reviews";
+  currentReviewsSubtab = next;
+  const showReviews = next === "reviews";
+  document.getElementById("reviewsSubtabReviews")?.classList.toggle("hidden", !showReviews);
+  document.getElementById("reviewsSubtabQuestions")?.classList.toggle("hidden", showReviews);
+  document.getElementById("reviewsSubtabReviewsBtn")?.classList.toggle("active", showReviews);
+  document.getElementById("reviewsSubtabQuestionsBtn")?.classList.toggle("active", !showReviews);
+  if (!preload) return;
+  if (showReviews) {
+    if (!wbReviewRows.length) loadWbReviews();
+  } else {
+    if (!wbQuestionRows.length) loadQuestionsWorkspace();
+  }
+}
+
+function syncReviewsSubtabAccess() {
+  const canReviews = enabledModules.has("wb_reviews_ai");
+  const canQuestions = enabledModules.has("wb_questions_ai");
+  document.getElementById("reviewsSubtabReviewsBtn")?.classList.toggle("hidden", !canReviews);
+  document.getElementById("reviewsSubtabQuestionsBtn")?.classList.toggle("hidden", !canQuestions);
+  if (!canReviews && canQuestions) currentReviewsSubtab = "questions";
+  if (!canQuestions && canReviews) currentReviewsSubtab = "reviews";
+}
+
+function switchAdsSubtab(tab, preload = true) {
+  const allowed = new Set(["campaigns", "analytics", "recommendations", "ozon"]);
+  const next = allowed.has(String(tab || "")) ? String(tab) : "campaigns";
+  currentAdsSubtab = next;
+  const all = ["campaigns", "analytics", "recommendations", "ozon"];
+  for (const key of all) {
+    const active = key === next;
+    document.getElementById(`adsSubtab${key[0].toUpperCase()}${key.slice(1)}`)?.classList.toggle("hidden", !active);
+    document.getElementById(`adsSubtab${key[0].toUpperCase()}${key.slice(1)}Btn`)?.classList.toggle("active", active);
+  }
+  if (!preload) return;
+  if (next === "campaigns" && enabledModules.has("wb_ads")) loadWbAdCampaigns();
+  if (next === "analytics" && enabledModules.has("wb_ads_analytics")) loadAdsAnalytics();
+  if (next === "recommendations" && enabledModules.has("wb_ads_recommendations")) loadAdsRecommendations();
+}
+
+function syncAdsSubtabAccess() {
+  const access = {
+    campaigns: enabledModules.has("wb_ads"),
+    analytics: enabledModules.has("wb_ads_analytics"),
+    recommendations: enabledModules.has("wb_ads_recommendations"),
+    ozon: true,
+  };
+  for (const [tab, ok] of Object.entries(access)) {
+    const label = tab[0].toUpperCase() + tab.slice(1);
+    document.getElementById(`adsSubtab${label}Btn`)?.classList.toggle("hidden", !ok);
+  }
+  if (!access[currentAdsSubtab]) {
+    currentAdsSubtab = access.campaigns ? "campaigns" : (access.analytics ? "analytics" : (access.recommendations ? "recommendations" : "ozon"));
+  }
+}
+
+async function loadAdsWorkspace() {
+  const hasAnyAdsModule = enabledModules.has("wb_ads") || enabledModules.has("wb_ads_analytics") || enabledModules.has("wb_ads_recommendations");
+  if (!hasAnyAdsModule) return;
+  syncAdsSubtabAccess();
+  switchAdsSubtab(currentAdsSubtab || "campaigns", false);
+  if (enabledModules.has("wb_ads")) await loadWbAdCampaigns();
+  if (enabledModules.has("wb_ads_analytics")) await loadAdsAnalytics();
+  if (enabledModules.has("wb_ads_recommendations")) await loadAdsRecommendations();
 }
 
 async function loadReviewsWorkspace() {
-  if (!enabledModules.has("wb_reviews_ai")) return;
+  const hasReviews = enabledModules.has("wb_reviews_ai");
+  const hasQuestions = enabledModules.has("wb_questions_ai");
+  if (!hasReviews && !hasQuestions) return;
   normalizeFeedbackDateDefaults("reviews", "reviewDateFrom", "reviewDateTo");
-  await loadReviewAiSettings();
-  await loadWbReviews();
+  normalizeFeedbackDateDefaults("questions", "questionDateFrom", "questionDateTo");
+  syncReviewsSubtabAccess();
+  if (hasReviews) {
+    await loadReviewAiSettings();
+    await loadWbReviews();
+  }
+  if (hasQuestions) {
+    await loadQuestionAiSettings();
+    await loadAiDocs();
+    await loadWbQuestions();
+  }
+  if (!hasReviews && hasQuestions) {
+    switchReviewsSubtab("questions", false);
+  } else {
+    switchReviewsSubtab(currentReviewsSubtab || "reviews", false);
+  }
 }
 
 async function loadReviewAiSettings() {
@@ -1310,6 +1786,33 @@ function renderProductCellText(row) {
   return `${name} (${article}; ${currentLang === "en" ? "barcode" : "штрихкод"}: ${barcode})`;
 }
 
+function renderFeedbackProductCell(targetCell, row) {
+  if (!targetCell) return;
+  targetCell.className = "cell-product-text";
+  targetCell.innerHTML = "";
+  const name = String(row?.product || "-").trim() || "-";
+  const article = String(row?.article || "").trim();
+  const barcode = String(row?.barcode || "").trim();
+
+  const nameEl = document.createElement("div");
+  nameEl.className = "cell-product-name";
+  nameEl.textContent = name;
+  targetCell.appendChild(nameEl);
+
+  if (article) {
+    const articleEl = document.createElement("div");
+    articleEl.className = "cell-meta-small";
+    articleEl.textContent = `${currentLang === "en" ? "Article" : "Артикул"}: ${article}`;
+    targetCell.appendChild(articleEl);
+  }
+  if (barcode) {
+    const barcodeEl = document.createElement("div");
+    barcodeEl.className = "cell-meta-small";
+    barcodeEl.textContent = `${currentLang === "en" ? "Barcode" : "Штрихкод"}: ${barcode}`;
+    targetCell.appendChild(barcodeEl);
+  }
+}
+
 function makeIconActionButton({ icon, tip, onClick, secondary = false }) {
   const btn = document.createElement("button");
   btn.className = secondary ? "btn-secondary icon-action-btn" : "icon-action-btn";
@@ -1324,6 +1827,54 @@ function setTableMessage(tableBodyId, colspan, message) {
   const tbody = document.getElementById(tableBodyId);
   if (!tbody) return;
   tbody.innerHTML = `<tr><td colspan="${Math.max(1, Number(colspan || 1))}">${escapeHtml(String(message || "-"))}</td></tr>`;
+}
+
+function normalizeFeedbackText(value) {
+  if (typeof value === "string") return value;
+  if (value == null) return "";
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch (_) {
+    return "";
+  }
+}
+
+function normalizeFeedbackPhotos(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const item of value) {
+    if (typeof item === "string" && item.trim()) {
+      out.push(item.trim());
+      continue;
+    }
+    if (item && typeof item === "object") {
+      const raw = item.url || item.link || item.photo || item.src || "";
+      const text = typeof raw === "string" ? raw.trim() : "";
+      if (text) out.push(text);
+    }
+  }
+  return out;
+}
+
+function normalizeFeedbackRow(rawRow, rowType, idx, marketplace) {
+  if (!rawRow || typeof rawRow !== "object") return null;
+  const rawId = rawRow.id ?? rawRow.feedback_id ?? rawRow.review_id ?? rawRow.question_id ?? rawRow.comment_id ?? "";
+  const id = String(rawId || "").trim() || `${marketplace || "row"}-${rowType}-${idx + 1}`;
+  return {
+    ...rawRow,
+    id,
+    _type: rowType,
+    date: normalizeFeedbackText(rawRow.date || ""),
+    created_at: normalizeFeedbackText(rawRow.created_at || rawRow.date || ""),
+    product: normalizeFeedbackText(rawRow.product || ""),
+    article: normalizeFeedbackText(rawRow.article || ""),
+    barcode: normalizeFeedbackText(rawRow.barcode || ""),
+    text: normalizeFeedbackText(rawRow.text || ""),
+    answer: normalizeFeedbackText(rawRow.answer || ""),
+    user: normalizeFeedbackText(rawRow.user || ""),
+    photos: normalizeFeedbackPhotos(rawRow.photos),
+  };
 }
 
 async function loadWbReviews() {
@@ -1362,8 +1913,14 @@ async function loadWbReviews() {
 
   const applyReviewsPayload = async (payload) => {
     const incoming = [];
-    for (const row of payload.new || []) incoming.push({ ...row, _type: "new" });
-    for (const row of payload.answered || []) incoming.push({ ...row, _type: "answered" });
+    (Array.isArray(payload?.new) ? payload.new : []).forEach((row, idx) => {
+      const normalized = normalizeFeedbackRow(row, "new", idx, marketplace);
+      if (normalized) incoming.push(normalized);
+    });
+    (Array.isArray(payload?.answered) ? payload.answered : []).forEach((row, idx) => {
+      const normalized = normalizeFeedbackRow(row, "answered", idx, marketplace);
+      if (normalized) incoming.push(normalized);
+    });
     wbReviewRows = incoming;
     for (const row of wbReviewRows) {
       if (!row?.id) continue;
@@ -1380,6 +1937,7 @@ async function loadWbReviews() {
     }
     await renderWbReviews();
     if (raw) raw.textContent = JSON.stringify(payload, null, 2);
+    markModuleLoaded("reviews");
   };
 
   const requestFullReload = () => {
@@ -1463,13 +2021,13 @@ async function renderWbReviews() {
   });
 
   if (!visibleRows.length) {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="7">${
+    const rowEl = document.createElement("tr");
+    rowEl.innerHTML = `<td colspan="7">${
       wbReviewRows.length
         ? (currentLang === "en" ? "No reviews for current filters." : "По текущим фильтрам отзывы не найдены.")
         : (currentLang === "en" ? "No reviews found." : "Отзывы не найдены.")
     }</td>`;
-    tbody.appendChild(tr);
+    tbody.appendChild(rowEl);
     reviewLoadProgress = { active: false, total: wbReviewRows.length, loaded: wbReviewRows.length };
     updateReviewLoadStatus();
     return;
@@ -1477,26 +2035,30 @@ async function renderWbReviews() {
 
   const appendRow = (row) => {
     const status = normalizeReviewStatus(row);
-    const tr = document.createElement("tr");
+    const rowEl = document.createElement("tr");
+    const reviewId = String(row?.id || "").trim();
 
     const tdType = document.createElement("td");
     const pill = document.createElement("span");
     pill.className = "review-type-pill";
-    pill.textContent = status === "new" ? (currentLang === "en" ? "new" : "новый") : (currentLang === "en" ? "answered" : "отвечен");
+    pill.textContent = status === "new" ? "🆕" : "✅";
+    pill.dataset.tip = status === "new" ? tr("Новый отзыв", "New review") : tr("Отвеченный отзыв", "Answered review");
     tdType.appendChild(pill);
 
     const tdDate = document.createElement("td");
-    tdDate.textContent = row.date || "-";
+    tdDate.textContent = row?.date || "-";
     tdDate.className = "cell-meta-small";
 
     const tdProduct = document.createElement("td");
-    tdProduct.textContent = renderProductCellText(row);
+    renderFeedbackProductCell(tdProduct, row);
 
     const tdStars = document.createElement("td");
-    tdStars.textContent = String(row.stars ?? "-");
+    const stars = Number(row.stars || 0);
+    tdStars.textContent = stars > 0 ? `★${stars}` : "-";
+    tdStars.dataset.tip = tr("Оценка покупателя", "Customer rating");
 
     const tdText = document.createElement("td");
-    if (row.user) {
+    if (row?.user) {
       const userTag = document.createElement("div");
       userTag.className = "cell-meta-small";
       userTag.textContent = `${currentLang === "en" ? "Author" : "Автор"}: ${row.user}`;
@@ -1504,9 +2066,9 @@ async function renderWbReviews() {
     }
     const body = document.createElement("div");
     body.className = "cell-main-text";
-    body.textContent = row.text || "-";
+    body.textContent = row?.text || "-";
     tdText.appendChild(body);
-    const photos = Array.isArray(row.photos) ? row.photos.filter((x) => typeof x === "string" && x.trim()) : [];
+    const photos = Array.isArray(row?.photos) ? row.photos.filter((x) => typeof x === "string" && x.trim()) : [];
     if (photos.length) {
       const previewWrap = document.createElement("div");
       previewWrap.className = "review-photo-list";
@@ -1534,8 +2096,8 @@ async function renderWbReviews() {
     replyInput.rows = 3;
     replyInput.className = "review-reply-input";
     replyInput.placeholder = currentLang === "en" ? "Reply text to customer" : "Текст ответа клиенту";
-    const draftKey = reviewDraftKey(currentReviewMarketplace, row.id);
-    replyInput.value = wbReviewDrafts.get(draftKey) ?? row.answer ?? "";
+    const draftKey = reviewDraftKey(currentReviewMarketplace, reviewId);
+    replyInput.value = wbReviewDrafts.get(draftKey) ?? row?.answer ?? "";
     replyInput.oninput = () => wbReviewDrafts.set(draftKey, replyInput.value);
     tdReply.appendChild(replyInput);
 
@@ -1545,19 +2107,25 @@ async function renderWbReviews() {
     const btnGenerate = makeIconActionButton({
       icon: "&#9889;",
       tip: tr("Сгенерировать ответ", "Generate reply"),
-      onClick: () => generateReviewReply(row.id),
+      onClick: () => generateReviewReply(reviewId),
       secondary: true,
     });
     const btnSend = makeIconActionButton({
       icon: status === "answered" ? "&#9998;" : "&#10148;",
       tip: status === "answered" ? tr("Обновить ответ", "Update reply") : tr("Отправить ответ", "Send reply"),
-      onClick: () => sendReviewReply(row.id),
+      onClick: () => sendReviewReply(reviewId),
     });
+    if (!reviewId) {
+      btnGenerate.disabled = true;
+      btnSend.disabled = true;
+      btnGenerate.dataset.tip = tr("У записи нет ID", "Record has no ID");
+      btnSend.dataset.tip = tr("У записи нет ID", "Record has no ID");
+    }
     wrap.append(btnGenerate, btnSend);
     tdActions.appendChild(wrap);
 
-    tr.append(tdType, tdDate, tdProduct, tdStars, tdText, tdReply, tdActions);
-    tbody.appendChild(tr);
+    rowEl.append(tdType, tdDate, tdProduct, tdStars, tdText, tdReply, tdActions);
+    tbody.appendChild(rowEl);
   };
 
   const total = Math.max(visibleRows.length, wbReviewRows.length);
@@ -1587,7 +2155,7 @@ async function renderWbReviews() {
 }
 
 async function generateReviewReply(reviewId) {
-  const row = wbReviewRows.find((x) => x.id === reviewId);
+  const row = wbReviewRows.find((x) => String(x?.id || "") === String(reviewId || ""));
   if (!row) return alert(tr("Отзыв не найден", "Review not found"));
   const endpoint = `${getReviewsEndpoint(currentReviewMarketplace)}/generate-reply`;
   const mpLabel = currentReviewMarketplace === "ozon" ? "Ozon" : "WB";
@@ -1615,7 +2183,8 @@ async function generateReviewReply(reviewId) {
 }
 
 async function sendReviewReply(reviewId) {
-  const text = (wbReviewDrafts.get(reviewDraftKey(currentReviewMarketplace, reviewId)) || "").trim();
+  const key = reviewDraftKey(currentReviewMarketplace, String(reviewId || ""));
+  const text = (wbReviewDrafts.get(key) || "").trim();
   if (!text) return alert(tr("Введите или сгенерируйте текст ответа", "Enter or generate reply text"));
   const endpoint = `${getReviewsEndpoint(currentReviewMarketplace)}/reply`;
   const mpLabel = currentReviewMarketplace === "ozon" ? "Ozon" : "WB";
@@ -1624,7 +2193,7 @@ async function sendReviewReply(reviewId) {
     () => requestJson(endpoint, {
       method: "POST",
       headers: authHeaders(),
-      body: JSON.stringify({ id: reviewId, text }),
+      body: JSON.stringify({ id: String(reviewId || ""), text }),
       timeoutMs: 60000,
     }),
     tr("Ответ отправляется в карточку отзыва через API маркетплейса.", "Reply is sent to marketplace review card via API.")
@@ -1820,8 +2389,14 @@ async function loadWbQuestions() {
 
   const applyQuestionsPayload = async (payload) => {
     const incoming = [];
-    for (const row of payload.new || []) incoming.push({ ...row, _type: "new" });
-    for (const row of payload.answered || []) incoming.push({ ...row, _type: "answered" });
+    (Array.isArray(payload?.new) ? payload.new : []).forEach((row, idx) => {
+      const normalized = normalizeFeedbackRow(row, "new", idx, marketplace);
+      if (normalized) incoming.push(normalized);
+    });
+    (Array.isArray(payload?.answered) ? payload.answered : []).forEach((row, idx) => {
+      const normalized = normalizeFeedbackRow(row, "answered", idx, marketplace);
+      if (normalized) incoming.push(normalized);
+    });
     wbQuestionRows = incoming;
 
     for (const row of wbQuestionRows) {
@@ -1839,6 +2414,7 @@ async function loadWbQuestions() {
     }
     await renderWbQuestions();
     if (raw) raw.textContent = JSON.stringify(payload, null, 2);
+    markModuleLoaded("reviews");
   };
 
   const requestFullReload = () => {
@@ -1919,13 +2495,13 @@ async function renderWbQuestions() {
   });
 
   if (!visibleRows.length) {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="6">${
+    const rowEl = document.createElement("tr");
+    rowEl.innerHTML = `<td colspan="6">${
       wbQuestionRows.length
         ? (currentLang === "en" ? "No questions for current filters." : "По текущим фильтрам вопросы не найдены.")
         : (currentLang === "en" ? "No questions found." : "Вопросы не найдены.")
     }</td>`;
-    tbody.appendChild(tr);
+    tbody.appendChild(rowEl);
     questionLoadProgress = { active: false, total: wbQuestionRows.length, loaded: wbQuestionRows.length };
     updateQuestionLoadStatus();
     return;
@@ -1933,23 +2509,25 @@ async function renderWbQuestions() {
 
   const appendRow = (row) => {
     const status = normalizeQuestionStatus(row);
-    const tr = document.createElement("tr");
+    const rowEl = document.createElement("tr");
+    const questionId = String(row?.id || "").trim();
 
     const tdType = document.createElement("td");
     const pill = document.createElement("span");
     pill.className = "review-type-pill";
-    pill.textContent = status === "new" ? (currentLang === "en" ? "new" : "новый") : (currentLang === "en" ? "answered" : "отвечен");
+    pill.textContent = status === "new" ? "🆕" : "✅";
+    pill.dataset.tip = status === "new" ? tr("Новый вопрос", "New question") : tr("Отвеченный вопрос", "Answered question");
     tdType.appendChild(pill);
 
     const tdDate = document.createElement("td");
-    tdDate.textContent = row.date || "-";
+    tdDate.textContent = row?.date || "-";
     tdDate.className = "cell-meta-small";
 
     const tdProduct = document.createElement("td");
-    tdProduct.textContent = renderProductCellText(row);
+    renderFeedbackProductCell(tdProduct, row);
 
     const tdText = document.createElement("td");
-    if (row.user) {
+    if (row?.user) {
       const userTag = document.createElement("div");
       userTag.className = "cell-meta-small";
       userTag.textContent = `${currentLang === "en" ? "Author" : "Автор"}: ${row.user}`;
@@ -1957,9 +2535,9 @@ async function renderWbQuestions() {
     }
     const body = document.createElement("div");
     body.className = "cell-main-text";
-    body.textContent = row.text || "-";
+    body.textContent = row?.text || "-";
     tdText.appendChild(body);
-    const photos = Array.isArray(row.photos) ? row.photos.filter((x) => typeof x === "string" && x.trim()) : [];
+    const photos = Array.isArray(row?.photos) ? row.photos.filter((x) => typeof x === "string" && x.trim()) : [];
     if (photos.length) {
       const previewWrap = document.createElement("div");
       previewWrap.className = "review-photo-list";
@@ -1987,8 +2565,8 @@ async function renderWbQuestions() {
     replyInput.rows = 3;
     replyInput.className = "review-reply-input";
     replyInput.placeholder = currentLang === "en" ? "Reply text to customer" : "Текст ответа клиенту";
-    const draftKey = questionDraftKey(currentQuestionMarketplace, row.id);
-    replyInput.value = wbQuestionDrafts.get(draftKey) ?? row.answer ?? "";
+    const draftKey = questionDraftKey(currentQuestionMarketplace, questionId);
+    replyInput.value = wbQuestionDrafts.get(draftKey) ?? row?.answer ?? "";
     replyInput.oninput = () => wbQuestionDrafts.set(draftKey, replyInput.value);
     tdReply.appendChild(replyInput);
 
@@ -1998,19 +2576,25 @@ async function renderWbQuestions() {
     const btnGenerate = makeIconActionButton({
       icon: "&#9889;",
       tip: tr("Сгенерировать ответ", "Generate reply"),
-      onClick: () => generateQuestionReply(row.id),
+      onClick: () => generateQuestionReply(questionId),
       secondary: true,
     });
     const btnSend = makeIconActionButton({
       icon: status === "answered" ? "&#9998;" : "&#10148;",
       tip: status === "answered" ? tr("Обновить ответ", "Update reply") : tr("Отправить ответ", "Send reply"),
-      onClick: () => sendQuestionReply(row.id),
+      onClick: () => sendQuestionReply(questionId),
     });
+    if (!questionId) {
+      btnGenerate.disabled = true;
+      btnSend.disabled = true;
+      btnGenerate.dataset.tip = tr("У записи нет ID", "Record has no ID");
+      btnSend.dataset.tip = tr("У записи нет ID", "Record has no ID");
+    }
     wrap.append(btnGenerate, btnSend);
     tdActions.appendChild(wrap);
 
-    tr.append(tdType, tdDate, tdProduct, tdText, tdReply, tdActions);
-    tbody.appendChild(tr);
+    rowEl.append(tdType, tdDate, tdProduct, tdText, tdReply, tdActions);
+    tbody.appendChild(rowEl);
   };
 
   const total = Math.max(visibleRows.length, wbQuestionRows.length);
@@ -2040,7 +2624,7 @@ async function renderWbQuestions() {
 }
 
 async function generateQuestionReply(questionId) {
-  const row = wbQuestionRows.find((x) => x.id === questionId);
+  const row = wbQuestionRows.find((x) => String(x?.id || "") === String(questionId || ""));
   if (!row) return alert(tr("Вопрос не найден", "Question not found"));
   const endpoint = `${getQuestionsEndpoint(currentQuestionMarketplace)}/generate-reply`;
   const mpLabel = currentQuestionMarketplace === "ozon" ? "Ozon" : "WB";
@@ -2068,7 +2652,8 @@ async function generateQuestionReply(questionId) {
 }
 
 async function sendQuestionReply(questionId) {
-  const text = (wbQuestionDrafts.get(questionDraftKey(currentQuestionMarketplace, questionId)) || "").trim();
+  const key = questionDraftKey(currentQuestionMarketplace, String(questionId || ""));
+  const text = (wbQuestionDrafts.get(key) || "").trim();
   if (!text) return alert(tr("Введите или сгенерируйте текст ответа", "Enter or generate reply text"));
   const endpoint = `${getQuestionsEndpoint(currentQuestionMarketplace)}/reply`;
   const mpLabel = currentQuestionMarketplace === "ozon" ? "Ozon" : "WB";
@@ -2077,7 +2662,7 @@ async function sendQuestionReply(questionId) {
     () => requestJson(endpoint, {
       method: "POST",
       headers: authHeaders(),
-      body: JSON.stringify({ id: questionId, text }),
+      body: JSON.stringify({ id: String(questionId || ""), text }),
       timeoutMs: 60000,
     }),
     tr("Ответ отправляется в карточку вопроса через API маркетплейса.", "Reply is sent to marketplace question card via API.")
@@ -2129,6 +2714,7 @@ async function loadWbAdCampaigns() {
     })
     .catch(() => null);
   await enrichWbCampaignRows(runToken);
+  markModuleLoaded("ads");
 }
 
 function getCampaignRowId(row) {
@@ -2199,6 +2785,7 @@ async function enrichWbCampaignRows(runToken) {
   updateWbAdsLoadStatus();
 
   const batchSize = 12;
+  let partialFallback = false;
   for (let i = 0; i < pending.length; i += batchSize) {
     if (runToken !== wbAdsLoadToken) return;
     const chunk = pending.slice(i, i + batchSize);
@@ -2210,7 +2797,7 @@ async function enrichWbCampaignRows(runToken) {
     }).catch(() => null);
 
     if (!payload) {
-      wbAdsLoadProgress.failed += chunk.length;
+      partialFallback = true;
       wbAdsLoadProgress.loaded += chunk.length;
       updateWbAdsLoadStatus();
       continue;
@@ -2231,7 +2818,16 @@ async function enrichWbCampaignRows(runToken) {
   }
   if (runToken !== wbAdsLoadToken) return;
   wbAdsLoadProgress.active = false;
-  updateWbAdsLoadStatus();
+  if (partialFallback) {
+    updateWbAdsLoadStatus(
+      tr(
+        "Кампании загружены частично: часть детальных полей временно недоступна.",
+        "Campaigns loaded partially: some detailed fields are temporarily unavailable."
+      )
+    );
+  } else {
+    updateWbAdsLoadStatus();
+  }
   renderWbCampaignRows();
 }
 
@@ -2468,6 +3064,8 @@ function renderWbCampaignRows() {
       selectedWbCampaignId = id;
       const campaignInput = document.getElementById("wbRateCampaignId");
       if (campaignInput) campaignInput.value = String(id);
+      const analyticsInput = document.getElementById("adsAnalyticsCampaignId");
+      if (analyticsInput) analyticsInput.value = String(id);
       const typeInput = document.getElementById("wbRateCampaignType");
       const typeRaw = String(typeMeta.label || type).toLowerCase();
       if (typeInput) {
@@ -2552,7 +3150,20 @@ async function openCampaignDetailModal(campaignId) {
   const ratesEl = document.getElementById("campaignRatesRaw");
   const statsEl = document.getElementById("campaignStatsRaw");
   const rawEl = document.getElementById("campaignDetailRaw");
-  if (summaryEl) summaryEl.textContent = tr("Загружаем детали кампании…", "Loading campaign details...");
+  if (summaryEl) {
+    const baseRow = wbCampaignRows.find((row) => Number(getCampaignRowId(row) || 0) === currentCampaignDetailId) || null;
+    if (baseRow) {
+      const baseName = String(baseRow?.name || baseRow?.campaignName || baseRow?.campaign_name || baseRow?.subject || baseRow?.title || "").trim();
+      const baseStatus = normalizeCampaignStatus(baseRow?.status || baseRow?.state || "-");
+      const baseType = normalizeCampaignType(baseRow?.type || baseRow?.adType || baseRow?.campaignType || baseRow?.typeId || "-");
+      summaryEl.textContent = tr(
+        `Кампания ${currentCampaignDetailId}: ${baseName || "-"} | ${baseStatus} | ${baseType}. Догружаем расширенные детали...`,
+        `Campaign ${currentCampaignDetailId}: ${baseName || "-"} | ${baseStatus} | ${baseType}. Loading extended details...`
+      );
+    } else {
+      summaryEl.textContent = tr("Загружаем детали кампании…", "Loading campaign details...");
+    }
+  }
   if (productsEl) productsEl.innerHTML = "";
   if (ratesEl) ratesEl.textContent = "-";
   if (statsEl) statsEl.textContent = "-";
@@ -2572,7 +3183,15 @@ async function openCampaignDetailModal(campaignId) {
       alert(e.message);
       return null;
     });
-    if (!payload) return;
+    if (!payload) {
+      if (summaryEl) {
+        summaryEl.textContent = tr(
+          "Не удалось загрузить детали кампании. Проверьте ключ WB Ads и повторите.",
+          "Failed to load campaign details. Check WB Ads key and retry."
+        );
+      }
+      return;
+    }
     wbCampaignDetailCache.set(cacheKey, payload);
   }
   renderCampaignDetail(payload.data || {});
@@ -2600,6 +3219,7 @@ async function applyCampaignAction(action) {
     return null;
   });
   if (!data) return;
+  invalidateModuleCache("ads", "sales");
   alert(data.message || tr("Операция выполнена", "Operation completed"));
   await loadWbAdCampaigns();
   await refreshCampaignDetails();
@@ -2631,32 +3251,144 @@ async function loadWbCampaignRates() {
   if (holder) holder.textContent = JSON.stringify(data, null, 2);
 }
 
+function computeAdsAnalyticsTotals(rows) {
+  const out = {
+    views: 0,
+    clicks: 0,
+    orders: 0,
+    spent: 0,
+    ctr: 0,
+    cr: 0,
+    cpc: 0,
+    cpo: 0,
+  };
+  const list = Array.isArray(rows) ? rows : [];
+  for (const row of list) {
+    out.views += Number(row?.views || 0);
+    out.clicks += Number(row?.clicks || 0);
+    out.orders += Number(row?.orders || 0);
+    out.spent += Number(row?.spent || 0);
+  }
+  out.views = Number.isFinite(out.views) ? out.views : 0;
+  out.clicks = Number.isFinite(out.clicks) ? out.clicks : 0;
+  out.orders = Number.isFinite(out.orders) ? out.orders : 0;
+  out.spent = Number.isFinite(out.spent) ? out.spent : 0;
+  out.ctr = out.views > 0 ? (out.clicks / out.views) * 100 : 0;
+  out.cr = out.clicks > 0 ? (out.orders / out.clicks) * 100 : 0;
+  out.cpc = out.clicks > 0 ? out.spent / out.clicks : 0;
+  out.cpo = out.orders > 0 ? out.spent / out.orders : 0;
+  return out;
+}
+
+function buildAdsAnalyticsSummaryText(meta, totals) {
+  const periodFrom = String(meta?.date_from || "-");
+  const periodTo = String(meta?.date_to || "-");
+  const campaignsLoaded = Number(meta?.campaigns_loaded || 0);
+  const campaignFilter = Number(meta?.campaign_id || 0);
+  const lines = [
+    `${tr("Период", "Period")}: ${periodFrom} - ${periodTo}`,
+    `${tr("Кампаний в отчете", "Campaigns in report")}: ${formatInt(campaignsLoaded)}`,
+    `${tr("Показы", "Views")}: ${formatInt(totals.views)}`,
+    `${tr("Клики", "Clicks")}: ${formatInt(totals.clicks)}`,
+    `${tr("Заказы", "Orders")}: ${formatInt(totals.orders)}`,
+    `${tr("Расход", "Spend")}: ${formatMoney(totals.spent)}`,
+    `CTR: ${Number(totals.ctr || 0).toFixed(2)}%`,
+    `CR: ${Number(totals.cr || 0).toFixed(2)}%`,
+    `CPC: ${formatMoney(totals.cpc)}`,
+    `CPO: ${formatMoney(totals.cpo)}`,
+  ];
+  if (campaignFilter > 0) {
+    lines.unshift(`${tr("Фильтр campaign_id", "campaign_id filter")}: ${campaignFilter}`);
+  }
+  return lines.join("\n");
+}
+
 async function loadAdsAnalytics() {
   if (!enabledModules.has("wb_ads_analytics")) return;
   const dateFrom = (document.getElementById("adsAnalyticsFrom")?.value || "").trim();
   const dateTo = (document.getElementById("adsAnalyticsTo")?.value || "").trim();
   const campaignId = Number(document.getElementById("adsAnalyticsCampaignId")?.value || 0);
-  const qp = new URLSearchParams();
-  if (dateFrom) qp.set("date_from", dateFrom);
-  if (dateTo) qp.set("date_to", dateTo);
-  if (campaignId > 0) qp.set("campaign_id", String(campaignId));
-  const suffix = qp.toString() ? `?${qp.toString()}` : "";
   const totalBox = document.getElementById("adsAnalyticsTotals");
   const rawBox = document.getElementById("adsAnalyticsRaw");
-  if (totalBox) totalBox.textContent = tr("Загружаем аналитику...", "Loading analytics...");
-  const data = await requestJson(`/api/wb/ads/analytics${suffix}`, { headers: authHeaders(), timeoutMs: 120000 }).catch((e) => {
-    adsAnalyticsRows = [];
-    renderAdsAnalyticsRows();
-    if (totalBox) totalBox.textContent = tr("Ошибка загрузки аналитики. Проверьте API-ключ и период.", "Analytics loading failed. Check API key and period.");
-    if (rawBox) rawBox.textContent = tr("Ошибка загрузки аналитики.", "Analytics loading failed.");
-    alert(e.message);
-    return null;
-  });
-  if (!data) return;
-  adsAnalyticsRows = Array.isArray(data.rows) ? data.rows : [];
-  if (totalBox) totalBox.textContent = JSON.stringify(data.totals || {}, null, 2);
-  if (rawBox) rawBox.textContent = JSON.stringify(data, null, 2);
+  if (totalBox) totalBox.textContent = tr("Загружаем аналитику по кампаниям...", "Loading campaign analytics...");
+  if (rawBox) rawBox.textContent = tr("Запрашиваем данные...", "Requesting data...");
+
+  const pageLimit = 80;
+  let offset = 0;
+  let keepLoading = true;
+  let page = 0;
+  const mergedRows = [];
+  let periodFrom = "";
+  let periodTo = "";
+  while (keepLoading) {
+    page += 1;
+    const qp = new URLSearchParams();
+    if (dateFrom) qp.set("date_from", dateFrom);
+    if (dateTo) qp.set("date_to", dateTo);
+    if (campaignId > 0) qp.set("campaign_id", String(campaignId));
+    qp.set("offset", String(offset));
+    qp.set("limit", String(pageLimit));
+    if (totalBox) {
+      totalBox.textContent = tr(
+        `Загружаем аналитику: страница ${page} (offset ${offset})...`,
+        `Loading analytics: page ${page} (offset ${offset})...`
+      );
+    }
+    const data = await requestJson(`/api/wb/ads/analytics?${qp.toString()}`, {
+      headers: authHeaders(),
+      timeoutMs: 120000,
+    }).catch((e) => {
+      adsAnalyticsRows = [];
+      renderAdsAnalyticsRows();
+      if (totalBox) totalBox.textContent = tr("Ошибка загрузки аналитики. Проверьте API-ключ и период.", "Analytics loading failed. Check API key and period.");
+      if (rawBox) rawBox.textContent = tr("Ошибка загрузки аналитики.", "Analytics loading failed.");
+      alert(e.message);
+      return null;
+    });
+    if (!data) return;
+
+    if (!periodFrom) periodFrom = String(data.date_from || "");
+    if (!periodTo) periodTo = String(data.date_to || "");
+    const rows = Array.isArray(data.rows) ? data.rows : [];
+    mergedRows.push(...rows);
+    if (campaignId > 0) {
+      keepLoading = false;
+    } else {
+      keepLoading = rows.length >= pageLimit;
+      offset += pageLimit;
+      if (offset >= 10000) keepLoading = false;
+    }
+  }
+
+  adsAnalyticsRows = mergedRows.slice().sort((a, b) => Number(b?.spent || 0) - Number(a?.spent || 0));
+  const totals = computeAdsAnalyticsTotals(adsAnalyticsRows);
+  if (totalBox) {
+    totalBox.textContent = buildAdsAnalyticsSummaryText(
+      {
+        date_from: periodFrom || dateFrom || "-",
+        date_to: periodTo || dateTo || "-",
+        campaigns_loaded: adsAnalyticsRows.length,
+        campaign_id: campaignId,
+      },
+      totals
+    );
+  }
+  if (rawBox) {
+    rawBox.textContent = JSON.stringify(
+      {
+        date_from: periodFrom || dateFrom || null,
+        date_to: periodTo || dateTo || null,
+        campaign_id: campaignId > 0 ? campaignId : null,
+        campaigns_loaded: adsAnalyticsRows.length,
+        totals,
+        rows: adsAnalyticsRows,
+      },
+      null,
+      2
+    );
+  }
   renderAdsAnalyticsRows();
+  markModuleLoaded("ads");
 }
 
 function renderAdsAnalyticsRows() {
@@ -2686,6 +3418,16 @@ function renderAdsAnalyticsRows() {
       <td>${escapeHtml(parseCampaignMetric(row, "cpc", 2))}</td>
       <td>${escapeHtml(parseCampaignMetric(row, "cpo", 2))}</td>
     `;
+    tr.onclick = () => {
+      const cid = Number(row?.campaign_id || 0);
+      if (cid <= 0) return;
+      const analyticsInput = document.getElementById("adsAnalyticsCampaignId");
+      if (analyticsInput) analyticsInput.value = String(cid);
+      const rateInput = document.getElementById("wbRateCampaignId");
+      if (rateInput) rateInput.value = String(cid);
+      selectedWbCampaignId = String(cid);
+      renderWbCampaignRows();
+    };
     tbody.appendChild(tr);
   }
 }
@@ -2717,6 +3459,104 @@ function updateAdsRecLoadStatus(message = "") {
   });
 }
 
+function updateSalesLoadStatus(message = "") {
+  const holder = document.getElementById("salesLoadStatus");
+  if (!holder) return;
+  if (message) {
+    holder.innerHTML = buildLoadStatusHtml({
+      title: message,
+      loaded: salesLoadProgress.loaded || 0,
+      total: salesLoadProgress.total || 0,
+      active: salesLoadProgress.active,
+    });
+    return;
+  }
+  const { active, total, loaded } = salesLoadProgress;
+  if (!active && !total) {
+    holder.textContent = "-";
+    return;
+  }
+  holder.innerHTML = buildLoadStatusHtml({
+    title: active
+      ? tr("Загрузка статистики продаж", "Loading sales statistics")
+      : tr("Статистика продаж загружена", "Sales statistics loaded"),
+    loaded,
+    total,
+    active,
+  });
+}
+
+function renderAdsRecommendationsMeta(payload) {
+  const host = document.getElementById("adsRecMeta");
+  if (!host) return;
+  if (!payload || typeof payload !== "object") {
+    host.innerHTML = `<div class="hint">-</div>`;
+    return;
+  }
+  if (payload.error) {
+    host.innerHTML = `<div class="help-callout warn"><strong>${escapeHtml(String(payload.error))}</strong></div>`;
+    return;
+  }
+  const rows = [
+    [tr("Период", "Period"), `${payload.date_from || "-"} - ${payload.date_to || "-"}`],
+    [tr("Проверено кампаний", "Scanned campaigns"), `${formatInt(payload.campaigns_scanned || 0)} / ${formatInt(payload.total_campaigns || 0)}`],
+    [tr("Мин. расход", "Min spend"), formatMoney(payload.min_spent || 0)],
+    [tr("Рекомендаций", "Recommendations"), formatInt(payload.recommendations || 0)],
+  ];
+  if (Number(payload.high || 0) || Number(payload.medium || 0) || Number(payload.low || 0)) {
+    rows.push([tr("Высокий приоритет", "High priority"), formatInt(payload.high || 0)]);
+    rows.push([tr("Средний приоритет", "Medium priority"), formatInt(payload.medium || 0)]);
+    rows.push([tr("Низкий приоритет", "Low priority"), formatInt(payload.low || 0)]);
+  }
+  host.innerHTML = `
+    <div class="ads-rec-meta-grid">
+      ${rows.map(([label, value]) => `<article class="ads-rec-kv"><span>${escapeHtml(String(label))}</span><strong>${escapeHtml(String(value))}</strong></article>`).join("")}
+    </div>
+    ${payload.note ? `<div class="hint">${escapeHtml(String(payload.note))}</div>` : ""}
+  `;
+}
+
+function renderAdsRecommendationsInsights() {
+  const host = document.getElementById("adsRecInsights");
+  if (!host) return;
+  if (!Array.isArray(adsRecommendationRows) || !adsRecommendationRows.length) {
+    host.innerHTML = `<div class="hint">${
+      currentLang === "en"
+        ? "No recommendation cards yet. Build recommendations for selected dates."
+        : "Карточки рекомендаций пока пусты. Постройте рекомендации за выбранный период."
+    }</div>`;
+    return;
+  }
+  const topRows = adsRecommendationRows.slice(0, 8);
+  host.innerHTML = topRows.map((row) => {
+    const prio = String(row?.priority || "low").toLowerCase();
+    const prioLabel = prio === "high"
+      ? tr("Высокий", "High")
+      : (prio === "medium" ? tr("Средний", "Medium") : tr("Низкий", "Low"));
+    const views = Number(row?.views || 0);
+    const clicks = Number(row?.clicks || 0);
+    const orders = Number(row?.orders || 0);
+    const spent = Number(row?.spent || 0);
+    const metricBits = [
+      `${tr("Показы", "Views")}: ${formatInt(Number.isFinite(views) ? views : 0)}`,
+      `${tr("Клики", "Clicks")}: ${formatInt(Number.isFinite(clicks) ? clicks : 0)}`,
+      `${tr("Заказы", "Orders")}: ${formatInt(Number.isFinite(orders) ? orders : 0)}`,
+      `${tr("Расход", "Spend")}: ${formatMoney(Number.isFinite(spent) ? spent : 0)}`,
+    ];
+    return `
+      <article class="ads-rec-insight-card ${escapeHtml(prio)}">
+        <header>
+          <strong>#${escapeHtml(String(row?.campaign_id || "-"))} ${escapeHtml(String(row?.name || "-"))}</strong>
+          <span>${escapeHtml(prioLabel)}</span>
+        </header>
+        <div class="ads-rec-insight-title">${escapeHtml(String(row?.recommendation || "-"))}</div>
+        <div class="ads-rec-insight-reason">${escapeHtml(String(row?.reason || "-"))}</div>
+        <div class="ads-rec-insight-metrics">${metricBits.map((x) => `<span>${escapeHtml(x)}</span>`).join("")}</div>
+      </article>
+    `;
+  }).join("");
+}
+
 async function loadAdsRecommendations() {
   if (!enabledModules.has("wb_ads_recommendations")) return;
   adsRecLoadToken += 1;
@@ -2724,76 +3564,149 @@ async function loadAdsRecommendations() {
   const dateFrom = (document.getElementById("adsRecFrom")?.value || "").trim();
   const dateTo = (document.getElementById("adsRecTo")?.value || "").trim();
   const minSpent = Number(document.getElementById("adsRecMinSpent")?.value || 0);
-  const qp = new URLSearchParams();
-  if (dateFrom) qp.set("date_from", dateFrom);
-  if (dateTo) qp.set("date_to", dateTo);
-  if (Number.isFinite(minSpent) && minSpent > 0) qp.set("min_spent", String(minSpent));
+  const qpBase = new URLSearchParams();
+  if (dateFrom) qpBase.set("date_from", dateFrom);
+  if (dateTo) qpBase.set("date_to", dateTo);
+  if (Number.isFinite(minSpent)) qpBase.set("min_spent", String(Math.max(0, minSpent)));
 
-  const meta = document.getElementById("adsRecMeta");
-  if (meta) meta.textContent = tr("Загружаем рекомендации...", "Loading recommendations...");
+  renderAdsRecommendationsMeta({
+    date_from: dateFrom || "-",
+    date_to: dateTo || "-",
+    campaigns_scanned: 0,
+    total_campaigns: 0,
+    min_spent: Number.isFinite(minSpent) ? minSpent : 0,
+    recommendations: 0,
+    note: tr("Загружаем рекомендации...", "Loading recommendations..."),
+  });
   adsRecommendationRows = [];
   renderAdsRecommendationsRows();
+  renderAdsRecommendationsInsights();
   adsRecLoadProgress = { active: true, total: 0, loaded: 0 };
-  updateAdsRecLoadStatus(tr("Подготовка догрузки...", "Preparing progressive load..."));
+  updateAdsRecLoadStatus(tr("Запрашиваем рекомендации...", "Requesting recommendations..."));
 
+  const pageLimit = 80;
   let offset = 0;
-  const pageLimit = 40;
-  let finalMeta = {};
-  while (true) {
+  let keepLoading = true;
+  let seenTotal = 0;
+  let scanned = 0;
+  let finalDateFrom = dateFrom;
+  let finalDateTo = dateTo;
+  let fallbackMode = false;
+  let partialLoadWarning = "";
+  while (keepLoading) {
     if (runToken !== adsRecLoadToken) return;
-    const qpLocal = new URLSearchParams(qp);
-    qpLocal.set("offset", String(offset));
-    qpLocal.set("limit", String(pageLimit));
-    const localSuffix = `?${qpLocal.toString()}`;
-    const data = await requestJson(`/api/wb/ads/recommendations${localSuffix}`, { headers: authHeaders(), timeoutMs: 120000 }).catch((e) => {
-      if (offset === 0) alert(e.message);
-      return null;
-    });
-    if (!data) break;
-    if (runToken !== adsRecLoadToken) return;
-
-    const chunkRows = Array.isArray(data.rows) ? data.rows : [];
-    adsRecommendationRows.push(...chunkRows);
-    const byCampaign = new Map();
-    for (const row of adsRecommendationRows) {
-      const key = row?.campaign_id != null ? String(row.campaign_id) : JSON.stringify(row);
-      byCampaign.set(key, row);
+    const qp = new URLSearchParams(qpBase);
+    qp.set("offset", String(offset));
+    qp.set("limit", String(pageLimit));
+    let data = null;
+    let lastError = "";
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      data = await requestJson(`/api/wb/ads/recommendations?${qp.toString()}`, {
+        headers: authHeaders(),
+        timeoutMs: 120000,
+      }).catch((e) => {
+        lastError = String(e?.message || "");
+        return null;
+      });
+      if (data) break;
+      if (attempt < 1) {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      }
     }
-    adsRecommendationRows = [...byCampaign.values()];
-    renderAdsRecommendationsRows();
+    if (!data || runToken !== adsRecLoadToken) {
+      partialLoadWarning = tr(
+        `Часть рекомендаций не загрузилась (offset ${offset}).`,
+        `Part of recommendations failed to load (offset ${offset}).`
+      );
+      if (lastError && !adsRecommendationRows.length) {
+        adsRecLoadProgress = { active: false, total: Math.max(0, seenTotal), loaded: Math.max(0, scanned) };
+        updateAdsRecLoadStatus(tr("Ошибка загрузки рекомендаций.", "Recommendations loading failed."));
+        renderAdsRecommendationsMeta({
+          error: tr("Ошибка загрузки рекомендаций. Проверьте API-ключ и период.", "Recommendations loading failed. Check API key and date range."),
+        });
+        alert(lastError);
+        return;
+      }
+      break;
+    }
 
+    const batchRows = Array.isArray(data.rows)
+      ? data.rows
+      : (Array.isArray(data.recommendations) ? data.recommendations : []);
+    adsRecommendationRows.push(...batchRows);
     const info = data.meta || {};
-    const totalCampaigns = Number(info.total_campaigns || 0);
-    const nextOffset = Number(info.next_offset || 0);
-    const hasMore = Boolean(info.has_more);
-    const scanned = Number(info.offset || offset) + Number(info.limit || pageLimit);
-    adsRecLoadProgress.total = totalCampaigns > 0 ? totalCampaigns : Math.max(adsRecLoadProgress.total, scanned);
-    adsRecLoadProgress.loaded = Math.min(adsRecLoadProgress.total, scanned);
-    updateAdsRecLoadStatus();
-    finalMeta = {
-      date_from: data.date_from,
-      date_to: data.date_to,
-      campaigns_scanned: info.campaigns_scanned || 0,
-      loaded_campaigns: adsRecLoadProgress.loaded,
-      total_campaigns: adsRecLoadProgress.total,
-      min_spent: info.min_spent ?? minSpent ?? 0,
-      recommendations: adsRecommendationRows.length,
+    finalDateFrom = data.date_from || finalDateFrom;
+    finalDateTo = data.date_to || finalDateTo;
+    fallbackMode = fallbackMode || Boolean(info.fallback_mode);
+    seenTotal = Math.max(
+      seenTotal,
+      Number(info.total_campaigns || 0),
+      Number(info.campaigns_scanned || 0),
+      offset + pageLimit
+    );
+    scanned = Math.max(scanned, Number(info.campaigns_scanned || (offset + batchRows.length)));
+    adsRecLoadProgress = {
+      active: true,
+      total: Math.max(0, seenTotal),
+      loaded: Math.max(0, scanned),
     };
-    if (meta) meta.textContent = JSON.stringify(finalMeta, null, 2);
-    if (!hasMore) break;
-    offset = nextOffset > offset ? nextOffset : offset + pageLimit;
-    await new Promise((resolve) => setTimeout(resolve, 40));
+    updateAdsRecLoadStatus();
+    renderAdsRecommendationsRows();
+    renderAdsRecommendationsInsights();
+    keepLoading = Boolean(info.has_more);
+    const nextOffset = Number(info.next_offset ?? (offset + pageLimit));
+    offset = Number.isFinite(nextOffset) && nextOffset > offset ? nextOffset : (offset + pageLimit);
+    if (!keepLoading) break;
   }
-  if (runToken !== adsRecLoadToken) return;
-  adsRecLoadProgress.active = false;
-  updateAdsRecLoadStatus();
 
-  if (meta && Object.keys(finalMeta).length) {
-    meta.textContent = JSON.stringify(finalMeta, null, 2);
+  const weight = { high: 3, medium: 2, low: 1 };
+  adsRecommendationRows.sort((a, b) => {
+    const pa = weight[String(a?.priority || "").toLowerCase()] || 0;
+    const pb = weight[String(b?.priority || "").toLowerCase()] || 0;
+    if (pb !== pa) return pb - pa;
+    return Number(b?.spent || 0) - Number(a?.spent || 0);
+  });
+  const prioCounts = adsRecommendationRows.reduce((acc, row) => {
+    const key = String(row?.priority || "low").toLowerCase();
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, { high: 0, medium: 0, low: 0 });
+  const explain = adsRecommendationRows.length
+    ? tr("Рекомендации сформированы в виде карточек и таблицы. Начните с высокого приоритета.", "Recommendations are ready in cards and table. Start with high priority.")
+    : tr(
+      "Нет готовых рекомендаций. Сервис вернул нейтральную статистику или недостающие данные за период.",
+      "No actionable recommendations. Service returned neutral or insufficient data for selected period."
+    );
+  const finalMeta = {
+    date_from: finalDateFrom || dateFrom,
+    date_to: finalDateTo || dateTo,
+    campaigns_scanned: scanned,
+    total_campaigns: seenTotal,
+    min_spent: Number.isFinite(minSpent) ? minSpent : 0,
+    recommendations: adsRecommendationRows.length,
+    high: prioCounts.high || 0,
+    medium: prioCounts.medium || 0,
+    low: prioCounts.low || 0,
+    note: `${explain}${
+      fallbackMode ? ` ${tr("Часть строк собрана в fallback-режиме.", "Some rows are generated in fallback mode.")}` : ""
+    }${
+      partialLoadWarning ? ` ${partialLoadWarning}` : ""
+    }`,
+  };
+  adsRecLoadProgress = {
+    active: false,
+    total: Math.max(0, seenTotal),
+    loaded: Math.max(0, scanned),
+  };
+  if (partialLoadWarning) {
+    updateAdsRecLoadStatus(tr("Загрузка завершена частично.", "Load completed partially."));
+  } else {
+    updateAdsRecLoadStatus();
   }
-  const raw = document.getElementById("adsRecRaw");
-  if (raw) raw.textContent = JSON.stringify({ rows: adsRecommendationRows, meta: finalMeta }, null, 2);
+  renderAdsRecommendationsMeta(finalMeta);
   renderAdsRecommendationsRows();
+  renderAdsRecommendationsInsights();
+  markModuleLoaded("ads");
 }
 
 function renderAdsRecommendationsRows() {
@@ -2808,12 +3721,20 @@ function renderAdsRecommendationsRows() {
   }
   for (const row of adsRecommendationRows) {
     const ctrVal = parseCampaignMetric(row, "ctr", 2);
+    const actionCode = String(row.action || "").trim();
+    const actionLabel = actionCode
+      ? ` (${actionCode})`
+      : "";
+    const priorityRaw = String(row.priority || "low").toLowerCase();
+    const priorityLabel = priorityRaw === "high"
+      ? tr("Высокий", "High")
+      : (priorityRaw === "medium" ? tr("Средний", "Medium") : tr("Низкий", "Low"));
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${escapeHtml(row.campaign_id ?? "-")}</td>
       <td>${escapeHtml(row.name ?? "-")}</td>
-      <td>${escapeHtml(row.status ?? "-")}</td>
-      <td>${escapeHtml(row.type ?? "-")}</td>
+      <td>${escapeHtml(normalizeCampaignStatus(row.status ?? "-"))}</td>
+      <td>${escapeHtml(normalizeCampaignType(row.type ?? "-"))}</td>
       <td>${escapeHtml(parseCampaignMetric(row, "views"))}</td>
       <td>${escapeHtml(parseCampaignMetric(row, "clicks"))}</td>
       <td>${escapeHtml(ctrVal === "-" ? "-" : `${ctrVal}%`)}</td>
@@ -2821,8 +3742,8 @@ function renderAdsRecommendationsRows() {
       <td>${escapeHtml(parseCampaignMetric(row, "spent", 2))}</td>
       <td>${escapeHtml(parseCampaignMetric(row, "cpc", 2))}</td>
       <td>${escapeHtml(parseCampaignMetric(row, "cpo", 2))}</td>
-      <td>${escapeHtml(row.priority ?? "-")}</td>
-      <td>${escapeHtml(row.recommendation ?? "-")}</td>
+      <td>${escapeHtml(priorityLabel)}</td>
+      <td>${escapeHtml(String(row.recommendation || "-") + actionLabel)}</td>
       <td>${escapeHtml(row.reason ?? "-")}</td>
     `;
     tbody.appendChild(tr);
@@ -2853,6 +3774,7 @@ async function importProducts() {
     return null;
   });
   if (!data) return;
+  invalidateModuleCache("products", "seo", "sales");
   await loadProducts();
   await loadDashboard();
   alert(tr(`Импортировано: ${data.length}`, `Imported: ${data.length}`));
@@ -2876,6 +3798,7 @@ async function reloadProducts() {
     return null;
   });
   if (!data) return;
+  invalidateModuleCache("products", "seo", "sales");
   selectedProducts.clear();
   await loadProducts();
   await loadSeoJobs();
@@ -2954,6 +3877,7 @@ async function loadProducts() {
   if (selected?.id) {
     suggestKeywordsForSelectedProduct(selected.id);
   }
+  markModuleLoaded("products");
 }
 
 function toggleProduct(id, checked) {
@@ -2992,6 +3916,7 @@ async function checkCurrentPositions(applyToAll) {
     return null;
   });
   if (!data) return;
+  invalidateModuleCache("products", "seo", "sales");
 
   const criterion = keywords.length
     ? tr(`Критерий: позиции рассчитаны по вашим ключам (${keywords.join(", ")}).`, `Criteria: rankings calculated by your keywords (${keywords.join(", ")}).`)
@@ -3028,6 +3953,7 @@ async function generateSeo(applyToAll) {
   });
 
   if (!data) return;
+  invalidateModuleCache("seo", "sales");
   await loadSeoJobs();
   await loadDashboard();
   if (data.length) renderSeoPreview(data[0]);
@@ -3097,6 +4023,7 @@ async function loadSeoJobs() {
     tbody.appendChild(tr);
   }
   renderSeoKanban(rows);
+  markModuleLoaded("seo");
 }
 
 function toggleJob(id, checked) {
@@ -3123,6 +4050,7 @@ async function deleteSeoSelected() {
     return null;
   });
   if (!data) return;
+  invalidateModuleCache("seo", "sales");
 
   selectedJobs.clear();
   await loadSeoJobs();
@@ -3143,6 +4071,7 @@ async function deleteSeoAll() {
     return null;
   });
   if (!data) return;
+  invalidateModuleCache("seo", "sales");
 
   selectedJobs.clear();
   await loadSeoJobs();
@@ -3166,6 +4095,7 @@ async function applySeo() {
     return null;
   });
   if (!data) return;
+  invalidateModuleCache("seo", "products", "sales");
   await loadSeoJobs();
   await loadDashboard();
   alert(tr(`Применено: ${data.length}`, `Applied: ${data.length}`));
@@ -3187,6 +4117,7 @@ async function recheckSelected() {
     return null;
   });
   if (!data) return;
+  invalidateModuleCache("seo", "products", "sales");
   await loadSeoJobs();
   await loadDashboard();
   alert(tr(`Переоценено задач: ${data.length}`, `Rechecked jobs: ${data.length}`));
@@ -3207,6 +4138,7 @@ async function recheckDue() {
     return null;
   });
   if (!data) return;
+  invalidateModuleCache("seo", "products", "sales");
   await loadSeoJobs();
   await loadDashboard();
   alert(tr(`Переоценено просроченных задач: ${data.length}`, `Rechecked overdue jobs: ${data.length}`));
@@ -3239,12 +4171,21 @@ async function loadDashboard() {
 
   const points = await loadTrend({ days: 21 });
   renderTrendChart("dashboardTrendChart", "dashboardTrendMeta", points);
+  markModuleLoaded("sales");
 }
 
 function initSalesPeriodDefaults() {
+  const marketEl = document.getElementById("salesMarketplace");
   const toEl = document.getElementById("salesDateTo");
   const fromEl = document.getElementById("salesDateFrom");
   if (!toEl || !fromEl) return;
+  if (marketEl && !marketEl.value) marketEl.value = "all";
+  const showTotal = document.getElementById("salesShowTotal");
+  const showWb = document.getElementById("salesShowWb");
+  const showOzon = document.getElementById("salesShowOzon");
+  if (showTotal && typeof showTotal.checked === "boolean") showTotal.checked = true;
+  if (showWb && typeof showWb.checked === "boolean") showWb.checked = true;
+  if (showOzon && typeof showOzon.checked === "boolean") showOzon.checked = true;
   if (!toEl.value || !fromEl.value) {
     setSalesRange("day", false);
     return;
@@ -3531,12 +4472,14 @@ function renderSalesStats() {
   }, null, 2);
 }
 
-async function loadSalesStats() {
+async function loadSalesStats(retryAttempt = 0) {
   if (!enabledModules.has("sales_stats")) {
     const meta = document.getElementById("salesStatsMeta");
     if (meta) meta.textContent = tr("Модуль статистики продаж отключен администратором.", "Sales statistics module is disabled by admin.");
     salesRows = [];
     salesChartRows = [];
+    salesLoadProgress = { active: false, total: 0, loaded: 0 };
+    updateSalesLoadStatus();
     renderSalesStats();
     return;
   }
@@ -3553,29 +4496,75 @@ async function loadSalesStats() {
   if (date_to) qp.set("date_to", date_to);
   const meta = document.getElementById("salesStatsMeta");
   if (meta) meta.textContent = tr("Загрузка статистики продаж...", "Loading sales statistics...");
+  salesRows = [];
+  salesChartRows = [];
+  renderSalesStats();
+  salesLoadProgress = { active: true, total: market === "all" ? 2 : 1, loaded: 0 };
+  updateSalesLoadStatus();
 
-  const data = await requestJson(`/api/sales/stats?${qp.toString()}`, {
-    headers: authHeaders(),
-    timeoutMs: 120000,
-  }).catch((e) => {
-    if (runToken !== salesLoadToken) return null;
+  let data = null;
+  let lastError = "";
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    data = await requestJson(`/api/sales/stats?${qp.toString()}`, {
+      headers: authHeaders(),
+      timeoutMs: 120000,
+    }).catch((e) => {
+      lastError = String(e?.message || "");
+      return null;
+    });
+    if (data) break;
+    if (attempt < 1) {
+      updateSalesLoadStatus(tr("Повторный запрос статистики...", "Retrying sales request..."));
+      await new Promise((resolve) => setTimeout(resolve, 900));
+    }
+  }
+  if (!data) {
+    if (runToken !== salesLoadToken) return;
     salesRows = [];
     salesChartRows = [];
+    salesLoadProgress = { active: false, total: market === "all" ? 2 : 1, loaded: 0 };
+    updateSalesLoadStatus();
     renderSalesStats();
     if (meta) meta.textContent = tr("Ошибка загрузки статистики. Проверьте API-ключи и период.", "Sales loading failed. Check API keys and period.");
-    alert(e.message);
-    return null;
-  });
-  if (!data) return;
+    if (lastError) alert(lastError);
+    return;
+  }
   if (runToken !== salesLoadToken) return;
 
-  salesRows = Array.isArray(data.rows) ? data.rows : [];
+  const rawRows = Array.isArray(data.rows) ? data.rows : [];
+  salesRows = rawRows.filter((row) => {
+    const mp = String(row?.marketplace || "").toLowerCase();
+    if (market === "all") return mp === "wb" || mp === "ozon";
+    return mp === market;
+  });
   salesChartRows = Array.isArray(data.chart) ? data.chart : [];
   if (!salesChartRows.length && salesRows.length) {
     salesChartRows = buildSalesChartFromRows(salesRows);
   }
+  if (market !== "all") {
+    salesChartRows = buildSalesChartFromRows(salesRows);
+  }
   const totals = data.totals || {};
   const warnings = Array.isArray(data.warnings) ? data.warnings.filter(Boolean) : [];
+  const hasWb429 = warnings.some((x) => String(x || "").includes("429"));
+  if (hasWb429 && (market === "wb" || market === "all") && retryAttempt < 1) {
+    if (meta) {
+      meta.textContent = tr(
+        "WB API временно ограничил запрос (429). Повторяем загрузку автоматически...",
+        "WB API rate-limited this request (429). Retrying automatically..."
+      );
+    }
+    salesLoadProgress = {
+      active: true,
+      total: market === "all" ? 2 : 1,
+      loaded: 0,
+    };
+    updateSalesLoadStatus(tr("Повторный запрос статистики...", "Retrying sales request..."));
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    if (runToken !== salesLoadToken) return;
+    await loadSalesStats(retryAttempt + 1);
+    return;
+  }
   if (meta) {
     const totalTxt = tr(
       `Заказы: ${formatInt(totals.orders || 0)}, шт.: ${formatInt(totals.units || 0)}, выручка: ${formatMoney(totals.revenue || 0)}, отказы: ${formatInt(totals.returns || 0)}, реклама: ${formatMoney(totals.ad_spend || 0)}, прочие: ${formatMoney(totals.other_costs || 0)}.`,
@@ -3584,7 +4573,10 @@ async function loadSalesStats() {
     const warnTxt = warnings.length ? ` ${warnings.join(" | ")}` : "";
     meta.textContent = `${totalTxt}${warnTxt}`;
   }
+  salesLoadProgress = { active: false, total: market === "all" ? 2 : 1, loaded: market === "all" ? 2 : 1 };
+  updateSalesLoadStatus();
   renderSalesStats();
+  markModuleLoaded("sales");
 }
 
 async function loadBilling() {
@@ -3700,16 +4692,163 @@ function renderProfileData(data) {
 
   const keysView = document.getElementById("profileKeysList");
   if (keysView) keysView.textContent = JSON.stringify(data.credentials || [], null, 2);
+
+  teamMembers = Array.isArray(data.team_members) ? data.team_members : [];
+  renderTeamAccessOptions();
+  renderTeamMembers();
+}
+
+function renderTeamAccessOptions(selected = []) {
+  const host = document.getElementById("teamAccessPicks");
+  if (!host) return;
+  const selectedSet = new Set((Array.isArray(selected) ? selected : []).map((x) => String(x || "").trim().toLowerCase()).filter(Boolean));
+  host.innerHTML = TEAM_ACCESS_MODULES
+    .map((code) => `
+      <label class="check">
+        <input type="checkbox" data-team-access="${code}" ${selectedSet.has(code) ? "checked" : ""} />
+        ${escapeHtml(moduleLabel(code))}
+      </label>
+    `)
+    .join("");
+}
+
+function getSelectedTeamAccess() {
+  return [...document.querySelectorAll("#teamAccessPicks [data-team-access]")]
+    .filter((el) => el.checked)
+    .map((el) => String(el.dataset.teamAccess || "").trim())
+    .filter(Boolean);
+}
+
+function resetTeamMemberForm() {
+  setInputValue("teamMemberEmail", "");
+  setInputValue("teamMemberPassword", "");
+  setInputValue("teamMemberPhone", "");
+  setInputValue("teamMemberFullName", "");
+  setInputValue("teamMemberNickname", "");
+  setInputValue("teamMemberAvatar", "");
+  renderTeamAccessOptions();
+}
+
+function renderTeamMembers() {
+  const tbody = document.getElementById("teamMembersTable");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  if (!Array.isArray(teamMembers) || !teamMembers.length) {
+    setTableMessage("teamMembersTable", 9, tr("Сотрудников пока нет.", "No employees yet."));
+    return;
+  }
+  for (const row of teamMembers) {
+    const access = Array.isArray(row.access_scope) ? row.access_scope : [];
+    const trEl = document.createElement("tr");
+    trEl.innerHTML = `
+      <td>${escapeHtml(String(row.id || "-"))}</td>
+      <td><input data-team-email="${row.id}" value="${escapeHtml(String(row.email || ""))}" ${row.is_owner ? "disabled" : ""} /></td>
+      <td><input data-team-full="${row.id}" value="${escapeHtml(String(row.full_name || ""))}" /></td>
+      <td><input data-team-phone="${row.id}" value="${escapeHtml(String(row.phone || ""))}" /></td>
+      <td><input data-team-nick="${row.id}" value="${escapeHtml(String(row.nickname || ""))}" /></td>
+      <td>${row.is_owner ? tr("Владелец", "Owner") : `${tr("Сотрудник", "Employee")}${row.has_password ? " 🔒" : ""}`}</td>
+      <td><input data-team-access-input="${row.id}" value="${escapeHtml(access.join(", "))}" placeholder="products, seo_generation, wb_reviews_ai" /></td>
+      <td>${row.is_owner ? "-" : `<input type="password" data-team-password="${row.id}" placeholder="${escapeHtml(tr("Новый пароль (опц.)", "New password (optional)"))}" />`}</td>
+      <td>
+        <div class="actions">
+          <button class="btn-secondary" type="button" data-team-save="${row.id}">${tr("Сохранить", "Save")}</button>
+          ${row.is_owner ? "" : `<button class="btn-danger" type="button" data-team-del="${row.id}">${tr("Удалить", "Delete")}</button>`}
+        </div>
+      </td>
+    `;
+    trEl.querySelector(`[data-team-save="${row.id}"]`)?.addEventListener("click", async () => updateTeamMember(row.id));
+    trEl.querySelector(`[data-team-del="${row.id}"]`)?.addEventListener("click", async () => deleteTeamMember(row.id));
+    tbody.appendChild(trEl);
+  }
+}
+
+function parseAccessInput(raw) {
+  return String(raw || "")
+    .split(",")
+    .map((x) => x.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+async function addTeamMember() {
+  if (!enabledModules.has("user_profile")) return;
+  const payload = {
+    email: String(document.getElementById("teamMemberEmail")?.value || "").trim(),
+    password: String(document.getElementById("teamMemberPassword")?.value || ""),
+    phone: String(document.getElementById("teamMemberPhone")?.value || "").trim(),
+    full_name: String(document.getElementById("teamMemberFullName")?.value || "").trim(),
+    nickname: String(document.getElementById("teamMemberNickname")?.value || "").trim(),
+    avatar_url: String(document.getElementById("teamMemberAvatar")?.value || "").trim(),
+    access_scope: getSelectedTeamAccess(),
+  };
+  if (!payload.email) return alert(tr("Укажите email сотрудника.", "Enter employee email."));
+  const row = await requestJson("/api/profile/team", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+    timeoutMs: 60000,
+  }).catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  if (!row) return;
+  invalidateModuleCache("profile");
+  teamMembers = [row, ...teamMembers.filter((x) => Number(x.id) !== Number(row.id))];
+  renderTeamMembers();
+  resetTeamMemberForm();
+}
+
+async function updateTeamMember(memberId) {
+  const id = Number(memberId || 0);
+  if (!id) return;
+  const current = teamMembers.find((x) => Number(x.id) === id) || {};
+  const payload = {
+    email: String(document.querySelector(`[data-team-email="${id}"]`)?.value || "").trim(),
+    password: String(document.querySelector(`[data-team-password="${id}"]`)?.value || ""),
+    phone: String(document.querySelector(`[data-team-phone="${id}"]`)?.value || "").trim(),
+    full_name: String(document.querySelector(`[data-team-full="${id}"]`)?.value || "").trim(),
+    nickname: String(document.querySelector(`[data-team-nick="${id}"]`)?.value || "").trim(),
+    avatar_url: String(current.avatar_url || "").trim(),
+    access_scope: parseAccessInput(document.querySelector(`[data-team-access-input="${id}"]`)?.value || ""),
+  };
+  const row = await requestJson(`/api/profile/team/${id}`, {
+    method: "PUT",
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+    timeoutMs: 60000,
+  }).catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  if (!row) return;
+  invalidateModuleCache("profile");
+  teamMembers = teamMembers.map((x) => (Number(x.id) === id ? row : x));
+  renderTeamMembers();
+}
+
+async function deleteTeamMember(memberId) {
+  const id = Number(memberId || 0);
+  if (!id) return;
+  if (!confirm(tr("Удалить сотрудника из кабинета?", "Delete employee from workspace?"))) return;
+  await requestJson(`/api/profile/team/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+    timeoutMs: 60000,
+  }).catch((e) => alert(e.message));
+  invalidateModuleCache("profile");
+  teamMembers = teamMembers.filter((x) => Number(x.id) !== id);
+  renderTeamMembers();
 }
 
 async function loadProfile() {
   if (!enabledModules.has("user_profile")) return;
+  ensureProfileTeamUi();
   const data = await requestJson("/api/profile", { headers: authHeaders(), timeoutMs: 60000 }).catch((e) => {
     alert(e.message);
     return null;
   });
   if (!data) return;
   renderProfileData(data);
+  markModuleLoaded("profile");
 }
 
 async function saveProfileData() {
@@ -3738,6 +4877,7 @@ async function saveProfileData() {
     return null;
   });
   if (!data) return;
+  invalidateModuleCache("profile");
   renderProfileData(data);
   alert(tr("Профиль сохранен", "Profile saved"));
 }
@@ -3756,6 +4896,7 @@ async function changeProfilePlan() {
     return null;
   });
   if (!data) return;
+  invalidateModuleCache("profile", "billing");
   renderProfileData(data);
   alert(tr("Тариф обновлен", "Plan updated"));
 }
@@ -3771,6 +4912,7 @@ async function renewProfilePlan() {
     return null;
   });
   if (!data) return;
+  invalidateModuleCache("profile", "billing");
   renderProfileData(data);
   alert(tr("Продление выполнено", "Renewal completed"));
 }
@@ -3795,6 +4937,7 @@ async function changeProfilePassword() {
     return null;
   });
   if (!data) return;
+  invalidateModuleCache("profile");
   setInputValue("profileCurrentPassword", "");
   setInputValue("profileNewPassword", "");
   alert(data.message || tr("Пароль обновлен", "Password updated"));
@@ -3813,6 +4956,7 @@ async function saveProfileKey(marketplace) {
     headers: authHeaders(),
     body: JSON.stringify({ marketplace, api_key }),
   }).catch((e) => alert(e.message));
+  invalidateModuleCache("profile", "products", "sales", "ads", "reviews");
   if (input) input.value = "";
   await loadProfile();
 }
@@ -3843,15 +4987,16 @@ async function deleteProfileKey(marketplace) {
     return null;
   });
   if (data?.message) alert(data.message);
+  invalidateModuleCache("profile", "products", "sales", "ads", "reviews");
   await loadProfile();
 }
 
 async function loadHelpDocs() {
   if (!enabledModules.has("help_center")) return;
+  pruneLegacyUi();
   const moduleCode = (document.getElementById("helpModuleSelect")?.value || "").trim();
-  const lang = (document.getElementById("helpLangSelect")?.value || currentLang || "ru").trim().toLowerCase();
+  const lang = (currentLang || "ru").trim().toLowerCase();
   const qp = new URLSearchParams();
-  if (moduleCode) qp.set("module_code", moduleCode);
   qp.set("lang", lang === "en" ? "en" : "ru");
   const data = await requestJson(`/api/help/docs?${qp.toString()}`, { headers: authHeaders() }).catch((e) => {
     alert(e.message);
@@ -3859,6 +5004,7 @@ async function loadHelpDocs() {
   });
   if (!data) return;
   const rows = Array.isArray(data) ? data : [];
+  helpDocsRows = rows;
   const select = document.getElementById("helpModuleSelect");
   if (select) {
     const prev = select.value;
@@ -3873,41 +5019,53 @@ async function loadHelpDocs() {
     select.innerHTML = `<option value="">${lang === "en" ? "All modules" : "Все модули"}</option>${options}`;
     if (prev && [...select.options].some((opt) => opt.value === prev)) {
       select.value = prev;
+    } else if (moduleCode && [...select.options].some((opt) => opt.value === moduleCode)) {
+      select.value = moduleCode;
     }
   }
+  const selectedCode = (document.getElementById("helpModuleSelect")?.value || "").trim();
   const view = document.getElementById("helpDocsView");
   if (!view) return;
   if (!rows.length) {
     view.innerHTML = `<div class="help-empty">${lang === "en" ? "No help data." : "Справка не найдена."}</div>`;
     return;
   }
-  const moduleChips = rows.map((row) => {
+  const unique = new Map();
+  for (const row of rows) {
     const code = String(row?.module_code || "").trim();
     const title = String(row?.title || code || "-").trim();
-    if (!code) return "";
+    if (!code || unique.has(code)) continue;
+    unique.set(code, title);
+  }
+  const moduleChips = [...unique.entries()].map(([code, title]) => {
+    const activeClass = selectedCode === code ? "active" : "";
     return `
-      <button class="help-chip-btn" type="button" onclick="openHelpModule('${escapeHtml(code)}')">
+      <button class="help-chip-btn ${activeClass}" type="button" onclick="filterHelpModule('${escapeHtml(code)}')">
         ${escapeHtml(title)}
       </button>
     `;
   }).join("");
 
-  const cards = rows.map((row) => {
+  const filteredRows = selectedCode
+    ? rows.filter((row) => String(row?.module_code || "").trim() === selectedCode)
+    : rows;
+  const cards = filteredRows.map((row) => {
     const code = String(row?.module_code || "").trim();
     const title = String(row?.title || code || "-").trim();
+    const activeClass = selectedCode === code ? "active" : "";
     return `
-      <article class="help-card" id="help-card-${escapeHtml(code)}">
+      <article class="help-card ${activeClass ? "selected" : ""}" id="help-card-${escapeHtml(code)}">
         <header class="help-card-head">
           <div>
             <h4>${escapeHtml(title)}</h4>
             <small>[${escapeHtml(code)}]</small>
           </div>
           <div class="help-card-actions">
-            <button class="btn-secondary help-open-btn" type="button" onclick="openHelpModule('${escapeHtml(code)}')">
-              ${lang === "en" ? "Open module" : "Открыть модуль"}
+            <button class="btn-secondary help-open-btn" type="button" onclick="filterHelpModule('${escapeHtml(code)}')">
+              ${lang === "en" ? "Show module help" : "Показать справку модуля"}
             </button>
             <button class="help-filter-btn" type="button" onclick="filterHelpModule('${escapeHtml(code)}')">
-              ${lang === "en" ? "Show only this" : "Только этот модуль"}
+              ${lang === "en" ? "Highlight module" : "Подсветить модуль"}
             </button>
           </div>
         </header>
@@ -3930,12 +5088,15 @@ async function loadHelpDocs() {
     <div class="help-header">
       <div class="help-header-title">
         <h4>${lang === "en" ? "Interactive help center" : "Интерактивная справка"}</h4>
-        <p>${lang === "en" ? "Click any module and jump directly to it." : "Нажмите на модуль и перейдите к нему прямо из справки."}</p>
+        <p>${lang === "en"
+      ? (selectedCode ? "Showing help for selected module." : "Select module to open focused help.")
+      : (selectedCode ? "Показана справка только по выбранному модулю." : "Выберите модуль, чтобы открыть целевую справку.")}</p>
       </div>
       <div class="help-chip-list">${moduleChips}</div>
     </div>
-    <div class="help-card-list">${cards}</div>
+    <div class="help-card-list">${cards || `<div class="help-empty">${lang === "en" ? "Module help not found." : "Справка по модулю не найдена."}</div>`}</div>
   `;
+  markModuleLoaded("help");
 }
 
 function formatHelpContent(text, lang = "ru") {
@@ -3989,11 +5150,7 @@ function filterHelpModule(moduleCode) {
 }
 
 function openHelpModule(moduleCode) {
-  const code = String(moduleCode || "").trim().toLowerCase();
-  const tab = HELP_MODULE_TAB_MAP[code];
-  if (!tab) return;
-  const btn = document.querySelector(`.nav-btn[data-tab="${tab}"]`);
-  showTab(tab, btn || null);
+  filterHelpModule(moduleCode);
 }
 
 window.openHelpModule = openHelpModule;
