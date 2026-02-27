@@ -39,10 +39,12 @@ if id -u "${APP_USER}" >/dev/null 2>&1; then
   chown -R "${APP_USER}:${APP_USER}" "${ROOT_DIR}"
 fi
 
-if command -v systemctl >/dev/null 2>&1; then
+if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files | grep -q '^seo_wibe.service'; then
   systemctl restart seo_wibe
   systemctl is-active --quiet seo_wibe
 fi
 
-curl -fsS --max-time 15 "http://127.0.0.1:8016/" >/dev/null
+if systemctl list-unit-files | grep -q '^seo_wibe.service'; then
+  curl -fsS --max-time 15 "http://127.0.0.1:8016/" >/dev/null
+fi
 echo "deploy ok: ${REMOTE_SHA}"
