@@ -21,6 +21,9 @@ jobs:
     if: ${{ secrets.DEPLOY_HOST != '' && secrets.DEPLOY_USER != '' && secrets.DEPLOY_SSH_KEY != '' && secrets.DEPLOY_PATH != '' }}
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -32,14 +35,7 @@ jobs:
           script: |
             set -e
             cd ${{ secrets.DEPLOY_PATH }}
-            git fetch origin main
-            git reset --hard origin/main
-
-            if [ -f requirements.txt ]; then
-              python3 -m pip install -r requirements.txt
+            if [ ! -x scripts/deploy_server.sh ]; then
+              chmod +x scripts/deploy_server.sh || true
             fi
-
-            RESTART_CMD='${{ secrets.DEPLOY_RESTART_CMD }}'
-            if [ -n "$RESTART_CMD" ]; then
-              eval "$RESTART_CMD"
-            fi
+            scripts/deploy_server.sh
