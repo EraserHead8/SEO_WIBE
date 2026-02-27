@@ -31,6 +31,7 @@ let adsRecLoadToken = 0;
 let salesRows = [];
 let salesChartRows = [];
 let salesLoadProgress = { active: false, total: 0, loaded: 0 };
+let salesLoadState = "idle";
 let salesLoadToken = 0;
 let salesAutoLoadTimer = null;
 let teamMembers = [];
@@ -1859,12 +1860,23 @@ function normalizeFeedbackPhotos(value) {
 
 function normalizeFeedbackRow(rawRow, rowType, idx, marketplace) {
   if (!rawRow || typeof rawRow !== "object") return null;
-  const rawId = rawRow.id ?? rawRow.feedback_id ?? rawRow.review_id ?? rawRow.question_id ?? rawRow.comment_id ?? "";
-  const id = String(rawId || "").trim() || `${marketplace || "row"}-${rowType}-${idx + 1}`;
+  const rawId = rawRow.id
+    ?? rawRow.feedbackId
+    ?? rawRow.feedback_id
+    ?? rawRow.reviewId
+    ?? rawRow.review_id
+    ?? rawRow.questionId
+    ?? rawRow.question_id
+    ?? rawRow.commentId
+    ?? rawRow.comment_id
+    ?? "";
+  const syntheticId = buildFeedbackSyntheticId(rawRow, marketplace);
+  const id = String(rawId || "").trim() || syntheticId || `${marketplace || "row"}-${rowType}-${idx + 1}`;
   return {
     ...rawRow,
     id,
     _type: rowType,
+    _marketplace: marketplace,
     date: normalizeFeedbackText(rawRow.date || ""),
     created_at: normalizeFeedbackText(rawRow.created_at || rawRow.date || ""),
     product: normalizeFeedbackText(rawRow.product || ""),
@@ -1875,6 +1887,82 @@ function normalizeFeedbackRow(rawRow, rowType, idx, marketplace) {
     user: normalizeFeedbackText(rawRow.user || ""),
     photos: normalizeFeedbackPhotos(rawRow.photos),
   };
+}
+
+function stableTextHash(value) {
+  const text = String(value || "");
+  let hash = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    hash = ((hash << 5) - hash + text.charCodeAt(i)) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+}
+
+function buildFeedbackSyntheticId(rawRow, marketplace = "") {
+  if (!rawRow || typeof rawRow !== "object") return "";
+  const parts = [
+    normalizeFeedbackText(rawRow.created_at || rawRow.createdAt || rawRow.createdDate || rawRow.date || ""),
+    normalizeFeedbackText(rawRow.product || rawRow.product_name || rawRow.productName || ""),
+    normalizeFeedbackText(rawRow.article || rawRow.offer_id || rawRow.offerId || ""),
+    normalizeFeedbackText(rawRow.barcode || ""),
+    normalizeFeedbackText(rawRow.user || rawRow.userName || rawRow.customerName || rawRow.author || ""),
+    normalizeFeedbackText(rawRow.stars ?? rawRow.rating ?? rawRow.productValuation ?? ""),
+    normalizeFeedbackText(rawRow.text || rawRow.question || rawRow.content || rawRow.message || ""),
+    normalizeFeedbackText(rawRow.answer || rawRow.answerText || rawRow.reply || ""),
+  ];
+  const fingerprint = parts.join("|").trim().toLowerCase();
+  if (!fingerprint || !fingerprint.replace(/\|/g, "")) return "";
+  return `${marketplace || "row"}-fb-${stableTextHash(fingerprint)}`;
+}
+
+function isFeedbackAnsweredRow(row) {
+  return Boolean(
+    row?.is_answered ||
+    row?._type === "answered" ||
+    String(row?.answer || "").trim()
+  );
+}
+
+function feedbackRowQuality(row) {
+  if (!row || typeof row !== "object") return 0;
+  let score = 0;
+  if (isFeedbackAnsweredRow(row)) score += 100;
+  score += Math.min(60, String(row.answer || "").trim().length);
+  score += Math.min(40, String(row.text || "").trim().length);
+  if (String(row.created_at || row.date || "").trim()) score += 8;
+  if (String(row.product || "").trim()) score += 5;
+  if (String(row.article || "").trim()) score += 3;
+  if (String(row.barcode || "").trim()) score += 2;
+  return score;
+}
+
+function dedupeFeedbackRows(rows) {
+  const out = new Map();
+  if (!Array.isArray(rows)) return [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const primaryId = String(row.id || "").trim();
+    const syntheticId = buildFeedbackSyntheticId(row, row._marketplace || "");
+    const key = primaryId || syntheticId;
+    if (!key) continue;
+    const prev = out.get(key);
+    if (!prev) {
+      out.set(key, row);
+      continue;
+    }
+    const keepCurrent = feedbackRowQuality(row) >= feedbackRowQuality(prev);
+    const base = keepCurrent ? prev : row;
+    const preferred = keepCurrent ? row : prev;
+    const merged = {
+      ...base,
+      ...preferred,
+      id: key,
+      is_answered: isFeedbackAnsweredRow(prev) || isFeedbackAnsweredRow(row),
+    };
+    merged._type = merged.is_answered ? "answered" : "new";
+    out.set(key, merged);
+  }
+  return [...out.values()];
 }
 
 async function loadWbReviews() {
@@ -1921,7 +2009,7 @@ async function loadWbReviews() {
       const normalized = normalizeFeedbackRow(row, "answered", idx, marketplace);
       if (normalized) incoming.push(normalized);
     });
-    wbReviewRows = incoming;
+    wbReviewRows = dedupeFeedbackRows(incoming);
     for (const row of wbReviewRows) {
       if (!row?.id) continue;
       const key = reviewDraftKey(marketplace, row.id);
@@ -2397,7 +2485,7 @@ async function loadWbQuestions() {
       const normalized = normalizeFeedbackRow(row, "answered", idx, marketplace);
       if (normalized) incoming.push(normalized);
     });
-    wbQuestionRows = incoming;
+    wbQuestionRows = dedupeFeedbackRows(incoming);
 
     for (const row of wbQuestionRows) {
       if (!row?.id) continue;
@@ -3480,10 +3568,16 @@ function updateSalesLoadStatus(message = "") {
     holder.textContent = "-";
     return;
   }
+  const state = salesLoadState || "idle";
+  const title = active
+    ? tr("Загрузка статистики продаж", "Loading sales statistics")
+    : (state === "error"
+      ? tr("Ошибка загрузки статистики продаж", "Sales statistics loading failed")
+      : (state === "partial"
+        ? tr("Статистика продаж загружена частично", "Sales statistics partially loaded")
+        : tr("Статистика продаж загружена", "Sales statistics loaded")));
   holder.innerHTML = buildLoadStatusHtml({
-    title: active
-      ? tr("Загрузка статистики продаж", "Loading sales statistics")
-      : tr("Статистика продаж загружена", "Sales statistics loaded"),
+    title,
     loaded,
     total,
     active,
@@ -4441,6 +4535,46 @@ function buildSalesChartFromRows(rows) {
   return [...dayMap.values()].sort((a, b) => String(a.date).localeCompare(String(b.date)));
 }
 
+function isSalesSourceWarningFatal(source, warnings = []) {
+  const safeWarnings = Array.isArray(warnings) ? warnings : [];
+  return safeWarnings.some((item) => {
+    const warning = String(item || "").toLowerCase();
+    if (!warning) return false;
+    if (warning.includes("ошибка загрузки статистики")) return true;
+    if (source === "wb") {
+      if (!warning.includes("wb")) return false;
+      if (warning.includes("кампаний много")) return false;
+      if (warning.includes("показаны кэшированные данные")) return false;
+      return (
+        warning.includes("ключ") ||
+        warning.includes("sales api") ||
+        warning.includes("429") ||
+        warning.includes("error") ||
+        warning.includes("недоступ")
+      );
+    }
+    if (!warning.includes("ozon")) return false;
+    return (
+      warning.includes("ключ") ||
+      warning.includes("client_id") ||
+      warning.includes("analytics api") ||
+      warning.includes("error") ||
+      warning.includes("недоступ")
+    );
+  });
+}
+
+function resolveSalesLoadProgress(market, rows, warnings = []) {
+  const selected = market === "all" ? ["wb", "ozon"] : [market];
+  const safeRows = Array.isArray(rows) ? rows : [];
+  let loaded = 0;
+  for (const source of selected) {
+    const hasRows = safeRows.some((row) => String(row?.marketplace || "").toLowerCase() === source);
+    if (hasRows || !isSalesSourceWarningFatal(source, warnings)) loaded += 1;
+  }
+  return { total: selected.length, loaded };
+}
+
 function renderSalesStats() {
   const tbody = document.getElementById("salesTable");
   const raw = document.getElementById("salesRaw");
@@ -4485,6 +4619,7 @@ async function loadSalesStats(retryAttempt = 0) {
     salesRows = [];
     salesChartRows = [];
     salesLoadProgress = { active: false, total: 0, loaded: 0 };
+    salesLoadState = "idle";
     updateSalesLoadStatus();
     renderSalesStats();
     return;
@@ -4505,6 +4640,7 @@ async function loadSalesStats(retryAttempt = 0) {
   salesRows = [];
   salesChartRows = [];
   renderSalesStats();
+  salesLoadState = "loading";
   salesLoadProgress = { active: true, total: market === "all" ? 2 : 1, loaded: 0 };
   updateSalesLoadStatus();
 
@@ -4528,6 +4664,7 @@ async function loadSalesStats(retryAttempt = 0) {
     if (runToken !== salesLoadToken) return;
     salesRows = [];
     salesChartRows = [];
+    salesLoadState = "error";
     salesLoadProgress = { active: false, total: market === "all" ? 2 : 1, loaded: 0 };
     updateSalesLoadStatus();
     renderSalesStats();
@@ -4565,6 +4702,7 @@ async function loadSalesStats(retryAttempt = 0) {
       total: market === "all" ? 2 : 1,
       loaded: 0,
     };
+    salesLoadState = "loading";
     updateSalesLoadStatus(tr("Повторный запрос статистики...", "Retrying sales request..."));
     await new Promise((resolve) => setTimeout(resolve, 1200));
     if (runToken !== salesLoadToken) return;
@@ -4579,7 +4717,15 @@ async function loadSalesStats(retryAttempt = 0) {
     const warnTxt = warnings.length ? ` ${warnings.join(" | ")}` : "";
     meta.textContent = `${totalTxt}${warnTxt}`;
   }
-  salesLoadProgress = { active: false, total: market === "all" ? 2 : 1, loaded: market === "all" ? 2 : 1 };
+  const progress = resolveSalesLoadProgress(market, salesRows, warnings);
+  salesLoadProgress = { active: false, total: progress.total, loaded: progress.loaded };
+  if (progress.total > 0 && progress.loaded === 0 && warnings.length) {
+    salesLoadState = "error";
+  } else if (progress.total > 0 && progress.loaded < progress.total) {
+    salesLoadState = "partial";
+  } else {
+    salesLoadState = "success";
+  }
   updateSalesLoadStatus();
   renderSalesStats();
   markModuleLoaded("sales");

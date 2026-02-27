@@ -1438,7 +1438,15 @@ def _normalize_review_row(row: dict[str, Any], is_answered: bool) -> dict[str, A
     )
     effective_answered = bool(is_answered or answer_text)
     return {
-        "id": str(row.get("id") or ""),
+        "id": _pick_first_str(
+            row.get("id"),
+            row.get("feedbackId"),
+            row.get("feedback_id"),
+            row.get("reviewId"),
+            row.get("review_id"),
+            row.get("commentId"),
+            row.get("comment_id"),
+        ),
         "date": created[:10] if created else "",
         "created_at": created,
         "product": str(product.get("productName") or product.get("nmId") or ""),
@@ -2197,17 +2205,131 @@ def _looks_answered_feedback(row: dict[str, Any]) -> bool:
 
 
 def _dedupe_review_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    by_id: dict[str, dict[str, Any]] = {}
+    by_key: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
     tail: list[dict[str, Any]] = []
     for row in rows:
         if not isinstance(row, dict):
             continue
-        rid = _pick_first_str(row.get("id"), row.get("feedbackId"), row.get("feedback_id"))
-        if not rid:
+        rid = _pick_first_str(
+            row.get("id"),
+            row.get("feedbackId"),
+            row.get("feedback_id"),
+            row.get("reviewId"),
+            row.get("review_id"),
+            row.get("questionId"),
+            row.get("question_id"),
+            row.get("commentId"),
+            row.get("comment_id"),
+        )
+        signature = _feedback_signature_key(row)
+        key = f"id:{rid}" if rid else (f"sig:{signature}" if signature else "")
+        if not key:
             tail.append(row)
             continue
-        by_id[rid] = row
-    return list(by_id.values()) + tail
+        prev = by_key.get(key)
+        if prev is None:
+            by_key[key] = row
+            order.append(key)
+            continue
+        if _feedback_row_score(row) >= _feedback_row_score(prev):
+            by_key[key] = row
+    return [by_key[key] for key in order] + tail
+
+
+def _feedback_signature_key(row: dict[str, Any]) -> str:
+    if not isinstance(row, dict):
+        return ""
+    product = row.get("productDetails") if isinstance(row.get("productDetails"), dict) else {}
+    created = _pick_first_str(
+        row.get("createdDate"),
+        row.get("createdAt"),
+        row.get("published_at"),
+        row.get("date"),
+    )
+    article = _pick_first_str(
+        row.get("article"),
+        row.get("nmId"),
+        row.get("offerId"),
+        product.get("nmId") if isinstance(product, dict) else "",
+    )
+    barcode = _pick_first_str(
+        row.get("barcode"),
+        product.get("barcode") if isinstance(product, dict) else "",
+        product.get("imtId") if isinstance(product, dict) else "",
+    )
+    user_name = _pick_first_str(
+        row.get("user"),
+        row.get("userName"),
+        row.get("customerName"),
+        row.get("buyerName"),
+        row.get("author"),
+        row.get("authorName"),
+    )
+    stars = _pick_first_str(row.get("stars"), row.get("rating"), row.get("score"), row.get("productValuation"))
+    text = _join_non_empty(
+        [
+            str(row.get("text") or "").strip(),
+            str(row.get("question") or "").strip(),
+            str(row.get("content") or "").strip(),
+            str(row.get("message") or "").strip(),
+            str(row.get("pros") or "").strip(),
+            str(row.get("cons") or "").strip(),
+        ]
+    )
+    answer = _extract_answer_text(
+        row.get("answer"),
+        row.get("answerText"),
+        row.get("supplierAnswer"),
+        row.get("sellerAnswer"),
+        row.get("response"),
+        row.get("reply"),
+    )
+    payload = "|".join(
+        [
+            created.strip().lower(),
+            article.strip().lower(),
+            barcode.strip().lower(),
+            user_name.strip().lower(),
+            stars.strip().lower(),
+            text.strip().lower(),
+            answer.strip().lower(),
+        ]
+    )
+    if not payload or not payload.replace("|", "").strip():
+        return ""
+    return payload[:520]
+
+
+def _feedback_row_score(row: dict[str, Any]) -> int:
+    if not isinstance(row, dict):
+        return 0
+    score = 0
+    if _looks_answered_feedback(row):
+        score += 100
+    answer = _extract_answer_text(
+        row.get("answer"),
+        row.get("answerText"),
+        row.get("supplierAnswer"),
+        row.get("sellerAnswer"),
+        row.get("response"),
+        row.get("reply"),
+    )
+    text = _join_non_empty(
+        [
+            str(row.get("text") or "").strip(),
+            str(row.get("question") or "").strip(),
+            str(row.get("content") or "").strip(),
+            str(row.get("message") or "").strip(),
+        ]
+    )
+    score += min(len(answer), 60)
+    score += min(len(text), 40)
+    if _pick_first_str(row.get("createdDate"), row.get("createdAt"), row.get("published_at"), row.get("date")):
+        score += 10
+    if _pick_first_str(row.get("user"), row.get("userName"), row.get("customerName"), row.get("author")):
+        score += 5
+    return score
 
 
 def _extract_ozon_review_rows(data: dict[str, Any] | list[dict[str, Any]]) -> list[dict[str, Any]]:
