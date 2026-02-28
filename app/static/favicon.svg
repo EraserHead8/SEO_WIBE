@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="SEO WIBE">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0a1b49"/>
+      <stop offset="100%" stop-color="#122a68"/>
+    </linearGradient>
+    <linearGradient id="rocket" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f6fbff"/>
+      <stop offset="100%" stop-color="#c7dbff"/>
+    </linearGradient>
+    <linearGradient id="flame" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffe27a"/>
+      <stop offset="100%" stop-color="#ff6c2f"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="24" fill="url(#bg)"/>
+  <circle cx="96" cy="28" r="5" fill="#ffd56b" opacity="0.9"/>
+  <circle cx="23" cy="34" r="2.5" fill="#ffffff" opacity="0.85"/>
+  <circle cx="35" cy="20" r="1.8" fill="#bcd0ff" opacity="0.8"/>
+  <path d="M48 88c12-18 24-28 36-32 3 10 1 23-7 37l-17-4z" fill="url(#flame)"/>
+  <path d="M36 84c0-20 20-52 46-52 8 0 13 4 13 12 0 26-32 46-52 46z" fill="url(#rocket)"/>
+  <path d="M64 31c4 4 6 11 6 18 0 18-12 33-27 39-2-2-3-4-3-7 0-18 12-42 24-50z" fill="#a8bfe8" opacity="0.45"/>
+  <circle cx="69" cy="54" r="8.5" fill="#2c61d8"/>
+  <circle cx="69" cy="54" r="4.2" fill="#a7deff"/>
+  <path d="M41 72l-10 4 7-11z" fill="#6a3ad7"/>
+  <path d="M58 93l-3 14 11-10z" fill="#6a3ad7"/>
+</svg>

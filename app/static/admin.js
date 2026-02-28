@@ -9,7 +9,7 @@ let adminAiGlobalState = null;
 let adminSelectedUserAiState = null;
 const adminUserProfileCache = new Map();
 
-const UI_THEMES = ["classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring", "japan", "greenland"];
+const UI_THEMES = ["classic", "dark", "light", "moon", "newyear", "summer", "autumn", "winter", "spring", "japan", "greenland"];
 const BILLING_PLAN_CODES = ["starter", "pro", "business"];
 
 let adminLang = (localStorage.getItem("admin_ui_lang") || "ru").toLowerCase() === "en" ? "en" : "ru";
@@ -56,6 +56,7 @@ const DEFAULT_MODULE_CODES = [
   "user_profile",
   "wb_reviews_ai",
   "wb_questions_ai",
+  "returns",
   "wb_ads",
   "wb_ads_analytics",
   "wb_ads_recommendations",
@@ -70,6 +71,7 @@ const TEAM_ACCESS_MODULES = [
   "sales_stats",
   "wb_reviews_ai",
   "wb_questions_ai",
+  "returns",
   "wb_ads",
   "wb_ads_analytics",
   "wb_ads_recommendations",
@@ -87,6 +89,7 @@ const MODULE_TITLES = {
   user_profile: { ru: "Профиль пользователя", en: "User profile" },
   wb_reviews_ai: { ru: "Отзывы и AI-ответы (WB/Ozon)", en: "Reviews and AI replies (WB/Ozon)" },
   wb_questions_ai: { ru: "Вопросы и AI-ответы (WB/Ozon)", en: "Questions and AI replies (WB/Ozon)" },
+  returns: { ru: "Возвраты WB/Ozon", en: "WB/Ozon returns" },
   wb_ads: { ru: "Реклама WB", en: "WB Ads" },
   wb_ads_analytics: { ru: "Аналитика рекламы WB", en: "WB Ads analytics" },
   wb_ads_recommendations: { ru: "Рекомендации WB Ads", en: "WB Ads recommendations" },
@@ -99,6 +102,7 @@ const THEME_LABELS = {
   classic: { ru: "Классика", en: "Classic" },
   dark: { ru: "Темная", en: "Dark" },
   light: { ru: "Светлая", en: "Light" },
+  moon: { ru: "Луна", en: "Moon" },
   newyear: { ru: "Новогодняя", en: "New Year" },
   summer: { ru: "Лето", en: "Summer" },
   autumn: { ru: "Осень", en: "Autumn" },
@@ -250,6 +254,7 @@ function applyAdminLanguage() {
     ["#adminTab-ai .panel:nth-of-type(2) .grid-6 button", aTr("Добавить AI пользователю", "Add AI for user")],
     ["#adminTab-appearance .panel h3", aTr("Оформление интерфейса", "UI appearance")],
     ["#adminThemeChoiceEnabled", aTr("Разрешить выбор темы пользователям", "Allow users to choose theme")],
+    ["#adminForceThemeEnabled", aTr("Принудительно применять тему всем", "Force this theme for all users")],
     ["#adminTab-appearance .grid-3 button", aTr("Сохранить оформление", "Save appearance")],
     ["#adminTab-appearance .hint", aTr("Разрешенные темы для выбора:", "Allowed themes:")],
     ["#adminTab-credentials .panel h3", aTr("API ключи пользователей", "User API keys")],
@@ -264,7 +269,17 @@ function applyAdminLanguage() {
     const el = document.querySelector(selector);
     if (!el) continue;
     if (el.tagName.toLowerCase() === "input") {
-      el.setAttribute("placeholder", value);
+      const input = el;
+      if (String(input.type || "").toLowerCase() === "checkbox") {
+        const label = input.closest("label");
+        if (label) {
+          label.textContent = "";
+          label.appendChild(input);
+          label.append(document.createTextNode(` ${value}`));
+        }
+      } else {
+        input.setAttribute("placeholder", value);
+      }
     } else if (el.tagName.toLowerCase() === "label") {
       const input = el.querySelector("input");
       el.textContent = "";
@@ -287,7 +302,16 @@ function applyAdminLanguage() {
   });
 
   document.querySelectorAll("#adminTab-audit thead th").forEach((th, idx) => {
-    const labels = [aTr("ID", "ID"), aTr("ВРЕМЯ", "TIME"), aTr("USER", "USER"), aTr("ДЕЙСТВИЕ", "ACTION"), aTr("ДЕТАЛИ", "DETAILS")];
+    const labels = [
+      aTr("ID", "ID"),
+      aTr("ВРЕМЯ", "TIME"),
+      aTr("АКТЕР", "ACTOR"),
+      aTr("МОДУЛЬ", "MODULE"),
+      aTr("ДЕЙСТВИЕ", "ACTION"),
+      aTr("СТАТУС", "STATUS"),
+      aTr("СУЩНОСТЬ", "ENTITY"),
+      aTr("ДЕТАЛИ", "DETAILS"),
+    ];
     th.textContent = labels[idx] || th.textContent;
   });
 
@@ -396,7 +420,13 @@ async function adminLogin() {
   await ensureAdminAuth();
 }
 
-function adminLogout() {
+async function adminLogout() {
+  if (adminToken) {
+    await adminRequest("/api/auth/logout", {
+      method: "POST",
+      headers: adminHeaders(),
+    }).catch(() => null);
+  }
   adminToken = "";
   adminMe = null;
   adminUsers = [];
@@ -419,7 +449,7 @@ async function ensureAdminAuth() {
   }
   const me = await adminRequest("/api/auth/me", { headers: adminHeaders() }).catch(() => null);
   if (!me || me.role !== "admin") {
-    adminLogout();
+    await adminLogout();
     alert(aTr("Доступ только для admin-пользователя", "Admin access only"));
     return;
   }
@@ -1469,24 +1499,30 @@ function renderAdminAuditTable() {
 
   const rows = adminAuditRows.filter((row) => {
     const action = String(row.action || "").toLowerCase();
+    const moduleCode = String(row.module_code || "").toLowerCase();
+    const entity = `${String(row.entity_type || "")} ${String(row.entity_id || "")}`.toLowerCase();
+    const status = String(row.status || "").toLowerCase();
     const details = String(row.details || "").toLowerCase();
+    const actor = `${String(row.actor_email || "")} ${String(row.actor_member_id ?? "")}`.toLowerCase();
     const uid = String(row.user_id ?? "").toLowerCase();
-    if (actionFilter && !action.includes(actionFilter)) return false;
-    if (textFilter && !(`${details} ${uid}`.includes(textFilter))) return false;
+    if (actionFilter && !`${action} ${moduleCode} ${entity} ${status}`.includes(actionFilter)) return false;
+    if (textFilter && !`${details} ${uid} ${actor} ${moduleCode} ${entity} ${status}`.includes(textFilter)) return false;
     return true;
   });
 
   if (meta) {
     const uniqueActions = new Set(rows.map((row) => String(row.action || "").trim()).filter(Boolean));
+    const uniqueModules = new Set(rows.map((row) => String(row.module_code || "").trim()).filter(Boolean));
+    const uniqueActors = new Set(rows.map((row) => String(row.actor_email || "").trim()).filter(Boolean));
     meta.textContent = aTr(
-      `Событий: ${rows.length}. Уникальных действий: ${uniqueActions.size}.`,
-      `Events: ${rows.length}. Unique actions: ${uniqueActions.size}.`
+      `Событий: ${rows.length}. Уникальных действий: ${uniqueActions.size}. Модулей: ${uniqueModules.size}. Актеров: ${uniqueActors.size}.`,
+      `Events: ${rows.length}. Unique actions: ${uniqueActions.size}. Modules: ${uniqueModules.size}. Actors: ${uniqueActors.size}.`
     );
   }
 
   if (!rows.length) {
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="5">${aTr("Записи аудита не найдены.", "No audit records.")}</td>`;
+    tr.innerHTML = `<td colspan="8">${aTr("Записи аудита не найдены.", "No audit records.")}</td>`;
     tbody.appendChild(tr);
     return;
   }
@@ -1496,16 +1532,32 @@ function renderAdminAuditTable() {
     const tr = document.createElement("tr");
     const parsed = parseAuditDetails(row.details);
     const userEmail = userMap.get(Number(row.user_id)) || "";
-    const userLabel = row.user_id ? `#${row.user_id}${userEmail ? ` ${userEmail}` : ""}` : "-";
+    const fallbackUserLabel = row.user_id ? `#${row.user_id}${userEmail ? ` ${userEmail}` : ""}` : "-";
+    const actorEmail = String(row.actor_email || "").trim();
+    const actorMemberId = Number(row.actor_member_id || 0);
+    const actorRole = row.actor_is_owner ? aTr("owner", "owner") : aTr("employee", "employee");
+    const actorLabel = actorEmail || fallbackUserLabel;
+    const actorMeta = actorMemberId > 0 ? `${aTr("member", "member")} #${actorMemberId} • ${actorRole}` : (row.user_id ? `user #${row.user_id}` : "-");
+    const moduleLabel = String(row.module_code || "").trim() || "-";
+    const statusLabel = String(row.status || "").trim() || "ok";
+    const entityType = String(row.entity_type || "").trim();
+    const entityId = String(row.entity_id || "").trim();
+    const entityLabel = (entityType || entityId) ? `${entityType || "-"}:${entityId || "-"}` : "-";
     const detailHtml = parsed.kv.length
-      ? `<div class="admin-audit-kv">${parsed.kv.map(([k, v]) => `<span><b>${escapeHtml(k)}</b>: ${escapeHtml(v)}</span>`).join("")}</div>`
-      : `<span class="hint">${escapeHtml(parsed.summary)}</span>`;
+      ? `<div class="admin-audit-kv">${parsed.kv.map(([k, v]) => `<span><b>${escapeHtml(k)}</b>: ${escapeHtml(v)}</span>`).join("")}
+          ${row.ip ? `<span><b>ip</b>: ${escapeHtml(String(row.ip))}</span>` : ""}
+          ${row.user_agent ? `<span><b>ua</b>: ${escapeHtml(String(row.user_agent))}</span>` : ""}
+        </div>`
+      : `<div class="admin-audit-kv"><span>${escapeHtml(parsed.summary)}</span>${row.ip ? `<span><b>ip</b>: ${escapeHtml(String(row.ip))}</span>` : ""}${row.user_agent ? `<span><b>ua</b>: ${escapeHtml(String(row.user_agent))}</span>` : ""}</div>`;
 
     tr.innerHTML = `
       <td>${row.id}</td>
       <td>${escapeHtml(formatDateTime(row.created_at))}</td>
-      <td>${escapeHtml(userLabel)}</td>
+      <td><div><b>${escapeHtml(actorLabel)}</b></div><div class="hint">${escapeHtml(actorMeta)}</div></td>
+      <td><span class="admin-chip">${escapeHtml(moduleLabel)}</span></td>
       <td><span class="admin-chip">${escapeHtml(String(row.action || "-"))}</span></td>
+      <td><span class="admin-chip">${escapeHtml(statusLabel)}</span></td>
+      <td>${escapeHtml(entityLabel)}</td>
       <td>${detailHtml}</td>
     `;
     tbody.appendChild(tr);
@@ -1528,18 +1580,20 @@ async function loadAdminAudit() {
 function renderAdminAppearance() {
   const rawEl = document.getElementById("adminUiSettingsRaw");
   const enabledEl = document.getElementById("adminThemeChoiceEnabled");
+  const forceEl = document.getElementById("adminForceThemeEnabled");
   const defaultEl = document.getElementById("adminDefaultThemeSelect");
   const allowedEl = document.getElementById("adminAllowedThemes");
-  if (!rawEl || !enabledEl || !defaultEl || !allowedEl) return;
+  if (!rawEl || !enabledEl || !forceEl || !defaultEl || !allowedEl) return;
 
   const payload = adminUiSettings && typeof adminUiSettings === "object"
     ? adminUiSettings
-    : { theme_choice_enabled: true, default_theme: "classic", allowed_themes: [...UI_THEMES] };
+    : { theme_choice_enabled: true, force_theme: false, default_theme: "classic", allowed_themes: [...UI_THEMES] };
   const allowed = Array.isArray(payload.allowed_themes)
     ? payload.allowed_themes.filter((x) => UI_THEMES.includes(String(x)))
     : [...UI_THEMES];
 
   enabledEl.checked = Boolean(payload.theme_choice_enabled);
+  forceEl.checked = Boolean(payload.force_theme);
   defaultEl.innerHTML = UI_THEMES.map((code) => `<option value="${code}">${escapeHtml(THEME_LABELS[code]?.[adminLang] || code)}</option>`).join("");
   defaultEl.value = UI_THEMES.includes(payload.default_theme) ? payload.default_theme : "classic";
 
@@ -1553,6 +1607,7 @@ function renderAdminAppearance() {
 
 async function adminSaveUiSettings() {
   const enabled = Boolean(document.getElementById("adminThemeChoiceEnabled")?.checked);
+  const forceTheme = Boolean(document.getElementById("adminForceThemeEnabled")?.checked);
   const defaultTheme = document.getElementById("adminDefaultThemeSelect")?.value || "classic";
   const allowed = [...document.querySelectorAll("#adminAllowedThemes [data-theme-code]")]
     .filter((el) => el.checked)
@@ -1560,6 +1615,7 @@ async function adminSaveUiSettings() {
     .filter((x) => UI_THEMES.includes(String(x)));
   const payload = {
     theme_choice_enabled: enabled,
+    force_theme: forceTheme,
     default_theme: defaultTheme,
     allowed_themes: allowed,
   };

@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.api.routes import router
-from app.background import seo_recheck_loop
+from app.background import seo_recheck_loop, wb_ads_snapshot_sync_loop
 from app.db import Base, engine, ensure_admin_emails, run_lightweight_migrations
 
 app = FastAPI(title="SEO WIBE")
@@ -32,6 +32,7 @@ async def on_startup():
     run_lightweight_migrations()
     ensure_admin_emails()
     asyncio.create_task(seo_recheck_loop())
+    asyncio.create_task(wb_ads_snapshot_sync_loop())
 
 
 @app.get("/", response_class=HTMLResponse)

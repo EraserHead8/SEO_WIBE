@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SEO WIBE Admin</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=20260227f" />
+  <link rel="apple-touch-icon" href="/static/favicon.svg?v=20260227f" />
   <link rel="stylesheet" href="/static/styles.css?v=20260227e" />
 </head>
 <body>
@@ -78,6 +80,7 @@
             <option value="classic">Классика</option>
             <option value="dark">Темная</option>
             <option value="light">Светлая</option>
+            <option value="moon">Луна</option>
             <option value="newyear">Новогодняя</option>
             <option value="summer">Лето</option>
             <option value="autumn">Осень</option>
@@ -239,6 +242,7 @@
           <h3>Оформление интерфейса</h3>
           <div class="grid-3">
             <label class="check"><input id="adminThemeChoiceEnabled" type="checkbox" /> Разрешить выбор темы пользователям</label>
+            <label class="check"><input id="adminForceThemeEnabled" type="checkbox" /> Принудительно применять тему всем</label>
             <select id="adminDefaultThemeSelect"></select>
             <button onclick="adminSaveUiSettings()">Сохранить оформление</button>
           </div>
@@ -289,7 +293,7 @@
           <div class="table-card">
             <table>
               <thead>
-                <tr><th>ID</th><th>Время</th><th>User</th><th>Действие</th><th>Детали</th></tr>
+                <tr><th>ID</th><th>Время</th><th>Actor</th><th>Module</th><th>Action</th><th>Status</th><th>Entity</th><th>Детали</th></tr>
               </thead>
               <tbody id="adminAuditTable"></tbody>
             </table>

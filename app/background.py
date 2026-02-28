@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
+import random
 
 from sqlalchemy import select
 
 from app.db import SessionLocal
 from app.models import ApiCredential, ModuleAccess, Product, SeoJob, User, UserKeyword
 from app.services.marketplace import find_competitors, resolve_wb_external_id, update_product_description
+from app.services.ads_cache import sync_wb_campaign_snapshots_for_all_users
 from app.services.seo import (
     build_seo_description,
     discover_keywords,
@@ -133,3 +135,15 @@ def _safe_known_position(value: int | None) -> int:
     if value > 500:
         return 501
     return int(value)
+
+
+async def wb_ads_snapshot_sync_loop():
+    while True:
+        await asyncio.sleep(3600 + random.randint(60, 180))
+        db = SessionLocal()
+        try:
+            sync_wb_campaign_snapshots_for_all_users(db)
+        except Exception:
+            db.rollback()
+        finally:
+            db.close()

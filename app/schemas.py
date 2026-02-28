@@ -223,6 +223,15 @@ class AuditLogOut(BaseModel):
     user_id: int | None
     action: str
     details: str
+    actor_email: str = ""
+    actor_member_id: int | None = None
+    actor_is_owner: bool = True
+    module_code: str = ""
+    entity_type: str = ""
+    entity_id: str = ""
+    status: str = "ok"
+    ip: str = ""
+    user_agent: str = ""
     created_at: datetime
 
 
@@ -256,6 +265,24 @@ class WbReviewReplyOut(BaseModel):
     message: str
 
 
+class ReturnActionIn(BaseModel):
+    id: str
+    action: str
+    comment: str = ""
+
+
+class ReturnActionOut(BaseModel):
+    ok: bool
+    message: str
+    id: str
+    action: str
+
+
+class ReturnsOut(BaseModel):
+    rows: list[dict[str, Any]]
+    warnings: list[str] = Field(default_factory=list)
+
+
 class ReviewAiSettingsIn(BaseModel):
     reply_mode: str = "manual"
     prompt: str = ""
@@ -280,6 +307,7 @@ class GenerateReviewReplyOut(BaseModel):
 class WbCampaignsOut(BaseModel):
     campaigns: list[dict[str, Any]]
     stats: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    meta: dict[str, Any] = Field(default_factory=dict)
 
 
 class WbCampaignEnrichOut(BaseModel):
@@ -432,29 +460,33 @@ class AiAssistantOut(BaseModel):
 
 class SalesStatsRowOut(BaseModel):
     date: str
+    bucket: str | None = None
     marketplace: str
     orders: int
     units: int
     revenue: float
     returns: int = 0
     ad_spend: float = 0.0
-    other_costs: float = 0.0
+    penalties: float = 0.0
 
 
 class SalesStatsPointOut(BaseModel):
     date: str
+    bucket: str | None = None
     orders: int
     units: int
     revenue: float
     returns: int = 0
     ad_spend: float = 0.0
-    other_costs: float = 0.0
+    penalties: float = 0.0
 
 
 class SalesStatsOut(BaseModel):
     marketplace: str
     date_from: str
     date_to: str
+    granularity: str = "day"
+    timezone: str = "UTC"
     rows: list[SalesStatsRowOut]
     chart: list[SalesStatsPointOut]
     totals: dict[str, float | int]
@@ -540,11 +572,13 @@ class AdminUserProfileOut(BaseModel):
 
 class UiSettingsOut(BaseModel):
     theme_choice_enabled: bool
+    force_theme: bool = False
     default_theme: str
     allowed_themes: list[str]
 
 
 class UiSettingsIn(BaseModel):
     theme_choice_enabled: bool = True
+    force_theme: bool = False
     default_theme: str = "classic"
-    allowed_themes: list[str] = Field(default_factory=lambda: ["classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring", "japan", "greenland"])
+    allowed_themes: list[str] = Field(default_factory=lambda: ["classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring", "japan", "greenland", "moon"])

@@ -47,6 +47,7 @@ class Product(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    owner_member_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     marketplace: Mapped[str] = mapped_column(String(30), index=True)
     article: Mapped[str] = mapped_column(String(120), index=True)
     external_id: Mapped[str] = mapped_column(String(120), default="", index=True)
@@ -72,6 +73,7 @@ class SeoJob(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    owner_member_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
     status: Mapped[str] = mapped_column(String(30), default="generated")
     generated_description: Mapped[str] = mapped_column(Text)
@@ -92,6 +94,7 @@ class UserKeyword(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    owner_member_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     marketplace: Mapped[str] = mapped_column(String(30), default="all", index=True)
     keyword: Mapped[str] = mapped_column(String(255), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -140,6 +143,7 @@ class UserKnowledgeDoc(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    owner_member_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     filename: Mapped[str] = mapped_column(String(255), default="")
     content_type: Mapped[str] = mapped_column(String(120), default="")
     content_text: Mapped[str] = mapped_column(Text, default="")
@@ -230,6 +234,15 @@ class AuditLog(Base):
     user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     action: Mapped[str] = mapped_column(String(120))
     details: Mapped[str] = mapped_column(Text, default="")
+    actor_email: Mapped[str] = mapped_column(String(255), default="")
+    actor_member_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    actor_is_owner: Mapped[bool] = mapped_column(Boolean, default=True)
+    module_code: Mapped[str] = mapped_column(String(80), default="")
+    entity_type: Mapped[str] = mapped_column(String(80), default="")
+    entity_id: Mapped[str] = mapped_column(String(120), default="")
+    status: Mapped[str] = mapped_column(String(24), default="ok")
+    ip: Mapped[str] = mapped_column(String(80), default="")
+    user_agent: Mapped[str] = mapped_column(String(500), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -282,4 +295,34 @@ class SystemSetting(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     key: Mapped[str] = mapped_column(String(80), unique=True, index=True)
     value: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class WbAdsCampaignSnapshot(Base):
+    __tablename__ = "wb_ads_campaign_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    campaign_id: Mapped[int] = mapped_column(Integer, index=True)
+    payload_json: Mapped[str] = mapped_column(Text, default="")
+    payload_hash: Mapped[str] = mapped_column(String(128), default="", index=True)
+    status: Mapped[str] = mapped_column(String(40), default="")
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class WorkItemClaim(Base):
+    __tablename__ = "work_item_claims"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    module_code: Mapped[str] = mapped_column(String(80), index=True)
+    marketplace: Mapped[str] = mapped_column(String(30), default="", index=True)
+    item_type: Mapped[str] = mapped_column(String(60), default="", index=True)
+    item_external_id: Mapped[str] = mapped_column(String(180), default="", index=True)
+    owner_member_id: Mapped[int] = mapped_column(Integer, index=True)
+    claimed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

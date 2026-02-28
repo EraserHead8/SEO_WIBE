@@ -7,6 +7,7 @@ DEFAULT_MODULES = [
     "user_profile",
     "wb_reviews_ai",
     "wb_questions_ai",
+    "returns",
     "wb_ads",
     "wb_ads_analytics",
     "wb_ads_recommendations",

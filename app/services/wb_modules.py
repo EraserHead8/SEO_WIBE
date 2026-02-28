@@ -1514,14 +1514,19 @@ def _request_wb_json(
     auth_values = auth_variants or [token, f"Bearer {token}"]
     safe_attempts = max(1, int(max_attempts or 1))
     timeout_cfg = timeout or WB_TIMEOUT
+    method_up = str(method or "GET").upper()
     for auth_value in auth_values:
         headers = {"Authorization": auth_value, "Content-Type": "application/json"}
         for attempt in range(safe_attempts):
             response = None
             try:
                 with httpx.Client(timeout=timeout_cfg, follow_redirects=True) as client:
-                    if method == "POST":
+                    if method_up == "POST":
                         response = client.post(url, headers=headers, params=params, json=payload)
+                    elif method_up == "PATCH":
+                        response = client.patch(url, headers=headers, params=params, json=payload)
+                    elif method_up == "PUT":
+                        response = client.put(url, headers=headers, params=params, json=payload)
                     else:
                         response = client.get(url, headers=headers, params=params)
             except Exception:
@@ -2799,3 +2804,350 @@ def _is_truthy(value: Any) -> bool:
     if isinstance(value, str):
         return value.strip().lower() in {"true", "1", "yes", "y", "ok"}
     return False
+
+
+def fetch_wb_returns(
+    api_key: str,
+    status: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    limit: int = 200,
+) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit or 1), 500))
+    payloads: list[dict[str, Any]] = [
+        {"limit": safe_limit},
+        {"take": safe_limit, "skip": 0},
+        {"is_archive": False, "limit": safe_limit},
+    ]
+    if status:
+        for pl in payloads:
+            pl["status"] = status
+    rows: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    for endpoint in (
+        "https://marketplace-api.wildberries.ru/api/v1/claims",
+        "https://supplies-api.wildberries.ru/api/v1/claims",
+    ):
+        for payload in payloads:
+            data = _request_wb_json("POST", endpoint, api_key=api_key, payload=payload, auth_variants=[api_key.strip(), f"Bearer {api_key.strip()}"])
+            if data is None:
+                continue
+            parsed = _extract_first_dict_list(data, preferred_keys=("claims", "items", "data", "result", "list"))
+            if parsed:
+                rows = parsed
+                break
+            if isinstance(data, dict):
+                single_id = _pick_first_str(data.get("id"), data.get("claim_id"), data.get("claimId"))
+                if single_id:
+                    rows = [data]
+                    break
+        if rows:
+            break
+    normalized = [_normalize_wb_return_row(x) for x in rows if isinstance(x, dict)]
+    normalized = _filter_rows_by_period(normalized, date_from=date_from, date_to=date_to)
+    return {"rows": normalized, "warnings": warnings}
+
+
+def fetch_wb_return_details(api_key: str, claim_id: str) -> dict[str, Any] | None:
+    rid = str(claim_id or "").strip()
+    if not rid:
+        return None
+    endpoints = (
+        "https://marketplace-api.wildberries.ru/api/v1/claim",
+        "https://supplies-api.wildberries.ru/api/v1/claim",
+        "https://marketplace-api.wildberries.ru/api/v1/claims",
+    )
+    for endpoint in endpoints:
+        for method, params, payload in (
+            ("GET", {"id": rid}, None),
+            ("GET", {"claimId": rid}, None),
+            ("POST", None, {"id": rid}),
+            ("POST", None, {"claim_id": rid}),
+            ("POST", None, {"claimId": rid}),
+        ):
+            data = _request_wb_json(method, endpoint, api_key=api_key, params=params, payload=payload, auth_variants=[api_key.strip(), f"Bearer {api_key.strip()}"])
+            if data is None:
+                continue
+            if isinstance(data, dict):
+                candidate = data.get("claim") if isinstance(data.get("claim"), dict) else data
+                cid = _pick_first_str(candidate.get("id"), candidate.get("claim_id"), candidate.get("claimId"))
+                if cid and cid == rid:
+                    return _normalize_wb_return_row(candidate)
+                rows = _extract_first_dict_list(data, preferred_keys=("claims", "items", "data", "result", "list"))
+                for row in rows:
+                    if _pick_first_str(row.get("id"), row.get("claim_id"), row.get("claimId")) == rid:
+                        return _normalize_wb_return_row(row)
+            if isinstance(data, list):
+                for row in data:
+                    if isinstance(row, dict) and _pick_first_str(row.get("id"), row.get("claim_id"), row.get("claimId")) == rid:
+                        return _normalize_wb_return_row(row)
+    return None
+
+
+def action_wb_return(api_key: str, claim_id: str, action: str, comment: str = "") -> tuple[bool, str, dict[str, Any] | None]:
+    rid = str(claim_id or "").strip()
+    if not rid:
+        return False, "Не указан ID заявки на возврат", None
+    op = str(action or "").strip().lower()
+    if op not in {"approve", "accept", "reject", "decline", "comment"}:
+        return False, "Недопустимое действие возврата", None
+
+    mapped = "approve" if op in {"approve", "accept"} else ("reject" if op in {"reject", "decline"} else "comment")
+    payloads: list[dict[str, Any]] = [
+        {"id": rid, "action": mapped, "comment": comment or ""},
+        {"claim_id": rid, "status": mapped, "comment": comment or ""},
+        {"claimId": rid, "status": mapped, "comment": comment or ""},
+    ]
+    endpoints = (
+        "https://marketplace-api.wildberries.ru/api/v1/claim/action",
+        "https://marketplace-api.wildberries.ru/api/v1/claims/action",
+        "https://supplies-api.wildberries.ru/api/v1/claim/action",
+    )
+    last_error = "WB API возвратов недоступен"
+    for endpoint in endpoints:
+        for payload in payloads:
+            response = _request_wb_json("PATCH", endpoint, api_key=api_key, payload=payload, auth_variants=[api_key.strip(), f"Bearer {api_key.strip()}"])
+            if response is not None:
+                return True, "Действие по возврату отправлено", response if isinstance(response, dict) else {"raw": response}
+    return False, last_error, None
+
+
+def fetch_ozon_ads_campaigns(api_key: str, limit: int = 200) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit or 1), 500))
+    warnings: list[str] = []
+    rows: list[dict[str, Any]] = []
+    payloads: list[dict[str, Any]] = [
+        {"limit": safe_limit, "offset": 0},
+        {"page": 1, "page_size": min(safe_limit, 100)},
+    ]
+    endpoints = (
+        "https://performance.ozon.ru:443/api/client/campaign",
+        "https://api-seller.ozon.ru/v1/advertising/campaign/list",
+        "https://api-seller.ozon.ru/v2/advertising/campaign/list",
+    )
+    for endpoint in endpoints:
+        for payload in payloads:
+            data = _request_ozon_json("POST", endpoint, api_key=api_key, payload=payload)
+            if data is None:
+                continue
+            parsed = _extract_first_dict_list(data, preferred_keys=("campaigns", "items", "list", "data", "result"))
+            if parsed:
+                rows = parsed
+                break
+        if rows:
+            break
+    if not rows:
+        warnings.append("Ozon Ads API не вернул список кампаний (возможны ограничения ключа).")
+    normalized = [_normalize_ozon_ads_campaign_row(x) for x in rows if isinstance(x, dict)]
+    return {"rows": normalized, "warnings": warnings}
+
+
+def fetch_ozon_ads_analytics(
+    api_key: str,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    campaign_id: int | None = None,
+) -> dict[str, Any]:
+    left = _parse_iso_date(date_from) or (date.today() - timedelta(days=6))
+    right = _parse_iso_date(date_to) or date.today()
+    if left > right:
+        left, right = right, left
+    payloads: list[dict[str, Any]] = [
+        {"date_from": left.isoformat(), "date_to": right.isoformat(), "campaign_id": campaign_id},
+        {"from": left.isoformat(), "to": right.isoformat(), "campaign_id": campaign_id},
+    ]
+    warnings: list[str] = []
+    rows: list[dict[str, Any]] = []
+    for endpoint in (
+        "https://performance.ozon.ru:443/api/client/statistics/campaign",
+        "https://api-seller.ozon.ru/v1/advertising/statistics",
+    ):
+        for payload in payloads:
+            data = _request_ozon_json("POST", endpoint, api_key=api_key, payload=payload)
+            if data is None:
+                continue
+            parsed = _extract_first_dict_list(data, preferred_keys=("rows", "campaigns", "items", "data", "result", "list"))
+            if parsed:
+                rows = parsed
+                break
+        if rows:
+            break
+    if not rows:
+        warnings.append("Ozon Ads аналитика недоступна по текущему ключу.")
+    out_rows = [_normalize_ozon_ads_analytics_row(x) for x in rows if isinstance(x, dict)]
+    if campaign_id and int(campaign_id or 0) > 0:
+        out_rows = [x for x in out_rows if int(x.get("campaign_id") or 0) == int(campaign_id)]
+    totals = {
+        "views": float(round(sum(float(x.get("views") or 0.0) for x in out_rows), 3)),
+        "clicks": float(round(sum(float(x.get("clicks") or 0.0) for x in out_rows), 3)),
+        "orders": float(round(sum(float(x.get("orders") or 0.0) for x in out_rows), 3)),
+        "spent": float(round(sum(float(x.get("spent") or 0.0) for x in out_rows), 3)),
+        "ctr_avg": float(round((sum(float(x.get("ctr") or 0.0) for x in out_rows) / len(out_rows)) if out_rows else 0.0, 4)),
+        "cr_avg": float(round((sum(float(x.get("cr") or 0.0) for x in out_rows) / len(out_rows)) if out_rows else 0.0, 4)),
+    }
+    return {
+        "date_from": left.isoformat(),
+        "date_to": right.isoformat(),
+        "rows": out_rows,
+        "totals": totals,
+        "warnings": warnings,
+    }
+
+
+def fetch_ozon_returns(
+    api_key: str,
+    status: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    limit: int = 200,
+) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit or 1), 500))
+    warnings: list[str] = []
+    rows: list[dict[str, Any]] = []
+    payloads: list[dict[str, Any]] = [
+        {
+            "filter": {
+                "status": status or "",
+                "date_from": date_from or "",
+                "date_to": date_to or "",
+            },
+            "limit": safe_limit,
+            "offset": 0,
+        },
+        {"limit": safe_limit, "offset": 0},
+    ]
+    for endpoint in (
+        "https://api-seller.ozon.ru/v1/returns/company/fbs",
+        "https://api-seller.ozon.ru/v1/returns/list",
+    ):
+        for payload in payloads:
+            data = _request_ozon_json("POST", endpoint, api_key=api_key, payload=payload)
+            if data is None:
+                continue
+            parsed = _extract_first_dict_list(data, preferred_keys=("returns", "items", "list", "data", "result"))
+            if parsed:
+                rows = parsed
+                break
+        if rows:
+            break
+    if not rows:
+        warnings.append("Ozon returns API не вернул данные (staged режим).")
+    normalized = [_normalize_ozon_return_row(x) for x in rows if isinstance(x, dict)]
+    normalized = _filter_rows_by_period(normalized, date_from=date_from, date_to=date_to)
+    return {"rows": normalized, "warnings": warnings}
+
+
+def fetch_ozon_return_details(api_key: str, return_id: str) -> dict[str, Any] | None:
+    rid = str(return_id or "").strip()
+    if not rid:
+        return None
+    payloads = [
+        {"return_id": rid},
+        {"id": rid},
+    ]
+    for endpoint in (
+        "https://api-seller.ozon.ru/v1/returns/company/fbs/info",
+        "https://api-seller.ozon.ru/v1/returns/info",
+    ):
+        for payload in payloads:
+            data = _request_ozon_json("POST", endpoint, api_key=api_key, payload=payload)
+            if data is None:
+                continue
+            if isinstance(data, dict):
+                candidate = data.get("result") if isinstance(data.get("result"), dict) else data
+                cid = _pick_first_str(candidate.get("id"), candidate.get("return_id"), candidate.get("returnId"))
+                if cid and cid == rid:
+                    return _normalize_ozon_return_row(candidate)
+            rows = _extract_first_dict_list(data, preferred_keys=("returns", "items", "list", "data", "result"))
+            for row in rows:
+                if _pick_first_str(row.get("id"), row.get("return_id"), row.get("returnId")) == rid:
+                    return _normalize_ozon_return_row(row)
+    return None
+
+
+def _normalize_wb_return_row(row: dict[str, Any]) -> dict[str, Any]:
+    claim_id = _pick_first_str(row.get("id"), row.get("claim_id"), row.get("claimId"), row.get("return_id"))
+    status = _pick_first_str(row.get("status"), row.get("state"), row.get("claim_status"), row.get("claimState")) or "-"
+    created = _pick_first_str(row.get("created_at"), row.get("createdAt"), row.get("date"), row.get("dt"))
+    product = _pick_first_str(row.get("product_name"), row.get("name"), row.get("subject"), row.get("title"), "WB возврат")
+    article = _pick_first_str(row.get("article"), row.get("offer_id"), row.get("nm_id"), row.get("nmId"))
+    reason = _pick_first_str(row.get("reason"), row.get("description"), row.get("comment"), row.get("text"))
+    photos = _extract_photo_urls(row.get("photos"), row.get("images"), row.get("photo"), row.get("photo_urls"), row.get("media"))
+    return {
+        "id": claim_id,
+        "date": created[:10] if created else "",
+        "created_at": created,
+        "marketplace": "wb",
+        "status": status,
+        "product": product,
+        "article": article,
+        "reason": reason,
+        "description": reason,
+        "photos": photos,
+        "raw": row,
+    }
+
+
+def _normalize_ozon_return_row(row: dict[str, Any]) -> dict[str, Any]:
+    rid = _pick_first_str(row.get("id"), row.get("return_id"), row.get("returnId"))
+    status = _pick_first_str(row.get("status"), row.get("state"), row.get("return_status")) or "-"
+    created = _pick_first_str(row.get("created_at"), row.get("createdAt"), row.get("date"), row.get("posting_date"))
+    product = _pick_first_str(row.get("product_name"), row.get("name"), row.get("title"), "Ozon возврат")
+    article = _pick_first_str(row.get("offer_id"), row.get("article"), row.get("sku"), row.get("product_id"))
+    reason = _pick_first_str(row.get("reason"), row.get("description"), row.get("comment"), row.get("text"))
+    photos = _extract_photo_urls(row.get("photos"), row.get("images"), row.get("photo"), row.get("photo_urls"), row.get("media"))
+    return {
+        "id": rid,
+        "date": created[:10] if created else "",
+        "created_at": created,
+        "marketplace": "ozon",
+        "status": status,
+        "product": product,
+        "article": article,
+        "reason": reason,
+        "description": reason,
+        "photos": photos,
+        "raw": row,
+    }
+
+
+def _normalize_ozon_ads_campaign_row(row: dict[str, Any]) -> dict[str, Any]:
+    cid = _to_int(_pick_first_str(row.get("id"), row.get("campaign_id"), row.get("campaignId"), row.get("advertId"))) or 0
+    name = _pick_first_str(row.get("name"), row.get("title"), row.get("campaign_name"), f"Ozon {cid}" if cid else "Ozon campaign")
+    status = _pick_first_str(row.get("status"), row.get("state"), row.get("campaign_status")) or "-"
+    ctype = _pick_first_str(row.get("type"), row.get("campaign_type"), row.get("adType")) or "-"
+    budget = _pick_first_str(row.get("budget"), row.get("daily_budget"), row.get("sum")) or "-"
+    return {
+        "campaign_id": cid,
+        "name": name,
+        "status": status,
+        "type": ctype,
+        "budget": budget,
+    }
+
+
+def _normalize_ozon_ads_analytics_row(row: dict[str, Any]) -> dict[str, Any]:
+    cid = _to_int(_pick_first_str(row.get("campaign_id"), row.get("campaignId"), row.get("id"), row.get("advertId"))) or 0
+    views = float(_to_float(row.get("views")) or _to_float(row.get("impressions")) or 0.0)
+    clicks = float(_to_float(row.get("clicks")) or 0.0)
+    orders = float(_to_float(row.get("orders")) or _to_float(row.get("orders_count")) or 0.0)
+    spent = float(_to_float(row.get("spent")) or _to_float(row.get("cost")) or _to_float(row.get("sum")) or 0.0)
+    ctr = float(_to_float(row.get("ctr")) or ((clicks / views * 100.0) if views > 0 else 0.0))
+    cr = float(_to_float(row.get("cr")) or ((orders / clicks * 100.0) if clicks > 0 else 0.0))
+    cpc = float(_to_float(row.get("cpc")) or ((spent / clicks) if clicks > 0 else 0.0))
+    cpo = float(_to_float(row.get("cpo")) or ((spent / orders) if orders > 0 else 0.0))
+    return {
+        "campaign_id": cid,
+        "name": _pick_first_str(row.get("name"), row.get("title"), row.get("campaign_name"), f"Ozon {cid}" if cid else "Ozon campaign"),
+        "status": _pick_first_str(row.get("status"), row.get("state"), row.get("campaign_status")) or "-",
+        "type": _pick_first_str(row.get("type"), row.get("campaign_type"), row.get("adType")) or "-",
+        "budget": _pick_first_str(row.get("budget"), row.get("daily_budget"), row.get("sum")) or "-",
+        "views": float(round(views, 3)),
+        "clicks": float(round(clicks, 3)),
+        "orders": float(round(orders, 3)),
+        "spent": float(round(spent, 3)),
+        "ctr": float(round(ctr, 4)),
+        "cr": float(round(cr, 4)),
+        "cpc": float(round(cpc, 4)),
+        "cpo": float(round(cpo, 4)),
+    }

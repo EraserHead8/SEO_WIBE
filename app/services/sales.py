@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta
 import math
 import time
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 from app.services.wb_modules import fetch_wb_campaign_stats_bulk, fetch_wb_campaigns
@@ -32,6 +33,8 @@ def build_sales_report(
     date_to: date,
     wb_api_key: str = "",
     ozon_api_key: str = "",
+    granularity: str = "auto",
+    timezone: str = "UTC",
 ) -> dict[str, Any]:
     selected = (marketplace or "all").strip().lower()
     if selected not in {"all", "wb", "ozon"}:
@@ -53,6 +56,7 @@ def build_sales_report(
             ozon_rows, ozon_warn = _fetch_ozon_sales_rows(ozon_api_key.strip(), date_from=date_from, date_to=date_to)
             collected.extend(ozon_rows)
             warnings.extend(ozon_warn)
+            warnings.append("Ozon penalties недоступны по текущему API: используем 0.")
         else:
             warnings.append("Ozon ключ не подключен.")
 
@@ -71,18 +75,26 @@ def build_sales_report(
                     wb_ad_spend_by_day[days[-1].isoformat()] = round(wb_ad_spend_by_day.get(days[-1].isoformat(), 0.0) + drift, 2)
 
     rows = _aggregate_rows(collected, wb_ad_spend_by_day=wb_ad_spend_by_day)
-    chart = _build_chart(rows)
+    resolved_granularity = _resolve_granularity(granularity, date_from, date_to)
+    chart = _build_chart(rows, source_rows=collected, granularity=resolved_granularity, date_from=date_from, date_to=date_to, timezone=timezone)
     totals = {
         "orders": int(sum(int(x.get("orders") or 0) for x in rows)),
         "units": int(sum(int(x.get("units") or 0) for x in rows)),
         "revenue": float(round(sum(float(x.get("revenue") or 0.0) for x in rows), 2)),
         "returns": int(sum(int(x.get("returns") or 0) for x in rows)),
         "ad_spend": float(round(sum(float(x.get("ad_spend") or 0.0) for x in rows), 2)),
-        "other_costs": float(round(sum(float(x.get("other_costs") or 0.0) for x in rows), 2)),
+        "penalties": float(round(sum(float(x.get("penalties") or 0.0) for x in rows), 2)),
         "days": len({str(x.get("date") or "") for x in rows}),
     }
-    totals["gross_profit"] = float(round(float(totals["revenue"]) - float(totals["ad_spend"]) - float(totals["other_costs"]), 2))
-    return {"rows": rows, "chart": chart, "totals": totals, "warnings": warnings}
+    totals["gross_profit"] = float(round(float(totals["revenue"]) - float(totals["ad_spend"]) - float(totals["penalties"]), 2))
+    return {
+        "rows": rows,
+        "chart": chart,
+        "totals": totals,
+        "warnings": warnings,
+        "granularity": resolved_granularity,
+        "timezone": timezone,
+    }
 
 
 def _fetch_wb_sales_rows(api_key: str, date_from: date, date_to: date) -> tuple[list[dict[str, Any]], list[str]]:
@@ -173,26 +185,28 @@ def _fetch_wb_sales_rows(api_key: str, date_from: date, date_to: date) -> tuple[
                 rows.append(
                     {
                         "date": day.isoformat(),
+                        "occurred_at": str(item.get("date") or item.get("saleDate") or item.get("lastChangeDate") or ""),
                         "marketplace": "wb",
                         "orders": 0,
                         "units": 0,
                         "revenue": 0.0,
                         "returns": units,
                         "ad_spend": 0.0,
-                        "other_costs": safe_revenue,
+                        "penalties": safe_revenue,
                     }
                 )
                 continue
             rows.append(
                 {
                     "date": day.isoformat(),
+                    "occurred_at": str(item.get("date") or item.get("saleDate") or item.get("lastChangeDate") or ""),
                     "marketplace": "wb",
                     "orders": 1,
                     "units": units,
                     "revenue": safe_revenue,
                     "returns": 0,
                     "ad_spend": 0.0,
-                    "other_costs": 0.0,
+                    "penalties": 0.0,
                 }
             )
 
@@ -272,13 +286,14 @@ def _fetch_ozon_sales_rows(api_key: str, date_from: date, date_to: date) -> tupl
         rows.append(
             {
                 "date": day.isoformat(),
+                "occurred_at": str(item.get("date") or item.get("day") or ""),
                 "marketplace": "ozon",
                 "orders": orders,
                 "units": units,
                 "revenue": revenue,
                 "returns": 0,
                 "ad_spend": 0.0,
-                "other_costs": 0.0,
+                "penalties": 0.0,
             }
         )
     return rows, warnings
@@ -303,7 +318,7 @@ def _aggregate_rows(rows: list[dict[str, Any]], wb_ad_spend_by_day: dict[str, fl
                 "revenue": 0.0,
                 "returns": 0,
                 "ad_spend": 0.0,
-                "other_costs": 0.0,
+                "penalties": 0.0,
             },
         )
         row["orders"] += int(item.get("orders") or 0)
@@ -311,7 +326,7 @@ def _aggregate_rows(rows: list[dict[str, Any]], wb_ad_spend_by_day: dict[str, fl
         row["revenue"] = float(round(float(row["revenue"]) + float(item.get("revenue") or 0.0), 2))
         row["returns"] += int(item.get("returns") or 0)
         row["ad_spend"] = float(round(float(row["ad_spend"]) + float(item.get("ad_spend") or 0.0), 2))
-        row["other_costs"] = float(round(float(row["other_costs"]) + float(item.get("other_costs") or 0.0), 2))
+        row["penalties"] = float(round(float(row["penalties"]) + float(item.get("penalties") or 0.0), 2))
     if ad_map:
         for row in bucket.values():
             if str(row.get("marketplace") or "").lower() != "wb":
@@ -323,22 +338,103 @@ def _aggregate_rows(rows: list[dict[str, Any]], wb_ad_spend_by_day: dict[str, fl
     return out
 
 
-def _build_chart(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _build_chart(
+    rows: list[dict[str, Any]],
+    *,
+    source_rows: list[dict[str, Any]] | None = None,
+    granularity: str = "day",
+    date_from: date | None = None,
+    date_to: date | None = None,
+    timezone: str = "UTC",
+) -> list[dict[str, Any]]:
+    if granularity == "hour":
+        return _build_chart_hour(source_rows or rows, date_from=date_from, date_to=date_to, timezone=timezone)
     bucket: dict[str, dict[str, Any]] = {}
     for item in rows:
         day = str(item.get("date") or "")
         if not day:
             continue
-        row = bucket.setdefault(day, {"date": day, "orders": 0, "units": 0, "revenue": 0.0, "returns": 0, "ad_spend": 0.0, "other_costs": 0.0})
+        row = bucket.setdefault(day, {"date": day, "bucket": day, "orders": 0, "units": 0, "revenue": 0.0, "returns": 0, "ad_spend": 0.0, "penalties": 0.0})
         row["orders"] += int(item.get("orders") or 0)
         row["units"] += int(item.get("units") or 0)
         row["revenue"] = float(round(float(row["revenue"]) + float(item.get("revenue") or 0.0), 2))
         row["returns"] += int(item.get("returns") or 0)
         row["ad_spend"] = float(round(float(row["ad_spend"]) + float(item.get("ad_spend") or 0.0), 2))
-        row["other_costs"] = float(round(float(row["other_costs"]) + float(item.get("other_costs") or 0.0), 2))
+        row["penalties"] = float(round(float(row["penalties"]) + float(item.get("penalties") or 0.0), 2))
     out = list(bucket.values())
     out.sort(key=lambda x: str(x.get("date") or ""))
     return out
+
+
+def _resolve_granularity(value: str, date_from: date, date_to: date) -> str:
+    code = str(value or "auto").strip().lower()
+    if code == "hour":
+        return "hour"
+    if code == "day":
+        return "day"
+    return "hour" if date_from == date_to else "day"
+
+
+def _build_chart_hour(
+    rows: list[dict[str, Any]],
+    *,
+    date_from: date | None,
+    date_to: date | None,
+    timezone: str,
+) -> list[dict[str, Any]]:
+    left = date_from or date.today()
+    right = date_to or left
+    if left > right:
+        left, right = right, left
+    day = left
+    try:
+        tzinfo = ZoneInfo(str(timezone or "UTC"))
+    except Exception:
+        tzinfo = ZoneInfo("UTC")
+
+    buckets: dict[int, dict[str, Any]] = {
+        hour: {
+            "date": day.isoformat(),
+            "bucket": f"{day.isoformat()} {hour:02d}:00",
+            "orders": 0,
+            "units": 0,
+            "revenue": 0.0,
+            "returns": 0,
+            "ad_spend": 0.0,
+            "penalties": 0.0,
+        }
+        for hour in range(24)
+    }
+
+    for item in rows:
+        hour = _row_to_hour_bucket(item, tzinfo=tzinfo)
+        row_day = _parse_any_date(item.get("date") or item.get("occurred_at"))
+        if row_day is None:
+            row_day = day
+        if row_day < left or row_day > right:
+            continue
+        bucket = buckets.get(hour)
+        if not bucket:
+            continue
+        bucket["orders"] += int(item.get("orders") or 0)
+        bucket["units"] += int(item.get("units") or 0)
+        bucket["revenue"] = float(round(float(bucket["revenue"]) + float(item.get("revenue") or 0.0), 2))
+        bucket["returns"] += int(item.get("returns") or 0)
+        bucket["ad_spend"] = float(round(float(bucket["ad_spend"]) + float(item.get("ad_spend") or 0.0), 2))
+        bucket["penalties"] = float(round(float(bucket["penalties"]) + float(item.get("penalties") or 0.0), 2))
+
+    return [buckets[x] for x in range(24)]
+
+
+def _row_to_hour_bucket(item: dict[str, Any], tzinfo: ZoneInfo) -> int:
+    raw = item.get("occurred_at") or item.get("datetime") or item.get("created_at") or item.get("date")
+    dt = _parse_any_datetime(raw)
+    if dt is None:
+        return 12
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+    local = dt.astimezone(tzinfo)
+    return int(local.hour)
 
 
 def _fetch_wb_ad_spent_total(api_key: str, date_from: date, date_to: date) -> tuple[float, list[str]]:
@@ -486,26 +582,28 @@ def _fetch_wb_sales_rows_report_detail(api_key: str, date_from: date, date_to: d
             rows.append(
                 {
                     "date": day.isoformat(),
+                    "occurred_at": str(item.get("sale_dt") or item.get("saleDt") or item.get("order_dt") or item.get("rr_dt") or ""),
                     "marketplace": "wb",
                     "orders": 0,
                     "units": 0,
                     "revenue": 0.0,
                     "returns": units,
-                    "ad_spend": 0.0,
-                    "other_costs": return_amount if return_amount > 0 else safe_revenue,
-                }
-            )
-            continue
+                "ad_spend": 0.0,
+                "penalties": return_amount if return_amount > 0 else safe_revenue,
+            }
+        )
+        continue
         rows.append(
             {
                 "date": day.isoformat(),
+                "occurred_at": str(item.get("sale_dt") or item.get("saleDt") or item.get("order_dt") or item.get("rr_dt") or ""),
                 "marketplace": "wb",
                 "orders": 1,
                 "units": units,
                 "revenue": safe_revenue,
                 "returns": 0,
                 "ad_spend": 0.0,
-                "other_costs": 0.0,
+                "penalties": 0.0,
             }
         )
     if not rows:
@@ -675,6 +773,26 @@ def _parse_any_date(value: Any) -> date | None:
             return datetime.strptime(chunk, fmt).date()
         except Exception:
             continue
+    return None
+
+
+def _parse_any_datetime(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except Exception:
+        pass
+    for candidate in (text, text[:19], text[:16]):
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M"):
+            try:
+                return datetime.strptime(candidate, fmt)
+            except Exception:
+                continue
+    base = _parse_any_date(text)
+    if base is not None:
+        return datetime.combine(base, datetime.min.time())
     return None
 
 

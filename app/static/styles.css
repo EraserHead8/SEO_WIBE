@@ -64,6 +64,24 @@ body[data-theme="light"] {
   --field-placeholder: #5f7fa9;
 }
 
+body[data-theme="moon"] {
+  --bg-1: #12161f;
+  --bg-2: #2f3648;
+  --panel: rgba(33, 39, 55, 0.86);
+  --panel-2: rgba(40, 47, 64, 0.8);
+  --line: rgba(170, 180, 202, 0.3);
+  --text: #edf2ff;
+  --muted: #b8c1d8;
+  --neon: #a5b6de;
+  --accent: #c9d3ea;
+  --ok: #9fd7c8;
+  --danger: #e88c97;
+  --bg-radial-a: rgba(127, 139, 171, 0.34);
+  --bg-radial-b: rgba(87, 97, 128, 0.35);
+  --field-bg: rgba(26, 31, 45, 0.92);
+  --field-placeholder: #a7b0c9;
+}
+
 body[data-theme="newyear"] {
   --bg-1: #072018;
   --bg-2: #6d0f1d;
@@ -242,6 +260,29 @@ body[data-theme="greenland"] .app-bg::before {
   opacity: 0.24;
   font-size: clamp(18px, 2vw, 30px);
   animation: theme-float 21s linear infinite;
+}
+
+body[data-theme="moon"] .app-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 12% 22%, rgba(189, 196, 214, 0.2) 0 36px, rgba(102, 114, 145, 0.28) 37px 52px, transparent 53px),
+    radial-gradient(circle at 78% 18%, rgba(185, 194, 214, 0.18) 0 30px, rgba(97, 108, 139, 0.26) 31px 45px, transparent 46px),
+    radial-gradient(circle at 33% 68%, rgba(178, 188, 210, 0.16) 0 42px, rgba(92, 103, 133, 0.25) 43px 60px, transparent 61px),
+    radial-gradient(circle at 86% 76%, rgba(173, 184, 208, 0.16) 0 28px, rgba(88, 98, 127, 0.24) 29px 40px, transparent 41px),
+    radial-gradient(circle at 56% 44%, rgba(168, 178, 201, 0.14) 0 24px, rgba(82, 92, 119, 0.22) 25px 36px, transparent 37px);
+  opacity: 0.65;
+}
+
+body[data-theme="moon"] .app-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(236, 242, 255, 0.72) 1px, transparent 1.8px);
+  background-size: 34px 34px;
+  opacity: 0.22;
+  animation: snow-shift 22s linear infinite;
 }
 
 .hidden { display: none !important; }
@@ -510,11 +551,11 @@ body[data-theme="light"] .review-type-pill {
 .app-shell {
   position: relative;
   z-index: 2;
-  max-width: 1460px;
+  max-width: min(1880px, calc(100vw - 12px));
   margin: 16px auto;
   padding: 0 16px 24px;
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: 250px minmax(0, 1fr);
   gap: 14px;
   align-items: start;
 }
@@ -533,6 +574,7 @@ body[data-theme="light"] .review-type-pill {
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
+  transition: width 0.2s ease, padding 0.2s ease;
 }
 .brand h2 {
   margin: 0;
@@ -589,6 +631,34 @@ body[data-theme="light"] .review-type-pill {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.sidebar-toggle {
+  width: 100%;
+}
+
+.sidebar.compact {
+  width: 82px;
+  min-width: 82px;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.sidebar.compact .brand p,
+.sidebar.compact .nav-label,
+.sidebar.compact .btn-danger.full {
+  display: none;
+}
+
+.sidebar.compact .brand h2 {
+  font-size: 19px;
+  text-align: center;
+}
+
+.sidebar.compact .nav-btn {
+  justify-content: center;
+  padding-left: 8px;
+  padding-right: 8px;
 }
 .nav-btn:hover { border-color: var(--line); }
 .nav-btn.active {
@@ -951,6 +1021,24 @@ input, select, textarea {
   color: var(--text);
   font: inherit;
 }
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) calc(50% - 2px),
+    calc(100% - 12px) calc(50% - 2px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 34px;
+}
+select option,
+select optgroup {
+  background-color: #0c1431;
+  color: #e6eeff;
+}
 input::placeholder { color: var(--field-placeholder); }
 textarea::placeholder { color: var(--field-placeholder); }
 textarea {
@@ -1129,18 +1217,19 @@ tbody tr:hover {
 }
 .review-reply-input {
   width: 100%;
-  min-width: 210px;
-  min-height: 124px;
+  min-width: 0;
+  min-height: 104px;
   padding: 10px;
   font-size: 13px;
   resize: vertical;
 }
 .review-actions {
   display: flex;
-  gap: 4px;
-  flex-direction: column;
-  justify-content: center;
+  gap: 6px;
+  flex-direction: row;
+  justify-content: flex-start;
   align-items: center;
+  flex-wrap: wrap;
   width: 100%;
 }
 .review-actions button {
@@ -1155,8 +1244,9 @@ tbody tr:hover {
   place-items: center;
 }
 .reviews-table {
-  min-width: 1320px;
-  table-layout: fixed;
+  min-width: 0;
+  width: 100%;
+  table-layout: auto;
 }
 .reviews-table th:nth-child(1),
 .reviews-table td:nth-child(1),
@@ -1191,18 +1281,19 @@ tbody tr:hover {
 .reviews-table td:nth-child(6),
 .questions-table th:nth-child(5),
 .questions-table td:nth-child(5) {
-  width: 460px;
+  width: auto;
 }
 
 .reviews-table td:nth-child(6),
 .questions-table td:nth-child(5) {
-  min-width: 460px;
+  min-width: 0;
   padding-right: 16px;
   vertical-align: top;
 }
 .questions-table {
-  min-width: 1240px;
-  table-layout: fixed;
+  min-width: 0;
+  width: 100%;
+  table-layout: auto;
 }
 .questions-table th:nth-child(4),
 .questions-table td:nth-child(4) {
@@ -1219,6 +1310,16 @@ tbody tr:hover {
 }
 .questions-table .review-actions button {
   width: 32px;
+}
+
+.reviews-table th,
+.reviews-table td,
+.questions-table th,
+.questions-table td {
+  width: auto !important;
+  min-width: 0 !important;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .reviews-table th:last-child,
 .reviews-table td:last-child,
@@ -2139,10 +2240,14 @@ pre {
 }
 
 #adminTab-audit table {
-  min-width: 980px;
+  min-width: 1380px;
 }
 
-#adminTab-audit td:nth-child(5) {
+#adminTab-audit td:nth-child(3) {
+  min-width: 210px;
+}
+
+#adminTab-audit td:nth-child(8) {
   min-width: 340px;
 }
 
@@ -2205,6 +2310,17 @@ body[data-theme="light"] textarea {
   color: #163a66;
   border-color: rgba(102, 136, 194, 0.4);
   background: rgba(255, 255, 255, 0.98);
+}
+body[data-theme="light"] select option,
+body[data-theme="light"] select optgroup {
+  background-color: #ffffff;
+  color: #15375f;
+}
+
+body[data-theme="moon"] select option,
+body[data-theme="moon"] select optgroup {
+  background-color: #222838;
+  color: #edf2ff;
 }
 
 body[data-theme="light"] button {
@@ -2431,6 +2547,61 @@ body[data-theme="light"] .hover-tip {
 @keyframes snow-shift {
   0% { transform: translate3d(0, -4%, 0); }
   100% { transform: translate3d(-8%, 8%, 0); }
+}
+
+@media (min-width: 981px) {
+  .reviews-table,
+  .questions-table,
+  .reviews-table tbody,
+  .questions-table tbody {
+    display: block;
+    width: 100%;
+    min-width: 0 !important;
+  }
+
+  .reviews-table thead,
+  .questions-table thead {
+    display: none;
+  }
+
+  .reviews-table tr,
+  .questions-table tr {
+    display: block;
+    border: 1px solid rgba(142, 172, 248, 0.3);
+    border-radius: 12px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    background: rgba(11, 22, 52, 0.62);
+  }
+
+  .reviews-table td,
+  .questions-table td {
+    display: block;
+    border-bottom: 0;
+    padding: 6px 4px;
+  }
+
+  .reviews-table td::before,
+  .questions-table td::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .reviews-table td:empty::before,
+  .questions-table td:empty::before {
+    margin-bottom: 0;
+  }
+
+  .review-actions button {
+    width: 38px;
+    min-width: 38px;
+    height: 36px;
+  }
 }
 
 @media (max-width: 1200px) {

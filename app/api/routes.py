@@ -3,10 +3,12 @@ from __future__ import annotations
 import io
 import json
 import math
+import hashlib
 from datetime import date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -33,6 +35,8 @@ from app.models import (
     UserQuestionAiSettings,
     UserKeyword,
     SystemSetting,
+    WbAdsCampaignSnapshot,
+    WorkItemClaim,
 )
 from app.schemas import (
     AiAssistantIn,
@@ -104,10 +108,18 @@ from app.schemas import (
     WbReviewReplyIn,
     WbReviewReplyOut,
     WbReviewsOut,
+    ReturnActionIn,
+    ReturnActionOut,
+    ReturnsOut,
     UiSettingsIn,
     UiSettingsOut,
 )
 from app.services.sales import build_sales_report
+from app.services.ads_cache import (
+    get_wb_snapshot_rows,
+    is_wb_snapshot_stale,
+    sync_wb_campaign_snapshots,
+)
 from app.services.marketplace import (
     fetch_products_from_marketplace,
     find_competitors,
@@ -145,13 +157,21 @@ from app.services.wb_modules import (
     post_wb_question_reply,
     post_wb_review_reply,
     update_wb_campaign_state,
+    fetch_wb_returns,
+    fetch_wb_return_details,
+    action_wb_return,
+    fetch_ozon_ads_campaigns,
+    fetch_ozon_ads_analytics,
+    fetch_ozon_returns,
+    fetch_ozon_return_details,
 )
 
 router = APIRouter(prefix="/api")
 DISABLED_BY_DEFAULT_MODULES = {"billing", "wb_reviews_ai", "wb_questions_ai", "wb_ads", "wb_ads_analytics", "wb_ads_recommendations", "help_center"}
-AVAILABLE_THEMES = ("classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring", "japan", "greenland")
+AVAILABLE_THEMES = ("classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring", "japan", "greenland", "moon")
 DEFAULT_UI_SETTINGS = {
     "theme_choice_enabled": True,
+    "force_theme": False,
     "default_theme": "classic",
     "allowed_themes": list(AVAILABLE_THEMES),
 }
@@ -335,9 +355,9 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
             "- Маркетплейс: all / wb / ozon.\n"
             "- Дата с / по: период отчета.\n"
             "- Быстрые периоды: день, неделя, месяц, квартал, 6 месяцев, год.\n"
-            "- Переключатель метрики графика: штуки / выручка / заказы / отказы / реклама / прочие траты.\n"
+            "- Переключатель метрики графика: штуки / выручка / заказы / отказы / реклама / штрафы.\n"
             "- Чекбоксы графика: всего / WB / Ozon для сравнения линий.\n"
-            "- Поле «Прочие траты»: ручные расходы, которые не пришли из API.\n"
+            "- Показатель «Штрафы»: удержания/штрафные списания из доступных отчетов маркетплейсов.\n"
             "- Загрузить статистику: ручной принудительный рефреш.\n\n"
             "Важно:\n"
             "- KPI-карточки сверху показывают агрегаты за выбранный период.\n"
@@ -581,9 +601,9 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
             "- Marketplace: all / wb / ozon.\n"
             "- Date from / date to.\n"
             "- Quick ranges: day, week, month, quarter, 6 months, year.\n"
-            "- Chart metric switch: units / revenue / orders / returns / ad spend / other costs.\n"
+            "- Chart metric switch: units / revenue / orders / returns / ad spend / penalties.\n"
             "- Chart series toggles: total / WB / Ozon for side-by-side comparison.\n"
-            "- Other costs field: manual costs not provided by marketplace API.\n"
+            "- Penalties metric: marketplace deductions/penalty charges when available.\n"
             "- Load stats: manual forced refresh.\n\n"
             "Important:\n"
             "- KPI cards show total orders, units, and revenue for the selected range.\n"
@@ -660,7 +680,7 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
 
 
 @router.post("/auth/register", response_model=TokenResponse)
-def register(payload: RegisterRequest, db: Session = Depends(get_db)):
+def register(payload: RegisterRequest, request: Request, db: Session = Depends(get_db)):
     email = payload.email.strip().lower()
     exists = db.scalar(select(User).where(User.email == email))
     if exists:
@@ -696,17 +716,39 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
             )
         )
 
-    db.add(AuditLog(user_id=user.id, action="user_registered", details=f"role={role}"))
+    _audit(
+        db,
+        user,
+        action="user_registered",
+        details=f"role={role}",
+        module_code="auth",
+        entity_type="user",
+        entity_id=str(user.id),
+        status="ok",
+        request=request,
+    )
     db.commit()
 
     return TokenResponse(access_token=create_access_token(payload.email))
 
 
 @router.post("/auth/login", response_model=TokenResponse)
-def login(payload: LoginRequest, db: Session = Depends(get_db)):
+def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
     email = payload.email.strip().lower()
     user = db.scalar(select(User).where(User.email == email))
     if user and verify_password(payload.password, user.hashed_password):
+        _audit(
+            db,
+            user,
+            action="auth_login_success",
+            details="kind=owner",
+            module_code="auth",
+            entity_type="user",
+            entity_id=str(user.id),
+            status="ok",
+            request=request,
+        )
+        db.commit()
         return TokenResponse(access_token=create_access_token(user.email))
 
     member = db.scalar(
@@ -720,8 +762,52 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     if member and member.hashed_password and verify_password(payload.password, member.hashed_password):
         owner = db.get(User, member.user_id)
         if owner:
+            owner._actor_email = member.email
+            owner._actor_member_id = member.id
+            owner._actor_is_owner = bool(member.is_owner)
+            _audit(
+                db,
+                owner,
+                action="auth_login_success",
+                details=f"kind=team_member;member_id={member.id}",
+                module_code="auth",
+                entity_type="team_member",
+                entity_id=str(member.id),
+                status="ok",
+                request=request,
+            )
+            db.commit()
             return TokenResponse(access_token=create_access_token(member.email))
+    _audit(
+        db,
+        None,
+        action="auth_login_failed",
+        details=f"email={email}",
+        module_code="auth",
+        entity_type="user",
+        entity_id=email,
+        status="error",
+        request=request,
+    )
+    db.commit()
     raise HTTPException(status_code=401, detail="Неверный email или пароль")
+
+
+@router.post("/auth/logout", response_model=MessageOut)
+def logout(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    _audit(
+        db,
+        user,
+        action="auth_logout",
+        details="kind=owner" if _actor_is_owner(user) else f"kind=team_member;member_id={_actor_member_id(user)}",
+        module_code="auth",
+        entity_type="user",
+        entity_id=str(user.id),
+        status="ok",
+        request=request,
+    )
+    db.commit()
+    return MessageOut(message="Выход выполнен")
 
 
 @router.get("/auth/me", response_model=UserOut)
@@ -747,6 +833,7 @@ def ui_settings(user: User = Depends(get_current_user), db: Session = Depends(ge
 
 @router.post("/credentials", response_model=ApiCredentialOut)
 def save_credential(payload: ApiCredentialIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    _require_owner_actor(user)
     marketplace = validate_marketplace(payload.marketplace)
 
     creds = db.scalars(
@@ -764,7 +851,15 @@ def save_credential(payload: ApiCredentialIn, user: User = Depends(get_current_u
         cred = ApiCredential(user_id=user.id, marketplace=marketplace, api_key=payload.api_key, active=True)
         db.add(cred)
 
-    db.add(AuditLog(user_id=user.id, action="credential_saved", details=f"marketplace={marketplace}"))
+    _audit(
+        db,
+        user,
+        action="credential_saved",
+        details=f"marketplace={marketplace}",
+        module_code="user_profile",
+        entity_type="api_credential",
+        entity_id=marketplace,
+    )
     db.commit()
     return ApiCredentialOut(id=cred.id, marketplace=cred.marketplace, api_key_masked=mask_key(cred.api_key), active=cred.active)
 
@@ -779,15 +874,26 @@ def list_credentials(user: User = Depends(get_current_user), db: Session = Depen
 
 @router.post("/credentials/test", response_model=CredentialTestOut)
 def test_credential(payload: ApiCredentialIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    _require_owner_actor(user)
     marketplace = validate_marketplace(payload.marketplace)
     ok, message = test_marketplace_credentials(marketplace, payload.api_key)
-    db.add(AuditLog(user_id=user.id, action="credential_tested", details=f"marketplace={marketplace};ok={ok}"))
+    _audit(
+        db,
+        user,
+        action="credential_tested",
+        details=f"marketplace={marketplace};ok={ok}",
+        module_code="user_profile",
+        entity_type="api_credential",
+        entity_id=marketplace,
+        status="ok" if ok else "error",
+    )
     db.commit()
     return CredentialTestOut(ok=ok, message=message)
 
 
 @router.delete("/credentials/{marketplace}", response_model=MessageOut)
 def delete_credential(marketplace: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    _require_owner_actor(user)
     market = validate_marketplace(marketplace)
     creds = db.scalars(
         select(ApiCredential).where(ApiCredential.user_id == user.id, ApiCredential.marketplace == market)
@@ -797,14 +903,29 @@ def delete_credential(marketplace: str, user: User = Depends(get_current_user), 
 
     for cred in creds:
         db.delete(cred)
-    db.add(AuditLog(user_id=user.id, action="credential_deleted", details=f"marketplace={market}"))
+    _audit(
+        db,
+        user,
+        action="credential_deleted",
+        details=f"marketplace={market}",
+        module_code="user_profile",
+        entity_type="api_credential",
+        entity_id=market,
+    )
     db.commit()
     return MessageOut(message="Ключ удален")
 
 
 @router.get("/keywords", response_model=list[KeywordOut])
 def list_keywords(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return db.scalars(select(UserKeyword).where(UserKeyword.user_id == user.id).order_by(UserKeyword.id.desc())).all()
+    return db.scalars(
+        select(UserKeyword)
+        .where(
+            UserKeyword.user_id == user.id,
+            _owned_by_actor_or_owner_filter(UserKeyword, user),
+        )
+        .order_by(UserKeyword.id.desc())
+    ).all()
 
 
 @router.post("/keywords", response_model=KeywordOut)
@@ -821,14 +942,23 @@ def add_keyword(payload: KeywordIn, user: User = Depends(get_current_user), db: 
             UserKeyword.user_id == user.id,
             UserKeyword.marketplace == marketplace,
             UserKeyword.keyword == keyword,
+            _owned_by_actor_or_owner_filter(UserKeyword, user),
         )
     )
     if exists:
         return exists
 
     row = UserKeyword(user_id=user.id, marketplace=marketplace, keyword=keyword)
+    _assign_owner_member(row, _resolve_owner_member_id(db, user))
     db.add(row)
-    db.add(AuditLog(user_id=user.id, action="keyword_added", details=f"marketplace={marketplace};keyword={keyword}"))
+    _audit(
+        db,
+        user,
+        action="keyword_added",
+        details=f"marketplace={marketplace};keyword={keyword}",
+        module_code="seo_generation",
+        entity_type="keyword",
+    )
     db.commit()
     db.refresh(row)
     return row
@@ -836,11 +966,25 @@ def add_keyword(payload: KeywordIn, user: User = Depends(get_current_user), db: 
 
 @router.delete("/keywords/{keyword_id}", response_model=MessageOut)
 def delete_keyword(keyword_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    row = db.scalar(select(UserKeyword).where(UserKeyword.id == keyword_id, UserKeyword.user_id == user.id))
+    row = db.scalar(
+        select(UserKeyword).where(
+            UserKeyword.id == keyword_id,
+            UserKeyword.user_id == user.id,
+            _owned_by_actor_or_owner_filter(UserKeyword, user),
+        )
+    )
     if not row:
         raise HTTPException(status_code=404, detail="Ключ не найден")
     db.delete(row)
-    db.add(AuditLog(user_id=user.id, action="keyword_deleted", details=f"id={keyword_id}"))
+    _audit(
+        db,
+        user,
+        action="keyword_deleted",
+        details=f"id={keyword_id}",
+        module_code="seo_generation",
+        entity_type="keyword",
+        entity_id=str(keyword_id),
+    )
     db.commit()
     return MessageOut(message="Ключ удален")
 
@@ -876,19 +1020,36 @@ def wb_reviews(
             date_to=date_to.isoformat() if date_to else None,
             max_pages=8,
         )
-    if not data.get("new") and not data.get("answered"):
+    new_rows = _filter_claimed_feedback_rows(
+        db,
+        user,
+        module_code="wb_reviews_ai",
+        marketplace="wb",
+        item_type="review",
+        rows=list(data.get("new") or []),
+    )
+    answered_rows = _filter_claimed_feedback_rows(
+        db,
+        user,
+        module_code="wb_reviews_ai",
+        marketplace="wb",
+        item_type="review",
+        rows=list(data.get("answered") or []),
+    )
+    if not new_rows and not answered_rows:
         ok, message = probe_wb_feedback_access(wb_key, feedback_kind="reviews")
         if not ok:
             raise HTTPException(status_code=400, detail=message)
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            action="wb_reviews_read",
-            details=f"new={len(data.get('new', []))};answered={len(data.get('answered', []))}",
-        )
+    _audit(
+        db,
+        user,
+        action="wb_reviews_read",
+        details=f"new={len(new_rows)};answered={len(answered_rows)}",
+        module_code="wb_reviews_ai",
+        entity_type="review",
     )
     db.commit()
-    return WbReviewsOut(new=data.get("new", []), answered=data.get("answered", []))
+    return WbReviewsOut(new=new_rows, answered=answered_rows)
 
 
 @router.post("/wb/reviews/reply", response_model=WbReviewReplyOut)
@@ -897,8 +1058,25 @@ def wb_reply_review(payload: WbReviewReplyIn, user: User = Depends(get_current_u
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
+    _claim_or_validate_work_item(
+        db,
+        user,
+        module_code="wb_reviews_ai",
+        marketplace="wb",
+        item_type="review",
+        item_external_id=str(payload.id or "").strip(),
+    )
     ok, message = post_wb_review_reply(wb_key, payload.id, payload.text)
-    db.add(AuditLog(user_id=user.id, action="wb_review_reply", details=f"feedback_id={payload.id};ok={ok}"))
+    _audit(
+        db,
+        user,
+        action="wb_review_reply",
+        details=f"feedback_id={payload.id};ok={ok}",
+        module_code="wb_reviews_ai",
+        entity_type="review",
+        entity_id=str(payload.id or ""),
+        status="ok" if ok else "error",
+    )
     db.commit()
     if not ok:
         raise HTTPException(status_code=400, detail=message)
@@ -925,12 +1103,13 @@ def wb_generate_reply(payload: GenerateReviewReplyIn, user: User = Depends(get_c
         provider=str(runtime.get("provider") or ""),
         base_url=str(runtime.get("base_url") or ""),
     )
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            action="wb_review_reply_generated",
-            details=f"provider={runtime.get('provider') or 'builtin'};model={runtime.get('model') or settings.openai_model};mode={runtime.get('mode') or 'builtin'}",
-        )
+    _audit(
+        db,
+        user,
+        action="wb_review_reply_generated",
+        details=f"provider={runtime.get('provider') or 'builtin'};model={runtime.get('model') or settings.openai_model};mode={runtime.get('mode') or 'builtin'}",
+        module_code="wb_reviews_ai",
+        entity_type="review",
     )
     db.commit()
     return GenerateReviewReplyOut(reply=reply)
@@ -960,19 +1139,36 @@ def ozon_reviews(
         max_pages=1 if fast else 8,
         enrich_products=not fast,
     )
-    if not data.get("new") and not data.get("answered"):
+    new_rows = _filter_claimed_feedback_rows(
+        db,
+        user,
+        module_code="wb_reviews_ai",
+        marketplace="ozon",
+        item_type="review",
+        rows=list(data.get("new") or []),
+    )
+    answered_rows = _filter_claimed_feedback_rows(
+        db,
+        user,
+        module_code="wb_reviews_ai",
+        marketplace="ozon",
+        item_type="review",
+        rows=list(data.get("answered") or []),
+    )
+    if not new_rows and not answered_rows:
         ok, message = probe_ozon_feedback_access(ozon_key, feedback_kind="reviews")
         if not ok:
             raise HTTPException(status_code=400, detail=message)
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            action="ozon_reviews_read",
-            details=f"new={len(data.get('new', []))};answered={len(data.get('answered', []))}",
-        )
+    _audit(
+        db,
+        user,
+        action="ozon_reviews_read",
+        details=f"new={len(new_rows)};answered={len(answered_rows)}",
+        module_code="wb_reviews_ai",
+        entity_type="review",
     )
     db.commit()
-    return WbReviewsOut(new=data.get("new", []), answered=data.get("answered", []))
+    return WbReviewsOut(new=new_rows, answered=answered_rows)
 
 
 @router.post("/ozon/reviews/reply", response_model=WbReviewReplyOut)
@@ -981,8 +1177,25 @@ def ozon_reply_review(payload: WbReviewReplyIn, user: User = Depends(get_current
     ozon_key = _get_active_marketplace_api_key(db, user.id, "ozon")
     if not ozon_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для ozon")
+    _claim_or_validate_work_item(
+        db,
+        user,
+        module_code="wb_reviews_ai",
+        marketplace="ozon",
+        item_type="review",
+        item_external_id=str(payload.id or "").strip(),
+    )
     ok, message = post_ozon_review_reply(ozon_key, payload.id, payload.text)
-    db.add(AuditLog(user_id=user.id, action="ozon_review_reply", details=f"review_id={payload.id};ok={ok}"))
+    _audit(
+        db,
+        user,
+        action="ozon_review_reply",
+        details=f"review_id={payload.id};ok={ok}",
+        module_code="wb_reviews_ai",
+        entity_type="review",
+        entity_id=str(payload.id or ""),
+        status="ok" if ok else "error",
+    )
     db.commit()
     if not ok:
         raise HTTPException(status_code=400, detail=message)
@@ -1009,12 +1222,13 @@ def ozon_generate_reply(payload: GenerateReviewReplyIn, user: User = Depends(get
         provider=str(runtime.get("provider") or ""),
         base_url=str(runtime.get("base_url") or ""),
     )
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            action="ozon_review_reply_generated",
-            details=f"provider={runtime.get('provider') or 'builtin'};model={runtime.get('model') or settings.openai_model};mode={runtime.get('mode') or 'builtin'}",
-        )
+    _audit(
+        db,
+        user,
+        action="ozon_review_reply_generated",
+        details=f"provider={runtime.get('provider') or 'builtin'};model={runtime.get('model') or settings.openai_model};mode={runtime.get('mode') or 'builtin'}",
+        module_code="wb_reviews_ai",
+        entity_type="review",
     )
     db.commit()
     return GenerateReviewReplyOut(reply=reply)
@@ -1045,19 +1259,36 @@ def wb_questions(
             date_to=date_to.isoformat() if date_to else None,
             max_pages=8,
         )
-    if not data.get("new") and not data.get("answered"):
+    new_rows = _filter_claimed_feedback_rows(
+        db,
+        user,
+        module_code="wb_questions_ai",
+        marketplace="wb",
+        item_type="question",
+        rows=list(data.get("new") or []),
+    )
+    answered_rows = _filter_claimed_feedback_rows(
+        db,
+        user,
+        module_code="wb_questions_ai",
+        marketplace="wb",
+        item_type="question",
+        rows=list(data.get("answered") or []),
+    )
+    if not new_rows and not answered_rows:
         ok, message = probe_wb_feedback_access(wb_key, feedback_kind="questions")
         if not ok:
             raise HTTPException(status_code=400, detail=message)
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            action="wb_questions_read",
-            details=f"new={len(data.get('new', []))};answered={len(data.get('answered', []))}",
-        )
+    _audit(
+        db,
+        user,
+        action="wb_questions_read",
+        details=f"new={len(new_rows)};answered={len(answered_rows)}",
+        module_code="wb_questions_ai",
+        entity_type="question",
     )
     db.commit()
-    return WbReviewsOut(new=data.get("new", []), answered=data.get("answered", []))
+    return WbReviewsOut(new=new_rows, answered=answered_rows)
 
 
 @router.post("/wb/questions/reply", response_model=WbReviewReplyOut)
@@ -1066,8 +1297,25 @@ def wb_reply_question(payload: WbReviewReplyIn, user: User = Depends(get_current
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
+    _claim_or_validate_work_item(
+        db,
+        user,
+        module_code="wb_questions_ai",
+        marketplace="wb",
+        item_type="question",
+        item_external_id=str(payload.id or "").strip(),
+    )
     ok, message = post_wb_question_reply(wb_key, payload.id, payload.text)
-    db.add(AuditLog(user_id=user.id, action="wb_question_reply", details=f"question_id={payload.id};ok={ok}"))
+    _audit(
+        db,
+        user,
+        action="wb_question_reply",
+        details=f"question_id={payload.id};ok={ok}",
+        module_code="wb_questions_ai",
+        entity_type="question",
+        entity_id=str(payload.id or ""),
+        status="ok" if ok else "error",
+    )
     db.commit()
     if not ok:
         raise HTTPException(status_code=400, detail=message)
@@ -1094,12 +1342,13 @@ def wb_generate_question_reply(payload: GenerateReviewReplyIn, user: User = Depe
         provider=str(runtime.get("provider") or ""),
         base_url=str(runtime.get("base_url") or ""),
     )
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            action="wb_question_reply_generated",
-            details=f"provider={runtime.get('provider') or 'builtin'};model={runtime.get('model') or settings.openai_model};mode={runtime.get('mode') or 'builtin'}",
-        )
+    _audit(
+        db,
+        user,
+        action="wb_question_reply_generated",
+        details=f"provider={runtime.get('provider') or 'builtin'};model={runtime.get('model') or settings.openai_model};mode={runtime.get('mode') or 'builtin'}",
+        module_code="wb_questions_ai",
+        entity_type="question",
     )
     db.commit()
     return GenerateReviewReplyOut(reply=reply)
@@ -1124,19 +1373,36 @@ def ozon_questions(
         max_pages=1 if fast else 8,
         enrich_products=not fast,
     )
-    if not data.get("new") and not data.get("answered"):
+    new_rows = _filter_claimed_feedback_rows(
+        db,
+        user,
+        module_code="wb_questions_ai",
+        marketplace="ozon",
+        item_type="question",
+        rows=list(data.get("new") or []),
+    )
+    answered_rows = _filter_claimed_feedback_rows(
+        db,
+        user,
+        module_code="wb_questions_ai",
+        marketplace="ozon",
+        item_type="question",
+        rows=list(data.get("answered") or []),
+    )
+    if not new_rows and not answered_rows:
         ok, message = probe_ozon_feedback_access(ozon_key, feedback_kind="questions")
         if not ok:
             raise HTTPException(status_code=400, detail=message)
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            action="ozon_questions_read",
-            details=f"new={len(data.get('new', []))};answered={len(data.get('answered', []))}",
-        )
+    _audit(
+        db,
+        user,
+        action="ozon_questions_read",
+        details=f"new={len(new_rows)};answered={len(answered_rows)}",
+        module_code="wb_questions_ai",
+        entity_type="question",
     )
     db.commit()
-    return WbReviewsOut(new=data.get("new", []), answered=data.get("answered", []))
+    return WbReviewsOut(new=new_rows, answered=answered_rows)
 
 
 @router.post("/ozon/questions/reply", response_model=WbReviewReplyOut)
@@ -1145,8 +1411,25 @@ def ozon_reply_question(payload: WbReviewReplyIn, user: User = Depends(get_curre
     ozon_key = _get_active_marketplace_api_key(db, user.id, "ozon")
     if not ozon_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для ozon")
+    _claim_or_validate_work_item(
+        db,
+        user,
+        module_code="wb_questions_ai",
+        marketplace="ozon",
+        item_type="question",
+        item_external_id=str(payload.id or "").strip(),
+    )
     ok, message = post_ozon_question_reply(ozon_key, payload.id, payload.text)
-    db.add(AuditLog(user_id=user.id, action="ozon_question_reply", details=f"question_id={payload.id};ok={ok}"))
+    _audit(
+        db,
+        user,
+        action="ozon_question_reply",
+        details=f"question_id={payload.id};ok={ok}",
+        module_code="wb_questions_ai",
+        entity_type="question",
+        entity_id=str(payload.id or ""),
+        status="ok" if ok else "error",
+    )
     db.commit()
     if not ok:
         raise HTTPException(status_code=400, detail=message)
@@ -1173,15 +1456,204 @@ def ozon_generate_question_reply(payload: GenerateReviewReplyIn, user: User = De
         provider=str(runtime.get("provider") or ""),
         base_url=str(runtime.get("base_url") or ""),
     )
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            action="ozon_question_reply_generated",
-            details=f"provider={runtime.get('provider') or 'builtin'};model={runtime.get('model') or settings.openai_model};mode={runtime.get('mode') or 'builtin'}",
-        )
+    _audit(
+        db,
+        user,
+        action="ozon_question_reply_generated",
+        details=f"provider={runtime.get('provider') or 'builtin'};model={runtime.get('model') or settings.openai_model};mode={runtime.get('mode') or 'builtin'}",
+        module_code="wb_questions_ai",
+        entity_type="question",
     )
     db.commit()
     return GenerateReviewReplyOut(reply=reply)
+
+
+@router.get("/wb/returns", response_model=ReturnsOut)
+def wb_returns_list(
+    status: str = "",
+    date_from: date | None = None,
+    date_to: date | None = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "returns")
+    wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
+    if not wb_key:
+        raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
+    payload = fetch_wb_returns(
+        wb_key,
+        status=status or None,
+        date_from=date_from.isoformat() if date_from else None,
+        date_to=date_to.isoformat() if date_to else None,
+    )
+    rows = _filter_claimed_feedback_rows(
+        db,
+        user,
+        module_code="returns",
+        marketplace="wb",
+        item_type="return",
+        rows=list(payload.get("rows") or []),
+    )
+    warnings = [str(x) for x in (payload.get("warnings") or [])]
+    _audit(
+        db,
+        user,
+        action="wb_returns_read",
+        details=f"rows={len(rows)};warnings={len(warnings)}",
+        module_code="returns",
+        entity_type="return",
+        status="ok" if not warnings else "partial",
+    )
+    db.commit()
+    return ReturnsOut(rows=rows, warnings=warnings)
+
+
+@router.get("/wb/returns/{return_id}", response_model=dict[str, Any])
+def wb_returns_detail(return_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "returns")
+    wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
+    if not wb_key:
+        raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
+    rid = str(return_id or "").strip()
+    if not rid:
+        raise HTTPException(status_code=400, detail="Некорректный ID возврата")
+    if not _actor_is_owner(user):
+        claim = db.scalar(
+            select(WorkItemClaim).where(
+                WorkItemClaim.user_id == user.id,
+                WorkItemClaim.module_code == "returns",
+                WorkItemClaim.marketplace == "wb",
+                WorkItemClaim.item_type == "return",
+                WorkItemClaim.item_external_id == rid,
+            )
+        )
+        if claim and int(claim.owner_member_id or 0) != _actor_member_id(user):
+            raise HTTPException(status_code=403, detail="Запись закреплена за другим сотрудником")
+    row = fetch_wb_return_details(wb_key, rid)
+    if not row:
+        raise HTTPException(status_code=404, detail="Заявка на возврат не найдена")
+    _audit(
+        db,
+        user,
+        action="wb_return_detail_read",
+        details=f"id={rid}",
+        module_code="returns",
+        entity_type="return",
+        entity_id=rid,
+    )
+    db.commit()
+    return row
+
+
+@router.patch("/wb/returns/action", response_model=ReturnActionOut)
+def wb_returns_action(payload: ReturnActionIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "returns")
+    wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
+    if not wb_key:
+        raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
+    rid = str(payload.id or "").strip()
+    if not rid:
+        raise HTTPException(status_code=400, detail="Некорректный ID возврата")
+    _claim_or_validate_work_item(
+        db,
+        user,
+        module_code="returns",
+        marketplace="wb",
+        item_type="return",
+        item_external_id=rid,
+    )
+    ok, message, _raw = action_wb_return(wb_key, rid, payload.action, payload.comment)
+    _audit(
+        db,
+        user,
+        action="wb_return_action",
+        details=f"id={rid};action={payload.action};ok={ok}",
+        module_code="returns",
+        entity_type="return",
+        entity_id=rid,
+        status="ok" if ok else "error",
+    )
+    db.commit()
+    if not ok:
+        raise HTTPException(status_code=400, detail=message)
+    return ReturnActionOut(ok=True, message=message, id=rid, action=payload.action)
+
+
+@router.get("/ozon/returns", response_model=ReturnsOut)
+def ozon_returns_list(
+    status: str = "",
+    date_from: date | None = None,
+    date_to: date | None = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "returns")
+    ozon_key = _get_active_marketplace_api_key(db, user.id, "ozon")
+    if not ozon_key:
+        raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для ozon")
+    payload = fetch_ozon_returns(
+        ozon_key,
+        status=status or None,
+        date_from=date_from.isoformat() if date_from else None,
+        date_to=date_to.isoformat() if date_to else None,
+    )
+    rows = _filter_claimed_feedback_rows(
+        db,
+        user,
+        module_code="returns",
+        marketplace="ozon",
+        item_type="return",
+        rows=list(payload.get("rows") or []),
+    )
+    warnings = [str(x) for x in (payload.get("warnings") or [])]
+    _audit(
+        db,
+        user,
+        action="ozon_returns_read",
+        details=f"rows={len(rows)};warnings={len(warnings)}",
+        module_code="returns",
+        entity_type="return",
+        status="ok" if not warnings else "partial",
+    )
+    db.commit()
+    return ReturnsOut(rows=rows, warnings=warnings)
+
+
+@router.get("/ozon/returns/{return_id}", response_model=dict[str, Any])
+def ozon_returns_detail(return_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "returns")
+    ozon_key = _get_active_marketplace_api_key(db, user.id, "ozon")
+    if not ozon_key:
+        raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для ozon")
+    rid = str(return_id or "").strip()
+    if not rid:
+        raise HTTPException(status_code=400, detail="Некорректный ID возврата")
+    if not _actor_is_owner(user):
+        claim = db.scalar(
+            select(WorkItemClaim).where(
+                WorkItemClaim.user_id == user.id,
+                WorkItemClaim.module_code == "returns",
+                WorkItemClaim.marketplace == "ozon",
+                WorkItemClaim.item_type == "return",
+                WorkItemClaim.item_external_id == rid,
+            )
+        )
+        if claim and int(claim.owner_member_id or 0) != _actor_member_id(user):
+            raise HTTPException(status_code=403, detail="Запись закреплена за другим сотрудником")
+    row = fetch_ozon_return_details(ozon_key, rid)
+    if not row:
+        raise HTTPException(status_code=404, detail="Заявка на возврат не найдена")
+    _audit(
+        db,
+        user,
+        action="ozon_return_detail_read",
+        details=f"id={rid}",
+        module_code="returns",
+        entity_type="return",
+        entity_id=rid,
+    )
+    db.commit()
+    return row
 
 
 @router.get("/wb/questions/ai-settings", response_model=ReviewAiSettingsOut)
@@ -1234,17 +1706,109 @@ def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depen
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
-    rows = fetch_wb_campaigns(wb_key, enrich=False)
+    rows = get_wb_snapshot_rows(db, user.id)
+    source = "snapshot"
+    stale = is_wb_snapshot_stale(db, user.id)
+    if not rows:
+        sync_wb_campaign_snapshots(db, user.id, wb_key)
+        rows = get_wb_snapshot_rows(db, user.id)
+        source = "sync-first"
+        stale = is_wb_snapshot_stale(db, user.id)
+    elif stale:
+        sync_wb_campaign_snapshots(db, user.id, wb_key)
+        rows = get_wb_snapshot_rows(db, user.id)
+        stale = is_wb_snapshot_stale(db, user.id)
+        source = "snapshot+refresh"
     ids = sorted({_to_int_safe(_campaign_id_from_any(row)) for row in rows if _to_int_safe(_campaign_id_from_any(row)) > 0})
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            action="wb_ads_campaigns_read",
-            details=f"count={len(rows)};ids={len(ids)};mode=fast",
-        )
+    _audit(
+        db,
+        user,
+        action="wb_ads_campaigns_read",
+        details=f"count={len(rows)};ids={len(ids)};source={source};stale={int(stale)}",
+        module_code="wb_ads",
+        entity_type="campaign",
     )
     db.commit()
-    return WbCampaignsOut(campaigns=rows, stats={})
+    return WbCampaignsOut(campaigns=rows, stats={}, meta={"source": source, "stale": stale, "count": len(rows)})
+
+
+@router.post("/wb/ads/campaigns/sync", response_model=dict[str, Any])
+def wb_ads_campaigns_sync(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "wb_ads")
+    wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
+    if not wb_key:
+        raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
+    payload = sync_wb_campaign_snapshots(db, user.id, wb_key)
+    _audit(
+        db,
+        user,
+        action="wb_ads_campaigns_sync",
+        details=json.dumps(payload, ensure_ascii=False)[:2000],
+        module_code="wb_ads",
+        entity_type="campaign",
+    )
+    db.commit()
+    return payload
+
+
+@router.get("/ozon/ads/campaigns", response_model=WbCampaignsOut)
+def ozon_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "wb_ads")
+    ozon_key = _get_active_marketplace_api_key(db, user.id, "ozon")
+    if not ozon_key:
+        raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для ozon")
+    payload = fetch_ozon_ads_campaigns(ozon_key)
+    rows = list(payload.get("rows") or [])
+    warnings = [str(x) for x in (payload.get("warnings") or [])]
+    _audit(
+        db,
+        user,
+        action="ozon_ads_campaigns_read",
+        details=f"count={len(rows)};warnings={len(warnings)}",
+        module_code="wb_ads",
+        entity_type="campaign",
+        status="ok" if not warnings else "partial",
+    )
+    db.commit()
+    return WbCampaignsOut(campaigns=rows, stats={}, meta={"warnings": warnings, "count": len(rows)})
+
+
+@router.get("/ozon/ads/analytics", response_model=WbAdsAnalyticsOut)
+def ozon_ads_analytics(
+    date_from: date | None = None,
+    date_to: date | None = None,
+    campaign_id: int | None = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "wb_ads_analytics")
+    ozon_key = _get_active_marketplace_api_key(db, user.id, "ozon")
+    if not ozon_key:
+        raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для ozon")
+    payload = fetch_ozon_ads_analytics(
+        ozon_key,
+        date_from=date_from.isoformat() if date_from else None,
+        date_to=date_to.isoformat() if date_to else None,
+        campaign_id=campaign_id,
+    )
+    rows = list(payload.get("rows") or [])
+    warnings = [str(x) for x in (payload.get("warnings") or [])]
+    left = str(payload.get("date_from") or (date_from.isoformat() if date_from else date.today().isoformat()))
+    right = str(payload.get("date_to") or (date_to.isoformat() if date_to else date.today().isoformat()))
+    totals = dict(payload.get("totals") or {"views": 0.0, "clicks": 0.0, "orders": 0.0, "spent": 0.0, "ctr_avg": 0.0, "cr_avg": 0.0})
+    if warnings:
+        totals["warning_count"] = float(len(warnings))
+    _audit(
+        db,
+        user,
+        action="ozon_ads_analytics_read",
+        details=f"date_from={left};date_to={right};rows={len(rows)};warnings={len(warnings)}",
+        module_code="wb_ads_analytics",
+        entity_type="campaign",
+        status="ok" if not warnings else "partial",
+    )
+    db.commit()
+    return WbAdsAnalyticsOut(date_from=left, date_to=right, rows=rows, totals=totals)
 
 
 @router.post("/wb/ads/campaigns/enrich", response_model=WbCampaignEnrichOut)
@@ -1728,7 +2292,12 @@ def wb_ads_recommendations(
 @router.get("/ai/docs", response_model=list[KnowledgeDocOut])
 def list_ai_docs(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     rows = db.scalars(
-        select(UserKnowledgeDoc).where(UserKnowledgeDoc.user_id == user.id).order_by(UserKnowledgeDoc.id.desc())
+        select(UserKnowledgeDoc)
+        .where(
+            UserKnowledgeDoc.user_id == user.id,
+            _owned_by_actor_or_owner_filter(UserKnowledgeDoc, user),
+        )
+        .order_by(UserKnowledgeDoc.id.desc())
     ).all()
     return [
         KnowledgeDocOut(
@@ -1759,8 +2328,16 @@ async def upload_ai_doc(
         content_type=(file.content_type or "application/octet-stream")[:120],
         content_text=text[:160000],
     )
+    _assign_owner_member(row, _resolve_owner_member_id(db, user))
     db.add(row)
-    db.add(AuditLog(user_id=user.id, action="ai_doc_uploaded", details=f"filename={row.filename};size={len(row.content_text)}"))
+    _audit(
+        db,
+        user,
+        action="ai_doc_uploaded",
+        details=f"filename={row.filename};size={len(row.content_text)}",
+        module_code="wb_questions_ai",
+        entity_type="knowledge_doc",
+    )
     db.commit()
     db.refresh(row)
     return KnowledgeDocOut(
@@ -1774,12 +2351,26 @@ async def upload_ai_doc(
 
 @router.delete("/ai/docs/{doc_id}", response_model=MessageOut)
 def delete_ai_doc(doc_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    row = db.scalar(select(UserKnowledgeDoc).where(UserKnowledgeDoc.id == doc_id, UserKnowledgeDoc.user_id == user.id))
+    row = db.scalar(
+        select(UserKnowledgeDoc).where(
+            UserKnowledgeDoc.id == doc_id,
+            UserKnowledgeDoc.user_id == user.id,
+            _owned_by_actor_or_owner_filter(UserKnowledgeDoc, user),
+        )
+    )
     if not row:
         raise HTTPException(status_code=404, detail="Документ не найден")
     fname = row.filename
     db.delete(row)
-    db.add(AuditLog(user_id=user.id, action="ai_doc_deleted", details=f"id={doc_id};filename={fname}"))
+    _audit(
+        db,
+        user,
+        action="ai_doc_deleted",
+        details=f"id={doc_id};filename={fname}",
+        module_code="wb_questions_ai",
+        entity_type="knowledge_doc",
+        entity_id=str(doc_id),
+    )
     db.commit()
     return MessageOut(message="Документ удален")
 
@@ -1866,8 +2457,25 @@ def _resolve_credential(db: Session, user_id: int, marketplace: str) -> ApiCrede
 def import_products(payload: ImportProductsRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     marketplace = validate_marketplace(payload.marketplace)
     cred = _resolve_credential(db, user.id, marketplace)
-    upserted = upsert_products(db, user.id, marketplace, cred.api_key, payload.articles, payload.import_all)
-    db.add(AuditLog(user_id=user.id, action="products_imported", details=f"count={len(upserted)};marketplace={marketplace}"))
+    owner_member_id = _resolve_owner_member_id(db, user)
+    upserted = upsert_products(
+        db,
+        user.id,
+        marketplace,
+        cred.api_key,
+        payload.articles,
+        payload.import_all,
+        owner_member_id=owner_member_id,
+        actor_is_owner=_actor_is_owner(user),
+    )
+    _audit(
+        db,
+        user,
+        action="products_imported",
+        details=f"count={len(upserted)};marketplace={marketplace}",
+        module_code="products",
+        entity_type="product",
+    )
     db.commit()
     return upserted
 
@@ -1877,10 +2485,22 @@ def reload_products(payload: ProductReloadRequest, user: User = Depends(get_curr
     marketplace = validate_marketplace(payload.marketplace)
     cred = _resolve_credential(db, user.id, marketplace)
 
-    existing = db.scalars(select(Product).where(Product.user_id == user.id, Product.marketplace == marketplace)).all()
+    existing = db.scalars(
+        select(Product).where(
+            Product.user_id == user.id,
+            Product.marketplace == marketplace,
+            _owned_by_actor_or_owner_filter(Product, user),
+        )
+    ).all()
     if existing:
         product_ids = [p.id for p in existing]
-        old_jobs = db.scalars(select(SeoJob).where(SeoJob.user_id == user.id, SeoJob.product_id.in_(product_ids))).all()
+        old_jobs = db.scalars(
+            select(SeoJob).where(
+                SeoJob.user_id == user.id,
+                SeoJob.product_id.in_(product_ids),
+                _owned_by_actor_or_owner_filter(SeoJob, user),
+            )
+        ).all()
         old_snapshots = db.scalars(
             select(PositionSnapshot).where(PositionSnapshot.user_id == user.id, PositionSnapshot.product_id.in_(product_ids))
         ).all()
@@ -1892,8 +2512,25 @@ def reload_products(payload: ProductReloadRequest, user: User = Depends(get_curr
             db.delete(product)
         db.flush()
 
-    upserted = upsert_products(db, user.id, marketplace, cred.api_key, payload.articles, payload.import_all)
-    db.add(AuditLog(user_id=user.id, action="products_reloaded", details=f"count={len(upserted)};marketplace={marketplace}"))
+    owner_member_id = _resolve_owner_member_id(db, user)
+    upserted = upsert_products(
+        db,
+        user.id,
+        marketplace,
+        cred.api_key,
+        payload.articles,
+        payload.import_all,
+        owner_member_id=owner_member_id,
+        actor_is_owner=_actor_is_owner(user),
+    )
+    _audit(
+        db,
+        user,
+        action="products_reloaded",
+        details=f"count={len(upserted)};marketplace={marketplace}",
+        module_code="products",
+        entity_type="product",
+    )
     db.commit()
     return upserted
 
@@ -1916,7 +2553,12 @@ def reimport_products_alias(payload: ProductReloadRequest, user: User = Depends(
 
 @router.get("/products", response_model=list[ProductOut])
 def list_products(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    rows = db.scalars(select(Product).where(Product.user_id == user.id).order_by(Product.id.desc())).all()
+    rows = db.scalars(
+        select(Product).where(
+            Product.user_id == user.id,
+            _owned_by_actor_or_owner_filter(Product, user),
+        ).order_by(Product.id.desc())
+    ).all()
     for row in rows:
         if not row.photo_url:
             row.photo_url = f"https://placehold.co/120x120/e8eefc/1b2a52?text={row.marketplace.upper()}%20{row.id}"
@@ -1925,7 +2567,13 @@ def list_products(user: User = Depends(get_current_user), db: Session = Depends(
 
 @router.get("/products/{product_id}/keyword-suggestions", response_model=list[str])
 def product_keyword_suggestions(product_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    product = db.scalar(select(Product).where(Product.id == product_id, Product.user_id == user.id))
+    product = db.scalar(
+        select(Product).where(
+            Product.id == product_id,
+            Product.user_id == user.id,
+            _owned_by_actor_or_owner_filter(Product, user),
+        )
+    )
     if not product:
         raise HTTPException(status_code=404, detail="Товар не найден")
 
@@ -1940,7 +2588,7 @@ def product_keyword_suggestions(product_id: int, user: User = Depends(get_curren
         product.name,
         product.current_description,
         competitors,
-        get_user_keywords(db, user.id, product.marketplace),
+        get_user_keywords(db, user.id, product.marketplace, None if _actor_is_owner(user) else int(product.owner_member_id or 0)),
         [],
     )
     primary = _preferred_keyword_from_name(product.name)
@@ -1970,13 +2618,24 @@ def check_current_positions(payload: PositionCheckRequest, user: User = Depends(
 
     product_ids = payload.product_ids
     if payload.apply_to_all:
-        product_ids = db.scalars(select(Product.id).where(Product.user_id == user.id)).all()
+        product_ids = db.scalars(
+            select(Product.id).where(
+                Product.user_id == user.id,
+                _owned_by_actor_or_owner_filter(Product, user),
+            )
+        ).all()
     if not product_ids:
         raise HTTPException(status_code=400, detail="Выберите товары для проверки позиций")
 
     result: list[PositionCheckOut] = []
     for product_id in product_ids:
-        product = db.scalar(select(Product).where(Product.id == product_id, Product.user_id == user.id))
+        product = db.scalar(
+            select(Product).where(
+                Product.id == product_id,
+                Product.user_id == user.id,
+                _owned_by_actor_or_owner_filter(Product, user),
+            )
+        )
         if not product:
             continue
         _hydrate_external_id_if_needed(db, user.id, product)
@@ -1997,7 +2656,7 @@ def check_current_positions(payload: PositionCheckRequest, user: User = Depends(
                 product.name,
                 product.current_description,
                 competitors,
-                get_user_keywords(db, user.id, product.marketplace),
+                get_user_keywords(db, user.id, product.marketplace, None if _actor_is_owner(user) else int(product.owner_member_id or 0)),
                 [],
             )[:5]
 
@@ -2027,6 +2686,7 @@ def check_current_positions(payload: PositionCheckRequest, user: User = Depends(
                     SeoJob.user_id == user.id,
                     SeoJob.product_id == product.id,
                     SeoJob.status.in_(["generated", "in_progress", "applied", "top_reached"]),
+                    _owned_by_actor_or_owner_filter(SeoJob, user),
                 )
             ).all()
             for job in linked_jobs:
@@ -2057,6 +2717,7 @@ def check_current_positions(payload: PositionCheckRequest, user: User = Depends(
                 SeoJob.user_id == user.id,
                 SeoJob.product_id == product.id,
                 SeoJob.status.in_(["generated", "in_progress", "applied", "top_reached"]),
+                _owned_by_actor_or_owner_filter(SeoJob, user),
             )
         ).all()
         for job in linked_jobs:
@@ -2089,7 +2750,14 @@ def check_current_positions(payload: PositionCheckRequest, user: User = Depends(
             )
         )
 
-    db.add(AuditLog(user_id=user.id, action="positions_checked", details=f"count={len(result)}"))
+    _audit(
+        db,
+        user,
+        action="positions_checked",
+        details=f"count={len(result)}",
+        module_code="rank_tracking",
+        entity_type="product",
+    )
     db.commit()
     return result
 
@@ -2100,14 +2768,25 @@ def generate_seo(payload: SeoGenerateRequest, user: User = Depends(get_current_u
 
     product_ids = payload.product_ids
     if payload.apply_to_all:
-        product_ids = db.scalars(select(Product.id).where(Product.user_id == user.id)).all()
+        product_ids = db.scalars(
+            select(Product.id).where(
+                Product.user_id == user.id,
+                _owned_by_actor_or_owner_filter(Product, user),
+            )
+        ).all()
 
     if not product_ids:
         raise HTTPException(status_code=400, detail="Нет выбранных товаров для SEO")
 
     jobs: list[SeoJob] = []
     for product_id in product_ids:
-        product = db.scalar(select(Product).where(Product.id == product_id, Product.user_id == user.id))
+        product = db.scalar(
+            select(Product).where(
+                Product.id == product_id,
+                Product.user_id == user.id,
+                _owned_by_actor_or_owner_filter(Product, user),
+            )
+        )
         if not product:
             continue
         _hydrate_external_id_if_needed(db, user.id, product)
@@ -2123,7 +2802,7 @@ def generate_seo(payload: SeoGenerateRequest, user: User = Depends(get_current_u
             product.name,
             product.current_description,
             competitors,
-            get_user_keywords(db, user.id, product.marketplace),
+            get_user_keywords(db, user.id, product.marketplace, None if _actor_is_owner(user) else int(product.owner_member_id or 0)),
             payload.extra_keywords,
         )
         generated = build_seo_description(product.name, product.current_description, keywords, competitors)
@@ -2153,6 +2832,7 @@ def generate_seo(payload: SeoGenerateRequest, user: User = Depends(get_current_u
 
         job = SeoJob(
             user_id=user.id,
+            owner_member_id=int(product.owner_member_id or _resolve_owner_member_id(db, user) or 0) or None,
             product_id=product.id,
             status="generated",
             generated_description=generated,
@@ -2176,32 +2856,62 @@ def generate_seo(payload: SeoGenerateRequest, user: User = Depends(get_current_u
         db.add(job)
         jobs.append(job)
 
-    db.add(AuditLog(user_id=user.id, action="seo_generated", details=f"count={len(jobs)};apply_to_all={payload.apply_to_all}"))
+    _audit(
+        db,
+        user,
+        action="seo_generated",
+        details=f"count={len(jobs)};apply_to_all={payload.apply_to_all}",
+        module_code="seo_generation",
+        entity_type="seo_job",
+    )
     db.commit()
     return [build_seo_job_out(db, x) for x in jobs]
 
 
 @router.get("/seo/jobs", response_model=list[SeoJobOut])
 def list_seo_jobs(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    jobs = db.scalars(select(SeoJob).where(SeoJob.user_id == user.id).order_by(SeoJob.id.desc())).all()
+    jobs = db.scalars(
+        select(SeoJob).where(
+            SeoJob.user_id == user.id,
+            _owned_by_actor_or_owner_filter(SeoJob, user),
+        ).order_by(SeoJob.id.desc())
+    ).all()
     return [build_seo_job_out(db, x) for x in jobs]
 
 
 @router.post("/seo/jobs/delete", response_model=MessageOut)
 def delete_seo_jobs(payload: SeoDeleteRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if payload.delete_all:
-        jobs = db.scalars(select(SeoJob).where(SeoJob.user_id == user.id)).all()
+        jobs = db.scalars(
+            select(SeoJob).where(
+                SeoJob.user_id == user.id,
+                _owned_by_actor_or_owner_filter(SeoJob, user),
+            )
+        ).all()
     else:
         if not payload.job_ids:
             raise HTTPException(status_code=400, detail="Укажите задачи для удаления")
-        jobs = db.scalars(select(SeoJob).where(SeoJob.user_id == user.id, SeoJob.id.in_(payload.job_ids))).all()
+        jobs = db.scalars(
+            select(SeoJob).where(
+                SeoJob.user_id == user.id,
+                SeoJob.id.in_(payload.job_ids),
+                _owned_by_actor_or_owner_filter(SeoJob, user),
+            )
+        ).all()
 
     deleted = 0
     for job in jobs:
         db.delete(job)
         deleted += 1
 
-    db.add(AuditLog(user_id=user.id, action="seo_deleted", details=f"count={deleted};all={payload.delete_all}"))
+    _audit(
+        db,
+        user,
+        action="seo_deleted",
+        details=f"count={deleted};all={payload.delete_all}",
+        module_code="seo_generation",
+        entity_type="seo_job",
+    )
     db.commit()
     return MessageOut(message=f"Удалено SEO задач: {deleted}")
 
@@ -2229,15 +2939,23 @@ def apply_seo(payload: SeoApplyRequest, user: User = Depends(get_current_user), 
     if not payload.job_ids:
         raise HTTPException(status_code=400, detail="Выберите хотя бы одну SEO-задачу")
 
-    jobs = db.scalars(select(SeoJob).where(SeoJob.user_id == user.id, SeoJob.id.in_(payload.job_ids))).all()
+    jobs = db.scalars(
+        select(SeoJob).where(
+            SeoJob.user_id == user.id,
+            SeoJob.id.in_(payload.job_ids),
+            _owned_by_actor_or_owner_filter(SeoJob, user),
+        )
+    ).all()
     if not jobs:
         raise HTTPException(status_code=404, detail="Задачи не найдены")
 
     updated_jobs: list[SeoJob] = []
     for job in jobs:
+        _enforce_record_owner_access(job, user)
         product = db.get(Product, job.product_id)
         if not product:
             continue
+        _enforce_record_owner_access(product, user)
         _hydrate_external_id_if_needed(db, user.id, product)
 
         cred = _resolve_credential(db, user.id, product.marketplace)
@@ -2250,7 +2968,14 @@ def apply_seo(payload: SeoApplyRequest, user: User = Depends(get_current_user), 
         job.next_check_at = schedule_next_check(job.current_position, job.target_position)
         updated_jobs.append(job)
 
-    db.add(AuditLog(user_id=user.id, action="seo_applied", details=f"count={len(updated_jobs)}"))
+    _audit(
+        db,
+        user,
+        action="seo_applied",
+        details=f"count={len(updated_jobs)}",
+        module_code="auto_apply",
+        entity_type="seo_job",
+    )
     db.commit()
     return [build_seo_job_out(db, x) for x in updated_jobs]
 
@@ -2266,16 +2991,25 @@ def recheck_seo(payload: SeoRecheckRequest, user: User = Depends(get_current_use
                 SeoJob.status.in_(["applied", "in_progress", "generated"]),
                 SeoJob.next_check_at.is_not(None),
                 SeoJob.next_check_at <= datetime.utcnow(),
+                _owned_by_actor_or_owner_filter(SeoJob, user),
             )
         ).all()
     else:
-        jobs = db.scalars(select(SeoJob).where(SeoJob.user_id == user.id, SeoJob.id.in_(payload.job_ids))).all()
+        jobs = db.scalars(
+            select(SeoJob).where(
+                SeoJob.user_id == user.id,
+                SeoJob.id.in_(payload.job_ids),
+                _owned_by_actor_or_owner_filter(SeoJob, user),
+            )
+        ).all()
 
     result: list[SeoJob] = []
     for job in jobs:
+        _enforce_record_owner_access(job, user)
         product = db.get(Product, job.product_id)
         if not product:
             continue
+        _enforce_record_owner_access(product, user)
         marketplace_api_key = _get_active_marketplace_api_key(db, user.id, product.marketplace)
 
         keywords = [k.strip() for k in job.keywords_snapshot.split(",") if k.strip()]
@@ -2314,19 +3048,53 @@ def recheck_seo(payload: SeoRecheckRequest, user: User = Depends(get_current_use
         job.next_check_at = schedule_next_check(current_position, job.target_position)
         result.append(job)
 
-    db.add(AuditLog(user_id=user.id, action="seo_rechecked", details=f"count={len(result)}"))
+    _audit(
+        db,
+        user,
+        action="seo_rechecked",
+        details=f"count={len(result)}",
+        module_code="rank_tracking",
+        entity_type="seo_job",
+    )
     db.commit()
     return [build_seo_job_out(db, x) for x in result]
 
 
 @router.get("/dashboard", response_model=DashboardOut)
 def dashboard(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    total_products = db.scalar(select(func.count()).select_from(Product).where(Product.user_id == user.id)) or 0
-    total_jobs = db.scalar(select(func.count()).select_from(SeoJob).where(SeoJob.user_id == user.id)) or 0
-    applied_jobs = db.scalar(select(func.count()).select_from(SeoJob).where(SeoJob.user_id == user.id, SeoJob.status == "applied")) or 0
-    in_progress_jobs = db.scalar(select(func.count()).select_from(SeoJob).where(SeoJob.user_id == user.id, SeoJob.status.in_(["in_progress", "generated"]))) or 0
+    total_products = db.scalar(
+        select(func.count()).select_from(Product).where(
+            Product.user_id == user.id,
+            _owned_by_actor_or_owner_filter(Product, user),
+        )
+    ) or 0
+    total_jobs = db.scalar(
+        select(func.count()).select_from(SeoJob).where(
+            SeoJob.user_id == user.id,
+            _owned_by_actor_or_owner_filter(SeoJob, user),
+        )
+    ) or 0
+    applied_jobs = db.scalar(
+        select(func.count()).select_from(SeoJob).where(
+            SeoJob.user_id == user.id,
+            SeoJob.status == "applied",
+            _owned_by_actor_or_owner_filter(SeoJob, user),
+        )
+    ) or 0
+    in_progress_jobs = db.scalar(
+        select(func.count()).select_from(SeoJob).where(
+            SeoJob.user_id == user.id,
+            SeoJob.status.in_(["in_progress", "generated"]),
+            _owned_by_actor_or_owner_filter(SeoJob, user),
+        )
+    ) or 0
     top5_products = db.scalar(
-        select(func.count()).select_from(Product).where(Product.user_id == user.id, Product.last_position.is_not(None), Product.last_position <= 5)
+        select(func.count()).select_from(Product).where(
+            Product.user_id == user.id,
+            Product.last_position.is_not(None),
+            Product.last_position <= 5,
+            _owned_by_actor_or_owner_filter(Product, user),
+        )
     ) or 0
 
     return DashboardOut(total_products=total_products, total_jobs=total_jobs, applied_jobs=applied_jobs, in_progress_jobs=in_progress_jobs, top5_products=top5_products)
@@ -2345,6 +3113,16 @@ def seo_trend(
         PositionSnapshot.user_id == user.id,
         PositionSnapshot.created_at >= since,
     )
+    if not _actor_is_owner(user):
+        visible_product_ids = db.scalars(
+            select(Product.id).where(
+                Product.user_id == user.id,
+                _owned_by_actor_or_owner_filter(Product, user),
+            )
+        ).all()
+        if not visible_product_ids:
+            return TrendOut(points=[])
+        query = query.where(PositionSnapshot.product_id.in_(visible_product_ids))
     if product_id is not None:
         query = query.where(PositionSnapshot.product_id == product_id)
 
@@ -2371,6 +3149,8 @@ def sales_stats(
     marketplace: str = "all",
     date_from: date | None = None,
     date_to: date | None = None,
+    granularity: str = "auto",
+    tz: str = "UTC",
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -2386,6 +3166,15 @@ def sales_stats(
     if (right - left).days > 365:
         left = right - timedelta(days=365)
 
+    gran = str(granularity or "auto").strip().lower()
+    if gran not in {"auto", "hour", "day"}:
+        raise HTTPException(status_code=400, detail="granularity должен быть auto, hour или day")
+    tz_name = str(tz or "UTC").strip() or "UTC"
+    try:
+        ZoneInfo(tz_name)
+    except Exception:
+        tz_name = "UTC"
+
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     ozon_key = _get_active_marketplace_api_key(db, user.id, "ozon")
     try:
@@ -2395,6 +3184,8 @@ def sales_stats(
             date_to=right,
             wb_api_key=wb_key,
             ozon_api_key=ozon_key,
+            granularity=gran,
+            timezone=tz_name,
         )
     except Exception as exc:
         payload = {
@@ -2406,11 +3197,13 @@ def sales_stats(
                 "revenue": 0.0,
                 "returns": 0,
                 "ad_spend": 0.0,
-                "other_costs": 0.0,
+                "penalties": 0.0,
                 "days": 0,
                 "gross_profit": 0.0,
             },
             "warnings": [f"Ошибка загрузки статистики: {str(exc or '')[:220]}"],
+            "granularity": "day",
+            "timezone": tz_name,
         }
     rows = payload.get("rows") if isinstance(payload, dict) else []
     chart = payload.get("chart") if isinstance(payload, dict) else []
@@ -2421,18 +3214,23 @@ def sales_stats(
     totals = totals if isinstance(totals, dict) else {}
     warnings = warnings if isinstance(warnings, list) else []
 
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            action="sales_stats_read",
-            details=f"market={selected_market};from={left.isoformat()};to={right.isoformat()};rows={len(rows)}",
-        )
+    report_granularity = str(payload.get("granularity") or ("hour" if gran == "hour" else "day"))
+    report_tz = str(payload.get("timezone") or tz_name)
+    _audit(
+        db,
+        user,
+        action="sales_stats_read",
+        details=f"market={selected_market};from={left.isoformat()};to={right.isoformat()};rows={len(rows)};granularity={report_granularity};tz={report_tz}",
+        module_code="sales_stats",
+        entity_type="sales",
     )
     db.commit()
     return SalesStatsOut(
         marketplace=selected_market,
         date_from=left.isoformat(),
         date_to=right.isoformat(),
+        granularity=report_granularity,
+        timezone=report_tz,
         rows=rows,
         chart=chart,
         totals=totals,
@@ -2446,6 +3244,10 @@ def profile_state(user: User = Depends(get_current_user), db: Session = Depends(
     profile = _get_or_create_user_profile(db, user.id)
     account = _get_or_create_billing_account(db, user.id)
     payload = _build_user_profile_payload(db, user, profile, account)
+    if not _actor_is_owner(user):
+        actor_email = _actor_email(user)
+        payload.credentials = []
+        payload.team_members = [x for x in payload.team_members if str(x.email or "").strip().lower() == actor_email]
     db.commit()
     return payload
 
@@ -2453,6 +3255,7 @@ def profile_state(user: User = Depends(get_current_user), db: Session = Depends(
 @router.put("/profile", response_model=UserProfileOut)
 def profile_update(payload: UserProfileUpdateIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     ensure_module_enabled(db, user, "user_profile")
+    _require_owner_actor(user)
     profile = _get_or_create_user_profile(db, user.id)
 
     profile.full_name = payload.full_name.strip()[:255]
@@ -2550,6 +3353,7 @@ def profile_ai_service_delete(service_id: int, user: User = Depends(get_current_
 @router.get("/profile/team", response_model=list[TeamMemberOut])
 def profile_team_list(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     ensure_module_enabled(db, user, "user_profile")
+    _require_owner_actor(user)
     rows = _list_team_members(db, user.id)
     db.commit()
     return rows
@@ -2558,6 +3362,7 @@ def profile_team_list(user: User = Depends(get_current_user), db: Session = Depe
 @router.post("/profile/team", response_model=TeamMemberOut)
 def profile_team_add(payload: TeamMemberIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     ensure_module_enabled(db, user, "user_profile")
+    _require_owner_actor(user)
     email = payload.email.strip().lower()
     _ensure_team_email_is_available(db, email, user_id=user.id)
     exists = db.scalar(select(TeamMember).where(TeamMember.user_id == user.id, TeamMember.email == email))
@@ -2585,6 +3390,7 @@ def profile_team_add(payload: TeamMemberIn, user: User = Depends(get_current_use
 @router.put("/profile/team/{member_id}", response_model=TeamMemberOut)
 def profile_team_update(member_id: int, payload: TeamMemberIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     ensure_module_enabled(db, user, "user_profile")
+    _require_owner_actor(user)
     row = db.get(TeamMember, member_id)
     if not row or row.user_id != user.id:
         raise HTTPException(status_code=404, detail="Сотрудник не найден")
@@ -2617,6 +3423,7 @@ def profile_team_update(member_id: int, payload: TeamMemberIn, user: User = Depe
 @router.delete("/profile/team/{member_id}", response_model=MessageOut)
 def profile_team_delete(member_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     ensure_module_enabled(db, user, "user_profile")
+    _require_owner_actor(user)
     row = db.get(TeamMember, member_id)
     if not row or row.user_id != user.id:
         raise HTTPException(status_code=404, detail="Сотрудник не найден")
@@ -2670,6 +3477,7 @@ def profile_change_password(
 @router.post("/profile/plan", response_model=UserProfileOut)
 def profile_change_plan(payload: BillingPlanChangeIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     ensure_module_enabled(db, user, "user_profile")
+    _require_owner_actor(user)
     plan_code = (payload.plan_code or "").strip().lower()
     if plan_code not in BILLING_PLANS:
         raise HTTPException(status_code=400, detail=f"Неизвестный план: {plan_code}")
@@ -2698,6 +3506,7 @@ def profile_change_plan(payload: BillingPlanChangeIn, user: User = Depends(get_c
 @router.post("/profile/renew", response_model=UserProfileOut)
 def profile_renew_plan(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     ensure_module_enabled(db, user, "user_profile")
+    _require_owner_actor(user)
     account = _get_or_create_billing_account(db, user.id)
     base = account.renew_at if account.renew_at and account.renew_at > datetime.utcnow() else datetime.utcnow()
     account.renew_at = base + timedelta(days=30)
@@ -3037,6 +3846,7 @@ def admin_save_ui_settings(payload: UiSettingsIn, me: User = Depends(get_admin_u
     next_payload = _sanitize_ui_settings_payload(
         {
             "theme_choice_enabled": bool(payload.theme_choice_enabled),
+            "force_theme": bool(payload.force_theme),
             "default_theme": payload.default_theme,
             "allowed_themes": payload.allowed_themes,
         }
@@ -3308,16 +4118,35 @@ def admin_audit(limit: int = 200, _: User = Depends(get_admin_user), db: Session
     return db.scalars(select(AuditLog).order_by(AuditLog.id.desc()).limit(clamped)).all()
 
 
-def upsert_products(db: Session, user_id: int, marketplace: str, api_key: str, articles: list[str], import_all: bool) -> list[Product]:
+def upsert_products(
+    db: Session,
+    user_id: int,
+    marketplace: str,
+    api_key: str,
+    articles: list[str],
+    import_all: bool,
+    *,
+    owner_member_id: int,
+    actor_is_owner: bool,
+) -> list[Product]:
     data = fetch_products_from_marketplace(marketplace, api_key, articles, import_all)
     upserted: list[Product] = []
     for item in data:
-        product = db.scalar(
-            select(Product).where(Product.user_id == user_id, Product.marketplace == marketplace, Product.article == item.article)
+        base_query = select(Product).where(
+            Product.user_id == user_id,
+            Product.marketplace == marketplace,
+            Product.article == item.article,
         )
+        if actor_is_owner:
+            product = db.scalar(base_query.order_by(Product.id.desc()))
+        else:
+            product = db.scalar(
+                base_query.where(Product.owner_member_id == int(owner_member_id or 0)).order_by(Product.id.desc())
+            )
         if not product:
             product = Product(
                 user_id=user_id,
+                owner_member_id=int(owner_member_id or 0) or None,
                 marketplace=marketplace,
                 article=item.article,
                 external_id=item.external_id,
@@ -3334,6 +4163,8 @@ def upsert_products(db: Session, user_id: int, marketplace: str, api_key: str, a
             product.barcode = item.barcode
             product.photo_url = item.photo_url or product.photo_url
             product.current_description = item.description
+            if not product.owner_member_id:
+                product.owner_member_id = int(owner_member_id or 0) or None
         upserted.append(product)
     return upserted
 
@@ -3379,9 +4210,12 @@ def build_seo_job_out(db: Session, job: SeoJob) -> SeoJobOut:
     )
 
 
-def get_user_keywords(db: Session, user_id: int, marketplace: str) -> list[str]:
+def get_user_keywords(db: Session, user_id: int, marketplace: str, owner_member_id: int | None = None) -> list[str]:
+    query = select(UserKeyword.keyword).where(UserKeyword.user_id == user_id, UserKeyword.marketplace.in_(["all", marketplace]))
+    if owner_member_id is not None and int(owner_member_id or 0) > 0:
+        query = query.where(UserKeyword.owner_member_id == int(owner_member_id))
     rows = db.scalars(
-        select(UserKeyword.keyword).where(UserKeyword.user_id == user_id, UserKeyword.marketplace.in_(["all", marketplace]))
+        query
     ).all()
     return list(dict.fromkeys([x.strip() for x in rows if x and x.strip()]))
 
@@ -3668,6 +4502,7 @@ def _safe_team_scope(values: list[str] | None) -> list[str]:
         "sales_stats",
         "wb_reviews_ai",
         "wb_questions_ai",
+        "returns",
         "wb_ads",
         "wb_ads_analytics",
         "wb_ads_recommendations",
@@ -4010,6 +4845,7 @@ def _set_system_setting(db: Session, key: str, value: str) -> None:
 def _sanitize_ui_settings_payload(raw: dict[str, Any] | None) -> dict[str, Any]:
     data = raw if isinstance(raw, dict) else {}
     enabled = bool(data.get("theme_choice_enabled", DEFAULT_UI_SETTINGS["theme_choice_enabled"]))
+    force_theme = bool(data.get("force_theme", DEFAULT_UI_SETTINGS.get("force_theme", False)))
     default_theme = str(data.get("default_theme") or DEFAULT_UI_SETTINGS["default_theme"]).strip().lower()
     if default_theme not in AVAILABLE_THEMES:
         default_theme = str(DEFAULT_UI_SETTINGS["default_theme"])
@@ -4029,6 +4865,7 @@ def _sanitize_ui_settings_payload(raw: dict[str, Any] | None) -> dict[str, Any]:
         default_theme = allowed[0]
     return {
         "theme_choice_enabled": enabled,
+        "force_theme": force_theme,
         "default_theme": default_theme,
         "allowed_themes": allowed,
     }
@@ -4077,6 +4914,237 @@ def _sanitize_generated_description(text: str) -> str:
         raw = raw.replace(phrase, "").strip()
     raw = " ".join(raw.split())
     return raw
+
+
+def _actor_member_id(user: User) -> int:
+    try:
+        return int(getattr(user, "_actor_member_id", 0) or 0)
+    except Exception:
+        return 0
+
+
+def _actor_is_owner(user: User) -> bool:
+    return bool(getattr(user, "_actor_is_owner", True))
+
+
+def _actor_email(user: User) -> str:
+    return str(getattr(user, "_actor_email", "") or "").strip().lower()
+
+
+def _require_owner_actor(user: User) -> None:
+    if not _actor_is_owner(user):
+        raise HTTPException(status_code=403, detail="Только владелец кабинета может выполнять это действие")
+
+
+def _owner_member_id_for_user(db: Session, user_id: int) -> int:
+    row = db.scalar(
+        select(TeamMember.id).where(
+            TeamMember.user_id == user_id,
+            TeamMember.is_owner.is_(True),
+        ).order_by(TeamMember.id.asc())
+    )
+    return int(row or 0)
+
+
+def _resolve_owner_member_id(db: Session, user: User) -> int:
+    actor_member_id = _actor_member_id(user)
+    if actor_member_id > 0 and not _actor_is_owner(user):
+        return actor_member_id
+    owner_member_id = _owner_member_id_for_user(db, user.id)
+    if owner_member_id > 0:
+        return owner_member_id
+    return actor_member_id
+
+
+def _owned_by_actor_or_owner_filter(model: Any, user: User) -> Any:
+    if _actor_is_owner(user):
+        return True
+    actor_id = _actor_member_id(user)
+    if actor_id <= 0:
+        return False
+    return model.owner_member_id == actor_id
+
+
+def _enforce_record_owner_access(record: Any, user: User) -> None:
+    if _actor_is_owner(user):
+        return
+    actor_id = _actor_member_id(user)
+    if actor_id <= 0:
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+    owner_member_id = int(getattr(record, "owner_member_id", 0) or 0)
+    if owner_member_id != actor_id:
+        raise HTTPException(status_code=403, detail="Недостаточно прав для доступа к данным другого сотрудника")
+
+
+def _assign_owner_member(record: Any, owner_member_id: int) -> None:
+    if hasattr(record, "owner_member_id"):
+        setattr(record, "owner_member_id", int(owner_member_id or 0) or None)
+
+
+def _work_item_claim_key(module_code: str, marketplace: str, item_type: str, item_external_id: str) -> tuple[str, str, str, str]:
+    return (
+        str(module_code or "").strip().lower(),
+        str(marketplace or "").strip().lower(),
+        str(item_type or "").strip().lower(),
+        str(item_external_id or "").strip(),
+    )
+
+
+def _claim_or_validate_work_item(
+    db: Session,
+    user: User,
+    *,
+    module_code: str,
+    marketplace: str,
+    item_type: str,
+    item_external_id: str,
+) -> None:
+    if _actor_is_owner(user):
+        return
+    actor_member_id = _actor_member_id(user)
+    if actor_member_id <= 0:
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+    _, _, _, item_id = _work_item_claim_key(module_code, marketplace, item_type, item_external_id)
+    if not item_id:
+        raise HTTPException(status_code=400, detail="Не удалось определить ID записи")
+    row = db.scalar(
+        select(WorkItemClaim).where(
+            WorkItemClaim.user_id == user.id,
+            WorkItemClaim.module_code == module_code,
+            WorkItemClaim.marketplace == marketplace,
+            WorkItemClaim.item_type == item_type,
+            WorkItemClaim.item_external_id == item_id,
+        )
+    )
+    if row:
+        if int(row.owner_member_id or 0) != actor_member_id:
+            raise HTTPException(status_code=403, detail="Запись уже закреплена за другим сотрудником")
+        row.updated_at = datetime.utcnow()
+        return
+    row = WorkItemClaim(
+        user_id=user.id,
+        module_code=module_code,
+        marketplace=marketplace,
+        item_type=item_type,
+        item_external_id=item_id,
+        owner_member_id=actor_member_id,
+    )
+    db.add(row)
+
+
+def _feedback_synthetic_id(row: dict[str, Any], marketplace: str) -> str:
+    raw = str(
+        row.get("id")
+        or row.get("feedbackId")
+        or row.get("feedback_id")
+        or row.get("reviewId")
+        or row.get("review_id")
+        or row.get("questionId")
+        or row.get("question_id")
+        or ""
+    ).strip()
+    if raw:
+        return raw
+    parts = [
+        str(row.get("created_at") or row.get("date") or ""),
+        str(row.get("product") or ""),
+        str(row.get("article") or ""),
+        str(row.get("barcode") or ""),
+        str(row.get("user") or ""),
+        str(row.get("text") or ""),
+        str(row.get("answer") or ""),
+    ]
+    base = "|".join(parts).strip().lower()
+    if not base:
+        return ""
+    digest = hashlib.sha1(base.encode("utf-8")).hexdigest()[:12]
+    return f"{marketplace}-fb-{digest}"
+
+
+def _filter_claimed_feedback_rows(
+    db: Session,
+    user: User,
+    *,
+    module_code: str,
+    marketplace: str,
+    item_type: str,
+    rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    safe_rows = [x for x in (rows or []) if isinstance(x, dict)]
+    if _actor_is_owner(user):
+        for row in safe_rows:
+            row["id"] = _feedback_synthetic_id(row, marketplace)
+        return safe_rows
+    actor_member_id = _actor_member_id(user)
+    if actor_member_id <= 0:
+        return []
+    ids: list[str] = []
+    for row in safe_rows:
+        row_id = _feedback_synthetic_id(row, marketplace)
+        row["id"] = row_id
+        if row_id:
+            ids.append(row_id)
+    if not ids:
+        return safe_rows
+    claims = db.scalars(
+        select(WorkItemClaim).where(
+            WorkItemClaim.user_id == user.id,
+            WorkItemClaim.module_code == module_code,
+            WorkItemClaim.marketplace == marketplace,
+            WorkItemClaim.item_type == item_type,
+            WorkItemClaim.item_external_id.in_(ids),
+        )
+    ).all()
+    claimed_by: dict[str, int] = {
+        str(x.item_external_id): int(x.owner_member_id or 0)
+        for x in claims
+    }
+    out: list[dict[str, Any]] = []
+    for row in safe_rows:
+        row_id = str(row.get("id") or "")
+        owner = claimed_by.get(row_id)
+        if owner and owner != actor_member_id:
+            continue
+        out.append(row)
+    return out
+
+
+def _audit(
+    db: Session,
+    user: User | None,
+    *,
+    action: str,
+    details: str = "",
+    module_code: str = "",
+    entity_type: str = "",
+    entity_id: str = "",
+    status: str = "ok",
+    request: Request | None = None,
+) -> None:
+    actor_email = _actor_email(user) if user else ""
+    actor_member_id = _actor_member_id(user) if user else None
+    actor_is_owner = _actor_is_owner(user) if user else True
+    client_ip = ""
+    user_agent = ""
+    if request is not None:
+        client_ip = str(getattr(request.client, "host", "") or "")
+        user_agent = str(request.headers.get("user-agent") or "")[:500]
+    db.add(
+        AuditLog(
+            user_id=(user.id if user else None),
+            action=str(action or "").strip()[:120],
+            details=str(details or "")[:5000],
+            actor_email=actor_email[:255],
+            actor_member_id=actor_member_id,
+            actor_is_owner=actor_is_owner,
+            module_code=str(module_code or "")[:80],
+            entity_type=str(entity_type or "")[:80],
+            entity_id=str(entity_id or "")[:120],
+            status=str(status or "ok")[:24],
+            ip=client_ip[:80],
+            user_agent=user_agent[:500],
+        )
+    )
 
 
 def _actor_scope(user: User) -> list[str]:
