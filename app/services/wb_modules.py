@@ -304,6 +304,8 @@ def post_wb_question_reply(api_key: str, question_id: str, text: str) -> tuple[b
         {"question_id": qid, "text": reply},
         {"id": qid, "answer": reply},
         {"questionId": qid, "answer": reply},
+        {"id": qid, "answer": {"text": reply}},
+        {"questionId": qid, "answer": {"text": reply}},
     ]
     if qid.isdigit():
         qid_int = int(qid)
@@ -312,9 +314,14 @@ def post_wb_question_reply(api_key: str, question_id: str, text: str) -> tuple[b
                 {"id": qid_int, "text": reply},
                 {"questionId": qid_int, "text": reply},
                 {"question_id": qid_int, "text": reply},
+                {"id": qid_int, "answer": reply},
+                {"id": qid_int, "answer": {"text": reply}},
             ]
         )
     attempts: list[tuple[str, str, dict[str, Any]]] = []
+    # Official endpoint for questions handling is PATCH /api/v1/questions.
+    for payload in payloads:
+        attempts.append(("PATCH", "https://feedbacks-api.wildberries.ru/api/v1/questions", payload))
     for endpoint in (
         "https://feedbacks-api.wildberries.ru/api/v1/questions/answer",
         "https://feedbacks-api.wildberries.ru/api/v1/questions/answers",
@@ -417,32 +424,39 @@ def post_ozon_review_reply(api_key: str, review_id: str, text: str) -> tuple[boo
     payloads: list[dict[str, Any]] = [
         {"review_id": raw_id, "text": reply},
         {"id": raw_id, "text": reply},
+        {"review_id": raw_id, "comment": reply},
+        {"id": raw_id, "comment": reply},
+        {"review_id": raw_id, "answer": reply},
+        {"id": raw_id, "answer": reply},
     ]
     if int_id is not None:
         payloads.extend(
             [
                 {"review_id": int_id, "text": reply},
                 {"id": int_id, "text": reply},
+                {"review_id": int_id, "comment": reply},
+                {"id": int_id, "comment": reply},
+                {"review_id": int_id, "answer": reply},
+                {"id": int_id, "answer": reply},
             ]
         )
 
-    endpoints = [
+    attempts: list[tuple[str, str, dict[str, Any]]] = []
+    for endpoint in (
         "https://api-seller.ozon.ru/v1/review/comment/create",
         "https://api-seller.ozon.ru/v1/review/comment/update",
         "https://api-seller.ozon.ru/v1/review/comment",
-    ]
-    last_error = "Не удалось отправить ответ в Ozon API"
-    for endpoint in endpoints:
-        for payload in payloads:
-            response = _request_ozon_response("POST", endpoint, api_key=api_key, payload=payload)
-            if response is None:
-                continue
-            if response.status_code < 400:
-                return True, "Ответ отправлен"
-            body = _safe_response_text(response)
-            if body:
-                last_error = f"Ozon API вернул {response.status_code}: {body}"
-    return False, last_error
+        "https://api-seller.ozon.ru/v1/review/answer/create",
+        "https://api-seller.ozon.ru/v1/review/answer/update",
+        "https://api-seller.ozon.ru/v1/review/answer",
+        "https://api-seller.ozon.ru/v2/review/comment/create",
+        "https://api-seller.ozon.ru/v2/review/comment/update",
+        "https://api-seller.ozon.ru/v2/review/comment",
+    ):
+        for method in ("POST", "PATCH", "PUT"):
+            for payload in payloads:
+                attempts.append((method, endpoint, payload))
+    return _post_ozon_reply_with_fallback(api_key, attempts, entity_label="отзыв")
 
 
 def post_ozon_question_reply(api_key: str, question_id: str, text: str) -> tuple[bool, str]:
@@ -464,27 +478,91 @@ def post_ozon_question_reply(api_key: str, question_id: str, text: str) -> tuple
     payloads: list[dict[str, Any]] = [
         {"question_id": raw_id, "text": reply},
         {"id": raw_id, "text": reply},
+        {"question_id": raw_id, "answer_text": reply},
+        {"id": raw_id, "answer_text": reply},
+        {"question_id": raw_id, "answer": reply},
+        {"id": raw_id, "answer": reply},
     ]
     if int_id is not None:
-        payloads.extend([{"question_id": int_id, "text": reply}, {"id": int_id, "text": reply}])
+        payloads.extend(
+            [
+                {"question_id": int_id, "text": reply},
+                {"id": int_id, "text": reply},
+                {"question_id": int_id, "answer_text": reply},
+                {"id": int_id, "answer_text": reply},
+                {"question_id": int_id, "answer": reply},
+                {"id": int_id, "answer": reply},
+            ]
+        )
 
-    endpoints = [
+    attempts: list[tuple[str, str, dict[str, Any]]] = []
+    for endpoint in (
         "https://api-seller.ozon.ru/v1/question/answer/create",
         "https://api-seller.ozon.ru/v1/question/answer/update",
         "https://api-seller.ozon.ru/v1/question/answer",
-    ]
+        "https://api-seller.ozon.ru/v1/product/question/answer/create",
+        "https://api-seller.ozon.ru/v1/product/question/answer/update",
+        "https://api-seller.ozon.ru/v1/product/question/answer",
+        "https://api-seller.ozon.ru/v2/question/answer/create",
+        "https://api-seller.ozon.ru/v2/question/answer/update",
+        "https://api-seller.ozon.ru/v2/question/answer",
+    ):
+        for method in ("POST", "PATCH", "PUT"):
+            for payload in payloads:
+                attempts.append((method, endpoint, payload))
+    return _post_ozon_reply_with_fallback(api_key, attempts, entity_label="вопрос")
+
+
+def _post_ozon_reply_with_fallback(
+    api_key: str,
+    attempts: list[tuple[str, str, dict[str, Any]]],
+    entity_label: str = "элемент",
+) -> tuple[bool, str]:
+    if not attempts:
+        return False, "Не задан маршрут отправки ответа в Ozon API"
+
+    seen: set[tuple[str, str, str]] = set()
+    normalized_attempts: list[tuple[str, str, dict[str, Any]]] = []
+    for method, endpoint, payload in attempts:
+        signature = (
+            str(method or "POST").upper().strip(),
+            str(endpoint or "").strip(),
+            str(sorted((payload or {}).items())),
+        )
+        if signature in seen:
+            continue
+        seen.add(signature)
+        normalized_attempts.append((signature[0], signature[1], payload))
+
     last_error = "Не удалось отправить ответ в Ozon API"
-    for endpoint in endpoints:
-        for payload in payloads:
-            response = _request_ozon_response("POST", endpoint, api_key=api_key, payload=payload)
-            if response is None:
-                continue
-            if response.status_code < 400:
-                return True, "Ответ отправлен"
-            body = _safe_response_text(response)
+    for method, endpoint, payload in normalized_attempts:
+        response = _request_ozon_response(method, endpoint, api_key=api_key, payload=payload)
+        if response is None:
+            continue
+        if response.status_code < 400:
+            return True, "Ответ отправлен"
+        body = _safe_response_text(response)
+        if response.status_code in {404, 405, 409, 422}:
             if body:
                 last_error = f"Ozon API вернул {response.status_code}: {body}"
-    return False, last_error
+            else:
+                last_error = f"Ozon API вернул {response.status_code}"
+            continue
+        if response.status_code == 429:
+            return False, "Ozon API вернул 429 (лимит запросов). Повторите позже."
+        if response.status_code in {401, 403}:
+            return False, "Ozon API отклонил ключ (401/403). Проверьте client_id и api_key."
+        if response.status_code >= 500:
+            if body:
+                last_error = f"Ozon API временно недоступен ({response.status_code}): {body}"
+            else:
+                last_error = f"Ozon API временно недоступен ({response.status_code})"
+            continue
+        if body:
+            last_error = f"Ozon API вернул {response.status_code}: {body}"
+        else:
+            last_error = f"Ozon API вернул {response.status_code}"
+    return False, f"Не удалось отправить ответ на {entity_label}: {last_error}"
 
 
 def generate_review_reply(

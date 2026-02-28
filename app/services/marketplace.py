@@ -1466,6 +1466,14 @@ def _extract_ozon_photos(source: dict[str, Any]) -> list[str]:
         val = source.get(key)
         if isinstance(val, str) and val.strip():
             push(val, bucket="primary")
+        elif isinstance(val, list):
+            for idx, item in enumerate(val):
+                if isinstance(item, str) and item.strip():
+                    push(item, bucket="primary" if idx == 0 else "common")
+                elif isinstance(item, dict):
+                    value = image_from_obj(item)
+                    if value:
+                        push(value, bucket="primary" if idx == 0 else "common")
 
     for key, val in source.items():
         if not isinstance(val, str):
@@ -1480,6 +1488,14 @@ def _extract_ozon_photos(source: dict[str, Any]) -> list[str]:
         val = image_from_obj(primary)
         if val:
             push(val, bucket="primary")
+    elif isinstance(primary, list):
+        for idx, item in enumerate(primary):
+            if isinstance(item, str) and item.strip():
+                push(item, bucket="primary" if idx == 0 else "common")
+            elif isinstance(item, dict):
+                val = image_from_obj(item)
+                if val:
+                    push(val, bucket="primary" if idx == 0 else "common")
 
     images = source.get("images")
     if isinstance(images, list) and images:
