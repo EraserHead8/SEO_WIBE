@@ -437,7 +437,7 @@ def generate_review_reply(
     token = (api_key or "").strip() or (settings.openai_api_key or "").strip()
     if not token:
         return fallback
-    resolved_model = (model or "").strip() or settings.openai_model
+    resolved_model = _resolve_provider_model(provider=provider, model=(model or "").strip() or settings.openai_model)
 
     if kind == "question":
         system_prompt = custom_prompt or (
@@ -523,7 +523,7 @@ def generate_help_assistant_reply(
     fallback = _fallback_help_reply(q, context_text=context_text)
     if not token:
         return fallback
-    resolved_model = (model or "").strip() or settings.openai_model
+    resolved_model = _resolve_provider_model(provider=provider, model=(model or "").strip() or settings.openai_model)
     sys_prompt = (prompt or "").strip() or (
         "Ты AI-помощник сервиса SEO WIBE для продавцов маркетплейсов. "
         "Помогай по WB, Ozon и по самому сервису. "
@@ -591,6 +591,20 @@ def _resolve_ai_chat_endpoint(provider: str, base_url: str) -> str:
         "xai": "https://api.x.ai/v1/chat/completions",
     }
     return endpoints.get(code, endpoints["openai"])
+
+
+def _resolve_provider_model(provider: str, model: str) -> str:
+    code = str(provider or "").strip().lower()
+    raw = " ".join(str(model or "").split()).strip()
+    if code == "deepseek":
+        if not raw:
+            return "deepseek-chat"
+        low = raw.lower()
+        # DeepSeek does not accept OpenAI family model IDs.
+        if low.startswith("gpt-") or low in {"o1", "o1-mini", "o3", "o4-mini"}:
+            return "deepseek-chat"
+        return raw
+    return raw or (settings.openai_model or "gpt-4o-mini")
 
 
 def _fallback_help_reply(question: str, context_text: str = "") -> str:
@@ -2753,14 +2767,37 @@ def _extract_knowledge_text(prompt_text: str) -> str:
         "используй базу знаний",
         "служебные инструкции",
     )
+    instruction_patterns = (
+        r"\bты\s+проф+ес+иональ\w*[^.!?]*[.!?]?",
+        r"\bты\s+менеджер[^.!?]*[.!?]?",
+        r"\bтвоя\s+задача[^.!?]*[.!?]?",
+        r"\bнеобходимо\s+будет[^.!?]*[.!?]?",
+        r"\bклиент\s+задает\s+вопросы[^.!?]*[.!?]?",
+        r"\bсформируй\s+только\s+текст\s+ответа[^.!?]*[.!?]?",
+    )
     for line in parts:
         compact = " ".join(str(line or "").split()).strip()
         if not compact:
             continue
-        low = compact.lower()
-        if any(bit in low for bit in instruction_bits):
-            continue
-        clean_lines.append(compact)
+        sentences = re.split(r"(?<=[.!?])\s+", compact)
+        kept: list[str] = []
+        for sentence in sentences:
+            seg = " ".join(sentence.split()).strip()
+            if not seg:
+                continue
+            low = seg.lower()
+            if any(bit in low for bit in instruction_bits):
+                continue
+            kept.append(seg)
+        if not kept:
+            cleaned = compact
+            for pattern in instruction_patterns:
+                cleaned = re.sub(pattern, " ", cleaned, flags=re.IGNORECASE)
+            cleaned = " ".join(cleaned.split()).strip(" -:;,.")
+            if cleaned:
+                kept.append(cleaned)
+        if kept:
+            clean_lines.append(" ".join(kept))
     return "\n".join(clean_lines)[:14000]
 
 

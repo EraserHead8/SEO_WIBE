@@ -5966,11 +5966,27 @@ def _sanitize_ai_service_name(value: str) -> str:
     return text[:120]
 
 
-def _sanitize_ai_service_model(value: str) -> str:
+def _provider_default_model(provider: str) -> str:
+    code = _normalize_ai_provider(provider)
+    defaults = {
+        "deepseek": "deepseek-chat",
+    }
+    return defaults.get(code, settings.openai_model or "gpt-4o-mini")
+
+
+def _sanitize_ai_service_model(value: str, *, provider: str = "openai") -> str:
+    normalized_provider = _normalize_ai_provider(provider)
     text = " ".join(str(value or "").split()).strip()
+    default_model = _provider_default_model(normalized_provider)
     if not text:
-        return settings.openai_model
-    return text[:120]
+        return default_model
+    model = text[:120]
+    low = model.lower()
+    if normalized_provider == "deepseek":
+        # DeepSeek endpoint rejects OpenAI model names; auto-fix common misconfiguration.
+        if low.startswith("gpt-") or low in {"o1", "o1-mini", "o3", "o4-mini"}:
+            return "deepseek-chat"
+    return model
 
 
 def _sanitize_ai_base_url(value: str) -> str:
@@ -6069,9 +6085,10 @@ def _ai_service_to_out(row: AiServiceAccount, *, scope: str) -> AiServiceOut:
 
 def _update_ai_service_row(row: AiServiceAccount, payload: AiServiceIn) -> None:
     row.name = _sanitize_ai_service_name(payload.name)
-    row.provider = _normalize_ai_provider(payload.provider)
+    provider = _normalize_ai_provider(payload.provider)
+    row.provider = provider
     row.api_key = str(payload.api_key or "").strip()[:255]
-    row.model = _sanitize_ai_service_model(payload.model)
+    row.model = _sanitize_ai_service_model(payload.model, provider=provider)
     row.base_url = _sanitize_ai_base_url(payload.base_url)
     row.is_active = True
 
@@ -6131,6 +6148,29 @@ def _resolve_user_ai_runtime(db: Session, user_id: int) -> dict[str, Any]:
         mode = "builtin"
         service_id = None
 
+    if mode == "builtin" and not str(settings.openai_api_key or "").strip():
+        # If built-in key is absent, transparently fallback to latest active global service.
+        fallback_global = db.scalar(
+            select(AiServiceAccount)
+            .where(
+                AiServiceAccount.user_id.is_(None),
+                AiServiceAccount.is_active.is_(True),
+            )
+            .order_by(AiServiceAccount.id.desc())
+        )
+        if fallback_global and str(fallback_global.api_key or "").strip():
+            fallback_provider = fallback_global.provider or "openai"
+            return {
+                "mode": "global",
+                "service_id": fallback_global.id,
+                "service_name": fallback_global.name or f"AI #{fallback_global.id}",
+                "provider": fallback_provider,
+                "api_key": fallback_global.api_key or "",
+                "model": _sanitize_ai_service_model(fallback_global.model or "", provider=fallback_provider),
+                "base_url": fallback_global.base_url or "",
+                "source": "auto_global_fallback",
+            }
+
     if mode == "builtin":
         return {
             "mode": "builtin",
@@ -6138,7 +6178,7 @@ def _resolve_user_ai_runtime(db: Session, user_id: int) -> dict[str, Any]:
             "service_name": "Built-in OpenAI",
             "provider": "openai",
             "api_key": settings.openai_api_key or "",
-            "model": settings.openai_model or "gpt-4o-mini",
+            "model": _sanitize_ai_service_model(settings.openai_model or "", provider="openai"),
             "base_url": "",
             "source": "builtin",
         }
@@ -6149,17 +6189,18 @@ def _resolve_user_ai_runtime(db: Session, user_id: int) -> dict[str, Any]:
             "service_name": "Built-in OpenAI",
             "provider": "openai",
             "api_key": settings.openai_api_key or "",
-            "model": settings.openai_model or "gpt-4o-mini",
+            "model": _sanitize_ai_service_model(settings.openai_model or "", provider="openai"),
             "base_url": "",
             "source": "builtin",
         }
+    resolved_provider = service_row.provider or "openai"
     return {
         "mode": mode,
         "service_id": service_row.id,
         "service_name": service_row.name or f"AI #{service_row.id}",
-        "provider": service_row.provider or "openai",
+        "provider": resolved_provider,
         "api_key": service_row.api_key or "",
-        "model": service_row.model or settings.openai_model,
+        "model": _sanitize_ai_service_model(service_row.model or "", provider=resolved_provider),
         "base_url": service_row.base_url or "",
         "source": "service",
     }
