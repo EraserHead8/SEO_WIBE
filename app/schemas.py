@@ -91,6 +91,14 @@ class ProductDetailOut(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class ProductPageOut(BaseModel):
+    rows: list[ProductOut] = Field(default_factory=list)
+    total: int = 0
+    page: int = 1
+    page_size: int = 30
+    total_pages: int = 0
+
+
 class SeoGenerateRequest(BaseModel):
     product_ids: list[int] = []
     extra_keywords: list[str] = []
@@ -260,6 +268,15 @@ class AuditLogPageOut(BaseModel):
     page: int = 1
     page_size: int = 100
     total_pages: int = 0
+
+
+class ActivityTrackIn(BaseModel):
+    action: str
+    module_code: str = ""
+    details: str = ""
+    entity_type: str = ""
+    entity_id: str = ""
+    status: str = "ok"
 
 
 class WbReviewOut(BaseModel):

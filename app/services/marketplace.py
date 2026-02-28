@@ -49,46 +49,17 @@ class CompetitorCard:
 
 def fetch_products_from_marketplace(marketplace: str, api_key: str, articles: list[str], import_all: bool) -> list[MarketplaceProduct]:
     """
-    Заглушка для MVP.
-    Здесь добавляется реальная интеграция с WB/Ozon API.
+    Возвращает только реальные товары из API маркетплейса.
+    Демо/fallback-генерация намеренно отключена, чтобы не смешивать
+    фиктивные карточки с реальными данными пользователя.
     """
-    if httpx and marketplace == "wb":
-        live = _fetch_wb_products(api_key, articles, import_all)
-        if live:
-            return live
-    if httpx and marketplace == "ozon":
-        live = _fetch_ozon_products(api_key, articles, import_all)
-        if live:
-            return live
-
-    demo_names = [
-        "Дымоходная труба 110 мм",
-        "Сэндвич-дымоход нержавеющий",
-        "Колено дымохода 45 градусов",
-        "Труба дымохода утепленная",
-    ]
-    result: list[MarketplaceProduct] = []
-    source_articles = articles if articles else ["ART-000001", "ART-000002", "ART-000003"]
-    if import_all:
-        source_articles = [f"{marketplace.upper()}-ART-{100000 + i}" for i in range(1, 31)]
-
-    for i, article in enumerate(source_articles):
-        name = demo_names[i % len(demo_names)]
-        barcode = build_demo_barcode(i + 1)
-        result.append(
-            MarketplaceProduct(
-                article=article,
-                external_id="",
-                barcode=barcode,
-                photo_url=f"https://picsum.photos/seed/{marketplace}-{i+1}/120/120",
-                name=name,
-                description=(
-                    f"{name}. Подходит для безопасного отвода дыма. "
-                    "Усиленная сталь, стабильная тяга, монтаж без лишней сложности."
-                ),
-            )
-        )
-    return result
+    if not httpx:
+        return []
+    if marketplace == "wb":
+        return _fetch_wb_products(api_key, articles, import_all) or []
+    if marketplace == "ozon":
+        return _fetch_ozon_products(api_key, articles, import_all) or []
+    return []
 
 
 def find_competitors(

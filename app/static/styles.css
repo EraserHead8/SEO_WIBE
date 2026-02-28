@@ -1234,6 +1234,29 @@ input[type="checkbox"] {
 }
 
 .table-card { overflow: auto; }
+.products-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 8px 0;
+  flex-wrap: wrap;
+}
+.products-pager-left,
+.products-pager-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.products-pager select {
+  width: auto;
+  min-width: 88px;
+}
+.products-pager .btn-secondary {
+  padding: 8px 12px;
+  min-height: 36px;
+}
 table { width: 100%; border-collapse: collapse; min-width: 760px; }
 th, td { padding: 12px; border-bottom: 1px solid rgba(157, 183, 255, 0.14); vertical-align: top; }
 th {
@@ -3008,6 +3031,15 @@ body[data-theme="light"] .hover-tip {
   }
   .sales-kpis { grid-template-columns: 1fr; }
   .sales-chart-controls { align-items: flex-start; }
+  .products-pager {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .products-pager-left,
+  .products-pager-right {
+    justify-content: space-between;
+    width: 100%;
+  }
   .kpis { grid-template-columns: 1fr 1fr; }
   .kanban { grid-template-columns: 1fr; }
   #appSection.app-shell {

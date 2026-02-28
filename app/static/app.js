@@ -4,6 +4,11 @@ let selectedProducts = new Set();
 let selectedJobs = new Set();
 let currentProducts = [];
 let currentJobs = [];
+let productPage = 1;
+let productPageSize = 30;
+let productTotal = 0;
+let productTotalPages = 0;
+const PRODUCT_PAGE_SIZE_OPTIONS = [30, 50, 100, 200, 500, 1000];
 let selectedProductId = null;
 let selectedProductDetails = null;
 let autoKeywordProductId = null;
@@ -64,6 +69,7 @@ const MODULE_CACHE_TTL_MS = 30 * 60 * 1000;
 const MODULE_AUTO_REFRESH_MS = 60 * 60 * 1000;
 let moduleAutoRefreshTimer = null;
 const POSITION_LIMIT = 500;
+const uiActivityThrottle = new Map();
 
 const authHeaders = () => ({
   "Content-Type": "application/json",
@@ -164,6 +170,37 @@ function t(key, fallback = "") {
 
 function tr(ru, en) {
   return currentLang === "en" ? en : ru;
+}
+
+function shouldTrackUiActivity(key, cooldownMs = 30000) {
+  const now = Date.now();
+  const prev = Number(uiActivityThrottle.get(key) || 0);
+  if (prev && (now - prev) < Math.max(1000, Number(cooldownMs || 0))) return false;
+  uiActivityThrottle.set(key, now);
+  return true;
+}
+
+async function trackUiActivity(action, moduleCode = "", details = "", options = {}) {
+  if (!token) return;
+  const safeAction = String(action || "").trim().toLowerCase();
+  if (!safeAction) return;
+  const safeModule = String(moduleCode || "").trim().toLowerCase();
+  const safeDetails = String(details || "").trim();
+  const key = `${safeAction}:${safeModule}:${safeDetails}`;
+  if (!options.force && !shouldTrackUiActivity(key, Number(options.cooldownMs || 30000))) return;
+  await requestJson("/api/activity/track", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({
+      action: safeAction,
+      module_code: safeModule,
+      details: safeDetails,
+      entity_type: String(options.entityType || "").trim().toLowerCase(),
+      entity_id: String(options.entityId || "").trim(),
+      status: String(options.status || "ok").trim().toLowerCase() || "ok",
+    }),
+    timeoutMs: 8000,
+  }).catch(() => null);
 }
 
 function moduleLabel(code) {
@@ -466,12 +503,23 @@ function applyUiLanguage() {
   }
   const importMarketplace = document.getElementById("importMarketplace");
   if (importMarketplace) {
+    const currentValue = String(importMarketplace.value || "all");
     importMarketplace.innerHTML = `
       <option value="all">${isEn ? "All marketplaces" : "Все маркетплейсы"}</option>
       <option value="wb">WB</option>
       <option value="ozon">Ozon</option>
     `;
+    if ([...importMarketplace.options].some((opt) => opt.value === currentValue)) {
+      importMarketplace.value = currentValue;
+    }
   }
+  setText("label[for='productPageSizeTop']", isEn ? "Rows per page" : "На странице");
+  setText("label[for='productPageSizeBottom']", isEn ? "Rows per page" : "На странице");
+  setText("#productsPrevTopBtn", isEn ? "Prev" : "Назад");
+  setText("#productsNextTopBtn", isEn ? "Next" : "Далее");
+  setText("#productsPrevBottomBtn", isEn ? "Prev" : "Назад");
+  setText("#productsNextBottomBtn", isEn ? "Next" : "Далее");
+  setText("#seo .panel .grid-4 button:nth-of-type(4)", isEn ? "Select all products" : "Выбрать все товары");
   setText("#seo .panel .grid-5 button:nth-of-type(1)", isEn ? "Generate Selected" : "Сгенерировать для выбранных");
   setText("#seo .panel .grid-5 button:nth-of-type(2)", isEn ? "Generate All" : "Сгенерировать для всех");
   setText("#seo .panel .grid-5 button:nth-of-type(3)", isEn ? "Apply" : "Применить");
@@ -761,6 +809,7 @@ function applyUiLanguage() {
   updateWbAdsLoadStatus();
   updateAdsRecLoadStatus();
   updateSalesLoadStatus();
+  syncProductsPagerControls();
   applyUiThemeSettingsToSelect();
   renderTeamAccessOptions();
   renderTeamMembers();
@@ -1302,9 +1351,11 @@ function switchProductsSubtab(tab, preload = true) {
   document.getElementById("productsSubtabSeoBtn")?.classList.toggle("active", !showCatalog);
   if (!preload) return;
   if (showCatalog) {
+    trackUiActivity("ui_subtab_opened", "products", "subtab=catalog", { cooldownMs: 15000 });
     loadProducts();
     return;
   }
+  trackUiActivity("ui_subtab_opened", "seo_generation", "subtab=seo", { cooldownMs: 15000 });
   loadSeoJobs();
   loadKeywords();
 }
@@ -1557,6 +1608,18 @@ function showTab(name, btn = null) {
   if (targetTab === "billing") runModuleLoader("billing", loadBilling);
   if (targetTab === "help") runModuleLoader("help", loadHelpWorkspace, { maxAgeMs: MODULE_CACHE_TTL_MS });
   if (targetTab === "admin") loadAdmin();
+  const activityMap = {
+    sales: "sales_stats",
+    products: currentProductsSubtab === "seo" ? "seo_generation" : "products",
+    reviews: currentReviewsSubtab === "questions" ? "wb_questions_ai" : (currentReviewsSubtab === "returns" ? "returns" : "wb_reviews_ai"),
+    ads: currentAdsSubtab === "analytics" ? "wb_ads_analytics" : (currentAdsSubtab === "recommendations" ? "wb_ads_recommendations" : "wb_ads"),
+    profile: "user_profile",
+    billing: "billing",
+    help: currentHelpSubtab === "assistant" ? "ai_assistant" : "help_center",
+    admin: "admin",
+  };
+  const activityModule = activityMap[targetTab] || targetTab;
+  trackUiActivity("ui_module_opened", activityModule, `tab=${targetTab}`, { cooldownMs: 15000 });
   setTimeout(() => {
     applyModuleActionIcons();
     applyButtonTooltips();
@@ -1605,6 +1668,10 @@ async function logout() {
   selectedProducts.clear();
   selectedJobs.clear();
   selectedProductId = null;
+  productPage = 1;
+  productPageSize = 30;
+  productTotal = 0;
+  productTotalPages = 0;
   enabledModules = new Set();
   wbReviewRows = [];
   wbQuestionRows = [];
@@ -1765,10 +1832,13 @@ function switchReviewsSubtab(tab, preload = true) {
   document.getElementById("reviewsSubtabReturnsBtn")?.classList.toggle("active", showReturns);
   if (!preload) return;
   if (showReviews) {
+    trackUiActivity("ui_subtab_opened", "wb_reviews_ai", "subtab=reviews", { cooldownMs: 15000 });
     if (!wbReviewRows.length) loadWbReviews();
   } else if (showQuestions) {
+    trackUiActivity("ui_subtab_opened", "wb_questions_ai", "subtab=questions", { cooldownMs: 15000 });
     if (!wbQuestionRows.length) loadQuestionsWorkspace();
   } else if (showReturns) {
+    trackUiActivity("ui_subtab_opened", "returns", "subtab=returns", { cooldownMs: 15000 });
     if (!returnsRows.length) loadReturns();
   }
 }
@@ -1799,9 +1869,18 @@ function switchAdsSubtab(tab, preload = true) {
     document.getElementById(`adsSubtab${key[0].toUpperCase()}${key.slice(1)}Btn`)?.classList.toggle("active", active);
   }
   if (!preload) return;
-  if (next === "campaigns" && enabledModules.has("wb_ads")) loadWbAdCampaigns();
-  if (next === "analytics" && enabledModules.has("wb_ads_analytics")) loadAdsAnalytics();
-  if (next === "recommendations" && enabledModules.has("wb_ads_recommendations")) loadAdsRecommendations();
+  if (next === "campaigns" && enabledModules.has("wb_ads")) {
+    trackUiActivity("ui_subtab_opened", "wb_ads", "subtab=campaigns", { cooldownMs: 15000 });
+    loadWbAdCampaigns();
+  }
+  if (next === "analytics" && enabledModules.has("wb_ads_analytics")) {
+    trackUiActivity("ui_subtab_opened", "wb_ads_analytics", "subtab=analytics", { cooldownMs: 15000 });
+    loadAdsAnalytics();
+  }
+  if (next === "recommendations" && enabledModules.has("wb_ads_recommendations")) {
+    trackUiActivity("ui_subtab_opened", "wb_ads_recommendations", "subtab=recommendations", { cooldownMs: 15000 });
+    loadAdsRecommendations();
+  }
 }
 
 function syncAdsSubtabAccess() {
@@ -1847,8 +1926,10 @@ function switchHelpSubtab(tab, preload = true) {
   document.getElementById("helpSubtabAssistantBtn")?.classList.toggle("active", showAssistant);
   if (!preload) return;
   if (showDocs) {
+    trackUiActivity("ui_subtab_opened", "help_center", "subtab=docs", { cooldownMs: 15000 });
     loadHelpDocs();
   } else if (showAssistant) {
+    trackUiActivity("ui_subtab_opened", "ai_assistant", "subtab=assistant", { cooldownMs: 15000 });
     renderHelpAssistantHistory();
     renderHelpAssistantModuleOptions();
   }
@@ -4422,6 +4503,69 @@ function getImportPayload() {
   return { marketplace, articles, import_all };
 }
 
+function normalizeProductPageSize(rawValue) {
+  const num = Number(rawValue || 0);
+  if (PRODUCT_PAGE_SIZE_OPTIONS.includes(num)) return num;
+  return 30;
+}
+
+function syncProductsPagerControls() {
+  const safePage = Math.max(1, Number(productPage || 1));
+  const safeTotalPages = Math.max(0, Number(productTotalPages || 0));
+  const effectiveTotalPages = safeTotalPages || 1;
+  const totalItems = Math.max(0, Number(productTotal || 0));
+  const infoText = totalItems
+    ? tr(`Страница ${safePage} из ${effectiveTotalPages} • всего товаров: ${totalItems}`, `Page ${safePage} of ${effectiveTotalPages} • total products: ${totalItems}`)
+    : tr("Товары не найдены", "No products found");
+
+  ["productPageSizeTop", "productPageSizeBottom"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const nextVal = String(productPageSize);
+    if (el.value !== nextVal) el.value = nextVal;
+  });
+  ["productsPageInfoTop", "productsPageInfoBottom"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = infoText;
+  });
+  ["productsPrevTopBtn", "productsPrevBottomBtn"].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (btn) btn.disabled = safePage <= 1;
+  });
+  ["productsNextTopBtn", "productsNextBottomBtn"].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (btn) btn.disabled = totalItems <= 0 || safePage >= effectiveTotalPages;
+  });
+}
+
+function onProductsFilterChanged() {
+  productPage = 1;
+  loadProducts();
+}
+
+function setProductsPageSize(value) {
+  const next = normalizeProductPageSize(value);
+  if (next === productPageSize) {
+    syncProductsPagerControls();
+    return;
+  }
+  productPageSize = next;
+  productPage = 1;
+  loadProducts();
+}
+
+function productsPrevPage() {
+  if (productPage <= 1) return;
+  productPage -= 1;
+  loadProducts();
+}
+
+function productsNextPage() {
+  if (productTotalPages > 0 && productPage >= productTotalPages) return;
+  productPage += 1;
+  loadProducts();
+}
+
 async function importProducts() {
   const payload = getImportPayload();
   const data = await withBusy(
@@ -4439,8 +4583,11 @@ async function importProducts() {
   });
   if (!data) return;
   invalidateModuleCache("products", "seo", "sales");
+  productPage = 1;
   await loadProducts();
   await loadDashboard();
+  const safeMp = String(payload.marketplace || "all").toLowerCase();
+  await trackUiActivity("products_import_completed", "products", `marketplace=${safeMp};import_all=${payload.import_all ? 1 : 0};count=${Number(data.length || 0)}`);
   alert(tr(`Импортировано: ${data.length}`, `Imported: ${data.length}`));
 }
 
@@ -4464,20 +4611,44 @@ async function reloadProducts() {
   if (!data) return;
   invalidateModuleCache("products", "seo", "sales");
   selectedProducts.clear();
+  productPage = 1;
   await loadProducts();
   await loadSeoJobs();
   await loadDashboard();
+  const safeMp = String(payload.marketplace || "all").toLowerCase();
+  await trackUiActivity("products_reload_completed", "products", `marketplace=${safeMp};import_all=${payload.import_all ? 1 : 0};count=${Number(data.length || 0)}`);
   alert(tr(`База обновлена, товаров: ${data.length}`, `Catalog refreshed, products: ${data.length}`));
 }
 
 async function loadProducts() {
-  const rows = await requestJson("/api/products", { headers: authHeaders() }).catch(() => null);
-  if (!rows) return;
-
+  const marketplace = String(document.getElementById("importMarketplace")?.value || "all").trim().toLowerCase();
   const filter = (document.getElementById("productFilter")?.value || "").trim().toLowerCase();
-  currentProducts = filter
-    ? rows.filter((p) => `${p.article} ${p.name} ${p.barcode || ""}`.toLowerCase().includes(filter))
-    : rows;
+  productPageSize = normalizeProductPageSize(
+    document.getElementById("productPageSizeTop")?.value || document.getElementById("productPageSizeBottom")?.value || productPageSize
+  );
+
+  const qp = new URLSearchParams();
+  qp.set("marketplace", ["all", "wb", "ozon"].includes(marketplace) ? marketplace : "all");
+  qp.set("page", String(Math.max(1, Number(productPage || 1))));
+  qp.set("page_size", String(productPageSize));
+  if (filter) qp.set("q", filter);
+
+  const data = await requestJson(`/api/products?${qp.toString()}`, { headers: authHeaders() }).catch(() => null);
+  if (!data) return;
+
+  if (Array.isArray(data)) {
+    currentProducts = data;
+    productTotal = data.length;
+    productPage = 1;
+    productTotalPages = data.length ? 1 : 0;
+  } else {
+    currentProducts = Array.isArray(data.rows) ? data.rows : [];
+    productTotal = Math.max(0, Number(data.total || currentProducts.length));
+    productPage = Math.max(1, Number(data.page || productPage || 1));
+    productPageSize = normalizeProductPageSize(data.page_size || productPageSize);
+    productTotalPages = Math.max(0, Number(data.total_pages || 0));
+  }
+  syncProductsPagerControls();
 
   const tbody = document.getElementById("productsTable");
   tbody.innerHTML = "";
@@ -4538,6 +4709,11 @@ async function loadProducts() {
     selectedProductId = currentProducts[0].id;
   }
   const selected = currentProducts.find((x) => x.id === selectedProductId) || currentProducts[0] || null;
+  if (selected?.id) {
+    selectedProductId = selected.id;
+  } else {
+    selectedProductId = null;
+  }
   await renderProductPreview(selected || null);
   if (selected?.id) {
     suggestKeywordsForSelectedProduct(selected.id);

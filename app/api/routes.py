@@ -41,6 +41,7 @@ from app.models import (
     WorkItemClaim,
 )
 from app.schemas import (
+    ActivityTrackIn,
     AiAssistantIn,
     AiAssistantOut,
     AiEffectiveOut,
@@ -76,6 +77,7 @@ from app.schemas import (
     PositionCheckOut,
     PositionCheckRequest,
     ProductDetailOut,
+    ProductPageOut,
     ProductOut,
     ProductReloadRequest,
     ProductUpdateIn,
@@ -185,6 +187,7 @@ AUDIT_STORAGE_MAX_BYTES = 3 * 1024 * 1024 * 1024
 AUDIT_STORAGE_TARGET_BYTES = int(AUDIT_STORAGE_MAX_BYTES * 0.9)
 AUDIT_PRUNE_BATCH = 5000
 _AUDIT_PRUNE_LAST_CHECK_AT: float = 0.0
+PRODUCT_PAGE_SIZE_OPTIONS = (30, 50, 100, 200, 500, 1000)
 
 BILLING_PLANS: dict[str, dict[str, Any]] = {
     "starter": {"title": "Starter", "price": 990, "limits": {"products": 500, "seo_jobs_month": 1500, "ai_replies_month": 800}},
@@ -211,29 +214,25 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
     "products": {
         "title": "Товары",
         "content": (
-            "Назначение: импорт каталога, фильтрация и проверка позиций.\n\n"
+            "Назначение: импорт каталога, фильтрация, постраничная работа и управление карточками.\n\n"
             "Кнопки и поля:\n"
             "- Импорт: загружает товары из выбранного маркетплейса.\n"
             "- Перезагрузить базу: полностью пересобирает локальный каталог.\n"
             "- Выбрать все: выделяет все строки в текущей выдаче.\n"
-            "- Проверить выбранные: проверяет позиции только у отмеченных карточек.\n"
-            "- Проверить все: проверяет позиции по всему каталогу.\n"
+            "- Переключение страниц: навигация по каталогу сверху и снизу таблицы.\n"
+            "- Размер страницы: 30/50/100/200/500/1000 строк.\n"
             "- Поле «Фильтр»: быстрый поиск по артикулу/названию.\n"
-            "- Поле «Ключи для проверки»: ключевые фразы через запятую.\n\n"
-            "Результат проверки позиции:\n"
-            "- 1..500: реальная позиция карточки в поиске.\n"
-            "- 501+: карточка не найдена в первых 500 позициях.\n"
-            "- Если по нескольким ключам позиции отличаются, система показывает лучшую и среднюю.\n\n"
+            "- Детали справа: просмотр фото, атрибутов и редактирование карточки.\n\n"
             "Рекомендуемый порядок работы:\n"
             "1) Импортируйте каталог.\n"
             "2) Отфильтруйте нужную группу SKU.\n"
-            "3) Укажите релевантные ключи.\n"
-            "4) Запустите «Проверить выбранные» и сравните результат до/после SEO.\n\n"
+            "3) Настройте размер страницы и пролистайте нужный сегмент каталога.\n"
+            "4) Откройте карточку справа и при необходимости обновите данные.\n"
+            "5) Для проверки позиций перейдите в подмодуль «SEO задачи».\n\n"
             "Диагностика:\n"
-            "- Если позиции не обновляются, проверьте валидность API-ключа WB/Ozon в «Профиле».\n"
-            "- Если у товара часто 501+, уточните набор ключей и проверьте корректность артикула/внешнего ID.\n"
+            "- Если фильтр WB/Ozon не срабатывает, проверьте выбранный маркетплейс в селекте над таблицей.\n"
             "- Если таблица пустая после импорта, очистите фильтр и повторите загрузку.\n\n"
-            "Пример: импортируйте товары Ozon, задайте ключи «утеплитель трубы, теплоизоляция», нажмите «Проверить выбранные», затем сравните динамику в SEO-задачах."
+            "Пример: импортируйте товары Ozon, включите 100 строк на страницу, отфильтруйте «дымоход», откройте карточку и обновите описание."
         ),
     },
     "seo_generation": {
@@ -460,28 +459,25 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
     "products": {
         "title": "Products",
         "content": (
-            "Purpose: catalog import, filtering, and ranking checks.\n\n"
+            "Purpose: catalog import, filtering, pagination, and product card management.\n\n"
             "Buttons and fields:\n"
             "- Import: imports products from selected marketplace.\n"
             "- Reload Catalog: fully rebuilds local catalog.\n"
             "- Select All: selects all rows in current table view.\n"
-            "- Check Selected / Check All: runs ranking checks.\n"
+            "- Page navigation: top and bottom paging controls.\n"
+            "- Page size: 30/50/100/200/500/1000 rows.\n"
             "- Filter input: quick search by article/title.\n"
-            "- Ranking keywords input: custom comma-separated keywords.\n\n"
-            "Ranking result meaning:\n"
-            "- 1..500: real card rank in search.\n"
-            "- 501+: card is outside first 500 positions.\n"
-            "- For multiple keywords, the system tracks both best and average rank.\n\n"
+            "- Right-side details panel: photos, attributes, card editing.\n\n"
             "Recommended workflow:\n"
             "1) Import catalog.\n"
             "2) Filter priority SKU group.\n"
-            "3) Set focused keywords.\n"
-            "4) Run Check Selected and compare before/after SEO changes.\n\n"
+            "3) Set page size and browse catalog pages.\n"
+            "4) Open and update card details when needed.\n"
+            "5) Run ranking checks in the SEO Jobs submodule.\n\n"
             "Troubleshooting:\n"
-            "- If ranks are not updating, validate WB/Ozon API keys in Profile.\n"
-            "- If many rows show 501+, refine keyword set and verify external identifiers.\n"
+            "- If WB/Ozon filter looks wrong, verify selected marketplace in top selector.\n"
             "- If table looks empty after import, clear filters and reload data.\n\n"
-            "Example: import Ozon catalog, set custom keywords, run Check Selected for priority SKUs, then compare with SEO Jobs results."
+            "Example: import Ozon catalog, set 100 rows per page, filter \"chimney\", open card details, and update description."
         ),
     },
     "seo_generation": {
@@ -821,17 +817,43 @@ def logout(request: Request, user: User = Depends(get_current_user), db: Session
 
 
 @router.get("/auth/me", response_model=UserOut)
-def me(user: User = Depends(get_current_user)):
+def me(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    _audit(
+        db,
+        user,
+        action="auth_session_check",
+        details="session=active",
+        module_code="auth",
+        entity_type="user",
+        entity_id=str(user.id),
+        status="ok",
+        request=request,
+    )
+    db.commit()
     return user
 
 
 @router.get("/modules/current", response_model=list[CurrentModuleOut])
-def current_modules(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def current_modules(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     rows = db.scalars(select(ModuleAccess).where(ModuleAccess.user_id == user.id)).all()
     out: list[CurrentModuleOut] = []
+    enabled_count = 0
     for row in rows:
         allowed = bool(row.enabled) and _actor_can_use_module(user, row.module_code)
+        if allowed:
+            enabled_count += 1
         out.append(CurrentModuleOut(module_code=row.module_code, enabled=allowed))
+    _audit(
+        db,
+        user,
+        action="ui_modules_loaded",
+        details=f"enabled={enabled_count};total={len(rows)}",
+        module_code="auth",
+        entity_type="module_access",
+        status="ok",
+        request=request,
+    )
+    db.commit()
     return out
 
 
@@ -839,6 +861,36 @@ def current_modules(user: User = Depends(get_current_user), db: Session = Depend
 def ui_settings(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     _ = user
     return _get_ui_settings(db)
+
+
+@router.post("/activity/track", response_model=MessageOut)
+def track_activity(
+    payload: ActivityTrackIn,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    action = re.sub(r"[^a-z0-9_-]+", "", str(payload.action or "").strip().lower())[:120]
+    if not action:
+        raise HTTPException(status_code=400, detail="action is required")
+    module_code = re.sub(r"[^a-z0-9_-]+", "", str(payload.module_code or "").strip().lower())[:80]
+    entity_type = re.sub(r"[^a-z0-9_-]+", "", str(payload.entity_type or "").strip().lower())[:80]
+    status = str(payload.status or "ok").strip().lower()
+    if status not in {"ok", "error", "warn"}:
+        status = "ok"
+    _audit(
+        db,
+        user,
+        action=action,
+        details=str(payload.details or "")[:5000],
+        module_code=module_code,
+        entity_type=entity_type,
+        entity_id=str(payload.entity_id or "")[:120],
+        status=status,
+        request=request,
+    )
+    db.commit()
+    return MessageOut(message="tracked")
 
 
 @router.post("/credentials", response_model=ApiCredentialOut)
@@ -2686,18 +2738,59 @@ def reimport_products_alias(payload: ProductReloadRequest, user: User = Depends(
     return reload_products(payload, user, db)
 
 
-@router.get("/products", response_model=list[ProductOut])
-def list_products(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+@router.get("/products", response_model=ProductPageOut)
+def list_products(
+    marketplace: str = "all",
+    q: str = "",
+    page: int = 1,
+    page_size: int = 30,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    safe_market = str(marketplace or "all").strip().lower()
+    if safe_market not in {"all", "wb", "ozon"}:
+        safe_market = "all"
+    safe_q = str(q or "").strip().lower()[:200]
+    safe_page = max(1, int(page or 1))
+    safe_page_size = int(page_size or 30)
+    if safe_page_size not in PRODUCT_PAGE_SIZE_OPTIONS:
+        safe_page_size = 30
+
+    query = select(Product).where(
+        Product.user_id == user.id,
+        _owned_by_actor_or_owner_filter(Product, user),
+    )
+    if safe_market != "all":
+        query = query.where(Product.marketplace == safe_market)
+    if safe_q:
+        pattern = f"%{safe_q}%"
+        query = query.where(
+            or_(
+                func.lower(Product.article).like(pattern),
+                func.lower(Product.name).like(pattern),
+                func.lower(Product.barcode).like(pattern),
+                func.lower(Product.marketplace).like(pattern),
+            )
+        )
+
+    total = int(db.scalar(select(func.count()).select_from(query.subquery())) or 0)
+    total_pages = max(1, math.ceil(total / safe_page_size)) if total else 0
+    if total_pages and safe_page > total_pages:
+        safe_page = total_pages
+    offset = max(0, (safe_page - 1) * safe_page_size)
     rows = db.scalars(
-        select(Product).where(
-            Product.user_id == user.id,
-            _owned_by_actor_or_owner_filter(Product, user),
-        ).order_by(Product.id.desc())
+        query.order_by(Product.id.desc()).offset(offset).limit(safe_page_size)
     ).all()
     for row in rows:
         if not row.photo_url:
             row.photo_url = f"https://placehold.co/120x120/e8eefc/1b2a52?text={row.marketplace.upper()}%20{row.id}"
-    return rows
+    return ProductPageOut(
+        rows=rows,
+        total=total,
+        page=safe_page,
+        page_size=safe_page_size,
+        total_pages=total_pages,
+    )
 
 
 @router.get("/products/{product_id}/details", response_model=ProductDetailOut)

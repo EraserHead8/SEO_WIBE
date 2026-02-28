@@ -189,29 +189,62 @@
         <div id="productsSubtabCatalog">
         <div class="panel">
           <div class="grid-6 reviews-controls">
-            <select id="importMarketplace"><option value="all">Все маркетплейсы</option><option value="wb">WB</option><option value="ozon">Ozon</option></select>
+            <select id="importMarketplace" onchange="onProductsFilterChanged()"><option value="all">Все маркетплейсы</option><option value="wb">WB</option><option value="ozon">Ozon</option></select>
             <input id="articles" placeholder="Артикулы через запятую (или пусто)" />
             <label class="check"><input id="importAll" type="checkbox" /> Импортировать все</label>
             <button id="productsImportBtn" class="icon-only-btn" type="button" data-tip="Импорт" onclick="importProducts()">&#8681;</button>
             <button id="productsReloadBtn" class="btn-secondary icon-only-btn" type="button" data-tip="Перезагрузить базу" onclick="reloadProducts()">&#10227;</button>
             <button id="productsSelectAllBtn" class="btn-secondary icon-only-btn" type="button" data-tip="Выбрать все" onclick="selectAllProducts()">&#9745;</button>
           </div>
-          <div class="grid-4">
-            <input id="productFilter" placeholder="Фильтр: артикул/название" oninput="loadProducts()" />
-            <input id="positionKeywords" placeholder="Ключи для проверки (опционально)" />
-            <button id="productsCheckSelectedBtn" class="btn-secondary icon-only-btn" type="button" data-tip="Проверить выбранные" onclick="checkCurrentPositions(false)">&#128269;</button>
-            <button id="productsCheckAllBtn" class="btn-secondary icon-only-btn" type="button" data-tip="Проверить все" onclick="checkCurrentPositions(true)">&#128640;</button>
+          <div class="grid-1">
+            <input id="productFilter" placeholder="Фильтр: артикул/название" oninput="onProductsFilterChanged()" />
           </div>
         </div>
 
         <div class="products-split">
           <div class="table-card">
+            <div class="products-pager products-pager-top">
+              <div class="products-pager-left">
+                <label for="productPageSizeTop" class="hint">На странице</label>
+                <select id="productPageSizeTop" onchange="setProductsPageSize(this.value)">
+                  <option value="30">30</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                  <option value="200">200</option>
+                  <option value="500">500</option>
+                  <option value="1000">1000</option>
+                </select>
+              </div>
+              <div class="products-pager-right">
+                <button id="productsPrevTopBtn" class="btn-secondary" type="button" onclick="productsPrevPage()">Назад</button>
+                <span id="productsPageInfoTop" class="hint">Страница 1 из 1</span>
+                <button id="productsNextTopBtn" class="btn-secondary" type="button" onclick="productsNextPage()">Далее</button>
+              </div>
+            </div>
             <table class="products-table">
               <thead>
                 <tr><th></th><th>Фото</th><th>ID</th><th>МП</th><th>Артикул</th><th>Баркод</th><th>Название</th><th>Позиция</th></tr>
               </thead>
               <tbody id="productsTable"></tbody>
             </table>
+            <div class="products-pager products-pager-bottom">
+              <div class="products-pager-left">
+                <label for="productPageSizeBottom" class="hint">На странице</label>
+                <select id="productPageSizeBottom" onchange="setProductsPageSize(this.value)">
+                  <option value="30">30</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                  <option value="200">200</option>
+                  <option value="500">500</option>
+                  <option value="1000">1000</option>
+                </select>
+              </div>
+              <div class="products-pager-right">
+                <button id="productsPrevBottomBtn" class="btn-secondary" type="button" onclick="productsPrevPage()">Назад</button>
+                <span id="productsPageInfoBottom" class="hint">Страница 1 из 1</span>
+                <button id="productsNextBottomBtn" class="btn-secondary" type="button" onclick="productsNextPage()">Далее</button>
+              </div>
+            </div>
           </div>
           <aside class="preview-card product-preview-card">
             <h3>Карточка товара</h3>
@@ -241,13 +274,18 @@
             </div>
           </aside>
         </div>
-        <pre id="positionCheckResult"></pre>
         </div>
         <div id="productsSubtabSeo" class="hidden"></div>
       </section>
 
       <section id="seo" class="tab hidden">
         <div class="panel">
+          <div class="grid-4">
+            <input id="positionKeywords" placeholder="Ключи для проверки (опционально)" />
+            <button id="productsCheckSelectedBtn" class="btn-secondary icon-only-btn" type="button" data-tip="Проверить выбранные" onclick="checkCurrentPositions(false)">&#128269;</button>
+            <button id="productsCheckAllBtn" class="btn-secondary icon-only-btn" type="button" data-tip="Проверить все" onclick="checkCurrentPositions(true)">&#128640;</button>
+            <button class="btn-secondary" type="button" onclick="selectAllProducts()">Выбрать все товары</button>
+          </div>
           <div class="grid-5">
             <input id="extraKeywords" placeholder="Доп. ключи (опционально)" />
             <input id="targetPosition" type="number" value="5" min="1" max="50" />
@@ -265,6 +303,7 @@
           <div class="grid-1">
             <button class="btn-danger" onclick="deleteSeoAll()">Очистить все SEO задачи</button>
           </div>
+          <pre id="positionCheckResult"></pre>
         </div>
 
         <div class="kanban" id="seoKanban"></div>
