@@ -70,6 +70,16 @@ def _extract_ozon_items(payload: Any) -> list[dict[str, Any]]:
     return []
 
 
+def _safe_response_json(response: Any) -> dict[str, Any]:
+    try:
+        payload = response.json()
+        if isinstance(payload, dict):
+            return payload
+        return {}
+    except Exception:
+        return {}
+
+
 def fetch_products_from_marketplace(marketplace: str, api_key: str, articles: list[str], import_all: bool) -> list[MarketplaceProduct]:
     """
     Возвращает только реальные товары из API маркетплейса.
@@ -889,7 +899,7 @@ def _fetch_wb_products(
                 if not mapped:
                     return None
                 break
-            data = response.json()
+            data = _safe_response_json(response)
             cards = data.get("cards") or data.get("data", {}).get("cards") or []
             if not isinstance(cards, list) or not cards:
                 break
@@ -1004,7 +1014,7 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
                 if not all_product_ids:
                     return None
                 break
-            payload = list_resp.json()
+            payload = _safe_response_json(list_resp)
             result = payload.get("result")
             list_data = result if isinstance(result, dict) else {}
             items = _extract_ozon_items(payload)
@@ -1051,7 +1061,7 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
                 continue
             if info_resp.status_code >= 400:
                 continue
-            payload = info_resp.json()
+            payload = _safe_response_json(info_resp)
             chunk_items = _extract_ozon_items(payload)
             if isinstance(chunk_items, list):
                 info_items.extend(chunk_items)
@@ -1071,7 +1081,7 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
                     continue
                 if info_resp.status_code >= 400:
                     continue
-                payload = info_resp.json()
+                payload = _safe_response_json(info_resp)
                 chunk_items = _extract_ozon_items(payload)
                 info_items.extend(chunk_items)
         if not info_items:
@@ -1081,6 +1091,11 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
     seen_keys: set[tuple[str, str]] = set()
     for item in info_items:
         source = item.get("product_info") if isinstance(item.get("product_info"), dict) else item
+        merged = {}
+        if isinstance(item, dict):
+            merged.update(item)
+        if isinstance(source, dict):
+            merged.update(source)
         article = str(source.get("offer_id") or item.get("offer_id") or source.get("id") or item.get("product_id") or "")
         if not article:
             continue
@@ -1089,17 +1104,15 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
         if dedupe_key in seen_keys:
             continue
         seen_keys.add(dedupe_key)
-        name = str(source.get("name") or source.get("title") or item.get("name") or item.get("title") or "Товар Ozon")
+        name = str(merged.get("name") or merged.get("title") or "Товар Ozon")
         category_name = str(
-            source.get("category_name")
-            or source.get("category")
-            or item.get("category_name")
-            or item.get("category")
+            merged.get("category_name")
+            or merged.get("category")
             or ""
         )
-        description = str(source.get("description") or source.get("marketing_description") or "")
-        barcode = _extract_ozon_barcode(source)
-        photo_url = _extract_ozon_photo(source)
+        description = str(merged.get("description") or merged.get("marketing_description") or "")
+        barcode = _extract_ozon_barcode(merged)
+        photo_url = _extract_ozon_photo(merged)
         mapped.append(
             MarketplaceProduct(
                 article=article,
@@ -1145,7 +1158,7 @@ def _fetch_wb_product_details(api_key: str, article: str, external_id: str) -> d
             response = client.post(endpoint, headers=headers, json=payload)
         if response.status_code >= 400:
             return {"photos": [], "attributes": {}, "raw": {}}
-        data = response.json()
+        data = _safe_response_json(response)
     except Exception:
         return {"photos": [], "attributes": {}, "raw": {}}
     cards = data.get("cards") or data.get("data", {}).get("cards") or []
@@ -1187,6 +1200,7 @@ def _fetch_ozon_product_details(api_key: str, article: str, external_id: str) ->
     client_id, token = creds
     headers = {"Client-Id": client_id, "Api-Key": token, "Content-Type": "application/json"}
     info_endpoint = "https://api-seller.ozon.ru/v3/product/info/list"
+    legacy_info_endpoint = "https://api-seller.ozon.ru/v2/product/info"
 
     product_ids: list[int] = []
     try:
@@ -1204,7 +1218,7 @@ def _fetch_ozon_product_details(api_key: str, article: str, external_id: str) ->
                     json={"filter": {"visibility": "ALL", "offer_id": [article]}, "last_id": "", "limit": 20},
                 )
             if list_resp.status_code < 400:
-                payload = list_resp.json()
+                payload = _safe_response_json(list_resp)
                 rows = _extract_ozon_items(payload)
                 for row in rows if isinstance(rows, list) else []:
                     pid = row.get("product_id")
@@ -1222,25 +1236,67 @@ def _fetch_ozon_product_details(api_key: str, article: str, external_id: str) ->
         with httpx.Client(timeout=20.0) as client:
             info_resp = client.post(info_endpoint, headers=headers, json={"product_id": product_ids[:20]})
         if info_resp.status_code >= 400:
-            return {"photos": [], "attributes": {}, "raw": {}}
-        payload = info_resp.json()
+            payload = {}
+        else:
+            payload = _safe_response_json(info_resp)
         rows = _extract_ozon_items(payload)
     except Exception:
-        return {"photos": [], "attributes": {}, "raw": {}}
-    if not isinstance(rows, list) or not rows:
-        return {"photos": [], "attributes": {}, "raw": {}}
-    first = rows[0].get("product_info") if isinstance(rows[0], dict) else rows[0]
-    if not isinstance(first, dict):
-        first = {}
-    photos = _extract_ozon_photos(first)
+        rows = []
+    first: dict[str, Any] = {}
+    if isinstance(rows, list) and rows:
+        first_row = rows[0]
+        if isinstance(first_row, dict):
+            first = first_row.get("product_info") if isinstance(first_row.get("product_info"), dict) else first_row
+        if not isinstance(first, dict):
+            first = {}
+
+    # Enrich details from legacy endpoint: it often contains full media set for a single product.
+    enrich: dict[str, Any] = {}
+    target_product_id = 0
+    for value in [external_id, first.get("id"), *(product_ids[:1])]:
+        try:
+            pid = int(str(value or "").strip())
+        except Exception:
+            continue
+        if pid > 0:
+            target_product_id = pid
+            break
+    try:
+        if target_product_id > 0:
+            with httpx.Client(timeout=20.0) as client:
+                legacy_resp = client.post(
+                    legacy_info_endpoint,
+                    headers=headers,
+                    json={"product_id": target_product_id},
+                )
+            if legacy_resp.status_code < 400:
+                legacy_payload = _safe_response_json(legacy_resp)
+                result = legacy_payload.get("result")
+                if isinstance(result, dict):
+                    enrich = result
+    except Exception:
+        enrich = {}
+
+    merged = dict(first or {})
+    if isinstance(enrich, dict) and enrich:
+        # Keep v3 structured fields, but add missing rich media from v2 response.
+        for key, value in enrich.items():
+            if key in {"images", "images360", "primary_image", "color_image", "sources", "photos", "image_urls", "picture_urls"}:
+                merged[key] = value
+            elif key not in merged or merged.get(key) in (None, "", [], {}):
+                merged[key] = value
+
+    photos = _extract_ozon_photos(merged)
+    if not photos:
+        photos = _extract_ozon_photos(first)
     attrs = {
-        "offer_id": str(first.get("offer_id") or ""),
-        "id": str(first.get("id") or ""),
-        "name": str(first.get("name") or ""),
-        "brand": str(first.get("brand") or ""),
-        "category_name": str(first.get("category_name") or ""),
+        "offer_id": str(merged.get("offer_id") or first.get("offer_id") or ""),
+        "id": str(merged.get("id") or first.get("id") or ""),
+        "name": str(merged.get("name") or merged.get("title") or first.get("name") or ""),
+        "brand": str(merged.get("brand") or first.get("brand") or ""),
+        "category_name": str(merged.get("category_name") or first.get("category_name") or ""),
     }
-    return {"photos": photos, "attributes": attrs, "raw": first}
+    return {"photos": photos, "attributes": attrs, "raw": merged or first}
 
 
 def _update_wb_description(api_key: str, article: str, description: str) -> bool:
@@ -1351,12 +1407,11 @@ def _extract_ozon_photos(source: dict[str, Any]) -> list[str]:
         else:
             normal_priority.append(normalized)
 
-    image = source.get("image")
-    if isinstance(image, str) and image.strip():
-        push(image, primary=True)
+    for key in ("primary_image", "primary_image_url", "main_image", "main_image_url", "image_main", "image"):
+        val = source.get(key)
+        if isinstance(val, str) and val.strip():
+            push(val, primary=True)
     primary = source.get("primary_image")
-    if isinstance(primary, str) and primary.strip():
-        push(primary, primary=True)
     if isinstance(primary, dict):
         for key in ("url", "image", "src", "file_name"):
             val = primary.get(key)
