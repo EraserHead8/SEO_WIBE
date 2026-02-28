@@ -423,9 +423,8 @@ def generate_review_reply(
     mp = "Ozon" if (marketplace or "").strip().lower() == "ozon" else "WB"
     kind = "question" if (content_kind or "").strip().lower() == "question" else "review"
 
-    context_hint = _extract_knowledge_hint(custom_prompt)
     fallback_base = _fallback_question_reply(review, product, customer_name) if kind == "question" else _fallback_reply(review, product, rating, customer_name)
-    fallback = _merge_reply_with_hint(fallback_base, context_hint)
+    fallback = _sanitize_customer_reply(fallback_base) or fallback_base
     token = (api_key or "").strip() or (settings.openai_api_key or "").strip()
     if not token:
         return fallback
@@ -490,7 +489,10 @@ def generate_review_reply(
         )
         if not reply:
             return fallback
-        return " ".join(reply.split())
+        safe_reply = _sanitize_customer_reply(reply)
+        if not safe_reply:
+            return fallback
+        return safe_reply
     except Exception:
         return fallback
 
@@ -2670,35 +2672,35 @@ def _fallback_question_reply(question_text: str, product_name: str, reviewer_nam
     )
 
 
-def _extract_knowledge_hint(prompt_text: str) -> str:
-    text = " ".join(str(prompt_text or "").split())
-    if not text:
+def _sanitize_customer_reply(text: str) -> str:
+    compact = " ".join((text or "").split()).strip()
+    if not compact:
         return ""
-    lower = text.lower()
-    marker = "база знаний:"
-    idx = lower.find(marker)
-    chunk = text[idx + len(marker):] if idx >= 0 else text
-    if not chunk:
-        return ""
-    cleaned = chunk.replace("[", " ").replace("]", " ").replace("{", " ").replace("}", " ")
-    cleaned = " ".join(cleaned.split())
-    if not cleaned:
-        return ""
-    if len(cleaned) > 240:
-        cleaned = cleaned[:240].rsplit(" ", 1)[0].strip()
-    return cleaned
-
-
-def _merge_reply_with_hint(base_reply: str, hint: str) -> str:
-    answer = " ".join(str(base_reply or "").split())
-    extra = " ".join(str(hint or "").split())
-    if not extra:
-        return answer
-    extra_lower = extra.lower()
-    if extra_lower in answer.lower():
-        return answer
-    merged = f"{answer} {extra}".strip()
-    return merged[:3000]
+    lowered = compact.lower()
+    leak_markers = (
+        "база знаний:",
+        "используй базу знаний",
+        "служебный контекст",
+        "сформируй только текст ответа клиенту",
+        "ты профессиональный менеджер",
+        "твоя задача на текущем месте работы",
+        "клиент задает вопросы",
+        "you are a marketplace manager",
+        "knowledge base:",
+        "system prompt",
+    )
+    cut_at: int | None = None
+    for marker in leak_markers:
+        idx = lowered.find(marker)
+        if idx <= 0:
+            continue
+        if cut_at is None or idx < cut_at:
+            cut_at = idx
+    if cut_at is not None:
+        compact = compact[:cut_at].strip(" \t\r\n-:;,.")
+    if len(compact) > 3000:
+        compact = compact[:3000].rsplit(" ", 1)[0].strip()
+    return compact
 
 
 def _build_ozon_headers(api_key: str) -> dict[str, str]:
