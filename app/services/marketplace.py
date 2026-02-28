@@ -874,7 +874,17 @@ def _fetch_wb_products(
                     "filter": {"withPhoto": -1},
                 }
             }
-            response = client.post(endpoint, headers=headers, json=payload)
+            response = None
+            for attempt in range(5):
+                response = client.post(endpoint, headers=headers, json=payload)
+                if response.status_code in (429, 500, 502, 503, 504):
+                    time.sleep(0.35 * (attempt + 1))
+                    continue
+                break
+            if response is None:
+                if not mapped:
+                    return None
+                break
             if response.status_code >= 400:
                 if not mapped:
                     return None
@@ -975,11 +985,21 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
     with httpx.Client(timeout=25.0) as client:
         while pages < max_pages:
             pages += 1
-            list_resp = client.post(
-                list_endpoint,
-                headers=headers,
-                json={"filter": {"visibility": "ALL"}, "last_id": last_id, "limit": min(max(1, int(limit)), 100)},
-            )
+            list_resp = None
+            for attempt in range(5):
+                list_resp = client.post(
+                    list_endpoint,
+                    headers=headers,
+                    json={"filter": {"visibility": "ALL"}, "last_id": last_id, "limit": min(max(1, int(limit)), 100)},
+                )
+                if list_resp.status_code in (429, 500, 502, 503, 504):
+                    time.sleep(0.35 * (attempt + 1))
+                    continue
+                break
+            if list_resp is None:
+                if not all_product_ids:
+                    return None
+                break
             if list_resp.status_code >= 400:
                 if not all_product_ids:
                     return None
@@ -1020,7 +1040,15 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
         batch_size = 100
         for offset in range(0, len(unique_ids), batch_size):
             chunk = unique_ids[offset : offset + batch_size]
-            info_resp = client.post(info_endpoint, headers=headers, json={"product_id": chunk})
+            info_resp = None
+            for attempt in range(5):
+                info_resp = client.post(info_endpoint, headers=headers, json={"product_id": chunk})
+                if info_resp.status_code in (429, 500, 502, 503, 504):
+                    time.sleep(0.3 * (attempt + 1))
+                    continue
+                break
+            if info_resp is None:
+                continue
             if info_resp.status_code >= 400:
                 continue
             payload = info_resp.json()
@@ -1032,7 +1060,15 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
             legacy_info_endpoint = "https://api-seller.ozon.ru/v2/product/info/list"
             for offset in range(0, len(unique_ids), batch_size):
                 chunk = unique_ids[offset : offset + batch_size]
-                info_resp = client.post(legacy_info_endpoint, headers=headers, json={"product_id": chunk})
+                info_resp = None
+                for attempt in range(5):
+                    info_resp = client.post(legacy_info_endpoint, headers=headers, json={"product_id": chunk})
+                    if info_resp.status_code in (429, 500, 502, 503, 504):
+                        time.sleep(0.3 * (attempt + 1))
+                        continue
+                    break
+                if info_resp is None:
+                    continue
                 if info_resp.status_code >= 400:
                     continue
                 payload = info_resp.json()
@@ -1303,51 +1339,69 @@ def _extract_ozon_photo(source: dict[str, Any]) -> str:
 
 
 def _extract_ozon_photos(source: dict[str, Any]) -> list[str]:
-    out: list[str] = []
-    images = source.get("images")
-    if isinstance(images, list) and images:
-        for item in images:
-            if isinstance(item, str) and item.strip():
-                out.append(_normalize_photo_url(item))
-                continue
-            if isinstance(item, dict):
-                for key in ("url", "image", "image_url", "src", "file_name", "name"):
-                    val = item.get(key)
-                    if isinstance(val, str) and val.strip():
-                        out.append(_normalize_photo_url(val))
-                        break
+    high_priority: list[str] = []
+    normal_priority: list[str] = []
+
+    def push(val: str, primary: bool = False):
+        normalized = _normalize_photo_url(val)
+        if not normalized:
+            return
+        if primary:
+            high_priority.append(normalized)
+        else:
+            normal_priority.append(normalized)
+
     image = source.get("image")
     if isinstance(image, str) and image.strip():
-        out.append(_normalize_photo_url(image))
+        push(image, primary=True)
     primary = source.get("primary_image")
     if isinstance(primary, str) and primary.strip():
-        out.append(_normalize_photo_url(primary))
+        push(primary, primary=True)
     if isinstance(primary, dict):
         for key in ("url", "image", "src", "file_name"):
             val = primary.get(key)
             if isinstance(val, str) and val.strip():
-                out.append(_normalize_photo_url(val))
+                push(val, primary=True)
                 break
     color_image = source.get("color_image")
     if isinstance(color_image, str) and color_image.strip():
-        out.append(_normalize_photo_url(color_image))
+        push(color_image, primary=True)
     if isinstance(color_image, dict):
         for key in ("url", "image", "src", "file_name"):
             val = color_image.get(key)
             if isinstance(val, str) and val.strip():
-                out.append(_normalize_photo_url(val))
+                push(val, primary=True)
                 break
+
+    images = source.get("images")
+    if isinstance(images, list) and images:
+        for idx, item in enumerate(images):
+            if isinstance(item, str) and item.strip():
+                push(item, primary=idx == 0)
+                continue
+            if isinstance(item, dict):
+                value = ""
+                for key in ("url", "image", "image_url", "src", "file_name", "name"):
+                    val = item.get(key)
+                    if isinstance(val, str) and val.strip():
+                        value = val
+                        break
+                if not value:
+                    continue
+                is_primary = bool(item.get("is_primary")) or bool(item.get("isMain")) or idx == 0
+                push(value, primary=is_primary)
+
     for list_key in ("images360", "photos", "image_urls", "picture_urls"):
         rows = source.get(list_key)
         if isinstance(rows, list):
             for entry in rows:
                 if isinstance(entry, str) and entry.strip():
-                    out.append(_normalize_photo_url(entry))
+                    push(entry, primary=False)
                 elif isinstance(entry, dict):
                     for key in ("url", "image", "image_url", "src", "file_name"):
                         val = entry.get(key)
                         if isinstance(val, str) and val.strip():
-                            out.append(_normalize_photo_url(val))
+                            push(val, primary=False)
                             break
     sources = source.get("sources")
     if isinstance(sources, list):
@@ -1357,8 +1411,10 @@ def _extract_ozon_photos(source: dict[str, Any]) -> list[str]:
             for key in ("url", "image", "src", "file_name"):
                 val = entry.get(key)
                 if isinstance(val, str) and val.strip():
-                    out.append(_normalize_photo_url(val))
+                    push(val, primary=False)
                     break
+
+    out = high_priority + normal_priority
     dedup: list[str] = []
     seen: set[str] = set()
     for url in out:

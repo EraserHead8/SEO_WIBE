@@ -1927,7 +1927,7 @@ pre {
   position: fixed;
   inset: 0;
   background: rgba(3, 8, 21, 0.82);
-  z-index: 1200;
+  z-index: 2200;
   display: flex;
   align-items: center;
   justify-content: center;
