@@ -49,6 +49,27 @@ class CompetitorCard:
     url: str = ""
 
 
+def _extract_ozon_items(payload: Any) -> list[dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return []
+
+    def collect(value: Any) -> list[dict[str, Any]]:
+        if isinstance(value, list):
+            return [x for x in value if isinstance(x, dict)]
+        if isinstance(value, dict):
+            for key in ("items", "products", "product_infos", "rows"):
+                nested = value.get(key)
+                if isinstance(nested, list):
+                    return [x for x in nested if isinstance(x, dict)]
+        return []
+
+    for candidate in (payload.get("result"), payload.get("items"), payload.get("products"), payload.get("product_infos")):
+        rows = collect(candidate)
+        if rows:
+            return rows
+    return []
+
+
 def fetch_products_from_marketplace(marketplace: str, api_key: str, articles: list[str], import_all: bool) -> list[MarketplaceProduct]:
     """
     Возвращает только реальные товары из API маркетплейса.
@@ -966,10 +987,7 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
             payload = list_resp.json()
             result = payload.get("result")
             list_data = result if isinstance(result, dict) else {}
-            if isinstance(result, list):
-                items = result
-            else:
-                items = list_data.get("items", [])
+            items = _extract_ozon_items(payload)
             if not isinstance(items, list) or not items:
                 break
             for item in items:
@@ -984,7 +1002,13 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
                     all_product_ids.append(pid_int)
             if not import_all:
                 break
-            next_last_id = str(list_data.get("last_id") or payload.get("last_id") or "").strip()
+            paging = list_data.get("paging") if isinstance(list_data.get("paging"), dict) else {}
+            next_last_id = str(
+                list_data.get("last_id")
+                or paging.get("last_id")
+                or payload.get("last_id")
+                or ""
+            ).strip()
             if not next_last_id or next_last_id == last_id:
                 break
             last_id = next_last_id
@@ -1000,14 +1024,7 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
             if info_resp.status_code >= 400:
                 continue
             payload = info_resp.json()
-            result = payload.get("result")
-            chunk_items: list[dict[str, Any]] = []
-            if isinstance(result, dict):
-                raw_items = result.get("items", [])
-                if isinstance(raw_items, list):
-                    chunk_items = [x for x in raw_items if isinstance(x, dict)]
-            elif isinstance(result, list):
-                chunk_items = [x for x in result if isinstance(x, dict)]
+            chunk_items = _extract_ozon_items(payload)
             if isinstance(chunk_items, list):
                 info_items.extend(chunk_items)
         if not info_items and unique_ids:
@@ -1019,14 +1036,7 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
                 if info_resp.status_code >= 400:
                     continue
                 payload = info_resp.json()
-                result = payload.get("result")
-                chunk_items: list[dict[str, Any]] = []
-                if isinstance(result, dict):
-                    raw_items = result.get("items", [])
-                    if isinstance(raw_items, list):
-                        chunk_items = [x for x in raw_items if isinstance(x, dict)]
-                elif isinstance(result, list):
-                    chunk_items = [x for x in result if isinstance(x, dict)]
+                chunk_items = _extract_ozon_items(payload)
                 info_items.extend(chunk_items)
         if not info_items:
             info_items = list_items_fallback
@@ -1034,7 +1044,7 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
     mapped: list[MarketplaceProduct] = []
     seen_keys: set[tuple[str, str]] = set()
     for item in info_items:
-        source = item.get("product_info") or item
+        source = item.get("product_info") if isinstance(item.get("product_info"), dict) else item
         article = str(source.get("offer_id") or item.get("offer_id") or source.get("id") or item.get("product_id") or "")
         if not article:
             continue
@@ -1043,7 +1053,7 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
         if dedupe_key in seen_keys:
             continue
         seen_keys.add(dedupe_key)
-        name = str(source.get("name") or "Товар Ozon")
+        name = str(source.get("name") or source.get("title") or item.get("name") or item.get("title") or "Товар Ozon")
         category_name = str(
             source.get("category_name")
             or source.get("category")
@@ -1159,13 +1169,7 @@ def _fetch_ozon_product_details(api_key: str, article: str, external_id: str) ->
                 )
             if list_resp.status_code < 400:
                 payload = list_resp.json()
-                result = payload.get("result")
-                if isinstance(result, dict):
-                    rows = result.get("items", [])
-                elif isinstance(result, list):
-                    rows = result
-                else:
-                    rows = []
+                rows = _extract_ozon_items(payload)
                 for row in rows if isinstance(rows, list) else []:
                     pid = row.get("product_id")
                     try:
@@ -1184,13 +1188,7 @@ def _fetch_ozon_product_details(api_key: str, article: str, external_id: str) ->
         if info_resp.status_code >= 400:
             return {"photos": [], "attributes": {}, "raw": {}}
         payload = info_resp.json()
-        result = payload.get("result")
-        if isinstance(result, dict):
-            rows = result.get("items", [])
-        elif isinstance(result, list):
-            rows = result
-        else:
-            rows = []
+        rows = _extract_ozon_items(payload)
     except Exception:
         return {"photos": [], "attributes": {}, "raw": {}}
     if not isinstance(rows, list) or not rows:
@@ -1308,13 +1306,59 @@ def _extract_ozon_photos(source: dict[str, Any]) -> list[str]:
     out: list[str] = []
     images = source.get("images")
     if isinstance(images, list) and images:
-        out.extend(_normalize_photo_url(str(x)) for x in images if str(x).strip())
+        for item in images:
+            if isinstance(item, str) and item.strip():
+                out.append(_normalize_photo_url(item))
+                continue
+            if isinstance(item, dict):
+                for key in ("url", "image", "image_url", "src", "file_name", "name"):
+                    val = item.get(key)
+                    if isinstance(val, str) and val.strip():
+                        out.append(_normalize_photo_url(val))
+                        break
     image = source.get("image")
     if isinstance(image, str) and image.strip():
         out.append(_normalize_photo_url(image))
     primary = source.get("primary_image")
-    if isinstance(primary, str):
+    if isinstance(primary, str) and primary.strip():
         out.append(_normalize_photo_url(primary))
+    if isinstance(primary, dict):
+        for key in ("url", "image", "src", "file_name"):
+            val = primary.get(key)
+            if isinstance(val, str) and val.strip():
+                out.append(_normalize_photo_url(val))
+                break
+    color_image = source.get("color_image")
+    if isinstance(color_image, str) and color_image.strip():
+        out.append(_normalize_photo_url(color_image))
+    if isinstance(color_image, dict):
+        for key in ("url", "image", "src", "file_name"):
+            val = color_image.get(key)
+            if isinstance(val, str) and val.strip():
+                out.append(_normalize_photo_url(val))
+                break
+    for list_key in ("images360", "photos", "image_urls", "picture_urls"):
+        rows = source.get(list_key)
+        if isinstance(rows, list):
+            for entry in rows:
+                if isinstance(entry, str) and entry.strip():
+                    out.append(_normalize_photo_url(entry))
+                elif isinstance(entry, dict):
+                    for key in ("url", "image", "image_url", "src", "file_name"):
+                        val = entry.get(key)
+                        if isinstance(val, str) and val.strip():
+                            out.append(_normalize_photo_url(val))
+                            break
+    sources = source.get("sources")
+    if isinstance(sources, list):
+        for entry in sources:
+            if not isinstance(entry, dict):
+                continue
+            for key in ("url", "image", "src", "file_name"):
+                val = entry.get(key)
+                if isinstance(val, str) and val.strip():
+                    out.append(_normalize_photo_url(val))
+                    break
     dedup: list[str] = []
     seen: set[str] = set()
     for url in out:
@@ -1326,7 +1370,7 @@ def _extract_ozon_photos(source: dict[str, Any]) -> list[str]:
 
 
 def _normalize_photo_url(value: str) -> str:
-    raw = value.strip()
+    raw = value.strip().strip("'\"").rstrip(";")
     if not raw:
         return ""
     if raw.startswith("//"):

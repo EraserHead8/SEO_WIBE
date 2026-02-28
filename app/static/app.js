@@ -4866,6 +4866,13 @@ async function openProductViewModal(productId) {
     photosEl.innerHTML = allPhotos.length
       ? allPhotos.map((url, idx) => `<img src="${escapeHtml(String(url))}" alt="product-photo-${idx + 1}" loading="lazy" class="product-detail-photo">`).join("")
       : `<div class="hint">${escapeHtml(tr("Фотографии не найдены.", "No photos found."))}</div>`;
+    if (allPhotos.length) {
+      const imgNodes = photosEl.querySelectorAll("img.product-detail-photo");
+      imgNodes.forEach((imgEl, idx) => {
+        imgEl.classList.add("clickable-photo");
+        imgEl.addEventListener("click", () => openReviewPhotoViewer(allPhotos, idx));
+      });
+    }
   }
   if (warnEl) {
     const warnings = Array.isArray(details.warnings) ? details.warnings.filter(Boolean) : [];

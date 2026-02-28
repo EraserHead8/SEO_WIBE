@@ -1685,6 +1685,10 @@ tbody tr:hover {
   border-radius: 10px;
   border: 1px solid rgba(133, 165, 255, 0.36);
 }
+
+.clickable-photo {
+  cursor: zoom-in;
+}
 .preview-card.sticky {
   position: sticky;
   top: 84px;
