@@ -5,6 +5,7 @@ let selectedJobs = new Set();
 let currentProducts = [];
 let currentJobs = [];
 let selectedProductId = null;
+let selectedProductDetails = null;
 let autoKeywordProductId = null;
 let enabledModules = new Set();
 let wbReviewRows = [];
@@ -45,6 +46,7 @@ let helpAssistantHistory = [];
 let currentLang = (localStorage.getItem("ui_lang") || "ru").toLowerCase() === "en" ? "en" : "ru";
 let currentTheme = (localStorage.getItem("ui_theme") || "classic").toLowerCase();
 let sidebarCompact = localStorage.getItem("sidebar_compact") === "1";
+let authMode = "login";
 let uiThemeSettings = {
   theme_choice_enabled: true,
   force_theme: false,
@@ -104,12 +106,12 @@ const TEAM_ACCESS_MODULES = [
 ];
 
 const NAV_BUTTON_ICONS = {
-  products: "▦",
-  sales: "◷",
-  reviews: "★",
-  ads: "◈",
-  profile: "☻",
-  help: "ⓘ",
+  products: "/static/icons/nav-products.svg",
+  sales: "/static/icons/nav-sales.svg",
+  reviews: "/static/icons/nav-reviews.svg",
+  ads: "/static/icons/nav-ads.svg",
+  profile: "/static/icons/nav-profile.svg",
+  help: "/static/icons/nav-help.svg",
 };
 
 const UI_TEXT = {
@@ -225,13 +227,24 @@ function applyUiThemeSettingsToSelect() {
   sel.disabled = Boolean(uiThemeSettings.force_theme) || !uiThemeSettings.theme_choice_enabled;
 }
 
+function toolbarIconSvg(name) {
+  const icons = {
+    import: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"></path><polyline points="7 11 12 16 17 11"></polyline><path d="M5 20h14"></path></svg>`,
+    refresh: `<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.5 9a9 9 0 0 1 14.8-3.3L23 10"></path><path d="M20.5 15a9 9 0 0 1-14.8 3.3L1 14"></path></svg>`,
+    select: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><polyline points="8 12 11 15 16 9"></polyline></svg>`,
+    search: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>`,
+    rocket: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 19.5c2.4-1.4 4.8-1.6 7.2-.6 1-2.7.7-5.5-.8-8.3 2.8-4.3 6.2-6.5 10.1-6.6-.1 4-2.3 7.4-6.6 10.2-2.8-1.5-5.6-1.8-8.3-.8-.9 2.3-.7 4.7.6 7.1z"></path><circle cx="15.5" cy="8.5" r="1.5"></circle></svg>`,
+  };
+  return icons[name] || "";
+}
+
 function applyProductToolbarIcons(isEn) {
   const items = [
-    { id: "productsImportBtn", icon: "&#8681;", ru: "Импорт", en: "Import" },
-    { id: "productsReloadBtn", icon: "&#10227;", ru: "Перезагрузить базу", en: "Reload Catalog" },
-    { id: "productsSelectAllBtn", icon: "&#9745;", ru: "Выбрать все", en: "Select All" },
-    { id: "productsCheckSelectedBtn", icon: "&#128269;", ru: "Проверить выбранные", en: "Check Selected" },
-    { id: "productsCheckAllBtn", icon: "&#128640;", ru: "Проверить все", en: "Check All" },
+    { id: "productsImportBtn", icon: toolbarIconSvg("import"), ru: "Импорт", en: "Import" },
+    { id: "productsReloadBtn", icon: toolbarIconSvg("refresh"), ru: "Перезагрузить базу", en: "Reload Catalog" },
+    { id: "productsSelectAllBtn", icon: toolbarIconSvg("select"), ru: "Выбрать все", en: "Select All" },
+    { id: "productsCheckSelectedBtn", icon: toolbarIconSvg("search"), ru: "Проверить выбранные", en: "Check Selected" },
+    { id: "productsCheckAllBtn", icon: toolbarIconSvg("rocket"), ru: "Проверить все", en: "Check All" },
   ];
   for (const item of items) {
     const btn = document.getElementById(item.id);
@@ -270,18 +283,23 @@ function iconByButtonLabel(labelRaw) {
 function applyNavIcons() {
   document.querySelectorAll(".side-nav .nav-btn").forEach((btn) => {
     const tabCode = String(btn.dataset.tab || "").trim();
-    const icon = NAV_BUTTON_ICONS[tabCode] || "•";
+    const iconSrc = NAV_BUTTON_ICONS[tabCode] || "";
     const labelNode = btn.querySelector(".nav-label");
     const label = String((labelNode?.textContent || btn.textContent || "")).trim();
-    btn.innerHTML = `<span class="nav-icon" aria-hidden="true">${icon}</span><span class="nav-label">${escapeHtml(label)}</span>`;
+    const iconHtml = iconSrc
+      ? `<span class="nav-icon" aria-hidden="true"><img src="${iconSrc}" alt="" loading="lazy" /></span>`
+      : `<span class="nav-icon" aria-hidden="true">•</span>`;
+    btn.innerHTML = `${iconHtml}<span class="nav-label">${escapeHtml(label)}</span>`;
   });
 }
 
 function applySidebarMode() {
   const sidebar = document.getElementById("mainSidebar");
+  const shell = document.getElementById("appSection");
   if (!sidebar) return;
   const compact = Boolean(sidebarCompact);
   sidebar.classList.toggle("compact", compact);
+  if (shell) shell.classList.toggle("sidebar-compact", compact);
   const toggle = sidebar.querySelector(".sidebar-toggle");
   if (toggle) {
     toggle.textContent = compact ? "☰" : "⇄";
@@ -299,6 +317,26 @@ function toggleSidebarMode() {
 }
 
 window.toggleSidebarMode = toggleSidebarMode;
+
+function switchAuthMode(mode = "login") {
+  authMode = String(mode || "").toLowerCase() === "register" ? "register" : "login";
+  const isLogin = authMode === "login";
+  document.getElementById("authLoginPane")?.classList.toggle("hidden", !isLogin);
+  document.getElementById("authRegisterPane")?.classList.toggle("hidden", isLogin);
+  document.getElementById("authModeLoginBtn")?.classList.toggle("active", isLogin);
+  document.getElementById("authModeRegisterBtn")?.classList.toggle("active", !isLogin);
+  document.getElementById("authToolbarLoginBtn")?.classList.toggle("active", isLogin);
+  document.getElementById("authToolbarRegisterBtn")?.classList.toggle("active", !isLogin);
+}
+
+function changeAuthLang() {
+  const value = String(document.getElementById("authLangSelect")?.value || "ru").toLowerCase();
+  currentLang = value === "en" ? "en" : "ru";
+  applyUiLanguage();
+}
+
+window.switchAuthMode = switchAuthMode;
+window.changeAuthLang = changeAuthLang;
 
 function applyModuleActionIcons() {
   const buttons = document.querySelectorAll(".workspace .panel button, .workspace .table-card button");
@@ -338,6 +376,8 @@ function applyUiLanguage() {
   document.documentElement.setAttribute("lang", lang);
   const langSelect = document.getElementById("uiLangSelect");
   if (langSelect && langSelect.value !== lang) langSelect.value = lang;
+  const authLangSelect = document.getElementById("authLangSelect");
+  if (authLangSelect && authLangSelect.value !== lang) authLangSelect.value = lang;
 
   const setText = (selector, value) => {
     const el = document.querySelector(selector);
@@ -372,10 +412,44 @@ function applyUiLanguage() {
   applyNavIcons();
   applySidebarMode();
   setText(".btn-danger.full", t("logout"));
-  setText("#authSection .auth-box:nth-of-type(1) h3", lang === "en" ? "Register" : "Регистрация");
-  setText("#authSection .auth-box:nth-of-type(2) h3", lang === "en" ? "Login" : "Вход");
-  setText("#authSection .auth-box:nth-of-type(1) button", lang === "en" ? "Create Account" : "Создать аккаунт");
-  setText("#authSection .auth-box:nth-of-type(2) button", lang === "en" ? "Sign In" : "Войти в кабинет");
+  setText("#authToolbarSubtitle", lang === "en" ? "Marketplace Seller OS" : "Сервис для маркетплейсов");
+  setText("#authToolbarLoginBtn", lang === "en" ? "Login" : "Вход");
+  setText("#authToolbarRegisterBtn", lang === "en" ? "Sign up" : "Регистрация");
+  setText("#authModeLoginBtn", lang === "en" ? "Login" : "Вход");
+  setText("#authModeRegisterBtn", lang === "en" ? "Sign up" : "Регистрация");
+  setText("#authLoginTitle", lang === "en" ? "Login" : "Вход");
+  setText("#authLoginHint", lang === "en" ? "Use owner or employee email to enter workspace." : "Используйте email владельца или сотрудника.");
+  setText("#authRegisterTitle", lang === "en" ? "Registration" : "Регистрация");
+  setText("#authRegisterHint", lang === "en" ? "Create owner account first. Team members are added in profile." : "Создайте кабинет владельца. Сотрудников добавите позже в профиле.");
+  setText("#authLoginSubmitBtn", lang === "en" ? "Sign In" : "Войти в кабинет");
+  setText("#authRegisterSubmitBtn", lang === "en" ? "Create Account" : "Создать аккаунт");
+  setText("#authToRegisterBtn", lang === "en" ? "No account? Sign up" : "Нет аккаунта? Регистрация");
+  setText("#authToLoginBtn", lang === "en" ? "Already have account? Login" : "Уже есть аккаунт? Вход");
+  setText("#authLeadText", lang === "en" ? "Seller operating system for marketplaces: sales, products, ads, feedback, AI and team workflows in one workspace." : "Операционная система продавца на маркетплейсах: продажи, товары, реклама, отзывы, AI и команда в одном кабинете.");
+  setText("#authWhatTitle", lang === "en" ? "What it does" : "Что делает");
+  setText("#authWhatItem1", lang === "en" ? "Collects sales, penalties, ads and KPIs from WB/Ozon." : "Собирает продажи, штрафы, рекламу и KPI по WB/Ozon.");
+  setText("#authWhatItem2", lang === "en" ? "Manages catalog: import, updates, SEO tasks and ranking checks." : "Управляет каталогом: импорт, обновление, SEO и позициями.");
+  setText("#authWhatItem3", lang === "en" ? "Accelerates reviews/questions processing with AI and knowledge base." : "Ускоряет работу с отзывами/вопросами через AI и базу знаний.");
+  setText("#authStartTitle", lang === "en" ? "How to start" : "Как начать");
+  setText("#authStartItem1", lang === "en" ? "Sign in to workspace (or create account)." : "Войдите в кабинет (или зарегистрируйтесь).");
+  setText("#authStartItem2", lang === "en" ? "Connect WB and Ozon API keys in profile." : "Подключите API-ключи WB и Ozon в профиле.");
+  setText("#authStartItem3", lang === "en" ? "Select a module and run your first workflow." : "Выберите модуль и запустите первый рабочий сценарий.");
+  setText("#authPitchNote", lang === "en" ? "Built for teams from 1 to 100+ employees with strict access control and activity audit." : "Для команд от 1 до 100+ сотрудников, с разделением доступа и аудитом действий.");
+  setText("#landingCard1Title", lang === "en" ? "Sales and KPI" : "Продажи и KPI");
+  setText("#landingCard1Text", lang === "en" ? "Unified period analytics: revenue, orders, penalties, ad spend and gross profit." : "Единая статистика по периодам: выручка, заказы, штрафы, расходы на рекламу и валовая прибыль.");
+  setText("#landingCard2Title", lang === "en" ? "Catalog and cards" : "Каталог и карточки");
+  setText("#landingCard2Text", lang === "en" ? "WB/Ozon import, card editing, SEO jobs and ranking control by target queries." : "Импорт WB/Ozon, редактирование карточек, SEO-задачи и контроль позиций по ключевым запросам.");
+  setText("#landingCard3Title", lang === "en" ? "Team and permissions" : "Команда и доступы");
+  setText("#landingCard3Quote1", lang === "en" ? "Owner controls all data, employees only their own tasks." : "«Владелец управляет всем, сотрудники работают только со своими задачами»");
+  setText("#landingCard3Meta1", lang === "en" ? "Granular permissions with audit log" : "Гибкие права и аудит действий");
+  setText("#landingCard3Quote2", lang === "en" ? "AI speeds up review/question replies without quality loss." : "«AI ускорил ответы на отзывы и вопросы без потери качества»");
+  setText("#landingCard3Meta2", lang === "en" ? "Reply templates + knowledge base" : "Сценарии ответов + база знаний");
+  setText("#landingCard4Title", lang === "en" ? "Active modules" : "Модули в работе");
+  setText("#landingCard4Item1", lang === "en" ? "Products: import, edit, photos, rankings." : "Товары: импорт, редактирование, фото, позиции.");
+  setText("#landingCard4Item2", lang === "en" ? "Reviews/questions/returns in one operations flow." : "Отзывы/вопросы/возвраты: обработка в одном контуре.");
+  setText("#landingCard4Item3", lang === "en" ? "Ads: campaigns, analytics and recommendations." : "Реклама: кампании, аналитика и рекомендации.");
+  setText("#landingBandTitle", lang === "en" ? "Commercial impact" : "Коммерческий эффект");
+  setText("#landingBandText", lang === "en" ? "SEO WIBE reduces manual load, shortens the cycle from data to action, and helps scale marketplace sales." : "SEO WIBE снижает ручную нагрузку команды, ускоряет цикл “данные → действие → результат” и помогает масштабировать продажи на маркетплейсах.");
 
   const isEn = lang === "en";
   setText("#sales .panel:nth-of-type(3) h3", isEn ? "Quick Actions" : "Быстрые действия");
@@ -389,6 +463,14 @@ function applyUiLanguage() {
     importAllLabel.textContent = "";
     if (input) importAllLabel.appendChild(input);
     importAllLabel.append(document.createTextNode(` ${isEn ? "Import all" : "Импортировать все"}`));
+  }
+  const importMarketplace = document.getElementById("importMarketplace");
+  if (importMarketplace) {
+    importMarketplace.innerHTML = `
+      <option value="all">${isEn ? "All marketplaces" : "Все маркетплейсы"}</option>
+      <option value="wb">WB</option>
+      <option value="ozon">Ozon</option>
+    `;
   }
   setText("#seo .panel .grid-5 button:nth-of-type(1)", isEn ? "Generate Selected" : "Сгенерировать для выбранных");
   setText("#seo .panel .grid-5 button:nth-of-type(2)", isEn ? "Generate All" : "Сгенерировать для всех");
@@ -599,6 +681,10 @@ function applyUiLanguage() {
   setCheckLabel("#sales .sales-chart-controls label:nth-of-type(3)", "Ozon");
 
   const placeholders = [
+    ["#loginEmail", "Email"],
+    ["#regEmail", "Email"],
+    ["#loginPassword", isEn ? "Password" : "Пароль"],
+    ["#regPassword", isEn ? "Password (>=8)" : "Пароль (>=8)"],
     ["#articles", isEn ? "Articles comma separated (or empty)" : "Артикулы через запятую (или пусто)"],
     ["#productFilter", isEn ? "Filter by article/name" : "Фильтр: артикул/название"],
     ["#positionKeywords", isEn ? "Ranking keywords (optional)" : "Ключи для проверки (опционально)"],
@@ -641,6 +727,7 @@ function applyUiLanguage() {
     const el = document.querySelector(selector);
     if (el) el.placeholder = text;
   }
+  switchAuthMode(authMode);
 
   const themeSel = document.getElementById("uiThemeSelect");
   if (themeSel) {
@@ -1017,6 +1104,7 @@ async function renderProductPreview(product) {
   if (!product) {
     card.innerHTML = `<p class="hint">${tr("Выберите товар в таблице.", "Select a product in table.")}</p>`;
     renderTrendChart("productTrendChart", "productTrendMeta", []);
+    renderProductDetailsPane(null, null);
     return;
   }
   const photo = product.photo_url
@@ -1042,6 +1130,97 @@ async function renderProductPreview(product) {
   }
   const points = await loadTrend({ productId: product.id, days: 21 });
   renderTrendChart("productTrendChart", "productTrendMeta", points);
+}
+
+function renderProductDetailsPane(product, payload) {
+  const warnEl = document.getElementById("productDetailsWarn");
+  const photosEl = document.getElementById("productDetailsPhotos");
+  const rawEl = document.getElementById("productDetailRaw");
+  const nameEl = document.getElementById("productDetailName");
+  const descEl = document.getElementById("productDetailDescription");
+  const photoEl = document.getElementById("productDetailPhotoUrl");
+  const kwEl = document.getElementById("productDetailKeywords");
+  if (!warnEl || !photosEl || !rawEl || !nameEl || !descEl || !photoEl || !kwEl) return;
+  if (!product) {
+    warnEl.textContent = tr("Выберите товар в таблице, чтобы увидеть детали.", "Select a product in table to view details.");
+    photosEl.innerHTML = "";
+    rawEl.textContent = "-";
+    nameEl.value = "";
+    descEl.value = "";
+    photoEl.value = "";
+    kwEl.value = "";
+    return;
+  }
+  const warnings = Array.isArray(payload?.warnings) ? payload.warnings.filter(Boolean) : [];
+  warnEl.textContent = warnings.length
+    ? warnings.join(" | ")
+    : tr("Детали карточки загружены. Можно редактировать и сохранять.", "Product details loaded. You can edit and save.");
+  const photos = Array.isArray(payload?.photos)
+    ? payload.photos.filter((x) => typeof x === "string" && x.trim())
+    : [];
+  const fallbackPhoto = String(product.photo_url || "").trim();
+  const photoRows = photos.length ? photos : (fallbackPhoto ? [fallbackPhoto] : []);
+  photosEl.innerHTML = photoRows.length
+    ? photoRows.map((url, idx) => `<img src="${escapeHtml(url)}" alt="product-photo-${idx + 1}" class="product-detail-photo" loading="lazy" />`).join("")
+    : `<div class="hint">${tr("Фотографии не найдены.", "No photos found.")}</div>`;
+  nameEl.value = String(payload?.product?.name || product?.name || "");
+  descEl.value = String(payload?.product?.current_description || product?.current_description || "");
+  photoEl.value = String(payload?.product?.photo_url || product?.photo_url || "");
+  kwEl.value = String(payload?.product?.target_keywords || product?.target_keywords || "");
+  const safePayload = payload && typeof payload === "object" ? payload : { product };
+  rawEl.textContent = JSON.stringify(safePayload, null, 2);
+}
+
+async function loadSelectedProductDetails(productId = selectedProductId, opts = {}) {
+  const id = Number(productId || 0);
+  if (!id) {
+    renderProductDetailsPane(null, null);
+    return;
+  }
+  const silent = Boolean(opts?.silent);
+  const product = currentProducts.find((x) => Number(x.id) === id) || null;
+  const data = await requestJson(`/api/products/${id}/details`, {
+    headers: authHeaders(),
+    timeoutMs: 90000,
+  }).catch((e) => {
+    if (!silent) alert(e.message);
+    return null;
+  });
+  if (!data) return;
+  selectedProductDetails = data;
+  renderProductDetailsPane(product, data);
+}
+
+async function saveSelectedProductDetails() {
+  const id = Number(selectedProductId || 0);
+  if (!id) {
+    alert(tr("Сначала выберите товар в таблице.", "Select a product in table first."));
+    return;
+  }
+  const payload = {
+    name: String(document.getElementById("productDetailName")?.value || "").trim(),
+    current_description: String(document.getElementById("productDetailDescription")?.value || ""),
+    photo_url: String(document.getElementById("productDetailPhotoUrl")?.value || "").trim(),
+    target_keywords: String(document.getElementById("productDetailKeywords")?.value || "").trim(),
+  };
+  const updated = await withBusy(
+    tr("Сохраняем изменения карточки товара…", "Saving product card changes..."),
+    () => requestJson(`/api/products/${id}`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify(payload),
+      timeoutMs: 120000,
+    }),
+    tr("Если изменено описание, сервис отправит его в маркетплейс через API.", "If description changed, service also sends it to marketplace API.")
+  ).catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  if (!updated) return;
+  invalidateModuleCache("products", "seo");
+  await loadProducts();
+  await loadSelectedProductDetails(id, { silent: true });
+  alert(tr("Карточка товара обновлена.", "Product card updated."));
 }
 
 async function suggestKeywordsForSelectedProduct(productId) {
@@ -1072,7 +1251,7 @@ function setActiveNav(tabName) {
 }
 
 function ensureProfileTeamUi() {
-  if (document.getElementById("teamMembersTable")) return;
+  if (document.getElementById("teamMembersList")) return;
   const profileTab = document.getElementById("profile");
   if (!profileTab) return;
   const panel = document.createElement("div");
@@ -1080,7 +1259,7 @@ function ensureProfileTeamUi() {
   panel.id = "profileTeamPanel";
   panel.innerHTML = `
     <h3>${tr("Сотрудники кабинета", "Workspace Team")}</h3>
-    <div class="grid-6 team-form-grid">
+    <div class="grid-1 team-form-stack">
       <input id="teamMemberEmail" placeholder="${escapeHtml(tr("Email сотрудника", "Employee email"))}" />
       <input id="teamMemberPassword" type="password" placeholder="${escapeHtml(tr("Пароль сотрудника (>=8)", "Employee password (>=8)"))}" />
       <input id="teamMemberPhone" placeholder="${escapeHtml(tr("Телефон", "Phone"))}" />
@@ -1090,13 +1269,8 @@ function ensureProfileTeamUi() {
       <button class="btn-secondary" type="button" onclick="addTeamMember()">${tr("Добавить сотрудника", "Add employee")}</button>
     </div>
     <div class="team-access-picks" id="teamAccessPicks"></div>
-    <div class="table-card">
-      <table>
-        <thead>
-          <tr><th>ID</th><th>Email</th><th>ФИО</th><th>Телефон</th><th>Ник</th><th>Роль</th><th>Доступ</th><th>Пароль</th><th>Действия</th></tr>
-        </thead>
-        <tbody id="teamMembersTable"></tbody>
-      </table>
+    <div class="team-member-list" id="teamMembersList">
+      <div class="hint">${tr("Сотрудники загружаются...", "Loading employees...")}</div>
     </div>
   `;
   profileTab.appendChild(panel);
@@ -1460,6 +1634,7 @@ async function logout() {
   localStorage.removeItem("token");
   document.getElementById("appSection").classList.add("hidden");
   document.getElementById("authSection").classList.remove("hidden");
+  switchAuthMode("login");
 }
 
 async function ensureAuth() {
@@ -2265,44 +2440,63 @@ async function renderWbReviews() {
     const status = normalizeReviewStatus(row);
     const rowEl = document.createElement("tr");
     const reviewId = String(row?.id || "").trim();
+    const tdWrap = document.createElement("td");
+    tdWrap.colSpan = 7;
+    tdWrap.className = "feedback-card-cell";
+    const card = document.createElement("article");
+    card.className = "feedback-row-card";
 
-    const tdType = document.createElement("td");
-    tdType.dataset.label = tr("Статус", "Status");
-    tdType.dataset.label = tr("Статус", "Status");
+    const head = document.createElement("div");
+    head.className = "feedback-row-head";
+    const meta = document.createElement("div");
+    meta.className = "feedback-meta-row";
     const pill = document.createElement("span");
     pill.className = "review-type-pill";
     pill.textContent = status === "new" ? "🆕" : "✅";
     pill.dataset.tip = status === "new" ? tr("Новый отзыв", "New review") : tr("Отвеченный отзыв", "Answered review");
-    tdType.appendChild(pill);
-
-    const tdDate = document.createElement("td");
-    tdDate.textContent = row?.date || "-";
-    tdDate.className = "cell-meta-small";
-    tdDate.dataset.label = tr("Дата", "Date");
-    tdDate.dataset.label = tr("Дата", "Date");
-
-    const tdProduct = document.createElement("td");
-    tdProduct.dataset.label = tr("Товар", "Product");
-    renderFeedbackProductCell(tdProduct, row);
-
-    const tdStars = document.createElement("td");
+    meta.appendChild(pill);
+    const dateBadge = document.createElement("span");
+    dateBadge.className = "feedback-meta-badge";
+    dateBadge.textContent = row?.date || "-";
+    meta.appendChild(dateBadge);
     const stars = Number(row.stars || 0);
-    tdStars.textContent = stars > 0 ? `★${stars}` : "-";
-    tdStars.dataset.tip = tr("Оценка покупателя", "Customer rating");
-    tdStars.dataset.label = tr("Оценка", "Rating");
-
-    const tdText = document.createElement("td");
-    tdText.dataset.label = tr("Отзыв", "Review");
-    if (row?.user) {
-      const userTag = document.createElement("div");
-      userTag.className = "cell-meta-small";
-      userTag.textContent = `${currentLang === "en" ? "Author" : "Автор"}: ${row.user}`;
-      tdText.appendChild(userTag);
+    if (stars > 0) {
+      const starBadge = document.createElement("span");
+      starBadge.className = "feedback-meta-badge";
+      starBadge.textContent = `★ ${stars}`;
+      starBadge.dataset.tip = tr("Оценка покупателя", "Customer rating");
+      meta.appendChild(starBadge);
     }
+    const mpBadge = document.createElement("span");
+    mpBadge.className = "feedback-meta-badge";
+    mpBadge.textContent = (currentReviewMarketplace || "wb").toUpperCase();
+    meta.appendChild(mpBadge);
+    head.appendChild(meta);
+    if (row?.user) {
+      const author = document.createElement("div");
+      author.className = "cell-meta-small";
+      author.textContent = `${currentLang === "en" ? "Author" : "Автор"}: ${row.user}`;
+      head.appendChild(author);
+    }
+    card.appendChild(head);
+
+    const productBlock = document.createElement("div");
+    productBlock.className = "feedback-product-line";
+    renderFeedbackProductCell(productBlock, row);
+    card.appendChild(productBlock);
+
+    const textBlock = document.createElement("div");
+    textBlock.className = "feedback-text-line";
+    const textTitle = document.createElement("span");
+    textTitle.className = "cell-meta-small";
+    textTitle.textContent = tr("Отзыв", "Review");
+    textBlock.appendChild(textTitle);
     const body = document.createElement("div");
     body.className = "cell-main-text";
     body.textContent = row?.text || "-";
-    tdText.appendChild(body);
+    textBlock.appendChild(body);
+    card.appendChild(textBlock);
+
     const photos = Array.isArray(row?.photos) ? row.photos.filter((x) => typeof x === "string" && x.trim()) : [];
     if (photos.length) {
       const previewWrap = document.createElement("div");
@@ -2323,11 +2517,15 @@ async function renderWbReviews() {
         : (currentLang === "en" ? "Open photos" : "Открыть фото");
       btnAll.onclick = () => openReviewPhotoViewer(photos, 0);
       previewWrap.appendChild(btnAll);
-      tdText.appendChild(previewWrap);
+      card.appendChild(previewWrap);
     }
 
-    const tdReply = document.createElement("td");
-    tdReply.dataset.label = tr("Ответ", "Reply");
+    const replyBlock = document.createElement("div");
+    replyBlock.className = "feedback-reply-line";
+    const replyTitle = document.createElement("span");
+    replyTitle.className = "cell-meta-small";
+    replyTitle.textContent = tr("Ответ", "Reply");
+    replyBlock.appendChild(replyTitle);
     const replyInput = document.createElement("textarea");
     replyInput.rows = 3;
     replyInput.className = "review-reply-input";
@@ -2335,12 +2533,11 @@ async function renderWbReviews() {
     const draftKey = reviewDraftKey(currentReviewMarketplace, reviewId);
     replyInput.value = wbReviewDrafts.get(draftKey) ?? row?.answer ?? "";
     replyInput.oninput = () => wbReviewDrafts.set(draftKey, replyInput.value);
-    tdReply.appendChild(replyInput);
+    replyBlock.appendChild(replyInput);
+    card.appendChild(replyBlock);
 
-    const tdActions = document.createElement("td");
-    tdActions.dataset.label = tr("Действия", "Actions");
     const wrap = document.createElement("div");
-    wrap.className = "review-actions";
+    wrap.className = "review-actions feedback-actions-row";
     const btnGenerate = makeIconActionButton({
       icon: "&#9889;",
       tip: tr("Сгенерировать ответ", "Generate reply"),
@@ -2359,9 +2556,9 @@ async function renderWbReviews() {
       btnSend.dataset.tip = tr("У записи нет ID", "Record has no ID");
     }
     wrap.append(btnGenerate, btnSend);
-    tdActions.appendChild(wrap);
-
-    rowEl.append(tdType, tdDate, tdProduct, tdStars, tdText, tdReply, tdActions);
+    card.appendChild(wrap);
+    tdWrap.appendChild(card);
+    rowEl.appendChild(tdWrap);
     tbody.appendChild(rowEl);
   };
 
@@ -2748,34 +2945,55 @@ async function renderWbQuestions() {
     const status = normalizeQuestionStatus(row);
     const rowEl = document.createElement("tr");
     const questionId = String(row?.id || "").trim();
+    const tdWrap = document.createElement("td");
+    tdWrap.colSpan = 6;
+    tdWrap.className = "feedback-card-cell";
+    const card = document.createElement("article");
+    card.className = "feedback-row-card";
 
-    const tdType = document.createElement("td");
+    const head = document.createElement("div");
+    head.className = "feedback-row-head";
+    const meta = document.createElement("div");
+    meta.className = "feedback-meta-row";
     const pill = document.createElement("span");
     pill.className = "review-type-pill";
     pill.textContent = status === "new" ? "🆕" : "✅";
     pill.dataset.tip = status === "new" ? tr("Новый вопрос", "New question") : tr("Отвеченный вопрос", "Answered question");
-    tdType.appendChild(pill);
-
-    const tdDate = document.createElement("td");
-    tdDate.textContent = row?.date || "-";
-    tdDate.className = "cell-meta-small";
-
-    const tdProduct = document.createElement("td");
-    tdProduct.dataset.label = tr("Товар", "Product");
-    renderFeedbackProductCell(tdProduct, row);
-
-    const tdText = document.createElement("td");
-    tdText.dataset.label = tr("Вопрос", "Question");
+    meta.appendChild(pill);
+    const dateBadge = document.createElement("span");
+    dateBadge.className = "feedback-meta-badge";
+    dateBadge.textContent = row?.date || "-";
+    meta.appendChild(dateBadge);
+    const mpBadge = document.createElement("span");
+    mpBadge.className = "feedback-meta-badge";
+    mpBadge.textContent = (currentQuestionMarketplace || "wb").toUpperCase();
+    meta.appendChild(mpBadge);
+    head.appendChild(meta);
     if (row?.user) {
-      const userTag = document.createElement("div");
-      userTag.className = "cell-meta-small";
-      userTag.textContent = `${currentLang === "en" ? "Author" : "Автор"}: ${row.user}`;
-      tdText.appendChild(userTag);
+      const author = document.createElement("div");
+      author.className = "cell-meta-small";
+      author.textContent = `${currentLang === "en" ? "Author" : "Автор"}: ${row.user}`;
+      head.appendChild(author);
     }
+    card.appendChild(head);
+
+    const productBlock = document.createElement("div");
+    productBlock.className = "feedback-product-line";
+    renderFeedbackProductCell(productBlock, row);
+    card.appendChild(productBlock);
+
+    const textBlock = document.createElement("div");
+    textBlock.className = "feedback-text-line";
+    const textTitle = document.createElement("span");
+    textTitle.className = "cell-meta-small";
+    textTitle.textContent = tr("Вопрос", "Question");
+    textBlock.appendChild(textTitle);
     const body = document.createElement("div");
     body.className = "cell-main-text";
     body.textContent = row?.text || "-";
-    tdText.appendChild(body);
+    textBlock.appendChild(body);
+    card.appendChild(textBlock);
+
     const photos = Array.isArray(row?.photos) ? row.photos.filter((x) => typeof x === "string" && x.trim()) : [];
     if (photos.length) {
       const previewWrap = document.createElement("div");
@@ -2796,11 +3014,15 @@ async function renderWbQuestions() {
         : (currentLang === "en" ? "Open photos" : "Открыть фото");
       btnAll.onclick = () => openReviewPhotoViewer(photos, 0);
       previewWrap.appendChild(btnAll);
-      tdText.appendChild(previewWrap);
+      card.appendChild(previewWrap);
     }
 
-    const tdReply = document.createElement("td");
-    tdReply.dataset.label = tr("Ответ", "Reply");
+    const replyBlock = document.createElement("div");
+    replyBlock.className = "feedback-reply-line";
+    const replyTitle = document.createElement("span");
+    replyTitle.className = "cell-meta-small";
+    replyTitle.textContent = tr("Ответ", "Reply");
+    replyBlock.appendChild(replyTitle);
     const replyInput = document.createElement("textarea");
     replyInput.rows = 3;
     replyInput.className = "review-reply-input";
@@ -2808,12 +3030,11 @@ async function renderWbQuestions() {
     const draftKey = questionDraftKey(currentQuestionMarketplace, questionId);
     replyInput.value = wbQuestionDrafts.get(draftKey) ?? row?.answer ?? "";
     replyInput.oninput = () => wbQuestionDrafts.set(draftKey, replyInput.value);
-    tdReply.appendChild(replyInput);
+    replyBlock.appendChild(replyInput);
+    card.appendChild(replyBlock);
 
-    const tdActions = document.createElement("td");
-    tdActions.dataset.label = tr("Действия", "Actions");
     const wrap = document.createElement("div");
-    wrap.className = "review-actions";
+    wrap.className = "review-actions feedback-actions-row";
     const btnGenerate = makeIconActionButton({
       icon: "&#9889;",
       tip: tr("Сгенерировать ответ", "Generate reply"),
@@ -2832,9 +3053,9 @@ async function renderWbQuestions() {
       btnSend.dataset.tip = tr("У записи нет ID", "Record has no ID");
     }
     wrap.append(btnGenerate, btnSend);
-    tdActions.appendChild(wrap);
-
-    rowEl.append(tdType, tdDate, tdProduct, tdText, tdReply, tdActions);
+    card.appendChild(wrap);
+    tdWrap.appendChild(card);
+    rowEl.appendChild(tdWrap);
     tbody.appendChild(rowEl);
   };
 
@@ -3459,9 +3680,9 @@ function renderWbCampaignRows() {
   }
 
   if (!rows.length) {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="11">${currentLang === "en" ? "No campaigns found." : "Кампании не найдены."}</td>`;
-    tbody.appendChild(tr);
+    const rowEl = document.createElement("tr");
+    rowEl.innerHTML = `<td colspan="11">${currentLang === "en" ? "No campaigns found." : "Кампании не найдены."}</td>`;
+    tbody.appendChild(rowEl);
     return;
   }
   for (const row of rows) {
@@ -3479,9 +3700,9 @@ function renderWbCampaignRows() {
     const ctr = parseCampaignMetric(row, "ctr", 2);
     const orders = parseCampaignMetric(row, "orders");
     const spent = parseCampaignMetric(row, "spent", 2);
-    const tr = document.createElement("tr");
-    if (selectedWbCampaignId && id === selectedWbCampaignId) tr.classList.add("selected-row");
-    tr.innerHTML = `
+    const rowEl = document.createElement("tr");
+    if (selectedWbCampaignId && id === selectedWbCampaignId) rowEl.classList.add("selected-row");
+    rowEl.innerHTML = `
       <td>${escapeHtml(id)}</td>
       <td>${escapeHtml(name)}</td>
       <td>${escapeHtml(status)}</td>
@@ -3494,7 +3715,7 @@ function renderWbCampaignRows() {
       <td>${escapeHtml(orders)}</td>
       <td>${escapeHtml(spent)}</td>
     `;
-    tr.onclick = () => {
+    rowEl.onclick = () => {
       if (id === "-") return;
       selectedWbCampaignId = id;
       const campaignInput = document.getElementById("wbRateCampaignId");
@@ -3513,7 +3734,7 @@ function renderWbCampaignRows() {
       if (id === "-") return;
       openCampaignDetailModal(Number(id));
     };
-    tbody.appendChild(tr);
+    tbody.appendChild(rowEl);
   }
 }
 
@@ -3558,13 +3779,13 @@ function renderCampaignDetail(data) {
     productsEl.appendChild(rowEl);
   } else {
     for (const row of products.slice(0, 600)) {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
+      const rowEl = document.createElement("tr");
+      rowEl.innerHTML = `
         <td>${escapeHtml(row.nmId ?? "-")}</td>
         <td>${escapeHtml(row.offer ?? "-")}</td>
         <td>${escapeHtml(row.name ?? "-")}</td>
       `;
-      productsEl.appendChild(tr);
+      productsEl.appendChild(rowEl);
     }
   }
 
@@ -3831,15 +4052,15 @@ function renderAdsAnalyticsRows() {
   if (!tbody) return;
   tbody.innerHTML = "";
   if (!adsAnalyticsRows.length) {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="12">${currentLang === "en" ? "No data." : "Нет данных."}</td>`;
-    tbody.appendChild(tr);
+    const rowEl = document.createElement("tr");
+    rowEl.innerHTML = `<td colspan="12">${currentLang === "en" ? "No data." : "Нет данных."}</td>`;
+    tbody.appendChild(rowEl);
     return;
   }
   for (const row of adsAnalyticsRows) {
     const ctrVal = parseCampaignMetric(row, "ctr", 2);
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
+    const rowEl = document.createElement("tr");
+    rowEl.innerHTML = `
       <td>${escapeHtml(row.campaign_id ?? "-")}</td>
       <td>${escapeHtml(row.name ?? "-")}</td>
       <td>${escapeHtml(normalizeCampaignStatus(row.status ?? "-"))}</td>
@@ -3853,7 +4074,7 @@ function renderAdsAnalyticsRows() {
       <td>${escapeHtml(parseCampaignMetric(row, "cpc", 2))}</td>
       <td>${escapeHtml(parseCampaignMetric(row, "cpo", 2))}</td>
     `;
-    tr.onclick = () => {
+    rowEl.onclick = () => {
       const cid = Number(row?.campaign_id || 0);
       if (cid <= 0) return;
       const analyticsInput = document.getElementById("adsAnalyticsCampaignId");
@@ -3863,7 +4084,7 @@ function renderAdsAnalyticsRows() {
       selectedWbCampaignId = String(cid);
       renderWbCampaignRows();
     };
-    tbody.appendChild(tr);
+    tbody.appendChild(rowEl);
   }
 }
 
@@ -4157,9 +4378,9 @@ function renderAdsRecommendationsRows() {
   if (!tbody) return;
   tbody.innerHTML = "";
   if (!adsRecommendationRows.length) {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="14">${currentLang === "en" ? "No recommendations for selected period." : "Рекомендаций за выбранный период нет."}</td>`;
-    tbody.appendChild(tr);
+    const rowEl = document.createElement("tr");
+    rowEl.innerHTML = `<td colspan="14">${currentLang === "en" ? "No recommendations for selected period." : "Рекомендаций за выбранный период нет."}</td>`;
+    tbody.appendChild(rowEl);
     return;
   }
   for (const row of adsRecommendationRows) {
@@ -4172,8 +4393,8 @@ function renderAdsRecommendationsRows() {
     const priorityLabel = priorityRaw === "high"
       ? tr("Высокий", "High")
       : (priorityRaw === "medium" ? tr("Средний", "Medium") : tr("Низкий", "Low"));
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
+    const rowEl = document.createElement("tr");
+    rowEl.innerHTML = `
       <td>${escapeHtml(row.campaign_id ?? "-")}</td>
       <td>${escapeHtml(row.name ?? "-")}</td>
       <td>${escapeHtml(normalizeCampaignStatus(row.status ?? "-"))}</td>
@@ -4189,7 +4410,7 @@ function renderAdsRecommendationsRows() {
       <td>${escapeHtml(String(row.recommendation || "-") + actionLabel)}</td>
       <td>${escapeHtml(row.reason ?? "-")}</td>
     `;
-    tbody.appendChild(tr);
+    tbody.appendChild(rowEl);
   }
 }
 
@@ -4262,8 +4483,8 @@ async function loadProducts() {
   tbody.innerHTML = "";
 
   for (const p of currentProducts) {
-    const tr = document.createElement("tr");
-    if (p.id === selectedProductId) tr.classList.add("selected-row");
+    const rowEl = document.createElement("tr");
+    if (p.id === selectedProductId) rowEl.classList.add("selected-row");
     const tdSelect = document.createElement("td");
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
@@ -4304,21 +4525,25 @@ async function loadProducts() {
     const tdPos = document.createElement("td");
     tdPos.textContent = formatPositionValue(p.last_position);
 
-    tr.append(tdSelect, tdPhoto, tdId, tdMp, tdArticle, tdBarcode, tdName, tdPos);
-    tr.onclick = () => {
+    rowEl.append(tdSelect, tdPhoto, tdId, tdMp, tdArticle, tdBarcode, tdName, tdPos);
+    rowEl.onclick = () => {
       selectedProductId = p.id;
       suggestKeywordsForSelectedProduct(p.id);
       loadProducts();
     };
-    tbody.appendChild(tr);
+    tbody.appendChild(rowEl);
   }
 
   if (!selectedProductId && currentProducts.length) {
     selectedProductId = currentProducts[0].id;
   }
   const selected = currentProducts.find((x) => x.id === selectedProductId) || currentProducts[0] || null;
+  await renderProductPreview(selected || null);
   if (selected?.id) {
     suggestKeywordsForSelectedProduct(selected.id);
+    await loadSelectedProductDetails(selected.id, { silent: true });
+  } else {
+    renderProductDetailsPane(null, null);
   }
   markModuleLoaded("products");
 }
@@ -4452,8 +4677,8 @@ async function loadSeoJobs() {
   for (const j of currentJobs) {
     const article = j.product_article || "-";
     const name = j.product_name || tr("Товар", "Product");
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
+    const rowEl = document.createElement("tr");
+    rowEl.innerHTML = `
       <td><input type="checkbox" ${selectedJobs.has(j.id) ? "checked" : ""} onchange="toggleJob(${j.id}, this.checked)"></td>
       <td>${j.id}</td>
       <td>${article}</td>
@@ -4462,8 +4687,8 @@ async function loadSeoJobs() {
       <td>${formatPositionValue(j.current_position)}</td>
       <td>${j.next_check_at ?? "-"}</td>
     `;
-    tr.onclick = () => renderSeoPreview(j);
-    tbody.appendChild(tr);
+    rowEl.onclick = () => renderSeoPreview(j);
+    tbody.appendChild(rowEl);
   }
   renderSeoKanban(rows);
   markModuleLoaded("seo");
@@ -4838,15 +5063,35 @@ function renderSalesChart(points) {
     const y = padY + (1 - ((Number(value || 0) - min) / range)) * (height - padY * 2);
     return `<circle cx="${x}" cy="${y}" r="4.5" fill="${color}" stroke="rgba(255,255,255,0.48)" stroke-width="1"></circle>`;
   };
-  svg.innerHTML = series
-    .map((item) => {
-      const line = item.values.length > 1
-        ? `<polyline points="${lineTo(item.values)}" fill="none" stroke="${item.color}" stroke-width="3" stroke-linecap="round"></polyline>`
-        : "";
-      const points = item.values.map((v, idx) => circleAt(v, idx, item.color)).join("");
-      return `${line}${points}`;
-    })
-    .join("");
+  const gridLines = Array.from({ length: 5 }).map((_, idx) => {
+    const ratio = idx / 4;
+    const y = padY + ratio * (height - padY * 2);
+    const val = max - ratio * range;
+    const valueText = (metric === "revenue" || metric === "ad_spend" || metric === "penalties")
+      ? formatMoney(val)
+      : formatInt(val);
+    return `
+      <line x1="${padX}" y1="${y}" x2="${width - padX}" y2="${y}" stroke="rgba(133,165,255,0.18)" stroke-width="1" />
+      <text x="${padX + 4}" y="${Math.max(10, y - 4)}" fill="rgba(205,222,255,0.7)" font-size="10">${valueText}</text>
+    `;
+  }).join("");
+  const xTicks = labels.map((label, idx) => {
+    if (labels.length > 12 && idx % Math.ceil(labels.length / 6) !== 0 && idx !== labels.length - 1) return "";
+    const x = padX + idx * step;
+    const short = String(label || "").slice(-5);
+    return `<text x="${x}" y="${height - 2}" fill="rgba(205,222,255,0.66)" font-size="10" text-anchor="middle">${escapeHtml(short)}</text>`;
+  }).join("");
+  const lineMarkup = series.map((item, idx) => {
+    const line = item.values.length > 1
+      ? `<polyline points="${lineTo(item.values)}" fill="none" stroke="${item.color}" stroke-width="${idx === 0 ? 3.4 : 2.6}" stroke-linecap="round"></polyline>`
+      : "";
+    const area = idx === 0 && item.values.length > 1
+      ? `<polygon points="${lineTo(item.values)} ${width - padX},${height - padY} ${padX},${height - padY}" fill="${item.color}" opacity="0.08"></polygon>`
+      : "";
+    const points = item.values.map((v, pointIdx) => circleAt(v, pointIdx, item.color)).join("");
+    return `${area}${line}${points}`;
+  }).join("");
+  svg.innerHTML = `${gridLines}${lineMarkup}${xTicks}`;
   const metricLabel = metric === "revenue"
     ? tr("Выручка", "Revenue")
     : (metric === "orders"
@@ -4857,8 +5102,14 @@ function renderSalesChart(points) {
           ? tr("Реклама", "Ads Spend")
           : (metric === "penalties" ? tr("Штрафы", "Penalties") : tr("Штуки", "Units")))));
   const formatValue = (metric === "revenue" || metric === "ad_spend" || metric === "penalties") ? formatMoney : formatInt;
+  const topSeries = series[0] || { values: [] };
+  const topValues = Array.isArray(topSeries.values) ? topSeries.values : [];
+  const peak = topValues.length ? Math.max(...topValues) : 0;
+  const low = topValues.length ? Math.min(...topValues) : 0;
   meta.innerHTML = `
     <span>${metricLabel}: <b>${series.map((item) => `${item.label} ${formatValue(item.values.reduce((a, b) => a + Number(b || 0), 0))}`).join(" • ")}</b></span>
+    <span>${tr("Пик", "Peak")}: <b>${formatValue(peak)}</b></span>
+    <span>${tr("Мин", "Min")}: <b>${formatValue(low)}</b></span>
   `;
 }
 
@@ -5331,35 +5582,48 @@ function resetTeamMemberForm() {
 }
 
 function renderTeamMembers() {
-  const tbody = document.getElementById("teamMembersTable");
-  if (!tbody) return;
-  tbody.innerHTML = "";
+  const host = document.getElementById("teamMembersList");
+  if (!host) return;
+  host.innerHTML = "";
   if (!Array.isArray(teamMembers) || !teamMembers.length) {
-    setTableMessage("teamMembersTable", 9, tr("Сотрудников пока нет.", "No employees yet."));
+    host.innerHTML = `<div class="hint">${escapeHtml(tr("Сотрудников пока нет.", "No employees yet."))}</div>`;
     return;
   }
   for (const row of teamMembers) {
     const access = Array.isArray(row.access_scope) ? row.access_scope : [];
-    const trEl = document.createElement("tr");
-    trEl.innerHTML = `
-      <td>${escapeHtml(String(row.id || "-"))}</td>
-      <td><input data-team-email="${row.id}" value="${escapeHtml(String(row.email || ""))}" ${row.is_owner ? "disabled" : ""} /></td>
-      <td><input data-team-full="${row.id}" value="${escapeHtml(String(row.full_name || ""))}" /></td>
-      <td><input data-team-phone="${row.id}" value="${escapeHtml(String(row.phone || ""))}" /></td>
-      <td><input data-team-nick="${row.id}" value="${escapeHtml(String(row.nickname || ""))}" /></td>
-      <td>${row.is_owner ? tr("Владелец", "Owner") : `${tr("Сотрудник", "Employee")}${row.has_password ? " 🔒" : ""}`}</td>
-      <td>${renderTeamMemberAccessPicks(row.id, access, row.is_owner)}</td>
-      <td>${row.is_owner ? "-" : `<input type="password" data-team-password="${row.id}" placeholder="${escapeHtml(tr("Новый пароль (опц.)", "New password (optional)"))}" />`}</td>
-      <td>
-        <div class="actions">
-          <button class="btn-secondary" type="button" data-team-save="${row.id}">${tr("Сохранить", "Save")}</button>
-          ${row.is_owner ? "" : `<button class="btn-danger" type="button" data-team-del="${row.id}">${tr("Удалить", "Delete")}</button>`}
+    const card = document.createElement("article");
+    card.className = "team-member-card";
+    card.innerHTML = `
+      <div class="team-member-head">
+        <div>
+          <strong>#${escapeHtml(String(row.id || "-"))} ${escapeHtml(String(row.email || "-"))}</strong>
+          <div class="hint">${row.is_owner ? tr("Владелец кабинета", "Workspace owner") : tr("Сотрудник кабинета", "Workspace employee")}</div>
         </div>
-      </td>
+        <span>${row.is_owner ? tr("Владелец", "Owner") : `${tr("Сотрудник", "Employee")}${row.has_password ? " 🔒" : ""}`}</span>
+      </div>
+      <div class="team-member-grid">
+        <label><span>Email</span><input data-team-email="${row.id}" value="${escapeHtml(String(row.email || ""))}" ${row.is_owner ? "disabled" : ""} /></label>
+        <label><span>${tr("ФИО", "Full name")}</span><input data-team-full="${row.id}" value="${escapeHtml(String(row.full_name || ""))}" /></label>
+        <label><span>${tr("Телефон", "Phone")}</span><input data-team-phone="${row.id}" value="${escapeHtml(String(row.phone || ""))}" /></label>
+        <label><span>${tr("Ник", "Nickname")}</span><input data-team-nick="${row.id}" value="${escapeHtml(String(row.nickname || ""))}" /></label>
+        ${
+          row.is_owner
+            ? ""
+            : `<label><span>${tr("Новый пароль", "New password")}</span><input type="password" data-team-password="${row.id}" placeholder="${escapeHtml(tr("Новый пароль (опц.)", "New password (optional)"))}" /></label>`
+        }
+        <div class="team-member-wide">
+          <span>${tr("Доступ к модулям", "Module access")}</span>
+          ${renderTeamMemberAccessPicks(row.id, access, row.is_owner)}
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn-secondary" type="button" data-team-save="${row.id}">${tr("Сохранить", "Save")}</button>
+        ${row.is_owner ? "" : `<button class="btn-danger" type="button" data-team-del="${row.id}">${tr("Удалить", "Delete")}</button>`}
+      </div>
     `;
-    trEl.querySelector(`[data-team-save="${row.id}"]`)?.addEventListener("click", async () => updateTeamMember(row.id));
-    trEl.querySelector(`[data-team-del="${row.id}"]`)?.addEventListener("click", async () => deleteTeamMember(row.id));
-    tbody.appendChild(trEl);
+    card.querySelector(`[data-team-save="${row.id}"]`)?.addEventListener("click", async () => updateTeamMember(row.id));
+    card.querySelector(`[data-team-del="${row.id}"]`)?.addEventListener("click", async () => deleteTeamMember(row.id));
+    host.appendChild(card);
   }
 }
 
@@ -6071,6 +6335,7 @@ async function adminResetUserPassword() {
 
 applyTheme(currentTheme);
 applyUiLanguage();
+switchAuthMode("login");
 applySidebarMode();
 applyButtonTooltips();
 initHoverTips();

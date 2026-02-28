@@ -423,7 +423,9 @@ def generate_review_reply(
     mp = "Ozon" if (marketplace or "").strip().lower() == "ozon" else "WB"
     kind = "question" if (content_kind or "").strip().lower() == "question" else "review"
 
-    fallback = _fallback_question_reply(review, product, customer_name) if kind == "question" else _fallback_reply(review, product, rating, customer_name)
+    context_hint = _extract_knowledge_hint(custom_prompt)
+    fallback_base = _fallback_question_reply(review, product, customer_name) if kind == "question" else _fallback_reply(review, product, rating, customer_name)
+    fallback = _merge_reply_with_hint(fallback_base, context_hint)
     token = (api_key or "").strip() or (settings.openai_api_key or "").strip()
     if not token:
         return fallback
@@ -2666,6 +2668,37 @@ def _fallback_question_reply(question_text: str, product_name: str, reviewer_nam
         "Проверим по вашей ситуации и подскажем точные параметры. "
         "Если можете, уточните нужный размер/модель и условия использования."
     )
+
+
+def _extract_knowledge_hint(prompt_text: str) -> str:
+    text = " ".join(str(prompt_text or "").split())
+    if not text:
+        return ""
+    lower = text.lower()
+    marker = "база знаний:"
+    idx = lower.find(marker)
+    chunk = text[idx + len(marker):] if idx >= 0 else text
+    if not chunk:
+        return ""
+    cleaned = chunk.replace("[", " ").replace("]", " ").replace("{", " ").replace("}", " ")
+    cleaned = " ".join(cleaned.split())
+    if not cleaned:
+        return ""
+    if len(cleaned) > 240:
+        cleaned = cleaned[:240].rsplit(" ", 1)[0].strip()
+    return cleaned
+
+
+def _merge_reply_with_hint(base_reply: str, hint: str) -> str:
+    answer = " ".join(str(base_reply or "").split())
+    extra = " ".join(str(hint or "").split())
+    if not extra:
+        return answer
+    extra_lower = extra.lower()
+    if extra_lower in answer.lower():
+        return answer
+    merged = f"{answer} {extra}".strip()
+    return merged[:3000]
 
 
 def _build_ozon_headers(api_key: str) -> dict[str, str]:

@@ -112,6 +112,60 @@ const THEME_LABELS = {
   greenland: { ru: "Гренландия", en: "Greenland" },
 };
 
+const AUDIT_MODULE_TITLES = {
+  auth: { ru: "Авторизация", en: "Authentication" },
+  products: { ru: "Товары", en: "Products" },
+  seo_generation: { ru: "SEO задачи", en: "SEO jobs" },
+  rank_tracking: { ru: "Позиции", en: "Rank tracking" },
+  sales_stats: { ru: "Статистика продаж", en: "Sales statistics" },
+  wb_reviews_ai: { ru: "Отзывы", en: "Reviews" },
+  wb_questions_ai: { ru: "Вопросы", en: "Questions" },
+  returns: { ru: "Возвраты", en: "Returns" },
+  wb_ads: { ru: "Реклама WB", en: "WB ads" },
+  wb_ads_analytics: { ru: "Аналитика Ads", en: "Ads analytics" },
+  wb_ads_recommendations: { ru: "Рекомендации Ads", en: "Ads recommendations" },
+  user_profile: { ru: "Профиль", en: "Profile" },
+  help_center: { ru: "Справка", en: "Help center" },
+  ai_assistant: { ru: "AI помощник", en: "AI assistant" },
+  admin: { ru: "Админка", en: "Admin panel" },
+};
+
+const AUDIT_ACTION_TITLES = {
+  auth_login_success: { ru: "Успешный вход", en: "Login success" },
+  auth_login_failed: { ru: "Ошибка входа", en: "Login failed" },
+  auth_logout: { ru: "Выход из системы", en: "Logout" },
+  user_registered: { ru: "Регистрация пользователя", en: "User registration" },
+  products_imported: { ru: "Импорт товаров", en: "Products import" },
+  products_reloaded: { ru: "Полная перезагрузка товаров", en: "Products full reload" },
+  product_details_read: { ru: "Просмотр деталей товара", en: "Product details read" },
+  product_updated: { ru: "Обновление карточки товара", en: "Product card updated" },
+  sales_stats_read: { ru: "Чтение статистики продаж", en: "Sales statistics read" },
+  wb_review_reply_generated: { ru: "Генерация ответа на отзыв", en: "Generate review reply" },
+  wb_review_reply: { ru: "Публикация ответа на отзыв", en: "Publish review reply" },
+  ozon_review_reply_generated: { ru: "Генерация ответа на отзыв (Ozon)", en: "Generate review reply (Ozon)" },
+  ozon_review_reply: { ru: "Публикация ответа на отзыв (Ozon)", en: "Publish review reply (Ozon)" },
+  wb_question_reply_generated: { ru: "Генерация ответа на вопрос", en: "Generate question reply" },
+  wb_question_reply: { ru: "Публикация ответа на вопрос", en: "Publish question reply" },
+  ozon_question_reply_generated: { ru: "Генерация ответа на вопрос (Ozon)", en: "Generate question reply (Ozon)" },
+  ozon_question_reply: { ru: "Публикация ответа на вопрос (Ozon)", en: "Publish question reply (Ozon)" },
+  wb_returns_read: { ru: "Чтение списка возвратов WB", en: "WB returns list read" },
+  ozon_returns_read: { ru: "Чтение списка возвратов Ozon", en: "Ozon returns list read" },
+  wb_return_detail_read: { ru: "Просмотр деталей возврата WB", en: "WB return detail read" },
+  wb_return_action: { ru: "Действие по возврату", en: "Return action" },
+  profile_updated: { ru: "Обновление профиля", en: "Profile updated" },
+  profile_team_member_added: { ru: "Добавлен сотрудник", en: "Employee added" },
+  profile_team_member_updated: { ru: "Изменен сотрудник", en: "Employee updated" },
+  profile_team_member_deleted: { ru: "Удален сотрудник", en: "Employee deleted" },
+  admin_team_member_added: { ru: "Админ добавил сотрудника", en: "Admin added employee" },
+  admin_team_member_updated: { ru: "Админ изменил сотрудника", en: "Admin updated employee" },
+  admin_team_member_deleted: { ru: "Админ удалил сотрудника", en: "Admin deleted employee" },
+  admin_user_profile_updated: { ru: "Админ обновил профиль пользователя", en: "Admin updated user profile" },
+  admin_user_plan_updated: { ru: "Админ обновил тариф пользователя", en: "Admin updated user plan" },
+  admin_user_password_reset: { ru: "Админ сменил пароль пользователя", en: "Admin reset user password" },
+  help_assistant_reply_generated: { ru: "AI помощник сформировал ответ", en: "AI assistant generated answer" },
+  admin_ui_settings_updated: { ru: "Изменены настройки оформления", en: "UI settings updated" },
+};
+
 const adminHeaders = () => ({
   "Content-Type": "application/json",
   "Authorization": `Bearer ${adminToken}`,
@@ -119,6 +173,56 @@ const adminHeaders = () => ({
 
 function aTr(ru, en) {
   return adminLang === "en" ? en : ru;
+}
+
+function humanAuditModule(codeRaw) {
+  const code = String(codeRaw || "").trim().toLowerCase();
+  if (!code) return "-";
+  const base = AUDIT_MODULE_TITLES[code] || MODULE_TITLES[code];
+  if (base && typeof base === "object") return base[adminLang] || base.ru || code;
+  return code.replaceAll("_", " ");
+}
+
+function humanAuditAction(actionRaw) {
+  const action = String(actionRaw || "").trim().toLowerCase();
+  if (!action) return "-";
+  const mapped = AUDIT_ACTION_TITLES[action];
+  if (mapped && typeof mapped === "object") return mapped[adminLang] || mapped.ru || action;
+  if (action.endsWith("_read")) return aTr(`Чтение: ${action.replaceAll("_", " ")}`, `Read: ${action.replaceAll("_", " ")}`);
+  if (action.endsWith("_updated")) return aTr(`Обновление: ${action.replaceAll("_", " ")}`, `Update: ${action.replaceAll("_", " ")}`);
+  return action.replaceAll("_", " ");
+}
+
+function humanAuditDetailKey(keyRaw) {
+  const key = String(keyRaw || "").trim().toLowerCase();
+  const labels = {
+    user_id: aTr("Пользователь", "User"),
+    member_id: aTr("Сотрудник", "Employee"),
+    feedback_id: aTr("ID записи", "Record ID"),
+    question_id: aTr("ID вопроса", "Question ID"),
+    review_id: aTr("ID отзыва", "Review ID"),
+    product_id: aTr("ID товара", "Product ID"),
+    service_id: aTr("ID сервиса", "Service ID"),
+    action: aTr("Операция", "Operation"),
+    role: aTr("Роль", "Role"),
+    source: aTr("Источник", "Source"),
+    provider: aTr("Провайдер", "Provider"),
+    model: aTr("Модель", "Model"),
+    mode: aTr("Режим", "Mode"),
+    module: aTr("Модуль", "Module"),
+    marketplace: aTr("Маркетплейс", "Marketplace"),
+    count: aTr("Количество", "Count"),
+    rows: aTr("Строк", "Rows"),
+    loaded: aTr("Загружено", "Loaded"),
+    total: aTr("Всего", "Total"),
+    status: aTr("Статус", "Status"),
+    ok: aTr("Успех", "Success"),
+    date_from: aTr("Период с", "Date from"),
+    date_to: aTr("Период по", "Date to"),
+    ip: "IP",
+    ua: "UA",
+  };
+  return labels[key] || keyRaw || "-";
 }
 
 function escapeHtml(value) {
@@ -260,9 +364,12 @@ function applyAdminLanguage() {
     ["#adminTab-credentials .panel h3", aTr("API ключи пользователей", "User API keys")],
     ["#adminTab-credentials .grid-2 button", aTr("Обновить таблицу", "Refresh table")],
     ["#adminTab-audit .panel h3", aTr("Журнал действий", "Activity log")],
-    ["#adminTab-audit .grid-4 button", aTr("Обновить журнал", "Refresh log")],
-    ["#adminAuditActionFilter", aTr("Фильтр по действию (action)", "Filter by action")],
-    ["#adminAuditTextFilter", aTr("Текст в деталях / user_id", "Details text / user_id")],
+    ["#adminAuditRefreshBtn", aTr("Обновить журнал", "Refresh log")],
+    ["#adminAuditActionFilter", aTr("Действие (например: auth_login_success)", "Action (e.g. auth_login_success)")],
+    ["#adminAuditModuleFilter", aTr("Модуль (например: sales_stats)", "Module (e.g. sales_stats)")],
+    ["#adminAuditUserFilter", aTr("user_id / actor email", "user_id / actor email")],
+    ["#adminAuditMemberFilter", aTr("member_id сотрудника", "employee member_id")],
+    ["#adminAuditTextFilter", aTr("Поиск по деталям / entity / actor / ip / ua", "Search in details / entity / actor / ip / ua")],
   ];
 
   for (const [selector, value] of staticTexts) {
@@ -500,6 +607,10 @@ function renderAdminDashboard(stats, users, modules) {
   const items = [
     [aTr("Пользователи", "Users"), stats.total_users || 0],
     [aTr("Новые за 7 дней", "New in 7 days"), stats.new_users_7d || 0],
+    [aTr("Сотрудники", "Employees"), stats.employees_total || 0],
+    [aTr("Команда всего", "Team members total"), stats.total_team_members || 0],
+    [aTr("Активные пользователи 24ч", "Active users 24h"), stats.active_users_24h || 0],
+    [aTr("События аудита 24ч", "Audit events 24h"), stats.audit_events_24h || 0],
     [aTr("Товаров", "Products"), stats.total_products || 0],
     [aTr("SEO задач", "SEO jobs"), stats.total_jobs || 0],
     [aTr("Активные", "Active"), stats.active_jobs || 0],
@@ -774,57 +885,60 @@ function renderAdminUserProfilePanel(payload, rowId) {
           <div class="admin-team-access-wrap">${renderAdminTeamScopePicks([], payload.user_id, false, "new")}</div>
           <button type="button" data-team-add>${aTr("Добавить сотрудника", "Add employee")}</button>
         </div>
-        <div class="table-card admin-team-table-wrap">
-          <table class="admin-team-table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>${aTr("EMAIL", "EMAIL")}</th>
-                <th>${aTr("ФИО", "FULL NAME")}</th>
-                <th>${aTr("Телефон", "PHONE")}</th>
-                <th>${aTr("Ник", "NICK")}</th>
-                <th>${aTr("Роль", "ROLE")}</th>
-                <th>${aTr("Доступ", "ACCESS")}</th>
-                <th>${aTr("Пароль", "PASSWORD")}</th>
-                <th>${aTr("Действия", "ACTIONS")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${
-                teamMembers.length
-                  ? teamMembers
-                      .map((member) => {
-                        const memberId = Number(member.id || 0);
-                        const isOwner = Boolean(member.is_owner);
-                        const access = Array.isArray(member.access_scope) ? member.access_scope : [];
-                        return `
-                          <tr data-team-row="${memberId}">
-                            <td>${memberId || "-"}</td>
-                            <td><input data-team-email="${memberId}" value="${escapeHtml(String(member.email || ""))}" ${isOwner ? "disabled" : ""} /></td>
-                            <td><input data-team-full="${memberId}" value="${escapeHtml(String(member.full_name || ""))}" /></td>
-                            <td><input data-team-phone="${memberId}" value="${escapeHtml(String(member.phone || ""))}" /></td>
-                            <td><input data-team-nick="${memberId}" value="${escapeHtml(String(member.nickname || ""))}" /></td>
-                            <td>${isOwner ? aTr("Владелец", "Owner") : aTr("Сотрудник", "Employee")}</td>
-                            <td>${renderAdminTeamScopePicks(access, memberId, isOwner, "row")}</td>
-                            <td>${isOwner ? "-" : `<input type="password" data-team-pass="${memberId}" placeholder="${escapeHtml(aTr("Новый пароль", "New password"))}" />`}</td>
-                            <td>
-                              <div class="actions">
-                                <button class="btn-secondary" type="button" data-team-save="${memberId}">${aTr("Сохранить", "Save")}</button>
-                                ${
-                                  isOwner
-                                    ? ""
-                                    : `<button class="btn-danger" type="button" data-team-del="${memberId}">${aTr("Удалить", "Delete")}</button>`
-                                }
-                              </div>
-                            </td>
-                          </tr>
-                        `;
-                      })
-                      .join("")
-                  : `<tr><td colspan="9">${aTr("Сотрудники не добавлены.", "No employees added.")}</td></tr>`
-              }
-            </tbody>
-          </table>
+        <div class="admin-team-list">
+          ${
+            teamMembers.length
+              ? teamMembers
+                  .map((member) => {
+                    const memberId = Number(member.id || 0);
+                    const isOwner = Boolean(member.is_owner);
+                    const access = Array.isArray(member.access_scope) ? member.access_scope : [];
+                    return `
+                      <article class="admin-team-card" data-team-row="${memberId}">
+                        <div class="admin-team-card-head">
+                          <div>
+                            <strong>#${memberId || "-"} ${escapeHtml(String(member.email || "-"))}</strong>
+                            <div class="hint">${isOwner ? aTr("Владелец кабинета", "Workspace owner") : aTr("Сотрудник кабинета", "Workspace employee")}</div>
+                          </div>
+                          <span class="admin-chip">${isOwner ? aTr("Владелец", "Owner") : aTr("Сотрудник", "Employee")}</span>
+                        </div>
+                        <div class="admin-team-card-grid">
+                          <label>
+                            <span>${aTr("Email", "Email")}</span>
+                            <input data-team-email="${memberId}" value="${escapeHtml(String(member.email || ""))}" ${isOwner ? "disabled" : ""} />
+                          </label>
+                          <label>
+                            <span>${aTr("ФИО", "Full name")}</span>
+                            <input data-team-full="${memberId}" value="${escapeHtml(String(member.full_name || ""))}" />
+                          </label>
+                          <label>
+                            <span>${aTr("Телефон", "Phone")}</span>
+                            <input data-team-phone="${memberId}" value="${escapeHtml(String(member.phone || ""))}" />
+                          </label>
+                          <label>
+                            <span>${aTr("Ник", "Nickname")}</span>
+                            <input data-team-nick="${memberId}" value="${escapeHtml(String(member.nickname || ""))}" />
+                          </label>
+                          ${
+                            isOwner
+                              ? ""
+                              : `<label><span>${aTr("Новый пароль", "New password")}</span><input type="password" data-team-pass="${memberId}" placeholder="${escapeHtml(aTr("Новый пароль", "New password"))}" /></label>`
+                          }
+                          <div>
+                            <span class="hint">${aTr("Доступ к модулям", "Module access")}</span>
+                            ${renderAdminTeamScopePicks(access, memberId, isOwner, "row")}
+                          </div>
+                        </div>
+                        <div class="actions">
+                          <button class="btn-secondary" type="button" data-team-save="${memberId}">${aTr("Сохранить", "Save")}</button>
+                          ${isOwner ? "" : `<button class="btn-danger" type="button" data-team-del="${memberId}">${aTr("Удалить", "Delete")}</button>`}
+                        </div>
+                      </article>
+                    `;
+                  })
+                  .join("")
+              : `<div class="hint">${aTr("Сотрудники не добавлены.", "No employees added.")}</div>`
+          }
         </div>
       </div>
     </div>
@@ -1493,22 +1607,7 @@ function renderAdminAuditTable() {
   const meta = document.getElementById("adminAuditMeta");
   if (!tbody) return;
   tbody.innerHTML = "";
-
-  const actionFilter = String(document.getElementById("adminAuditActionFilter")?.value || "").trim().toLowerCase();
-  const textFilter = String(document.getElementById("adminAuditTextFilter")?.value || "").trim().toLowerCase();
-
-  const rows = adminAuditRows.filter((row) => {
-    const action = String(row.action || "").toLowerCase();
-    const moduleCode = String(row.module_code || "").toLowerCase();
-    const entity = `${String(row.entity_type || "")} ${String(row.entity_id || "")}`.toLowerCase();
-    const status = String(row.status || "").toLowerCase();
-    const details = String(row.details || "").toLowerCase();
-    const actor = `${String(row.actor_email || "")} ${String(row.actor_member_id ?? "")}`.toLowerCase();
-    const uid = String(row.user_id ?? "").toLowerCase();
-    if (actionFilter && !`${action} ${moduleCode} ${entity} ${status}`.includes(actionFilter)) return false;
-    if (textFilter && !`${details} ${uid} ${actor} ${moduleCode} ${entity} ${status}`.includes(textFilter)) return false;
-    return true;
-  });
+  const rows = Array.isArray(adminAuditRows) ? adminAuditRows : [];
 
   if (meta) {
     const uniqueActions = new Set(rows.map((row) => String(row.action || "").trim()).filter(Boolean));
@@ -1538,13 +1637,14 @@ function renderAdminAuditTable() {
     const actorRole = row.actor_is_owner ? aTr("owner", "owner") : aTr("employee", "employee");
     const actorLabel = actorEmail || fallbackUserLabel;
     const actorMeta = actorMemberId > 0 ? `${aTr("member", "member")} #${actorMemberId} • ${actorRole}` : (row.user_id ? `user #${row.user_id}` : "-");
-    const moduleLabel = String(row.module_code || "").trim() || "-";
+    const moduleLabel = humanAuditModule(row.module_code);
     const statusLabel = String(row.status || "").trim() || "ok";
+    const actionLabel = humanAuditAction(row.action);
     const entityType = String(row.entity_type || "").trim();
     const entityId = String(row.entity_id || "").trim();
     const entityLabel = (entityType || entityId) ? `${entityType || "-"}:${entityId || "-"}` : "-";
     const detailHtml = parsed.kv.length
-      ? `<div class="admin-audit-kv">${parsed.kv.map(([k, v]) => `<span><b>${escapeHtml(k)}</b>: ${escapeHtml(v)}</span>`).join("")}
+      ? `<div class="admin-audit-kv">${parsed.kv.map(([k, v]) => `<span><b>${escapeHtml(humanAuditDetailKey(k))}</b>: ${escapeHtml(v)}</span>`).join("")}
           ${row.ip ? `<span><b>ip</b>: ${escapeHtml(String(row.ip))}</span>` : ""}
           ${row.user_agent ? `<span><b>ua</b>: ${escapeHtml(String(row.user_agent))}</span>` : ""}
         </div>`
@@ -1555,7 +1655,7 @@ function renderAdminAuditTable() {
       <td>${escapeHtml(formatDateTime(row.created_at))}</td>
       <td><div><b>${escapeHtml(actorLabel)}</b></div><div class="hint">${escapeHtml(actorMeta)}</div></td>
       <td><span class="admin-chip">${escapeHtml(moduleLabel)}</span></td>
-      <td><span class="admin-chip">${escapeHtml(String(row.action || "-"))}</span></td>
+      <td><span class="admin-chip">${escapeHtml(actionLabel)}</span></td>
       <td><span class="admin-chip">${escapeHtml(statusLabel)}</span></td>
       <td>${escapeHtml(entityLabel)}</td>
       <td>${detailHtml}</td>
@@ -1566,7 +1666,30 @@ function renderAdminAuditTable() {
 
 async function loadAdminAudit() {
   const limit = Number(document.getElementById("adminAuditLimit")?.value || 200);
-  const data = await adminRequest(`/api/admin/audit?limit=${limit}`, { headers: adminHeaders() }).catch((e) => {
+  const action = String(document.getElementById("adminAuditActionFilter")?.value || "").trim();
+  const moduleCode = String(document.getElementById("adminAuditModuleFilter")?.value || "").trim();
+  const status = String(document.getElementById("adminAuditStatusFilter")?.value || "").trim();
+  const dateFrom = String(document.getElementById("adminAuditDateFrom")?.value || "").trim();
+  const dateTo = String(document.getElementById("adminAuditDateTo")?.value || "").trim();
+  const textFilter = String(document.getElementById("adminAuditTextFilter")?.value || "").trim();
+  const userFilter = String(document.getElementById("adminAuditUserFilter")?.value || "").trim();
+  const memberFilter = String(document.getElementById("adminAuditMemberFilter")?.value || "").trim();
+
+  const qp = new URLSearchParams();
+  qp.set("limit", String(Math.max(10, Math.min(limit, 1000))));
+  if (action) qp.set("action", action);
+  if (moduleCode) qp.set("module_code", moduleCode);
+  if (status) qp.set("status", status);
+  if (dateFrom) qp.set("date_from", dateFrom);
+  if (dateTo) qp.set("date_to", dateTo);
+  if (textFilter) qp.set("q", textFilter);
+  if (userFilter) {
+    if (/^\d+$/.test(userFilter)) qp.set("user_id", userFilter);
+    else qp.set("actor_email", userFilter);
+  }
+  if (/^\d+$/.test(memberFilter)) qp.set("actor_member_id", memberFilter);
+
+  const data = await adminRequest(`/api/admin/audit?${qp.toString()}`, { headers: adminHeaders() }).catch((e) => {
     alert(e.message);
     return null;
   });

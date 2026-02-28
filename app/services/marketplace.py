@@ -866,45 +866,78 @@ def _fetch_wb_products(
         return None
     endpoint = "https://content-api.wildberries.ru/content/v2/get/cards/list"
     headers = {"Authorization": api_key, "Content-Type": "application/json"}
-    payload: dict[str, Any] = {
-        "settings": {
-            "cursor": {"limit": min(limit, 100)},
-            "filter": {"withPhoto": -1},
-        }
-    }
-
-    with httpx.Client(timeout=timeout_sec) as client:
-        response = client.post(endpoint, headers=headers, json=payload)
-        if response.status_code >= 400:
-            return None
-        data = response.json()
-
-    cards = data.get("cards") or data.get("data", {}).get("cards") or []
     mapped: list[MarketplaceProduct] = []
-    for card in cards:
-        article = str(card.get("vendorCode") or card.get("nmID") or "")
-        if not article:
-            continue
-        name = str(card.get("title") or card.get("object") or "Товар")
-        description = str(card.get("description") or "")
-        barcode = _extract_wb_barcode(card)
-        photo_url = _extract_wb_photo(card)
-        mapped.append(
-            MarketplaceProduct(
-                article=article,
-                external_id=str(card.get("nmID") or ""),
-                barcode=barcode,
-                photo_url=photo_url,
-                name=name,
-                description=description,
-            )
-        )
+    dedupe: set[tuple[str, str]] = set()
+    cursor: dict[str, Any] = {"limit": min(max(1, int(limit)), 100)}
+    max_pages = 200 if import_all else 1
+    page = 0
+    with httpx.Client(timeout=timeout_sec) as client:
+        while page < max_pages:
+            page += 1
+            payload: dict[str, Any] = {
+                "settings": {
+                    "cursor": cursor,
+                    "filter": {"withPhoto": -1},
+                }
+            }
+            response = client.post(endpoint, headers=headers, json=payload)
+            if response.status_code >= 400:
+                if not mapped:
+                    return None
+                break
+            data = response.json()
+            cards = data.get("cards") or data.get("data", {}).get("cards") or []
+            if not isinstance(cards, list) or not cards:
+                break
+
+            for card in cards:
+                article = str(card.get("vendorCode") or card.get("nmID") or "")
+                if not article:
+                    continue
+                external_id = str(card.get("nmID") or "")
+                dedupe_key = (article, external_id)
+                if dedupe_key in dedupe:
+                    continue
+                dedupe.add(dedupe_key)
+                name = str(card.get("title") or card.get("object") or "Товар")
+                description = str(card.get("description") or "")
+                barcode = _extract_wb_barcode(card)
+                photo_url = _extract_wb_photo(card)
+                mapped.append(
+                    MarketplaceProduct(
+                        article=article,
+                        external_id=external_id,
+                        barcode=barcode,
+                        photo_url=photo_url,
+                        name=name,
+                        description=description,
+                    )
+                )
+
+            if not import_all:
+                break
+            next_cursor = data.get("cursor") or data.get("data", {}).get("cursor") or {}
+            next_updated = next_cursor.get("updatedAt")
+            next_nm = next_cursor.get("nmID")
+            if not next_nm:
+                next_nm = next_cursor.get("nmId")
+            next_payload: dict[str, Any] = {"limit": min(max(1, int(limit)), 100)}
+            if next_updated:
+                next_payload["updatedAt"] = next_updated
+            if next_nm:
+                try:
+                    next_payload["nmID"] = int(next_nm)
+                except Exception:
+                    next_payload["nmID"] = next_nm
+            if next_payload == cursor:
+                break
+            cursor = next_payload
 
     if articles:
         article_set = {x.strip() for x in articles if x.strip()}
         mapped = [x for x in mapped if x.article in article_set]
     if not import_all:
-        mapped = mapped[: min(30, len(mapped))]
+        mapped = mapped[: min(max(1, int(limit)), len(mapped))]
     return mapped
 
 
@@ -924,24 +957,56 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
     list_endpoint = "https://api-seller.ozon.ru/v3/product/list"
     info_endpoint = "https://api-seller.ozon.ru/v3/product/info/list"
 
+    all_product_ids: list[int] = []
+    last_id = ""
+    pages = 0
+    max_pages = 240 if import_all else 1
     with httpx.Client(timeout=25.0) as client:
-        list_resp = client.post(
-            list_endpoint,
-            headers=headers,
-            json={"filter": {"visibility": "ALL"}, "last_id": "", "limit": min(limit, 100)},
-        )
-        if list_resp.status_code >= 400:
-            return None
-        list_data = list_resp.json().get("result", {})
-        items = list_data.get("items", [])
-        product_ids = [item.get("product_id") for item in items if item.get("product_id")]
-        if not product_ids:
-            return []
+        while pages < max_pages:
+            pages += 1
+            list_resp = client.post(
+                list_endpoint,
+                headers=headers,
+                json={"filter": {"visibility": "ALL"}, "last_id": last_id, "limit": min(max(1, int(limit)), 100)},
+            )
+            if list_resp.status_code >= 400:
+                if not all_product_ids:
+                    return None
+                break
+            list_data = list_resp.json().get("result", {})
+            items = list_data.get("items", [])
+            if not isinstance(items, list) or not items:
+                break
+            for item in items:
+                pid = item.get("product_id")
+                try:
+                    pid_int = int(pid)
+                except Exception:
+                    continue
+                if pid_int > 0:
+                    all_product_ids.append(pid_int)
+            if not import_all:
+                break
+            next_last_id = str(list_data.get("last_id") or "").strip()
+            if not next_last_id or next_last_id == last_id:
+                break
+            last_id = next_last_id
 
-        info_resp = client.post(info_endpoint, headers=headers, json={"product_id": product_ids})
-        if info_resp.status_code >= 400:
-            return None
-        info_items = info_resp.json().get("result", {}).get("items", [])
+        unique_ids = sorted(set(all_product_ids))
+        if not unique_ids:
+            return []
+        info_items: list[dict[str, Any]] = []
+        batch_size = 100
+        for offset in range(0, len(unique_ids), batch_size):
+            chunk = unique_ids[offset : offset + batch_size]
+            info_resp = client.post(info_endpoint, headers=headers, json={"product_id": chunk})
+            if info_resp.status_code >= 400:
+                if not info_items:
+                    return None
+                continue
+            chunk_items = info_resp.json().get("result", {}).get("items", [])
+            if isinstance(chunk_items, list):
+                info_items.extend(chunk_items)
 
     mapped: list[MarketplaceProduct] = []
     for item in info_items:
@@ -968,8 +1033,129 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
         article_set = {x.strip() for x in articles if x.strip()}
         mapped = [x for x in mapped if x.article in article_set]
     if not import_all:
-        mapped = mapped[: min(30, len(mapped))]
+        mapped = mapped[: min(max(1, int(limit)), len(mapped))]
     return mapped
+
+
+def fetch_marketplace_product_details(marketplace: str, api_key: str, article: str, external_id: str = "") -> dict[str, Any]:
+    code = str(marketplace or "").strip().lower()
+    if code == "wb":
+        return _fetch_wb_product_details(api_key, article, external_id)
+    if code == "ozon":
+        return _fetch_ozon_product_details(api_key, article, external_id)
+    return {"photos": [], "attributes": {}, "raw": {}}
+
+
+def _fetch_wb_product_details(api_key: str, article: str, external_id: str) -> dict[str, Any]:
+    if not httpx:
+        return {"photos": [], "attributes": {}, "raw": {}}
+    endpoint = "https://content-api.wildberries.ru/content/v2/get/cards/list"
+    headers = {"Authorization": api_key, "Content-Type": "application/json"}
+    payload = {
+        "settings": {
+            "cursor": {"limit": 100},
+            "filter": {"textSearch": article or external_id, "withPhoto": -1},
+        }
+    }
+    try:
+        with httpx.Client(timeout=20.0) as client:
+            response = client.post(endpoint, headers=headers, json=payload)
+        if response.status_code >= 400:
+            return {"photos": [], "attributes": {}, "raw": {}}
+        data = response.json()
+    except Exception:
+        return {"photos": [], "attributes": {}, "raw": {}}
+    cards = data.get("cards") or data.get("data", {}).get("cards") or []
+    if not isinstance(cards, list):
+        cards = []
+    target = None
+    ext = str(external_id or "").strip()
+    art = str(article or "").strip().lower()
+    for card in cards:
+        nm = str(card.get("nmID") or "").strip()
+        vendor = str(card.get("vendorCode") or "").strip().lower()
+        if ext and nm == ext:
+            target = card
+            break
+        if art and vendor == art:
+            target = card
+            break
+    if target is None and cards:
+        target = cards[0]
+    if not target:
+        return {"photos": [], "attributes": {}, "raw": {}}
+    photos = _extract_wb_photos(target)
+    attrs = {
+        "vendorCode": str(target.get("vendorCode") or ""),
+        "nmID": str(target.get("nmID") or ""),
+        "brand": str(target.get("brand") or ""),
+        "title": str(target.get("title") or ""),
+        "object": str(target.get("object") or ""),
+    }
+    return {"photos": photos, "attributes": attrs, "raw": target}
+
+
+def _fetch_ozon_product_details(api_key: str, article: str, external_id: str) -> dict[str, Any]:
+    if not httpx:
+        return {"photos": [], "attributes": {}, "raw": {}}
+    creds = _parse_ozon_credentials(api_key)
+    if not creds:
+        return {"photos": [], "attributes": {}, "raw": {}}
+    client_id, token = creds
+    headers = {"Client-Id": client_id, "Api-Key": token, "Content-Type": "application/json"}
+    info_endpoint = "https://api-seller.ozon.ru/v3/product/info/list"
+
+    product_ids: list[int] = []
+    try:
+        if external_id and str(external_id).isdigit():
+            product_ids.append(int(str(external_id)))
+    except Exception:
+        pass
+    if not product_ids:
+        list_endpoint = "https://api-seller.ozon.ru/v3/product/list"
+        try:
+            with httpx.Client(timeout=20.0) as client:
+                list_resp = client.post(
+                    list_endpoint,
+                    headers=headers,
+                    json={"filter": {"visibility": "ALL", "offer_id": [article]}, "last_id": "", "limit": 20},
+                )
+            if list_resp.status_code < 400:
+                rows = list_resp.json().get("result", {}).get("items", [])
+                for row in rows if isinstance(rows, list) else []:
+                    pid = row.get("product_id")
+                    try:
+                        pid_int = int(pid)
+                    except Exception:
+                        continue
+                    if pid_int > 0:
+                        product_ids.append(pid_int)
+        except Exception:
+            pass
+    if not product_ids:
+        return {"photos": [], "attributes": {}, "raw": {}}
+    try:
+        with httpx.Client(timeout=20.0) as client:
+            info_resp = client.post(info_endpoint, headers=headers, json={"product_id": product_ids[:20]})
+        if info_resp.status_code >= 400:
+            return {"photos": [], "attributes": {}, "raw": {}}
+        rows = info_resp.json().get("result", {}).get("items", [])
+    except Exception:
+        return {"photos": [], "attributes": {}, "raw": {}}
+    if not isinstance(rows, list) or not rows:
+        return {"photos": [], "attributes": {}, "raw": {}}
+    first = rows[0].get("product_info") if isinstance(rows[0], dict) else rows[0]
+    if not isinstance(first, dict):
+        first = {}
+    photos = _extract_ozon_photos(first)
+    attrs = {
+        "offer_id": str(first.get("offer_id") or ""),
+        "id": str(first.get("id") or ""),
+        "name": str(first.get("name") or ""),
+        "brand": str(first.get("brand") or ""),
+        "category_name": str(first.get("category_name") or ""),
+    }
+    return {"photos": photos, "attributes": attrs, "raw": first}
 
 
 def _update_wb_description(api_key: str, article: str, description: str) -> bool:
@@ -1023,17 +1209,31 @@ def _extract_wb_barcode(card: dict[str, Any]) -> str:
 
 
 def _extract_wb_photo(card: dict[str, Any]) -> str:
+    photos = _extract_wb_photos(card)
+    return photos[0] if photos else ""
+
+
+def _extract_wb_photos(card: dict[str, Any]) -> list[str]:
     photos = card.get("photos") or []
+    out: list[str] = []
     if photos:
-        first = photos[0]
-        if isinstance(first, dict):
-            for key in ("big", "c516x688", "tm"):
-                val = first.get(key)
-                if val:
-                    return _normalize_photo_url(str(val))
-        if isinstance(first, str):
-            return _normalize_photo_url(first)
-    return ""
+        for item in photos:
+            if isinstance(item, dict):
+                for key in ("big", "c516x688", "tm"):
+                    val = item.get(key)
+                    if val:
+                        out.append(_normalize_photo_url(str(val)))
+                        break
+            elif isinstance(item, str):
+                out.append(_normalize_photo_url(item))
+    dedup: list[str] = []
+    seen: set[str] = set()
+    for url in out:
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        dedup.append(url)
+    return dedup
 
 
 def _extract_ozon_barcode(source: dict[str, Any]) -> str:
@@ -1049,13 +1249,26 @@ def _extract_ozon_barcode(source: dict[str, Any]) -> str:
 
 
 def _extract_ozon_photo(source: dict[str, Any]) -> str:
+    photos = _extract_ozon_photos(source)
+    return photos[0] if photos else ""
+
+
+def _extract_ozon_photos(source: dict[str, Any]) -> list[str]:
+    out: list[str] = []
     images = source.get("images")
     if isinstance(images, list) and images:
-        return _normalize_photo_url(str(images[0]))
+        out.extend(_normalize_photo_url(str(x)) for x in images if str(x).strip())
     primary = source.get("primary_image")
     if isinstance(primary, str):
-        return _normalize_photo_url(primary)
-    return ""
+        out.append(_normalize_photo_url(primary))
+    dedup: list[str] = []
+    seen: set[str] = set()
+    for url in out:
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        dedup.append(url)
+    return dedup
 
 
 def _normalize_photo_url(value: str) -> str:

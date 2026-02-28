@@ -588,11 +588,11 @@ def _fetch_wb_sales_rows_report_detail(api_key: str, date_from: date, date_to: d
                     "units": 0,
                     "revenue": 0.0,
                     "returns": units,
-                "ad_spend": 0.0,
-                "penalties": return_amount if return_amount > 0 else safe_revenue,
-            }
-        )
-        continue
+                    "ad_spend": 0.0,
+                    "penalties": return_amount if return_amount > 0 else safe_revenue,
+                }
+            )
+            continue
         rows.append(
             {
                 "date": day.isoformat(),

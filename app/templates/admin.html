@@ -4,9 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SEO WIBE Admin</title>
-  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=20260227f" />
-  <link rel="apple-touch-icon" href="/static/favicon.svg?v=20260227f" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260227e" />
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=20260228a" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png?v=20260228a" />
+  <link rel="icon" type="image/png" sizes="180x180" href="/static/apple-touch-icon.png?v=20260228a" />
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico?v=20260228a" />
+  <link rel="shortcut icon" href="/static/favicon.ico?v=20260228a" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png?v=20260228a" />
+  <link rel="manifest" href="/static/site.webmanifest?v=20260228a" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260228a" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -14,7 +19,7 @@
   <section id="adminAuthSection" class="auth-wrap">
     <div class="auth-card auth-hero">
       <div class="auth-pitch">
-        <h1 class="logo-mark"><span class="logo-a">SEO</span> <span class="logo-b">WIBE</span> Admin</h1>
+        <h1 class="logo-mark"><img src="/static/favicon.svg?v=20260228a" alt="SEO WIBE" class="brand-logo" /><span class="logo-a">SEO</span> <span class="logo-b">WIBE</span> Admin</h1>
         <p class="lead">Отдельная зона администратора: управление пользователями, доступами модулей, ключами и аудитом действий.</p>
         <div class="pitch-grid">
           <article>
@@ -50,7 +55,7 @@
   <section id="adminPanelSection" class="app-shell hidden">
     <aside class="sidebar">
       <div class="brand">
-        <h2 class="logo-mark"><span class="logo-a">SEO</span> <span class="logo-b">WIBE</span></h2>
+        <h2 class="logo-mark"><img src="/static/favicon.svg?v=20260228a" alt="SEO WIBE" class="brand-logo" /><span class="logo-a">SEO</span> <span class="logo-b">WIBE</span></h2>
         <p>Admin Console</p>
       </div>
       <nav class="side-nav">
@@ -279,21 +284,34 @@
       <section id="adminTab-audit" class="admin-tab hidden">
         <div class="panel">
           <h3>Журнал действий</h3>
-          <div class="grid-4">
+          <div class="grid-6">
             <select id="adminAuditLimit">
               <option value="100">100</option>
               <option value="200" selected>200</option>
               <option value="500">500</option>
             </select>
-            <input id="adminAuditActionFilter" placeholder="Фильтр по действию (action)" oninput="renderAdminAuditTable()" />
-            <input id="adminAuditTextFilter" placeholder="Текст в деталях / user_id" oninput="renderAdminAuditTable()" />
-            <button onclick="loadAdminAudit()">Обновить журнал</button>
+            <input id="adminAuditActionFilter" placeholder="Действие (например: auth_login_success)" oninput="loadAdminAudit()" />
+            <input id="adminAuditModuleFilter" placeholder="Модуль (например: sales_stats)" oninput="loadAdminAudit()" />
+            <input id="adminAuditUserFilter" placeholder="user_id / actor email" oninput="loadAdminAudit()" />
+            <input id="adminAuditMemberFilter" placeholder="member_id сотрудника" oninput="loadAdminAudit()" />
+            <select id="adminAuditStatusFilter" onchange="loadAdminAudit()">
+              <option value="">Все статусы</option>
+              <option value="ok">ok</option>
+              <option value="error">error</option>
+            </select>
+          </div>
+          <div class="grid-5">
+            <input id="adminAuditDateFrom" type="date" onchange="loadAdminAudit()" />
+            <input id="adminAuditDateTo" type="date" onchange="loadAdminAudit()" />
+            <input id="adminAuditTextFilter" placeholder="Поиск по деталям / entity / actor / ip / ua" oninput="loadAdminAudit()" />
+            <button id="adminAuditRefreshBtn" onclick="loadAdminAudit()">Обновить журнал</button>
+            <div></div>
           </div>
           <div id="adminAuditMeta" class="hint">-</div>
           <div class="table-card">
             <table>
               <thead>
-                <tr><th>ID</th><th>Время</th><th>Actor</th><th>Module</th><th>Action</th><th>Status</th><th>Entity</th><th>Детали</th></tr>
+                <tr><th>ID</th><th>Время</th><th>Кто выполнил</th><th>Модуль</th><th>Действие</th><th>Статус</th><th>Сущность</th><th>Детали</th></tr>
               </thead>
               <tbody id="adminAuditTable"></tbody>
             </table>
@@ -307,6 +325,6 @@
     </main>
   </section>
 
-  <script src="/static/admin.js?v=20260227d"></script>
+  <script src="/static/admin.js?v=20260228a"></script>
 </body>
 </html>

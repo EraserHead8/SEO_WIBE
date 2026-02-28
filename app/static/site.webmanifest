@@ -1,0 +1,19 @@
+{
+  "name": "SEO WIBE Seller OS",
+  "short_name": "SEO WIBE",
+  "icons": [
+    {
+      "src": "/static/favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/favicon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#0d1d49",
+  "background_color": "#07122d",
+  "display": "standalone"
+}

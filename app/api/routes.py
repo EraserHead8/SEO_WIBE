@@ -4,12 +4,13 @@ import io
 import json
 import math
 import hashlib
+import re
 from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Request
-from sqlalchemy import func, select
+from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -72,8 +73,10 @@ from app.schemas import (
     ModuleAccessOut,
     PositionCheckOut,
     PositionCheckRequest,
+    ProductDetailOut,
     ProductOut,
     ProductReloadRequest,
+    ProductUpdateIn,
     SalesStatsOut,
     HelpDocOut,
     KnowledgeDocOut,
@@ -121,6 +124,7 @@ from app.services.ads_cache import (
     sync_wb_campaign_snapshots,
 )
 from app.services.marketplace import (
+    fetch_marketplace_product_details,
     fetch_products_from_marketplace,
     find_competitors,
     resolve_wb_external_id,
@@ -1088,7 +1092,11 @@ def wb_generate_reply(payload: GenerateReviewReplyIn, user: User = Depends(get_c
     ensure_module_enabled(db, user, "wb_reviews_ai")
     settings_row = _get_or_create_ai_settings(db, user.id)
     runtime = _resolve_user_ai_runtime(db, user.id)
-    knowledge_ctx = _build_user_knowledge_context(db, user.id)
+    knowledge_ctx = _build_user_knowledge_context(
+        db,
+        user.id,
+        query_text=f"{payload.product_name} {payload.review_text} {payload.reviewer_name}",
+    )
     prompt = _compose_ai_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", knowledge_ctx, content_kind="review")
     reply = generate_review_reply(
         review_text=payload.review_text,
@@ -1207,7 +1215,11 @@ def ozon_generate_reply(payload: GenerateReviewReplyIn, user: User = Depends(get
     ensure_module_enabled(db, user, "wb_reviews_ai")
     settings_row = _get_or_create_ai_settings(db, user.id)
     runtime = _resolve_user_ai_runtime(db, user.id)
-    knowledge_ctx = _build_user_knowledge_context(db, user.id)
+    knowledge_ctx = _build_user_knowledge_context(
+        db,
+        user.id,
+        query_text=f"{payload.product_name} {payload.review_text} {payload.reviewer_name}",
+    )
     prompt = _compose_ai_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", knowledge_ctx, content_kind="review")
     reply = generate_review_reply(
         review_text=payload.review_text,
@@ -1327,7 +1339,11 @@ def wb_generate_question_reply(payload: GenerateReviewReplyIn, user: User = Depe
     ensure_module_enabled(db, user, "wb_questions_ai")
     settings_row = _get_or_create_question_ai_settings(db, user.id)
     runtime = _resolve_user_ai_runtime(db, user.id)
-    knowledge_ctx = _build_user_knowledge_context(db, user.id)
+    knowledge_ctx = _build_user_knowledge_context(
+        db,
+        user.id,
+        query_text=f"{payload.product_name} {payload.review_text} {payload.reviewer_name}",
+    )
     prompt = _compose_ai_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", knowledge_ctx, content_kind="question")
     reply = generate_review_reply(
         review_text=payload.review_text,
@@ -1441,7 +1457,11 @@ def ozon_generate_question_reply(payload: GenerateReviewReplyIn, user: User = De
     ensure_module_enabled(db, user, "wb_questions_ai")
     settings_row = _get_or_create_question_ai_settings(db, user.id)
     runtime = _resolve_user_ai_runtime(db, user.id)
-    knowledge_ctx = _build_user_knowledge_context(db, user.id)
+    knowledge_ctx = _build_user_knowledge_context(
+        db,
+        user.id,
+        query_text=f"{payload.product_name} {payload.review_text} {payload.reviewer_name}",
+    )
     prompt = _compose_ai_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", knowledge_ctx, content_kind="question")
     reply = generate_review_reply(
         review_text=payload.review_text,
@@ -2453,26 +2473,53 @@ def _resolve_credential(db: Session, user_id: int, marketplace: str) -> ApiCrede
     return cred
 
 
+def _resolve_product_marketplaces(value: str) -> list[str]:
+    code = str(value or "").strip().lower()
+    if code in {"wb", "ozon"}:
+        return [code]
+    if code == "all":
+        return ["wb", "ozon"]
+    raise HTTPException(status_code=400, detail="marketplace должен быть wb, ozon или all")
+
+
 @router.post("/products/import", response_model=list[ProductOut])
 def import_products(payload: ImportProductsRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    marketplace = validate_marketplace(payload.marketplace)
-    cred = _resolve_credential(db, user.id, marketplace)
+    marketplaces = _resolve_product_marketplaces(payload.marketplace)
     owner_member_id = _resolve_owner_member_id(db, user)
-    upserted = upsert_products(
-        db,
-        user.id,
-        marketplace,
-        cred.api_key,
-        payload.articles,
-        payload.import_all,
-        owner_member_id=owner_member_id,
-        actor_is_owner=_actor_is_owner(user),
-    )
+    upserted: list[Product] = []
+    missing_keys: list[str] = []
+    for marketplace in marketplaces:
+        cred = db.scalar(
+            select(ApiCredential)
+            .where(
+                ApiCredential.user_id == user.id,
+                ApiCredential.marketplace == marketplace,
+                ApiCredential.active.is_(True),
+            )
+            .order_by(ApiCredential.id.desc())
+        )
+        if not cred:
+            missing_keys.append(marketplace)
+            continue
+        upserted.extend(
+            upsert_products(
+                db,
+                user.id,
+                marketplace,
+                cred.api_key,
+                payload.articles,
+                payload.import_all,
+                owner_member_id=owner_member_id,
+                actor_is_owner=_actor_is_owner(user),
+            )
+        )
+    if not upserted and missing_keys:
+        raise HTTPException(status_code=400, detail=f"Сначала сохраните API ключи: {', '.join(missing_keys)}")
     _audit(
         db,
         user,
         action="products_imported",
-        details=f"count={len(upserted)};marketplace={marketplace}",
+        details=f"count={len(upserted)};marketplaces={','.join(marketplaces)};missing={','.join(missing_keys)}",
         module_code="products",
         entity_type="product",
     )
@@ -2482,52 +2529,85 @@ def import_products(payload: ImportProductsRequest, user: User = Depends(get_cur
 
 @router.post("/products/reload", response_model=list[ProductOut])
 def reload_products(payload: ProductReloadRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    marketplace = validate_marketplace(payload.marketplace)
-    cred = _resolve_credential(db, user.id, marketplace)
+    marketplaces = _resolve_product_marketplaces(payload.marketplace)
+    missing_keys: list[str] = []
+    for marketplace in marketplaces:
+        has_key = db.scalar(
+            select(ApiCredential.id)
+            .where(
+                ApiCredential.user_id == user.id,
+                ApiCredential.marketplace == marketplace,
+                ApiCredential.active.is_(True),
+            )
+            .order_by(ApiCredential.id.desc())
+        )
+        if not has_key:
+            missing_keys.append(marketplace)
+    if len(missing_keys) == len(marketplaces):
+        raise HTTPException(status_code=400, detail=f"Сначала сохраните API ключи: {', '.join(missing_keys)}")
 
     existing = db.scalars(
         select(Product).where(
             Product.user_id == user.id,
-            Product.marketplace == marketplace,
+            Product.marketplace.in_(marketplaces),
             _owned_by_actor_or_owner_filter(Product, user),
         )
     ).all()
     if existing:
         product_ids = [p.id for p in existing]
-        old_jobs = db.scalars(
-            select(SeoJob).where(
-                SeoJob.user_id == user.id,
-                SeoJob.product_id.in_(product_ids),
-                _owned_by_actor_or_owner_filter(SeoJob, user),
-            )
-        ).all()
-        old_snapshots = db.scalars(
-            select(PositionSnapshot).where(PositionSnapshot.user_id == user.id, PositionSnapshot.product_id.in_(product_ids))
-        ).all()
-        for job in old_jobs:
-            db.delete(job)
-        for snapshot in old_snapshots:
-            db.delete(snapshot)
+        if product_ids:
+            old_jobs = db.scalars(
+                select(SeoJob).where(
+                    SeoJob.user_id == user.id,
+                    SeoJob.product_id.in_(product_ids),
+                    _owned_by_actor_or_owner_filter(SeoJob, user),
+                )
+            ).all()
+            old_snapshots = db.scalars(
+                select(PositionSnapshot).where(
+                    PositionSnapshot.user_id == user.id,
+                    PositionSnapshot.product_id.in_(product_ids),
+                )
+            ).all()
+            for job in old_jobs:
+                db.delete(job)
+            for snapshot in old_snapshots:
+                db.delete(snapshot)
         for product in existing:
             db.delete(product)
         db.flush()
 
     owner_member_id = _resolve_owner_member_id(db, user)
-    upserted = upsert_products(
-        db,
-        user.id,
-        marketplace,
-        cred.api_key,
-        payload.articles,
-        payload.import_all,
-        owner_member_id=owner_member_id,
-        actor_is_owner=_actor_is_owner(user),
-    )
+    upserted: list[Product] = []
+    for marketplace in marketplaces:
+        cred = db.scalar(
+            select(ApiCredential)
+            .where(
+                ApiCredential.user_id == user.id,
+                ApiCredential.marketplace == marketplace,
+                ApiCredential.active.is_(True),
+            )
+            .order_by(ApiCredential.id.desc())
+        )
+        if not cred:
+            continue
+        upserted.extend(
+            upsert_products(
+                db,
+                user.id,
+                marketplace,
+                cred.api_key,
+                payload.articles,
+                payload.import_all,
+                owner_member_id=owner_member_id,
+                actor_is_owner=_actor_is_owner(user),
+            )
+        )
     _audit(
         db,
         user,
         action="products_reloaded",
-        details=f"count={len(upserted)};marketplace={marketplace}",
+        details=f"count={len(upserted)};marketplaces={','.join(marketplaces)};missing={','.join(missing_keys)}",
         module_code="products",
         entity_type="product",
     )
@@ -2563,6 +2643,105 @@ def list_products(user: User = Depends(get_current_user), db: Session = Depends(
         if not row.photo_url:
             row.photo_url = f"https://placehold.co/120x120/e8eefc/1b2a52?text={row.marketplace.upper()}%20{row.id}"
     return rows
+
+
+@router.get("/products/{product_id}/details", response_model=ProductDetailOut)
+def product_details(product_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    product = db.scalar(
+        select(Product).where(
+            Product.id == product_id,
+            Product.user_id == user.id,
+            _owned_by_actor_or_owner_filter(Product, user),
+        )
+    )
+    if not product:
+        raise HTTPException(status_code=404, detail="Товар не найден")
+    _hydrate_external_id_if_needed(db, user.id, product)
+    details_payload: dict[str, Any] = {"photos": [], "attributes": {}, "raw": {}}
+    warnings: list[str] = []
+    credential = _get_active_marketplace_api_key(db, user.id, product.marketplace)
+    if credential:
+        details_payload = fetch_marketplace_product_details(
+            marketplace=product.marketplace,
+            api_key=credential,
+            article=product.article,
+            external_id=product.external_id or "",
+        )
+    else:
+        warnings.append(f"API ключ {product.marketplace.upper()} не подключен.")
+    raw_payload = details_payload.get("raw") if isinstance(details_payload, dict) else {}
+    if not isinstance(raw_payload, dict):
+        raw_payload = {"value": str(raw_payload)[:5000]}
+    _audit(
+        db,
+        user,
+        action="product_details_read",
+        details=f"product_id={product.id};marketplace={product.marketplace}",
+        module_code="products",
+        entity_type="product",
+        entity_id=str(product.id),
+    )
+    db.commit()
+    return ProductDetailOut(
+        product=product,
+        photos=[str(x) for x in (details_payload.get("photos") or []) if str(x).strip()],
+        attributes={str(k): str(v) for k, v in dict(details_payload.get("attributes") or {}).items()},
+        raw=raw_payload,
+        warnings=warnings,
+    )
+
+
+@router.patch("/products/{product_id}", response_model=ProductOut)
+def update_product(product_id: int, payload: ProductUpdateIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    product = db.scalar(
+        select(Product).where(
+            Product.id == product_id,
+            Product.user_id == user.id,
+            _owned_by_actor_or_owner_filter(Product, user),
+        )
+    )
+    if not product:
+        raise HTTPException(status_code=404, detail="Товар не найден")
+    next_name = str(payload.name or "").strip()
+    next_description = str(payload.current_description or "").strip()
+    next_photo = str(payload.photo_url or "").strip()
+    next_keywords = str(payload.target_keywords or "").strip()
+    if next_name:
+        product.name = next_name[:255]
+    if payload.current_description is not None:
+        product.current_description = next_description[:16000]
+    if payload.photo_url is not None:
+        product.photo_url = next_photo[:500]
+    if payload.target_keywords is not None:
+        product.target_keywords = next_keywords[:5000]
+
+    details = [
+        f"product_id={product.id}",
+        f"marketplace={product.marketplace}",
+        f"name={'1' if bool(next_name) else '0'}",
+        f"description={'1' if bool(payload.current_description is not None) else '0'}",
+        f"photo={'1' if bool(payload.photo_url is not None) else '0'}",
+        f"keywords={'1' if bool(payload.target_keywords is not None) else '0'}",
+    ]
+    if payload.current_description is not None:
+        api_key = _get_active_marketplace_api_key(db, user.id, product.marketplace)
+        if api_key:
+            ok = update_product_description(product.marketplace, api_key, product.article, product.current_description)
+            details.append(f"remote_update={'ok' if ok else 'failed'}")
+        else:
+            details.append("remote_update=skipped_no_key")
+    _audit(
+        db,
+        user,
+        action="product_updated",
+        details=";".join(details),
+        module_code="products",
+        entity_type="product",
+        entity_id=str(product.id),
+    )
+    db.commit()
+    db.refresh(product)
+    return product
 
 
 @router.get("/products/{product_id}/keyword-suggestions", response_model=list[str])
@@ -3763,17 +3942,35 @@ def admin_team_delete(user_id: int, member_id: int, me: User = Depends(get_admin
 @router.get("/admin/stats", response_model=AdminStatsOut)
 def admin_stats(_: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     week_ago = datetime.utcnow() - timedelta(days=7)
+    day_ago = datetime.utcnow() - timedelta(hours=24)
     total_users = db.scalar(select(func.count()).select_from(User)) or 0
     new_users_7d = db.scalar(select(func.count()).select_from(User).where(User.created_at >= week_ago)) or 0
     total_products = db.scalar(select(func.count()).select_from(Product)) or 0
     total_jobs = db.scalar(select(func.count()).select_from(SeoJob)) or 0
     active_jobs = db.scalar(select(func.count()).select_from(SeoJob).where(SeoJob.status.in_(["generated", "in_progress"]))) or 0
+    total_team_members = db.scalar(select(func.count()).select_from(TeamMember)) or 0
+    employees_total = db.scalar(
+        select(func.count()).select_from(TeamMember).where(TeamMember.is_owner.is_(False))
+    ) or 0
+    active_users_24h = db.scalar(
+        select(func.count(func.distinct(AuditLog.user_id))).where(
+            AuditLog.created_at >= day_ago,
+            AuditLog.user_id.is_not(None),
+        )
+    ) or 0
+    audit_events_24h = db.scalar(
+        select(func.count()).select_from(AuditLog).where(AuditLog.created_at >= day_ago)
+    ) or 0
     return AdminStatsOut(
         total_users=total_users,
         new_users_7d=new_users_7d,
         total_products=total_products,
         total_jobs=total_jobs,
         active_jobs=active_jobs,
+        total_team_members=total_team_members,
+        employees_total=employees_total,
+        active_users_24h=active_users_24h,
+        audit_events_24h=audit_events_24h,
     )
 
 
@@ -4113,9 +4310,59 @@ def admin_user_ai_service_delete(user_id: int, service_id: int, me: User = Depen
 
 
 @router.get("/admin/audit", response_model=list[AuditLogOut])
-def admin_audit(limit: int = 200, _: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+def admin_audit(
+    limit: int = 200,
+    action: str = "",
+    module_code: str = "",
+    status: str = "",
+    user_id: int | None = None,
+    actor_email: str = "",
+    actor_member_id: int | None = None,
+    q: str = "",
+    date_from: date | None = None,
+    date_to: date | None = None,
+    _: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
     clamped = max(10, min(limit, 1000))
-    return db.scalars(select(AuditLog).order_by(AuditLog.id.desc()).limit(clamped)).all()
+    query = select(AuditLog)
+    safe_action = str(action or "").strip()
+    safe_module = str(module_code or "").strip()
+    safe_status = str(status or "").strip()
+    safe_actor_email = str(actor_email or "").strip().lower()
+    safe_q = str(q or "").strip().lower()
+    if safe_action:
+        query = query.where(AuditLog.action.ilike(f"%{safe_action}%"))
+    if safe_module:
+        query = query.where(AuditLog.module_code.ilike(f"%{safe_module}%"))
+    if safe_status:
+        query = query.where(AuditLog.status.ilike(f"%{safe_status}%"))
+    if user_id is not None and int(user_id) > 0:
+        query = query.where(AuditLog.user_id == int(user_id))
+    if actor_member_id is not None and int(actor_member_id) > 0:
+        query = query.where(AuditLog.actor_member_id == int(actor_member_id))
+    if safe_actor_email:
+        query = query.where(func.lower(AuditLog.actor_email).like(f"%{safe_actor_email}%"))
+    if date_from is not None:
+        query = query.where(AuditLog.created_at >= datetime.combine(date_from, datetime.min.time()))
+    if date_to is not None:
+        query = query.where(AuditLog.created_at <= datetime.combine(date_to, datetime.max.time()))
+    if safe_q:
+        pattern = f"%{safe_q}%"
+        query = query.where(
+            or_(
+                func.lower(AuditLog.action).like(pattern),
+                func.lower(AuditLog.module_code).like(pattern),
+                func.lower(AuditLog.status).like(pattern),
+                func.lower(AuditLog.details).like(pattern),
+                func.lower(AuditLog.entity_type).like(pattern),
+                func.lower(AuditLog.entity_id).like(pattern),
+                func.lower(AuditLog.actor_email).like(pattern),
+                func.lower(cast(AuditLog.user_id, String)).like(pattern),
+                func.lower(cast(AuditLog.actor_member_id, String)).like(pattern),
+            )
+        )
+    return db.scalars(query.order_by(AuditLog.id.desc()).limit(clamped)).all()
 
 
 def upsert_products(
@@ -4378,15 +4625,68 @@ def _campaign_summary_from_base_row(row: dict[str, Any], campaign_id: int) -> di
     }
 
 
-def _build_user_knowledge_context(db: Session, user_id: int, max_chars: int = 12000) -> str:
+def _knowledge_tokens(text: str) -> list[str]:
+    words = re.findall(r"[a-zA-Zа-яА-Я0-9_]{3,}", str(text or "").lower())
+    stop = {
+        "для", "это", "что", "как", "или", "если", "при", "без", "его", "еще", "ещё",
+        "with", "this", "that", "from", "into", "about", "your", "have", "will", "would",
+    }
+    out: list[str] = []
+    seen: set[str] = set()
+    for word in words:
+        if word in stop or word in seen:
+            continue
+        seen.add(word)
+        out.append(word)
+    return out[:40]
+
+
+def _extract_relevant_knowledge_excerpt(text: str, tokens: list[str], max_chars: int) -> str:
+    compact = " ".join(str(text or "").split())
+    if not compact:
+        return ""
+    if not tokens:
+        return compact[:max_chars]
+    best_idx = -1
+    for token in tokens:
+        pos = compact.lower().find(token.lower())
+        if pos >= 0 and (best_idx < 0 or pos < best_idx):
+            best_idx = pos
+    if best_idx < 0:
+        return compact[:max_chars]
+    start = max(0, best_idx - max_chars // 3)
+    end = min(len(compact), start + max_chars)
+    return compact[start:end]
+
+
+def _build_user_knowledge_context(
+    db: Session,
+    user_id: int,
+    max_chars: int = 12000,
+    query_text: str = "",
+) -> str:
     rows = db.scalars(
         select(UserKnowledgeDoc).where(UserKnowledgeDoc.user_id == user_id).order_by(UserKnowledgeDoc.updated_at.desc()).limit(30)
     ).all()
     if not rows:
         return ""
+    tokens = _knowledge_tokens(query_text)
+    scored: list[tuple[float, UserKnowledgeDoc]] = []
+    for idx, row in enumerate(rows):
+        text = " ".join((row.content_text or "").split())
+        if not text:
+            continue
+        low = text.lower()
+        overlap = sum(1 for token in tokens if token in low) if tokens else 0
+        # Prefer relevant matches first, then recency (lower idx means newer row).
+        score = float(overlap * 100 - idx)
+        scored.append((score, row))
+    if not scored:
+        return ""
+    scored.sort(key=lambda x: x[0], reverse=True)
     parts: list[str] = []
     budget = max(1000, max_chars)
-    for row in rows:
+    for _, row in scored:
         text = " ".join((row.content_text or "").split())
         if not text:
             continue
@@ -4394,7 +4694,7 @@ def _build_user_knowledge_context(db: Session, user_id: int, max_chars: int = 12
         rest = max(0, budget - len(head))
         if rest <= 0:
             break
-        chunk = text[:rest]
+        chunk = _extract_relevant_knowledge_excerpt(text, tokens=tokens, max_chars=rest)
         parts.append(f"{head}{chunk}")
         budget -= len(head) + len(chunk)
         if budget <= 0:

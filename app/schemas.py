@@ -76,6 +76,21 @@ class ProductOut(BaseModel):
     last_position: int | None
 
 
+class ProductUpdateIn(BaseModel):
+    name: str | None = None
+    current_description: str | None = None
+    photo_url: str | None = None
+    target_keywords: str | None = None
+
+
+class ProductDetailOut(BaseModel):
+    product: ProductOut
+    photos: list[str] = Field(default_factory=list)
+    attributes: dict[str, Any] = Field(default_factory=dict)
+    raw: dict[str, Any] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class SeoGenerateRequest(BaseModel):
     product_ids: list[int] = []
     extra_keywords: list[str] = []
@@ -204,6 +219,10 @@ class AdminStatsOut(BaseModel):
     total_products: int
     total_jobs: int
     active_jobs: int
+    total_team_members: int = 0
+    employees_total: int = 0
+    active_users_24h: int = 0
+    audit_events_24h: int = 0
 
 
 class AdminPasswordResetIn(BaseModel):
