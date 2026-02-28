@@ -1279,11 +1279,41 @@ def _fetch_ozon_product_details(api_key: str, article: str, external_id: str) ->
 
     merged = dict(first or {})
     if isinstance(enrich, dict) and enrich:
-        # Keep v3 structured fields, but add missing rich media from v2 response.
+        # Keep v3 as primary source of truth and enrich only missing/extra media.
+        media_keys = {
+            "images",
+            "images360",
+            "primary_image",
+            "primary_image_url",
+            "main_image",
+            "main_image_url",
+            "image_main",
+            "image",
+            "color_image",
+            "sources",
+            "photos",
+            "image_urls",
+            "picture_urls",
+        }
         for key, value in enrich.items():
-            if key in {"images", "images360", "primary_image", "color_image", "sources", "photos", "image_urls", "picture_urls"}:
-                merged[key] = value
-            elif key not in merged or merged.get(key) in (None, "", [], {}):
+            current = merged.get(key)
+            if key in media_keys:
+                if current in (None, "", [], {}):
+                    merged[key] = value
+                    continue
+                if isinstance(current, list) and isinstance(value, list):
+                    merged[key] = [*current, *value]
+                    continue
+                if isinstance(current, dict) and isinstance(value, dict):
+                    next_dict = dict(current)
+                    for sub_key, sub_val in value.items():
+                        if next_dict.get(sub_key) in (None, "", [], {}):
+                            next_dict[sub_key] = sub_val
+                    merged[key] = next_dict
+                    continue
+                # Non-empty existing media from v3 keeps priority.
+                continue
+            if key not in merged or merged.get(key) in (None, "", [], {}):
                 merged[key] = value
 
     photos = _extract_ozon_photos(merged)
@@ -1395,81 +1425,106 @@ def _extract_ozon_photo(source: dict[str, Any]) -> str:
 
 
 def _extract_ozon_photos(source: dict[str, Any]) -> list[str]:
-    high_priority: list[str] = []
-    normal_priority: list[str] = []
+    # Priority buckets:
+    # 1) explicit primary/main image
+    # 2) first element of images[] (most often "главная" фото карточки)
+    # 3) remaining images[] and extra galleries
+    primary_bucket: list[str] = []
+    first_bucket: list[str] = []
+    common_bucket: list[str] = []
 
-    def push(val: str, primary: bool = False):
+    def push(val: str, bucket: str = "common"):
         normalized = _normalize_photo_url(val)
         if not normalized:
             return
-        if primary:
-            high_priority.append(normalized)
+        if bucket == "primary":
+            primary_bucket.append(normalized)
+        elif bucket == "first":
+            first_bucket.append(normalized)
         else:
-            normal_priority.append(normalized)
+            common_bucket.append(normalized)
+
+    def image_from_obj(item: Any) -> str:
+        if not isinstance(item, dict):
+            return ""
+        for key in (
+            "url",
+            "image",
+            "image_url",
+            "imageUrl",
+            "src",
+            "file_name",
+            "fileName",
+            "name",
+        ):
+            val = item.get(key)
+            if isinstance(val, str) and val.strip():
+                return val
+        return ""
 
     for key in ("primary_image", "primary_image_url", "main_image", "main_image_url", "image_main", "image"):
         val = source.get(key)
         if isinstance(val, str) and val.strip():
-            push(val, primary=True)
+            push(val, bucket="primary")
+
+    for key, val in source.items():
+        if not isinstance(val, str):
+            continue
+        lowered = str(key or "").strip().lower()
+        if lowered.startswith("primary_image") or lowered.startswith("main_image"):
+            if val.strip():
+                push(val, bucket="primary")
+
     primary = source.get("primary_image")
     if isinstance(primary, dict):
-        for key in ("url", "image", "src", "file_name"):
-            val = primary.get(key)
-            if isinstance(val, str) and val.strip():
-                push(val, primary=True)
-                break
-    color_image = source.get("color_image")
-    if isinstance(color_image, str) and color_image.strip():
-        push(color_image, primary=True)
-    if isinstance(color_image, dict):
-        for key in ("url", "image", "src", "file_name"):
-            val = color_image.get(key)
-            if isinstance(val, str) and val.strip():
-                push(val, primary=True)
-                break
+        val = image_from_obj(primary)
+        if val:
+            push(val, bucket="primary")
 
     images = source.get("images")
     if isinstance(images, list) and images:
         for idx, item in enumerate(images):
+            value = ""
             if isinstance(item, str) and item.strip():
-                push(item, primary=idx == 0)
+                value = item
+            elif isinstance(item, dict):
+                value = image_from_obj(item)
+            if not value:
                 continue
-            if isinstance(item, dict):
-                value = ""
-                for key in ("url", "image", "image_url", "src", "file_name", "name"):
-                    val = item.get(key)
-                    if isinstance(val, str) and val.strip():
-                        value = val
-                        break
-                if not value:
-                    continue
-                is_primary = bool(item.get("is_primary")) or bool(item.get("isMain")) or idx == 0
-                push(value, primary=is_primary)
+            if idx == 0:
+                push(value, bucket="first")
+            else:
+                push(value, bucket="common")
+            if isinstance(item, dict) and (item.get("is_primary") or item.get("isMain") or item.get("main")):
+                push(value, bucket="primary")
+
+    color_image = source.get("color_image")
+    if isinstance(color_image, str) and color_image.strip():
+        push(color_image, bucket="common")
+    elif isinstance(color_image, dict):
+        val = image_from_obj(color_image)
+        if val:
+            push(val, bucket="common")
 
     for list_key in ("images360", "photos", "image_urls", "picture_urls"):
         rows = source.get(list_key)
         if isinstance(rows, list):
             for entry in rows:
                 if isinstance(entry, str) and entry.strip():
-                    push(entry, primary=False)
-                elif isinstance(entry, dict):
-                    for key in ("url", "image", "image_url", "src", "file_name"):
-                        val = entry.get(key)
-                        if isinstance(val, str) and val.strip():
-                            push(val, primary=False)
-                            break
+                    push(entry, bucket="common")
+                else:
+                    val = image_from_obj(entry)
+                    if val:
+                        push(val, bucket="common")
+
     sources = source.get("sources")
     if isinstance(sources, list):
         for entry in sources:
-            if not isinstance(entry, dict):
-                continue
-            for key in ("url", "image", "src", "file_name"):
-                val = entry.get(key)
-                if isinstance(val, str) and val.strip():
-                    push(val, primary=False)
-                    break
+            val = image_from_obj(entry)
+            if val:
+                push(val, bucket="common")
 
-    out = high_priority + normal_priority
+    out = primary_bucket + first_bucket + common_bucket
     dedup: list[str] = []
     seen: set[str] = set()
     for url in out:
