@@ -291,8 +291,26 @@ function escapeHtml(value) {
 
 function formatDateTime(raw) {
   if (!raw) return "-";
-  const text = String(raw);
-  return text.slice(0, 19).replace("T", " ");
+  const text = String(raw).trim();
+  if (!text) return "-";
+
+  let dt = null;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(text)) {
+    // Backend stores naive UTC timestamps; interpret them as UTC to avoid -3h shift in UI.
+    const hasTz = /[zZ]$|[+-]\d{2}:\d{2}$/.test(text);
+    dt = new Date(hasTz ? text : `${text}Z`);
+  } else if (/^\d{4}-\d{2}-\d{2}\s/.test(text)) {
+    dt = new Date(`${text.replace(" ", "T")}Z`);
+  } else {
+    dt = new Date(text);
+  }
+  if (!dt || Number.isNaN(dt.getTime())) {
+    return text.slice(0, 19).replace("T", " ");
+  }
+
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())} `
+    + `${pad(dt.getHours())}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}`;
 }
 
 function parseAdminTeamScope(raw) {
