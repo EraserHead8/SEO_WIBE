@@ -6341,6 +6341,26 @@ applyButtonTooltips();
 initHoverTips();
 ensureAuth();
 
+["loginEmail", "loginPassword"].forEach((id) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    login();
+  });
+});
+
+["regEmail", "regPassword"].forEach((id) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    register();
+  });
+});
+
 const keywordInput = document.getElementById("positionKeywords");
 if (keywordInput) {
   keywordInput.addEventListener("input", () => {

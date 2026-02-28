@@ -1867,6 +1867,15 @@ document.getElementById("adminAiUserSelect")?.addEventListener("change", () => {
   loadAdminUserAi().catch(() => null);
 });
 document.getElementById("adminAiUserMode")?.addEventListener("change", () => renderAdminAiTab(true));
+["adminEmail", "adminPassword"].forEach((id) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    adminLogin();
+  });
+});
 window.showAdminTab = showAdminTab;
 window.adminLogin = adminLogin;
 window.adminLogout = adminLogout;

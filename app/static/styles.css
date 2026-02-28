@@ -2946,6 +2946,35 @@ body[data-theme="light"] .hover-tip {
     position: static;
     height: auto;
   }
+  /* Keep user workspace sidebar usable on medium screens: compact rail at left. */
+  #appSection.app-shell {
+    grid-template-columns: 86px minmax(0, 1fr);
+    --sidebar-width: 86px;
+  }
+  #appSection #mainSidebar {
+    position: sticky;
+    top: 12px;
+    height: calc(100vh - 24px);
+    padding: 12px 8px;
+    gap: 10px;
+  }
+  #appSection #mainSidebar .brand p,
+  #appSection #mainSidebar .nav-label {
+    display: none;
+  }
+  #appSection #mainSidebar .brand h2 {
+    font-size: 18px;
+    text-align: center;
+  }
+  #appSection #mainSidebar .nav-btn {
+    justify-content: center;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  #appSection #mainSidebar .btn-danger.full {
+    padding: 10px 6px;
+    font-size: 12px;
+  }
   .seo-split { grid-template-columns: 1fr; }
   .products-split { grid-template-columns: 1fr; }
   .preview-card { position: static; }
@@ -2981,6 +3010,51 @@ body[data-theme="light"] .hover-tip {
   .sales-chart-controls { align-items: flex-start; }
   .kpis { grid-template-columns: 1fr 1fr; }
   .kanban { grid-template-columns: 1fr; }
+  #appSection.app-shell {
+    display: block;
+    padding-bottom: 92px;
+  }
+  #appSection .workspace {
+    min-height: calc(100vh - 118px);
+  }
+  /* On narrow screens convert left rail into bottom horizontal nav. */
+  #mainSidebar {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    top: auto;
+    height: auto;
+    border-radius: 16px;
+    padding: 8px;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    z-index: 48;
+    background: linear-gradient(160deg, rgba(10, 20, 52, 0.96), rgba(12, 30, 76, 0.94));
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  }
+  #mainSidebar .brand,
+  #mainSidebar .sidebar-toggle,
+  #mainSidebar .btn-danger.full {
+    display: none;
+  }
+  #mainSidebar .side-nav {
+    display: flex;
+    width: 100%;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+  #mainSidebar .nav-btn {
+    flex: 0 0 auto;
+    min-width: 44px;
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  #mainSidebar .nav-label {
+    display: none;
+  }
   .topbar { flex-direction: column; align-items: flex-start; }
   .topbar-controls { width: 100%; }
   .topbar-controls .chip-select { width: 100%; border-radius: 12px; }

@@ -1,7 +1,8 @@
 import asyncio
+from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -14,6 +15,7 @@ app.include_router(router)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 @app.middleware("http")
@@ -43,3 +45,28 @@ def index(request: Request):
 @app.get("/admin", response_class=HTMLResponse)
 def admin_page(request: Request):
     return templates.TemplateResponse("admin.html", {"request": request})
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon_ico():
+    return FileResponse(STATIC_DIR / "favicon.ico", media_type="image/x-icon")
+
+
+@app.get("/favicon.svg", include_in_schema=False)
+def favicon_svg():
+    return FileResponse(STATIC_DIR / "favicon.svg", media_type="image/svg+xml")
+
+
+@app.get("/favicon-32x32.png", include_in_schema=False)
+def favicon_32():
+    return FileResponse(STATIC_DIR / "favicon-32x32.png", media_type="image/png")
+
+
+@app.get("/apple-touch-icon.png", include_in_schema=False)
+def apple_touch_icon():
+    return FileResponse(STATIC_DIR / "apple-touch-icon.png", media_type="image/png")
+
+
+@app.get("/site.webmanifest", include_in_schema=False)
+def site_webmanifest():
+    return FileResponse(STATIC_DIR / "site.webmanifest", media_type="application/manifest+json")
