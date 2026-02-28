@@ -261,30 +261,17 @@ def post_wb_review_reply(api_key: str, feedback_id: str, text: str) -> tuple[boo
         return False, "Ответ слишком длинный (максимум 3000 символов)"
 
     fid = feedback_id.strip()
-    payloads: list[dict[str, Any]] = [
-        {"id": fid, "text": reply},
-        {"feedbackId": fid, "text": reply},
-        {"feedback_id": fid, "text": reply},
-        {"id": fid, "answer": reply},
-        {"feedbackId": fid, "answer": reply},
-    ]
+    payloads: list[dict[str, Any]] = [{"id": fid, "text": reply}]
     if fid.isdigit():
         fid_int = int(fid)
-        payloads.extend(
-            [
-                {"id": fid_int, "text": reply},
-                {"feedbackId": fid_int, "text": reply},
-                {"feedback_id": fid_int, "text": reply},
-            ]
-        )
+        payloads.append({"id": fid_int, "text": reply})
     attempts: list[tuple[str, str, dict[str, Any]]] = []
-    for endpoint in (
-        "https://feedbacks-api.wildberries.ru/api/v1/feedbacks/answer",
-        "https://feedbacks-api.wildberries.ru/api/v1/feedbacks/answers",
-    ):
-        for method in ("POST", "PATCH"):
-            for payload in payloads:
-                attempts.append((method, endpoint, payload))
+    for payload in payloads:
+        # Official endpoint: POST /api/v1/feedbacks/answer
+        attempts.append(("POST", "https://feedbacks-api.wildberries.ru/api/v1/feedbacks/answer", payload))
+        # Lightweight fallback in case of legacy gateway route.
+        attempts.append(("POST", "https://feedbacks-api.wildberries.ru/api/v1/feedbacks/answers", payload))
+        attempts.append(("PATCH", "https://feedbacks-api.wildberries.ru/api/v1/feedbacks/answer", payload))
     return _post_wb_reply_with_fallback(api_key, attempts, entity_label="отзыв")
 
 
@@ -300,21 +287,13 @@ def post_wb_question_reply(api_key: str, question_id: str, text: str) -> tuple[b
     qid = question_id.strip()
     payloads: list[dict[str, Any]] = [
         {"id": qid, "text": reply},
-        {"questionId": qid, "text": reply},
-        {"question_id": qid, "text": reply},
-        {"id": qid, "answer": reply},
-        {"questionId": qid, "answer": reply},
         {"id": qid, "answer": {"text": reply}},
-        {"questionId": qid, "answer": {"text": reply}},
     ]
     if qid.isdigit():
         qid_int = int(qid)
         payloads.extend(
             [
                 {"id": qid_int, "text": reply},
-                {"questionId": qid_int, "text": reply},
-                {"question_id": qid_int, "text": reply},
-                {"id": qid_int, "answer": reply},
                 {"id": qid_int, "answer": {"text": reply}},
             ]
         )
@@ -322,15 +301,9 @@ def post_wb_question_reply(api_key: str, question_id: str, text: str) -> tuple[b
     # Official endpoint for questions handling is PATCH /api/v1/questions.
     for payload in payloads:
         attempts.append(("PATCH", "https://feedbacks-api.wildberries.ru/api/v1/questions", payload))
-    for endpoint in (
-        "https://feedbacks-api.wildberries.ru/api/v1/questions/answer",
-        "https://feedbacks-api.wildberries.ru/api/v1/questions/answers",
-        "https://feedbacks-api.wildberries.ru/api/v1/question/answer",
-        "https://feedbacks-api.wildberries.ru/api/v1/question/answers",
-    ):
-        for method in ("POST", "PATCH"):
-            for payload in payloads:
-                attempts.append((method, endpoint, payload))
+        # Fallback routes kept minimal to avoid flooding API limits.
+        attempts.append(("POST", "https://feedbacks-api.wildberries.ru/api/v1/questions/answer", payload))
+        attempts.append(("PATCH", "https://feedbacks-api.wildberries.ru/api/v1/questions/answer", payload))
     return _post_wb_reply_with_fallback(api_key, attempts, entity_label="вопрос")
 
 
@@ -359,43 +332,49 @@ def _post_wb_reply_with_fallback(
         seen.add(signature)
         normalized_attempts.append((signature[0], signature[1], payload))
 
+    max_attempts_per_route = 3
     last_error = "Не удалось отправить ответ в WB API"
     saw_auth_error = False
     with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
         for method, endpoint, payload in normalized_attempts:
             for auth_value in (token, f"Bearer {token}"):
                 headers = {"Authorization": auth_value, "Content-Type": "application/json"}
-                try:
-                    response = client.request(method, endpoint, headers=headers, json=payload)
-                except Exception:
-                    continue
-                if response.status_code in {200, 201, 202, 204}:
-                    return True, "Ответ отправлен"
-                if response.status_code in {401, 403}:
-                    saw_auth_error = True
-                    last_error = "WB API отклонил ключ (401/403). Проверьте тип ключа и права."
-                    continue
-                body = _safe_response_text(response)
-                if response.status_code == 429:
-                    return False, "WB API вернул 429 (лимит запросов). Повторите позже."
-                # 404/405/422 часто означают несовместимый endpoint/payload,
-                # поэтому пробуем другие варианты, а не падаем сразу.
-                if response.status_code in {404, 405, 409, 422}:
-                    if body:
-                        last_error = f"WB API вернул {response.status_code}: {body}"
-                    else:
-                        last_error = f"WB API вернул {response.status_code}"
-                    continue
-                if response.status_code >= 500:
-                    if body:
-                        last_error = f"WB API временно недоступен ({response.status_code}): {body}"
-                    else:
-                        last_error = f"WB API временно недоступен ({response.status_code})"
-                    continue
-                if body:
-                    last_error = f"WB API вернул {response.status_code}: {body}"
-                else:
-                    last_error = f"WB API вернул {response.status_code}"
+                for attempt in range(max_attempts_per_route):
+                    try:
+                        response = client.request(method, endpoint, headers=headers, json=payload)
+                    except Exception:
+                        if attempt < max_attempts_per_route - 1:
+                            time.sleep(0.45 * (attempt + 1))
+                        continue
+                    if response.status_code in {200, 201, 202, 204}:
+                        return True, "Ответ отправлен"
+                    if response.status_code in {401, 403}:
+                        saw_auth_error = True
+                        last_error = "WB API отклонил запрос (401/403). Проверьте токен и права категории «Вопросы и отзывы»."
+                        break
+                    body = _safe_response_text(response)
+                    if response.status_code == 429:
+                        if attempt < max_attempts_per_route - 1:
+                            delay = _retry_after_seconds(response, fallback=0.8 * (attempt + 1))
+                            time.sleep(delay)
+                            continue
+                        return False, "WB API вернул 429 (лимит 3 запроса/сек для категории). Повторите позже."
+                    # 404/405/422 часто означают несовместимый endpoint/payload,
+                    # поэтому пробуем другие варианты.
+                    if response.status_code in {404, 405, 409, 422}:
+                        short_body = _short_error_text(body)
+                        last_error = f"WB API вернул {response.status_code}{f': {short_body}' if short_body else ''}"
+                        break
+                    if response.status_code >= 500:
+                        if attempt < max_attempts_per_route - 1:
+                            time.sleep(0.75 * (attempt + 1))
+                            continue
+                        short_body = _short_error_text(body)
+                        last_error = f"WB API временно недоступен ({response.status_code}){f': {short_body}' if short_body else ''}"
+                        break
+                    short_body = _short_error_text(body)
+                    last_error = f"WB API вернул {response.status_code}{f': {short_body}' if short_body else ''}"
+                    break
 
     if saw_auth_error and "401/403" in last_error:
         return False, last_error
@@ -423,39 +402,23 @@ def post_ozon_review_reply(api_key: str, review_id: str, text: str) -> tuple[boo
 
     payloads: list[dict[str, Any]] = [
         {"review_id": raw_id, "text": reply},
-        {"id": raw_id, "text": reply},
         {"review_id": raw_id, "comment": reply},
-        {"id": raw_id, "comment": reply},
-        {"review_id": raw_id, "answer": reply},
-        {"id": raw_id, "answer": reply},
     ]
     if int_id is not None:
         payloads.extend(
             [
                 {"review_id": int_id, "text": reply},
-                {"id": int_id, "text": reply},
                 {"review_id": int_id, "comment": reply},
-                {"id": int_id, "comment": reply},
-                {"review_id": int_id, "answer": reply},
-                {"id": int_id, "answer": reply},
             ]
         )
 
     attempts: list[tuple[str, str, dict[str, Any]]] = []
-    for endpoint in (
-        "https://api-seller.ozon.ru/v1/review/comment/create",
-        "https://api-seller.ozon.ru/v1/review/comment/update",
-        "https://api-seller.ozon.ru/v1/review/comment",
-        "https://api-seller.ozon.ru/v1/review/answer/create",
-        "https://api-seller.ozon.ru/v1/review/answer/update",
-        "https://api-seller.ozon.ru/v1/review/answer",
-        "https://api-seller.ozon.ru/v2/review/comment/create",
-        "https://api-seller.ozon.ru/v2/review/comment/update",
-        "https://api-seller.ozon.ru/v2/review/comment",
-    ):
-        for method in ("POST", "PATCH", "PUT"):
-            for payload in payloads:
-                attempts.append((method, endpoint, payload))
+    for payload in payloads:
+        # Official route: POST /v1/review/comment/create
+        attempts.append(("POST", "https://api-seller.ozon.ru/v1/review/comment/create", payload))
+        # Fallback for already answered reviews in some accounts/integrations.
+        attempts.append(("POST", "https://api-seller.ozon.ru/v1/review/comment/update", payload))
+        attempts.append(("POST", "https://api-seller.ozon.ru/v2/review/comment/create", payload))
     return _post_ozon_reply_with_fallback(api_key, attempts, entity_label="отзыв")
 
 
@@ -477,39 +440,23 @@ def post_ozon_question_reply(api_key: str, question_id: str, text: str) -> tuple
 
     payloads: list[dict[str, Any]] = [
         {"question_id": raw_id, "text": reply},
-        {"id": raw_id, "text": reply},
         {"question_id": raw_id, "answer_text": reply},
-        {"id": raw_id, "answer_text": reply},
-        {"question_id": raw_id, "answer": reply},
-        {"id": raw_id, "answer": reply},
     ]
     if int_id is not None:
         payloads.extend(
             [
                 {"question_id": int_id, "text": reply},
-                {"id": int_id, "text": reply},
                 {"question_id": int_id, "answer_text": reply},
-                {"id": int_id, "answer_text": reply},
-                {"question_id": int_id, "answer": reply},
-                {"id": int_id, "answer": reply},
             ]
         )
 
     attempts: list[tuple[str, str, dict[str, Any]]] = []
-    for endpoint in (
-        "https://api-seller.ozon.ru/v1/question/answer/create",
-        "https://api-seller.ozon.ru/v1/question/answer/update",
-        "https://api-seller.ozon.ru/v1/question/answer",
-        "https://api-seller.ozon.ru/v1/product/question/answer/create",
-        "https://api-seller.ozon.ru/v1/product/question/answer/update",
-        "https://api-seller.ozon.ru/v1/product/question/answer",
-        "https://api-seller.ozon.ru/v2/question/answer/create",
-        "https://api-seller.ozon.ru/v2/question/answer/update",
-        "https://api-seller.ozon.ru/v2/question/answer",
-    ):
-        for method in ("POST", "PATCH", "PUT"):
-            for payload in payloads:
-                attempts.append((method, endpoint, payload))
+    for payload in payloads:
+        # Official question-answer route in Seller API updates.
+        attempts.append(("POST", "https://api-seller.ozon.ru/v1/question/answer/create", payload))
+        # Keep small compatibility fallbacks.
+        attempts.append(("POST", "https://api-seller.ozon.ru/v1/question/answer/update", payload))
+        attempts.append(("POST", "https://api-seller.ozon.ru/v2/question/answer/create", payload))
     return _post_ozon_reply_with_fallback(api_key, attempts, entity_label="вопрос")
 
 
@@ -543,25 +490,21 @@ def _post_ozon_reply_with_fallback(
             return True, "Ответ отправлен"
         body = _safe_response_text(response)
         if response.status_code in {404, 405, 409, 422}:
-            if body:
-                last_error = f"Ozon API вернул {response.status_code}: {body}"
-            else:
-                last_error = f"Ozon API вернул {response.status_code}"
+            short_body = _short_error_text(body)
+            last_error = f"Ozon API вернул {response.status_code}{f': {short_body}' if short_body else ''}"
             continue
         if response.status_code == 429:
             return False, "Ozon API вернул 429 (лимит запросов). Повторите позже."
         if response.status_code in {401, 403}:
-            return False, "Ozon API отклонил ключ (401/403). Проверьте client_id и api_key."
+            short_body = _short_error_text(body)
+            suffix = f" Детали: {short_body}" if short_body else ""
+            return False, f"Ozon API отклонил запрос (401/403). Проверьте client_id/api_key и права метода.{suffix}"
         if response.status_code >= 500:
-            if body:
-                last_error = f"Ozon API временно недоступен ({response.status_code}): {body}"
-            else:
-                last_error = f"Ozon API временно недоступен ({response.status_code})"
+            short_body = _short_error_text(body)
+            last_error = f"Ozon API временно недоступен ({response.status_code}){f': {short_body}' if short_body else ''}"
             continue
-        if body:
-            last_error = f"Ozon API вернул {response.status_code}: {body}"
-        else:
-            last_error = f"Ozon API вернул {response.status_code}"
+        short_body = _short_error_text(body)
+        last_error = f"Ozon API вернул {response.status_code}{f': {short_body}' if short_body else ''}"
     return False, f"Не удалось отправить ответ на {entity_label}: {last_error}"
 
 
@@ -1795,13 +1738,31 @@ def _request_ozon_response(
     headers = _build_ozon_headers(api_key)
     if not headers:
         return None
-    try:
-        with httpx.Client(timeout=OZON_TIMEOUT, follow_redirects=True) as client:
-            if method == "POST":
-                return client.post(url, headers=headers, json=payload or {})
-            return client.get(url, headers=headers)
-    except Exception:
-        return None
+    method_up = str(method or "POST").upper().strip()
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        try:
+            with httpx.Client(timeout=OZON_TIMEOUT, follow_redirects=True) as client:
+                if method_up == "POST":
+                    response = client.post(url, headers=headers, json=payload or {})
+                elif method_up == "PATCH":
+                    response = client.patch(url, headers=headers, json=payload or {})
+                elif method_up == "PUT":
+                    response = client.put(url, headers=headers, json=payload or {})
+                else:
+                    response = client.get(url, headers=headers)
+        except Exception:
+            if attempt < max_attempts - 1:
+                time.sleep(0.55 * (attempt + 1))
+            continue
+        if response.status_code == 429 and attempt < max_attempts - 1:
+            time.sleep(_retry_after_seconds(response, fallback=0.8 * (attempt + 1)))
+            continue
+        if response.status_code >= 500 and attempt < max_attempts - 1:
+            time.sleep(0.8 * (attempt + 1))
+            continue
+        return response
+    return None
 
 
 def _normalize_review_row(row: dict[str, Any], is_answered: bool) -> dict[str, Any]:
@@ -3106,6 +3067,23 @@ def _extract_answer_text(*values: Any) -> str:
         if text:
             return text
     return ""
+
+
+def _short_error_text(value: str, max_len: int = 320) -> str:
+    compact = " ".join(str(value or "").split()).strip()
+    if len(compact) <= max_len:
+        return compact
+    return compact[:max_len].rstrip() + "..."
+
+
+def _retry_after_seconds(response: httpx.Response, fallback: float = 1.0) -> float:
+    raw = str(response.headers.get("Retry-After") or "").strip()
+    if raw.isdigit():
+        try:
+            return max(0.2, min(float(raw), 12.0))
+        except Exception:
+            return max(0.2, min(float(fallback), 12.0))
+    return max(0.2, min(float(fallback), 12.0))
 
 
 def _extract_photo_urls(*values: Any) -> list[str]:
