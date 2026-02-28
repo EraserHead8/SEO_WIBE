@@ -254,6 +254,14 @@ class AuditLogOut(BaseModel):
     created_at: datetime
 
 
+class AuditLogPageOut(BaseModel):
+    rows: list[AuditLogOut] = Field(default_factory=list)
+    total: int = 0
+    page: int = 1
+    page_size: int = 100
+    total_pages: int = 0
+
+
 class WbReviewOut(BaseModel):
     id: str
     date: str

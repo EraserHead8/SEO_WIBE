@@ -2560,12 +2560,28 @@ pre {
   min-width: 1380px;
 }
 
+#adminTab-audit .table-card {
+  max-height: 68vh;
+}
+
 #adminTab-audit td:nth-child(3) {
   min-width: 210px;
 }
 
 #adminTab-audit td:nth-child(8) {
   min-width: 340px;
+}
+
+.admin-audit-pager {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 10px;
+}
+
+.admin-audit-pager .hint {
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .admin-debug {

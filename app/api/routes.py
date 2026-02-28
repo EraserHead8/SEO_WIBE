@@ -4,13 +4,14 @@ import io
 import json
 import math
 import hashlib
+import os
 import re
 from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Request
-from sqlalchemy import String, cast, func, or_, select
+from sqlalchemy import String, cast, delete, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -57,6 +58,7 @@ from app.schemas import (
     AdminRoleUpdateIn,
     AdminStatsOut,
     AuditLogOut,
+    AuditLogPageOut,
     ApiCredentialIn,
     ApiCredentialOut,
     CurrentModuleOut,
@@ -179,6 +181,10 @@ DEFAULT_UI_SETTINGS = {
     "default_theme": "classic",
     "allowed_themes": list(AVAILABLE_THEMES),
 }
+AUDIT_STORAGE_MAX_BYTES = 3 * 1024 * 1024 * 1024
+AUDIT_STORAGE_TARGET_BYTES = int(AUDIT_STORAGE_MAX_BYTES * 0.9)
+AUDIT_PRUNE_BATCH = 5000
+_AUDIT_PRUNE_LAST_CHECK_AT: float = 0.0
 
 BILLING_PLANS: dict[str, dict[str, Any]] = {
     "starter": {"title": "Starter", "price": 990, "limits": {"products": 500, "seo_jobs_month": 1500, "ai_replies_month": 800}},
@@ -1693,7 +1699,14 @@ def wb_questions_save_ai_settings(payload: ReviewAiSettingsIn, user: User = Depe
         raise HTTPException(status_code=400, detail="reply_mode должен быть manual, suggest или auto")
     row.reply_mode = mode
     row.prompt = _sanitize_ai_prompt(payload.prompt)
-    db.add(AuditLog(user_id=user.id, action="wb_questions_ai_settings_saved", details=f"reply_mode={mode}"))
+    _audit(
+        db,
+        user,
+        action="wb_questions_ai_settings_saved",
+        details=f"reply_mode={mode}",
+        module_code="wb_questions_ai",
+        entity_type="ai_settings",
+    )
     db.commit()
     return ReviewAiSettingsOut(reply_mode=row.reply_mode, prompt=row.prompt)
 
@@ -1715,7 +1728,14 @@ def wb_save_ai_settings(payload: ReviewAiSettingsIn, user: User = Depends(get_cu
         raise HTTPException(status_code=400, detail="reply_mode должен быть manual, suggest или auto")
     row.reply_mode = mode
     row.prompt = _sanitize_ai_prompt(payload.prompt)
-    db.add(AuditLog(user_id=user.id, action="wb_ai_settings_saved", details=f"reply_mode={mode}"))
+    _audit(
+        db,
+        user,
+        action="wb_ai_settings_saved",
+        details=f"reply_mode={mode}",
+        module_code="wb_reviews_ai",
+        entity_type="ai_settings",
+    )
     db.commit()
     return ReviewAiSettingsOut(reply_mode=row.reply_mode, prompt=row.prompt)
 
@@ -1855,12 +1875,13 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
     except Exception:
         stats = {}
         error_flags.append("stats")
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            action="wb_ads_campaigns_enrich",
-            details=f"ids={len(ids)};summaries={len(summaries)};stats={len(stats)};errors={','.join(error_flags) if error_flags else '-'}",
-        )
+    _audit(
+        db,
+        user,
+        action="wb_ads_campaigns_enrich",
+        details=f"ids={len(ids)};summaries={len(summaries)};stats={len(stats)};errors={','.join(error_flags) if error_flags else '-'}",
+        module_code="wb_ads",
+        entity_type="campaign",
     )
     db.commit()
     return WbCampaignEnrichOut(summaries=summaries, stats=stats)
@@ -1875,12 +1896,14 @@ def wb_ads_rates(payload: WbCampaignRatesIn, user: User = Depends(get_current_us
     data = fetch_wb_campaign_rates(wb_key, payload.campaign_id, payload.campaign_type)
     if data is None:
         raise HTTPException(status_code=400, detail="Не удалось получить ставки по кампании")
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            action="wb_ads_rates_read",
-            details=f"campaign_id={payload.campaign_id};type={payload.campaign_type}",
-        )
+    _audit(
+        db,
+        user,
+        action="wb_ads_rates_read",
+        details=f"campaign_id={payload.campaign_id};type={payload.campaign_type}",
+        module_code="wb_ads",
+        entity_type="campaign",
+        entity_id=str(payload.campaign_id),
     )
     db.commit()
     return WbCampaignRatesOut(campaign_id=payload.campaign_id, campaign_type=payload.campaign_type, data=data)
@@ -1896,7 +1919,15 @@ def wb_ads_campaign_details(campaign_id: int, user: User = Depends(get_current_u
         raise HTTPException(status_code=400, detail="campaign_id должен быть > 0")
 
     data = fetch_wb_campaign_details(wb_key, campaign_id=campaign_id)
-    db.add(AuditLog(user_id=user.id, action="wb_ads_campaign_details_read", details=f"campaign_id={campaign_id}"))
+    _audit(
+        db,
+        user,
+        action="wb_ads_campaign_details_read",
+        details=f"campaign_id={campaign_id}",
+        module_code="wb_ads",
+        entity_type="campaign",
+        entity_id=str(campaign_id),
+    )
     db.commit()
     return WbCampaignDetailOut(campaign_id=campaign_id, data=data)
 
@@ -1910,7 +1941,14 @@ def wb_ads_balance(user: User = Depends(get_current_user), db: Session = Depends
     data = fetch_wb_ads_balance(wb_key)
     if data is None:
         raise HTTPException(status_code=400, detail="Не удалось получить баланс WB Ads")
-    db.add(AuditLog(user_id=user.id, action="wb_ads_balance_read", details="ok=1"))
+    _audit(
+        db,
+        user,
+        action="wb_ads_balance_read",
+        details="ok=1",
+        module_code="wb_ads",
+        entity_type="balance",
+    )
     db.commit()
     return WbAdsBalanceOut(data=data)
 
@@ -1922,12 +1960,15 @@ def wb_ads_action(payload: WbAdsActionIn, user: User = Depends(get_current_user)
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
     ok, message, raw = update_wb_campaign_state(wb_key, campaign_id=payload.campaign_id, action=payload.action)
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            action="wb_ads_action",
-            details=f"campaign_id={payload.campaign_id};action={payload.action};ok={ok};raw={json.dumps(raw, ensure_ascii=False)[:600]}",
-        )
+    _audit(
+        db,
+        user,
+        action="wb_ads_action",
+        details=f"campaign_id={payload.campaign_id};action={payload.action};ok={ok};raw={json.dumps(raw, ensure_ascii=False)[:600]}",
+        module_code="wb_ads",
+        entity_type="campaign",
+        entity_id=str(payload.campaign_id),
+        status="ok" if ok else "error",
     )
     db.commit()
     if not ok:
@@ -1971,12 +2012,13 @@ def wb_ads_analytics(
     if not ids:
         left = date_from.isoformat() if date_from else (date.today() - timedelta(days=6)).isoformat()
         right = date_to.isoformat() if date_to else date.today().isoformat()
-        db.add(
-            AuditLog(
-                user_id=user.id,
-                action="wb_ads_analytics_read",
-                details=f"date_from={left};date_to={right};campaigns=0;note=no_ids",
-            )
+        _audit(
+            db,
+            user,
+            action="wb_ads_analytics_read",
+            details=f"date_from={left};date_to={right};campaigns=0;note=no_ids",
+            module_code="wb_ads_analytics",
+            entity_type="campaign",
         )
         db.commit()
         return WbAdsAnalyticsOut(
@@ -2029,12 +2071,13 @@ def wb_ads_analytics(
 
     left = date_from.isoformat() if date_from else (date.today() - timedelta(days=6)).isoformat()
     right = date_to.isoformat() if date_to else date.today().isoformat()
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            action="wb_ads_analytics_read",
-            details=f"date_from={left};date_to={right};campaigns={len(out_rows)}",
-        )
+    _audit(
+        db,
+        user,
+        action="wb_ads_analytics_read",
+        details=f"date_from={left};date_to={right};campaigns={len(out_rows)}",
+        module_code="wb_ads_analytics",
+        entity_type="campaign",
     )
     db.commit()
     return WbAdsAnalyticsOut(date_from=left, date_to=right, rows=out_rows, totals=totals)
@@ -2085,12 +2128,13 @@ def wb_ads_recommendations(
     if not ids:
         left = date_from.isoformat() if date_from else (date.today() - timedelta(days=6)).isoformat()
         right = date_to.isoformat() if date_to else date.today().isoformat()
-        db.add(
-            AuditLog(
-                user_id=user.id,
-                action="wb_ads_recommendations_read",
-                details=f"date_from={left};date_to={right};rows=0;min_spent={max(0.0, float(min_spent or 0.0))};note=no_ids",
-            )
+        _audit(
+            db,
+            user,
+            action="wb_ads_recommendations_read",
+            details=f"date_from={left};date_to={right};rows=0;min_spent={max(0.0, float(min_spent or 0.0))};note=no_ids",
+            module_code="wb_ads_recommendations",
+            entity_type="campaign",
         )
         db.commit()
         empty_meta: dict[str, Any] = {
@@ -2283,12 +2327,13 @@ def wb_ads_recommendations(
 
     left = date_from.isoformat() if date_from else (date.today() - timedelta(days=6)).isoformat()
     right = date_to.isoformat() if date_to else date.today().isoformat()
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            action="wb_ads_recommendations_read",
-            details=f"date_from={left};date_to={right};rows={len(recommendations)};min_spent={safe_min_spent}",
-        )
+    _audit(
+        db,
+        user,
+        action="wb_ads_recommendations_read",
+        details=f"date_from={left};date_to={right};rows={len(recommendations)};min_spent={safe_min_spent}",
+        module_code="wb_ads_recommendations",
+        entity_type="campaign",
     )
     db.commit()
     return WbAdsRecommendationsOut(
@@ -2432,6 +2477,14 @@ def help_assistant(payload: AiAssistantIn, user: User = Depends(get_current_user
             context_parts.append(f"[{row['title']}] {row['content']}")
             if len(" ".join(context_parts)) > 12000:
                 break
+    user_knowledge = _build_user_knowledge_context(
+        db,
+        user.id,
+        max_chars=10000,
+        query_text=question,
+    )
+    if user_knowledge:
+        context_parts.append(f"[Пользовательская база знаний]\n{user_knowledge}")
     runtime = _resolve_user_ai_runtime(db, user.id)
     answer = generate_help_assistant_reply(
         question=question,
@@ -2442,12 +2495,14 @@ def help_assistant(payload: AiAssistantIn, user: User = Depends(get_current_user
         provider=str(runtime.get("provider") or ""),
         base_url=str(runtime.get("base_url") or ""),
     )
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            action="help_assistant_asked",
-            details=f"module={module_code or '-'};provider={runtime.get('provider') or 'builtin'};mode={runtime.get('mode') or 'builtin'}",
-        )
+    _audit(
+        db,
+        user,
+        action="help_assistant_asked",
+        details=f"module={module_code or '-'};provider={runtime.get('provider') or 'builtin'};mode={runtime.get('mode') or 'builtin'};knowledge={int(bool(user_knowledge))}",
+        module_code="ai_assistant",
+        entity_type="question",
+        status="ok",
     )
     db.commit()
     return AiAssistantOut(
@@ -3450,12 +3505,13 @@ def profile_update(payload: UserProfileUpdateIn, user: User = Depends(get_curren
     profile.company_structure = payload.company_structure.strip()[:12000]
     profile.avatar_url = payload.avatar_url.strip()[:500]
 
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            action="profile_updated",
-            details=f"company={profile.company_name};city={profile.city};team={profile.team_size}",
-        )
+    _audit(
+        db,
+        user,
+        action="profile_updated",
+        details=f"company={profile.company_name};city={profile.city};team={profile.team_size}",
+        module_code="user_profile",
+        entity_type="profile",
     )
     account = _get_or_create_billing_account(db, user.id)
     db.commit()
@@ -3480,12 +3536,13 @@ def profile_ai_select(payload: AiSelectionIn, user: User = Depends(get_current_u
         mode=payload.mode,
         service_id=payload.service_id,
     )
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            action="profile_ai_selected",
-            details=f"use_global_default={bool(payload.use_global_default)};mode={payload.mode};service_id={payload.service_id}",
-        )
+    _audit(
+        db,
+        user,
+        action="profile_ai_selected",
+        details=f"use_global_default={bool(payload.use_global_default)};mode={payload.mode};service_id={payload.service_id}",
+        module_code="user_profile",
+        entity_type="ai_selection",
     )
     db.commit()
     return _build_ai_profile_payload(db, user.id)
@@ -3499,7 +3556,15 @@ def profile_ai_service_add(payload: AiServiceIn, user: User = Depends(get_curren
         user_id=user.id,
         payload=payload,
     )
-    db.add(AuditLog(user_id=user.id, action="profile_ai_service_added", details=f"service_id={row.id};provider={row.provider}"))
+    _audit(
+        db,
+        user,
+        action="profile_ai_service_added",
+        details=f"service_id={row.id};provider={row.provider}",
+        module_code="user_profile",
+        entity_type="ai_service",
+        entity_id=str(row.id),
+    )
     db.commit()
     return _ai_service_to_out(row, scope="user")
 
@@ -3511,7 +3576,15 @@ def profile_ai_service_update(service_id: int, payload: AiServiceIn, user: User 
     if not row or row.user_id != user.id:
         raise HTTPException(status_code=404, detail="AI сервис не найден")
     _update_ai_service_row(row, payload)
-    db.add(AuditLog(user_id=user.id, action="profile_ai_service_updated", details=f"service_id={row.id};provider={row.provider}"))
+    _audit(
+        db,
+        user,
+        action="profile_ai_service_updated",
+        details=f"service_id={row.id};provider={row.provider}",
+        module_code="user_profile",
+        entity_type="ai_service",
+        entity_id=str(row.id),
+    )
     db.commit()
     return _ai_service_to_out(row, scope="user")
 
@@ -3524,7 +3597,15 @@ def profile_ai_service_delete(service_id: int, user: User = Depends(get_current_
         raise HTTPException(status_code=404, detail="AI сервис не найден")
     _reset_ai_selection_if_deleted_service(db, user.id, service_id)
     db.delete(row)
-    db.add(AuditLog(user_id=user.id, action="profile_ai_service_deleted", details=f"service_id={service_id}"))
+    _audit(
+        db,
+        user,
+        action="profile_ai_service_deleted",
+        details=f"service_id={service_id}",
+        module_code="user_profile",
+        entity_type="ai_service",
+        entity_id=str(service_id),
+    )
     db.commit()
     return MessageOut(message="AI сервис удален")
 
@@ -3561,7 +3642,15 @@ def profile_team_add(payload: TeamMemberIn, user: User = Depends(get_current_use
         is_active=True,
     )
     db.add(row)
-    db.add(AuditLog(user_id=user.id, action="profile_team_member_added", details=f"email={row.email}"))
+    _audit(
+        db,
+        user,
+        action="profile_team_member_added",
+        details=f"email={row.email}",
+        module_code="user_profile",
+        entity_type="team_member",
+        entity_id=str(row.id),
+    )
     db.commit()
     return _team_member_to_out(row)
 
@@ -3594,7 +3683,15 @@ def profile_team_update(member_id: int, payload: TeamMemberIn, user: User = Depe
         password = _validate_team_member_password(payload.password, required=False)
         if password:
             row.hashed_password = get_password_hash(password)
-    db.add(AuditLog(user_id=user.id, action="profile_team_member_updated", details=f"member_id={row.id}"))
+    _audit(
+        db,
+        user,
+        action="profile_team_member_updated",
+        details=f"member_id={row.id}",
+        module_code="user_profile",
+        entity_type="team_member",
+        entity_id=str(row.id),
+    )
     db.commit()
     return _team_member_to_out(row)
 
@@ -3609,7 +3706,15 @@ def profile_team_delete(member_id: int, user: User = Depends(get_current_user), 
     if row.is_owner:
         raise HTTPException(status_code=400, detail="Нельзя удалить владельца кабинета")
     db.delete(row)
-    db.add(AuditLog(user_id=user.id, action="profile_team_member_deleted", details=f"member_id={member_id}"))
+    _audit(
+        db,
+        user,
+        action="profile_team_member_deleted",
+        details=f"member_id={member_id}",
+        module_code="user_profile",
+        entity_type="team_member",
+        entity_id=str(member_id),
+    )
     db.commit()
     return MessageOut(message="Сотрудник удален")
 
@@ -3633,7 +3738,14 @@ def profile_change_password(
         owner_member = db.scalar(select(TeamMember).where(TeamMember.user_id == user.id, TeamMember.is_owner.is_(True)))
         if owner_member:
             owner_member.hashed_password = user.hashed_password
-        db.add(AuditLog(user_id=user.id, action="profile_password_changed", details="kind=owner"))
+        _audit(
+            db,
+            user,
+            action="profile_password_changed",
+            details="kind=owner",
+            module_code="user_profile",
+            entity_type="password",
+        )
         db.commit()
         return MessageOut(message="Пароль обновлен")
 
@@ -3648,7 +3760,15 @@ def profile_change_password(
     if not member or not member.hashed_password or not verify_password(payload.current_password, member.hashed_password):
         raise HTTPException(status_code=400, detail="Текущий пароль указан неверно")
     member.hashed_password = get_password_hash(payload.new_password)
-    db.add(AuditLog(user_id=user.id, action="profile_password_changed", details=f"kind=team_member;member_id={member.id}"))
+    _audit(
+        db,
+        user,
+        action="profile_password_changed",
+        details=f"kind=team_member;member_id={member.id}",
+        module_code="user_profile",
+        entity_type="password",
+        entity_id=str(member.id),
+    )
     db.commit()
     return MessageOut(message="Пароль сотрудника обновлен")
 
@@ -3676,7 +3796,14 @@ def profile_change_plan(payload: BillingPlanChangeIn, user: User = Depends(get_c
             note=f"План изменен на {plan_code}",
         )
     )
-    db.add(AuditLog(user_id=user.id, action="profile_plan_changed", details=f"plan={plan_code}"))
+    _audit(
+        db,
+        user,
+        action="profile_plan_changed",
+        details=f"plan={plan_code}",
+        module_code="billing",
+        entity_type="plan",
+    )
     profile = _get_or_create_user_profile(db, user.id)
     db.commit()
     return _build_user_profile_payload(db, user, profile, account)
@@ -3699,7 +3826,14 @@ def profile_renew_plan(user: User = Depends(get_current_user), db: Session = Dep
             note=f"Продление до {account.renew_at.isoformat()}",
         )
     )
-    db.add(AuditLog(user_id=user.id, action="profile_plan_renewed", details=f"renew_at={account.renew_at.isoformat()}"))
+    _audit(
+        db,
+        user,
+        action="profile_plan_renewed",
+        details=f"renew_at={account.renew_at.isoformat()}",
+        module_code="billing",
+        entity_type="plan",
+    )
     profile = _get_or_create_user_profile(db, user.id)
     db.commit()
     return _build_user_profile_payload(db, user, profile, account)
@@ -3736,7 +3870,14 @@ def billing_change_plan(payload: BillingPlanChangeIn, user: User = Depends(get_c
             note=f"План изменен на {plan_code}",
         )
     )
-    db.add(AuditLog(user_id=user.id, action="billing_plan_changed", details=f"plan={plan_code}"))
+    _audit(
+        db,
+        user,
+        action="billing_plan_changed",
+        details=f"plan={plan_code}",
+        module_code="billing",
+        entity_type="plan",
+    )
     db.commit()
     return _build_billing_payload(db, user.id, account)
 
@@ -3757,7 +3898,14 @@ def billing_renew(user: User = Depends(get_current_user), db: Session = Depends(
             note=f"Продление до {account.renew_at.isoformat()}",
         )
     )
-    db.add(AuditLog(user_id=user.id, action="billing_renewed", details=f"renew_at={account.renew_at.isoformat()}"))
+    _audit(
+        db,
+        user,
+        action="billing_renewed",
+        details=f"renew_at={account.renew_at.isoformat()}",
+        module_code="billing",
+        entity_type="plan",
+    )
     db.commit()
     return _build_billing_payload(db, user.id, account)
 
@@ -3801,12 +3949,14 @@ def admin_user_profile_update(
     profile.company_structure = payload.company_structure.strip()[:12000]
     profile.avatar_url = payload.avatar_url.strip()[:500]
 
-    db.add(
-        AuditLog(
-            user_id=me.id,
-            action="admin_user_profile_updated",
-            details=f"user_id={target.id};company={profile.company_name};city={profile.city};team={profile.team_size}",
-        )
+    _audit(
+        db,
+        me,
+        action="admin_user_profile_updated",
+        details=f"user_id={target.id};company={profile.company_name};city={profile.city};team={profile.team_size}",
+        module_code="admin",
+        entity_type="user",
+        entity_id=str(target.id),
     )
     db.commit()
     return _build_admin_user_profile_payload(db, target)
@@ -3841,12 +3991,14 @@ def admin_user_change_plan(
             note=f"Администратор изменил план на {plan_code}",
         )
     )
-    db.add(
-        AuditLog(
-            user_id=me.id,
-            action="admin_user_plan_changed",
-            details=f"user_id={target.id};plan={plan_code}",
-        )
+    _audit(
+        db,
+        me,
+        action="admin_user_plan_changed",
+        details=f"user_id={target.id};plan={plan_code}",
+        module_code="admin",
+        entity_type="user",
+        entity_id=str(target.id),
     )
     db.commit()
     return _build_admin_user_profile_payload(db, target)
@@ -3881,7 +4033,15 @@ def admin_team_add(
         is_active=True,
     )
     db.add(row)
-    db.add(AuditLog(user_id=me.id, action="admin_team_member_added", details=f"user_id={user_id};email={row.email}"))
+    _audit(
+        db,
+        me,
+        action="admin_team_member_added",
+        details=f"user_id={user_id};email={row.email}",
+        module_code="admin",
+        entity_type="team_member",
+        entity_id=str(row.id),
+    )
     db.commit()
     return _team_member_to_out(row)
 
@@ -3921,7 +4081,15 @@ def admin_team_update(
         password = _validate_team_member_password(payload.password, required=False)
         if password:
             row.hashed_password = get_password_hash(password)
-    db.add(AuditLog(user_id=me.id, action="admin_team_member_updated", details=f"user_id={user_id};member_id={member_id}"))
+    _audit(
+        db,
+        me,
+        action="admin_team_member_updated",
+        details=f"user_id={user_id};member_id={member_id}",
+        module_code="admin",
+        entity_type="team_member",
+        entity_id=str(member_id),
+    )
     db.commit()
     return _team_member_to_out(row)
 
@@ -3934,7 +4102,15 @@ def admin_team_delete(user_id: int, member_id: int, me: User = Depends(get_admin
     if row.is_owner:
         raise HTTPException(status_code=400, detail="Нельзя удалить владельца кабинета")
     db.delete(row)
-    db.add(AuditLog(user_id=me.id, action="admin_team_member_deleted", details=f"user_id={user_id};member_id={member_id}"))
+    _audit(
+        db,
+        me,
+        action="admin_team_member_deleted",
+        details=f"user_id={user_id};member_id={member_id}",
+        module_code="admin",
+        entity_type="team_member",
+        entity_id=str(member_id),
+    )
     db.commit()
     return MessageOut(message="Сотрудник удален")
 
@@ -3975,7 +4151,7 @@ def admin_stats(_: User = Depends(get_admin_user), db: Session = Depends(get_db)
 
 
 @router.post("/admin/users/password", response_model=MessageOut)
-def admin_reset_password(payload: AdminPasswordResetIn, _: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+def admin_reset_password(payload: AdminPasswordResetIn, me: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     user = db.get(User, payload.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
@@ -3993,7 +4169,15 @@ def admin_reset_password(payload: AdminPasswordResetIn, _: User = Depends(get_ad
     )
     if owner_member:
         owner_member.hashed_password = user.hashed_password
-    db.add(AuditLog(user_id=user.id, action="admin_password_reset", details="password_updated"))
+    _audit(
+        db,
+        me,
+        action="admin_password_reset",
+        details=f"user_id={user.id};password_updated=1",
+        module_code="admin",
+        entity_type="user",
+        entity_id=str(user.id),
+    )
     db.commit()
     return MessageOut(message="Пароль пользователя обновлен")
 
@@ -4009,7 +4193,15 @@ def admin_set_role(payload: AdminRoleUpdateIn, me: User = Depends(get_admin_user
     if user.id == me.id and role != "admin":
         raise HTTPException(status_code=400, detail="Нельзя снять admin c текущего пользователя")
     user.role = role
-    db.add(AuditLog(user_id=me.id, action="admin_role_updated", details=f"user_id={user.id};role={role}"))
+    _audit(
+        db,
+        me,
+        action="admin_role_updated",
+        details=f"user_id={user.id};role={role}",
+        module_code="admin",
+        entity_type="user",
+        entity_id=str(user.id),
+    )
     db.commit()
     return MessageOut(message="Роль пользователя обновлена")
 
@@ -4022,7 +4214,15 @@ def admin_delete_user(user_id: int, me: User = Depends(get_admin_user), db: Sess
     if user.id == me.id:
         raise HTTPException(status_code=400, detail="Нельзя удалить текущего администратора")
     db.delete(user)
-    db.add(AuditLog(user_id=me.id, action="admin_user_deleted", details=f"user_id={user_id}"))
+    _audit(
+        db,
+        me,
+        action="admin_user_deleted",
+        details=f"user_id={user_id}",
+        module_code="admin",
+        entity_type="user",
+        entity_id=str(user_id),
+    )
     db.commit()
     return MessageOut(message="Пользователь удален")
 
@@ -4049,7 +4249,14 @@ def admin_save_ui_settings(payload: UiSettingsIn, me: User = Depends(get_admin_u
         }
     )
     _set_system_setting(db, "ui_settings", json.dumps(next_payload, ensure_ascii=False))
-    db.add(AuditLog(user_id=me.id, action="admin_ui_settings_updated", details=json.dumps(next_payload, ensure_ascii=False)))
+    _audit(
+        db,
+        me,
+        action="admin_ui_settings_updated",
+        details=json.dumps(next_payload, ensure_ascii=False),
+        module_code="admin",
+        entity_type="ui_settings",
+    )
     db.commit()
     return UiSettingsOut(**next_payload)
 
@@ -4065,12 +4272,14 @@ def set_module_access(payload: ModuleAccessIn, me: User = Depends(get_admin_user
     else:
         row.enabled = payload.enabled
 
-    db.add(
-        AuditLog(
-            user_id=me.id,
-            action="admin_module_updated",
-            details=f"user_id={payload.user_id};module={payload.module_code};enabled={payload.enabled}",
-        )
+    _audit(
+        db,
+        me,
+        action="admin_module_updated",
+        details=f"user_id={payload.user_id};module={payload.module_code};enabled={payload.enabled}",
+        module_code="admin",
+        entity_type="module_access",
+        entity_id=f"{payload.user_id}:{payload.module_code}",
     )
     db.commit()
     return ModuleAccessOut(user_id=row.user_id, module_code=row.module_code, enabled=row.enabled)
@@ -4106,7 +4315,7 @@ def admin_list_all_credentials(_: User = Depends(get_admin_user), db: Session = 
 
 
 @router.post("/admin/credentials", response_model=ApiCredentialOut)
-def admin_save_credential(payload: AdminCredentialIn, _: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+def admin_save_credential(payload: AdminCredentialIn, me: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     marketplace = validate_marketplace(payload.marketplace)
     user = db.get(User, payload.user_id)
     if not user:
@@ -4127,7 +4336,15 @@ def admin_save_credential(payload: AdminCredentialIn, _: User = Depends(get_admi
         cred = ApiCredential(user_id=payload.user_id, marketplace=marketplace, api_key=payload.api_key, active=True)
         db.add(cred)
 
-    db.add(AuditLog(user_id=payload.user_id, action="admin_credential_saved", details=f"marketplace={marketplace}"))
+    _audit(
+        db,
+        me,
+        action="admin_credential_saved",
+        details=f"user_id={payload.user_id};marketplace={marketplace}",
+        module_code="admin",
+        entity_type="api_credential",
+        entity_id=f"{payload.user_id}:{marketplace}",
+    )
     db.commit()
     return ApiCredentialOut(id=cred.id, marketplace=cred.marketplace, api_key_masked=mask_key(cred.api_key), active=cred.active)
 
@@ -4167,7 +4384,14 @@ def admin_ai_global_default_save(payload: AiSelectionIn, me: User = Depends(get_
         raise HTTPException(status_code=400, detail="Глобальный default не может ссылаться на user-сервис")
     service_id = _validate_ai_service_binding(db, mode=mode, service_id=payload.service_id, user_id=None)
     _set_system_setting(db, "ai_global_default", json.dumps({"mode": mode, "service_id": service_id}, ensure_ascii=False))
-    db.add(AuditLog(user_id=me.id, action="admin_ai_global_default_saved", details=f"mode={mode};service_id={service_id}"))
+    _audit(
+        db,
+        me,
+        action="admin_ai_global_default_saved",
+        details=f"mode={mode};service_id={service_id}",
+        module_code="admin",
+        entity_type="ai_selection",
+    )
     db.commit()
     return {
         "global_default": {
@@ -4181,7 +4405,15 @@ def admin_ai_global_default_save(payload: AiSelectionIn, me: User = Depends(get_
 @router.post("/admin/ai/global/services", response_model=AiServiceOut)
 def admin_ai_global_service_add(payload: AiServiceIn, me: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     row = _upsert_ai_service(db, user_id=None, payload=payload)
-    db.add(AuditLog(user_id=me.id, action="admin_ai_global_service_added", details=f"service_id={row.id};provider={row.provider}"))
+    _audit(
+        db,
+        me,
+        action="admin_ai_global_service_added",
+        details=f"service_id={row.id};provider={row.provider}",
+        module_code="admin",
+        entity_type="ai_service",
+        entity_id=str(row.id),
+    )
     db.commit()
     return _ai_service_to_out(row, scope="global")
 
@@ -4192,7 +4424,15 @@ def admin_ai_global_service_update(service_id: int, payload: AiServiceIn, me: Us
     if not row or row.user_id is not None:
         raise HTTPException(status_code=404, detail="AI сервис не найден")
     _update_ai_service_row(row, payload)
-    db.add(AuditLog(user_id=me.id, action="admin_ai_global_service_updated", details=f"service_id={row.id};provider={row.provider}"))
+    _audit(
+        db,
+        me,
+        action="admin_ai_global_service_updated",
+        details=f"service_id={row.id};provider={row.provider}",
+        module_code="admin",
+        entity_type="ai_service",
+        entity_id=str(row.id),
+    )
     db.commit()
     return _ai_service_to_out(row, scope="global")
 
@@ -4217,7 +4457,15 @@ def admin_ai_global_service_delete(service_id: int, me: User = Depends(get_admin
         pref.mode = "builtin"
         pref.service_id = None
     db.delete(row)
-    db.add(AuditLog(user_id=me.id, action="admin_ai_global_service_deleted", details=f"service_id={service_id}"))
+    _audit(
+        db,
+        me,
+        action="admin_ai_global_service_deleted",
+        details=f"service_id={service_id}",
+        module_code="admin",
+        entity_type="ai_service",
+        entity_id=str(service_id),
+    )
     db.commit()
     return MessageOut(message="AI сервис удален")
 
@@ -4247,12 +4495,14 @@ def admin_user_ai_select(
         mode=payload.mode,
         service_id=payload.service_id,
     )
-    db.add(
-        AuditLog(
-            user_id=me.id,
-            action="admin_user_ai_selected",
-            details=f"user_id={user_id};use_global_default={bool(payload.use_global_default)};mode={payload.mode};service_id={payload.service_id}",
-        )
+    _audit(
+        db,
+        me,
+        action="admin_user_ai_selected",
+        details=f"user_id={user_id};use_global_default={bool(payload.use_global_default)};mode={payload.mode};service_id={payload.service_id}",
+        module_code="admin",
+        entity_type="ai_selection",
+        entity_id=str(user_id),
     )
     db.commit()
     return _build_ai_profile_payload(db, user_id)
@@ -4269,7 +4519,15 @@ def admin_user_ai_service_add(
     if not target:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
     row = _upsert_ai_service(db, user_id=user_id, payload=payload)
-    db.add(AuditLog(user_id=me.id, action="admin_user_ai_service_added", details=f"user_id={user_id};service_id={row.id};provider={row.provider}"))
+    _audit(
+        db,
+        me,
+        action="admin_user_ai_service_added",
+        details=f"user_id={user_id};service_id={row.id};provider={row.provider}",
+        module_code="admin",
+        entity_type="ai_service",
+        entity_id=f"{user_id}:{row.id}",
+    )
     db.commit()
     return _ai_service_to_out(row, scope="user")
 
@@ -4289,7 +4547,15 @@ def admin_user_ai_service_update(
     if not row or row.user_id != user_id:
         raise HTTPException(status_code=404, detail="AI сервис не найден")
     _update_ai_service_row(row, payload)
-    db.add(AuditLog(user_id=me.id, action="admin_user_ai_service_updated", details=f"user_id={user_id};service_id={row.id};provider={row.provider}"))
+    _audit(
+        db,
+        me,
+        action="admin_user_ai_service_updated",
+        details=f"user_id={user_id};service_id={row.id};provider={row.provider}",
+        module_code="admin",
+        entity_type="ai_service",
+        entity_id=f"{user_id}:{row.id}",
+    )
     db.commit()
     return _ai_service_to_out(row, scope="user")
 
@@ -4304,14 +4570,24 @@ def admin_user_ai_service_delete(user_id: int, service_id: int, me: User = Depen
         raise HTTPException(status_code=404, detail="AI сервис не найден")
     _reset_ai_selection_if_deleted_service(db, user_id, service_id)
     db.delete(row)
-    db.add(AuditLog(user_id=me.id, action="admin_user_ai_service_deleted", details=f"user_id={user_id};service_id={service_id}"))
+    _audit(
+        db,
+        me,
+        action="admin_user_ai_service_deleted",
+        details=f"user_id={user_id};service_id={service_id}",
+        module_code="admin",
+        entity_type="ai_service",
+        entity_id=f"{user_id}:{service_id}",
+    )
     db.commit()
     return MessageOut(message="AI сервис удален")
 
 
-@router.get("/admin/audit", response_model=list[AuditLogOut])
+@router.get("/admin/audit", response_model=AuditLogPageOut)
 def admin_audit(
-    limit: int = 200,
+    limit: int = 0,
+    page_size: int = 100,
+    page: int = 1,
     action: str = "",
     module_code: str = "",
     status: str = "",
@@ -4324,7 +4600,10 @@ def admin_audit(
     _: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
-    clamped = max(10, min(limit, 1000))
+    safe_limit = int(limit or 0)
+    requested_page_size = safe_limit if safe_limit > 0 else int(page_size or 100)
+    clamped_page_size = max(10, min(requested_page_size, 500))
+    current_page = max(1, int(page or 1))
     query = select(AuditLog)
     safe_action = str(action or "").strip()
     safe_module = str(module_code or "").strip()
@@ -4362,7 +4641,25 @@ def admin_audit(
                 func.lower(cast(AuditLog.actor_member_id, String)).like(pattern),
             )
         )
-    return db.scalars(query.order_by(AuditLog.id.desc()).limit(clamped)).all()
+    total = int(db.scalar(select(func.count()).select_from(query.subquery())) or 0)
+    offset = max(0, (current_page - 1) * clamped_page_size)
+    rows = db.scalars(
+        query.order_by(AuditLog.id.desc()).offset(offset).limit(clamped_page_size)
+    ).all()
+    total_pages = max(1, math.ceil(total / clamped_page_size)) if total else 0
+    if total_pages and current_page > total_pages:
+        current_page = total_pages
+        offset = max(0, (current_page - 1) * clamped_page_size)
+        rows = db.scalars(
+            query.order_by(AuditLog.id.desc()).offset(offset).limit(clamped_page_size)
+        ).all()
+    return AuditLogPageOut(
+        rows=rows,
+        total=total,
+        page=current_page,
+        page_size=clamped_page_size,
+        total_pages=total_pages,
+    )
 
 
 def upsert_products(
@@ -5415,6 +5712,82 @@ def _filter_claimed_feedback_rows(
     return out
 
 
+def _sqlite_db_main_path() -> str:
+    raw_url = str(settings.database_url or "").strip()
+    if not raw_url.lower().startswith("sqlite"):
+        return ""
+    if raw_url.startswith("sqlite:////"):
+        return "/" + raw_url.split("sqlite:////", 1)[1]
+    if raw_url.startswith("sqlite:///"):
+        return os.path.abspath(raw_url.split("sqlite:///", 1)[1])
+    return ""
+
+
+def _estimate_audit_storage_bytes(db: Session) -> int:
+    if not str(settings.database_url or "").lower().startswith("sqlite"):
+        # For non-sqlite we currently skip byte-based retention.
+        return 0
+    page_size = int(db.scalar(text("PRAGMA page_size")) or 0)
+    page_count = int(db.scalar(text("PRAGMA page_count")) or 0)
+    free_count = int(db.scalar(text("PRAGMA freelist_count")) or 0)
+    used_bytes = max(0, page_count - free_count) * max(0, page_size)
+    main_path = _sqlite_db_main_path()
+    wal_bytes = 0
+    if main_path:
+        wal_path = f"{main_path}-wal"
+        try:
+            wal_bytes = os.path.getsize(wal_path) if os.path.exists(wal_path) else 0
+        except Exception:
+            wal_bytes = 0
+    return int(used_bytes + wal_bytes)
+
+
+def _prune_audit_storage_if_needed(db: Session) -> None:
+    global _AUDIT_PRUNE_LAST_CHECK_AT
+    now_ts = datetime.utcnow().timestamp()
+    if now_ts - _AUDIT_PRUNE_LAST_CHECK_AT < 15:
+        return
+    _AUDIT_PRUNE_LAST_CHECK_AT = now_ts
+
+    try:
+        used_bytes = _estimate_audit_storage_bytes(db)
+    except Exception:
+        return
+    if used_bytes <= AUDIT_STORAGE_MAX_BYTES:
+        return
+
+    cutoff = datetime.utcnow() - timedelta(days=31)
+    rounds = 0
+    while used_bytes > AUDIT_STORAGE_TARGET_BYTES and rounds < 120:
+        ids = db.scalars(
+            select(AuditLog.id)
+            .where(AuditLog.created_at < cutoff)
+            .order_by(AuditLog.id.asc())
+            .limit(AUDIT_PRUNE_BATCH)
+        ).all()
+        if not ids:
+            ids = db.scalars(
+                select(AuditLog.id)
+                .order_by(AuditLog.id.asc())
+                .limit(AUDIT_PRUNE_BATCH)
+            ).all()
+            if not ids:
+                break
+        db.execute(delete(AuditLog).where(AuditLog.id.in_(ids)))
+        db.flush()
+        rounds += 1
+        try:
+            used_bytes = _estimate_audit_storage_bytes(db)
+        except Exception:
+            break
+    # Keep WAL bounded after large prune cycles.
+    if rounds > 0:
+        try:
+            db.execute(text("PRAGMA wal_checkpoint(TRUNCATE)"))
+        except Exception:
+            pass
+
+
 def _audit(
     db: Session,
     user: User | None,
@@ -5451,6 +5824,7 @@ def _audit(
             user_agent=user_agent[:500],
         )
     )
+    _prune_audit_storage_if_needed(db)
 
 
 def _actor_scope(user: User) -> list[str]:

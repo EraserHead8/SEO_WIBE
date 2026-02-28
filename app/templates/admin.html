@@ -11,7 +11,7 @@
   <link rel="shortcut icon" href="/static/favicon.ico?v=20260228a" />
   <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png?v=20260228a" />
   <link rel="manifest" href="/static/site.webmanifest?v=20260228a" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260228a" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260228b" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -285,29 +285,35 @@
         <div class="panel">
           <h3>Журнал действий</h3>
           <div class="grid-6">
-            <select id="adminAuditLimit">
-              <option value="100">100</option>
-              <option value="200" selected>200</option>
+            <select id="adminAuditLimit" onchange="loadAdminAuditReset()">
+              <option value="50">50</option>
+              <option value="100" selected>100</option>
+              <option value="250">250</option>
               <option value="500">500</option>
             </select>
-            <input id="adminAuditActionFilter" placeholder="Действие (например: auth_login_success)" oninput="loadAdminAudit()" />
-            <input id="adminAuditModuleFilter" placeholder="Модуль (например: sales_stats)" oninput="loadAdminAudit()" />
-            <input id="adminAuditUserFilter" placeholder="user_id / actor email" oninput="loadAdminAudit()" />
-            <input id="adminAuditMemberFilter" placeholder="member_id сотрудника" oninput="loadAdminAudit()" />
-            <select id="adminAuditStatusFilter" onchange="loadAdminAudit()">
+            <input id="adminAuditActionFilter" placeholder="Действие (например: auth_login_success)" oninput="loadAdminAuditReset()" />
+            <input id="adminAuditModuleFilter" placeholder="Модуль (например: sales_stats)" oninput="loadAdminAuditReset()" />
+            <input id="adminAuditUserFilter" placeholder="user_id / actor email" oninput="loadAdminAuditReset()" />
+            <input id="adminAuditMemberFilter" placeholder="member_id сотрудника" oninput="loadAdminAuditReset()" />
+            <select id="adminAuditStatusFilter" onchange="loadAdminAuditReset()">
               <option value="">Все статусы</option>
               <option value="ok">ok</option>
               <option value="error">error</option>
             </select>
           </div>
           <div class="grid-5">
-            <input id="adminAuditDateFrom" type="date" onchange="loadAdminAudit()" />
-            <input id="adminAuditDateTo" type="date" onchange="loadAdminAudit()" />
-            <input id="adminAuditTextFilter" placeholder="Поиск по деталям / entity / actor / ip / ua" oninput="loadAdminAudit()" />
-            <button id="adminAuditRefreshBtn" onclick="loadAdminAudit()">Обновить журнал</button>
+            <input id="adminAuditDateFrom" type="date" onchange="loadAdminAuditReset()" />
+            <input id="adminAuditDateTo" type="date" onchange="loadAdminAuditReset()" />
+            <input id="adminAuditTextFilter" placeholder="Поиск по деталям / entity / actor / ip / ua" oninput="loadAdminAuditReset()" />
+            <button id="adminAuditRefreshBtn" onclick="loadAdminAuditReset()">Обновить журнал</button>
             <div></div>
           </div>
           <div id="adminAuditMeta" class="hint">-</div>
+          <div class="admin-audit-pager">
+            <button id="adminAuditPrevBtn" class="btn-secondary" onclick="adminAuditPrevPage()">Назад</button>
+            <div id="adminAuditPageInfo" class="hint">Страница 1 из 1</div>
+            <button id="adminAuditNextBtn" class="btn-secondary" onclick="adminAuditNextPage()">Далее</button>
+          </div>
           <div class="table-card">
             <table>
               <thead>
@@ -325,6 +331,6 @@
     </main>
   </section>
 
-  <script src="/static/admin.js?v=20260228a"></script>
+  <script src="/static/admin.js?v=20260228b"></script>
 </body>
 </html>

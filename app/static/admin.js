@@ -5,6 +5,10 @@ let adminModules = [];
 let adminCredentials = [];
 let adminUiSettings = null;
 let adminAuditRows = [];
+let adminAuditPage = 1;
+let adminAuditPageSize = 100;
+let adminAuditTotal = 0;
+let adminAuditTotalPages = 0;
 let adminAiGlobalState = null;
 let adminSelectedUserAiState = null;
 const adminUserProfileCache = new Map();
@@ -135,11 +139,29 @@ const AUDIT_ACTION_TITLES = {
   auth_login_failed: { ru: "Ошибка входа", en: "Login failed" },
   auth_logout: { ru: "Выход из системы", en: "Logout" },
   user_registered: { ru: "Регистрация пользователя", en: "User registration" },
+  credential_saved: { ru: "Сохранен API ключ", en: "API key saved" },
+  credential_tested: { ru: "Проверка API ключа", en: "API key tested" },
+  credential_deleted: { ru: "Удален API ключ", en: "API key deleted" },
+  keyword_added: { ru: "Добавлено ключевое слово", en: "Keyword added" },
+  keyword_deleted: { ru: "Удалено ключевое слово", en: "Keyword deleted" },
+  wb_questions_ai_settings_saved: { ru: "Сохранены AI-настройки вопросов", en: "Question AI settings saved" },
+  wb_ai_settings_saved: { ru: "Сохранены AI-настройки отзывов", en: "Review AI settings saved" },
   products_imported: { ru: "Импорт товаров", en: "Products import" },
   products_reloaded: { ru: "Полная перезагрузка товаров", en: "Products full reload" },
   product_details_read: { ru: "Просмотр деталей товара", en: "Product details read" },
   product_updated: { ru: "Обновление карточки товара", en: "Product card updated" },
   sales_stats_read: { ru: "Чтение статистики продаж", en: "Sales statistics read" },
+  wb_ads_campaigns_read: { ru: "Чтение кампаний WB Ads", en: "Read WB Ads campaigns" },
+  wb_ads_campaigns_sync: { ru: "Синхронизация кампаний WB Ads", en: "Sync WB Ads campaigns" },
+  ozon_ads_campaigns_read: { ru: "Чтение кампаний Ozon Ads", en: "Read Ozon Ads campaigns" },
+  ozon_ads_analytics_read: { ru: "Чтение аналитики Ozon Ads", en: "Read Ozon Ads analytics" },
+  wb_ads_campaigns_enrich: { ru: "Обогащение кампаний WB Ads", en: "Enrich WB Ads campaigns" },
+  wb_ads_rates_read: { ru: "Чтение ставок WB Ads", en: "Read WB Ads rates" },
+  wb_ads_campaign_details_read: { ru: "Чтение деталей кампании WB Ads", en: "Read WB Ads campaign details" },
+  wb_ads_balance_read: { ru: "Чтение баланса WB Ads", en: "Read WB Ads balance" },
+  wb_ads_action: { ru: "Действие по кампании WB Ads", en: "WB Ads campaign action" },
+  wb_ads_analytics_read: { ru: "Чтение аналитики WB Ads", en: "Read WB Ads analytics" },
+  wb_ads_recommendations_read: { ru: "Чтение рекомендаций WB Ads", en: "Read WB Ads recommendations" },
   wb_review_reply_generated: { ru: "Генерация ответа на отзыв", en: "Generate review reply" },
   wb_review_reply: { ru: "Публикация ответа на отзыв", en: "Publish review reply" },
   ozon_review_reply_generated: { ru: "Генерация ответа на отзыв (Ozon)", en: "Generate review reply (Ozon)" },
@@ -153,16 +175,37 @@ const AUDIT_ACTION_TITLES = {
   wb_return_detail_read: { ru: "Просмотр деталей возврата WB", en: "WB return detail read" },
   wb_return_action: { ru: "Действие по возврату", en: "Return action" },
   profile_updated: { ru: "Обновление профиля", en: "Profile updated" },
+  profile_ai_selected: { ru: "Выбор AI режима профиля", en: "Profile AI selection updated" },
+  profile_ai_service_added: { ru: "Добавлен AI сервис профиля", en: "Profile AI service added" },
+  profile_ai_service_updated: { ru: "Обновлен AI сервис профиля", en: "Profile AI service updated" },
+  profile_ai_service_deleted: { ru: "Удален AI сервис профиля", en: "Profile AI service deleted" },
   profile_team_member_added: { ru: "Добавлен сотрудник", en: "Employee added" },
   profile_team_member_updated: { ru: "Изменен сотрудник", en: "Employee updated" },
   profile_team_member_deleted: { ru: "Удален сотрудник", en: "Employee deleted" },
+  profile_password_changed: { ru: "Изменен пароль", en: "Password changed" },
+  profile_plan_changed: { ru: "Изменен тариф в профиле", en: "Profile plan changed" },
+  profile_plan_renewed: { ru: "Продлен тариф в профиле", en: "Profile plan renewed" },
+  billing_plan_changed: { ru: "Изменен тариф в биллинге", en: "Billing plan changed" },
+  billing_renewed: { ru: "Продлен тариф в биллинге", en: "Billing plan renewed" },
   admin_team_member_added: { ru: "Админ добавил сотрудника", en: "Admin added employee" },
   admin_team_member_updated: { ru: "Админ изменил сотрудника", en: "Admin updated employee" },
   admin_team_member_deleted: { ru: "Админ удалил сотрудника", en: "Admin deleted employee" },
   admin_user_profile_updated: { ru: "Админ обновил профиль пользователя", en: "Admin updated user profile" },
-  admin_user_plan_updated: { ru: "Админ обновил тариф пользователя", en: "Admin updated user plan" },
-  admin_user_password_reset: { ru: "Админ сменил пароль пользователя", en: "Admin reset user password" },
-  help_assistant_reply_generated: { ru: "AI помощник сформировал ответ", en: "AI assistant generated answer" },
+  admin_user_plan_changed: { ru: "Админ обновил тариф пользователя", en: "Admin updated user plan" },
+  admin_password_reset: { ru: "Админ сменил пароль пользователя", en: "Admin reset user password" },
+  admin_role_updated: { ru: "Админ изменил роль пользователя", en: "Admin changed user role" },
+  admin_user_deleted: { ru: "Админ удалил пользователя", en: "Admin deleted user" },
+  admin_module_updated: { ru: "Админ изменил доступ к модулю", en: "Admin changed module access" },
+  admin_credential_saved: { ru: "Админ сохранил API ключ", en: "Admin saved API key" },
+  admin_ai_global_default_saved: { ru: "Админ обновил AI default", en: "Admin updated AI default" },
+  admin_ai_global_service_added: { ru: "Админ добавил глобальный AI сервис", en: "Admin added global AI service" },
+  admin_ai_global_service_updated: { ru: "Админ обновил глобальный AI сервис", en: "Admin updated global AI service" },
+  admin_ai_global_service_deleted: { ru: "Админ удалил глобальный AI сервис", en: "Admin deleted global AI service" },
+  admin_user_ai_selected: { ru: "Админ изменил AI режим пользователя", en: "Admin changed user AI mode" },
+  admin_user_ai_service_added: { ru: "Админ добавил AI сервис пользователю", en: "Admin added user AI service" },
+  admin_user_ai_service_updated: { ru: "Админ обновил AI сервис пользователя", en: "Admin updated user AI service" },
+  admin_user_ai_service_deleted: { ru: "Админ удалил AI сервис пользователя", en: "Admin deleted user AI service" },
+  help_assistant_asked: { ru: "Запрос к AI помощнику", en: "AI assistant request" },
   admin_ui_settings_updated: { ru: "Изменены настройки оформления", en: "UI settings updated" },
 };
 
@@ -190,6 +233,10 @@ function humanAuditAction(actionRaw) {
   if (mapped && typeof mapped === "object") return mapped[adminLang] || mapped.ru || action;
   if (action.endsWith("_read")) return aTr(`Чтение: ${action.replaceAll("_", " ")}`, `Read: ${action.replaceAll("_", " ")}`);
   if (action.endsWith("_updated")) return aTr(`Обновление: ${action.replaceAll("_", " ")}`, `Update: ${action.replaceAll("_", " ")}`);
+  if (action.endsWith("_saved")) return aTr(`Сохранение: ${action.replaceAll("_", " ")}`, `Save: ${action.replaceAll("_", " ")}`);
+  if (action.endsWith("_deleted")) return aTr(`Удаление: ${action.replaceAll("_", " ")}`, `Delete: ${action.replaceAll("_", " ")}`);
+  if (action.endsWith("_added")) return aTr(`Добавление: ${action.replaceAll("_", " ")}`, `Add: ${action.replaceAll("_", " ")}`);
+  if (action.endsWith("_changed")) return aTr(`Изменение: ${action.replaceAll("_", " ")}`, `Change: ${action.replaceAll("_", " ")}`);
   return action.replaceAll("_", " ");
 }
 
@@ -370,6 +417,9 @@ function applyAdminLanguage() {
     ["#adminAuditUserFilter", aTr("user_id / actor email", "user_id / actor email")],
     ["#adminAuditMemberFilter", aTr("member_id сотрудника", "employee member_id")],
     ["#adminAuditTextFilter", aTr("Поиск по деталям / entity / actor / ip / ua", "Search in details / entity / actor / ip / ua")],
+    ["#adminAuditPageInfo", aTr("Страница 1 из 1", "Page 1 of 1")],
+    ["#adminAuditPrevBtn", aTr("Назад", "Prev")],
+    ["#adminAuditNextBtn", aTr("Далее", "Next")],
   ];
 
   for (const [selector, value] of staticTexts) {
@@ -453,6 +503,7 @@ function applyAdminLanguage() {
   renderAdminModulesTable();
   renderAdminCredentialsTable();
   renderAdminAuditTable();
+  renderAdminAuditPager();
   renderAdminAppearance();
   renderAdminAiTab();
 }
@@ -540,6 +591,10 @@ async function adminLogout() {
   adminModules = [];
   adminCredentials = [];
   adminAuditRows = [];
+  adminAuditPage = 1;
+  adminAuditPageSize = 100;
+  adminAuditTotal = 0;
+  adminAuditTotalPages = 0;
   adminAiGlobalState = null;
   adminSelectedUserAiState = null;
   adminUserProfileCache.clear();
@@ -1614,8 +1669,8 @@ function renderAdminAuditTable() {
     const uniqueModules = new Set(rows.map((row) => String(row.module_code || "").trim()).filter(Boolean));
     const uniqueActors = new Set(rows.map((row) => String(row.actor_email || "").trim()).filter(Boolean));
     meta.textContent = aTr(
-      `Событий: ${rows.length}. Уникальных действий: ${uniqueActions.size}. Модулей: ${uniqueModules.size}. Актеров: ${uniqueActors.size}.`,
-      `Events: ${rows.length}. Unique actions: ${uniqueActions.size}. Modules: ${uniqueModules.size}. Actors: ${uniqueActors.size}.`
+      `Показано: ${rows.length} из ${adminAuditTotal}. Уникальных действий: ${uniqueActions.size}. Модулей: ${uniqueModules.size}. Актеров: ${uniqueActors.size}.`,
+      `Showing: ${rows.length} of ${adminAuditTotal}. Unique actions: ${uniqueActions.size}. Modules: ${uniqueModules.size}. Actors: ${uniqueActors.size}.`
     );
   }
 
@@ -1664,8 +1719,29 @@ function renderAdminAuditTable() {
   }
 }
 
-async function loadAdminAudit() {
-  const limit = Number(document.getElementById("adminAuditLimit")?.value || 200);
+function renderAdminAuditPager() {
+  const info = document.getElementById("adminAuditPageInfo");
+  const prev = document.getElementById("adminAuditPrevBtn");
+  const next = document.getElementById("adminAuditNextBtn");
+  const safePages = Math.max(1, Number(adminAuditTotalPages || 1));
+  const safePage = Math.min(safePages, Math.max(1, Number(adminAuditPage || 1)));
+  if (info) {
+    info.textContent = aTr(
+      `Страница ${safePage} из ${safePages} • всего ${adminAuditTotal}`,
+      `Page ${safePage} of ${safePages} • total ${adminAuditTotal}`
+    );
+  }
+  if (prev) prev.disabled = safePage <= 1;
+  if (next) next.disabled = safePage >= safePages;
+}
+
+async function loadAdminAudit(options = {}) {
+  const resetPage = Boolean(options && options.resetPage);
+  const pageSize = Number(document.getElementById("adminAuditLimit")?.value || adminAuditPageSize || 100);
+  if (resetPage || pageSize !== adminAuditPageSize) {
+    adminAuditPage = 1;
+  }
+  adminAuditPageSize = Math.max(50, Math.min(pageSize, 500));
   const action = String(document.getElementById("adminAuditActionFilter")?.value || "").trim();
   const moduleCode = String(document.getElementById("adminAuditModuleFilter")?.value || "").trim();
   const status = String(document.getElementById("adminAuditStatusFilter")?.value || "").trim();
@@ -1676,7 +1752,8 @@ async function loadAdminAudit() {
   const memberFilter = String(document.getElementById("adminAuditMemberFilter")?.value || "").trim();
 
   const qp = new URLSearchParams();
-  qp.set("limit", String(Math.max(10, Math.min(limit, 1000))));
+  qp.set("page_size", String(adminAuditPageSize));
+  qp.set("page", String(Math.max(1, adminAuditPage)));
   if (action) qp.set("action", action);
   if (moduleCode) qp.set("module_code", moduleCode);
   if (status) qp.set("status", status);
@@ -1694,10 +1771,38 @@ async function loadAdminAudit() {
     return null;
   });
   if (!data) return;
-  adminAuditRows = Array.isArray(data) ? data : [];
+  if (Array.isArray(data)) {
+    adminAuditRows = data;
+    adminAuditTotal = data.length;
+    adminAuditTotalPages = data.length ? 1 : 0;
+    adminAuditPage = 1;
+  } else {
+    adminAuditRows = Array.isArray(data.rows) ? data.rows : [];
+    adminAuditTotal = Number(data.total || 0);
+    adminAuditPage = Math.max(1, Number(data.page || 1));
+    adminAuditPageSize = Math.max(50, Math.min(Number(data.page_size || adminAuditPageSize || 100), 500));
+    adminAuditTotalPages = Math.max(0, Number(data.total_pages || 0));
+  }
   const raw = document.getElementById("adminAuditView");
-  if (raw) raw.textContent = JSON.stringify(adminAuditRows, null, 2);
+  if (raw) raw.textContent = JSON.stringify(data, null, 2);
   renderAdminAuditTable();
+  renderAdminAuditPager();
+}
+
+async function loadAdminAuditReset() {
+  await loadAdminAudit({ resetPage: true });
+}
+
+async function adminAuditPrevPage() {
+  if (adminAuditPage <= 1) return;
+  adminAuditPage -= 1;
+  await loadAdminAudit();
+}
+
+async function adminAuditNextPage() {
+  if (adminAuditTotalPages > 0 && adminAuditPage >= adminAuditTotalPages) return;
+  adminAuditPage += 1;
+  await loadAdminAudit();
 }
 
 function renderAdminAppearance() {
@@ -1767,6 +1872,9 @@ window.adminLogin = adminLogin;
 window.adminLogout = adminLogout;
 window.loadAdminAll = loadAdminAll;
 window.loadAdminAudit = loadAdminAudit;
+window.loadAdminAuditReset = loadAdminAuditReset;
+window.adminAuditPrevPage = adminAuditPrevPage;
+window.adminAuditNextPage = adminAuditNextPage;
 window.adminSaveUiSettings = adminSaveUiSettings;
 window.adminSaveCredential2 = adminSaveCredential2;
 window.adminSaveAiGlobalDefault = adminSaveAiGlobalDefault;
