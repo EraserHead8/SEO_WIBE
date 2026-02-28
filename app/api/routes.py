@@ -2592,6 +2592,7 @@ def _resolve_product_marketplaces(value: str) -> list[str]:
 @router.post("/products/import", response_model=list[ProductOut])
 def import_products(payload: ImportProductsRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     marketplaces = _resolve_product_marketplaces(payload.marketplace)
+    import_all = bool(payload.import_all or not payload.articles)
     owner_member_id = _resolve_owner_member_id(db, user)
     upserted: list[Product] = []
     missing_keys: list[str] = []
@@ -2615,7 +2616,7 @@ def import_products(payload: ImportProductsRequest, user: User = Depends(get_cur
                 marketplace,
                 cred.api_key,
                 payload.articles,
-                payload.import_all,
+                import_all,
                 owner_member_id=owner_member_id,
                 actor_is_owner=_actor_is_owner(user),
             )
@@ -2626,7 +2627,7 @@ def import_products(payload: ImportProductsRequest, user: User = Depends(get_cur
         db,
         user,
         action="products_imported",
-        details=f"count={len(upserted)};marketplaces={','.join(marketplaces)};missing={','.join(missing_keys)}",
+        details=f"count={len(upserted)};marketplaces={','.join(marketplaces)};import_all={1 if import_all else 0};missing={','.join(missing_keys)}",
         module_code="products",
         entity_type="product",
     )
@@ -2637,6 +2638,7 @@ def import_products(payload: ImportProductsRequest, user: User = Depends(get_cur
 @router.post("/products/reload", response_model=list[ProductOut])
 def reload_products(payload: ProductReloadRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     marketplaces = _resolve_product_marketplaces(payload.marketplace)
+    import_all = True
     missing_keys: list[str] = []
     for marketplace in marketplaces:
         has_key = db.scalar(
@@ -2705,7 +2707,7 @@ def reload_products(payload: ProductReloadRequest, user: User = Depends(get_curr
                 marketplace,
                 cred.api_key,
                 payload.articles,
-                payload.import_all,
+                import_all,
                 owner_member_id=owner_member_id,
                 actor_is_owner=_actor_is_owner(user),
             )
@@ -2714,7 +2716,7 @@ def reload_products(payload: ProductReloadRequest, user: User = Depends(get_curr
         db,
         user,
         action="products_reloaded",
-        details=f"count={len(upserted)};marketplaces={','.join(marketplaces)};missing={','.join(missing_keys)}",
+        details=f"count={len(upserted)};marketplaces={','.join(marketplaces)};import_all=1;missing={','.join(missing_keys)}",
         module_code="products",
         entity_type="product",
     )
@@ -2741,6 +2743,7 @@ def reimport_products_alias(payload: ProductReloadRequest, user: User = Depends(
 @router.get("/products", response_model=ProductPageOut)
 def list_products(
     marketplace: str = "all",
+    category: str = "all",
     q: str = "",
     page: int = 1,
     page_size: int = 30,
@@ -2750,6 +2753,9 @@ def list_products(
     safe_market = str(marketplace or "all").strip().lower()
     if safe_market not in {"all", "wb", "ozon"}:
         safe_market = "all"
+    safe_category = str(category or "all").strip().lower()
+    if not safe_category:
+        safe_category = "all"
     safe_q = str(q or "").strip().lower()[:200]
     safe_page = max(1, int(page or 1))
     safe_page_size = int(page_size or 30)
@@ -2762,6 +2768,8 @@ def list_products(
     )
     if safe_market != "all":
         query = query.where(Product.marketplace == safe_market)
+    if safe_category != "all":
+        query = query.where(func.lower(Product.category_name) == safe_category)
     if safe_q:
         pattern = f"%{safe_q}%"
         query = query.where(
@@ -2769,9 +2777,26 @@ def list_products(
                 func.lower(Product.article).like(pattern),
                 func.lower(Product.name).like(pattern),
                 func.lower(Product.barcode).like(pattern),
+                func.lower(Product.category_name).like(pattern),
                 func.lower(Product.marketplace).like(pattern),
             )
         )
+
+    categories_query = select(Product.category_name).where(
+        Product.user_id == user.id,
+        _owned_by_actor_or_owner_filter(Product, user),
+    )
+    if safe_market != "all":
+        categories_query = categories_query.where(Product.marketplace == safe_market)
+    category_rows = db.scalars(categories_query.order_by(Product.category_name.asc())).all()
+    categories = sorted(
+        {
+            str(x).strip()
+            for x in category_rows
+            if str(x or "").strip()
+        },
+        key=lambda s: s.lower(),
+    )
 
     total = int(db.scalar(select(func.count()).select_from(query.subquery())) or 0)
     total_pages = max(1, math.ceil(total / safe_page_size)) if total else 0
@@ -2786,6 +2811,7 @@ def list_products(
             row.photo_url = f"https://placehold.co/120x120/e8eefc/1b2a52?text={row.marketplace.upper()}%20{row.id}"
     return ProductPageOut(
         rows=rows,
+        categories=categories[:1000],
         total=total,
         page=safe_page,
         page_size=safe_page_size,
@@ -2851,11 +2877,17 @@ def update_product(product_id: int, payload: ProductUpdateIn, user: User = Depen
     if not product:
         raise HTTPException(status_code=404, detail="Товар не найден")
     next_name = str(payload.name or "").strip()
+    next_barcode = str(payload.barcode or "").strip()
+    next_category = str(payload.category_name or "").strip()
     next_description = str(payload.current_description or "").strip()
     next_photo = str(payload.photo_url or "").strip()
     next_keywords = str(payload.target_keywords or "").strip()
     if next_name:
         product.name = next_name[:255]
+    if payload.barcode is not None:
+        product.barcode = next_barcode[:64]
+    if payload.category_name is not None:
+        product.category_name = next_category[:255]
     if payload.current_description is not None:
         product.current_description = next_description[:16000]
     if payload.photo_url is not None:
@@ -2867,6 +2899,8 @@ def update_product(product_id: int, payload: ProductUpdateIn, user: User = Depen
         f"product_id={product.id}",
         f"marketplace={product.marketplace}",
         f"name={'1' if bool(next_name) else '0'}",
+        f"barcode={'1' if bool(payload.barcode is not None) else '0'}",
+        f"category={'1' if bool(payload.category_name is not None) else '0'}",
         f"description={'1' if bool(payload.current_description is not None) else '0'}",
         f"photo={'1' if bool(payload.photo_url is not None) else '0'}",
         f"keywords={'1' if bool(payload.target_keywords is not None) else '0'}",
@@ -4790,6 +4824,7 @@ def upsert_products(
                 barcode=item.barcode,
                 photo_url=item.photo_url or f"https://placehold.co/120x120/e8eefc/1b2a52?text={marketplace.upper()}",
                 name=item.name,
+                category_name=item.category_name or "",
                 current_description=item.description,
                 target_keywords="",
             )
@@ -4800,6 +4835,8 @@ def upsert_products(
             product.barcode = item.barcode
             product.photo_url = item.photo_url or product.photo_url
             product.current_description = item.description
+            if item.category_name:
+                product.category_name = item.category_name[:255]
             if not product.owner_member_id:
                 product.owner_member_id = int(owner_member_id or 0) or None
         upserted.append(product)

@@ -190,8 +190,8 @@
         <div class="panel">
           <div class="grid-6 reviews-controls">
             <select id="importMarketplace" onchange="onProductsFilterChanged()"><option value="all">Все маркетплейсы</option><option value="wb">WB</option><option value="ozon">Ozon</option></select>
+            <select id="productCategoryFilter" onchange="onProductsFilterChanged()"><option value="all">Все категории</option></select>
             <input id="articles" placeholder="Артикулы через запятую (или пусто)" />
-            <label class="check"><input id="importAll" type="checkbox" /> Импортировать все</label>
             <button id="productsImportBtn" class="icon-only-btn" type="button" data-tip="Импорт" onclick="importProducts()">&#8681;</button>
             <button id="productsReloadBtn" class="btn-secondary icon-only-btn" type="button" data-tip="Перезагрузить базу" onclick="reloadProducts()">&#10227;</button>
             <button id="productsSelectAllBtn" class="btn-secondary icon-only-btn" type="button" data-tip="Выбрать все" onclick="selectAllProducts()">&#9745;</button>
@@ -201,7 +201,7 @@
           </div>
         </div>
 
-        <div class="products-split">
+        <div class="products-catalog-wrap">
           <div class="table-card">
             <div class="products-pager products-pager-top">
               <div class="products-pager-left">
@@ -223,7 +223,7 @@
             </div>
             <table class="products-table">
               <thead>
-                <tr><th></th><th>Фото</th><th>ID</th><th>МП</th><th>Артикул</th><th>Баркод</th><th>Название</th><th>Позиция</th></tr>
+                <tr><th></th><th>Фото</th><th>ID</th><th>МП</th><th>Категория</th><th>Артикул</th><th>Баркод</th><th>Название</th><th>Позиция</th><th></th></tr>
               </thead>
               <tbody id="productsTable"></tbody>
             </table>
@@ -246,33 +246,6 @@
               </div>
             </div>
           </div>
-          <aside class="preview-card product-preview-card">
-            <h3>Карточка товара</h3>
-            <div id="productPreviewCard" class="hint">Выберите товар в таблице.</div>
-            <div class="panel trend-panel product-trend-panel">
-              <div class="panel-head">
-                <strong>Тренд позиции (21 день)</strong>
-                <span class="hint" id="productTrendMeta">-</span>
-              </div>
-              <svg id="productTrendChart" class="trend-chart mini" viewBox="0 0 720 150" preserveAspectRatio="none"></svg>
-            </div>
-            <div class="panel product-details-panel">
-              <h4>Детали и редактирование</h4>
-              <div id="productDetailsWarn" class="hint">-</div>
-              <div id="productDetailsPhotos" class="product-details-photos"></div>
-              <div class="grid-1">
-                <input id="productDetailName" placeholder="Название товара" />
-                <textarea id="productDetailDescription" rows="4" placeholder="Описание"></textarea>
-                <input id="productDetailPhotoUrl" placeholder="URL главного фото" />
-                <textarea id="productDetailKeywords" rows="3" placeholder="Целевые ключевые слова через запятую"></textarea>
-              </div>
-              <div class="actions">
-                <button onclick="saveSelectedProductDetails()">Сохранить изменения</button>
-                <button class="btn-secondary" onclick="loadSelectedProductDetails()">Обновить детали</button>
-              </div>
-              <pre id="productDetailRaw">-</pre>
-            </div>
-          </aside>
         </div>
         </div>
         <div id="productsSubtabSeo" class="hidden"></div>
@@ -930,8 +903,54 @@
     </div>
   </div>
 
+  <div id="productViewModal" class="campaign-modal hidden">
+    <div class="campaign-modal-card product-modal-card">
+      <div class="campaign-modal-head">
+        <h3>Карточка товара</h3>
+        <button class="campaign-close" onclick="closeProductViewModal()">✕</button>
+      </div>
+      <div id="productViewMeta" class="hint">-</div>
+      <div id="productViewWarn" class="hint">-</div>
+      <div id="productViewPhotos" class="product-modal-photos"></div>
+      <div id="productViewAttrs" class="product-modal-attrs"></div>
+      <div class="panel trend-panel product-modal-trend">
+        <div class="panel-head">
+          <strong>Тренд позиции (21 день)</strong>
+          <span class="hint" id="productViewTrendMeta">-</span>
+        </div>
+        <svg id="productViewTrendChart" class="trend-chart mini" viewBox="0 0 720 150" preserveAspectRatio="none"></svg>
+      </div>
+      <details>
+        <summary>RAW</summary>
+        <pre id="productViewRaw">-</pre>
+      </details>
+    </div>
+  </div>
+
+  <div id="productEditModal" class="campaign-modal hidden">
+    <div class="campaign-modal-card product-modal-card">
+      <div class="campaign-modal-head">
+        <h3>Редактировать товар</h3>
+        <button class="campaign-close" onclick="closeProductEditModal()">✕</button>
+      </div>
+      <div id="productEditHint" class="hint">-</div>
+      <div class="grid-1">
+        <input id="productEditName" placeholder="Название товара" />
+        <input id="productEditCategory" placeholder="Категория" />
+        <input id="productEditBarcode" placeholder="Баркод" />
+        <input id="productEditPhotoUrl" placeholder="URL главного фото" />
+        <textarea id="productEditDescription" rows="6" placeholder="Описание"></textarea>
+        <textarea id="productEditKeywords" rows="4" placeholder="Целевые ключевые слова через запятую"></textarea>
+      </div>
+      <div class="actions">
+        <button type="button" onclick="saveProductEditModal()">Сохранить</button>
+        <button class="btn-secondary" type="button" onclick="closeProductEditModal()">Отмена</button>
+      </div>
+    </div>
+  </div>
+
   <div id="hoverTip" class="hover-tip hidden"></div>
 
-  <script src="/static/app.js?v=20260228c"></script>
+  <script src="/static/app.js?v=20260228d"></script>
 </body>
 </html>

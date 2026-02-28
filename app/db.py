@@ -40,6 +40,8 @@ def run_lightweight_migrations():
             conn.execute(text("ALTER TABLE products ADD COLUMN barcode VARCHAR(64) DEFAULT ''"))
         if product_cols and "photo_url" not in product_cols:
             conn.execute(text("ALTER TABLE products ADD COLUMN photo_url VARCHAR(500) DEFAULT ''"))
+        if product_cols and "category_name" not in product_cols:
+            conn.execute(text("ALTER TABLE products ADD COLUMN category_name VARCHAR(255) DEFAULT ''"))
         if product_cols and "owner_member_id" not in product_cols:
             conn.execute(text("ALTER TABLE products ADD COLUMN owner_member_id INTEGER"))
 
@@ -177,6 +179,7 @@ def run_lightweight_migrations():
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_work_item_claims_user_scope ON work_item_claims (user_id, module_code, item_type, item_external_id)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_audit_logs_created_user_action ON audit_logs (created_at, user_id, action)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_products_owner_member_id ON products (owner_member_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_products_category_name ON products (category_name)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_seo_jobs_owner_member_id ON seo_jobs (owner_member_id)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_user_keywords_owner_member_id ON user_keywords (owner_member_id)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_user_knowledge_docs_owner_member_id ON user_knowledge_docs (owner_member_id)"))

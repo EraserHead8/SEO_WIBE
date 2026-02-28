@@ -54,6 +54,7 @@ class Product(Base):
     barcode: Mapped[str] = mapped_column(String(64), default="", index=True)
     photo_url: Mapped[str] = mapped_column(String(500), default="")
     name: Mapped[str] = mapped_column(String(255))
+    category_name: Mapped[str] = mapped_column(String(255), default="", index=True)
     current_description: Mapped[str] = mapped_column(Text, default="")
     target_keywords: Mapped[str] = mapped_column(Text, default="")
     last_position: Mapped[int | None] = mapped_column(Integer, nullable=True)

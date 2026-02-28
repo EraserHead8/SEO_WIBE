@@ -11,6 +11,8 @@ let productTotalPages = 0;
 const PRODUCT_PAGE_SIZE_OPTIONS = [30, 50, 100, 200, 500, 1000];
 let selectedProductId = null;
 let selectedProductDetails = null;
+let activeProductViewId = 0;
+let activeProductEditId = 0;
 let autoKeywordProductId = null;
 let enabledModules = new Set();
 let wbReviewRows = [];
@@ -494,13 +496,6 @@ function applyUiLanguage() {
   setText("#sales .panel:nth-of-type(3) .quick-actions button:nth-of-type(2)", isEn ? "Run SEO Generation" : "Запустить SEO-генерацию");
   setText("#sales .panel:nth-of-type(3) .quick-actions button:nth-of-type(3)", isEn ? "Check All Rankings" : "Проверить позиции всех");
   applyProductToolbarIcons(isEn);
-  const importAllLabel = document.querySelector("#products .panel .grid-6 .check");
-  if (importAllLabel) {
-    const input = importAllLabel.querySelector("input");
-    importAllLabel.textContent = "";
-    if (input) importAllLabel.appendChild(input);
-    importAllLabel.append(document.createTextNode(` ${isEn ? "Import all" : "Импортировать все"}`));
-  }
   const importMarketplace = document.getElementById("importMarketplace");
   if (importMarketplace) {
     const currentValue = String(importMarketplace.value || "all");
@@ -511,6 +506,12 @@ function applyUiLanguage() {
     `;
     if ([...importMarketplace.options].some((opt) => opt.value === currentValue)) {
       importMarketplace.value = currentValue;
+    }
+  }
+  const categoryFilter = document.getElementById("productCategoryFilter");
+  if (categoryFilter && categoryFilter.options.length) {
+    if (categoryFilter.options[0]?.value === "all") {
+      categoryFilter.options[0].textContent = isEn ? "All categories" : "Все категории";
     }
   }
   setText("label[for='productPageSizeTop']", isEn ? "Rows per page" : "На странице");
@@ -4495,11 +4496,12 @@ function renderAdsRecommendationsRows() {
   }
 }
 
-function getImportPayload() {
+function getImportPayload(options = {}) {
   const marketplace = document.getElementById("importMarketplace").value;
   const rawArticles = document.getElementById("articles").value.trim();
   const articles = rawArticles ? rawArticles.split(",").map((x) => x.trim()).filter(Boolean) : [];
-  const import_all = document.getElementById("importAll").checked;
+  const forceAll = Boolean(options.forceAll);
+  const import_all = forceAll || articles.length === 0;
   return { marketplace, articles, import_all };
 }
 
@@ -4507,6 +4509,31 @@ function normalizeProductPageSize(rawValue) {
   const num = Number(rawValue || 0);
   if (PRODUCT_PAGE_SIZE_OPTIONS.includes(num)) return num;
   return 30;
+}
+
+function syncCategoryFilterOptions(categories = []) {
+  const selectEl = document.getElementById("productCategoryFilter");
+  if (!selectEl) return false;
+  const prev = String(selectEl.value || "all");
+  const normalized = [];
+  const seen = new Set();
+  for (const raw of Array.isArray(categories) ? categories : []) {
+    const value = String(raw || "").trim();
+    if (!value) continue;
+    const key = value.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push(value);
+  }
+  normalized.sort((a, b) => a.localeCompare(b, "ru", { sensitivity: "base" }));
+  const allLabel = currentLang === "en" ? "All categories" : "Все категории";
+  const optionsHtml = [`<option value="all">${escapeHtml(allLabel)}</option>`]
+    .concat(normalized.map((x) => `<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`))
+    .join("");
+  selectEl.innerHTML = optionsHtml;
+  const wanted = prev && [...selectEl.options].some((o) => o.value === prev) ? prev : "all";
+  selectEl.value = wanted;
+  return wanted !== prev;
 }
 
 function syncProductsPagerControls() {
@@ -4593,7 +4620,7 @@ async function importProducts() {
 
 async function reloadProducts() {
   if (!confirm(tr("Очистить локальную базу товаров по выбранному маркетплейсу и загрузить заново?", "Clear local catalog for selected marketplace and reload?"))) return;
-  const payload = getImportPayload();
+  const payload = getImportPayload({ forceAll: true });
   const body = JSON.stringify(payload);
   const data = await withBusy(
     tr("Обновляем локальную базу товаров…", "Refreshing local catalog..."),
@@ -4622,6 +4649,7 @@ async function reloadProducts() {
 
 async function loadProducts() {
   const marketplace = String(document.getElementById("importMarketplace")?.value || "all").trim().toLowerCase();
+  const category = String(document.getElementById("productCategoryFilter")?.value || "all").trim();
   const filter = (document.getElementById("productFilter")?.value || "").trim().toLowerCase();
   productPageSize = normalizeProductPageSize(
     document.getElementById("productPageSizeTop")?.value || document.getElementById("productPageSizeBottom")?.value || productPageSize
@@ -4629,20 +4657,41 @@ async function loadProducts() {
 
   const qp = new URLSearchParams();
   qp.set("marketplace", ["all", "wb", "ozon"].includes(marketplace) ? marketplace : "all");
+  if (category && category.toLowerCase() !== "all") qp.set("category", category);
   qp.set("page", String(Math.max(1, Number(productPage || 1))));
   qp.set("page_size", String(productPageSize));
   if (filter) qp.set("q", filter);
 
   const data = await requestJson(`/api/products?${qp.toString()}`, { headers: authHeaders() }).catch(() => null);
-  if (!data) return;
+  if (!data) {
+    currentProducts = [];
+    productTotal = 0;
+    productPage = 1;
+    productTotalPages = 0;
+    syncCategoryFilterOptions([]);
+    syncProductsPagerControls();
+    const tbodyError = document.getElementById("productsTable");
+    if (tbodyError) {
+      tbodyError.innerHTML = `<tr><td colspan="10">${escapeHtml(tr("Не удалось загрузить товары. Проверьте API ключи и фильтры.", "Failed to load products. Check API keys and filters."))}</td></tr>`;
+    }
+    markModuleLoaded("products");
+    return;
+  }
 
   if (Array.isArray(data)) {
     currentProducts = data;
+    syncCategoryFilterOptions([]);
     productTotal = data.length;
     productPage = 1;
     productTotalPages = data.length ? 1 : 0;
   } else {
     currentProducts = Array.isArray(data.rows) ? data.rows : [];
+    const categoryReset = syncCategoryFilterOptions(Array.isArray(data.categories) ? data.categories : []);
+    if (categoryReset) {
+      productPage = 1;
+      await loadProducts();
+      return;
+    }
     productTotal = Math.max(0, Number(data.total || currentProducts.length));
     productPage = Math.max(1, Number(data.page || productPage || 1));
     productPageSize = normalizeProductPageSize(data.page_size || productPageSize);
@@ -4655,6 +4704,7 @@ async function loadProducts() {
 
   for (const p of currentProducts) {
     const rowEl = document.createElement("tr");
+    rowEl.dataset.productId = String(p.id);
     if (p.id === selectedProductId) rowEl.classList.add("selected-row");
     const tdSelect = document.createElement("td");
     const checkbox = document.createElement("input");
@@ -4687,6 +4737,8 @@ async function loadProducts() {
     tdId.textContent = String(p.id);
     const tdMp = document.createElement("td");
     tdMp.textContent = p.marketplace;
+    const tdCategory = document.createElement("td");
+    tdCategory.textContent = p.category_name || "-";
     const tdArticle = document.createElement("td");
     tdArticle.textContent = p.article;
     const tdBarcode = document.createElement("td");
@@ -4695,12 +4747,34 @@ async function loadProducts() {
     tdName.textContent = p.name;
     const tdPos = document.createElement("td");
     tdPos.textContent = formatPositionValue(p.last_position);
+    const tdActions = document.createElement("td");
+    tdActions.className = "product-actions-cell";
+    tdActions.innerHTML = `
+      <div class="product-row-actions">
+        <button class="btn-secondary btn-row-action" type="button">${escapeHtml(tr("Посмотреть", "View"))}</button>
+        <button class="btn-row-action" type="button">${escapeHtml(tr("Редактировать", "Edit"))}</button>
+      </div>
+    `;
+    const [viewBtn, editBtn] = tdActions.querySelectorAll("button");
+    if (viewBtn) {
+      viewBtn.onclick = (e) => {
+        e.stopPropagation();
+        openProductViewModal(p.id);
+      };
+    }
+    if (editBtn) {
+      editBtn.onclick = (e) => {
+        e.stopPropagation();
+        openProductEditModal(p.id);
+      };
+    }
 
-    rowEl.append(tdSelect, tdPhoto, tdId, tdMp, tdArticle, tdBarcode, tdName, tdPos);
+    rowEl.append(tdSelect, tdPhoto, tdId, tdMp, tdCategory, tdArticle, tdBarcode, tdName, tdPos, tdActions);
     rowEl.onclick = () => {
       selectedProductId = p.id;
       suggestKeywordsForSelectedProduct(p.id);
-      loadProducts();
+      for (const row of tbody.querySelectorAll("tr")) row.classList.remove("selected-row");
+      rowEl.classList.add("selected-row");
     };
     tbody.appendChild(rowEl);
   }
@@ -4709,19 +4783,164 @@ async function loadProducts() {
     selectedProductId = currentProducts[0].id;
   }
   const selected = currentProducts.find((x) => x.id === selectedProductId) || currentProducts[0] || null;
-  if (selected?.id) {
-    selectedProductId = selected.id;
-  } else {
-    selectedProductId = null;
+  selectedProductId = selected?.id || null;
+  if (selectedProductId) {
+    suggestKeywordsForSelectedProduct(selectedProductId);
+    const row = [...tbody.querySelectorAll("tr")]
+      .find((el) => Number(el.dataset.productId || 0) === Number(selectedProductId));
+    if (row) row.classList.add("selected-row");
   }
-  await renderProductPreview(selected || null);
-  if (selected?.id) {
-    suggestKeywordsForSelectedProduct(selected.id);
-    await loadSelectedProductDetails(selected.id, { silent: true });
-  } else {
-    renderProductDetailsPane(null, null);
+  if (!currentProducts.length) {
+    tbody.innerHTML = `<tr><td colspan="10">${escapeHtml(tr("Товары не найдены", "No products found"))}</td></tr>`;
   }
   markModuleLoaded("products");
+}
+
+function closeProductViewModal() {
+  const modal = document.getElementById("productViewModal");
+  if (modal) modal.classList.add("hidden");
+  activeProductViewId = 0;
+}
+
+function closeProductEditModal() {
+  const modal = document.getElementById("productEditModal");
+  if (modal) modal.classList.add("hidden");
+  activeProductEditId = 0;
+}
+
+async function fetchProductDetailsById(productId, opts = {}) {
+  const id = Number(productId || 0);
+  if (!id) return null;
+  const silent = Boolean(opts?.silent);
+  const data = await requestJson(`/api/products/${id}/details`, {
+    headers: authHeaders(),
+    timeoutMs: 90000,
+  }).catch((e) => {
+    if (!silent) alert(e.message);
+    return null;
+  });
+  return data;
+}
+
+function renderProductAttrRows(attributes) {
+  const rows = Object.entries(attributes || {})
+    .filter(([k, v]) => String(k || "").trim() && String(v || "").trim())
+    .map(([k, v]) => `<div class="product-modal-attr"><span>${escapeHtml(String(k))}</span><b>${escapeHtml(String(v))}</b></div>`)
+    .join("");
+  if (rows) return rows;
+  return `<div class="hint">${escapeHtml(tr("Атрибуты не найдены.", "No attributes found."))}</div>`;
+}
+
+async function openProductViewModal(productId) {
+  const id = Number(productId || 0);
+  if (!id) return;
+  const modal = document.getElementById("productViewModal");
+  if (!modal) return;
+  activeProductViewId = id;
+  const product = currentProducts.find((x) => Number(x.id) === id) || null;
+  const name = product?.name || tr("Товар", "Product");
+  const titleEl = modal.querySelector("h3");
+  if (titleEl) titleEl.textContent = `${tr("Карточка товара", "Product card")}: ${name}`;
+  modal.classList.remove("hidden");
+  const metaEl = document.getElementById("productViewMeta");
+  const warnEl = document.getElementById("productViewWarn");
+  const photosEl = document.getElementById("productViewPhotos");
+  const attrsEl = document.getElementById("productViewAttrs");
+  const rawEl = document.getElementById("productViewRaw");
+  if (metaEl) {
+    metaEl.textContent = product
+      ? `${tr("ID", "ID")}: ${product.id} • ${tr("МП", "MP")}: ${String(product.marketplace || "").toUpperCase()} • ${tr("Категория", "Category")}: ${product.category_name || "-"}`
+      : "-";
+  }
+  if (warnEl) warnEl.textContent = tr("Загружаем детали карточки…", "Loading product details...");
+  if (photosEl) photosEl.innerHTML = "";
+  if (attrsEl) attrsEl.innerHTML = "";
+  if (rawEl) rawEl.textContent = "-";
+
+  const details = await fetchProductDetailsById(id, { silent: true });
+  if (!details || activeProductViewId !== id) return;
+  const photos = Array.isArray(details.photos) ? details.photos.filter((x) => String(x || "").trim()) : [];
+  const fallback = product?.photo_url ? [product.photo_url] : [];
+  const allPhotos = photos.length ? photos : fallback;
+  if (photosEl) {
+    photosEl.innerHTML = allPhotos.length
+      ? allPhotos.map((url, idx) => `<img src="${escapeHtml(String(url))}" alt="product-photo-${idx + 1}" loading="lazy" class="product-detail-photo">`).join("")
+      : `<div class="hint">${escapeHtml(tr("Фотографии не найдены.", "No photos found."))}</div>`;
+  }
+  if (warnEl) {
+    const warnings = Array.isArray(details.warnings) ? details.warnings.filter(Boolean) : [];
+    warnEl.textContent = warnings.length ? warnings.join(" | ") : tr("Детали загружены.", "Details loaded.");
+  }
+  if (attrsEl) attrsEl.innerHTML = renderProductAttrRows(details.attributes || {});
+  if (rawEl) rawEl.textContent = JSON.stringify(details.raw || {}, null, 2);
+  const points = await loadTrend({ productId: id, days: 21 });
+  if (activeProductViewId !== id) return;
+  renderTrendChart("productViewTrendChart", "productViewTrendMeta", points);
+}
+
+async function openProductEditModal(productId) {
+  const id = Number(productId || 0);
+  if (!id) return;
+  const modal = document.getElementById("productEditModal");
+  if (!modal) return;
+  activeProductEditId = id;
+  const product = currentProducts.find((x) => Number(x.id) === id) || null;
+  const titleEl = modal.querySelector("h3");
+  if (titleEl) titleEl.textContent = `${tr("Редактировать товар", "Edit product")}: ${product?.name || id}`;
+  const hintEl = document.getElementById("productEditHint");
+  if (hintEl) hintEl.textContent = tr("Загружаем данные карточки…", "Loading product data...");
+  modal.classList.remove("hidden");
+
+  const details = await fetchProductDetailsById(id, { silent: true });
+  if (activeProductEditId !== id) return;
+  const base = details?.product || product || {};
+  const warnings = Array.isArray(details?.warnings) ? details.warnings.filter(Boolean) : [];
+  if (hintEl) {
+    hintEl.textContent = warnings.length
+      ? warnings.join(" | ")
+      : tr("Можно редактировать и сохранять изменения.", "You can edit and save changes.");
+  }
+  const setValue = (idValue, value) => {
+    const el = document.getElementById(idValue);
+    if (el) el.value = String(value || "");
+  };
+  setValue("productEditName", base.name);
+  setValue("productEditCategory", base.category_name);
+  setValue("productEditBarcode", base.barcode);
+  setValue("productEditPhotoUrl", base.photo_url);
+  setValue("productEditDescription", base.current_description);
+  setValue("productEditKeywords", base.target_keywords);
+}
+
+async function saveProductEditModal() {
+  const id = Number(activeProductEditId || 0);
+  if (!id) return;
+  const payload = {
+    name: String(document.getElementById("productEditName")?.value || "").trim(),
+    category_name: String(document.getElementById("productEditCategory")?.value || "").trim(),
+    barcode: String(document.getElementById("productEditBarcode")?.value || "").trim(),
+    photo_url: String(document.getElementById("productEditPhotoUrl")?.value || "").trim(),
+    current_description: String(document.getElementById("productEditDescription")?.value || ""),
+    target_keywords: String(document.getElementById("productEditKeywords")?.value || "").trim(),
+  };
+  const updated = await withBusy(
+    tr("Сохраняем изменения карточки товара…", "Saving product card changes..."),
+    () => requestJson(`/api/products/${id}`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify(payload),
+      timeoutMs: 120000,
+    }),
+    tr("Если изменено описание, сервис отправит его в маркетплейс через API.", "If description changed, service also sends it to marketplace API.")
+  ).catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  if (!updated) return;
+  invalidateModuleCache("products", "seo");
+  await loadProducts();
+  closeProductEditModal();
+  alert(tr("Карточка товара обновлена.", "Product card updated."));
 }
 
 function toggleProduct(id, checked) {
@@ -6609,6 +6828,28 @@ if (campaignDetailModal) {
   document.addEventListener("keydown", (e) => {
     if (campaignDetailModal.classList.contains("hidden")) return;
     if (e.key === "Escape") closeCampaignDetailModal();
+  });
+}
+
+const productViewModal = document.getElementById("productViewModal");
+if (productViewModal) {
+  productViewModal.addEventListener("click", (e) => {
+    if (e.target === productViewModal) closeProductViewModal();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (productViewModal.classList.contains("hidden")) return;
+    if (e.key === "Escape") closeProductViewModal();
+  });
+}
+
+const productEditModal = document.getElementById("productEditModal");
+if (productEditModal) {
+  productEditModal.addEventListener("click", (e) => {
+    if (e.target === productEditModal) closeProductEditModal();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (productEditModal.classList.contains("hidden")) return;
+    if (e.key === "Escape") closeProductEditModal();
   });
 }
 

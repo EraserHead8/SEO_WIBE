@@ -71,6 +71,7 @@ class ProductOut(BaseModel):
     barcode: str
     photo_url: str
     name: str
+    category_name: str = ""
     current_description: str
     target_keywords: str
     last_position: int | None
@@ -78,6 +79,8 @@ class ProductOut(BaseModel):
 
 class ProductUpdateIn(BaseModel):
     name: str | None = None
+    barcode: str | None = None
+    category_name: str | None = None
     current_description: str | None = None
     photo_url: str | None = None
     target_keywords: str | None = None
@@ -93,6 +96,7 @@ class ProductDetailOut(BaseModel):
 
 class ProductPageOut(BaseModel):
     rows: list[ProductOut] = Field(default_factory=list)
+    categories: list[str] = Field(default_factory=list)
     total: int = 0
     page: int = 1
     page_size: int = 30
