@@ -2753,14 +2753,16 @@ def list_products(
     safe_market = str(marketplace or "all").strip().lower()
     if safe_market not in {"all", "wb", "ozon"}:
         safe_market = "all"
-    safe_category = str(category or "all").strip().lower()
+    safe_category = str(category or "all").strip()
     if not safe_category:
         safe_category = "all"
+    safe_category_key = safe_category.lower()
     safe_q = str(q or "").strip().lower()[:200]
     safe_page = max(1, int(page or 1))
     safe_page_size = int(page_size or 30)
     if safe_page_size not in PRODUCT_PAGE_SIZE_OPTIONS:
         safe_page_size = 30
+    normalized_category_name = func.lower(func.trim(func.coalesce(Product.category_name, "")))
 
     query = select(Product).where(
         Product.user_id == user.id,
@@ -2768,35 +2770,40 @@ def list_products(
     )
     if safe_market != "all":
         query = query.where(Product.marketplace == safe_market)
-    if safe_category != "all":
-        query = query.where(func.lower(Product.category_name) == safe_category)
+    if safe_market != "all" and safe_category_key != "all":
+        query = query.where(normalized_category_name == safe_category_key)
     if safe_q:
         pattern = f"%{safe_q}%"
         query = query.where(
             or_(
-                func.lower(Product.article).like(pattern),
-                func.lower(Product.name).like(pattern),
-                func.lower(Product.barcode).like(pattern),
-                func.lower(Product.category_name).like(pattern),
-                func.lower(Product.marketplace).like(pattern),
+                func.lower(func.coalesce(Product.article, "")).like(pattern),
+                func.lower(func.coalesce(Product.name, "")).like(pattern),
+                func.lower(func.coalesce(Product.barcode, "")).like(pattern),
+                normalized_category_name.like(pattern),
+                func.lower(func.coalesce(Product.marketplace, "")).like(pattern),
             )
         )
 
-    categories_query = select(Product.category_name).where(
-        Product.user_id == user.id,
-        _owned_by_actor_or_owner_filter(Product, user),
-    )
+    categories: list[str] = []
     if safe_market != "all":
-        categories_query = categories_query.where(Product.marketplace == safe_market)
-    category_rows = db.scalars(categories_query.order_by(Product.category_name.asc())).all()
-    categories = sorted(
-        {
-            str(x).strip()
-            for x in category_rows
-            if str(x or "").strip()
-        },
-        key=lambda s: s.lower(),
-    )
+        categories_query = (
+            select(func.trim(Product.category_name))
+            .where(
+                Product.user_id == user.id,
+                _owned_by_actor_or_owner_filter(Product, user),
+                Product.marketplace == safe_market,
+            )
+            .order_by(func.lower(func.trim(Product.category_name)).asc())
+        )
+        category_rows = db.scalars(categories_query).all()
+        categories = sorted(
+            {
+                str(x).strip()
+                for x in category_rows
+                if str(x or "").strip()
+            },
+            key=lambda s: s.lower(),
+        )
 
     total = int(db.scalar(select(func.count()).select_from(query.subquery())) or 0)
     total_pages = max(1, math.ceil(total / safe_page_size)) if total else 0

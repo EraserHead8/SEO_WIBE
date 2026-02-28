@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260228c" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260228d" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -188,10 +188,9 @@
         </div>
         <div id="productsSubtabCatalog">
         <div class="panel">
-          <div class="grid-6 reviews-controls">
+          <div class="grid-5 products-controls">
             <select id="importMarketplace" onchange="onProductsFilterChanged()"><option value="all">Все маркетплейсы</option><option value="wb">WB</option><option value="ozon">Ozon</option></select>
             <select id="productCategoryFilter" onchange="onProductsFilterChanged()"><option value="all">Все категории</option></select>
-            <input id="articles" placeholder="Артикулы через запятую (или пусто)" />
             <button id="productsImportBtn" class="icon-only-btn" type="button" data-tip="Импорт" onclick="importProducts()">&#8681;</button>
             <button id="productsReloadBtn" class="btn-secondary icon-only-btn" type="button" data-tip="Перезагрузить базу" onclick="reloadProducts()">&#10227;</button>
             <button id="productsSelectAllBtn" class="btn-secondary icon-only-btn" type="button" data-tip="Выбрать все" onclick="selectAllProducts()">&#9745;</button>
@@ -782,14 +781,14 @@
 
         <div class="panel" id="profileTeamPanel">
           <h3>Сотрудники кабинета</h3>
-          <div class="grid-1 team-form-stack">
+          <div class="grid-1 team-form-stack team-create-form">
             <input id="teamMemberEmail" placeholder="Email сотрудника" />
             <input id="teamMemberPassword" type="password" placeholder="Пароль сотрудника (>=8)" />
             <input id="teamMemberPhone" placeholder="Телефон" />
             <input id="teamMemberFullName" placeholder="ФИО" />
             <input id="teamMemberNickname" placeholder="Ник" />
             <input id="teamMemberAvatar" placeholder="Ссылка на аватар" />
-            <button class="btn-secondary" onclick="addTeamMember()">Добавить сотрудника</button>
+            <button id="teamAddMemberBtn" class="btn-secondary" type="button" onclick="addTeamMember()">Добавить сотрудника</button>
           </div>
           <div class="team-access-picks" id="teamAccessPicks"></div>
           <div class="team-member-list" id="teamMembersList">
@@ -842,10 +841,10 @@
         </div>
         <div id="helpSubtabAssistant" class="hidden">
           <div class="panel">
-            <h3>AI помощник по маркетплейсам и сервису</h3>
+            <h3>AI помощник (любой вопрос)</h3>
             <div class="grid-3">
               <select id="helpAssistantModuleSelect"></select>
-              <input id="helpAssistantQuestion" placeholder="Ваш вопрос по WB/Ozon или по модулю сервиса" />
+              <input id="helpAssistantQuestion" placeholder="Задайте любой вопрос" />
               <button onclick="askHelpAssistant()">Спросить</button>
             </div>
             <div id="helpAssistantHint" class="hint">-</div>
@@ -949,8 +948,35 @@
     </div>
   </div>
 
+  <div id="teamMemberEditModal" class="team-modal hidden" aria-modal="true" role="dialog" aria-labelledby="teamMemberEditTitle">
+    <div class="team-modal-card">
+      <div class="team-modal-head">
+        <h3 id="teamMemberEditTitle">Сотрудник</h3>
+        <button class="campaign-close" type="button" onclick="closeTeamMemberEditor()">✕</button>
+      </div>
+      <div id="teamMemberEditMeta" class="hint">-</div>
+      <div class="team-modal-grid">
+        <label><span>Email</span><input id="teamModalEmail" /></label>
+        <label><span>ФИО</span><input id="teamModalFullName" /></label>
+        <label><span>Телефон</span><input id="teamModalPhone" /></label>
+        <label><span>Ник</span><input id="teamModalNickname" /></label>
+        <label><span>Ссылка на аватар</span><input id="teamModalAvatar" /></label>
+        <label><span>Новый пароль</span><input id="teamModalPassword" type="password" placeholder="Новый пароль (опц.)" /></label>
+      </div>
+      <div class="team-modal-access">
+        <span>Доступ к модулям</span>
+        <div class="team-access-picks" id="teamModalAccessPicks"></div>
+      </div>
+      <div class="actions">
+        <button id="teamModalSaveBtn" type="button" onclick="saveTeamMemberEditor()">Сохранить</button>
+        <button id="teamModalDeleteBtn" class="btn-danger" type="button" onclick="deleteTeamMemberFromModal()">Удалить</button>
+        <button class="btn-secondary" type="button" onclick="closeTeamMemberEditor()">Отмена</button>
+      </div>
+    </div>
+  </div>
+
   <div id="hoverTip" class="hover-tip hidden"></div>
 
-  <script src="/static/app.js?v=20260228d"></script>
+  <script src="/static/app.js?v=20260228e"></script>
 </body>
 </html>

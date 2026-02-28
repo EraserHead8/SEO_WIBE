@@ -45,6 +45,7 @@ let salesLoadState = "idle";
 let salesLoadToken = 0;
 let salesAutoLoadTimer = null;
 let teamMembers = [];
+let activeTeamMemberId = 0;
 let profileAiState = null;
 let reviewPhotoItems = [];
 let reviewPhotoIndex = 0;
@@ -514,6 +515,7 @@ function applyUiLanguage() {
       categoryFilter.options[0].textContent = isEn ? "All categories" : "Все категории";
     }
   }
+  syncCategoryFilterState();
   setText("label[for='productPageSizeTop']", isEn ? "Rows per page" : "На странице");
   setText("label[for='productPageSizeBottom']", isEn ? "Rows per page" : "На странице");
   setText("#productsPrevTopBtn", isEn ? "Prev" : "Назад");
@@ -558,11 +560,14 @@ function applyUiLanguage() {
   setText("#profileSecurityPanel h3", isEn ? "Security" : "Безопасность");
   setText("#profileSecurityPanel .grid-3 button", isEn ? "Change Password" : "Сменить пароль");
   setText("#profileTeamPanel h3", isEn ? "Workspace Team" : "Сотрудники кабинета");
-  setText("#profileTeamPanel .grid-6 button", isEn ? "Add employee" : "Добавить сотрудника");
+  setText("#teamAddMemberBtn", isEn ? "Add employee" : "Добавить сотрудника");
   setText("#helpSubtabDocs .panel h3", isEn ? "Module Help Center" : "Справка по модулям");
   setText("#helpSubtabDocs .grid-2 button", isEn ? "Refresh Help" : "Обновить справку");
-  setText("#helpSubtabAssistant .panel h3", isEn ? "AI assistant for marketplaces and service" : "AI помощник по маркетплейсам и сервису");
+  setText("#helpSubtabAssistant .panel h3", isEn ? "AI assistant (any question)" : "AI помощник (любой вопрос)");
   setText("#helpSubtabAssistant .grid-3 button", isEn ? "Ask" : "Спросить");
+  setText("#teamModalSaveBtn", isEn ? "Save" : "Сохранить");
+  setText("#teamModalDeleteBtn", isEn ? "Delete" : "Удалить");
+  setText("#teamMemberEditModal .actions .btn-secondary", isEn ? "Cancel" : "Отмена");
   setText("#helpSubtabDocsBtn", isEn ? "Help" : "Справка");
   setText("#helpSubtabAssistantBtn", isEn ? "AI assistant" : "AI помощник");
   setText("#reviewsSubtabReviewsBtn", isEn ? "Reviews" : "Отзывы");
@@ -734,7 +739,6 @@ function applyUiLanguage() {
     ["#regEmail", "Email"],
     ["#loginPassword", isEn ? "Password" : "Пароль"],
     ["#regPassword", isEn ? "Password (>=8)" : "Пароль (>=8)"],
-    ["#articles", isEn ? "Articles comma separated (or empty)" : "Артикулы через запятую (или пусто)"],
     ["#productFilter", isEn ? "Filter by article/name" : "Фильтр: артикул/название"],
     ["#positionKeywords", isEn ? "Ranking keywords (optional)" : "Ключи для проверки (опционально)"],
     ["#extraKeywords", isEn ? "Extra keywords (optional)" : "Доп. ключи (опционально)"],
@@ -766,11 +770,17 @@ function applyUiLanguage() {
     ["#teamMemberFullName", isEn ? "Full name" : "ФИО"],
     ["#teamMemberNickname", isEn ? "Nickname" : "Ник"],
     ["#teamMemberAvatar", isEn ? "Avatar URL" : "Ссылка на аватар"],
+    ["#teamModalEmail", isEn ? "Employee email" : "Email сотрудника"],
+    ["#teamModalPassword", isEn ? "New password (optional)" : "Новый пароль (опц.)"],
+    ["#teamModalPhone", isEn ? "Phone" : "Телефон"],
+    ["#teamModalFullName", isEn ? "Full name" : "ФИО"],
+    ["#teamModalNickname", isEn ? "Nickname" : "Ник"],
+    ["#teamModalAvatar", isEn ? "Avatar URL" : "Ссылка на аватар"],
     ["#profileAiName", isEn ? "AI service name" : "Название AI сервиса"],
     ["#profileAiModel", isEn ? "Model (e.g. gpt-4o-mini)" : "Модель (например gpt-4o-mini)"],
     ["#profileAiBaseUrl", isEn ? "Base URL (optional)" : "Base URL (опционально)"],
     ["#profileAiApiKey", isEn ? "Service API key" : "API key сервиса"],
-    ["#helpAssistantQuestion", isEn ? "Your question about WB/Ozon or service modules" : "Ваш вопрос по WB/Ozon или по модулю сервиса"],
+    ["#helpAssistantQuestion", isEn ? "Ask any question" : "Задайте любой вопрос"],
   ];
   for (const [selector, text] of placeholders) {
     const el = document.querySelector(selector);
@@ -1309,14 +1319,14 @@ function ensureProfileTeamUi() {
   panel.id = "profileTeamPanel";
   panel.innerHTML = `
     <h3>${tr("Сотрудники кабинета", "Workspace Team")}</h3>
-    <div class="grid-1 team-form-stack">
+    <div class="grid-1 team-form-stack team-create-form">
       <input id="teamMemberEmail" placeholder="${escapeHtml(tr("Email сотрудника", "Employee email"))}" />
       <input id="teamMemberPassword" type="password" placeholder="${escapeHtml(tr("Пароль сотрудника (>=8)", "Employee password (>=8)"))}" />
       <input id="teamMemberPhone" placeholder="${escapeHtml(tr("Телефон", "Phone"))}" />
       <input id="teamMemberFullName" placeholder="${escapeHtml(tr("ФИО", "Full name"))}" />
       <input id="teamMemberNickname" placeholder="${escapeHtml(tr("Ник", "Nickname"))}" />
       <input id="teamMemberAvatar" placeholder="${escapeHtml(tr("Ссылка на аватар", "Avatar URL"))}" />
-      <button class="btn-secondary" type="button" onclick="addTeamMember()">${tr("Добавить сотрудника", "Add employee")}</button>
+      <button id="teamAddMemberBtn" class="btn-secondary" type="button" onclick="addTeamMember()">${tr("Добавить сотрудника", "Add employee")}</button>
     </div>
     <div class="team-access-picks" id="teamAccessPicks"></div>
     <div class="team-member-list" id="teamMembersList">
@@ -4497,9 +4507,12 @@ function renderAdsRecommendationsRows() {
 }
 
 function getImportPayload(options = {}) {
-  const marketplace = document.getElementById("importMarketplace").value;
-  const rawArticles = document.getElementById("articles").value.trim();
-  const articles = rawArticles ? rawArticles.split(",").map((x) => x.trim()).filter(Boolean) : [];
+  const marketplace = String(document.getElementById("importMarketplace")?.value || "all").trim().toLowerCase();
+  const articlesEl = document.getElementById("articles");
+  const rawArticles = String(articlesEl?.value || "").trim();
+  const articles = rawArticles
+    ? rawArticles.split(",").map((x) => x.trim()).filter(Boolean)
+    : [];
   const forceAll = Boolean(options.forceAll);
   const import_all = forceAll || articles.length === 0;
   return { marketplace, articles, import_all };
@@ -4536,6 +4549,29 @@ function syncCategoryFilterOptions(categories = []) {
   return wanted !== prev;
 }
 
+function syncCategoryFilterState() {
+  const marketEl = document.getElementById("importMarketplace");
+  const categoryEl = document.getElementById("productCategoryFilter");
+  if (!marketEl || !categoryEl) return false;
+  const market = String(marketEl.value || "all").trim().toLowerCase();
+  const categoryEnabled = market === "wb" || market === "ozon";
+  const shouldResetToAll = !categoryEnabled && String(categoryEl.value || "all").toLowerCase() !== "all";
+  const allLabel = currentLang === "en" ? "All categories" : "Все категории";
+  if (!categoryEnabled && categoryEl.options.length > 1) {
+    categoryEl.innerHTML = `<option value="all">${escapeHtml(allLabel)}</option>`;
+  } else if (!categoryEl.options.length) {
+    categoryEl.innerHTML = `<option value="all">${escapeHtml(allLabel)}</option>`;
+  }
+  if (!categoryEnabled || shouldResetToAll) {
+    categoryEl.value = "all";
+  }
+  categoryEl.disabled = !categoryEnabled;
+  categoryEl.title = categoryEnabled
+    ? ""
+    : tr("Выберите WB или Ozon, чтобы фильтровать по категориям.", "Choose WB or Ozon to filter by categories.");
+  return shouldResetToAll;
+}
+
 function syncProductsPagerControls() {
   const safePage = Math.max(1, Number(productPage || 1));
   const safeTotalPages = Math.max(0, Number(productTotalPages || 0));
@@ -4566,6 +4602,7 @@ function syncProductsPagerControls() {
 }
 
 function onProductsFilterChanged() {
+  syncCategoryFilterState();
   productPage = 1;
   loadProducts();
 }
@@ -4649,15 +4686,20 @@ async function reloadProducts() {
 
 async function loadProducts() {
   const marketplace = String(document.getElementById("importMarketplace")?.value || "all").trim().toLowerCase();
+  const categoryEnabled = marketplace === "wb" || marketplace === "ozon";
   const category = String(document.getElementById("productCategoryFilter")?.value || "all").trim();
   const filter = (document.getElementById("productFilter")?.value || "").trim().toLowerCase();
+  const categoryReset = syncCategoryFilterState();
+  if (categoryReset) {
+    productPage = 1;
+  }
   productPageSize = normalizeProductPageSize(
     document.getElementById("productPageSizeTop")?.value || document.getElementById("productPageSizeBottom")?.value || productPageSize
   );
 
   const qp = new URLSearchParams();
   qp.set("marketplace", ["all", "wb", "ozon"].includes(marketplace) ? marketplace : "all");
-  if (category && category.toLowerCase() !== "all") qp.set("category", category);
+  if (categoryEnabled && category && category.toLowerCase() !== "all") qp.set("category", category);
   qp.set("page", String(Math.max(1, Number(productPage || 1))));
   qp.set("page_size", String(productPageSize));
   if (filter) qp.set("q", filter);
@@ -4669,6 +4711,7 @@ async function loadProducts() {
     productPage = 1;
     productTotalPages = 0;
     syncCategoryFilterOptions([]);
+    syncCategoryFilterState();
     syncProductsPagerControls();
     const tbodyError = document.getElementById("productsTable");
     if (tbodyError) {
@@ -4681,13 +4724,16 @@ async function loadProducts() {
   if (Array.isArray(data)) {
     currentProducts = data;
     syncCategoryFilterOptions([]);
+    syncCategoryFilterState();
     productTotal = data.length;
     productPage = 1;
     productTotalPages = data.length ? 1 : 0;
   } else {
     currentProducts = Array.isArray(data.rows) ? data.rows : [];
-    const categoryReset = syncCategoryFilterOptions(Array.isArray(data.categories) ? data.categories : []);
-    if (categoryReset) {
+    const categoryList = categoryEnabled && Array.isArray(data.categories) ? data.categories : [];
+    const optionsReset = syncCategoryFilterOptions(categoryList);
+    const resetByState = syncCategoryFilterState();
+    if (optionsReset || resetByState) {
       productPage = 1;
       await loadProducts();
       return;
@@ -5983,69 +6029,175 @@ function resetTeamMemberForm() {
   renderTeamAccessOptions();
 }
 
+function findTeamMemberById(memberId) {
+  const id = Number(memberId || 0);
+  if (!id) return null;
+  return teamMembers.find((x) => Number(x.id) === id) || null;
+}
+
+function summarizeTeamAccess(row) {
+  if (row?.is_owner) {
+    return {
+      title: tr("Полный доступ", "Full access"),
+      details: tr("Все модули доступны владельцу кабинета.", "All modules are available for workspace owner."),
+    };
+  }
+  const accessCodes = Array.isArray(row?.access_scope)
+    ? row.access_scope.map((x) => String(x || "").trim().toLowerCase()).filter(Boolean)
+    : [];
+  if (!accessCodes.length) {
+    return {
+      title: tr("Доступ не выдан", "No access"),
+      details: tr("Модули не выбраны.", "No modules selected."),
+    };
+  }
+  const labels = accessCodes.map((code) => moduleLabel(code));
+  const shortList = labels.slice(0, 3).join(", ");
+  const left = labels.length - 3;
+  return {
+    title: shortList || tr("Доступ назначен", "Access granted"),
+    details: left > 0
+      ? tr(`И еще модулей: ${left}`, `And ${left} more modules`)
+      : tr(`Модулей: ${labels.length}`, `Modules: ${labels.length}`),
+  };
+}
+
 function renderTeamMembers() {
   const host = document.getElementById("teamMembersList");
   if (!host) return;
   host.innerHTML = "";
   if (!Array.isArray(teamMembers) || !teamMembers.length) {
+    closeTeamMemberEditor();
     host.innerHTML = `<div class="hint">${escapeHtml(tr("Сотрудников пока нет.", "No employees yet."))}</div>`;
     return;
   }
   for (const row of teamMembers) {
-    const access = Array.isArray(row.access_scope) ? row.access_scope : [];
+    const access = summarizeTeamAccess(row);
     const card = document.createElement("article");
-    card.className = "team-member-card";
+    card.className = "team-member-row";
+    const roleLabel = row.is_owner
+      ? tr("Владелец", "Owner")
+      : tr("Сотрудник", "Employee");
+    const roleMeta = row.is_owner
+      ? ""
+      : (row.has_password ? tr("пароль задан", "password set") : tr("пароль не задан", "password missing"));
+    const editLabel = tr("Редактировать сотрудника", "Edit employee");
     card.innerHTML = `
-      <div class="team-member-head">
-        <div>
-          <strong>#${escapeHtml(String(row.id || "-"))} ${escapeHtml(String(row.email || "-"))}</strong>
-          <div class="hint">${row.is_owner ? tr("Владелец кабинета", "Workspace owner") : tr("Сотрудник кабинета", "Workspace employee")}</div>
+      <div class="team-member-row-main">
+        <div class="team-member-identity">
+          <strong>${escapeHtml(String(row.full_name || row.nickname || row.email || "-"))}</strong>
+          <div class="hint">${escapeHtml(String(row.email || "-"))}</div>
         </div>
-        <span>${row.is_owner ? tr("Владелец", "Owner") : `${tr("Сотрудник", "Employee")}${row.has_password ? " 🔒" : ""}`}</span>
-      </div>
-      <div class="team-member-grid">
-        <label><span>Email</span><input data-team-email="${row.id}" value="${escapeHtml(String(row.email || ""))}" ${row.is_owner ? "disabled" : ""} /></label>
-        <label><span>${tr("ФИО", "Full name")}</span><input data-team-full="${row.id}" value="${escapeHtml(String(row.full_name || ""))}" /></label>
-        <label><span>${tr("Телефон", "Phone")}</span><input data-team-phone="${row.id}" value="${escapeHtml(String(row.phone || ""))}" /></label>
-        <label><span>${tr("Ник", "Nickname")}</span><input data-team-nick="${row.id}" value="${escapeHtml(String(row.nickname || ""))}" /></label>
-        ${
-          row.is_owner
-            ? ""
-            : `<label><span>${tr("Новый пароль", "New password")}</span><input type="password" data-team-password="${row.id}" placeholder="${escapeHtml(tr("Новый пароль (опц.)", "New password (optional)"))}" /></label>`
-        }
-        <div class="team-member-wide">
-          <span>${tr("Доступ к модулям", "Module access")}</span>
-          ${renderTeamMemberAccessPicks(row.id, access, row.is_owner)}
+        <div class="team-member-role">${escapeHtml(roleMeta ? `${roleLabel} • ${roleMeta}` : roleLabel)}</div>
+        <div class="team-member-access">
+          <strong>${escapeHtml(access.title)}</strong>
+          <div class="hint">${escapeHtml(access.details)}</div>
         </div>
       </div>
-      <div class="actions">
-        <button class="btn-secondary" type="button" data-team-save="${row.id}">${tr("Сохранить", "Save")}</button>
-        ${row.is_owner ? "" : `<button class="btn-danger" type="button" data-team-del="${row.id}">${tr("Удалить", "Delete")}</button>`}
-      </div>
+      <button class="team-row-edit" type="button" title="${escapeHtml(editLabel)}" aria-label="${escapeHtml(editLabel)}" data-team-edit="${Number(row.id || 0)}">✎</button>
     `;
-    card.querySelector(`[data-team-save="${row.id}"]`)?.addEventListener("click", async () => updateTeamMember(row.id));
-    card.querySelector(`[data-team-del="${row.id}"]`)?.addEventListener("click", async () => deleteTeamMember(row.id));
+    card.querySelector(`[data-team-edit="${Number(row.id || 0)}"]`)?.addEventListener("click", () => openTeamMemberEditor(row.id));
+    card.addEventListener("dblclick", () => openTeamMemberEditor(row.id));
     host.appendChild(card);
+  }
+  if (activeTeamMemberId && !findTeamMemberById(activeTeamMemberId)) {
+    closeTeamMemberEditor();
   }
 }
 
-function renderTeamMemberAccessPicks(memberId, selected = [], disabled = false) {
-  const selectedSet = new Set((Array.isArray(selected) ? selected : []).map((x) => String(x || "").trim().toLowerCase()).filter(Boolean));
-  return `<div class="team-access-picks">
-    ${TEAM_ACCESS_MODULES.map((code) => `
+function renderTeamModalAccessPicks(selected = [], disabled = false) {
+  const host = document.getElementById("teamModalAccessPicks");
+  if (!host) return;
+  const selectedSet = new Set(
+    (Array.isArray(selected) ? selected : [])
+      .map((x) => String(x || "").trim().toLowerCase())
+      .filter(Boolean)
+  );
+  host.innerHTML = TEAM_ACCESS_MODULES
+    .map((code) => `
       <label class="check">
-        <input type="checkbox" data-team-access-row="${Number(memberId || 0)}" data-code="${escapeHtml(code)}" ${selectedSet.has(code) ? "checked" : ""} ${disabled ? "disabled" : ""} />
+        <input type="checkbox" data-team-modal-access="${escapeHtml(code)}" ${selectedSet.has(code) ? "checked" : ""} ${disabled ? "disabled" : ""} />
         ${escapeHtml(moduleLabel(code))}
       </label>
-    `).join("")}
-  </div>`;
+    `)
+    .join("");
 }
 
-function collectTeamMemberAccess(memberId) {
-  return [...document.querySelectorAll(`[data-team-access-row="${Number(memberId || 0)}"]`)]
+function collectTeamModalAccess() {
+  return [...document.querySelectorAll("#teamModalAccessPicks [data-team-modal-access]")]
     .filter((el) => el.checked)
-    .map((el) => String(el.dataset.code || "").trim().toLowerCase())
+    .map((el) => String(el.dataset.teamModalAccess || "").trim().toLowerCase())
     .filter(Boolean);
+}
+
+function openTeamMemberEditor(memberId) {
+  const row = findTeamMemberById(memberId);
+  const modal = document.getElementById("teamMemberEditModal");
+  if (!row || !modal) return;
+  activeTeamMemberId = Number(row.id || 0);
+  setInputValue("teamModalEmail", String(row.email || ""));
+  setInputValue("teamModalFullName", String(row.full_name || ""));
+  setInputValue("teamModalPhone", String(row.phone || ""));
+  setInputValue("teamModalNickname", String(row.nickname || ""));
+  setInputValue("teamModalAvatar", String(row.avatar_url || ""));
+  setInputValue("teamModalPassword", "");
+  const canEditIdentity = !row.is_owner;
+  const emailEl = document.getElementById("teamModalEmail");
+  const passEl = document.getElementById("teamModalPassword");
+  if (emailEl) emailEl.disabled = !canEditIdentity;
+  if (passEl) passEl.disabled = !canEditIdentity;
+  renderTeamModalAccessPicks(Array.isArray(row.access_scope) ? row.access_scope : [], row.is_owner);
+  const titleEl = document.getElementById("teamMemberEditTitle");
+  const metaEl = document.getElementById("teamMemberEditMeta");
+  const deleteBtn = document.getElementById("teamModalDeleteBtn");
+  if (titleEl) {
+    titleEl.textContent = row.is_owner
+      ? tr("Владелец кабинета", "Workspace owner")
+      : tr("Сотрудник кабинета", "Workspace employee");
+  }
+  if (metaEl) {
+    metaEl.textContent = `#${Number(row.id || 0)} • ${row.is_owner ? tr("Права владельца", "Owner permissions") : tr("Можно менять доступы и данные", "You can edit access and profile fields")}`;
+  }
+  if (deleteBtn) deleteBtn.classList.toggle("hidden", Boolean(row.is_owner));
+  modal.classList.remove("hidden");
+}
+
+function closeTeamMemberEditor() {
+  const modal = document.getElementById("teamMemberEditModal");
+  if (modal) modal.classList.add("hidden");
+  activeTeamMemberId = 0;
+}
+
+function buildTeamMemberPayloadFromModal(memberId) {
+  const row = findTeamMemberById(memberId);
+  if (!row) return null;
+  const emailRaw = String(document.getElementById("teamModalEmail")?.value || "").trim();
+  const email = row.is_owner ? String(row.email || "").trim() : emailRaw;
+  return {
+    email,
+    password: String(document.getElementById("teamModalPassword")?.value || ""),
+    phone: String(document.getElementById("teamModalPhone")?.value || "").trim(),
+    full_name: String(document.getElementById("teamModalFullName")?.value || "").trim(),
+    nickname: String(document.getElementById("teamModalNickname")?.value || "").trim(),
+    avatar_url: String(document.getElementById("teamModalAvatar")?.value || "").trim(),
+    access_scope: row.is_owner ? ["*"] : collectTeamModalAccess(),
+  };
+}
+
+async function saveTeamMemberEditor() {
+  const id = Number(activeTeamMemberId || 0);
+  if (!id) return;
+  const payload = buildTeamMemberPayloadFromModal(id);
+  if (!payload) return;
+  const updated = await updateTeamMember(id, payload);
+  if (updated) closeTeamMemberEditor();
+}
+
+async function deleteTeamMemberFromModal() {
+  const id = Number(activeTeamMemberId || 0);
+  if (!id) return;
+  const deleted = await deleteTeamMember(id);
+  if (deleted) closeTeamMemberEditor();
 }
 
 async function loadProfileAi() {
@@ -6152,19 +6304,25 @@ async function addTeamMember() {
   resetTeamMemberForm();
 }
 
-async function updateTeamMember(memberId) {
+async function updateTeamMember(memberId, payloadOverride = null) {
   const id = Number(memberId || 0);
   if (!id) return;
-  const current = teamMembers.find((x) => Number(x.id) === id) || {};
-  const payload = {
-    email: String(document.querySelector(`[data-team-email="${id}"]`)?.value || "").trim(),
-    password: String(document.querySelector(`[data-team-password="${id}"]`)?.value || ""),
-    phone: String(document.querySelector(`[data-team-phone="${id}"]`)?.value || "").trim(),
-    full_name: String(document.querySelector(`[data-team-full="${id}"]`)?.value || "").trim(),
-    nickname: String(document.querySelector(`[data-team-nick="${id}"]`)?.value || "").trim(),
+  const current = findTeamMemberById(id);
+  if (!current) return null;
+  const payload = payloadOverride || {
+    email: String(current.email || "").trim(),
+    password: "",
+    phone: String(current.phone || "").trim(),
+    full_name: String(current.full_name || "").trim(),
+    nickname: String(current.nickname || "").trim(),
     avatar_url: String(current.avatar_url || "").trim(),
-    access_scope: collectTeamMemberAccess(id),
+    access_scope: Array.isArray(current.access_scope) ? current.access_scope : [],
   };
+  payload.email = String(payload.email || "").trim();
+  if (!payload.email) {
+    alert(tr("Email сотрудника обязателен.", "Employee email is required."));
+    return null;
+  }
   const row = await requestJson(`/api/profile/team/${id}`, {
     method: "PUT",
     headers: authHeaders(),
@@ -6178,20 +6336,27 @@ async function updateTeamMember(memberId) {
   invalidateModuleCache("profile");
   teamMembers = teamMembers.map((x) => (Number(x.id) === id ? row : x));
   renderTeamMembers();
+  return row;
 }
 
 async function deleteTeamMember(memberId) {
   const id = Number(memberId || 0);
-  if (!id) return;
-  if (!confirm(tr("Удалить сотрудника из кабинета?", "Delete employee from workspace?"))) return;
-  await requestJson(`/api/profile/team/${id}`, {
+  if (!id) return false;
+  if (!confirm(tr("Удалить сотрудника из кабинета?", "Delete employee from workspace?"))) return false;
+  const result = await requestJson(`/api/profile/team/${id}`, {
     method: "DELETE",
     headers: authHeaders(),
     timeoutMs: 60000,
-  }).catch((e) => alert(e.message));
+  }).catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  if (!result) return false;
   invalidateModuleCache("profile");
   teamMembers = teamMembers.filter((x) => Number(x.id) !== id);
   renderTeamMembers();
+  if (activeTeamMemberId === id) closeTeamMemberEditor();
+  return true;
 }
 
 async function loadProfile() {
@@ -6860,8 +7025,22 @@ if (productEditModal) {
   });
 }
 
+const teamMemberEditModal = document.getElementById("teamMemberEditModal");
+if (teamMemberEditModal) {
+  teamMemberEditModal.addEventListener("click", (e) => {
+    if (e.target === teamMemberEditModal) closeTeamMemberEditor();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (teamMemberEditModal.classList.contains("hidden")) return;
+    if (e.key === "Escape") closeTeamMemberEditor();
+  });
+}
+
 window.switchHelpSubtab = switchHelpSubtab;
 window.askHelpAssistant = askHelpAssistant;
 window.loadProfileAi = loadProfileAi;
 window.saveProfileAiSelection = saveProfileAiSelection;
 window.addProfileAiService = addProfileAiService;
+window.closeTeamMemberEditor = closeTeamMemberEditor;
+window.saveTeamMemberEditor = saveTeamMemberEditor;
+window.deleteTeamMemberFromModal = deleteTeamMemberFromModal;
