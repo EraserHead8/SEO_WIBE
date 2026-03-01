@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 import math
-import re
 import time
 from typing import Any
 
@@ -260,22 +259,27 @@ def post_wb_review_reply(api_key: str, feedback_id: str, text: str) -> tuple[boo
     if len(reply) > 3000:
         return False, "Ответ слишком длинный (максимум 3000 символов)"
 
-    fid = feedback_id.strip()
-    payloads: list[dict[str, Any]] = [{"id": fid, "text": reply}]
-    if fid.isdigit():
-        fid_int = int(fid)
-        payloads.append({"id": fid_int, "text": reply})
-    attempts: list[tuple[str, str, dict[str, Any]]] = []
-    for payload in payloads:
-        # Official endpoint: POST /api/v1/feedbacks/answer
-        attempts.append(("POST", "https://feedbacks-api.wildberries.ru/api/v1/feedbacks/answer", payload))
-        # Lightweight fallback in case of legacy gateway route.
-        attempts.append(("POST", "https://feedbacks-api.wildberries.ru/api/v1/feedbacks/answers", payload))
-        attempts.append(("PATCH", "https://feedbacks-api.wildberries.ru/api/v1/feedbacks/answer", payload))
-    return _post_wb_reply_with_fallback(api_key, attempts, entity_label="отзыв")
+    endpoint = "https://feedbacks-api.wildberries.ru/api/v1/feedbacks/answer"
+    payload = {"id": feedback_id.strip(), "text": reply}
+
+    # WB endpoints могут принимать и plain token, и Bearer token.
+    for auth_value in (api_key.strip(), f"Bearer {api_key.strip()}"):
+        headers = {"Authorization": auth_value, "Content-Type": "application/json"}
+        try:
+            with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
+                response = client.post(endpoint, headers=headers, json=payload)
+        except Exception:
+            continue
+        if response.status_code in {200, 204}:
+            return True, "Ответ отправлен"
+        if response.status_code in {401, 403}:
+            continue
+        body = _safe_response_text(response)
+        return False, f"WB API вернул {response.status_code}: {body}"
+    return False, "Не удалось авторизоваться в WB API"
 
 
-def post_wb_question_reply(api_key: str, question_id: str, text: str, state: str = "") -> tuple[bool, str]:
+def post_wb_question_reply(api_key: str, question_id: str, text: str) -> tuple[bool, str]:
     if not question_id.strip():
         return False, "Не указан ID вопроса"
     reply = " ".join(text.split())
@@ -284,162 +288,29 @@ def post_wb_question_reply(api_key: str, question_id: str, text: str, state: str
     if len(reply) > 3000:
         return False, "Ответ слишком длинный (максимум 3000 символов)"
 
-    qid = question_id.strip()
-    states = _wb_question_state_candidates(state)
-    payloads: list[dict[str, Any]] = []
-    for state_value in states:
-        payloads.extend(
-            [
-                {"id": qid, "state": state_value, "answer": {"text": reply}},
-                {"id": qid, "state": state_value, "text": reply},
-            ]
-        )
-    if not payloads:
-        payloads.extend(
-            [
-                {"id": qid, "answer": {"text": reply}},
-                {"id": qid, "text": reply},
-            ]
-        )
-    if qid.isdigit():
-        qid_int = int(qid)
-        if states:
-            for state_value in states:
-                payloads.extend(
-                    [
-                        {"id": qid_int, "state": state_value, "text": reply},
-                        {"id": qid_int, "state": state_value, "answer": {"text": reply}},
-                    ]
-                )
-        else:
-            payloads.extend(
-                [
-                    {"id": qid_int, "text": reply},
-                    {"id": qid_int, "answer": {"text": reply}},
-                ]
-            )
-    attempts: list[tuple[str, str, dict[str, Any]]] = []
-    # Official endpoint for questions handling is PATCH /api/v1/questions.
-    # Keep both domains because some accounts are routed through wb.ru alias.
-    question_routes = (
-        "https://feedbacks-api.wildberries.ru/api/v1/questions",
-        "https://feedbacks-api.wb.ru/api/v1/questions",
-    )
-    for payload in payloads:
-        for route in question_routes:
-            attempts.append(("PATCH", route, payload))
-    return _post_wb_reply_with_fallback(api_key, attempts, entity_label="вопрос")
-
-
-def _post_wb_reply_with_fallback(
-    api_key: str,
-    attempts: list[tuple[str, str, dict[str, Any]]],
-    entity_label: str = "элемент",
-) -> tuple[bool, str]:
-    token = str(api_key or "").strip()
-    if not token:
-        return False, "WB API ключ не задан"
-    if not attempts:
-        return False, "Не задан маршрут отправки ответа в WB API"
-
-    # Дедуп, чтобы не стучаться одинаковыми комбинациями.
-    seen: set[tuple[str, str, str]] = set()
-    normalized_attempts: list[tuple[str, str, dict[str, Any]]] = []
-    for method, endpoint, payload in attempts:
-        signature = (
-            str(method or "POST").upper().strip(),
-            str(endpoint or "").strip(),
-            str(sorted((payload or {}).items())),
-        )
-        if signature in seen:
-            continue
-        seen.add(signature)
-        normalized_attempts.append((signature[0], signature[1], payload))
-
-    max_attempts_per_route = 2
+    endpoints = [
+        "https://feedbacks-api.wildberries.ru/api/v1/questions/answer",
+        "https://feedbacks-api.wildberries.ru/api/v1/question/answer",
+    ]
+    payloads = [{"id": question_id.strip(), "text": reply}, {"questionId": question_id.strip(), "text": reply}]
     last_error = "Не удалось отправить ответ в WB API"
-    saw_auth_error = False
-    last_status = 0
-    path_not_found = False
-    unsupported_method = False
-    missing_state = False
-
-    auth_candidates: list[str] = []
-    for raw_auth in (token, f"Bearer {token}"):
-        safe = str(raw_auth or "").strip()
-        if safe and safe not in auth_candidates:
-            auth_candidates.append(safe)
-
-    with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
-        for method, endpoint, payload in normalized_attempts:
-            for auth_value in auth_candidates:
+    for endpoint in endpoints:
+        for payload in payloads:
+            for auth_value in (api_key.strip(), f"Bearer {api_key.strip()}"):
                 headers = {"Authorization": auth_value, "Content-Type": "application/json"}
-                for attempt in range(max_attempts_per_route):
-                    try:
-                        response = client.request(method, endpoint, headers=headers, json=payload)
-                    except Exception:
-                        if attempt < max_attempts_per_route - 1:
-                            time.sleep(0.45 * (attempt + 1))
-                        continue
-                    if response.status_code in {200, 201, 202, 204}:
-                        return True, "Ответ отправлен"
-                    last_status = int(response.status_code or 0)
-                    if response.status_code in {401, 403}:
-                        saw_auth_error = True
-                        last_error = "WB API отклонил запрос (401/403). Проверьте токен и права категории «Вопросы и отзывы»."
-                        break
-                    body = _safe_response_text(response)
-                    if response.status_code == 429:
-                        if attempt < max_attempts_per_route - 1:
-                            delay = _retry_after_seconds(response, fallback=0.8 * (attempt + 1))
-                            time.sleep(delay)
-                            continue
-                        return False, "WB API вернул 429 (лимит 3 запроса/сек для категории). Повторите позже."
-                    # 404/405/422 часто означают несовместимый endpoint/payload,
-                    # поэтому пробуем другие варианты.
-                    if response.status_code == 400:
-                        short_body = _short_error_text(body)
-                        low_body = short_body.lower()
-                        if "empty state in request" in low_body:
-                            missing_state = True
-                            last_error = "WB API требует state вопроса. Перезагрузите список вопросов и повторите."
-                        else:
-                            last_error = f"WB API вернул 400{f': {short_body}' if short_body else ''}"
-                        break
-                    if response.status_code in {404, 405, 409, 422}:
-                        short_body = _short_error_text(body)
-                        low_body = short_body.lower()
-                        if "path not found" in low_body:
-                            path_not_found = True
-                        if "method not allowed" in low_body:
-                            unsupported_method = True
-                        last_error = f"WB API вернул {response.status_code}{f': {short_body}' if short_body else ''}"
-                        break
-                    if response.status_code >= 500:
-                        if attempt < max_attempts_per_route - 1:
-                            time.sleep(0.75 * (attempt + 1))
-                            continue
-                        short_body = _short_error_text(body)
-                        last_error = f"WB API временно недоступен ({response.status_code}){f': {short_body}' if short_body else ''}"
-                        break
-                    short_body = _short_error_text(body)
-                    last_error = f"WB API вернул {response.status_code}{f': {short_body}' if short_body else ''}"
-                    break
-
-    if saw_auth_error and "401/403" in last_error:
-        return False, last_error
-    if missing_state:
-        return False, last_error
-    if last_status in {404, 405} and (path_not_found or unsupported_method):
-        return (
-            False,
-            "WB API не принял маршрут ответа на вопрос (404/405). "
-            "Проверьте права «Вопросы и отзывы» и актуальность токена в кабинете WB.",
-        )
-    return (
-        False,
-        f"Не удалось отправить ответ на {entity_label}: {last_error}",
-    )
+                try:
+                    with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
+                        response = client.post(endpoint, headers=headers, json=payload)
+                except Exception:
+                    continue
+                if response.status_code in {200, 204}:
+                    return True, "Ответ отправлен"
+                if response.status_code in {401, 403}:
+                    continue
+                body = _safe_response_text(response)
+                if body:
+                    last_error = f"WB API вернул {response.status_code}: {body}"
+    return False, last_error
 
 
 def post_ozon_review_reply(api_key: str, review_id: str, text: str) -> tuple[bool, str]:
@@ -460,27 +331,36 @@ def post_ozon_review_reply(api_key: str, review_id: str, text: str) -> tuple[boo
 
     payloads: list[dict[str, Any]] = [
         {"review_id": raw_id, "text": reply},
-        {"review_id": raw_id, "comment": reply},
+        {"id": raw_id, "text": reply},
     ]
     if int_id is not None:
         payloads.extend(
             [
                 {"review_id": int_id, "text": reply},
-                {"review_id": int_id, "comment": reply},
+                {"id": int_id, "text": reply},
             ]
         )
 
-    attempts: list[tuple[str, str, dict[str, Any]]] = []
-    for payload in payloads:
-        # Official route: POST /v1/review/comment/create
-        attempts.append(("POST", "https://api-seller.ozon.ru/v1/review/comment/create", payload))
-        # Fallback for already answered reviews in some accounts/integrations.
-        attempts.append(("POST", "https://api-seller.ozon.ru/v1/review/comment/update", payload))
-        attempts.append(("POST", "https://api-seller.ozon.ru/v2/review/comment/create", payload))
-    return _post_ozon_reply_with_fallback(api_key, attempts, entity_label="отзыв")
+    endpoints = [
+        "https://api-seller.ozon.ru/v1/review/comment/create",
+        "https://api-seller.ozon.ru/v1/review/comment/update",
+        "https://api-seller.ozon.ru/v1/review/comment",
+    ]
+    last_error = "Не удалось отправить ответ в Ozon API"
+    for endpoint in endpoints:
+        for payload in payloads:
+            response = _request_ozon_response("POST", endpoint, api_key=api_key, payload=payload)
+            if response is None:
+                continue
+            if response.status_code < 400:
+                return True, "Ответ отправлен"
+            body = _safe_response_text(response)
+            if body:
+                last_error = f"Ozon API вернул {response.status_code}: {body}"
+    return False, last_error
 
 
-def post_ozon_question_reply(api_key: str, question_id: str, text: str, sku: int | None = None) -> tuple[bool, str]:
+def post_ozon_question_reply(api_key: str, question_id: str, text: str) -> tuple[bool, str]:
     if not question_id.strip():
         return False, "Не указан ID вопроса"
     reply = " ".join(text.split())
@@ -490,9 +370,6 @@ def post_ozon_question_reply(api_key: str, question_id: str, text: str, sku: int
         return False, "Ответ слишком длинный (максимум 3000 символов)"
 
     raw_id = question_id.strip()
-    sku_num = _to_int(sku)
-    if not sku_num or sku_num <= 0:
-        return False, "Для ответа на вопрос Ozon требуется SKU товара. Обновите список вопросов и повторите."
     int_id = None
     try:
         int_id = int(raw_id)
@@ -500,86 +377,29 @@ def post_ozon_question_reply(api_key: str, question_id: str, text: str, sku: int
         int_id = None
 
     payloads: list[dict[str, Any]] = [
-        {"question_id": raw_id, "sku": int(sku_num), "text": reply},
-        {"question_id": raw_id, "sku": int(sku_num), "answer_text": reply},
+        {"question_id": raw_id, "text": reply},
+        {"id": raw_id, "text": reply},
     ]
     if int_id is not None:
-        payloads.extend(
-            [
-                {"question_id": int_id, "sku": int(sku_num), "text": reply},
-                {"question_id": int_id, "sku": int(sku_num), "answer_text": reply},
-            ]
-        )
+        payloads.extend([{"question_id": int_id, "text": reply}, {"id": int_id, "text": reply}])
 
-    attempts: list[tuple[str, str, dict[str, Any]]] = []
-    for payload in payloads:
-        # Official question-answer route in Seller API updates.
-        attempts.append(("POST", "https://api-seller.ozon.ru/v1/question/answer/create", payload))
-        # Compatibility fallback for older integrations.
-        attempts.append(("POST", "https://api-seller.ozon.ru/v2/question/answer/create", payload))
-    return _post_ozon_reply_with_fallback(api_key, attempts, entity_label="вопрос")
-
-
-def _post_ozon_reply_with_fallback(
-    api_key: str,
-    attempts: list[tuple[str, str, dict[str, Any]]],
-    entity_label: str = "элемент",
-) -> tuple[bool, str]:
-    if not attempts:
-        return False, "Не задан маршрут отправки ответа в Ozon API"
-
-    seen: set[tuple[str, str, str]] = set()
-    normalized_attempts: list[tuple[str, str, dict[str, Any]]] = []
-    for method, endpoint, payload in attempts:
-        signature = (
-            str(method or "POST").upper().strip(),
-            str(endpoint or "").strip(),
-            str(sorted((payload or {}).items())),
-        )
-        if signature in seen:
-            continue
-        seen.add(signature)
-        normalized_attempts.append((signature[0], signature[1], payload))
-
+    endpoints = [
+        "https://api-seller.ozon.ru/v1/question/answer/create",
+        "https://api-seller.ozon.ru/v1/question/answer/update",
+        "https://api-seller.ozon.ru/v1/question/answer",
+    ]
     last_error = "Не удалось отправить ответ в Ozon API"
-    for method, endpoint, payload in normalized_attempts:
-        response = _request_ozon_response(method, endpoint, api_key=api_key, payload=payload)
-        if response is None:
-            continue
-        if response.status_code < 400:
-            return True, "Ответ отправлен"
-        body = _safe_response_text(response)
-        if response.status_code in {404, 405, 409, 422}:
-            short_body = _short_error_text(body)
-            last_error = f"Ozon API вернул {response.status_code}{f': {short_body}' if short_body else ''}"
-            continue
-        if response.status_code == 429:
-            return False, "Ozon API вернул 429 (лимит запросов). Повторите позже."
-        if response.status_code in {401, 403}:
-            short_body = _short_error_text(body)
-            low_body = short_body.lower()
-            role_error = (
-                "required role" in low_body
-                or '"code":7' in low_body
-                or "code:7" in low_body
-                or "code=7" in low_body
-            )
-            if role_error:
-                return (
-                    False,
-                    "Ozon API отклонил запрос: у ключа нет роли для ответа на отзывы/вопросы. "
-                    "Выдайте роли API для модуля отзывов и вопросов в кабинете Ozon Seller."
-                    f"{f' Детали: {short_body}' if short_body else ''}",
-                )
-            suffix = f" Детали: {short_body}" if short_body else ""
-            return False, f"Ozon API отклонил запрос (401/403). Проверьте client_id/api_key и права метода.{suffix}"
-        if response.status_code >= 500:
-            short_body = _short_error_text(body)
-            last_error = f"Ozon API временно недоступен ({response.status_code}){f': {short_body}' if short_body else ''}"
-            continue
-        short_body = _short_error_text(body)
-        last_error = f"Ozon API вернул {response.status_code}{f': {short_body}' if short_body else ''}"
-    return False, f"Не удалось отправить ответ на {entity_label}: {last_error}"
+    for endpoint in endpoints:
+        for payload in payloads:
+            response = _request_ozon_response("POST", endpoint, api_key=api_key, payload=payload)
+            if response is None:
+                continue
+            if response.status_code < 400:
+                return True, "Ответ отправлен"
+            body = _safe_response_text(response)
+            if body:
+                last_error = f"Ozon API вернул {response.status_code}: {body}"
+    return False, last_error
 
 
 def generate_review_reply(
@@ -590,10 +410,6 @@ def generate_review_reply(
     reviewer_name: str = "",
     marketplace: str = "wb",
     content_kind: str = "review",
-    api_key: str = "",
-    model: str = "",
-    provider: str = "openai",
-    base_url: str = "",
 ) -> str:
     review = (review_text or "").strip()
     product = (product_name or "").strip() or "товар"
@@ -603,20 +419,9 @@ def generate_review_reply(
     mp = "Ozon" if (marketplace or "").strip().lower() == "ozon" else "WB"
     kind = "question" if (content_kind or "").strip().lower() == "question" else "review"
 
-    if kind == "question":
-        fallback_base = _contextual_question_reply(
-            question_text=review,
-            product_name=product,
-            reviewer_name=customer_name,
-            prompt_text=custom_prompt,
-        )
-    else:
-        fallback_base = _fallback_reply(review, product, rating, customer_name)
-    fallback = _sanitize_customer_reply(fallback_base) or fallback_base
-    token = (api_key or "").strip() or (settings.openai_api_key or "").strip()
-    if not token:
+    fallback = _fallback_question_reply(review, product, customer_name) if kind == "question" else _fallback_reply(review, product, rating, customer_name)
+    if not settings.openai_api_key:
         return fallback
-    resolved_model = _resolve_provider_model(provider=provider, model=(model or "").strip() or settings.openai_model)
 
     if kind == "question":
         system_prompt = custom_prompt or (
@@ -650,22 +455,21 @@ def generate_review_reply(
             "Сформируй только текст ответа клиенту."
         )
     payload = {
-        "model": resolved_model,
+        "model": settings.openai_model,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        "temperature": 0.35,
+        "temperature": 0.6,
         "max_tokens": 260,
     }
     headers = {
-        "Authorization": f"Bearer {token}",
+        "Authorization": f"Bearer {settings.openai_api_key}",
         "Content-Type": "application/json",
     }
-    endpoint = _resolve_ai_chat_endpoint(provider=provider, base_url=base_url)
     try:
         with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
-            response = client.post(endpoint, headers=headers, json=payload)
+            response = client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
         if response.status_code >= 400:
             return fallback
         data = response.json()
@@ -677,205 +481,33 @@ def generate_review_reply(
         )
         if not reply:
             return fallback
-        safe_reply = _sanitize_customer_reply(reply)
-        if not safe_reply:
-            return fallback
-        return safe_reply
+        return " ".join(reply.split())
     except Exception:
         return fallback
 
 
-def generate_help_assistant_reply(
-    question: str,
-    context_text: str,
-    prompt: str = "",
-    *,
-    api_key: str = "",
-    model: str = "",
-    provider: str = "openai",
-    base_url: str = "",
-) -> str:
-    q = " ".join((question or "").split()).strip()
-    if not q:
-        return "Уточните вопрос, и я помогу пошагово."
-    token = (api_key or "").strip() or (settings.openai_api_key or "").strip()
-    fallback = _fallback_help_reply(q, context_text=context_text)
-    if not token:
-        return fallback
-    resolved_model = _resolve_provider_model(provider=provider, model=(model or "").strip() or settings.openai_model)
-    sys_prompt = (prompt or "").strip() or (
-        "Ты универсальный AI-помощник внутри интерфейса SEO WIBE. "
-        "Отвечай на любые вопросы пользователя: по сервису, маркетплейсам и общим темам. "
-        "Если вопрос про SEO WIBE, WB или Ozon — учитывай переданный контекст справки. "
-        "Если вопрос не по сервису — просто дай корректный общий ответ без отказа. "
-        "Отвечай кратко, структурно, по шагам. "
-        "Если информации мало, сначала задай один уточняющий вопрос. "
-        "Не выдумывай факты и API-правила."
-    )
-    user_prompt = (
-        f"Вопрос пользователя:\n{q}\n\n"
-        f"Контекст справки сервиса:\n{(context_text or '').strip()[:9000] or '[контекст не передан]'}\n\n"
-        "Сформируй практичный ответ на русском языке."
-    )
-    payload = {
-        "model": resolved_model,
-        "messages": [
-            {"role": "system", "content": sys_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "temperature": 0.45,
-        "max_tokens": 550,
-    }
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-    }
-    endpoint = _resolve_ai_chat_endpoint(provider=provider, base_url=base_url)
-    try:
-        with httpx.Client(timeout=OZON_TIMEOUT, follow_redirects=True) as client:
-            response = client.post(endpoint, headers=headers, json=payload)
-        if response.status_code >= 400:
-            return fallback
-        data = response.json()
-        reply = (
-            data.get("choices", [{}])[0]
-            .get("message", {})
-            .get("content", "")
-            .strip()
-        )
-        if not reply:
-            return fallback
-        compact = " ".join(reply.split())
-        safe_reply = _sanitize_customer_reply(compact)
-        return safe_reply or fallback
-    except Exception:
-        return fallback
-
-
-def _resolve_ai_chat_endpoint(provider: str, base_url: str) -> str:
-    raw_base = str(base_url or "").strip()
-    if raw_base:
-        base = raw_base.rstrip("/")
-        if base.endswith("/chat/completions"):
-            return base
-        if base.endswith("/v1"):
-            return f"{base}/chat/completions"
-        return f"{base}/v1/chat/completions"
-    code = str(provider or "").strip().lower()
-    endpoints = {
-        "openai": "https://api.openai.com/v1/chat/completions",
-        "openrouter": "https://openrouter.ai/api/v1/chat/completions",
-        "deepseek": "https://api.deepseek.com/chat/completions",
-        "groq": "https://api.groq.com/openai/v1/chat/completions",
-        "together": "https://api.together.xyz/v1/chat/completions",
-        "mistral": "https://api.mistral.ai/v1/chat/completions",
-        "xai": "https://api.x.ai/v1/chat/completions",
-    }
-    return endpoints.get(code, endpoints["openai"])
-
-
-def _resolve_provider_model(provider: str, model: str) -> str:
-    code = str(provider or "").strip().lower()
-    raw = " ".join(str(model or "").split()).strip()
-    if code == "deepseek":
-        if not raw:
-            return "deepseek-chat"
-        low = raw.lower()
-        # DeepSeek does not accept OpenAI family model IDs.
-        if low.startswith("gpt-") or low in {"o1", "o1-mini", "o3", "o4-mini"}:
-            return "deepseek-chat"
-        return raw
-    return raw or (settings.openai_model or "gpt-4o-mini")
-
-
-def _fallback_help_reply(question: str, context_text: str = "") -> str:
-    text = str(question or "").strip().lower()
-    if (
-        ("сколько" in text and "лун" in text and "марс" in text)
-        or ("how many" in text and "moon" in text and "mars" in text)
-    ):
-        return "У Марса 2 естественных спутника: Фобос и Деймос."
-    context_based = _contextual_help_reply(question=question, context_text=context_text)
-    if context_based:
-        return context_based
-    if "api" in text and ("ключ" in text or "key" in text):
-        return (
-            "Проверьте API-ключи в «Профиль»: для WB нужен токен, для Ozon формат client_id:api_key. "
-            "После сохранения нажмите «Проверить» и обновите нужный модуль."
-        )
-    if "статист" in text or "sales" in text:
-        return (
-            "Откройте «Статистика и дашборд», выберите маркетплейс и период, затем нажмите обновление. "
-            "При предупреждении 429 повторите запрос позже."
-        )
-    if "отзыв" in text or "вопрос" in text:
-        return (
-            "В модуле «Отзывы/Вопросы» сначала обновите список, затем сгенерируйте текст кнопкой AI "
-            "и отправьте ответ кнопкой отправки в строке."
-        )
-    return (
-        "Готов помочь с любым вопросом. Если нужен более точный ответ, добавьте детали или контекст."
-    )
-
-
-def _contextual_help_reply(question: str, context_text: str) -> str:
-    snippets = _best_context_snippets(
-        context_text=context_text,
-        query_text=question,
-        limit=2,
-        max_chars=240,
-    )
-    if not snippets:
-        return ""
-    if len(snippets) == 1:
-        return f"По справке сервиса: {snippets[0]}"
-    return f"По справке сервиса: 1) {snippets[0]} 2) {snippets[1]}"
-
-
-def fetch_wb_campaigns(
-    api_key: str,
-    enrich: bool = True,
-    fast_mode: bool = False,
-    request_timeout: httpx.Timeout | None = None,
-    max_attempts: int = 4,
-) -> list[dict[str, Any]]:
-    safe_attempts = max(1, int(max_attempts or 1))
-    if fast_mode:
-        attempts: list[tuple[str, str, dict[str, Any] | list[Any] | None]] = [
-            ("GET", "https://advert-api.wb.ru/adv/v1/promotion/count", None),
-            ("POST", "https://advert-api.wb.ru/adv/v1/promotion/count", {}),
-            ("GET", "https://advert-api.wildberries.ru/adv/v1/promotion/count", None),
-            ("POST", "https://advert-api.wildberries.ru/adv/v1/promotion/count", {}),
-        ]
-    else:
-        attempts = [
-            ("GET", "https://advert-api.wb.ru/adv/v1/promotion/count", None),
-            ("POST", "https://advert-api.wb.ru/adv/v1/promotion/count", {}),
-            ("POST", "https://advert-api.wb.ru/adv/v1/promotion/count", {"status": [9, 10, 11]}),
-            ("GET", "https://advert-api.wb.ru/api/v1/adverts", None),
-            ("GET", "https://advert-api.wb.ru/adv/v0/adverts", None),
-            ("GET", "https://advert-api.wb.ru/api/v1/adv/list", None),
-            ("POST", "https://advert-api.wb.ru/api/v1/adv/list", {}),
-            ("GET", "https://advert-api.wb.ru/adv/v1/adv/list", None),
-            ("POST", "https://advert-api.wb.ru/adv/v1/adv/list", {}),
-            ("POST", "https://advert-api.wb.ru/adv/v1/adv/list", {"order": "create", "direction": "desc"}),
-            ("POST", "https://advert-api.wb.ru/adv/v1/promotion/adverts", {}),
-            ("POST", "https://advert-api.wb.ru/adv/v1/promotion/adverts", []),
-            ("GET", "https://advert-api.wildberries.ru/adv/v1/promotion/count", None),
-            ("POST", "https://advert-api.wildberries.ru/adv/v1/promotion/count", {}),
-            ("GET", "https://advert-api.wildberries.ru/api/v1/adverts", None),
-        ]
+def fetch_wb_campaigns(api_key: str, enrich: bool = True) -> list[dict[str, Any]]:
+    attempts: list[tuple[str, str, dict[str, Any] | list[Any] | None]] = [
+        ("GET", "https://advert-api.wb.ru/adv/v1/promotion/count", None),
+        ("POST", "https://advert-api.wb.ru/adv/v1/promotion/count", {}),
+        ("POST", "https://advert-api.wb.ru/adv/v1/promotion/count", {"status": [9, 10, 11]}),
+        ("GET", "https://advert-api.wb.ru/api/v1/adverts", None),
+        ("GET", "https://advert-api.wb.ru/adv/v0/adverts", None),
+        ("GET", "https://advert-api.wb.ru/api/v1/adv/list", None),
+        ("POST", "https://advert-api.wb.ru/api/v1/adv/list", {}),
+        ("GET", "https://advert-api.wb.ru/adv/v1/adv/list", None),
+        ("POST", "https://advert-api.wb.ru/adv/v1/adv/list", {}),
+        ("POST", "https://advert-api.wb.ru/adv/v1/adv/list", {"order": "create", "direction": "desc"}),
+        ("POST", "https://advert-api.wb.ru/adv/v1/promotion/adverts", {}),
+        ("POST", "https://advert-api.wb.ru/adv/v1/promotion/adverts", []),
+        ("GET", "https://advert-api.wildberries.ru/adv/v1/promotion/count", None),
+        ("POST", "https://advert-api.wildberries.ru/adv/v1/promotion/count", {}),
+        ("GET", "https://advert-api.wildberries.ru/api/v1/adverts", None),
+    ]
 
     discovered_ids: list[int] = []
     for method, endpoint, payload in attempts:
-        data = _request_wb_json(
-            method,
-            endpoint,
-            api_key=api_key,
-            payload=payload,
-            timeout=request_timeout,
-            max_attempts=safe_attempts,
-        )
+        data = _request_wb_json(method, endpoint, api_key=api_key, payload=payload)
         if data is None:
             continue
         discovered_ids.extend(_extract_campaign_ids(data))
@@ -890,14 +522,7 @@ def fetch_wb_campaigns(
         ("GET", "https://advert-api.wildberries.ru/adv/v1/promotion/count", None),
         ("POST", "https://advert-api.wildberries.ru/adv/v1/promotion/count", {}),
     ):
-        count_data = _request_wb_json(
-            method,
-            endpoint,
-            api_key=api_key,
-            payload=payload,
-            timeout=request_timeout,
-            max_attempts=safe_attempts,
-        )
+        count_data = _request_wb_json(method, endpoint, api_key=api_key, payload=payload)
         if count_data is None:
             continue
         discovered_ids.extend(_extract_campaign_ids(count_data))
@@ -967,18 +592,11 @@ def fetch_wb_campaign_stats_bulk(
     campaign_ids: list[int],
     date_from: str | None = None,
     date_to: str | None = None,
-    fast_mode: bool = False,
-    request_timeout: httpx.Timeout | None = None,
-    max_attempts: int = 4,
-    chunk_size: int = 40,
-    max_chunks: int | None = None,
 ) -> dict[str, dict[str, Any]]:
     ids = [int(x) for x in campaign_ids if int(x) > 0]
     ids = sorted(set(ids))
     if not ids:
         return {}
-    safe_chunk_size = max(1, int(chunk_size or 1))
-    safe_attempts = max(1, int(max_attempts or 1))
 
     left = _parse_iso_date(date_from) or (date.today() - timedelta(days=6))
     right = _parse_iso_date(date_to) or date.today()
@@ -989,56 +607,28 @@ def fetch_wb_campaign_stats_bulk(
         "https://advert-api.wb.ru/adv/v3/fullstats",
         "https://advert-api.wildberries.ru/adv/v3/fullstats",
     ]
-    payload_variants: list[dict[str, Any]]
-    if fast_mode:
-        payload_variants = [{"ids": [], "from": left.isoformat(), "to": right.isoformat()}]
-    else:
-        payload_variants = [
-            {"ids": [], "from": left.isoformat(), "to": right.isoformat()},
-            {"id": [], "from": left.isoformat(), "to": right.isoformat()},
-            {"advertIds": [], "from": left.isoformat(), "to": right.isoformat()},
-        ]
-
     rows: list[dict[str, Any]] = []
-    for chunk_idx, chunk_start in enumerate(range(0, len(ids), safe_chunk_size)):
-        if max_chunks is not None and chunk_idx >= max(0, int(max_chunks)):
-            break
-        chunk = ids[chunk_start:chunk_start + safe_chunk_size]
+    for chunk_start in range(0, len(ids), 40):
+        chunk = ids[chunk_start:chunk_start + 40]
         ids_csv = ",".join(str(x) for x in chunk)
         got_chunk = False
         for endpoint in endpoints:
             params = {"ids": ids_csv, "beginDate": left.isoformat(), "endDate": right.isoformat()}
-            data = _request_wb_json(
-                "GET",
-                endpoint,
-                api_key=api_key,
-                params=params,
-                timeout=request_timeout,
-                max_attempts=safe_attempts,
-            )
+            data = _request_wb_json("GET", endpoint, api_key=api_key, params=params)
             dict_rows = _as_dict_list(data) if data is not None else []
             if dict_rows:
                 rows.extend(dict_rows)
                 got_chunk = True
                 break
 
+            payload_variants: list[dict[str, Any]] = [
+                {"ids": chunk, "from": left.isoformat(), "to": right.isoformat()},
+                {"id": chunk, "from": left.isoformat(), "to": right.isoformat()},
+                {"advertIds": chunk, "from": left.isoformat(), "to": right.isoformat()},
+            ]
             posted = False
-            for payload_template in payload_variants:
-                payload = dict(payload_template)
-                if "ids" in payload:
-                    payload["ids"] = chunk
-                if "id" in payload:
-                    payload["id"] = chunk
-                if "advertIds" in payload:
-                    payload["advertIds"] = chunk
-                pdata = _request_wb_json(
-                    "POST",
-                    endpoint,
-                    api_key=api_key,
-                    payload=payload,
-                    timeout=request_timeout,
-                    max_attempts=safe_attempts,
-                )
+            for payload in payload_variants:
+                pdata = _request_wb_json("POST", endpoint, api_key=api_key, payload=payload)
                 dict_rows = _as_dict_list(pdata) if pdata is not None else []
                 if dict_rows:
                     rows.extend(dict_rows)
@@ -1736,39 +1326,29 @@ def _request_wb_json(
     api_key: str,
     params: dict[str, Any] | None = None,
     payload: dict[str, Any] | list[Any] | None = None,
-    timeout: httpx.Timeout | None = None,
-    max_attempts: int = 4,
-    auth_variants: list[str] | None = None,
 ) -> dict[str, Any] | list[dict[str, Any]] | None:
     token = api_key.strip()
     if not token:
         return None
-    auth_values = auth_variants or [token, f"Bearer {token}"]
-    safe_attempts = max(1, int(max_attempts or 1))
-    timeout_cfg = timeout or WB_TIMEOUT
-    method_up = str(method or "GET").upper()
-    for auth_value in auth_values:
+    auth_variants = [token, f"Bearer {token}"]
+    for auth_value in auth_variants:
         headers = {"Authorization": auth_value, "Content-Type": "application/json"}
-        for attempt in range(safe_attempts):
+        for attempt in range(4):
             response = None
             try:
-                with httpx.Client(timeout=timeout_cfg, follow_redirects=True) as client:
-                    if method_up == "POST":
+                with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
+                    if method == "POST":
                         response = client.post(url, headers=headers, params=params, json=payload)
-                    elif method_up == "PATCH":
-                        response = client.patch(url, headers=headers, params=params, json=payload)
-                    elif method_up == "PUT":
-                        response = client.put(url, headers=headers, params=params, json=payload)
                     else:
                         response = client.get(url, headers=headers, params=params)
             except Exception:
                 response = None
             if response is None:
-                if attempt < safe_attempts - 1:
+                if attempt < 3:
                     time.sleep(0.35 * (attempt + 1))
                 continue
             if response.status_code == 429:
-                if attempt < safe_attempts - 1:
+                if attempt < 3:
                     time.sleep(0.65 * (attempt + 1))
                     continue
                 break
@@ -1814,31 +1394,13 @@ def _request_ozon_response(
     headers = _build_ozon_headers(api_key)
     if not headers:
         return None
-    method_up = str(method or "POST").upper().strip()
-    max_attempts = 3
-    for attempt in range(max_attempts):
-        try:
-            with httpx.Client(timeout=OZON_TIMEOUT, follow_redirects=True) as client:
-                if method_up == "POST":
-                    response = client.post(url, headers=headers, json=payload or {})
-                elif method_up == "PATCH":
-                    response = client.patch(url, headers=headers, json=payload or {})
-                elif method_up == "PUT":
-                    response = client.put(url, headers=headers, json=payload or {})
-                else:
-                    response = client.get(url, headers=headers)
-        except Exception:
-            if attempt < max_attempts - 1:
-                time.sleep(0.55 * (attempt + 1))
-            continue
-        if response.status_code == 429 and attempt < max_attempts - 1:
-            time.sleep(_retry_after_seconds(response, fallback=0.8 * (attempt + 1)))
-            continue
-        if response.status_code >= 500 and attempt < max_attempts - 1:
-            time.sleep(0.8 * (attempt + 1))
-            continue
-        return response
-    return None
+    try:
+        with httpx.Client(timeout=OZON_TIMEOUT, follow_redirects=True) as client:
+            if method == "POST":
+                return client.post(url, headers=headers, json=payload or {})
+            return client.get(url, headers=headers)
+    except Exception:
+        return None
 
 
 def _normalize_review_row(row: dict[str, Any], is_answered: bool) -> dict[str, Any]:
@@ -1876,15 +1438,7 @@ def _normalize_review_row(row: dict[str, Any], is_answered: bool) -> dict[str, A
     )
     effective_answered = bool(is_answered or answer_text)
     return {
-        "id": _pick_first_str(
-            row.get("id"),
-            row.get("feedbackId"),
-            row.get("feedback_id"),
-            row.get("reviewId"),
-            row.get("review_id"),
-            row.get("commentId"),
-            row.get("comment_id"),
-        ),
+        "id": str(row.get("id") or ""),
         "date": created[:10] if created else "",
         "created_at": created,
         "product": str(product.get("productName") or product.get("nmId") or ""),
@@ -2055,7 +1609,6 @@ def _normalize_wb_question_row(row: dict[str, Any], is_answered: bool) -> dict[s
         row.get("media"),
     )
     effective_answered = bool(is_answered or answer_text)
-    state = _pick_first_str(row.get("state"), row.get("stateName"), row.get("wbState"))
     return {
         "id": _pick_first_str(row.get("id"), row.get("questionId"), row.get("question_id")),
         "date": created[:10] if created else "",
@@ -2063,7 +1616,6 @@ def _normalize_wb_question_row(row: dict[str, Any], is_answered: bool) -> dict[s
         "product": str(product.get("productName") or product.get("nmId") or row.get("productName") or "Товар WB"),
         "article": str(product.get("nmId") or row.get("nmId") or row.get("offerId") or ""),
         "barcode": _pick_first_str(product.get("barcode"), row.get("barcode")),
-        "state": state,
         "stars": stars,
         "text": text,
         "user": user_name,
@@ -2165,14 +1717,6 @@ def _normalize_ozon_question_row(
         or _is_truthy(row.get("answered"))
         or status in {"answered", "replied", "processed", "published", "published_answer"}
     )
-    sku_value = _to_int(
-        _pick_first_str(
-            core.get("sku"),
-            row.get("sku"),
-            product.get("sku") if isinstance(product, dict) else "",
-            mapped.get("article"),
-        )
-    )
     return {
         "id": item_id,
         "date": created[:10] if created else "",
@@ -2180,8 +1724,6 @@ def _normalize_ozon_question_row(
         "product": product_name or "Товар Ozon",
         "article": article,
         "barcode": barcode,
-        "state": status.upper() if status else "",
-        "sku": int(sku_value) if sku_value and sku_value > 0 else None,
         "stars": stars,
         "text": text,
         "user": user_name,
@@ -2655,131 +2197,17 @@ def _looks_answered_feedback(row: dict[str, Any]) -> bool:
 
 
 def _dedupe_review_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    by_key: dict[str, dict[str, Any]] = {}
-    order: list[str] = []
+    by_id: dict[str, dict[str, Any]] = {}
     tail: list[dict[str, Any]] = []
     for row in rows:
         if not isinstance(row, dict):
             continue
-        rid = _pick_first_str(
-            row.get("id"),
-            row.get("feedbackId"),
-            row.get("feedback_id"),
-            row.get("reviewId"),
-            row.get("review_id"),
-            row.get("questionId"),
-            row.get("question_id"),
-            row.get("commentId"),
-            row.get("comment_id"),
-        )
-        signature = _feedback_signature_key(row)
-        key = f"id:{rid}" if rid else (f"sig:{signature}" if signature else "")
-        if not key:
+        rid = _pick_first_str(row.get("id"), row.get("feedbackId"), row.get("feedback_id"))
+        if not rid:
             tail.append(row)
             continue
-        prev = by_key.get(key)
-        if prev is None:
-            by_key[key] = row
-            order.append(key)
-            continue
-        if _feedback_row_score(row) >= _feedback_row_score(prev):
-            by_key[key] = row
-    return [by_key[key] for key in order] + tail
-
-
-def _feedback_signature_key(row: dict[str, Any]) -> str:
-    if not isinstance(row, dict):
-        return ""
-    product = row.get("productDetails") if isinstance(row.get("productDetails"), dict) else {}
-    created = _pick_first_str(
-        row.get("createdDate"),
-        row.get("createdAt"),
-        row.get("published_at"),
-        row.get("date"),
-    )
-    article = _pick_first_str(
-        row.get("article"),
-        row.get("nmId"),
-        row.get("offerId"),
-        product.get("nmId") if isinstance(product, dict) else "",
-    )
-    barcode = _pick_first_str(
-        row.get("barcode"),
-        product.get("barcode") if isinstance(product, dict) else "",
-        product.get("imtId") if isinstance(product, dict) else "",
-    )
-    user_name = _pick_first_str(
-        row.get("user"),
-        row.get("userName"),
-        row.get("customerName"),
-        row.get("buyerName"),
-        row.get("author"),
-        row.get("authorName"),
-    )
-    stars = _pick_first_str(row.get("stars"), row.get("rating"), row.get("score"), row.get("productValuation"))
-    text = _join_non_empty(
-        [
-            str(row.get("text") or "").strip(),
-            str(row.get("question") or "").strip(),
-            str(row.get("content") or "").strip(),
-            str(row.get("message") or "").strip(),
-            str(row.get("pros") or "").strip(),
-            str(row.get("cons") or "").strip(),
-        ]
-    )
-    answer = _extract_answer_text(
-        row.get("answer"),
-        row.get("answerText"),
-        row.get("supplierAnswer"),
-        row.get("sellerAnswer"),
-        row.get("response"),
-        row.get("reply"),
-    )
-    payload = "|".join(
-        [
-            created.strip().lower(),
-            article.strip().lower(),
-            barcode.strip().lower(),
-            user_name.strip().lower(),
-            stars.strip().lower(),
-            text.strip().lower(),
-            answer.strip().lower(),
-        ]
-    )
-    if not payload or not payload.replace("|", "").strip():
-        return ""
-    return payload[:520]
-
-
-def _feedback_row_score(row: dict[str, Any]) -> int:
-    if not isinstance(row, dict):
-        return 0
-    score = 0
-    if _looks_answered_feedback(row):
-        score += 100
-    answer = _extract_answer_text(
-        row.get("answer"),
-        row.get("answerText"),
-        row.get("supplierAnswer"),
-        row.get("sellerAnswer"),
-        row.get("response"),
-        row.get("reply"),
-    )
-    text = _join_non_empty(
-        [
-            str(row.get("text") or "").strip(),
-            str(row.get("question") or "").strip(),
-            str(row.get("content") or "").strip(),
-            str(row.get("message") or "").strip(),
-        ]
-    )
-    score += min(len(answer), 60)
-    score += min(len(text), 40)
-    if _pick_first_str(row.get("createdDate"), row.get("createdAt"), row.get("published_at"), row.get("date")):
-        score += 10
-    if _pick_first_str(row.get("user"), row.get("userName"), row.get("customerName"), row.get("author")):
-        score += 5
-    return score
+        by_id[rid] = row
+    return list(by_id.values()) + tail
 
 
 def _extract_ozon_review_rows(data: dict[str, Any] | list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -2930,186 +2358,6 @@ def _fallback_question_reply(question_text: str, product_name: str, reviewer_nam
     )
 
 
-def _contextual_question_reply(question_text: str, product_name: str, reviewer_name: str, prompt_text: str) -> str:
-    base = _fallback_question_reply(question_text, product_name, reviewer_name)
-    knowledge_text = _extract_knowledge_text(prompt_text)
-    if not knowledge_text:
-        return base
-    snippets = _best_context_snippets(
-        context_text=knowledge_text,
-        query_text=f"{question_text} {product_name}",
-        limit=2,
-        max_chars=220,
-    )
-    if not snippets:
-        return base
-    clean_product = product_name.replace('"', " ").replace("'", " ").replace("\\", " ").strip()
-    greeting = _build_greeting(reviewer_name)
-    facts = " ".join(snippets).strip()
-    if facts and not re.search(r"[.!?]\s*$", facts):
-        facts = f"{facts}."
-    reply = f"{greeting} По товару {clean_product}: {facts}"
-    if len(reply) < 260:
-        reply += " Если нужны точные параметры под вашу задачу, уточните условия применения."
-    return reply
-
-
-def _extract_knowledge_text(prompt_text: str) -> str:
-    raw = str(prompt_text or "").strip()
-    if not raw:
-        return ""
-    lowered = raw.lower()
-    marker_pos = -1
-    marker_len = 0
-    for marker in ("база знаний:", "knowledge base:"):
-        pos = lowered.find(marker)
-        if pos >= 0 and (marker_pos < 0 or pos < marker_pos):
-            marker_pos = pos
-            marker_len = len(marker)
-    body = raw[marker_pos + marker_len:] if marker_pos >= 0 else raw
-    parts = re.split(r"[\n\r]+", body)
-    clean_lines: list[str] = []
-    instruction_bits = (
-        "сформируй только текст ответа",
-        "ты менеджер",
-        "ты профессиональный",
-        "ты проффесиональный",
-        "твоя задача",
-        "используй базу знаний",
-        "служебные инструкции",
-    )
-    instruction_patterns = (
-        r"\bты\s+проф+ес+иональ\w*[^.!?]*[.!?]?",
-        r"\bты\s+менеджер[^.!?]*[.!?]?",
-        r"\bтвоя\s+задача[^.!?]*[.!?]?",
-        r"\bнеобходимо\s+будет[^.!?]*[.!?]?",
-        r"\bклиент\s+задает\s+вопросы[^.!?]*[.!?]?",
-        r"\bсформируй\s+только\s+текст\s+ответа[^.!?]*[.!?]?",
-    )
-    for line in parts:
-        compact = " ".join(str(line or "").split()).strip()
-        if not compact:
-            continue
-        sentences = re.split(r"(?<=[.!?])\s+", compact)
-        kept: list[str] = []
-        for sentence in sentences:
-            seg = " ".join(sentence.split()).strip()
-            if not seg:
-                continue
-            low = seg.lower()
-            if any(bit in low for bit in instruction_bits):
-                continue
-            kept.append(seg)
-        if not kept:
-            cleaned = compact
-            for pattern in instruction_patterns:
-                cleaned = re.sub(pattern, " ", cleaned, flags=re.IGNORECASE)
-            cleaned = " ".join(cleaned.split()).strip(" -:;,.")
-            if cleaned:
-                kept.append(cleaned)
-        if kept:
-            clean_lines.append(" ".join(kept))
-    return "\n".join(clean_lines)[:14000]
-
-
-def _best_context_snippets(context_text: str, query_text: str, limit: int = 2, max_chars: int = 220) -> list[str]:
-    source = " ".join(str(context_text or "").split())
-    if not source:
-        return []
-    query_tokens = _context_tokens(query_text)
-    chunks = re.split(r"[.!?\n;]+", source)
-    ranked: list[tuple[int, str]] = []
-    for chunk in chunks:
-        text = " ".join(chunk.split()).strip()
-        if len(text) < 18:
-            continue
-        low = text.lower()
-        overlap = sum(1 for token in query_tokens if token in low) if query_tokens else 0
-        if query_tokens and overlap <= 0:
-            continue
-        ranked.append((overlap, text[:max_chars]))
-    if not ranked:
-        fallback = source[:max_chars].strip()
-        return [fallback] if fallback else []
-    ranked.sort(key=lambda x: (x[0], len(x[1])), reverse=True)
-    out: list[str] = []
-    seen: set[str] = set()
-    for _, text in ranked:
-        normalized = text.lower()
-        if normalized in seen:
-            continue
-        seen.add(normalized)
-        out.append(text)
-        if len(out) >= max(1, int(limit or 1)):
-            break
-    return out
-
-
-def _context_tokens(text: str) -> list[str]:
-    words = re.findall(r"[a-zA-Zа-яА-Я0-9_]{3,}", str(text or "").lower())
-    stop = {
-        "для", "это", "что", "как", "или", "если", "при", "без", "его", "еще", "ещё",
-        "with", "this", "that", "from", "into", "about", "your", "have", "will", "would",
-    }
-    out: list[str] = []
-    seen: set[str] = set()
-    for word in words:
-        if word in stop or word in seen:
-            continue
-        seen.add(word)
-        out.append(word)
-        if len(out) >= 40:
-            break
-    return out
-
-
-def _sanitize_customer_reply(text: str) -> str:
-    compact = " ".join((text or "").split()).strip()
-    if not compact:
-        return ""
-    lowered = compact.lower()
-    leak_markers = (
-        "база знаний:",
-        "используй базу знаний",
-        "служебный контекст",
-        "сформируй только текст ответа клиенту",
-        "ты профессиональный менеджер",
-        "ты профессиональный менеджер маркетплейсов",
-        "ты проффесиональный менеджер",
-        "твоя задача на текущем месте работы",
-        "клиент задает вопросы",
-        "клиент задает вопросы на",
-        "you are a marketplace manager",
-        "knowledge base:",
-        "system prompt",
-    )
-    cut_at: int | None = None
-    for marker in leak_markers:
-        idx = lowered.find(marker)
-        if idx <= 0:
-            continue
-        if cut_at is None or idx < cut_at:
-            cut_at = idx
-    for pattern in (
-        r"\bты\s+проф+ес+иональ\w*\s+менеджер",
-        r"\bтвоя\s+задача\b",
-        r"\bклиент\s+задает\s+вопросы\b",
-    ):
-        match = re.search(pattern, lowered)
-        if not match:
-            continue
-        idx = int(match.start())
-        if idx <= 0:
-            continue
-        if cut_at is None or idx < cut_at:
-            cut_at = idx
-    if cut_at is not None:
-        compact = compact[:cut_at].strip(" \t\r\n-:;,.")
-    if len(compact) > 3000:
-        compact = compact[:3000].rsplit(" ", 1)[0].strip()
-    return compact
-
-
 def _build_ozon_headers(api_key: str) -> dict[str, str]:
     creds = _parse_ozon_credentials(api_key)
     if not creds:
@@ -3129,18 +2377,6 @@ def _parse_ozon_credentials(api_key: str) -> tuple[str, str] | None:
     if not left.strip() or not right.strip():
         return None
     return left.strip(), right.strip()
-
-
-def _wb_question_state_candidates(state: str) -> list[str]:
-    out: list[str] = []
-    for raw in (state, "suppliersPortalSynch", "wbRu"):
-        text = str(raw or "").strip()
-        if not text:
-            continue
-        if text in out:
-            continue
-        out.append(text)
-    return out
 
 
 def _build_greeting(reviewer_name: str) -> str:
@@ -3167,23 +2403,6 @@ def _extract_answer_text(*values: Any) -> str:
         if text:
             return text
     return ""
-
-
-def _short_error_text(value: str, max_len: int = 320) -> str:
-    compact = " ".join(str(value or "").split()).strip()
-    if len(compact) <= max_len:
-        return compact
-    return compact[:max_len].rstrip() + "..."
-
-
-def _retry_after_seconds(response: httpx.Response, fallback: float = 1.0) -> float:
-    raw = str(response.headers.get("Retry-After") or "").strip()
-    if raw.isdigit():
-        try:
-            return max(0.2, min(float(raw), 12.0))
-        except Exception:
-            return max(0.2, min(float(fallback), 12.0))
-    return max(0.2, min(float(fallback), 12.0))
 
 
 def _extract_photo_urls(*values: Any) -> list[str]:
@@ -3275,350 +2494,3 @@ def _is_truthy(value: Any) -> bool:
     if isinstance(value, str):
         return value.strip().lower() in {"true", "1", "yes", "y", "ok"}
     return False
-
-
-def fetch_wb_returns(
-    api_key: str,
-    status: str | None = None,
-    date_from: str | None = None,
-    date_to: str | None = None,
-    limit: int = 200,
-) -> dict[str, Any]:
-    safe_limit = max(1, min(int(limit or 1), 500))
-    payloads: list[dict[str, Any]] = [
-        {"limit": safe_limit},
-        {"take": safe_limit, "skip": 0},
-        {"is_archive": False, "limit": safe_limit},
-    ]
-    if status:
-        for pl in payloads:
-            pl["status"] = status
-    rows: list[dict[str, Any]] = []
-    warnings: list[str] = []
-    for endpoint in (
-        "https://marketplace-api.wildberries.ru/api/v1/claims",
-        "https://supplies-api.wildberries.ru/api/v1/claims",
-    ):
-        for payload in payloads:
-            data = _request_wb_json("POST", endpoint, api_key=api_key, payload=payload, auth_variants=[api_key.strip(), f"Bearer {api_key.strip()}"])
-            if data is None:
-                continue
-            parsed = _extract_first_dict_list(data, preferred_keys=("claims", "items", "data", "result", "list"))
-            if parsed:
-                rows = parsed
-                break
-            if isinstance(data, dict):
-                single_id = _pick_first_str(data.get("id"), data.get("claim_id"), data.get("claimId"))
-                if single_id:
-                    rows = [data]
-                    break
-        if rows:
-            break
-    normalized = [_normalize_wb_return_row(x) for x in rows if isinstance(x, dict)]
-    normalized = _filter_rows_by_period(normalized, date_from=date_from, date_to=date_to)
-    return {"rows": normalized, "warnings": warnings}
-
-
-def fetch_wb_return_details(api_key: str, claim_id: str) -> dict[str, Any] | None:
-    rid = str(claim_id or "").strip()
-    if not rid:
-        return None
-    endpoints = (
-        "https://marketplace-api.wildberries.ru/api/v1/claim",
-        "https://supplies-api.wildberries.ru/api/v1/claim",
-        "https://marketplace-api.wildberries.ru/api/v1/claims",
-    )
-    for endpoint in endpoints:
-        for method, params, payload in (
-            ("GET", {"id": rid}, None),
-            ("GET", {"claimId": rid}, None),
-            ("POST", None, {"id": rid}),
-            ("POST", None, {"claim_id": rid}),
-            ("POST", None, {"claimId": rid}),
-        ):
-            data = _request_wb_json(method, endpoint, api_key=api_key, params=params, payload=payload, auth_variants=[api_key.strip(), f"Bearer {api_key.strip()}"])
-            if data is None:
-                continue
-            if isinstance(data, dict):
-                candidate = data.get("claim") if isinstance(data.get("claim"), dict) else data
-                cid = _pick_first_str(candidate.get("id"), candidate.get("claim_id"), candidate.get("claimId"))
-                if cid and cid == rid:
-                    return _normalize_wb_return_row(candidate)
-                rows = _extract_first_dict_list(data, preferred_keys=("claims", "items", "data", "result", "list"))
-                for row in rows:
-                    if _pick_first_str(row.get("id"), row.get("claim_id"), row.get("claimId")) == rid:
-                        return _normalize_wb_return_row(row)
-            if isinstance(data, list):
-                for row in data:
-                    if isinstance(row, dict) and _pick_first_str(row.get("id"), row.get("claim_id"), row.get("claimId")) == rid:
-                        return _normalize_wb_return_row(row)
-    return None
-
-
-def action_wb_return(api_key: str, claim_id: str, action: str, comment: str = "") -> tuple[bool, str, dict[str, Any] | None]:
-    rid = str(claim_id or "").strip()
-    if not rid:
-        return False, "Не указан ID заявки на возврат", None
-    op = str(action or "").strip().lower()
-    if op not in {"approve", "accept", "reject", "decline", "comment"}:
-        return False, "Недопустимое действие возврата", None
-
-    mapped = "approve" if op in {"approve", "accept"} else ("reject" if op in {"reject", "decline"} else "comment")
-    payloads: list[dict[str, Any]] = [
-        {"id": rid, "action": mapped, "comment": comment or ""},
-        {"claim_id": rid, "status": mapped, "comment": comment or ""},
-        {"claimId": rid, "status": mapped, "comment": comment or ""},
-    ]
-    endpoints = (
-        "https://marketplace-api.wildberries.ru/api/v1/claim/action",
-        "https://marketplace-api.wildberries.ru/api/v1/claims/action",
-        "https://supplies-api.wildberries.ru/api/v1/claim/action",
-    )
-    last_error = "WB API возвратов недоступен"
-    for endpoint in endpoints:
-        for payload in payloads:
-            response = _request_wb_json("PATCH", endpoint, api_key=api_key, payload=payload, auth_variants=[api_key.strip(), f"Bearer {api_key.strip()}"])
-            if response is not None:
-                return True, "Действие по возврату отправлено", response if isinstance(response, dict) else {"raw": response}
-    return False, last_error, None
-
-
-def fetch_ozon_ads_campaigns(api_key: str, limit: int = 200) -> dict[str, Any]:
-    safe_limit = max(1, min(int(limit or 1), 500))
-    warnings: list[str] = []
-    rows: list[dict[str, Any]] = []
-    payloads: list[dict[str, Any]] = [
-        {"limit": safe_limit, "offset": 0},
-        {"page": 1, "page_size": min(safe_limit, 100)},
-    ]
-    endpoints = (
-        "https://performance.ozon.ru:443/api/client/campaign",
-        "https://api-seller.ozon.ru/v1/advertising/campaign/list",
-        "https://api-seller.ozon.ru/v2/advertising/campaign/list",
-    )
-    for endpoint in endpoints:
-        for payload in payloads:
-            data = _request_ozon_json("POST", endpoint, api_key=api_key, payload=payload)
-            if data is None:
-                continue
-            parsed = _extract_first_dict_list(data, preferred_keys=("campaigns", "items", "list", "data", "result"))
-            if parsed:
-                rows = parsed
-                break
-        if rows:
-            break
-    if not rows:
-        warnings.append("Ozon Ads API не вернул список кампаний (возможны ограничения ключа).")
-    normalized = [_normalize_ozon_ads_campaign_row(x) for x in rows if isinstance(x, dict)]
-    return {"rows": normalized, "warnings": warnings}
-
-
-def fetch_ozon_ads_analytics(
-    api_key: str,
-    date_from: str | None = None,
-    date_to: str | None = None,
-    campaign_id: int | None = None,
-) -> dict[str, Any]:
-    left = _parse_iso_date(date_from) or (date.today() - timedelta(days=6))
-    right = _parse_iso_date(date_to) or date.today()
-    if left > right:
-        left, right = right, left
-    payloads: list[dict[str, Any]] = [
-        {"date_from": left.isoformat(), "date_to": right.isoformat(), "campaign_id": campaign_id},
-        {"from": left.isoformat(), "to": right.isoformat(), "campaign_id": campaign_id},
-    ]
-    warnings: list[str] = []
-    rows: list[dict[str, Any]] = []
-    for endpoint in (
-        "https://performance.ozon.ru:443/api/client/statistics/campaign",
-        "https://api-seller.ozon.ru/v1/advertising/statistics",
-    ):
-        for payload in payloads:
-            data = _request_ozon_json("POST", endpoint, api_key=api_key, payload=payload)
-            if data is None:
-                continue
-            parsed = _extract_first_dict_list(data, preferred_keys=("rows", "campaigns", "items", "data", "result", "list"))
-            if parsed:
-                rows = parsed
-                break
-        if rows:
-            break
-    if not rows:
-        warnings.append("Ozon Ads аналитика недоступна по текущему ключу.")
-    out_rows = [_normalize_ozon_ads_analytics_row(x) for x in rows if isinstance(x, dict)]
-    if campaign_id and int(campaign_id or 0) > 0:
-        out_rows = [x for x in out_rows if int(x.get("campaign_id") or 0) == int(campaign_id)]
-    totals = {
-        "views": float(round(sum(float(x.get("views") or 0.0) for x in out_rows), 3)),
-        "clicks": float(round(sum(float(x.get("clicks") or 0.0) for x in out_rows), 3)),
-        "orders": float(round(sum(float(x.get("orders") or 0.0) for x in out_rows), 3)),
-        "spent": float(round(sum(float(x.get("spent") or 0.0) for x in out_rows), 3)),
-        "ctr_avg": float(round((sum(float(x.get("ctr") or 0.0) for x in out_rows) / len(out_rows)) if out_rows else 0.0, 4)),
-        "cr_avg": float(round((sum(float(x.get("cr") or 0.0) for x in out_rows) / len(out_rows)) if out_rows else 0.0, 4)),
-    }
-    return {
-        "date_from": left.isoformat(),
-        "date_to": right.isoformat(),
-        "rows": out_rows,
-        "totals": totals,
-        "warnings": warnings,
-    }
-
-
-def fetch_ozon_returns(
-    api_key: str,
-    status: str | None = None,
-    date_from: str | None = None,
-    date_to: str | None = None,
-    limit: int = 200,
-) -> dict[str, Any]:
-    safe_limit = max(1, min(int(limit or 1), 500))
-    warnings: list[str] = []
-    rows: list[dict[str, Any]] = []
-    payloads: list[dict[str, Any]] = [
-        {
-            "filter": {
-                "status": status or "",
-                "date_from": date_from or "",
-                "date_to": date_to or "",
-            },
-            "limit": safe_limit,
-            "offset": 0,
-        },
-        {"limit": safe_limit, "offset": 0},
-    ]
-    for endpoint in (
-        "https://api-seller.ozon.ru/v1/returns/company/fbs",
-        "https://api-seller.ozon.ru/v1/returns/list",
-    ):
-        for payload in payloads:
-            data = _request_ozon_json("POST", endpoint, api_key=api_key, payload=payload)
-            if data is None:
-                continue
-            parsed = _extract_first_dict_list(data, preferred_keys=("returns", "items", "list", "data", "result"))
-            if parsed:
-                rows = parsed
-                break
-        if rows:
-            break
-    if not rows:
-        warnings.append("Ozon returns API не вернул данные (staged режим).")
-    normalized = [_normalize_ozon_return_row(x) for x in rows if isinstance(x, dict)]
-    normalized = _filter_rows_by_period(normalized, date_from=date_from, date_to=date_to)
-    return {"rows": normalized, "warnings": warnings}
-
-
-def fetch_ozon_return_details(api_key: str, return_id: str) -> dict[str, Any] | None:
-    rid = str(return_id or "").strip()
-    if not rid:
-        return None
-    payloads = [
-        {"return_id": rid},
-        {"id": rid},
-    ]
-    for endpoint in (
-        "https://api-seller.ozon.ru/v1/returns/company/fbs/info",
-        "https://api-seller.ozon.ru/v1/returns/info",
-    ):
-        for payload in payloads:
-            data = _request_ozon_json("POST", endpoint, api_key=api_key, payload=payload)
-            if data is None:
-                continue
-            if isinstance(data, dict):
-                candidate = data.get("result") if isinstance(data.get("result"), dict) else data
-                cid = _pick_first_str(candidate.get("id"), candidate.get("return_id"), candidate.get("returnId"))
-                if cid and cid == rid:
-                    return _normalize_ozon_return_row(candidate)
-            rows = _extract_first_dict_list(data, preferred_keys=("returns", "items", "list", "data", "result"))
-            for row in rows:
-                if _pick_first_str(row.get("id"), row.get("return_id"), row.get("returnId")) == rid:
-                    return _normalize_ozon_return_row(row)
-    return None
-
-
-def _normalize_wb_return_row(row: dict[str, Any]) -> dict[str, Any]:
-    claim_id = _pick_first_str(row.get("id"), row.get("claim_id"), row.get("claimId"), row.get("return_id"))
-    status = _pick_first_str(row.get("status"), row.get("state"), row.get("claim_status"), row.get("claimState")) or "-"
-    created = _pick_first_str(row.get("created_at"), row.get("createdAt"), row.get("date"), row.get("dt"))
-    product = _pick_first_str(row.get("product_name"), row.get("name"), row.get("subject"), row.get("title"), "WB возврат")
-    article = _pick_first_str(row.get("article"), row.get("offer_id"), row.get("nm_id"), row.get("nmId"))
-    reason = _pick_first_str(row.get("reason"), row.get("description"), row.get("comment"), row.get("text"))
-    photos = _extract_photo_urls(row.get("photos"), row.get("images"), row.get("photo"), row.get("photo_urls"), row.get("media"))
-    return {
-        "id": claim_id,
-        "date": created[:10] if created else "",
-        "created_at": created,
-        "marketplace": "wb",
-        "status": status,
-        "product": product,
-        "article": article,
-        "reason": reason,
-        "description": reason,
-        "photos": photos,
-        "raw": row,
-    }
-
-
-def _normalize_ozon_return_row(row: dict[str, Any]) -> dict[str, Any]:
-    rid = _pick_first_str(row.get("id"), row.get("return_id"), row.get("returnId"))
-    status = _pick_first_str(row.get("status"), row.get("state"), row.get("return_status")) or "-"
-    created = _pick_first_str(row.get("created_at"), row.get("createdAt"), row.get("date"), row.get("posting_date"))
-    product = _pick_first_str(row.get("product_name"), row.get("name"), row.get("title"), "Ozon возврат")
-    article = _pick_first_str(row.get("offer_id"), row.get("article"), row.get("sku"), row.get("product_id"))
-    reason = _pick_first_str(row.get("reason"), row.get("description"), row.get("comment"), row.get("text"))
-    photos = _extract_photo_urls(row.get("photos"), row.get("images"), row.get("photo"), row.get("photo_urls"), row.get("media"))
-    return {
-        "id": rid,
-        "date": created[:10] if created else "",
-        "created_at": created,
-        "marketplace": "ozon",
-        "status": status,
-        "product": product,
-        "article": article,
-        "reason": reason,
-        "description": reason,
-        "photos": photos,
-        "raw": row,
-    }
-
-
-def _normalize_ozon_ads_campaign_row(row: dict[str, Any]) -> dict[str, Any]:
-    cid = _to_int(_pick_first_str(row.get("id"), row.get("campaign_id"), row.get("campaignId"), row.get("advertId"))) or 0
-    name = _pick_first_str(row.get("name"), row.get("title"), row.get("campaign_name"), f"Ozon {cid}" if cid else "Ozon campaign")
-    status = _pick_first_str(row.get("status"), row.get("state"), row.get("campaign_status")) or "-"
-    ctype = _pick_first_str(row.get("type"), row.get("campaign_type"), row.get("adType")) or "-"
-    budget = _pick_first_str(row.get("budget"), row.get("daily_budget"), row.get("sum")) or "-"
-    return {
-        "campaign_id": cid,
-        "name": name,
-        "status": status,
-        "type": ctype,
-        "budget": budget,
-    }
-
-
-def _normalize_ozon_ads_analytics_row(row: dict[str, Any]) -> dict[str, Any]:
-    cid = _to_int(_pick_first_str(row.get("campaign_id"), row.get("campaignId"), row.get("id"), row.get("advertId"))) or 0
-    views = float(_to_float(row.get("views")) or _to_float(row.get("impressions")) or 0.0)
-    clicks = float(_to_float(row.get("clicks")) or 0.0)
-    orders = float(_to_float(row.get("orders")) or _to_float(row.get("orders_count")) or 0.0)
-    spent = float(_to_float(row.get("spent")) or _to_float(row.get("cost")) or _to_float(row.get("sum")) or 0.0)
-    ctr = float(_to_float(row.get("ctr")) or ((clicks / views * 100.0) if views > 0 else 0.0))
-    cr = float(_to_float(row.get("cr")) or ((orders / clicks * 100.0) if clicks > 0 else 0.0))
-    cpc = float(_to_float(row.get("cpc")) or ((spent / clicks) if clicks > 0 else 0.0))
-    cpo = float(_to_float(row.get("cpo")) or ((spent / orders) if orders > 0 else 0.0))
-    return {
-        "campaign_id": cid,
-        "name": _pick_first_str(row.get("name"), row.get("title"), row.get("campaign_name"), f"Ozon {cid}" if cid else "Ozon campaign"),
-        "status": _pick_first_str(row.get("status"), row.get("state"), row.get("campaign_status")) or "-",
-        "type": _pick_first_str(row.get("type"), row.get("campaign_type"), row.get("adType")) or "-",
-        "budget": _pick_first_str(row.get("budget"), row.get("daily_budget"), row.get("sum")) or "-",
-        "views": float(round(views, 3)),
-        "clicks": float(round(clicks, 3)),
-        "orders": float(round(orders, 3)),
-        "spent": float(round(spent, 3)),
-        "ctr": float(round(ctr, 4)),
-        "cr": float(round(cr, 4)),
-        "cpc": float(round(cpc, 4)),
-        "cpo": float(round(cpo, 4)),
-    }

@@ -71,36 +71,9 @@ class ProductOut(BaseModel):
     barcode: str
     photo_url: str
     name: str
-    category_name: str = ""
     current_description: str
     target_keywords: str
     last_position: int | None
-
-
-class ProductUpdateIn(BaseModel):
-    name: str | None = None
-    barcode: str | None = None
-    category_name: str | None = None
-    current_description: str | None = None
-    photo_url: str | None = None
-    target_keywords: str | None = None
-
-
-class ProductDetailOut(BaseModel):
-    product: ProductOut
-    photos: list[str] = Field(default_factory=list)
-    attributes: dict[str, Any] = Field(default_factory=dict)
-    raw: dict[str, Any] = Field(default_factory=dict)
-    warnings: list[str] = Field(default_factory=list)
-
-
-class ProductPageOut(BaseModel):
-    rows: list[ProductOut] = Field(default_factory=list)
-    categories: list[str] = Field(default_factory=list)
-    total: int = 0
-    page: int = 1
-    page_size: int = 30
-    total_pages: int = 0
 
 
 class SeoGenerateRequest(BaseModel):
@@ -231,10 +204,6 @@ class AdminStatsOut(BaseModel):
     total_products: int
     total_jobs: int
     active_jobs: int
-    total_team_members: int = 0
-    employees_total: int = 0
-    active_users_24h: int = 0
-    audit_events_24h: int = 0
 
 
 class AdminPasswordResetIn(BaseModel):
@@ -254,33 +223,7 @@ class AuditLogOut(BaseModel):
     user_id: int | None
     action: str
     details: str
-    actor_email: str = ""
-    actor_member_id: int | None = None
-    actor_is_owner: bool = True
-    module_code: str = ""
-    entity_type: str = ""
-    entity_id: str = ""
-    status: str = "ok"
-    ip: str = ""
-    user_agent: str = ""
     created_at: datetime
-
-
-class AuditLogPageOut(BaseModel):
-    rows: list[AuditLogOut] = Field(default_factory=list)
-    total: int = 0
-    page: int = 1
-    page_size: int = 100
-    total_pages: int = 0
-
-
-class ActivityTrackIn(BaseModel):
-    action: str
-    module_code: str = ""
-    details: str = ""
-    entity_type: str = ""
-    entity_id: str = ""
-    status: str = "ok"
 
 
 class WbReviewOut(BaseModel):
@@ -290,8 +233,6 @@ class WbReviewOut(BaseModel):
     product: str
     article: str
     barcode: str = ""
-    state: str = ""
-    sku: int | None = None
     stars: int
     text: str
     user: str
@@ -308,31 +249,11 @@ class WbReviewsOut(BaseModel):
 class WbReviewReplyIn(BaseModel):
     id: str
     text: str
-    state: str | None = None
-    sku: int | None = None
 
 
 class WbReviewReplyOut(BaseModel):
     ok: bool
     message: str
-
-
-class ReturnActionIn(BaseModel):
-    id: str
-    action: str
-    comment: str = ""
-
-
-class ReturnActionOut(BaseModel):
-    ok: bool
-    message: str
-    id: str
-    action: str
-
-
-class ReturnsOut(BaseModel):
-    rows: list[dict[str, Any]]
-    warnings: list[str] = Field(default_factory=list)
 
 
 class ReviewAiSettingsIn(BaseModel):
@@ -359,7 +280,6 @@ class GenerateReviewReplyOut(BaseModel):
 class WbCampaignsOut(BaseModel):
     campaigns: list[dict[str, Any]]
     stats: dict[str, dict[str, Any]] = Field(default_factory=dict)
-    meta: dict[str, Any] = Field(default_factory=dict)
 
 
 class WbCampaignEnrichOut(BaseModel):
@@ -448,97 +368,31 @@ class HelpDocOut(BaseModel):
     content: str
 
 
-class AiServiceIn(BaseModel):
-    name: str = ""
-    provider: str = "openai"
-    api_key: str = ""
-    model: str = ""
-    base_url: str = ""
-
-
-class AiServiceOut(BaseModel):
-    id: int
-    scope: str
-    user_id: int | None = None
-    name: str
-    provider: str
-    model: str
-    base_url: str
-    api_key_masked: str
-    is_active: bool = True
-    created_at: str | None = None
-
-
-class AiSelectionIn(BaseModel):
-    use_global_default: bool = True
-    mode: str = "builtin"
-    service_id: int | None = None
-
-
-class AiSelectionOut(BaseModel):
-    use_global_default: bool
-    mode: str
-    service_id: int | None = None
-
-
-class AiEffectiveOut(BaseModel):
-    mode: str
-    service_id: int | None = None
-    service_name: str = ""
-    provider: str = "builtin"
-    model: str = ""
-    source: str = "builtin"
-
-
-class AiProfileOut(BaseModel):
-    selection: AiSelectionOut
-    global_default: AiSelectionOut
-    effective: AiEffectiveOut
-    user_services: list[AiServiceOut] = Field(default_factory=list)
-    global_services: list[AiServiceOut] = Field(default_factory=list)
-
-
-class AiAssistantIn(BaseModel):
-    question: str = ""
-    module_code: str = ""
-
-
-class AiAssistantOut(BaseModel):
-    answer: str
-    provider: str
-    mode: str
-    service_name: str = ""
-
-
 class SalesStatsRowOut(BaseModel):
     date: str
-    bucket: str | None = None
     marketplace: str
     orders: int
     units: int
     revenue: float
     returns: int = 0
     ad_spend: float = 0.0
-    penalties: float = 0.0
+    other_costs: float = 0.0
 
 
 class SalesStatsPointOut(BaseModel):
     date: str
-    bucket: str | None = None
     orders: int
     units: int
     revenue: float
     returns: int = 0
     ad_spend: float = 0.0
-    penalties: float = 0.0
+    other_costs: float = 0.0
 
 
 class SalesStatsOut(BaseModel):
     marketplace: str
     date_from: str
     date_to: str
-    granularity: str = "day"
-    timezone: str = "UTC"
     rows: list[SalesStatsRowOut]
     chart: list[SalesStatsPointOut]
     totals: dict[str, float | int]
@@ -624,13 +478,11 @@ class AdminUserProfileOut(BaseModel):
 
 class UiSettingsOut(BaseModel):
     theme_choice_enabled: bool
-    force_theme: bool = False
     default_theme: str
     allowed_themes: list[str]
 
 
 class UiSettingsIn(BaseModel):
     theme_choice_enabled: bool = True
-    force_theme: bool = False
     default_theme: str = "classic"
-    allowed_themes: list[str] = Field(default_factory=lambda: ["classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring", "japan", "greenland", "moon"])
+    allowed_themes: list[str] = Field(default_factory=lambda: ["classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring", "japan", "greenland"])
