@@ -46,6 +46,7 @@ let salesLoadToken = 0;
 let salesAutoLoadTimer = null;
 let teamMembers = [];
 let activeTeamMemberId = 0;
+let teamModalMode = "edit";
 let profileAiState = null;
 let reviewPhotoItems = [];
 let reviewPhotoIndex = 0;
@@ -615,6 +616,7 @@ function applyUiLanguage() {
   setText("#profileSecurityPanel h3", isEn ? "Security" : "Безопасность");
   setText("#profileSecurityPanel .grid-3 button", isEn ? "Change Password" : "Сменить пароль");
   setText("#profileTeamPanel h3", isEn ? "Workspace Team" : "Сотрудники кабинета");
+  setText("#teamPanelHint", isEn ? "Add or edit employees via popup window." : "Добавление и редактирование сотрудника выполняется через pop-up окно.");
   setText("#teamAddMemberBtn", isEn ? "Add employee" : "Добавить сотрудника");
   setText("#helpSubtabDocs .panel h3", isEn ? "Module Help Center" : "Справка по модулям");
   setText("#helpSubtabDocs .grid-2 button", isEn ? "Refresh Help" : "Обновить справку");
@@ -819,12 +821,6 @@ function applyUiLanguage() {
     ["#profileCompanyStructure", isEn ? "Team structure, roles, departments" : "Структура компании, роли, отделы"],
     ["#profileCurrentPassword", isEn ? "Current password" : "Текущий пароль"],
     ["#profileNewPassword", isEn ? "New password (>=8)" : "Новый пароль (>=8)"],
-    ["#teamMemberEmail", isEn ? "Employee email" : "Email сотрудника"],
-    ["#teamMemberPassword", isEn ? "Employee password (>=8)" : "Пароль сотрудника (>=8)"],
-    ["#teamMemberPhone", isEn ? "Phone" : "Телефон"],
-    ["#teamMemberFullName", isEn ? "Full name" : "ФИО"],
-    ["#teamMemberNickname", isEn ? "Nickname" : "Ник"],
-    ["#teamMemberAvatar", isEn ? "Avatar URL" : "Ссылка на аватар"],
     ["#teamModalEmail", isEn ? "Employee email" : "Email сотрудника"],
     ["#teamModalPassword", isEn ? "New password (optional)" : "Новый пароль (опц.)"],
     ["#teamModalPhone", isEn ? "Phone" : "Телефон"],
@@ -840,6 +836,14 @@ function applyUiLanguage() {
   for (const [selector, text] of placeholders) {
     const el = document.querySelector(selector);
     if (el) el.placeholder = text;
+  }
+  const teamModal = document.getElementById("teamMemberEditModal");
+  if (teamModal && !teamModal.classList.contains("hidden")) {
+    if (teamModalMode === "create") {
+      applyTeamModalHeader("create", null);
+    } else {
+      applyTeamModalHeader("edit", findTeamMemberById(activeTeamMemberId));
+    }
   }
   switchAuthMode(authMode);
 
@@ -1441,16 +1445,10 @@ function ensureProfileTeamUi() {
   panel.id = "profileTeamPanel";
   panel.innerHTML = `
     <h3>${tr("Сотрудники кабинета", "Workspace Team")}</h3>
-    <div class="grid-1 team-form-stack team-create-form">
-      <input id="teamMemberEmail" placeholder="${escapeHtml(tr("Email сотрудника", "Employee email"))}" />
-      <input id="teamMemberPassword" type="password" placeholder="${escapeHtml(tr("Пароль сотрудника (>=8)", "Employee password (>=8)"))}" />
-      <input id="teamMemberPhone" placeholder="${escapeHtml(tr("Телефон", "Phone"))}" />
-      <input id="teamMemberFullName" placeholder="${escapeHtml(tr("ФИО", "Full name"))}" />
-      <input id="teamMemberNickname" placeholder="${escapeHtml(tr("Ник", "Nickname"))}" />
-      <input id="teamMemberAvatar" placeholder="${escapeHtml(tr("Ссылка на аватар", "Avatar URL"))}" />
-      <button id="teamAddMemberBtn" class="btn-secondary" type="button" onclick="addTeamMember()">${tr("Добавить сотрудника", "Add employee")}</button>
+    <div class="team-member-toolbar">
+      <div id="teamPanelHint" class="hint">${tr("Добавление и редактирование сотрудника выполняется через pop-up окно.", "Add or edit employees via popup window.")}</div>
+      <button id="teamAddMemberBtn" class="btn-secondary" type="button" onclick="openTeamMemberCreator()">${tr("Добавить сотрудника", "Add employee")}</button>
     </div>
-    <div class="team-access-picks" id="teamAccessPicks"></div>
     <div class="team-member-list" id="teamMembersList">
       <div class="hint">${tr("Сотрудники загружаются...", "Loading employees...")}</div>
     </div>
@@ -6403,7 +6401,6 @@ function renderProfileData(data) {
   if (keysView) keysView.textContent = JSON.stringify(data.credentials || [], null, 2);
 
   teamMembers = Array.isArray(data.team_members) ? data.team_members : [];
-  renderTeamAccessOptions();
   renderTeamMembers();
 }
 
@@ -6502,35 +6499,39 @@ function renderProfileAiState(data) {
   });
 }
 
-function renderTeamAccessOptions(selected = []) {
-  const host = document.getElementById("teamAccessPicks");
-  if (!host) return;
-  const selectedSet = new Set((Array.isArray(selected) ? selected : []).map((x) => String(x || "").trim().toLowerCase()).filter(Boolean));
-  host.innerHTML = TEAM_ACCESS_MODULES
-    .map((code) => `
-      <label class="check">
-        <input type="checkbox" data-team-access="${code}" ${selectedSet.has(code) ? "checked" : ""} />
-        ${escapeHtml(moduleLabel(code))}
-      </label>
-    `)
-    .join("");
+function setTeamModalMode(mode) {
+  teamModalMode = mode === "create" ? "create" : "edit";
 }
 
-function getSelectedTeamAccess() {
-  return [...document.querySelectorAll("#teamAccessPicks [data-team-access]")]
-    .filter((el) => el.checked)
-    .map((el) => String(el.dataset.teamAccess || "").trim())
-    .filter(Boolean);
-}
-
-function resetTeamMemberForm() {
-  setInputValue("teamMemberEmail", "");
-  setInputValue("teamMemberPassword", "");
-  setInputValue("teamMemberPhone", "");
-  setInputValue("teamMemberFullName", "");
-  setInputValue("teamMemberNickname", "");
-  setInputValue("teamMemberAvatar", "");
-  renderTeamAccessOptions();
+function applyTeamModalHeader(mode, row = null) {
+  const titleEl = document.getElementById("teamMemberEditTitle");
+  const metaEl = document.getElementById("teamMemberEditMeta");
+  const saveBtn = document.getElementById("teamModalSaveBtn");
+  const deleteBtn = document.getElementById("teamModalDeleteBtn");
+  const passLabelEl = document.getElementById("teamModalPasswordLabel");
+  const passEl = document.getElementById("teamModalPassword");
+  if (mode === "create") {
+    if (titleEl) titleEl.textContent = tr("Новый сотрудник", "New employee");
+    if (metaEl) metaEl.textContent = tr("Заполните данные и выдайте доступы к модулям.", "Fill details and grant module access.");
+    if (saveBtn) saveBtn.textContent = tr("Добавить", "Add");
+    if (deleteBtn) deleteBtn.classList.add("hidden");
+    if (passLabelEl) passLabelEl.textContent = tr("Пароль", "Password");
+    if (passEl) passEl.placeholder = tr("Пароль сотрудника (>=8)", "Employee password (>=8)");
+    return;
+  }
+  if (saveBtn) saveBtn.textContent = tr("Сохранить", "Save");
+  if (passLabelEl) passLabelEl.textContent = tr("Новый пароль", "New password");
+  if (passEl) passEl.placeholder = tr("Новый пароль (опц.)", "New password (optional)");
+  if (!row) return;
+  if (titleEl) {
+    titleEl.textContent = row.is_owner
+      ? tr("Владелец кабинета", "Workspace owner")
+      : tr("Сотрудник кабинета", "Workspace employee");
+  }
+  if (metaEl) {
+    metaEl.textContent = `#${Number(row.id || 0)} • ${row.is_owner ? tr("Права владельца", "Owner permissions") : tr("Можно менять доступы и данные", "You can edit access and profile fields")}`;
+  }
+  if (deleteBtn) deleteBtn.classList.toggle("hidden", Boolean(row.is_owner));
 }
 
 function findTeamMemberById(memberId) {
@@ -6638,6 +6639,7 @@ function openTeamMemberEditor(memberId) {
   const row = findTeamMemberById(memberId);
   const modal = document.getElementById("teamMemberEditModal");
   if (!row || !modal) return;
+  setTeamModalMode("edit");
   activeTeamMemberId = Number(row.id || 0);
   setInputValue("teamModalEmail", String(row.email || ""));
   setInputValue("teamModalFullName", String(row.full_name || ""));
@@ -6651,18 +6653,27 @@ function openTeamMemberEditor(memberId) {
   if (emailEl) emailEl.disabled = !canEditIdentity;
   if (passEl) passEl.disabled = !canEditIdentity;
   renderTeamModalAccessPicks(Array.isArray(row.access_scope) ? row.access_scope : [], row.is_owner);
-  const titleEl = document.getElementById("teamMemberEditTitle");
-  const metaEl = document.getElementById("teamMemberEditMeta");
-  const deleteBtn = document.getElementById("teamModalDeleteBtn");
-  if (titleEl) {
-    titleEl.textContent = row.is_owner
-      ? tr("Владелец кабинета", "Workspace owner")
-      : tr("Сотрудник кабинета", "Workspace employee");
-  }
-  if (metaEl) {
-    metaEl.textContent = `#${Number(row.id || 0)} • ${row.is_owner ? tr("Права владельца", "Owner permissions") : tr("Можно менять доступы и данные", "You can edit access and profile fields")}`;
-  }
-  if (deleteBtn) deleteBtn.classList.toggle("hidden", Boolean(row.is_owner));
+  applyTeamModalHeader("edit", row);
+  modal.classList.remove("hidden");
+}
+
+function openTeamMemberCreator() {
+  const modal = document.getElementById("teamMemberEditModal");
+  if (!modal) return;
+  setTeamModalMode("create");
+  activeTeamMemberId = 0;
+  setInputValue("teamModalEmail", "");
+  setInputValue("teamModalFullName", "");
+  setInputValue("teamModalPhone", "");
+  setInputValue("teamModalNickname", "");
+  setInputValue("teamModalAvatar", "");
+  setInputValue("teamModalPassword", "");
+  const emailEl = document.getElementById("teamModalEmail");
+  const passEl = document.getElementById("teamModalPassword");
+  if (emailEl) emailEl.disabled = false;
+  if (passEl) passEl.disabled = false;
+  renderTeamModalAccessPicks([], false);
+  applyTeamModalHeader("create", null);
   modal.classList.remove("hidden");
 }
 
@@ -6670,13 +6681,14 @@ function closeTeamMemberEditor() {
   const modal = document.getElementById("teamMemberEditModal");
   if (modal) modal.classList.add("hidden");
   activeTeamMemberId = 0;
+  setTeamModalMode("edit");
 }
 
 function buildTeamMemberPayloadFromModal(memberId) {
-  const row = findTeamMemberById(memberId);
-  if (!row) return null;
+  const row = teamModalMode === "create" ? null : findTeamMemberById(memberId);
+  if (teamModalMode !== "create" && !row) return null;
   const emailRaw = String(document.getElementById("teamModalEmail")?.value || "").trim();
-  const email = row.is_owner ? String(row.email || "").trim() : emailRaw;
+  const email = row?.is_owner ? String(row.email || "").trim() : emailRaw;
   return {
     email,
     password: String(document.getElementById("teamModalPassword")?.value || ""),
@@ -6684,15 +6696,24 @@ function buildTeamMemberPayloadFromModal(memberId) {
     full_name: String(document.getElementById("teamModalFullName")?.value || "").trim(),
     nickname: String(document.getElementById("teamModalNickname")?.value || "").trim(),
     avatar_url: String(document.getElementById("teamModalAvatar")?.value || "").trim(),
-    access_scope: row.is_owner ? ["*"] : collectTeamModalAccess(),
+    access_scope: row?.is_owner ? ["*"] : collectTeamModalAccess(),
   };
 }
 
 async function saveTeamMemberEditor() {
   const id = Number(activeTeamMemberId || 0);
-  if (!id) return;
   const payload = buildTeamMemberPayloadFromModal(id);
   if (!payload) return;
+  if (!payload.email) {
+    alert(tr("Укажите email сотрудника.", "Enter employee email."));
+    return;
+  }
+  if (teamModalMode === "create") {
+    const created = await addTeamMember(payload);
+    if (created) closeTeamMemberEditor();
+    return;
+  }
+  if (!id) return;
   const updated = await updateTeamMember(id, payload);
   if (updated) closeTeamMemberEditor();
 }
@@ -6780,18 +6801,23 @@ async function addProfileAiService() {
   await loadProfileAi();
 }
 
-async function addTeamMember() {
-  if (!enabledModules.has("user_profile")) return;
-  const payload = {
-    email: String(document.getElementById("teamMemberEmail")?.value || "").trim(),
-    password: String(document.getElementById("teamMemberPassword")?.value || ""),
-    phone: String(document.getElementById("teamMemberPhone")?.value || "").trim(),
-    full_name: String(document.getElementById("teamMemberFullName")?.value || "").trim(),
-    nickname: String(document.getElementById("teamMemberNickname")?.value || "").trim(),
-    avatar_url: String(document.getElementById("teamMemberAvatar")?.value || "").trim(),
-    access_scope: getSelectedTeamAccess(),
-  };
-  if (!payload.email) return alert(tr("Укажите email сотрудника.", "Enter employee email."));
+async function addTeamMember(payloadOverride = null) {
+  if (!enabledModules.has("user_profile")) return null;
+  const payload = payloadOverride && typeof payloadOverride === "object"
+    ? payloadOverride
+    : buildTeamMemberPayloadFromModal(0);
+  if (!payload) return null;
+  payload.email = String(payload.email || "").trim();
+  payload.password = String(payload.password || "");
+  payload.phone = String(payload.phone || "").trim();
+  payload.full_name = String(payload.full_name || "").trim();
+  payload.nickname = String(payload.nickname || "").trim();
+  payload.avatar_url = String(payload.avatar_url || "").trim();
+  if (!Array.isArray(payload.access_scope)) payload.access_scope = [];
+  if (!payload.email) {
+    alert(tr("Укажите email сотрудника.", "Enter employee email."));
+    return null;
+  }
   const row = await requestJson("/api/profile/team", {
     method: "POST",
     headers: authHeaders(),
@@ -6801,11 +6827,11 @@ async function addTeamMember() {
     alert(e.message);
     return null;
   });
-  if (!row) return;
+  if (!row) return null;
   invalidateModuleCache("profile");
   teamMembers = [row, ...teamMembers.filter((x) => Number(x.id) !== Number(row.id))];
   renderTeamMembers();
-  resetTeamMemberForm();
+  return row;
 }
 
 async function updateTeamMember(memberId, payloadOverride = null) {

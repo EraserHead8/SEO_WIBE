@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260301f" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260301g" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -791,16 +791,10 @@
 
         <div class="panel" id="profileTeamPanel">
           <h3>Сотрудники кабинета</h3>
-          <div class="grid-1 team-form-stack team-create-form">
-            <input id="teamMemberEmail" placeholder="Email сотрудника" />
-            <input id="teamMemberPassword" type="password" placeholder="Пароль сотрудника (>=8)" />
-            <input id="teamMemberPhone" placeholder="Телефон" />
-            <input id="teamMemberFullName" placeholder="ФИО" />
-            <input id="teamMemberNickname" placeholder="Ник" />
-            <input id="teamMemberAvatar" placeholder="Ссылка на аватар" />
-            <button id="teamAddMemberBtn" class="btn-secondary" type="button" onclick="addTeamMember()">Добавить сотрудника</button>
+          <div class="team-member-toolbar">
+            <div id="teamPanelHint" class="hint">Добавление и редактирование сотрудника выполняется через pop-up окно.</div>
+            <button id="teamAddMemberBtn" class="btn-secondary" type="button" onclick="openTeamMemberCreator()">Добавить сотрудника</button>
           </div>
-          <div class="team-access-picks" id="teamAccessPicks"></div>
           <div class="team-member-list" id="teamMembersList">
             <div class="hint">Сотрудники загружаются...</div>
           </div>
@@ -1012,7 +1006,7 @@
         <label><span>Телефон</span><input id="teamModalPhone" /></label>
         <label><span>Ник</span><input id="teamModalNickname" /></label>
         <label><span>Ссылка на аватар</span><input id="teamModalAvatar" /></label>
-        <label><span>Новый пароль</span><input id="teamModalPassword" type="password" placeholder="Новый пароль (опц.)" /></label>
+        <label><span id="teamModalPasswordLabel">Новый пароль</span><input id="teamModalPassword" type="password" placeholder="Новый пароль (опц.)" /></label>
       </div>
       <div class="team-modal-access">
         <span>Доступ к модулям</span>
@@ -1029,6 +1023,6 @@
   <div id="hoverTip" class="hover-tip hidden"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script src="/static/app.js?v=20260301e"></script>
+  <script src="/static/app.js?v=20260301g"></script>
 </body>
 </html>
