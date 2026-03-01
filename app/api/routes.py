@@ -1252,11 +1252,12 @@ def ozon_reply_review(payload: WbReviewReplyIn, user: User = Depends(get_current
         item_external_id=str(payload.id or "").strip(),
     )
     ok, message = post_ozon_review_reply(ozon_key, payload.id, payload.text)
+    message_short = re.sub(r"\s+", " ", str(message or "")).strip()[:260]
     _audit(
         db,
         user,
         action="ozon_review_reply",
-        details=f"review_id={payload.id};ok={ok}",
+        details=f"review_id={payload.id};ok={ok};msg={message_short}",
         module_code="wb_reviews_ai",
         entity_type="review",
         entity_id=str(payload.id or ""),
@@ -1376,11 +1377,12 @@ def wb_reply_question(payload: WbReviewReplyIn, user: User = Depends(get_current
         item_external_id=str(payload.id or "").strip(),
     )
     ok, message = post_wb_question_reply(wb_key, payload.id, payload.text)
+    message_short = re.sub(r"\s+", " ", str(message or "")).strip()[:260]
     _audit(
         db,
         user,
         action="wb_question_reply",
-        details=f"question_id={payload.id};ok={ok}",
+        details=f"question_id={payload.id};ok={ok};msg={message_short}",
         module_code="wb_questions_ai",
         entity_type="question",
         entity_id=str(payload.id or ""),
@@ -1494,11 +1496,12 @@ def ozon_reply_question(payload: WbReviewReplyIn, user: User = Depends(get_curre
         item_external_id=str(payload.id or "").strip(),
     )
     ok, message = post_ozon_question_reply(ozon_key, payload.id, payload.text)
+    message_short = re.sub(r"\s+", " ", str(message or "")).strip()[:260]
     _audit(
         db,
         user,
         action="ozon_question_reply",
-        details=f"question_id={payload.id};ok={ok}",
+        details=f"question_id={payload.id};ok={ok};msg={message_short}",
         module_code="wb_questions_ai",
         entity_type="question",
         entity_id=str(payload.id or ""),
@@ -2750,19 +2753,41 @@ def list_products(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    def _normalize_category_value(value: str) -> str:
+        text = str(value or "").replace("\u00a0", " ")
+        text = " ".join(text.split())
+        return text.strip().lower()
+
+    def _normalized_category_expr():
+        raw = func.coalesce(Product.category_name, "")
+        # Normalize NBSP + repeated spaces so UI category option matches DB value.
+        return func.lower(
+            func.trim(
+                func.replace(
+                    func.replace(
+                        func.replace(raw, "\u00a0", " "),
+                        "  ",
+                        " ",
+                    ),
+                    "  ",
+                    " ",
+                )
+            )
+        )
+
     safe_market = str(marketplace or "all").strip().lower()
     if safe_market not in {"all", "wb", "ozon"}:
         safe_market = "all"
     safe_category = str(category or "all").strip()
     if not safe_category:
         safe_category = "all"
-    safe_category_key = safe_category.lower()
+    safe_category_key = _normalize_category_value(safe_category)
     safe_q = str(q or "").strip().lower()[:200]
     safe_page = max(1, int(page or 1))
     safe_page_size = int(page_size or 30)
     if safe_page_size not in PRODUCT_PAGE_SIZE_OPTIONS:
         safe_page_size = 30
-    normalized_category_name = func.lower(func.trim(func.coalesce(Product.category_name, "")))
+    normalized_category_name = _normalized_category_expr()
 
     query = select(Product).where(
         Product.user_id == user.id,
@@ -2796,14 +2821,15 @@ def list_products(
             .order_by(func.lower(func.trim(Product.category_name)).asc())
         )
         category_rows = db.scalars(categories_query).all()
-        categories = sorted(
-            {
-                str(x).strip()
-                for x in category_rows
-                if str(x or "").strip()
-            },
-            key=lambda s: s.lower(),
-        )
+        by_normalized: dict[str, str] = {}
+        for raw in category_rows:
+            label = " ".join(str(raw or "").replace("\u00a0", " ").split()).strip()
+            if not label:
+                continue
+            normalized = _normalize_category_value(label)
+            if normalized not in by_normalized:
+                by_normalized[normalized] = label
+        categories = sorted(by_normalized.values(), key=lambda s: s.lower())
 
     total = int(db.scalar(select(func.count()).select_from(query.subquery())) or 0)
     total_pages = max(1, math.ceil(total / safe_page_size)) if total else 0

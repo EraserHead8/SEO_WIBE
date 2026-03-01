@@ -3285,3 +3285,409 @@ body[data-theme="light"] .hover-tip {
   0% { transform: translateX(-110%); }
   100% { transform: translateX(320%); }
 }
+
+/* Interface refresh: clearer block separation, stronger hierarchy, better readability. */
+:root {
+  --surface-0: rgba(7, 13, 32, 0.78);
+  --surface-1: rgba(9, 18, 45, 0.84);
+  --surface-2: rgba(12, 25, 60, 0.86);
+  --surface-soft: rgba(19, 34, 78, 0.62);
+  --surface-border: rgba(143, 176, 255, 0.34);
+  --surface-border-strong: rgba(142, 206, 255, 0.55);
+  --surface-shadow: 0 14px 34px rgba(2, 8, 28, 0.44);
+}
+
+body {
+  line-height: 1.45;
+  background:
+    radial-gradient(circle at 14% 10%, rgba(51, 128, 255, 0.28), transparent 40%),
+    radial-gradient(circle at 88% 8%, rgba(34, 212, 255, 0.2), transparent 34%),
+    linear-gradient(145deg, var(--bg-1), var(--bg-2));
+}
+
+.app-bg {
+  opacity: 0.48;
+  background-image:
+    linear-gradient(rgba(138, 179, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(138, 179, 255, 0.05) 1px, transparent 1px);
+}
+
+.app-shell {
+  gap: 16px;
+}
+
+.sidebar {
+  border-radius: 22px;
+  border: 1px solid var(--surface-border);
+  background:
+    linear-gradient(180deg, rgba(8, 16, 40, 0.96), rgba(10, 23, 58, 0.92));
+  box-shadow: var(--surface-shadow);
+}
+
+.workspace {
+  border-radius: 22px;
+  border: 1px solid var(--surface-border);
+  background:
+    radial-gradient(circle at 94% -8%, rgba(101, 155, 255, 0.2), transparent 32%),
+    radial-gradient(circle at 8% 2%, rgba(38, 214, 255, 0.15), transparent 28%),
+    linear-gradient(165deg, rgba(6, 13, 35, 0.92), rgba(8, 20, 52, 0.92));
+  box-shadow: var(--surface-shadow);
+  padding: 16px;
+}
+
+.topbar {
+  padding: 14px 16px;
+  border: 1px solid var(--surface-border);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(12, 23, 56, 0.82), rgba(15, 33, 80, 0.78));
+  margin-bottom: 10px;
+}
+
+.topbar h1 {
+  letter-spacing: 0.01em;
+}
+
+.panel,
+.table-card,
+.kpi,
+.sales-kpi,
+.preview-card,
+.kanban-col,
+.help-card,
+.help-header,
+.landing-card,
+.landing-band,
+.auth-card,
+.auth-pitch,
+.auth-box,
+.ads-rec-kv,
+.admin-user-profile-card,
+.team-member-row,
+.team-modal-card {
+  border: 1px solid var(--surface-border);
+  box-shadow: 0 10px 26px rgba(3, 10, 31, 0.36);
+}
+
+#appSection .tab:not(.hidden) .panel,
+#appSection .tab:not(.hidden) .table-card,
+#adminPanelSection .admin-tab:not(.hidden) .panel,
+#adminPanelSection .admin-tab:not(.hidden) .table-card {
+  animation: panel-rise 0.32s ease-out both;
+}
+
+.panel,
+.table-card,
+.help-card,
+.help-header,
+.preview-card,
+.kanban-col,
+.ads-rec-kv,
+.team-member-row,
+.team-modal-card,
+.admin-user-profile-card {
+  background:
+    linear-gradient(150deg, var(--surface-1), var(--surface-2));
+}
+
+.panel {
+  border-radius: 16px;
+  padding: 13px;
+  margin-bottom: 11px;
+}
+
+.table-card {
+  border-radius: 15px;
+  overflow: hidden;
+}
+
+.panel h3,
+.panel h4,
+.help-card h4,
+.help-header h4,
+.landing-card h3,
+.auth-card h1,
+.auth-card h3 {
+  letter-spacing: 0.01em;
+}
+
+.kpi,
+.sales-kpi {
+  border-radius: 14px;
+  background:
+    linear-gradient(155deg, rgba(14, 30, 72, 0.96), rgba(18, 38, 91, 0.9));
+}
+
+.kpi-head strong {
+  color: #b7f1ff;
+}
+
+table th {
+  background: rgba(15, 29, 72, 0.9);
+  border-bottom: 1px solid rgba(141, 174, 255, 0.42);
+  letter-spacing: 0.04em;
+}
+
+table td {
+  border-bottom: 1px solid rgba(133, 165, 255, 0.2);
+}
+
+tbody tr:hover {
+  background: rgba(27, 49, 112, 0.26);
+}
+
+input,
+select,
+textarea {
+  background: linear-gradient(160deg, rgba(8, 17, 44, 0.95), rgba(11, 25, 61, 0.9));
+  border: 1px solid rgba(132, 167, 255, 0.34);
+  border-radius: 11px;
+  color: var(--text);
+  box-shadow: inset 0 1px 0 rgba(186, 219, 255, 0.08);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #8ea7da;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--surface-border-strong);
+  box-shadow:
+    0 0 0 2px rgba(78, 172, 255, 0.18),
+    inset 0 1px 0 rgba(186, 219, 255, 0.08);
+}
+
+button,
+.btn-secondary,
+.btn-danger,
+.chip-btn,
+.chip-select {
+  border-radius: 11px;
+}
+
+button,
+.btn-secondary {
+  border: 1px solid rgba(132, 167, 255, 0.34);
+  background: linear-gradient(140deg, rgba(18, 41, 92, 0.92), rgba(25, 56, 120, 0.86));
+  box-shadow: 0 8px 20px rgba(4, 11, 35, 0.32);
+}
+
+button:hover,
+.btn-secondary:hover {
+  border-color: rgba(147, 227, 255, 0.65);
+  transform: translateY(-1px);
+}
+
+.btn-danger {
+  background: linear-gradient(140deg, rgba(167, 33, 73, 0.92), rgba(212, 72, 110, 0.88));
+  border-color: rgba(255, 133, 161, 0.48);
+}
+
+.chip-btn {
+  border: 1px solid rgba(133, 165, 255, 0.34);
+  background: rgba(13, 31, 77, 0.76);
+}
+
+.chip-btn.active {
+  border-color: rgba(126, 229, 255, 0.66);
+  background: linear-gradient(140deg, rgba(23, 117, 173, 0.56), rgba(38, 154, 172, 0.52));
+}
+
+.module-subtabs {
+  gap: 9px;
+  padding-bottom: 2px;
+}
+
+.products-catalog-wrap .table-card,
+.seo-split .table-card,
+.reviews-wrap .table-card,
+.questions-wrap .table-card {
+  background:
+    linear-gradient(155deg, rgba(8, 18, 46, 0.94), rgba(12, 30, 72, 0.88));
+}
+
+.products-pager {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(132, 166, 255, 0.2);
+  background: rgba(11, 22, 55, 0.5);
+}
+
+.team-member-row {
+  border-radius: 15px;
+  padding: 13px 14px;
+}
+
+.team-member-role {
+  border-color: rgba(135, 206, 255, 0.55);
+  background: rgba(18, 42, 96, 0.65);
+}
+
+.team-row-edit {
+  background: linear-gradient(145deg, rgba(17, 52, 112, 0.94), rgba(30, 87, 170, 0.88));
+  border-color: rgba(131, 214, 255, 0.58);
+}
+
+.team-modal {
+  background: rgba(4, 9, 24, 0.86);
+  backdrop-filter: blur(4px);
+}
+
+.team-modal-card {
+  border-radius: 18px;
+  padding: 14px;
+}
+
+.auth-wrap {
+  padding: 24px;
+}
+
+.auth-toolbar {
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(9, 21, 54, 0.88), rgba(13, 33, 82, 0.82));
+  box-shadow: var(--surface-shadow);
+}
+
+.auth-card {
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 88% 6%, rgba(78, 147, 255, 0.22), transparent 28%),
+    linear-gradient(145deg, rgba(9, 20, 50, 0.92), rgba(14, 32, 82, 0.9));
+}
+
+.auth-pitch,
+.auth-box,
+.landing-card,
+.landing-band {
+  border-radius: 18px;
+  background:
+    linear-gradient(150deg, rgba(9, 19, 47, 0.86), rgba(14, 31, 78, 0.84));
+}
+
+.landing-card p,
+.landing-band p,
+.pitch-note,
+.faq-list {
+  color: #d0e0ff;
+}
+
+.landing-chart {
+  border-color: rgba(132, 170, 255, 0.36);
+  background: rgba(7, 17, 43, 0.78);
+}
+
+.bar-item .line {
+  background: rgba(105, 138, 223, 0.32);
+}
+
+.help-card-head {
+  border-bottom: 1px solid rgba(138, 173, 255, 0.26);
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+}
+
+.help-card-body {
+  color: #dce8ff;
+}
+
+.help-callout.main {
+  border-color: rgba(93, 216, 255, 0.5);
+  background: rgba(16, 74, 97, 0.34);
+}
+
+.help-callout.warn {
+  border-color: rgba(255, 177, 142, 0.5);
+  background: rgba(104, 56, 30, 0.3);
+}
+
+/* Admin keeps the same design language but with stronger readability for dense tables. */
+#adminPanelSection .workspace .panel,
+#adminPanelSection .workspace .table-card {
+  background:
+    linear-gradient(150deg, rgba(11, 20, 50, 0.93), rgba(16, 33, 82, 0.9));
+}
+
+#adminPanelSection .kpis {
+  gap: 10px;
+}
+
+#adminPanelSection table th {
+  font-size: 12px;
+}
+
+#adminPanelSection .hint {
+  color: #bcd0ff;
+}
+
+body[data-theme="light"] {
+  --surface-0: rgba(252, 255, 255, 0.95);
+  --surface-1: rgba(247, 252, 255, 0.95);
+  --surface-2: rgba(236, 245, 255, 0.95);
+  --surface-soft: rgba(235, 245, 255, 0.84);
+  --surface-border: rgba(95, 131, 194, 0.32);
+  --surface-border-strong: rgba(64, 150, 209, 0.52);
+  --surface-shadow: 0 12px 28px rgba(63, 93, 144, 0.2);
+}
+
+body[data-theme="light"] .workspace,
+body[data-theme="light"] .sidebar,
+body[data-theme="light"] .panel,
+body[data-theme="light"] .table-card,
+body[data-theme="light"] .auth-card,
+body[data-theme="light"] .auth-pitch,
+body[data-theme="light"] .auth-box,
+body[data-theme="light"] .landing-card,
+body[data-theme="light"] .landing-band,
+body[data-theme="light"] .team-member-row,
+body[data-theme="light"] .team-modal-card {
+  color: #133157;
+}
+
+body[data-theme="light"] input,
+body[data-theme="light"] select,
+body[data-theme="light"] textarea {
+  background: linear-gradient(170deg, rgba(255, 255, 255, 0.98), rgba(244, 250, 255, 0.96));
+  border-color: rgba(103, 137, 194, 0.35);
+  color: #173a65;
+}
+
+body[data-theme="light"] input::placeholder,
+body[data-theme="light"] textarea::placeholder {
+  color: #53759f;
+}
+
+@media (max-width: 1200px) {
+  .workspace {
+    border-radius: 18px;
+    padding: 12px;
+  }
+  .topbar {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 980px) {
+  .panel,
+  .table-card,
+  .auth-card,
+  .landing-card,
+  .landing-band {
+    border-radius: 14px;
+  }
+  #mainSidebar {
+    border-color: rgba(131, 171, 255, 0.45);
+    box-shadow: 0 16px 30px rgba(0, 0, 0, 0.4);
+  }
+}
+
+@keyframes panel-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

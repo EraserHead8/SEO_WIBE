@@ -286,8 +286,10 @@ def post_wb_question_reply(api_key: str, question_id: str, text: str) -> tuple[b
 
     qid = question_id.strip()
     payloads: list[dict[str, Any]] = [
-        {"id": qid, "text": reply},
+        # Official payload shape for PATCH /api/v1/questions.
         {"id": qid, "answer": {"text": reply}},
+        # Lightweight compatibility payload for older integrations.
+        {"id": qid, "text": reply},
     ]
     if qid.isdigit():
         qid_int = int(qid)
@@ -299,11 +301,16 @@ def post_wb_question_reply(api_key: str, question_id: str, text: str) -> tuple[b
         )
     attempts: list[tuple[str, str, dict[str, Any]]] = []
     # Official endpoint for questions handling is PATCH /api/v1/questions.
+    # Keep both domains because some accounts are routed through wb.ru alias.
+    question_routes = (
+        "https://feedbacks-api.wildberries.ru/api/v1/questions",
+        "https://feedbacks-api.wb.ru/api/v1/questions",
+    )
     for payload in payloads:
-        attempts.append(("PATCH", "https://feedbacks-api.wildberries.ru/api/v1/questions", payload))
-        # Fallback routes kept minimal to avoid flooding API limits.
-        attempts.append(("POST", "https://feedbacks-api.wildberries.ru/api/v1/questions/answer", payload))
-        attempts.append(("PATCH", "https://feedbacks-api.wildberries.ru/api/v1/questions/answer", payload))
+        for route in question_routes:
+            attempts.append(("PATCH", route, payload))
+            # Some API gateways still accept POST for this operation.
+            attempts.append(("POST", route, payload))
     return _post_wb_reply_with_fallback(api_key, attempts, entity_label="вопрос")
 
 
@@ -332,12 +339,22 @@ def _post_wb_reply_with_fallback(
         seen.add(signature)
         normalized_attempts.append((signature[0], signature[1], payload))
 
-    max_attempts_per_route = 3
+    max_attempts_per_route = 2
     last_error = "Не удалось отправить ответ в WB API"
     saw_auth_error = False
+    last_status = 0
+    path_not_found = False
+    unsupported_method = False
+
+    auth_candidates: list[str] = []
+    for raw_auth in (token, f"Bearer {token}"):
+        safe = str(raw_auth or "").strip()
+        if safe and safe not in auth_candidates:
+            auth_candidates.append(safe)
+
     with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
         for method, endpoint, payload in normalized_attempts:
-            for auth_value in (token, f"Bearer {token}"):
+            for auth_value in auth_candidates:
                 headers = {"Authorization": auth_value, "Content-Type": "application/json"}
                 for attempt in range(max_attempts_per_route):
                     try:
@@ -348,6 +365,7 @@ def _post_wb_reply_with_fallback(
                         continue
                     if response.status_code in {200, 201, 202, 204}:
                         return True, "Ответ отправлен"
+                    last_status = int(response.status_code or 0)
                     if response.status_code in {401, 403}:
                         saw_auth_error = True
                         last_error = "WB API отклонил запрос (401/403). Проверьте токен и права категории «Вопросы и отзывы»."
@@ -363,6 +381,11 @@ def _post_wb_reply_with_fallback(
                     # поэтому пробуем другие варианты.
                     if response.status_code in {404, 405, 409, 422}:
                         short_body = _short_error_text(body)
+                        low_body = short_body.lower()
+                        if "path not found" in low_body:
+                            path_not_found = True
+                        if "method not allowed" in low_body:
+                            unsupported_method = True
                         last_error = f"WB API вернул {response.status_code}{f': {short_body}' if short_body else ''}"
                         break
                     if response.status_code >= 500:
@@ -378,6 +401,12 @@ def _post_wb_reply_with_fallback(
 
     if saw_auth_error and "401/403" in last_error:
         return False, last_error
+    if last_status in {404, 405} and (path_not_found or unsupported_method):
+        return (
+            False,
+            "WB API не принял маршрут ответа на вопрос (404/405). "
+            "Проверьте права «Вопросы и отзывы» и актуальность токена в кабинете WB.",
+        )
     return (
         False,
         f"Не удалось отправить ответ на {entity_label}: {last_error}",
@@ -497,6 +526,20 @@ def _post_ozon_reply_with_fallback(
             return False, "Ozon API вернул 429 (лимит запросов). Повторите позже."
         if response.status_code in {401, 403}:
             short_body = _short_error_text(body)
+            low_body = short_body.lower()
+            role_error = (
+                "required role" in low_body
+                or '"code":7' in low_body
+                or "code:7" in low_body
+                or "code=7" in low_body
+            )
+            if role_error:
+                return (
+                    False,
+                    "Ozon API отклонил запрос: у ключа нет роли для ответа на отзывы/вопросы. "
+                    "Выдайте роли API для модуля отзывов и вопросов в кабинете Ozon Seller."
+                    f"{f' Детали: {short_body}' if short_body else ''}",
+                )
             suffix = f" Детали: {short_body}" if short_body else ""
             return False, f"Ozon API отклонил запрос (401/403). Проверьте client_id/api_key и права метода.{suffix}"
         if response.status_code >= 500:
