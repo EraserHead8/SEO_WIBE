@@ -4377,3 +4377,492 @@ tbody tr:hover td {
     grid-template-columns: 1fr;
   }
 }
+
+/* 2026-03 redesign v2: high-contrast analytics layout across landing/app/admin. */
+:root {
+  --ux-radius-lg: 16px;
+  --ux-radius-md: 12px;
+  --ux-radius-sm: 9px;
+  --ux-gap: 12px;
+}
+
+body {
+  letter-spacing: 0.002em;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.app-shell {
+  align-items: stretch;
+  gap: 14px;
+}
+
+.workspace {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--ds-surface-2) 86%, #ffffff), var(--ds-surface-2));
+  padding: 14px;
+}
+
+#appSection .tab:not(.hidden),
+#adminPanelSection .admin-tab:not(.hidden) {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  animation: panel-rise 0.3s ease-out both;
+}
+
+.topbar {
+  border-radius: var(--ux-radius-lg);
+  border: 1px solid var(--ds-border);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--ds-surface) 95%, #ffffff),
+      color-mix(in oklab, var(--ds-surface) 88%, var(--ds-surface-soft))
+    );
+}
+
+.topbar h1 {
+  font-size: clamp(22px, 2vw, 30px);
+  line-height: 1.1;
+}
+
+.topbar p {
+  font-size: 14px;
+}
+
+.sidebar {
+  border-radius: 20px;
+  padding: 14px;
+}
+
+.sidebar .brand h2 {
+  font-size: 27px;
+}
+
+.side-nav {
+  gap: 7px;
+}
+
+.nav-btn {
+  border-radius: 11px;
+  min-height: 44px;
+}
+
+.nav-btn.active {
+  box-shadow: inset 0 0 0 1px rgba(236, 247, 255, 0.22);
+}
+
+.panel,
+.table-card,
+.preview-card,
+.help-card,
+.help-header,
+.campaign-modal-card,
+.team-modal-card,
+.admin-user-profile-card {
+  border-radius: var(--ux-radius-lg);
+  border: 1px solid var(--ds-border);
+  background: var(--ds-surface);
+}
+
+.panel {
+  border-top: 3px solid color-mix(in oklab, var(--ds-accent) 34%, var(--ds-border));
+  padding: 12px;
+  gap: 8px;
+}
+
+.table-card {
+  padding: 0;
+}
+
+.table-card > table {
+  border-radius: 0;
+}
+
+#products .panel .grid-6,
+#products .panel .grid-5,
+#products .panel .grid-4,
+#products .panel .grid-3,
+#products .panel .grid-2,
+#reviews .panel .grid-6,
+#reviews .panel .grid-5,
+#reviews .panel .grid-4,
+#reviewsSubtabQuestions .panel .grid-6,
+#reviewsSubtabQuestions .panel .grid-5,
+#reviewsSubtabQuestions .panel .grid-4,
+#reviewsSubtabReturns .panel .grid-4,
+#ads .panel .grid-6,
+#ads .panel .grid-5,
+#ads .panel .grid-4,
+#sales .panel .grid-4,
+#profile .panel .grid-3,
+#help .panel .grid-4 {
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ux-radius-md);
+  padding: 9px;
+  background: color-mix(in oklab, var(--ds-surface-soft) 85%, #ffffff);
+}
+
+.products-pager,
+.admin-audit-pager {
+  margin: 0;
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  background: color-mix(in oklab, var(--ds-surface-soft) 88%, #ffffff);
+}
+
+.products-pager.products-pager-top {
+  border-top: 0;
+}
+
+.products-pager.products-pager-bottom {
+  border-bottom: 0;
+}
+
+table {
+  min-width: 860px;
+}
+
+table thead th {
+  top: 0;
+  background: color-mix(in oklab, var(--ds-surface-soft) 92%, #ffffff);
+  color: color-mix(in oklab, var(--ds-text) 84%, #344968);
+  font-weight: 700;
+}
+
+table td {
+  color: var(--ds-text);
+  vertical-align: middle;
+}
+
+.products-table td,
+.reviews-table td,
+.questions-table td,
+.ads-table td,
+.sales-table td,
+.seo-table td {
+  font-size: 13px;
+}
+
+tbody tr.selected-row td {
+  background: color-mix(in oklab, var(--ds-accent) 13%, var(--ds-surface));
+}
+
+.review-reply-input {
+  min-height: 118px;
+  line-height: 1.45;
+  font-size: 13px;
+}
+
+.review-actions button,
+.icon-action-btn {
+  border-radius: 8px;
+  border: 1px solid var(--ds-border-strong);
+  background: linear-gradient(180deg, #ffffff, #eff5ff);
+  color: var(--ds-text);
+}
+
+.review-actions button:hover,
+.icon-action-btn:hover {
+  border-color: color-mix(in oklab, var(--ds-accent) 52%, var(--ds-border-strong));
+}
+
+.trend-panel {
+  padding-bottom: 10px;
+}
+
+.trend-chart {
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ux-radius-md);
+  background:
+    linear-gradient(rgba(97, 125, 166, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(97, 125, 166, 0.07) 1px, transparent 1px),
+    color-mix(in oklab, var(--ds-surface-soft) 88%, #ffffff);
+  background-size: 24px 24px, 24px 24px, auto;
+}
+
+.kpis {
+  gap: 10px;
+}
+
+.kpi {
+  border-radius: 13px;
+  padding: 12px;
+}
+
+.kpi .kpi-head strong {
+  font-size: clamp(21px, 1.9vw, 28px);
+}
+
+.sales-kpis {
+  gap: 10px;
+}
+
+.sales-kpi {
+  border-radius: 12px;
+  border: 1px solid var(--ds-border);
+}
+
+.sales-kpi strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.status-wrap {
+  border-radius: 10px;
+  border: 1px solid var(--ds-border);
+  background: color-mix(in oklab, var(--ds-surface-soft) 78%, #ffffff);
+}
+
+.keyword-item,
+.ads-rec-kv,
+.ads-rec-insight-card,
+.help-callout,
+.help-block,
+.team-access-picks .check {
+  border-radius: 10px;
+}
+
+.help-card-head {
+  margin-bottom: 10px;
+}
+
+.help-card-head h4 {
+  font-size: 20px;
+}
+
+.help-card-body,
+.help-block p,
+.help-block li,
+.help-checklist ol {
+  color: var(--ds-text);
+}
+
+.team-member-list {
+  gap: 10px;
+}
+
+.team-member-row {
+  border-radius: 14px;
+  padding: 12px 13px;
+  transition: box-shadow 0.16s ease, transform 0.16s ease, border-color 0.16s ease;
+}
+
+.team-member-row:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in oklab, var(--ds-accent) 28%, var(--ds-border));
+  box-shadow: 0 12px 24px rgba(26, 52, 86, 0.14);
+}
+
+.team-member-row-main {
+  gap: 8px 12px;
+}
+
+.team-member-identity strong {
+  font-size: 16px;
+}
+
+.team-member-role {
+  background: color-mix(in oklab, var(--ds-surface-soft) 88%, #ffffff);
+}
+
+.team-row-edit {
+  border-radius: 10px;
+  width: 38px;
+  height: 38px;
+}
+
+.team-modal-card,
+.campaign-modal-card {
+  border-radius: 16px;
+}
+
+#adminPanelSection .workspace .panel,
+#adminPanelSection .workspace .table-card {
+  border-top-color: color-mix(in oklab, var(--ds-accent-2) 30%, var(--ds-border));
+}
+
+#adminPanelSection .kpi {
+  background: linear-gradient(
+    140deg,
+    color-mix(in oklab, var(--ds-accent) 30%, #3a375f),
+    color-mix(in oklab, var(--ds-accent-2) 30%, #2f5973)
+  );
+}
+
+#adminPanelSection .bar-item .line {
+  height: 10px;
+}
+
+#adminPanelSection pre {
+  border-radius: 10px;
+  border: 1px solid var(--ds-border);
+  background: color-mix(in oklab, var(--ds-surface-soft) 78%, #ffffff);
+  color: var(--ds-text);
+}
+
+table .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+table .actions button {
+  min-height: 34px;
+  padding: 7px 10px;
+}
+
+.auth-wrap {
+  padding: 18px;
+}
+
+.auth-toolbar {
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--ds-surface) 94%, #ffffff);
+}
+
+.auth-card {
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.auth-hero {
+  gap: 12px;
+}
+
+.auth-pitch {
+  border-top-width: 3px;
+}
+
+.auth-proof {
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+}
+
+.landing-grid {
+  gap: 10px;
+}
+
+.landing-card {
+  border-top: 3px solid color-mix(in oklab, var(--ds-accent-2) 25%, var(--ds-border));
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.landing-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(31, 58, 95, 0.14);
+}
+
+.landing-band {
+  border-top: 3px solid color-mix(in oklab, var(--ds-accent) 28%, var(--ds-border));
+}
+
+.landing-grid .landing-card:nth-child(1) {
+  animation: panel-rise 0.26s ease-out both;
+}
+
+.landing-grid .landing-card:nth-child(2) {
+  animation: panel-rise 0.34s ease-out both;
+}
+
+.landing-grid .landing-card:nth-child(3) {
+  animation: panel-rise 0.42s ease-out both;
+}
+
+.landing-grid .landing-card:nth-child(4) {
+  animation: panel-rise 0.5s ease-out both;
+}
+
+.chip-select,
+.chip-btn,
+button,
+.btn-secondary,
+.btn-danger {
+  min-height: 38px;
+}
+
+body[data-theme="dark"] .workspace,
+body[data-theme="dark"] .panel,
+body[data-theme="dark"] .table-card,
+body[data-theme="dark"] .auth-card,
+body[data-theme="dark"] .auth-pitch,
+body[data-theme="dark"] .auth-box,
+body[data-theme="dark"] .landing-card,
+body[data-theme="dark"] .landing-band,
+body[data-theme="dark"] .help-card,
+body[data-theme="dark"] .team-member-row {
+  color: #e9f1ff;
+}
+
+body[data-theme="dark"] input,
+body[data-theme="dark"] select,
+body[data-theme="dark"] textarea,
+body[data-theme="dark"] button,
+body[data-theme="dark"] .btn-secondary,
+body[data-theme="dark"] .chip-btn,
+body[data-theme="dark"] .chip-select {
+  color: #e9f1ff;
+  background: #1a2c46;
+  border-color: #35557f;
+}
+
+body[data-theme="dark"] table thead th {
+  background: #1a2f4d;
+  color: #bcd0f1;
+}
+
+body[data-theme="dark"] tbody tr:nth-child(even) td {
+  background: #152840;
+}
+
+body[data-theme="dark"] tbody tr:hover td {
+  background: #1d3558;
+}
+
+@media (max-width: 1200px) {
+  .workspace {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  #products .panel .grid-6,
+  #products .panel .grid-5,
+  #products .panel .grid-4,
+  #reviews .panel .grid-6,
+  #reviewsSubtabQuestions .panel .grid-6,
+  #ads .panel .grid-6,
+  #ads .panel .grid-5 {
+    padding: 8px;
+  }
+}
+
+@media (max-width: 980px) {
+  .workspace {
+    border-radius: 14px;
+  }
+
+  #appSection .tab:not(.hidden),
+  #adminPanelSection .admin-tab:not(.hidden) {
+    gap: 10px;
+  }
+
+  .panel {
+    padding: 10px;
+  }
+
+  .table-card {
+    border-radius: 10px;
+  }
+
+  table {
+    min-width: 620px;
+  }
+
+  .topbar h1 {
+    font-size: 22px;
+  }
+}
