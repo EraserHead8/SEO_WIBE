@@ -774,7 +774,76 @@ function renderAdminUsersTrend(stats) {
       return `${x},${y}`;
     })
     .join(" ");
-  svg.innerHTML = `
+
+  const canUseEcharts = Boolean(
+    typeof window !== "undefined"
+    && window.echarts
+    && typeof window.echarts.init === "function"
+    && svg instanceof HTMLElement
+  );
+  if (canUseEcharts) {
+    let chart = null;
+    try {
+      chart = window.echarts.getInstanceByDom(svg);
+    } catch (_) {
+      chart = null;
+    }
+    if (!chart) {
+      chart = window.echarts.init(svg, null, { renderer: "canvas" });
+    }
+    chart.setOption(
+      {
+        animationDuration: 380,
+        grid: { top: 14, right: 16, bottom: 22, left: 44 },
+        tooltip: {
+          trigger: "axis",
+          backgroundColor: "rgba(17,31,58,0.92)",
+          borderWidth: 0,
+          textStyle: { color: "#eff6ff" },
+        },
+        xAxis: {
+          type: "category",
+          boundaryGap: false,
+          data: ["D-6", "D-5", "D-4", "D-3", "D-2", "D-1", "D0"],
+          axisLine: { lineStyle: { color: "rgba(97,122,156,0.35)" } },
+          axisTick: { show: false },
+          axisLabel: { color: "#6f86a7", fontSize: 11 },
+        },
+        yAxis: {
+          type: "value",
+          min,
+          max,
+          splitLine: { lineStyle: { color: "rgba(95,121,162,0.17)" } },
+          axisLabel: { color: "#6f86a7", fontSize: 11 },
+        },
+        series: [
+          {
+            name: aTr("Пользователи", "Users"),
+            type: "line",
+            smooth: true,
+            showSymbol: false,
+            lineStyle: { width: 3, color: "#2f8cff" },
+            areaStyle: {
+              color: {
+                type: "linear",
+                x: 0, y: 0, x2: 0, y2: 1,
+                colorStops: [
+                  { offset: 0, color: "rgba(47,140,255,0.24)" },
+                  { offset: 1, color: "rgba(47,140,255,0.03)" },
+                ],
+              },
+            },
+            data: series,
+          },
+        ],
+      },
+      true
+    );
+    meta.innerHTML = `<span>${aTr("Всего пользователей", "Total users")}: <b>${total}</b></span><span>${aTr("Новые за 7 дней", "New in 7 days")}: <b>${fresh}</b></span>`;
+    return;
+  }
+
+  const fallbackMarkup = `
     <defs>
       <linearGradient id="adminTrendLine" x1="0%" y1="0%" x2="100%" y2="0%">
         <stop offset="0%" stop-color="#21e7ff"/>
@@ -783,6 +852,11 @@ function renderAdminUsersTrend(stats) {
     </defs>
     <polyline points="${points}" fill="none" stroke="url(#adminTrendLine)" stroke-width="3" stroke-linecap="round"></polyline>
   `;
+  if (String(svg.tagName || "").toLowerCase() === "svg") {
+    svg.innerHTML = fallbackMarkup;
+  } else {
+    svg.innerHTML = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${fallbackMarkup}</svg>`;
+  }
   meta.innerHTML = `<span>${aTr("Всего пользователей", "Total users")}: <b>${total}</b></span><span>${aTr("Новые за 7 дней", "New in 7 days")}: <b>${fresh}</b></span>`;
 }
 

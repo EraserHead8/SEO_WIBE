@@ -73,6 +73,61 @@ const MODULE_AUTO_REFRESH_MS = 60 * 60 * 1000;
 let moduleAutoRefreshTimer = null;
 const POSITION_LIMIT = 500;
 const uiActivityThrottle = new Map();
+const chartInstances = new Map();
+let chartResizeBound = false;
+
+function canUseEcharts(host) {
+  return Boolean(
+    host
+    && typeof window !== "undefined"
+    && window.echarts
+    && typeof window.echarts.init === "function"
+    && host instanceof HTMLElement
+  );
+}
+
+function ensureChartResizeBinding() {
+  if (chartResizeBound) return;
+  chartResizeBound = true;
+  window.addEventListener("resize", () => {
+    for (const inst of chartInstances.values()) {
+      try {
+        inst.resize();
+      } catch (_) {}
+    }
+  }, { passive: true });
+}
+
+function getOrCreateChart(host) {
+  if (!canUseEcharts(host)) return null;
+  ensureChartResizeBinding();
+  let instance = null;
+  try {
+    instance = window.echarts.getInstanceByDom(host);
+  } catch (_) {
+    instance = null;
+  }
+  if (!instance) {
+    instance = window.echarts.init(host, null, { renderer: "canvas" });
+  }
+  chartInstances.set(host.id || String(Math.random()), instance);
+  return instance;
+}
+
+function clearChartHost(host) {
+  if (!host) return;
+  if (canUseEcharts(host)) {
+    try {
+      const instance = window.echarts.getInstanceByDom(host);
+      if (instance) {
+        instance.clear();
+      }
+    } catch (_) {}
+  }
+  if (host.tagName && host.tagName.toLowerCase() === "svg") {
+    host.innerHTML = "";
+  }
+}
 
 const authHeaders = () => ({
   "Content-Type": "application/json",
@@ -1074,7 +1129,7 @@ function renderTrendChart(svgId, metaId, points) {
   if (!svg || !meta) return;
 
   if (!points.length) {
-    svg.innerHTML = "";
+    clearChartHost(svg);
     meta.textContent = tr("Пока нет данных по проверкам.", "No checks data yet.");
     return;
   }
@@ -1103,7 +1158,69 @@ function renderTrendChart(svgId, metaId, points) {
   const checks = points.reduce((a, b) => a + b.checks, 0);
   const top5 = points.reduce((a, b) => a + b.top5_hits, 0);
 
-  svg.innerHTML = `
+  const echartsHost = canUseEcharts(svg) ? svg : null;
+  if (echartsHost) {
+    const chart = getOrCreateChart(echartsHost);
+    if (chart) {
+      chart.setOption(
+        {
+          animationDuration: 380,
+          grid: { top: 18, right: 18, bottom: 24, left: 44 },
+          tooltip: {
+            trigger: "axis",
+            backgroundColor: "rgba(17,31,58,0.92)",
+            borderWidth: 0,
+            textStyle: { color: "#eff6ff" },
+          },
+          xAxis: {
+            type: "category",
+            boundaryGap: false,
+            data: points.map((p) => String(p.bucket || p.date || "").slice(-5)),
+            axisLine: { lineStyle: { color: "rgba(97,122,156,0.35)" } },
+            axisLabel: { color: "#6f86a7", fontSize: 11 },
+            axisTick: { show: false },
+          },
+          yAxis: {
+            type: "value",
+            inverse: true,
+            min,
+            max,
+            splitLine: { lineStyle: { color: "rgba(95,121,162,0.17)" } },
+            axisLabel: { color: "#6f86a7", fontSize: 11 },
+          },
+          series: [
+            {
+              name: tr("Позиция", "Rank"),
+              type: "line",
+              smooth: true,
+              showSymbol: false,
+              lineStyle: { width: 3, color: "#2f8cff" },
+              areaStyle: {
+                color: {
+                  type: "linear",
+                  x: 0, y: 0, x2: 0, y2: 1,
+                  colorStops: [
+                    { offset: 0, color: "rgba(47,140,255,0.24)" },
+                    { offset: 1, color: "rgba(47,140,255,0.02)" },
+                  ],
+                },
+              },
+              data: points.map((p) => (p.avg_position > 0 ? p.avg_position : 50)),
+            },
+          ],
+        },
+        true
+      );
+      meta.innerHTML = `
+        <span>${tr("Проверок", "Checks")}: <b>${checks}</b></span>
+        <span>${tr("Средняя позиция", "Average rank")}: <b>${avgPos}</b></span>
+        <span>${tr("Входов в топ-5", "Top-5 hits")}: <b>${top5}</b></span>
+      `;
+      return;
+    }
+  }
+
+  const fallbackMarkup = `
     <defs>
       <linearGradient id="${svgId}-line" x1="0%" x2="100%" y1="0%" y2="0%">
         <stop offset="0%" stop-color="#21e7ff"/>
@@ -1112,6 +1229,11 @@ function renderTrendChart(svgId, metaId, points) {
     </defs>
     <polyline points="${polyline}" fill="none" stroke="url(#${svgId}-line)" stroke-width="3" stroke-linecap="round" />
   `;
+  if (String(svg.tagName || "").toLowerCase() === "svg") {
+    svg.innerHTML = fallbackMarkup;
+  } else {
+    svg.innerHTML = `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${fallbackMarkup}</svg>`;
+  }
   meta.innerHTML = `
     <span>${tr("Проверок", "Checks")}: <b>${checks}</b></span>
     <span>${tr("Средняя позиция", "Average rank")}: <b>${avgPos}</b></span>
@@ -5411,7 +5533,7 @@ function renderSalesChart(points) {
   const meta = document.getElementById("salesTrendMeta");
   if (!svg || !meta) return;
   if (!Array.isArray(points) || !points.length) {
-    svg.innerHTML = "";
+    clearChartHost(svg);
     meta.textContent = tr("Нет данных за период.", "No data for selected period.");
     return;
   }
@@ -5431,7 +5553,7 @@ function renderSalesChart(points) {
     }))
     .filter((row) => row.label);
   if (!chartPoints.length) {
-    svg.innerHTML = "";
+    clearChartHost(svg);
     meta.textContent = tr("Нет данных за период.", "No data for selected period.");
     return;
   }
@@ -5485,7 +5607,7 @@ function renderSalesChart(points) {
     });
   }
   if (!series.length) {
-    svg.innerHTML = "";
+    clearChartHost(svg);
     meta.textContent = tr("Выберите хотя бы одну линию графика.", "Select at least one chart line.");
     return;
   }
@@ -5539,7 +5661,6 @@ function renderSalesChart(points) {
     const points = item.values.map((v, pointIdx) => circleAt(v, pointIdx, item.color)).join("");
     return `${area}${line}${points}`;
   }).join("");
-  svg.innerHTML = `${gridLines}${lineMarkup}${xTicks}`;
   const metricLabel = metric === "revenue"
     ? tr("Выручка", "Revenue")
     : (metric === "orders"
@@ -5554,6 +5675,80 @@ function renderSalesChart(points) {
   const topValues = Array.isArray(topSeries.values) ? topSeries.values : [];
   const peak = topValues.length ? Math.max(...topValues) : 0;
   const low = topValues.length ? Math.min(...topValues) : 0;
+
+  const echartsHost = canUseEcharts(svg) ? svg : null;
+  if (echartsHost) {
+    const chart = getOrCreateChart(echartsHost);
+    if (chart) {
+      chart.setOption(
+        {
+          animationDuration: 420,
+          grid: { top: 16, right: 18, bottom: 28, left: 56 },
+          legend: {
+            top: 2,
+            textStyle: { color: "#5f7391", fontSize: 12 },
+            data: series.map((item) => item.label),
+          },
+          tooltip: {
+            trigger: "axis",
+            backgroundColor: "rgba(17,31,58,0.92)",
+            borderWidth: 0,
+            textStyle: { color: "#eff6ff" },
+          },
+          xAxis: {
+            type: "category",
+            boundaryGap: false,
+            data: labels.map((x) => String(x || "").slice(-5)),
+            axisLine: { lineStyle: { color: "rgba(99,124,161,0.35)" } },
+            axisTick: { show: false },
+            axisLabel: { color: "#6e86a8", fontSize: 11 },
+          },
+          yAxis: {
+            type: "value",
+            min,
+            max,
+            splitLine: { lineStyle: { color: "rgba(96,122,162,0.16)" } },
+            axisLabel: { color: "#6e86a8", fontSize: 11 },
+          },
+          series: series.map((item, idx) => ({
+            name: item.label,
+            type: "line",
+            smooth: true,
+            showSymbol: false,
+            data: item.values,
+            lineStyle: { width: idx === 0 ? 3 : 2.2, color: item.color },
+            areaStyle: idx === 0
+              ? {
+                color: {
+                  type: "linear",
+                  x: 0, y: 0, x2: 0, y2: 1,
+                  colorStops: [
+                    { offset: 0, color: "rgba(81,118,255,0.2)" },
+                    { offset: 1, color: "rgba(81,118,255,0.03)" },
+                  ],
+                },
+              }
+              : undefined,
+          })),
+        },
+        true
+      );
+      meta.innerHTML = `
+        <span>${metricLabel}: <b>${series.map((item) => `${item.label} ${formatValue(item.values.reduce((a, b) => a + Number(b || 0), 0))}`).join(" • ")}</b></span>
+        <span>${tr("Пик", "Peak")}: <b>${formatValue(peak)}</b></span>
+        <span>${tr("Мин", "Min")}: <b>${formatValue(low)}</b></span>
+      `;
+      return;
+    }
+  }
+
+  const fallbackMarkup = `${gridLines}${lineMarkup}${xTicks}`;
+  if (String(svg.tagName || "").toLowerCase() === "svg") {
+    svg.innerHTML = fallbackMarkup;
+  } else {
+    svg.innerHTML = `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${fallbackMarkup}</svg>`;
+  }
+
   meta.innerHTML = `
     <span>${metricLabel}: <b>${series.map((item) => `${item.label} ${formatValue(item.values.reduce((a, b) => a + Number(b || 0), 0))}`).join(" • ")}</b></span>
     <span>${tr("Пик", "Peak")}: <b>${formatValue(peak)}</b></span>

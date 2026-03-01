@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260301a" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260301b" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -102,7 +102,7 @@
             <h3>Новые пользователи за 7 дней</h3>
             <span class="hint">По данным текущей базы</span>
           </div>
-          <svg id="adminUsersTrendChart" class="trend-chart" viewBox="0 0 720 180" preserveAspectRatio="none"></svg>
+          <div id="adminUsersTrendChart" class="trend-chart"></div>
           <div id="adminTrendMeta" class="trend-meta"></div>
         </div>
         <div class="cols-2">
@@ -329,6 +329,7 @@
     </main>
   </section>
 
-  <script src="/static/admin.js?v=20260228c"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+  <script src="/static/admin.js?v=20260301b"></script>
 </body>
 </html>

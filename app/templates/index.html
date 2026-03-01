@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260301a" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260301b" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -24,6 +24,11 @@
             <div class="auth-toolbar-subtitle" id="authToolbarSubtitle">Marketplace Seller OS</div>
           </div>
         </div>
+        <nav class="auth-toolbar-nav" aria-label="Landing navigation">
+          <a href="#authSection">Платформа</a>
+          <a href="#appSection">Модули</a>
+          <a href="#authRegisterPane">Регистрация</a>
+        </nav>
         <div class="auth-toolbar-controls">
           <button id="authToolbarLoginBtn" class="chip-btn active" type="button" onclick="switchAuthMode('login')">Вход</button>
           <button id="authToolbarRegisterBtn" class="chip-btn" type="button" onclick="switchAuthMode('register')">Регистрация</button>
@@ -56,6 +61,11 @@
             </article>
           </div>
           <div id="authPitchNote" class="pitch-note">Для команд от 1 до 100+ сотрудников, с разделением доступа и аудитом действий.</div>
+          <div class="auth-proof">
+            <div><b>WB + Ozon</b><span>единый контур данных</span></div>
+            <div><b>AI+RAG</b><span>ответы и помощь в интерфейсе</span></div>
+            <div><b>RBAC</b><span>гибкие доступы сотрудников</span></div>
+          </div>
         </div>
 
         <div class="auth-grid single">
@@ -347,7 +357,7 @@
           <div id="salesTotalsCards" class="sales-kpis"></div>
           <div id="salesStatsMeta" class="hint">-</div>
           <div id="salesLoadStatus" class="hint load-status">-</div>
-          <svg id="salesTrendChart" class="trend-chart mini" viewBox="0 0 720 150" preserveAspectRatio="none"></svg>
+          <div id="salesTrendChart" class="trend-chart mini"></div>
           <div id="salesTrendMeta" class="trend-meta"></div>
         </div>
         <div class="kpis" id="stats"></div>
@@ -356,7 +366,7 @@
             <h3>Тренд позиций (21 день)</h3>
             <span class="hint">Средняя позиция и плотность проверок</span>
           </div>
-          <svg id="dashboardTrendChart" class="trend-chart" viewBox="0 0 720 180" preserveAspectRatio="none"></svg>
+          <div id="dashboardTrendChart" class="trend-chart"></div>
           <div id="dashboardTrendMeta" class="trend-meta"></div>
         </div>
         <div class="panel">
@@ -917,7 +927,7 @@
           <strong>Тренд позиции (21 день)</strong>
           <span class="hint" id="productViewTrendMeta">-</span>
         </div>
-        <svg id="productViewTrendChart" class="trend-chart mini" viewBox="0 0 720 150" preserveAspectRatio="none"></svg>
+        <div id="productViewTrendChart" class="trend-chart mini"></div>
       </div>
       <details>
         <summary>RAW</summary>
@@ -977,6 +987,7 @@
 
   <div id="hoverTip" class="hover-tip hidden"></div>
 
-  <script src="/static/app.js?v=20260228e"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+  <script src="/static/app.js?v=20260301b"></script>
 </body>
 </html>
