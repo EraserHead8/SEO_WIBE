@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260301c" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260301d" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -918,10 +918,38 @@
         <h3>Карточка товара</h3>
         <button class="campaign-close" onclick="closeProductViewModal()">✕</button>
       </div>
-      <div id="productViewMeta" class="hint">-</div>
-      <div id="productViewWarn" class="hint">-</div>
-      <div id="productViewPhotos" class="product-modal-photos"></div>
-      <div id="productViewAttrs" class="product-modal-attrs"></div>
+      <div class="product-modal-info">
+        <div id="productViewMeta" class="hint">-</div>
+        <div id="productViewWarn" class="hint">-</div>
+      </div>
+      <section class="product-modal-section">
+        <h4>Кратко</h4>
+        <div id="productViewSummary" class="product-kv-grid"></div>
+      </section>
+      <section class="product-modal-section">
+        <h4>Описание</h4>
+        <div id="productViewDescription" class="product-modal-description">-</div>
+      </section>
+      <section class="product-modal-section">
+        <h4>Фото</h4>
+        <div id="productViewPhotos" class="product-modal-photos"></div>
+      </section>
+      <section class="product-modal-section">
+        <h4>Цена и статус</h4>
+        <div id="productViewCommerce" class="product-kv-grid"></div>
+      </section>
+      <section class="product-modal-section">
+        <h4>Логистика</h4>
+        <div id="productViewLogistics" class="product-kv-grid"></div>
+      </section>
+      <section class="product-modal-section">
+        <h4>ID и служебные поля</h4>
+        <div id="productViewTechnical" class="product-kv-grid"></div>
+      </section>
+      <section class="product-modal-section">
+        <h4>Характеристики</h4>
+        <div id="productViewAttrs" class="product-modal-attrs"></div>
+      </section>
       <div class="panel trend-panel product-modal-trend">
         <div class="panel-head">
           <strong>Тренд позиции (21 день)</strong>
@@ -929,7 +957,7 @@
         </div>
         <div id="productViewTrendChart" class="trend-chart mini"></div>
       </div>
-      <details>
+      <details class="product-modal-raw">
         <summary>RAW</summary>
         <pre id="productViewRaw">-</pre>
       </details>
@@ -943,13 +971,26 @@
         <button class="campaign-close" onclick="closeProductEditModal()">✕</button>
       </div>
       <div id="productEditHint" class="hint">-</div>
-      <div class="grid-1">
-        <input id="productEditName" placeholder="Название товара" />
-        <input id="productEditCategory" placeholder="Категория" />
-        <input id="productEditBarcode" placeholder="Баркод" />
-        <input id="productEditPhotoUrl" placeholder="URL главного фото" />
-        <textarea id="productEditDescription" rows="6" placeholder="Описание"></textarea>
-        <textarea id="productEditKeywords" rows="4" placeholder="Целевые ключевые слова через запятую"></textarea>
+      <div class="product-edit-layout">
+        <section class="product-modal-section product-edit-summary-col">
+          <h4>Карточка и характеристики</h4>
+          <div id="productEditSummary" class="product-kv-grid"></div>
+          <div id="productEditPhotos" class="product-modal-photos"></div>
+          <div id="productEditAttrs" class="product-modal-attrs"></div>
+        </section>
+        <section class="product-modal-section product-edit-form-col">
+          <h4>Редактирование</h4>
+          <div class="product-edit-form-grid">
+            <label><span>Название</span><input id="productEditName" placeholder="Название товара" /></label>
+            <label><span>Категория</span><input id="productEditCategory" placeholder="Категория" /></label>
+            <label><span>Баркод</span><input id="productEditBarcode" placeholder="Баркод" /></label>
+            <label><span>URL главного фото</span><input id="productEditPhotoUrl" placeholder="URL главного фото" /></label>
+            <label class="full"><span>Описание</span><textarea id="productEditDescription" rows="8" placeholder="Описание"></textarea></label>
+            <label class="full"><span>Целевые ключевые слова (через запятую)</span><textarea id="productEditKeywords" rows="4" placeholder="Целевые ключевые слова через запятую"></textarea></label>
+          </div>
+          <h4>Детали из API</h4>
+          <div id="productEditDetails" class="product-kv-grid"></div>
+        </section>
       </div>
       <div class="actions">
         <button type="button" onclick="saveProductEditModal()">Сохранить</button>
@@ -988,6 +1029,6 @@
   <div id="hoverTip" class="hover-tip hidden"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script src="/static/app.js?v=20260301c"></script>
+  <script src="/static/app.js?v=20260301d"></script>
 </body>
 </html>

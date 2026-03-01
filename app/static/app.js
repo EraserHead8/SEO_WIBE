@@ -4990,13 +4990,225 @@ async function fetchProductDetailsById(productId, opts = {}) {
   return data;
 }
 
-function renderProductAttrRows(attributes) {
-  const rows = Object.entries(attributes || {})
-    .filter(([k, v]) => String(k || "").trim() && String(v || "").trim())
-    .map(([k, v]) => `<div class="product-modal-attr"><span>${escapeHtml(String(k))}</span><b>${escapeHtml(String(v))}</b></div>`)
+function normalizeProductDetailValue(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") {
+    const text = value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+    if (!text || text === "-" || text === "—") return "";
+    return text;
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return "";
+    return String(value);
+  }
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (Array.isArray(value)) {
+    const parts = value.map((x) => normalizeProductDetailValue(x)).filter(Boolean);
+    return parts.join(", ");
+  }
+  if (typeof value === "object") {
+    const obj = value || {};
+    for (const key of ["value", "name", "title", "url", "id"]) {
+      const text = normalizeProductDetailValue(obj[key]);
+      if (text) return text;
+    }
+    try {
+      return JSON.stringify(obj);
+    } catch (_) {
+      return "";
+    }
+  }
+  return "";
+}
+
+function getValueByPath(source, path) {
+  if (!source || typeof source !== "object") return "";
+  const chunks = String(path || "").split(".").filter(Boolean);
+  if (!chunks.length) return "";
+  let cursor = source;
+  for (const chunk of chunks) {
+    if (!cursor || typeof cursor !== "object") return "";
+    cursor = cursor[chunk];
+  }
+  return normalizeProductDetailValue(cursor);
+}
+
+function extractProductDetailContext(details, fallbackProduct) {
+  const base = (details && details.product && typeof details.product === "object") ? details.product : (fallbackProduct || {});
+  const raw = (details && details.raw && typeof details.raw === "object") ? details.raw : {};
+  const attributesRaw = (details && details.attributes && typeof details.attributes === "object") ? details.attributes : {};
+  const photosRaw = Array.isArray(details?.photos) ? details.photos : [];
+  const knownPhoto = normalizeProductDetailValue(base.photo_url);
+  const photos = photosRaw.filter((x) => normalizeProductDetailValue(x)).map((x) => String(x));
+  if (!photos.length && knownPhoto) photos.push(knownPhoto);
+
+  const rawCandidates = [raw];
+  if (raw.product_info && typeof raw.product_info === "object") rawCandidates.push(raw.product_info);
+  if (raw.result && typeof raw.result === "object") rawCandidates.push(raw.result);
+  if (raw.data && typeof raw.data === "object") rawCandidates.push(raw.data);
+
+  const pickAttr = (...keys) => {
+    for (const key of keys) {
+      const text = normalizeProductDetailValue(attributesRaw?.[key]);
+      if (text) return text;
+    }
+    return "";
+  };
+  const pickRaw = (...keys) => {
+    for (const key of keys) {
+      for (const item of rawCandidates) {
+        const text = getValueByPath(item, key);
+        if (text) return text;
+      }
+    }
+    return "";
+  };
+  const pickAny = (...values) => {
+    for (const value of values) {
+      const text = normalizeProductDetailValue(value);
+      if (text) return text;
+    }
+    return "";
+  };
+
+  const name = pickAny(base.name, pickAttr("name", "title"), pickRaw("name", "title"));
+  const marketplace = pickAny(base.marketplace)?.toUpperCase() || "-";
+  const category = pickAny(base.category_name, pickAttr("category_name"), pickRaw("category_name", "category.name", "subjectName")) || "-";
+  const brand = pickAny(pickAttr("brand"), pickRaw("brand", "vendor", "trademark"));
+  const article = pickAny(base.article, pickAttr("offer_id", "vendorCode"), pickRaw("offer_id", "vendorCode"));
+  const externalId = pickAny(base.external_id, pickAttr("id", "nmID"), pickRaw("id", "product_id", "nmID"));
+  const barcode = pickAny(base.barcode, pickAttr("barcode", "barcodes"), pickRaw("barcode", "barcodes"));
+  const description = pickAny(
+    base.current_description,
+    pickAttr("description"),
+    pickRaw("description", "marketing_description", "annotation")
+  );
+
+  const summaryItems = [
+    { label: tr("Маркетплейс", "Marketplace"), value: marketplace },
+    { label: tr("Категория", "Category"), value: category },
+    { label: tr("Бренд", "Brand"), value: brand || "-" },
+    { label: tr("Артикул", "Article"), value: article || "-" },
+    { label: tr("Внешний ID", "External ID"), value: externalId || "-" },
+    { label: tr("Баркод", "Barcode"), value: barcode || "-" },
+  ];
+
+  const commerceItems = [
+    { label: tr("Цена", "Price"), value: pickAny(pickAttr("price"), pickRaw("price")) || "-" },
+    { label: tr("Старая цена", "Old price"), value: pickAny(pickAttr("old_price"), pickRaw("old_price")) || "-" },
+    { label: tr("Мин. цена", "Min price"), value: pickAny(pickAttr("min_price"), pickRaw("min_price")) || "-" },
+    { label: tr("Маркетинг цена", "Marketing price"), value: pickAny(pickAttr("marketing_price"), pickRaw("marketing_price")) || "-" },
+    { label: tr("Валюта", "Currency"), value: pickAny(pickAttr("currency_code"), pickRaw("currency_code")) || "-" },
+    { label: tr("НДС", "VAT"), value: pickAny(pickAttr("vat"), pickRaw("vat")) || "-" },
+    { label: tr("Статус", "Status"), value: pickAny(pickAttr("state"), pickRaw("state.name", "state")) || "-" },
+    { label: tr("Видимость", "Visibility"), value: pickAny(pickAttr("visibility"), pickRaw("visibility")) || "-" },
+  ];
+
+  const logisticsItems = [
+    { label: tr("Вес", "Weight"), value: pickAny(pickAttr("weight"), pickRaw("weight")) || "-" },
+    { label: tr("Ед. веса", "Weight unit"), value: pickAny(pickAttr("weight_unit"), pickRaw("weight_unit")) || "-" },
+    { label: tr("Длина", "Length"), value: pickAny(pickAttr("depth"), pickRaw("depth")) || "-" },
+    { label: tr("Ширина", "Width"), value: pickAny(pickAttr("width"), pickRaw("width")) || "-" },
+    { label: tr("Высота", "Height"), value: pickAny(pickAttr("height"), pickRaw("height")) || "-" },
+    { label: tr("Ед. габаритов", "Dimension unit"), value: pickAny(pickAttr("dimension_unit"), pickRaw("dimension_unit")) || "-" },
+    { label: tr("Упаковка: вес", "Package: weight"), value: pickAny(pickAttr("package_weight"), pickRaw("package_dimensions.weight")) || "-" },
+    { label: tr("Упаковка: длина", "Package: depth"), value: pickAny(pickAttr("package_depth"), pickRaw("package_dimensions.depth")) || "-" },
+    { label: tr("Упаковка: ширина", "Package: width"), value: pickAny(pickAttr("package_width"), pickRaw("package_dimensions.width")) || "-" },
+    { label: tr("Упаковка: высота", "Package: height"), value: pickAny(pickAttr("package_height"), pickRaw("package_dimensions.height")) || "-" },
+  ];
+
+  const technicalItems = [
+    { label: "offer_id", value: pickAny(pickAttr("offer_id"), pickRaw("offer_id"), base.article) || "-" },
+    { label: "id/product_id", value: pickAny(pickAttr("id"), pickRaw("id", "product_id"), base.external_id) || "-" },
+    { label: "sku", value: pickAny(pickAttr("sku"), pickRaw("sku")) || "-" },
+    { label: "fbo_sku", value: pickAny(pickAttr("fbo_sku"), pickRaw("fbo_sku")) || "-" },
+    { label: "fbs_sku", value: pickAny(pickAttr("fbs_sku"), pickRaw("fbs_sku")) || "-" },
+    { label: "nmID", value: pickAny(pickAttr("nmID"), pickRaw("nmID")) || "-" },
+    { label: "imtID", value: pickAny(pickAttr("imtID"), pickRaw("imtID")) || "-" },
+    { label: "description_category_id", value: pickAny(pickAttr("description_category_id"), pickRaw("description_category_id", "category_id")) || "-" },
+  ];
+
+  const displayAttributes = [];
+  for (const [key, value] of Object.entries(attributesRaw)) {
+    const text = normalizeProductDetailValue(value);
+    if (!text) continue;
+    if (key.startsWith("attr:") || key.startsWith("char:")) {
+      displayAttributes.push({ label: key.split(":").slice(1).join(":").trim() || key, value: text });
+      continue;
+    }
+  }
+  if (!displayAttributes.length) {
+    for (const [key, value] of Object.entries(attributesRaw)) {
+      if (String(key).startsWith("attr:") || String(key).startsWith("char:")) continue;
+      const text = normalizeProductDetailValue(value);
+      if (!text) continue;
+      displayAttributes.push({ label: String(key), value: text });
+      if (displayAttributes.length >= 30) break;
+    }
+  }
+
+  const cleanedAttributes = [];
+  for (const item of displayAttributes) {
+    const label = normalizeProductDetailValue(item.label);
+    const value = normalizeProductDetailValue(item.value);
+    if (!label || !value) continue;
+    cleanedAttributes.push({ label, value });
+  }
+
+  return {
+    base,
+    raw,
+    photos,
+    name: name || tr("Товар", "Product"),
+    description,
+    summaryItems,
+    commerceItems,
+    logisticsItems,
+    technicalItems,
+    attributeItems: cleanedAttributes,
+  };
+}
+
+function renderProductInfoGrid(items, emptyLabel) {
+  const rows = (Array.isArray(items) ? items : [])
+    .map((item) => {
+      const label = normalizeProductDetailValue(item?.label);
+      const value = normalizeProductDetailValue(item?.value);
+      if (!label || !value) return "";
+      return `<article class="product-kv-card"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></article>`;
+    })
+    .filter(Boolean)
     .join("");
   if (rows) return rows;
-  return `<div class="hint">${escapeHtml(tr("Атрибуты не найдены.", "No attributes found."))}</div>`;
+  return `<div class="hint">${escapeHtml(emptyLabel)}</div>`;
+}
+
+function renderProductAttributeTable(items) {
+  const rows = (Array.isArray(items) ? items : [])
+    .map((item) => {
+      const label = normalizeProductDetailValue(item?.label);
+      const value = normalizeProductDetailValue(item?.value);
+      if (!label || !value) return "";
+      return `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`;
+    })
+    .filter(Boolean)
+    .join("");
+  if (!rows) {
+    return `<div class="hint">${escapeHtml(tr("Атрибуты не найдены.", "No attributes found."))}</div>`;
+  }
+  return `
+    <div class="table-card product-attrs-table-wrap">
+      <table class="product-attrs-table">
+        <thead>
+          <tr>
+            <th>${escapeHtml(tr("Параметр", "Parameter"))}</th>
+            <th>${escapeHtml(tr("Значение", "Value"))}</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
 }
 
 async function openProductViewModal(productId) {
@@ -5012,7 +5224,12 @@ async function openProductViewModal(productId) {
   modal.classList.remove("hidden");
   const metaEl = document.getElementById("productViewMeta");
   const warnEl = document.getElementById("productViewWarn");
+  const summaryEl = document.getElementById("productViewSummary");
   const photosEl = document.getElementById("productViewPhotos");
+  const descEl = document.getElementById("productViewDescription");
+  const commerceEl = document.getElementById("productViewCommerce");
+  const logisticsEl = document.getElementById("productViewLogistics");
+  const technicalEl = document.getElementById("productViewTechnical");
   const attrsEl = document.getElementById("productViewAttrs");
   const rawEl = document.getElementById("productViewRaw");
   if (metaEl) {
@@ -5021,15 +5238,29 @@ async function openProductViewModal(productId) {
       : "-";
   }
   if (warnEl) warnEl.textContent = tr("Загружаем детали карточки…", "Loading product details...");
+  if (summaryEl) summaryEl.innerHTML = "";
   if (photosEl) photosEl.innerHTML = "";
+  if (descEl) descEl.textContent = "-";
+  if (commerceEl) commerceEl.innerHTML = "";
+  if (logisticsEl) logisticsEl.innerHTML = "";
+  if (technicalEl) technicalEl.innerHTML = "";
   if (attrsEl) attrsEl.innerHTML = "";
   if (rawEl) rawEl.textContent = "-";
 
   const details = await fetchProductDetailsById(id, { silent: true });
   if (!details || activeProductViewId !== id) return;
-  const photos = Array.isArray(details.photos) ? details.photos.filter((x) => String(x || "").trim()) : [];
-  const fallback = product?.photo_url ? [product.photo_url] : [];
-  const allPhotos = photos.length ? photos : fallback;
+  const context = extractProductDetailContext(details, product || {});
+  if (titleEl) titleEl.textContent = `${tr("Карточка товара", "Product card")}: ${context.name}`;
+  const allPhotos = context.photos;
+  if (summaryEl) {
+    summaryEl.innerHTML = renderProductInfoGrid(
+      context.summaryItems,
+      tr("Краткая информация недоступна.", "Summary is unavailable.")
+    );
+  }
+  if (descEl) {
+    descEl.textContent = context.description || tr("Описание отсутствует.", "Description is not available.");
+  }
   if (photosEl) {
     photosEl.innerHTML = allPhotos.length
       ? allPhotos.map((url, idx) => `<img src="${escapeHtml(String(url))}" alt="product-photo-${idx + 1}" loading="lazy" class="product-detail-photo">`).join("")
@@ -5046,8 +5277,26 @@ async function openProductViewModal(productId) {
     const warnings = Array.isArray(details.warnings) ? details.warnings.filter(Boolean) : [];
     warnEl.textContent = warnings.length ? warnings.join(" | ") : tr("Детали загружены.", "Details loaded.");
   }
-  if (attrsEl) attrsEl.innerHTML = renderProductAttrRows(details.attributes || {});
-  if (rawEl) rawEl.textContent = JSON.stringify(details.raw || {}, null, 2);
+  if (commerceEl) {
+    commerceEl.innerHTML = renderProductInfoGrid(
+      context.commerceItems,
+      tr("Коммерческие данные не найдены.", "Commerce data not found.")
+    );
+  }
+  if (logisticsEl) {
+    logisticsEl.innerHTML = renderProductInfoGrid(
+      context.logisticsItems,
+      tr("Логистические данные не найдены.", "Logistics data not found.")
+    );
+  }
+  if (technicalEl) {
+    technicalEl.innerHTML = renderProductInfoGrid(
+      context.technicalItems,
+      tr("Технические идентификаторы не найдены.", "Technical identifiers not found.")
+    );
+  }
+  if (attrsEl) attrsEl.innerHTML = renderProductAttributeTable(context.attributeItems);
+  if (rawEl) rawEl.textContent = JSON.stringify(context.raw || {}, null, 2);
   const points = await loadTrend({ productId: id, days: 21 });
   if (activeProductViewId !== id) return;
   renderTrendChart("productViewTrendChart", "productViewTrendMeta", points);
@@ -5063,13 +5312,23 @@ async function openProductEditModal(productId) {
   const titleEl = modal.querySelector("h3");
   if (titleEl) titleEl.textContent = `${tr("Редактировать товар", "Edit product")}: ${product?.name || id}`;
   const hintEl = document.getElementById("productEditHint");
+  const summaryEl = document.getElementById("productEditSummary");
+  const detailsEl = document.getElementById("productEditDetails");
+  const photosEl = document.getElementById("productEditPhotos");
+  const attrsEl = document.getElementById("productEditAttrs");
   if (hintEl) hintEl.textContent = tr("Загружаем данные карточки…", "Loading product data...");
+  if (summaryEl) summaryEl.innerHTML = "";
+  if (detailsEl) detailsEl.innerHTML = "";
+  if (photosEl) photosEl.innerHTML = "";
+  if (attrsEl) attrsEl.innerHTML = "";
   modal.classList.remove("hidden");
 
   const details = await fetchProductDetailsById(id, { silent: true });
   if (activeProductEditId !== id) return;
-  const base = details?.product || product || {};
+  const context = extractProductDetailContext(details, product || {});
+  const base = context.base || product || {};
   const warnings = Array.isArray(details?.warnings) ? details.warnings.filter(Boolean) : [];
+  if (titleEl) titleEl.textContent = `${tr("Редактировать товар", "Edit product")}: ${context.name || id}`;
   if (hintEl) {
     hintEl.textContent = warnings.length
       ? warnings.join(" | ")
@@ -5083,8 +5342,27 @@ async function openProductEditModal(productId) {
   setValue("productEditCategory", base.category_name);
   setValue("productEditBarcode", base.barcode);
   setValue("productEditPhotoUrl", base.photo_url);
-  setValue("productEditDescription", base.current_description);
+  setValue("productEditDescription", base.current_description || context.description);
   setValue("productEditKeywords", base.target_keywords);
+  if (summaryEl) {
+    summaryEl.innerHTML = renderProductInfoGrid(
+      context.summaryItems,
+      tr("Краткая информация недоступна.", "Summary is unavailable.")
+    );
+  }
+  if (detailsEl) {
+    const editInfo = [...context.commerceItems, ...context.logisticsItems, ...context.technicalItems];
+    detailsEl.innerHTML = renderProductInfoGrid(
+      editInfo,
+      tr("Детали карточки недоступны.", "Details are unavailable.")
+    );
+  }
+  if (photosEl) {
+    photosEl.innerHTML = context.photos.length
+      ? context.photos.map((url, idx) => `<img src="${escapeHtml(String(url))}" alt="edit-photo-${idx + 1}" loading="lazy" class="product-detail-photo">`).join("")
+      : `<div class="hint">${escapeHtml(tr("Фотографии не найдены.", "No photos found."))}</div>`;
+  }
+  if (attrsEl) attrsEl.innerHTML = renderProductAttributeTable(context.attributeItems);
 }
 
 async function saveProductEditModal() {

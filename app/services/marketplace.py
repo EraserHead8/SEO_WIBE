@@ -1088,6 +1088,7 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
             info_items = list_items_fallback
 
     mapped: list[MarketplaceProduct] = []
+    category_id_rows: list[dict[str, Any]] = []
     seen_keys: set[tuple[str, str]] = set()
     for item in info_items:
         source = item.get("product_info") if isinstance(item.get("product_info"), dict) else item
@@ -1105,12 +1106,17 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
             continue
         seen_keys.add(dedupe_key)
         name = str(merged.get("name") or merged.get("title") or "Товар Ozon")
-        category_name = str(
-            merged.get("category_name")
-            or merged.get("category")
-            or ""
-        )
-        description = str(merged.get("description") or merged.get("marketing_description") or "")
+        category_name = _extract_ozon_category_name(merged)
+        description = _extract_ozon_description(merged)
+        category_id = _extract_ozon_category_id(merged)
+        if not category_name and category_id > 0:
+            category_id_rows.append(
+                {
+                    "article": article,
+                    "external_id": external_id,
+                    "category_id": category_id,
+                }
+            )
         barcode = _extract_ozon_barcode(merged)
         photo_url = _extract_ozon_photo(merged)
         mapped.append(
@@ -1124,6 +1130,37 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
                 description=description,
             )
         )
+    if category_id_rows:
+        try:
+            with httpx.Client(timeout=20.0) as client:
+                category_map = _fetch_ozon_description_category_map(client, headers)
+        except Exception:
+            category_map = {}
+        if category_map:
+            by_ref: dict[tuple[str, str], str] = {}
+            for row in category_id_rows:
+                cid = int(row.get("category_id") or 0)
+                name = category_map.get(cid, "")
+                if not name:
+                    continue
+                key = (str(row.get("article") or "").strip().lower(), str(row.get("external_id") or "").strip())
+                by_ref[key] = name
+            if by_ref:
+                for idx, item in enumerate(mapped):
+                    if item.category_name:
+                        continue
+                    key = (str(item.article or "").strip().lower(), str(item.external_id or "").strip())
+                    next_category = by_ref.get(key, "")
+                    if next_category:
+                        mapped[idx] = MarketplaceProduct(
+                            article=item.article,
+                            external_id=item.external_id,
+                            barcode=item.barcode,
+                            photo_url=item.photo_url,
+                            name=item.name,
+                            category_name=next_category,
+                            description=item.description,
+                        )
 
     if articles:
         article_set = {x.strip() for x in articles if x.strip()}
@@ -1181,13 +1218,7 @@ def _fetch_wb_product_details(api_key: str, article: str, external_id: str) -> d
     if not target:
         return {"photos": [], "attributes": {}, "raw": {}}
     photos = _extract_wb_photos(target)
-    attrs = {
-        "vendorCode": str(target.get("vendorCode") or ""),
-        "nmID": str(target.get("nmID") or ""),
-        "brand": str(target.get("brand") or ""),
-        "title": str(target.get("title") or ""),
-        "object": str(target.get("object") or ""),
-    }
+    attrs = _build_wb_detail_attributes(target, photos)
     return {"photos": photos, "attributes": attrs, "raw": target}
 
 
@@ -1319,14 +1350,147 @@ def _fetch_ozon_product_details(api_key: str, article: str, external_id: str) ->
     photos = _extract_ozon_photos(merged)
     if not photos:
         photos = _extract_ozon_photos(first)
-    attrs = {
-        "offer_id": str(merged.get("offer_id") or first.get("offer_id") or ""),
-        "id": str(merged.get("id") or first.get("id") or ""),
-        "name": str(merged.get("name") or merged.get("title") or first.get("name") or ""),
-        "brand": str(merged.get("brand") or first.get("brand") or ""),
-        "category_name": str(merged.get("category_name") or first.get("category_name") or ""),
-    }
+    category_name = _extract_ozon_category_name(merged) or _extract_ozon_category_name(first)
+    if not category_name:
+        category_id = _extract_ozon_category_id(merged) or _extract_ozon_category_id(first)
+        if category_id > 0:
+            try:
+                with httpx.Client(timeout=15.0) as client:
+                    category_map = _fetch_ozon_description_category_map(client, headers)
+                category_name = category_map.get(int(category_id), "")
+            except Exception:
+                category_name = ""
+    if category_name and not merged.get("category_name"):
+        merged["category_name"] = category_name
+    attrs = _build_ozon_detail_attributes(merged or first, photos)
     return {"photos": photos, "attributes": attrs, "raw": merged or first}
+
+
+def enrich_ozon_category_names(api_key: str, refs: list[dict[str, str]]) -> dict[tuple[str, str], str]:
+    if not httpx:
+        return {}
+    creds = _parse_ozon_credentials(api_key)
+    if not creds:
+        return {}
+    client_id, token = creds
+    headers = {"Client-Id": client_id, "Api-Key": token, "Content-Type": "application/json"}
+    info_endpoint = "https://api-seller.ozon.ru/v3/product/info/list"
+    list_endpoint = "https://api-seller.ozon.ru/v3/product/list"
+
+    wanted: list[tuple[str, str]] = []
+    product_ids: set[int] = set()
+    offer_ids: set[str] = set()
+    for row in refs if isinstance(refs, list) else []:
+        article = str((row or {}).get("article") or "").strip()
+        external_id = str((row or {}).get("external_id") or "").strip()
+        if not article and not external_id:
+            continue
+        wanted.append((article.lower(), external_id))
+        try:
+            pid = int(external_id)
+        except Exception:
+            pid = 0
+        if pid > 0:
+            product_ids.add(pid)
+        elif article:
+            offer_ids.add(article)
+    if not wanted:
+        return {}
+
+    resolved_rows: list[dict[str, Any]] = []
+    with httpx.Client(timeout=20.0) as client:
+        if product_ids:
+            ids = sorted(product_ids)
+            for offset in range(0, len(ids), 100):
+                chunk = ids[offset : offset + 100]
+                try:
+                    resp = client.post(info_endpoint, headers=headers, json={"product_id": chunk})
+                except Exception:
+                    continue
+                if resp.status_code >= 400:
+                    continue
+                payload = _safe_response_json(resp)
+                rows = _extract_ozon_items(payload)
+                if isinstance(rows, list):
+                    resolved_rows.extend([x for x in rows if isinstance(x, dict)])
+
+        # Resolve products by offer_id for records where external_id is missing.
+        pending_offer = [x for x in sorted(offer_ids) if x]
+        for offset in range(0, len(pending_offer), 100):
+            chunk = pending_offer[offset : offset + 100]
+            try:
+                list_resp = client.post(
+                    list_endpoint,
+                    headers=headers,
+                    json={"filter": {"visibility": "ALL", "offer_id": chunk}, "last_id": "", "limit": 100},
+                )
+            except Exception:
+                continue
+            if list_resp.status_code >= 400:
+                continue
+            list_payload = _safe_response_json(list_resp)
+            list_rows = _extract_ozon_items(list_payload)
+            chunk_ids: list[int] = []
+            for row in list_rows if isinstance(list_rows, list) else []:
+                try:
+                    pid = int((row or {}).get("product_id"))
+                except Exception:
+                    pid = 0
+                if pid > 0:
+                    chunk_ids.append(pid)
+            if not chunk_ids:
+                continue
+            try:
+                info_resp = client.post(info_endpoint, headers=headers, json={"product_id": sorted(set(chunk_ids))})
+            except Exception:
+                continue
+            if info_resp.status_code >= 400:
+                continue
+            info_payload = _safe_response_json(info_resp)
+            info_rows = _extract_ozon_items(info_payload)
+            if isinstance(info_rows, list):
+                resolved_rows.extend([x for x in info_rows if isinstance(x, dict)])
+
+        category_map = _fetch_ozon_description_category_map(client, headers)
+
+    by_ref: dict[tuple[str, str], str] = {}
+    for item in resolved_rows:
+        source = item.get("product_info") if isinstance(item.get("product_info"), dict) else item
+        if not isinstance(source, dict):
+            continue
+        merged: dict[str, Any] = {}
+        if isinstance(item, dict):
+            merged.update(item)
+        merged.update(source)
+        article = str(merged.get("offer_id") or "").strip()
+        external_id = str(merged.get("id") or item.get("product_id") or "").strip()
+        if not article and not external_id:
+            continue
+        category_name = _extract_ozon_category_name(merged)
+        if not category_name:
+            cid = _extract_ozon_category_id(merged)
+            if cid > 0:
+                category_name = category_map.get(cid, "")
+        if not category_name:
+            continue
+        by_ref[(article.lower(), external_id)] = category_name
+
+    out: dict[tuple[str, str], str] = {}
+    for article_key, external_id in wanted:
+        category = by_ref.get((article_key, external_id), "")
+        if not category and article_key:
+            for (art, ext), value in by_ref.items():
+                if art == article_key:
+                    category = value
+                    break
+        if not category and external_id:
+            for (art, ext), value in by_ref.items():
+                if ext == external_id:
+                    category = value
+                    break
+        if category:
+            out[(article_key, external_id)] = category
+    return out
 
 
 def _update_wb_description(api_key: str, article: str, description: str) -> bool:
@@ -1549,6 +1713,257 @@ def _extract_ozon_photos(source: dict[str, Any]) -> list[str]:
         seen.add(url)
         dedup.append(url)
     return dedup
+
+
+def _extract_ozon_category_id(source: dict[str, Any]) -> int:
+    for key in (
+        "description_category_id",
+        "category_id",
+        "categoryId",
+        "descriptionCategoryId",
+    ):
+        try:
+            value = int(str(source.get(key) or "").strip())
+        except Exception:
+            value = 0
+        if value > 0:
+            return value
+    category = source.get("category")
+    if isinstance(category, dict):
+        for key in ("description_category_id", "category_id", "id"):
+            try:
+                value = int(str(category.get(key) or "").strip())
+            except Exception:
+                value = 0
+            if value > 0:
+                return value
+    return 0
+
+
+def _extract_ozon_category_name(source: dict[str, Any]) -> str:
+    for key in ("category_name", "category", "category_title", "categoryName", "subject_name"):
+        value = source.get(key)
+        if isinstance(value, str) and value.strip():
+            text = " ".join(value.replace("\u00a0", " ").split()).strip()
+            if text and text not in {"-", "—"}:
+                return text
+        if isinstance(value, dict):
+            for sub_key in ("category_name", "name", "title"):
+                sub = value.get(sub_key)
+                if isinstance(sub, str) and sub.strip():
+                    text = " ".join(sub.replace("\u00a0", " ").split()).strip()
+                    if text and text not in {"-", "—"}:
+                        return text
+        if isinstance(value, list):
+            parts = [str(x).strip() for x in value if isinstance(x, (str, int, float)) and str(x).strip()]
+            if parts:
+                joined = " > ".join(parts)
+                if joined and joined not in {"-", "—"}:
+                    return joined
+    return ""
+
+
+def _extract_ozon_description(source: dict[str, Any]) -> str:
+    for key in (
+        "description",
+        "marketing_description",
+        "annotation",
+        "content",
+        "rich_content",
+    ):
+        value = source.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _fetch_ozon_description_category_map(client: Any, headers: dict[str, str]) -> dict[int, str]:
+    endpoint = "https://api-seller.ozon.ru/v1/description-category/tree"
+    attempts = [
+        {"language": "DEFAULT"},
+        {"language": "RU"},
+        {},
+    ]
+    payload: dict[str, Any] = {}
+    for body in attempts:
+        try:
+            resp = client.post(endpoint, headers=headers, json=body)
+        except Exception:
+            continue
+        if resp.status_code >= 400:
+            continue
+        payload = _safe_response_json(resp)
+        if payload:
+            break
+    if not payload:
+        return {}
+    result = payload.get("result")
+    rows = result if isinstance(result, list) else payload.get("items")
+    if not isinstance(rows, list):
+        return {}
+    out: dict[int, str] = {}
+    stack: list[dict[str, Any]] = [x for x in rows if isinstance(x, dict)]
+    while stack:
+        node = stack.pop()
+        node_id = 0
+        for key in ("description_category_id", "category_id", "id"):
+            try:
+                node_id = int(str(node.get(key) or "").strip())
+            except Exception:
+                node_id = 0
+            if node_id > 0:
+                break
+        name = ""
+        for key in ("category_name", "name", "title"):
+            value = node.get(key)
+            if isinstance(value, str) and value.strip():
+                name = " ".join(value.replace("\u00a0", " ").split()).strip()
+                if name:
+                    break
+        if node_id > 0 and name:
+            out[node_id] = name
+        for child_key in ("children", "child", "categories"):
+            children = node.get(child_key)
+            if isinstance(children, list):
+                stack.extend([x for x in children if isinstance(x, dict)])
+    return out
+
+
+def _normalize_detail_value(value: Any, max_len: int = 600) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, str):
+        text = " ".join(value.replace("\u00a0", " ").split()).strip()
+        return text[:max_len]
+    if isinstance(value, list):
+        parts = [_normalize_detail_value(x, max_len=120) for x in value]
+        joined = ", ".join([x for x in parts if x])
+        return joined[:max_len]
+    if isinstance(value, dict):
+        for key in ("value", "name", "title", "url", "id"):
+            if key in value:
+                next_val = _normalize_detail_value(value.get(key), max_len=max_len)
+                if next_val:
+                    return next_val
+        try:
+            return json.dumps(value, ensure_ascii=False)[:max_len]
+        except Exception:
+            return ""
+    return str(value)[:max_len]
+
+
+def _collect_wb_characteristics(source: dict[str, Any]) -> dict[str, str]:
+    rows = source.get("characteristics")
+    if not isinstance(rows, list):
+        return {}
+    out: dict[str, str] = {}
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        name = _normalize_detail_value(item.get("name"), max_len=120)
+        if not name:
+            continue
+        value = item.get("value")
+        if not value:
+            value = item.get("values")
+        text = _normalize_detail_value(value, max_len=380)
+        if text:
+            out[name] = text
+    return out
+
+
+def _build_wb_detail_attributes(source: dict[str, Any], photos: list[str]) -> dict[str, str]:
+    attrs: dict[str, str] = {
+        "vendorCode": _normalize_detail_value(source.get("vendorCode")),
+        "nmID": _normalize_detail_value(source.get("nmID")),
+        "imtID": _normalize_detail_value(source.get("imtID")),
+        "brand": _normalize_detail_value(source.get("brand")),
+        "title": _normalize_detail_value(source.get("title")),
+        "subjectName": _normalize_detail_value(source.get("subjectName") or source.get("object")),
+        "description": _normalize_detail_value(source.get("description"), max_len=800),
+        "photos_count": str(len(photos)),
+    }
+    for key in ("createdAt", "updatedAt"):
+        value = _normalize_detail_value(source.get(key))
+        if value:
+            attrs[key] = value
+    barcode = _extract_wb_barcode(source)
+    if barcode:
+        attrs["barcode"] = barcode
+    for key, value in _collect_wb_characteristics(source).items():
+        attrs[f"char:{key}"] = value
+    return {k: v for k, v in attrs.items() if v}
+
+
+def _collect_ozon_attribute_pairs(source: dict[str, Any]) -> dict[str, str]:
+    rows = source.get("attributes")
+    if not isinstance(rows, list):
+        return {}
+    out: dict[str, str] = {}
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        name = _normalize_detail_value(
+            item.get("name") or item.get("attribute_name") or item.get("id"),
+            max_len=140,
+        )
+        if not name:
+            continue
+        value = item.get("values")
+        if value in (None, "", []):
+            value = item.get("value")
+        text = _normalize_detail_value(value, max_len=380)
+        if text:
+            out[name] = text
+    return out
+
+
+def _build_ozon_detail_attributes(source: dict[str, Any], photos: list[str]) -> dict[str, str]:
+    category_name = _extract_ozon_category_name(source)
+    category_id = _extract_ozon_category_id(source)
+    attrs: dict[str, str] = {
+        "offer_id": _normalize_detail_value(source.get("offer_id")),
+        "id": _normalize_detail_value(source.get("id") or source.get("product_id")),
+        "sku": _normalize_detail_value(source.get("sku")),
+        "fbo_sku": _normalize_detail_value(source.get("fbo_sku")),
+        "fbs_sku": _normalize_detail_value(source.get("fbs_sku")),
+        "name": _normalize_detail_value(source.get("name") or source.get("title"), max_len=500),
+        "brand": _normalize_detail_value(source.get("brand")),
+        "category_name": category_name,
+        "description_category_id": str(category_id) if category_id > 0 else "",
+        "type_id": _normalize_detail_value(source.get("type_id")),
+        "barcode": _extract_ozon_barcode(source),
+        "barcodes": _normalize_detail_value(source.get("barcodes"), max_len=300),
+        "price": _normalize_detail_value(source.get("price")),
+        "old_price": _normalize_detail_value(source.get("old_price")),
+        "min_price": _normalize_detail_value(source.get("min_price")),
+        "marketing_price": _normalize_detail_value(source.get("marketing_price")),
+        "vat": _normalize_detail_value(source.get("vat")),
+        "currency_code": _normalize_detail_value(source.get("currency_code")),
+        "state": _normalize_detail_value(source.get("state")),
+        "visibility": _normalize_detail_value(source.get("visibility")),
+        "photos_count": str(len(photos)),
+        "description": _normalize_detail_value(_extract_ozon_description(source), max_len=900),
+    }
+    # Common logistics fields
+    for key in ("weight", "weight_unit", "depth", "width", "height", "dimension_unit"):
+        value = _normalize_detail_value(source.get(key))
+        if value:
+            attrs[key] = value
+    # Nested package dimensions, if present.
+    package = source.get("package_dimensions")
+    if isinstance(package, dict):
+        for key in ("weight", "height", "width", "depth"):
+            value = _normalize_detail_value(package.get(key))
+            if value:
+                attrs[f"package_{key}"] = value
+    for key, value in _collect_ozon_attribute_pairs(source).items():
+        attrs[f"attr:{key}"] = value
+    return {k: v for k, v in attrs.items() if v}
 
 
 def _normalize_photo_url(value: str) -> str:

@@ -128,6 +128,7 @@ from app.services.ads_cache import (
     sync_wb_campaign_snapshots,
 )
 from app.services.marketplace import (
+    enrich_ozon_category_names,
     fetch_marketplace_product_details,
     fetch_products_from_marketplace,
     find_competitors,
@@ -2775,6 +2776,9 @@ def list_products(
             )
         )
 
+    def _compact_category_expr():
+        return func.replace(_normalized_category_expr(), " ", "")
+
     safe_market = str(marketplace or "all").strip().lower()
     if safe_market not in {"all", "wb", "ozon"}:
         safe_market = "all"
@@ -2782,12 +2786,14 @@ def list_products(
     if not safe_category:
         safe_category = "all"
     safe_category_key = _normalize_category_value(safe_category)
+    safe_category_compact = safe_category_key.replace(" ", "")
     safe_q = str(q or "").strip().lower()[:200]
     safe_page = max(1, int(page or 1))
     safe_page_size = int(page_size or 30)
     if safe_page_size not in PRODUCT_PAGE_SIZE_OPTIONS:
         safe_page_size = 30
     normalized_category_name = _normalized_category_expr()
+    compact_category_name = _compact_category_expr()
 
     query = select(Product).where(
         Product.user_id == user.id,
@@ -2796,7 +2802,10 @@ def list_products(
     if safe_market != "all":
         query = query.where(Product.marketplace == safe_market)
     if safe_market != "all" and safe_category_key != "all":
-        query = query.where(normalized_category_name == safe_category_key)
+        category_match = normalized_category_name == safe_category_key
+        if safe_category_compact and safe_category_compact != safe_category_key:
+            category_match = or_(category_match, compact_category_name == safe_category_compact)
+        query = query.where(category_match)
     if safe_q:
         pattern = f"%{safe_q}%"
         query = query.where(
@@ -2808,6 +2817,43 @@ def list_products(
                 func.lower(func.coalesce(Product.marketplace, "")).like(pattern),
             )
         )
+
+    if safe_market == "ozon":
+        missing_ozon_rows = db.scalars(
+            select(Product)
+            .where(
+                Product.user_id == user.id,
+                _owned_by_actor_or_owner_filter(Product, user),
+                Product.marketplace == "ozon",
+                or_(Product.category_name.is_(None), func.trim(Product.category_name) == ""),
+            )
+            .order_by(Product.id.desc())
+            .limit(250)
+        ).all()
+        if missing_ozon_rows:
+            ozon_key = _get_active_marketplace_api_key(db, user.id, "ozon")
+            if ozon_key:
+                refs = [
+                    {
+                        "article": str(row.article or ""),
+                        "external_id": str(row.external_id or ""),
+                    }
+                    for row in missing_ozon_rows
+                ]
+                mapped = enrich_ozon_category_names(ozon_key, refs)
+                if mapped:
+                    changed = False
+                    for row in missing_ozon_rows:
+                        key = (str(row.article or "").strip().lower(), str(row.external_id or "").strip())
+                        next_category = str(mapped.get(key) or "").strip()
+                        if not next_category:
+                            continue
+                        if str(row.category_name or "").strip() == next_category:
+                            continue
+                        row.category_name = next_category[:255]
+                        changed = True
+                    if changed:
+                        db.flush()
 
     categories: list[str] = []
     if safe_market != "all":
@@ -2879,6 +2925,26 @@ def product_details(product_id: int, user: User = Depends(get_current_user), db:
     raw_payload = details_payload.get("raw") if isinstance(details_payload, dict) else {}
     if not isinstance(raw_payload, dict):
         raw_payload = {"value": str(raw_payload)[:5000]}
+    attributes_payload = details_payload.get("attributes") if isinstance(details_payload, dict) else {}
+    if not isinstance(attributes_payload, dict):
+        attributes_payload = {}
+    next_category = ""
+    if not str(product.category_name or "").strip():
+        next_category = str(attributes_payload.get("category_name") or "").strip()
+        if not next_category:
+            next_category = str(raw_payload.get("category_name") or "").strip()
+        if not next_category:
+            category_obj = raw_payload.get("category")
+            if isinstance(category_obj, dict):
+                next_category = str(
+                    category_obj.get("category_name")
+                    or category_obj.get("name")
+                    or category_obj.get("title")
+                    or ""
+                ).strip()
+        if next_category:
+            product.category_name = next_category[:255]
+            db.flush()
     _audit(
         db,
         user,
@@ -2892,7 +2958,7 @@ def product_details(product_id: int, user: User = Depends(get_current_user), db:
     return ProductDetailOut(
         product=product,
         photos=[str(x) for x in (details_payload.get("photos") or []) if str(x).strip()],
-        attributes={str(k): str(v) for k, v in dict(details_payload.get("attributes") or {}).items()},
+        attributes={str(k): str(v) for k, v in attributes_payload.items()},
         raw=raw_payload,
         warnings=warnings,
     )
