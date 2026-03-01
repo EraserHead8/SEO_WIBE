@@ -1377,7 +1377,12 @@ def wb_reply_question(payload: WbReviewReplyIn, user: User = Depends(get_current
         item_type="question",
         item_external_id=str(payload.id or "").strip(),
     )
-    ok, message = post_wb_question_reply(wb_key, payload.id, payload.text)
+    ok, message = post_wb_question_reply(
+        wb_key,
+        payload.id,
+        payload.text,
+        state=str(payload.state or "").strip(),
+    )
     message_short = re.sub(r"\s+", " ", str(message or "")).strip()[:260]
     _audit(
         db,
@@ -1496,7 +1501,12 @@ def ozon_reply_question(payload: WbReviewReplyIn, user: User = Depends(get_curre
         item_type="question",
         item_external_id=str(payload.id or "").strip(),
     )
-    ok, message = post_ozon_question_reply(ozon_key, payload.id, payload.text)
+    ok, message = post_ozon_question_reply(
+        ozon_key,
+        payload.id,
+        payload.text,
+        sku=int(payload.sku or 0) if int(payload.sku or 0) > 0 else None,
+    )
     message_short = re.sub(r"\s+", " ", str(message or "")).strip()[:260]
     _audit(
         db,

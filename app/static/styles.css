@@ -4998,3 +4998,82 @@ body[data-theme="dark"] tbody tr:hover td {
     font-size: 22px;
   }
 }
+
+/* 2026-03 readability pass: feedback cards + larger sales chart */
+#salesTrendChart {
+  height: 272px;
+}
+
+#reviews .feedback-row-card,
+#reviewsSubtabQuestions .feedback-row-card {
+  padding: 14px 15px;
+  gap: 11px;
+  border-radius: 15px;
+  border: 1px solid color-mix(in oklab, var(--ds-border) 86%, #ffffff);
+  background:
+    linear-gradient(
+      165deg,
+      color-mix(in oklab, var(--ds-surface-soft) 70%, #ffffff),
+      color-mix(in oklab, var(--ds-surface) 92%, #ffffff)
+    );
+}
+
+#reviews .feedback-row-head,
+#reviewsSubtabQuestions .feedback-row-head {
+  align-items: center;
+  gap: 10px;
+}
+
+#reviews .feedback-meta-badge,
+#reviewsSubtabQuestions .feedback-meta-badge {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+#reviews .feedback-product-line,
+#reviewsSubtabQuestions .feedback-product-line,
+#reviews .feedback-text-line,
+#reviewsSubtabQuestions .feedback-text-line,
+#reviews .feedback-reply-line,
+#reviewsSubtabQuestions .feedback-reply-line {
+  border: 1px solid color-mix(in oklab, var(--ds-border) 88%, #ffffff);
+  border-radius: 11px;
+  background: color-mix(in oklab, var(--ds-surface-soft) 86%, #ffffff);
+  padding: 9px 10px;
+}
+
+#reviews .cell-main-text,
+#reviewsSubtabQuestions .cell-main-text {
+  line-height: 1.52;
+  font-size: 14px;
+  max-height: 280px;
+}
+
+#reviews .review-reply-input,
+#reviewsSubtabQuestions .review-reply-input {
+  min-height: 128px;
+  line-height: 1.5;
+  font-size: 14px;
+  background: color-mix(in oklab, var(--ds-surface-soft) 80%, #ffffff);
+}
+
+#reviews .feedback-actions-row,
+#reviewsSubtabQuestions .feedback-actions-row {
+  margin-top: 4px;
+}
+
+@media (max-width: 980px) {
+  #salesTrendChart {
+    height: 234px;
+  }
+  #reviews .feedback-row-card,
+  #reviewsSubtabQuestions .feedback-row-card {
+    padding: 11px 12px;
+  }
+  #reviews .cell-main-text,
+  #reviewsSubtabQuestions .cell-main-text {
+    font-size: 13px;
+    max-height: 230px;
+  }
+}

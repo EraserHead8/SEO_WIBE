@@ -924,7 +924,7 @@ async function requestJson(url, opts = {}) {
     if (e?.name === "AbortError") {
       throw new Error(currentLang === "en" ? "Request timed out. Please retry." : "Превышено время ожидания. Повторите запрос.");
     }
-    throw e;
+    throw new Error(currentLang === "en" ? "Network error. Check connection and retry." : "Сетевая ошибка. Проверьте соединение и повторите.");
   } finally {
     if (timer) clearTimeout(timer);
   }
@@ -3182,6 +3182,14 @@ async function renderWbQuestions() {
     mpBadge.className = "feedback-meta-badge";
     mpBadge.textContent = (currentQuestionMarketplace || "wb").toUpperCase();
     meta.appendChild(mpBadge);
+    const stateLabel = String(row?.state || "").trim();
+    if (stateLabel) {
+      const stateBadge = document.createElement("span");
+      stateBadge.className = "feedback-meta-badge";
+      stateBadge.textContent = stateLabel;
+      stateBadge.dataset.tip = tr("Статус/состояние записи API", "API record state/status");
+      meta.appendChild(stateBadge);
+    }
     head.appendChild(meta);
     if (row?.user) {
       const author = document.createElement("div");
@@ -3328,9 +3336,32 @@ async function generateQuestionReply(questionId) {
 }
 
 async function sendQuestionReply(questionId) {
+  const row = wbQuestionRows.find((x) => String(x?.id || "") === String(questionId || ""));
+  if (!row) return alert(tr("Вопрос не найден", "Question not found"));
   const key = questionDraftKey(currentQuestionMarketplace, String(questionId || ""));
   const text = (wbQuestionDrafts.get(key) || "").trim();
   if (!text) return alert(tr("Введите или сгенерируйте текст ответа", "Enter or generate reply text"));
+  const payload = { id: String(questionId || ""), text };
+  if (currentQuestionMarketplace === "wb") {
+    const state = String(row?.state || "").trim();
+    if (state) payload.state = state;
+  } else if (currentQuestionMarketplace === "ozon") {
+    const skuNum = Number(row?.sku || 0);
+    if (Number.isFinite(skuNum) && skuNum > 0) {
+      payload.sku = Math.trunc(skuNum);
+    } else {
+      const articleSku = Number(String(row?.article || "").trim());
+      if (Number.isFinite(articleSku) && articleSku > 0) {
+        payload.sku = Math.trunc(articleSku);
+      }
+    }
+    if (!payload.sku) {
+      return alert(tr(
+        "Для вопроса Ozon не найден SKU. Обновите вопросы и повторите.",
+        "SKU is missing for Ozon question. Reload questions and retry."
+      ));
+    }
+  }
   const endpoint = `${getQuestionsEndpoint(currentQuestionMarketplace)}/reply`;
   const mpLabel = currentQuestionMarketplace === "ozon" ? "Ozon" : "WB";
   const data = await withBusy(
@@ -3338,7 +3369,7 @@ async function sendQuestionReply(questionId) {
     () => requestJson(endpoint, {
       method: "POST",
       headers: authHeaders(),
-      body: JSON.stringify({ id: String(questionId || ""), text }),
+      body: JSON.stringify(payload),
       timeoutMs: 60000,
     }),
     tr("Ответ отправляется в карточку вопроса через API маркетплейса.", "Reply is sent to marketplace question card via API.")
@@ -5895,7 +5926,7 @@ function renderSalesChart(points) {
   const max = Math.max(...allValues, 0);
   const range = Math.max(1, max - min);
   const width = 720;
-  const height = 150;
+  const height = 220;
   const padX = 14;
   const padY = 12;
   const step = (width - padX * 2) / Math.max(1, labels.length - 1);

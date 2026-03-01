@@ -290,6 +290,8 @@ class WbReviewOut(BaseModel):
     product: str
     article: str
     barcode: str = ""
+    state: str = ""
+    sku: int | None = None
     stars: int
     text: str
     user: str
@@ -306,6 +308,8 @@ class WbReviewsOut(BaseModel):
 class WbReviewReplyIn(BaseModel):
     id: str
     text: str
+    state: str | None = None
+    sku: int | None = None
 
 
 class WbReviewReplyOut(BaseModel):

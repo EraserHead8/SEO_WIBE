@@ -275,7 +275,7 @@ def post_wb_review_reply(api_key: str, feedback_id: str, text: str) -> tuple[boo
     return _post_wb_reply_with_fallback(api_key, attempts, entity_label="отзыв")
 
 
-def post_wb_question_reply(api_key: str, question_id: str, text: str) -> tuple[bool, str]:
+def post_wb_question_reply(api_key: str, question_id: str, text: str, state: str = "") -> tuple[bool, str]:
     if not question_id.strip():
         return False, "Не указан ID вопроса"
     reply = " ".join(text.split())
@@ -285,20 +285,39 @@ def post_wb_question_reply(api_key: str, question_id: str, text: str) -> tuple[b
         return False, "Ответ слишком длинный (максимум 3000 символов)"
 
     qid = question_id.strip()
-    payloads: list[dict[str, Any]] = [
-        # Official payload shape for PATCH /api/v1/questions.
-        {"id": qid, "answer": {"text": reply}},
-        # Lightweight compatibility payload for older integrations.
-        {"id": qid, "text": reply},
-    ]
-    if qid.isdigit():
-        qid_int = int(qid)
+    states = _wb_question_state_candidates(state)
+    payloads: list[dict[str, Any]] = []
+    for state_value in states:
         payloads.extend(
             [
-                {"id": qid_int, "text": reply},
-                {"id": qid_int, "answer": {"text": reply}},
+                {"id": qid, "state": state_value, "answer": {"text": reply}},
+                {"id": qid, "state": state_value, "text": reply},
             ]
         )
+    if not payloads:
+        payloads.extend(
+            [
+                {"id": qid, "answer": {"text": reply}},
+                {"id": qid, "text": reply},
+            ]
+        )
+    if qid.isdigit():
+        qid_int = int(qid)
+        if states:
+            for state_value in states:
+                payloads.extend(
+                    [
+                        {"id": qid_int, "state": state_value, "text": reply},
+                        {"id": qid_int, "state": state_value, "answer": {"text": reply}},
+                    ]
+                )
+        else:
+            payloads.extend(
+                [
+                    {"id": qid_int, "text": reply},
+                    {"id": qid_int, "answer": {"text": reply}},
+                ]
+            )
     attempts: list[tuple[str, str, dict[str, Any]]] = []
     # Official endpoint for questions handling is PATCH /api/v1/questions.
     # Keep both domains because some accounts are routed through wb.ru alias.
@@ -309,8 +328,6 @@ def post_wb_question_reply(api_key: str, question_id: str, text: str) -> tuple[b
     for payload in payloads:
         for route in question_routes:
             attempts.append(("PATCH", route, payload))
-            # Some API gateways still accept POST for this operation.
-            attempts.append(("POST", route, payload))
     return _post_wb_reply_with_fallback(api_key, attempts, entity_label="вопрос")
 
 
@@ -345,6 +362,7 @@ def _post_wb_reply_with_fallback(
     last_status = 0
     path_not_found = False
     unsupported_method = False
+    missing_state = False
 
     auth_candidates: list[str] = []
     for raw_auth in (token, f"Bearer {token}"):
@@ -379,6 +397,15 @@ def _post_wb_reply_with_fallback(
                         return False, "WB API вернул 429 (лимит 3 запроса/сек для категории). Повторите позже."
                     # 404/405/422 часто означают несовместимый endpoint/payload,
                     # поэтому пробуем другие варианты.
+                    if response.status_code == 400:
+                        short_body = _short_error_text(body)
+                        low_body = short_body.lower()
+                        if "empty state in request" in low_body:
+                            missing_state = True
+                            last_error = "WB API требует state вопроса. Перезагрузите список вопросов и повторите."
+                        else:
+                            last_error = f"WB API вернул 400{f': {short_body}' if short_body else ''}"
+                        break
                     if response.status_code in {404, 405, 409, 422}:
                         short_body = _short_error_text(body)
                         low_body = short_body.lower()
@@ -400,6 +427,8 @@ def _post_wb_reply_with_fallback(
                     break
 
     if saw_auth_error and "401/403" in last_error:
+        return False, last_error
+    if missing_state:
         return False, last_error
     if last_status in {404, 405} and (path_not_found or unsupported_method):
         return (
@@ -451,7 +480,7 @@ def post_ozon_review_reply(api_key: str, review_id: str, text: str) -> tuple[boo
     return _post_ozon_reply_with_fallback(api_key, attempts, entity_label="отзыв")
 
 
-def post_ozon_question_reply(api_key: str, question_id: str, text: str) -> tuple[bool, str]:
+def post_ozon_question_reply(api_key: str, question_id: str, text: str, sku: int | None = None) -> tuple[bool, str]:
     if not question_id.strip():
         return False, "Не указан ID вопроса"
     reply = " ".join(text.split())
@@ -461,6 +490,9 @@ def post_ozon_question_reply(api_key: str, question_id: str, text: str) -> tuple
         return False, "Ответ слишком длинный (максимум 3000 символов)"
 
     raw_id = question_id.strip()
+    sku_num = _to_int(sku)
+    if not sku_num or sku_num <= 0:
+        return False, "Для ответа на вопрос Ozon требуется SKU товара. Обновите список вопросов и повторите."
     int_id = None
     try:
         int_id = int(raw_id)
@@ -468,14 +500,14 @@ def post_ozon_question_reply(api_key: str, question_id: str, text: str) -> tuple
         int_id = None
 
     payloads: list[dict[str, Any]] = [
-        {"question_id": raw_id, "text": reply},
-        {"question_id": raw_id, "answer_text": reply},
+        {"question_id": raw_id, "sku": int(sku_num), "text": reply},
+        {"question_id": raw_id, "sku": int(sku_num), "answer_text": reply},
     ]
     if int_id is not None:
         payloads.extend(
             [
-                {"question_id": int_id, "text": reply},
-                {"question_id": int_id, "answer_text": reply},
+                {"question_id": int_id, "sku": int(sku_num), "text": reply},
+                {"question_id": int_id, "sku": int(sku_num), "answer_text": reply},
             ]
         )
 
@@ -483,8 +515,7 @@ def post_ozon_question_reply(api_key: str, question_id: str, text: str) -> tuple
     for payload in payloads:
         # Official question-answer route in Seller API updates.
         attempts.append(("POST", "https://api-seller.ozon.ru/v1/question/answer/create", payload))
-        # Keep small compatibility fallbacks.
-        attempts.append(("POST", "https://api-seller.ozon.ru/v1/question/answer/update", payload))
+        # Compatibility fallback for older integrations.
         attempts.append(("POST", "https://api-seller.ozon.ru/v2/question/answer/create", payload))
     return _post_ozon_reply_with_fallback(api_key, attempts, entity_label="вопрос")
 
@@ -2024,6 +2055,7 @@ def _normalize_wb_question_row(row: dict[str, Any], is_answered: bool) -> dict[s
         row.get("media"),
     )
     effective_answered = bool(is_answered or answer_text)
+    state = _pick_first_str(row.get("state"), row.get("stateName"), row.get("wbState"))
     return {
         "id": _pick_first_str(row.get("id"), row.get("questionId"), row.get("question_id")),
         "date": created[:10] if created else "",
@@ -2031,6 +2063,7 @@ def _normalize_wb_question_row(row: dict[str, Any], is_answered: bool) -> dict[s
         "product": str(product.get("productName") or product.get("nmId") or row.get("productName") or "Товар WB"),
         "article": str(product.get("nmId") or row.get("nmId") or row.get("offerId") or ""),
         "barcode": _pick_first_str(product.get("barcode"), row.get("barcode")),
+        "state": state,
         "stars": stars,
         "text": text,
         "user": user_name,
@@ -2132,6 +2165,14 @@ def _normalize_ozon_question_row(
         or _is_truthy(row.get("answered"))
         or status in {"answered", "replied", "processed", "published", "published_answer"}
     )
+    sku_value = _to_int(
+        _pick_first_str(
+            core.get("sku"),
+            row.get("sku"),
+            product.get("sku") if isinstance(product, dict) else "",
+            mapped.get("article"),
+        )
+    )
     return {
         "id": item_id,
         "date": created[:10] if created else "",
@@ -2139,6 +2180,8 @@ def _normalize_ozon_question_row(
         "product": product_name or "Товар Ozon",
         "article": article,
         "barcode": barcode,
+        "state": status.upper() if status else "",
+        "sku": int(sku_value) if sku_value and sku_value > 0 else None,
         "stars": stars,
         "text": text,
         "user": user_name,
@@ -3086,6 +3129,18 @@ def _parse_ozon_credentials(api_key: str) -> tuple[str, str] | None:
     if not left.strip() or not right.strip():
         return None
     return left.strip(), right.strip()
+
+
+def _wb_question_state_candidates(state: str) -> list[str]:
+    out: list[str] = []
+    for raw in (state, "suppliersPortalSynch", "wbRu"):
+        text = str(raw or "").strip()
+        if not text:
+            continue
+        if text in out:
+            continue
+        out.append(text)
+    return out
 
 
 def _build_greeting(reviewer_name: str) -> str:
