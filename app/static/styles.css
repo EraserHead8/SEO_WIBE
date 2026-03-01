@@ -5077,3 +5077,116 @@ body[data-theme="dark"] tbody tr:hover td {
     max-height: 230px;
   }
 }
+
+/* 2026-03 contrast hardening: prevent low-contrast text in user/admin modules */
+.panel,
+.table-card,
+.campaign-modal-card,
+.product-modal-card,
+.team-modal-card,
+.admin-user-profile-card,
+.auth-card,
+.auth-pitch,
+.auth-box,
+.landing-card,
+.landing-band {
+  color: var(--ds-text);
+}
+
+.hint,
+.cell-meta-small,
+.auth-toolbar-subtitle,
+.pitch-note,
+.review small,
+.product-kv-card span,
+.product-edit-form-grid label > span,
+.team-modal-grid label > span,
+.team-modal-access > span {
+  color: var(--ds-muted);
+}
+
+.auth-toolbar-title,
+.auth-card h3,
+.landing-card h3,
+.landing-band h3,
+.campaign-modal-head h3,
+.team-modal-head h3,
+.product-modal-section h4,
+.product-kv-card b,
+.help-card-head h4,
+.help-card h4,
+.table-card h3,
+.panel h3,
+.panel h4 {
+  color: var(--ds-text);
+}
+
+.auth-card .lead,
+.pitch-grid ul,
+.pitch-grid ol,
+.landing-card p,
+.landing-band p,
+.review strong,
+.faq-list,
+.help-card-body,
+.help-block p,
+.help-block li,
+.help-checklist ol {
+  color: color-mix(in oklab, var(--ds-text) 78%, var(--ds-muted));
+}
+
+#productViewModal .campaign-modal-card,
+#productEditModal .campaign-modal-card,
+#campaignDetailModal .campaign-modal-card,
+#teamMemberEditModal .team-modal-card {
+  color: var(--ds-text);
+}
+
+#productViewMeta,
+#productViewWarn,
+#productEditHint,
+#teamMemberEditMeta,
+#campaignDetailSummary {
+  color: var(--ds-muted);
+}
+
+#productViewModal .product-modal-description,
+#productEditModal .product-modal-description,
+#productViewModal .product-modal-section,
+#productEditModal .product-modal-section {
+  color: var(--ds-text);
+}
+
+#productViewModal .product-modal-section,
+#productEditModal .product-modal-section {
+  background: color-mix(in oklab, var(--ds-surface-soft) 86%, #ffffff);
+  border-color: color-mix(in oklab, var(--ds-border) 88%, #ffffff);
+}
+
+#productViewModal .product-kv-card,
+#productEditModal .product-kv-card {
+  background: color-mix(in oklab, var(--ds-surface) 92%, #ffffff);
+  border-color: color-mix(in oklab, var(--ds-border) 88%, #ffffff);
+}
+
+.review-reply-input,
+.feedback-text-line .cell-main-text,
+.feedback-reply-line .cell-main-text,
+.feedback-product-line .cell-main-text {
+  color: var(--ds-text);
+}
+
+table td,
+table th,
+.products-table td,
+.reviews-table td,
+.questions-table td,
+.sales-table td,
+.ads-table td,
+.seo-table td {
+  color: var(--ds-text);
+}
+
+.admin-link {
+  color: color-mix(in oklab, var(--ds-accent) 72%, #1f4f77);
+}
