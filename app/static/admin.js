@@ -867,7 +867,10 @@ function renderAdminUsersTable() {
 
   const search = String(document.getElementById("adminUsersSearch")?.value || "").trim().toLowerCase();
   const rows = search
-    ? adminUsers.filter((u) => `${u.id} ${u.email} ${u.role}`.toLowerCase().includes(search))
+    ? adminUsers.filter((u) => {
+      const haystack = `${u.id} ${u.email} ${u.role} ${u.company_name || ""} ${u.city || ""}`;
+      return haystack.toLowerCase().includes(search);
+    })
     : adminUsers;
 
   const meta = document.getElementById("adminUsersMeta");
@@ -884,54 +887,19 @@ function renderAdminUsersTable() {
 
   for (const user of rows) {
     const tr = document.createElement("tr");
+    tr.className = "admin-user-row";
     const created = formatDateTime(user.created_at);
-    const profileRowId = `admin-user-profile-${user.id}`;
     tr.innerHTML = `
       <td>${user.id}</td>
       <td>${escapeHtml(user.email)}</td>
-      <td>
-        <select data-role-user="${user.id}">
-          <option value="client"${user.role === "client" ? " selected" : ""}>client</option>
-          <option value="admin"${user.role === "admin" ? " selected" : ""}>admin</option>
-        </select>
-      </td>
+      <td>${escapeHtml(user.role || "client")}</td>
       <td>${escapeHtml(created)}</td>
-      <td>
-        <div class="actions">
-          <button class="btn-secondary" data-save-role="${user.id}">${aTr("Сменить роль", "Change role")}</button>
-          <input class="inline-pass" type="password" placeholder="${escapeHtml(aTr("Новый пароль (>=8)", "New password (>=8)"))}" data-pass-user="${user.id}" />
-          <button class="btn-secondary" data-save-pass="${user.id}">${aTr("Сменить пароль", "Change password")}</button>
-          <button class="btn-secondary" data-profile-user="${user.id}">${aTr("Профиль", "Profile")}</button>
-          <button class="btn-danger" data-del-user="${user.id}">${aTr("Удалить", "Delete")}</button>
-        </div>
-      </td>
+      <td class="admin-user-row-actions"><button class="btn-secondary admin-user-edit-btn" data-edit-user="${user.id}">${aTr("Изменить", "Edit")}</button></td>
     `;
-
-    tr.querySelector(`[data-save-role="${user.id}"]`)?.addEventListener("click", async () => {
-      const role = tr.querySelector(`[data-role-user="${user.id}"]`)?.value || "client";
-      await adminSetUserRole(user.id, role);
-    });
-    tr.querySelector(`[data-save-pass="${user.id}"]`)?.addEventListener("click", async () => {
-      const newPass = tr.querySelector(`[data-pass-user="${user.id}"]`)?.value || "";
-      await adminSetUserPassword(user.id, newPass);
-    });
-    tr.querySelector(`[data-profile-user="${user.id}"]`)?.addEventListener("click", async () => {
-      await adminToggleUserProfile(user.id, profileRowId);
-    });
-    tr.querySelector(`[data-del-user="${user.id}"]`)?.addEventListener("click", async () => {
-      await adminDeleteUser(user.id);
+    tr.querySelector(`[data-edit-user="${user.id}"]`)?.addEventListener("click", async () => {
+      await adminOpenUserEditModal(user.id);
     });
     tbody.appendChild(tr);
-
-    const detailsTr = document.createElement("tr");
-    detailsTr.id = profileRowId;
-    detailsTr.className = "hidden";
-    detailsTr.innerHTML = `
-      <td colspan="5">
-        <div class="admin-user-details">${aTr("Нажмите «Профиль», чтобы загрузить данные.", "Click Profile to load details.")}</div>
-      </td>
-    `;
-    tbody.appendChild(detailsTr);
   }
 }
 
@@ -988,6 +956,25 @@ function renderAdminUserProfilePanel(payload, rowId) {
             <span class="admin-chip">${aTr("Статус", "Status")}: ${escapeHtml(String(plan.status || "-"))}</span>
             <span class="admin-chip">${aTr("Продление", "Renew")}: ${escapeHtml(formatDateTime(plan.renew_at))}</span>
           </div>
+        </div>
+      </div>
+
+      <div class="admin-user-core-actions">
+        <label class="admin-user-field">
+          <span>${aTr("Роль", "Role")}</span>
+          <select data-user-role>
+            <option value="client"${payload.role === "client" ? " selected" : ""}>client</option>
+            <option value="admin"${payload.role === "admin" ? " selected" : ""}>admin</option>
+          </select>
+        </label>
+        <label class="admin-user-field">
+          <span>${aTr("Новый пароль", "New password")}</span>
+          <input type="password" data-user-newpass placeholder="${escapeHtml(aTr("Новый пароль (>=8)", "New password (>=8)"))}" />
+        </label>
+        <div class="actions">
+          <button class="btn-secondary" type="button" data-user-save-role>${aTr("Сменить роль", "Change role")}</button>
+          <button class="btn-secondary" type="button" data-user-save-pass>${aTr("Сменить пароль", "Change password")}</button>
+          <button class="btn-danger" type="button" data-user-delete>${aTr("Удалить пользователя", "Delete user")}</button>
         </div>
       </div>
 
@@ -1102,9 +1089,25 @@ function renderAdminUserProfilePanel(payload, rowId) {
   `;
 
   const refreshProfile = async () => {
-    adminUserProfileCache.delete(payload.user_id);
-    await adminToggleUserProfile(payload.user_id, rowId, true);
+    await adminLoadUserProfileInto(payload.user_id, rowId, true);
   };
+  host.querySelector("[data-user-save-role]")?.addEventListener("click", async () => {
+    const role = host.querySelector("[data-user-role]")?.value || "client";
+    await adminSetUserRole(payload.user_id, role);
+    await refreshProfile();
+  });
+  host.querySelector("[data-user-save-pass]")?.addEventListener("click", async () => {
+    const newPass = String(host.querySelector("[data-user-newpass]")?.value || "");
+    const ok = await adminSetUserPassword(payload.user_id, newPass);
+    if (ok) {
+      const passInput = host.querySelector("[data-user-newpass]");
+      if (passInput) passInput.value = "";
+    }
+  });
+  host.querySelector("[data-user-delete]")?.addEventListener("click", async () => {
+    const deleted = await adminDeleteUser(payload.user_id);
+    if (deleted) adminCloseUserEditModal();
+  });
   host.querySelector("[data-save-profile]")?.addEventListener("click", async () => {
     await adminSaveUserProfileFromPanel(payload.user_id, rowId);
   });
@@ -1224,10 +1227,14 @@ async function adminSetUserRole(user_id, role) {
   });
   if (data) alert(data.message);
   await loadAdminAll();
+  return Boolean(data);
 }
 
 async function adminSetUserPassword(user_id, new_password) {
-  if (!new_password) return alert(aTr("Введите новый пароль", "Enter new password"));
+  if (!new_password) {
+    alert(aTr("Введите новый пароль", "Enter new password"));
+    return false;
+  }
   const data = await adminRequest("/api/admin/users/password", {
     method: "POST",
     headers: adminHeaders(),
@@ -1238,10 +1245,11 @@ async function adminSetUserPassword(user_id, new_password) {
   });
   if (data) alert(data.message);
   await loadAdminAll();
+  return Boolean(data);
 }
 
 async function adminDeleteUser(user_id) {
-  if (!confirm(aTr(`Удалить пользователя #${user_id} вместе с его данными?`, `Delete user #${user_id} with all data?`))) return;
+  if (!confirm(aTr(`Удалить пользователя #${user_id} вместе с его данными?`, `Delete user #${user_id} with all data?`))) return false;
   const data = await adminRequest(`/api/admin/users/${user_id}`, {
     method: "DELETE",
     headers: adminHeaders(),
@@ -1251,19 +1259,15 @@ async function adminDeleteUser(user_id) {
   });
   if (data) alert(data.message);
   await loadAdminAll();
+  return Boolean(data);
 }
 
-async function adminToggleUserProfile(user_id, rowId, forceReload = false) {
+async function adminLoadUserProfileInto(user_id, rowId, forceReload = false) {
   const row = document.getElementById(rowId);
-  if (!row) return;
-  if (!forceReload && !row.classList.contains("hidden")) {
-    row.classList.add("hidden");
-    return;
-  }
-
+  if (!row) return null;
   const holder = row.querySelector(".admin-user-details");
   if (holder) holder.textContent = aTr("Загрузка...", "Loading...");
-
+  if (forceReload) adminUserProfileCache.delete(user_id);
   let payload = forceReload ? null : (adminUserProfileCache.get(user_id) || null);
   if (!payload) {
     payload = await adminRequest(`/api/admin/users/${user_id}/profile`, {
@@ -1272,12 +1276,32 @@ async function adminToggleUserProfile(user_id, rowId, forceReload = false) {
       alert(e.message);
       return null;
     });
-    if (!payload) return;
+    if (!payload) return null;
     adminUserProfileCache.set(user_id, payload);
   }
 
   renderAdminUserProfilePanel(payload, rowId);
-  row.classList.remove("hidden");
+  return payload;
+}
+
+async function adminOpenUserEditModal(user_id) {
+  const modal = document.getElementById("adminUserEditModal");
+  const host = document.getElementById("adminUserEditHost");
+  if (!modal || !host) return;
+  modal.classList.remove("hidden");
+  const title = document.getElementById("adminUserEditTitle");
+  if (title) {
+    const user = adminUsers.find((x) => Number(x.id) === Number(user_id));
+    title.textContent = aTr("Профиль пользователя", "User profile") + ` #${user_id}${user?.email ? ` • ${user.email}` : ""}`;
+  }
+  await adminLoadUserProfileInto(user_id, "adminUserEditHost", false);
+}
+
+function adminCloseUserEditModal(evt) {
+  const modal = document.getElementById("adminUserEditModal");
+  if (!modal) return;
+  if (evt && evt.target && evt.target !== modal) return;
+  modal.classList.add("hidden");
 }
 
 async function adminSaveUserProfileFromPanel(userId, rowId) {
@@ -1978,6 +2002,10 @@ document.getElementById("adminAiUserMode")?.addEventListener("change", () => ren
     adminLogin();
   });
 });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  adminCloseUserEditModal();
+});
 window.showAdminTab = showAdminTab;
 window.adminLogin = adminLogin;
 window.adminLogout = adminLogout;
@@ -1994,6 +2022,8 @@ window.adminSaveUserAiSelection = adminSaveUserAiSelection;
 window.adminAddUserAiService = adminAddUserAiService;
 window.adminChangeLanguage = adminChangeLanguage;
 window.adminChangeTheme = adminChangeTheme;
+window.adminOpenUserEditModal = adminOpenUserEditModal;
+window.adminCloseUserEditModal = adminCloseUserEditModal;
 
 applyAdminTheme(adminTheme);
 applyAdminLanguage();

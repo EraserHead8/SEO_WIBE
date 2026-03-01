@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260301g" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260301h" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -329,7 +329,19 @@
     </main>
   </section>
 
+  <div id="adminUserEditModal" class="team-modal hidden" onclick="adminCloseUserEditModal(event)">
+    <div class="team-modal-card" onclick="event.stopPropagation()">
+      <div class="team-modal-head">
+        <h3 id="adminUserEditTitle">Профиль пользователя</h3>
+        <button class="btn-secondary" onclick="adminCloseUserEditModal()">Закрыть</button>
+      </div>
+      <div id="adminUserEditHost">
+        <div class="admin-user-details">-</div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script src="/static/admin.js?v=20260301c"></script>
+  <script src="/static/admin.js?v=20260301d"></script>
 </body>
 </html>

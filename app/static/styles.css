@@ -5215,3 +5215,111 @@ table th,
 .admin-link {
   color: color-mix(in oklab, var(--ds-accent) 72%, #1f4f77);
 }
+
+/* 2026-03 admin usability: users popup editing + audit scrolling/contrast */
+#adminTab-users .admin-user-row-actions {
+  text-align: right;
+  width: 132px;
+}
+
+#adminTab-users .admin-user-edit-btn {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(7px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+#adminTab-users tbody tr:hover .admin-user-edit-btn,
+#adminTab-users tbody tr:focus-within .admin-user-edit-btn {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+@media (hover: none) {
+  #adminTab-users .admin-user-edit-btn {
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
+}
+
+#adminUserEditModal .team-modal-card {
+  width: min(1240px, 98vw);
+}
+
+#adminUserEditHost .admin-user-details {
+  padding: 2px;
+}
+
+#adminUserEditHost .admin-user-core-actions {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) minmax(220px, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+#adminUserEditHost .admin-user-core-actions .actions {
+  justify-content: flex-end;
+}
+
+#adminTab-audit .table-card {
+  max-height: 68vh;
+  overflow: auto !important;
+  overscroll-behavior: contain;
+}
+
+#adminTab-audit .table-card > table {
+  min-width: 1380px;
+}
+
+#adminTab-audit thead th {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: color-mix(in oklab, var(--ds-surface-soft) 88%, #ffffff);
+}
+
+#adminTab-audit #adminAuditMeta,
+#adminTab-audit #adminAuditPageInfo,
+#adminTab-audit .admin-audit-kv,
+#adminTab-audit .admin-audit-kv span {
+  color: var(--ds-text);
+}
+
+#adminTab-audit .admin-audit-kv b {
+  color: color-mix(in oklab, var(--ds-accent) 62%, var(--ds-text));
+}
+
+#adminTab-appearance .panel h3,
+#adminTab-appearance .hint,
+#adminTab-appearance .check,
+#adminTab-appearance label {
+  color: var(--ds-text);
+}
+
+#adminTab-appearance .theme-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+
+#adminTab-appearance .theme-picks .check {
+  padding: 6px 10px;
+  border: 1px solid var(--ds-border);
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--ds-surface-soft) 88%, #ffffff);
+}
+
+#adminTab-appearance pre {
+  color: var(--ds-text);
+}
+
+@media (max-width: 980px) {
+  #adminUserEditHost .admin-user-core-actions {
+    grid-template-columns: 1fr;
+  }
+  #adminUserEditHost .admin-user-core-actions .actions {
+    justify-content: flex-start;
+  }
+}
