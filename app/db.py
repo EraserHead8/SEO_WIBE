@@ -100,6 +100,27 @@ def run_lightweight_migrations():
                 {"key": "ui_settings", "value": default_ui},
             )
 
+        audit_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(audit_logs)"))}
+        if audit_cols:
+            if "actor_email" not in audit_cols:
+                conn.execute(text("ALTER TABLE audit_logs ADD COLUMN actor_email VARCHAR(255) DEFAULT ''"))
+            if "actor_member_id" not in audit_cols:
+                conn.execute(text("ALTER TABLE audit_logs ADD COLUMN actor_member_id INTEGER"))
+            if "actor_is_owner" not in audit_cols:
+                conn.execute(text("ALTER TABLE audit_logs ADD COLUMN actor_is_owner BOOLEAN DEFAULT 1"))
+            if "module_code" not in audit_cols:
+                conn.execute(text("ALTER TABLE audit_logs ADD COLUMN module_code VARCHAR(80) DEFAULT ''"))
+            if "entity_type" not in audit_cols:
+                conn.execute(text("ALTER TABLE audit_logs ADD COLUMN entity_type VARCHAR(80) DEFAULT ''"))
+            if "entity_id" not in audit_cols:
+                conn.execute(text("ALTER TABLE audit_logs ADD COLUMN entity_id VARCHAR(120) DEFAULT ''"))
+            if "status" not in audit_cols:
+                conn.execute(text("ALTER TABLE audit_logs ADD COLUMN status VARCHAR(24) DEFAULT 'ok'"))
+            if "ip" not in audit_cols:
+                conn.execute(text("ALTER TABLE audit_logs ADD COLUMN ip VARCHAR(80) DEFAULT ''"))
+            if "user_agent" not in audit_cols:
+                conn.execute(text("ALTER TABLE audit_logs ADD COLUMN user_agent VARCHAR(500) DEFAULT ''"))
+
 
 def ensure_admin_emails():
     raw = settings.admin_emails or ""

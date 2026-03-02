@@ -202,6 +202,15 @@ class AuditLog(Base):
     user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     action: Mapped[str] = mapped_column(String(120))
     details: Mapped[str] = mapped_column(Text, default="")
+    actor_email: Mapped[str] = mapped_column(String(255), default="", index=True)
+    actor_member_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    actor_is_owner: Mapped[bool] = mapped_column(Boolean, default=True)
+    module_code: Mapped[str] = mapped_column(String(80), default="", index=True)
+    entity_type: Mapped[str] = mapped_column(String(80), default="", index=True)
+    entity_id: Mapped[str] = mapped_column(String(120), default="", index=True)
+    status: Mapped[str] = mapped_column(String(24), default="ok", index=True)
+    ip: Mapped[str] = mapped_column(String(80), default="")
+    user_agent: Mapped[str] = mapped_column(String(500), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
