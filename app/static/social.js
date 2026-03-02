@@ -620,20 +620,13 @@ function socialRunTetris() {
   }
 
   function moveLeft() {
-    const nextX = Math.max(0, current.x - 1);
-    const dx = nextX - current.x;
-    if (!dx) return;
-    current.x = nextX;
-    if (collides(current)) current.x -= dx;
+    current.x -= 1;
+    if (collides(current)) current.x += 1;
   }
 
   function moveRight() {
-    const maxX = cols - current.matrix[0].length;
-    const nextX = Math.min(maxX, current.x + 1);
-    const dx = nextX - current.x;
-    if (!dx) return;
-    current.x = nextX;
-    if (collides(current)) current.x -= dx;
+    current.x += 1;
+    if (collides(current)) current.x -= 1;
   }
 
   function moveDown() {

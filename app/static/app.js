@@ -6264,45 +6264,48 @@ function renderSalesChart(points) {
       return Number(valueOf(dayRow, metric) / bucketsPerDay);
     });
   };
+  const currentLabel = salesCurrentLabel || tr("Текущий период", "Current period");
+  const compareLabel = salesCompareLabel || tr("Предыдущий период", "Previous period");
+  const palette = {
+    wb: { current: "#2ec5ff", previous: "#7c61ff" },
+    ozon: { current: "#34d9a3", previous: "#ff9f6b" },
+  };
   if (showWb) {
     series.push({
       key: "wb",
-      label: `WB${salesCurrentLabel ? ` • ${salesCurrentLabel}` : ""}`,
-      color: "#2ec5ff",
+      label: `WB • ${currentLabel}`,
+      color: palette.wb.current,
       values: resolveMarketplaceSeries(chartPoints, currentMaps, "wb"),
     });
   }
   if (showOzon) {
     series.push({
       key: "ozon",
-      label: `Ozon${salesCurrentLabel ? ` • ${salesCurrentLabel}` : ""}`,
-      color: "#34d9a3",
+      label: `Ozon • ${currentLabel}`,
+      color: palette.ozon.current,
       values: resolveMarketplaceSeries(chartPoints, currentMaps, "ozon"),
     });
   }
   if (comparePoints.length) {
-    const alignCompareValues = (mp, fallbackColor) => {
+    const alignCompareValues = (mp) => {
       const baseValues = resolveMarketplaceSeries(comparePoints, compareMaps, mp);
       if (baseValues.length === labels.length) return baseValues;
-      const pad = labels.map((_, idx) => baseValues[idx] ?? 0);
-      return pad;
+      return labels.map((_, idx) => baseValues[idx] ?? 0);
     };
     if (showWb) {
       series.push({
         key: "wb_prev",
-        label: `WB${salesCompareLabel ? ` • ${salesCompareLabel}` : " • prev"}`,
-        color: "rgba(46, 197, 255, 0.45)",
-        dashed: true,
-        values: alignCompareValues("wb", "#2ec5ff"),
+        label: `WB • ${compareLabel}`,
+        color: palette.wb.previous,
+        values: alignCompareValues("wb"),
       });
     }
     if (showOzon) {
       series.push({
         key: "ozon_prev",
-        label: `Ozon${salesCompareLabel ? ` • ${salesCompareLabel}` : " • prev"}`,
-        color: "rgba(52, 217, 163, 0.45)",
-        dashed: true,
-        values: alignCompareValues("ozon", "#34d9a3"),
+        label: `Ozon • ${compareLabel}`,
+        color: palette.ozon.previous,
+        values: alignCompareValues("ozon"),
       });
     }
   }
@@ -6358,15 +6361,11 @@ function renderSalesChart(points) {
     return `<text x="${x}" y="${height - 2}" fill="rgba(205,222,255,0.66)" font-size="10" text-anchor="middle">${escapeHtml(short)}</text>`;
   }).join("");
   const lineMarkup = series.map((item, idx) => {
-    const dash = item.dashed ? ` stroke-dasharray="6 5"` : "";
     const line = item.values.length > 1
-      ? `<polyline points="${lineTo(item.values)}" fill="none" stroke="${item.color}" stroke-width="${idx === 0 ? 3.4 : 2.6}" stroke-linecap="round"${dash}></polyline>`
-      : "";
-    const area = idx === 0 && item.values.length > 1 && !item.dashed
-      ? `<polygon points="${lineTo(item.values)} ${width - padX},${height - padY} ${padX},${height - padY}" fill="${item.color}" opacity="0.08"></polygon>`
+      ? `<polyline points="${lineTo(item.values)}" fill="none" stroke="${item.color}" stroke-width="${idx === 0 ? 3.2 : 2.4}" stroke-linecap="round"></polyline>`
       : "";
     const points = item.values.map((v, pointIdx) => circleAt(v, pointIdx, item.color)).join("");
-    return `${area}${line}${points}`;
+    return `${line}${points}`;
   }).join("");
   const metricLabel = metric === "revenue"
     ? tr("Выручка", "Revenue")
@@ -6430,20 +6429,9 @@ function renderSalesChart(points) {
             smooth: true,
             showSymbol: false,
             data: item.values,
-            lineStyle: { width: idx === 0 ? 3 : 2.2, color: item.color, type: item.dashed ? "dashed" : "solid" },
+            lineStyle: { width: idx === 0 ? 3 : 2.2, color: item.color, type: "solid" },
             itemStyle: { color: item.color },
-            areaStyle: idx === 0 && !item.dashed
-              ? {
-                color: {
-                  type: "linear",
-                  x: 0, y: 0, x2: 0, y2: 1,
-                  colorStops: [
-                    { offset: 0, color: "rgba(81,118,255,0.2)" },
-                    { offset: 1, color: "rgba(81,118,255,0.03)" },
-                  ],
-                },
-              }
-              : undefined,
+            areaStyle: undefined,
           })),
         },
         true
