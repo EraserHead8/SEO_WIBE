@@ -935,6 +935,138 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
     return mapped
 
 
+def fetch_marketplace_product_details(marketplace: str, api_key: str, article: str, external_id: str = "") -> dict[str, Any]:
+    safe_market = str(marketplace or "").strip().lower()
+    if safe_market == "wb":
+        return _fetch_wb_product_details(api_key=api_key, article=article, external_id=external_id)
+    if safe_market == "ozon":
+        return _fetch_ozon_product_details(api_key=api_key, article=article, external_id=external_id)
+    return {"photos": [], "attributes": {}, "raw": {}}
+
+
+def _fetch_wb_product_details(api_key: str, article: str, external_id: str = "") -> dict[str, Any]:
+    products = _fetch_wb_products(api_key, [article] if article else [], True, limit=200, timeout_sec=8.0) or []
+    norm_article = _normalize_code(article)
+    norm_external = _normalize_code(external_id)
+    best: dict[str, Any] | None = None
+    for row in products:
+        vendor = _extract_wb_vendor_code(row)
+        nm_id = _extract_wb_nm_id(row)
+        if norm_external and nm_id and _codes_equal(norm_external, nm_id):
+            best = row
+            break
+        if norm_article and vendor and _codes_equal(norm_article, vendor):
+            best = row
+            break
+    if best is None:
+        for row in products:
+            name = _normalize_code(str(row.get("name") or row.get("title") or ""))
+            if norm_article and norm_article in name:
+                best = row
+                break
+    if best is None and products:
+        best = products[0]
+    if not best:
+        return {"photos": [], "attributes": {}, "raw": {}}
+    photos: list[str] = []
+    for photo in (best.get("photos") or []):
+        if isinstance(photo, dict):
+            for key in ("big", "c516x688", "tm"):
+                val = photo.get(key)
+                if val:
+                    photos.append(_normalize_photo_url(str(val)))
+                    break
+        elif isinstance(photo, str) and photo.strip():
+            photos.append(_normalize_photo_url(photo))
+    photos = [x for x in photos if x]
+    attrs: dict[str, Any] = {
+        "category_name": str(best.get("subjectName") or best.get("subject") or "").strip(),
+        "brand": str(best.get("brand") or "").strip(),
+        "vendor_code": str(best.get("supplierVendorCode") or best.get("vendorCode") or "").strip(),
+        "nm_id": str(best.get("id") or "").strip(),
+        "name": str(best.get("name") or "").strip(),
+    }
+    return {"photos": photos, "attributes": attrs, "raw": best}
+
+
+def _fetch_ozon_product_details(api_key: str, article: str, external_id: str = "") -> dict[str, Any]:
+    if not httpx:
+        return {"photos": [], "attributes": {}, "raw": {}}
+    creds = _parse_ozon_credentials(api_key)
+    if not creds:
+        return {"photos": [], "attributes": {}, "raw": {}}
+    client_id, token = creds
+    headers = {
+        "Client-Id": client_id,
+        "Api-Key": token,
+        "Content-Type": "application/json",
+    }
+    payload: dict[str, Any] = {"offer_id": [], "product_id": [], "sku": []}
+    if article:
+        payload["offer_id"] = [str(article).strip()]
+    if str(external_id or "").isdigit():
+        payload["product_id"] = [int(str(external_id))]
+    if not payload["offer_id"] and not payload["product_id"]:
+        return {"photos": [], "attributes": {}, "raw": {}}
+    endpoint = "https://api-seller.ozon.ru/v3/product/info/list"
+    try:
+        with httpx.Client(timeout=25.0) as client:
+            resp = client.post(endpoint, headers=headers, json=payload)
+            if resp.status_code >= 400:
+                return {"photos": [], "attributes": {}, "raw": {}}
+            data = resp.json()
+    except Exception:
+        return {"photos": [], "attributes": {}, "raw": {}}
+    items = (data.get("result") or {}).get("items") or data.get("items") or []
+    if not items:
+        return {"photos": [], "attributes": {}, "raw": {}}
+    item = items[0] if isinstance(items, list) else {}
+    source = item.get("product_info") if isinstance(item, dict) else {}
+    if not isinstance(source, dict):
+        source = item if isinstance(item, dict) else {}
+    photos: list[str] = []
+    primary = _extract_ozon_photo(source)
+    if primary:
+        photos.append(primary)
+    images = source.get("images")
+    if isinstance(images, list):
+        for img in images:
+            url = _normalize_photo_url(str(img or ""))
+            if url and url not in photos:
+                photos.append(url)
+    attrs: dict[str, Any] = {
+        "category_name": _extract_ozon_category_name(source),
+        "name": str(source.get("name") or "").strip(),
+        "offer_id": str(source.get("offer_id") or "").strip(),
+        "product_id": str(source.get("id") or source.get("product_id") or "").strip(),
+        "barcode": _extract_ozon_barcode(source),
+        "brand": str(source.get("brand") or "").strip(),
+        "description": str(source.get("description") or source.get("marketing_description") or "").strip(),
+    }
+    for attr in (source.get("attributes") or []):
+        if not isinstance(attr, dict):
+            continue
+        title = str(attr.get("name") or attr.get("attribute_name") or attr.get("id") or "").strip()
+        if not title:
+            continue
+        values = attr.get("values") or []
+        normalized_values: list[str] = []
+        if isinstance(values, list):
+            for val in values:
+                if isinstance(val, dict):
+                    raw_val = val.get("value") or val.get("text_value") or val.get("dictionary_value")
+                    if isinstance(raw_val, dict):
+                        raw_val = raw_val.get("value") or raw_val.get("name")
+                    txt = str(raw_val or "").strip()
+                else:
+                    txt = str(val or "").strip()
+                if txt:
+                    normalized_values.append(txt)
+        attrs[title] = ", ".join(normalized_values) if normalized_values else str(attr.get("value") or "").strip()
+    attrs = {str(k): str(v) for k, v in attrs.items() if str(v or "").strip()}
+    return {"photos": photos, "attributes": attrs, "raw": item if isinstance(item, dict) else {}}
+
+
 def enrich_ozon_category_names(api_key: str, refs: list[dict[str, str]]) -> dict[tuple[str, str], str]:
     """
     Возвращает категории Ozon для пар (article, external_id).
