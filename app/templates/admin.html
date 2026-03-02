@@ -43,6 +43,7 @@
           <h3>Вход администратора</h3>
           <input id="adminEmail" placeholder="Email администратора" />
           <input id="adminPassword" placeholder="Пароль" type="password" />
+          <label class="check remember-row"><input id="adminRemember" type="checkbox" /> Запомнить меня</label>
           <button onclick="adminLogin()">Войти в админку</button>
           <a class="admin-link" href="/">Открыть пользовательский сервис</a>
         </div>
@@ -62,6 +63,7 @@
         <button class="nav-btn admin-nav" data-admin-tab="modules" onclick="showAdminTab('modules', this)">Модули</button>
         <button class="nav-btn admin-nav" data-admin-tab="ai" onclick="showAdminTab('ai', this)">AI</button>
         <button class="nav-btn admin-nav" data-admin-tab="appearance" onclick="showAdminTab('appearance', this)">Оформление</button>
+        <button class="nav-btn admin-nav" data-admin-tab="server" onclick="showAdminTab('server', this)">Сервер</button>
         <button class="nav-btn admin-nav" data-admin-tab="credentials" onclick="showAdminTab('credentials', this)">API ключи</button>
         <button class="nav-btn admin-nav" data-admin-tab="audit" onclick="showAdminTab('audit', this)">Аудит</button>
       </nav>
@@ -228,6 +230,23 @@
                 <tr><td>Тема по умолчанию</td><td>-</td></tr>
                 <tr><td>Разрешено тем</td><td>-</td></tr>
               </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="adminTab-server" class="admin-tab hidden">
+        <div class="panel">
+          <h3>Мониторинг сервера</h3>
+          <div class="grid-3">
+            <button class="btn-secondary" type="button" onclick="loadAdminServerMetrics()">Обновить метрики</button>
+            <div class="hint" id="adminServerMeta">-</div>
+            <div class="hint" id="adminServerUptime">-</div>
+          </div>
+          <div id="adminServerKpis" class="kpis"></div>
+          <div class="table-card">
+            <table>
+              <tbody id="adminServerTable"></tbody>
             </table>
           </div>
         </div>
@@ -429,7 +448,18 @@
     </div>
   </div>
 
+  <div id="adminAuditDetailsModal" class="team-modal hidden" onclick="adminCloseAuditDetailsModal(event)">
+    <div class="team-modal-card" onclick="event.stopPropagation()">
+      <div class="team-modal-head">
+        <h3 id="adminAuditDetailsTitle">Детали события</h3>
+        <button class="btn-secondary" type="button" onclick="adminCloseAuditDetailsModal()">Закрыть</button>
+      </div>
+      <div id="adminAuditDetailsMeta" class="hint">-</div>
+      <pre id="adminAuditDetailsRaw">-</pre>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script src="/static/admin.js?v=20260302a"></script>
+  <script src="/static/admin.js?v=20260302b"></script>
 </body>
 </html>

@@ -79,6 +79,7 @@
               <p id="authLoginHint" class="hint">Используйте email владельца или сотрудника.</p>
               <input id="loginEmail" placeholder="Email" />
               <input id="loginPassword" placeholder="Пароль" type="password" />
+              <label class="check remember-row"><input id="loginRemember" type="checkbox" /> Запомнить меня</label>
               <button id="authLoginSubmitBtn" onclick="login()">Войти в кабинет</button>
               <button id="authToRegisterBtn" class="btn-secondary" type="button" onclick="switchAuthMode('register')">Нет аккаунта? Регистрация</button>
             </div>
@@ -173,6 +174,13 @@
           <button id="socialBellBtn" class="chip-btn icon-bell-btn hidden" type="button" onclick="showTab('social', document.querySelector('.nav-btn[data-tab=social]'))" title="Уведомления">
             <span class="bell-emoji" aria-hidden="true">🔔</span>
             <span id="socialBellBadge" class="icon-bell-badge hidden">0</span>
+          </button>
+          <button id="topbarUserBtn" class="chip-btn topbar-user-btn hidden" type="button" onclick="showTab('profile', document.querySelector('.nav-btn[data-tab=profile]'))">
+            <span class="topbar-user-icon" aria-hidden="true">👤</span>
+            <span class="topbar-user-meta">
+              <span id="topbarUserName">-</span>
+              <small id="topbarUserRole">-</small>
+            </span>
           </button>
           <select id="uiLangSelect" class="chip-select" onchange="changeUiLang()">
             <option value="ru">RU</option>
@@ -967,7 +975,13 @@
         <div id="socialSubtabCalendar" class="hidden">
           <div class="panel">
             <div class="social-calendar-toolbar">
-              <input id="socialCalendarMonth" type="month" onchange="socialRenderCalendar()" />
+              <div class="social-calendar-nav">
+                <button class="btn-secondary" type="button" onclick="socialShiftCalendar(-12)">« Год</button>
+                <button class="btn-secondary" type="button" onclick="socialShiftCalendar(-1)">‹ Месяц</button>
+                <button class="btn-secondary" type="button" onclick="socialShiftCalendar(1)">Месяц ›</button>
+                <button class="btn-secondary" type="button" onclick="socialShiftCalendar(12)">Год »</button>
+              </div>
+              <input id="socialCalendarMonth" type="month" onchange="socialLoadCalendar()" />
               <button class="btn-secondary" type="button" onclick="socialOpenCalendarModal()">Добавить событие</button>
             </div>
             <div id="socialCalendarGrid" class="social-calendar-grid"></div>
@@ -976,15 +990,39 @@
         </div>
 
         <div id="socialSubtabCalculator" class="hidden">
-          <div class="panel social-calc-grid">
-            <section>
+          <div class="panel social-calc-stack">
+            <section class="social-calc-shell">
               <h3>Калькулятор</h3>
-              <input id="socialCalcExpr" placeholder="Например: (1200+350)*1.2" />
-              <button type="button" onclick="socialCalcEvaluate()">Посчитать</button>
-              <div id="socialCalcResult" class="hint">-</div>
+              <div class="social-calc-display">
+                <input id="socialCalcExpr" placeholder="0" />
+                <div id="socialCalcResult" class="hint">-</div>
+              </div>
+              <div class="social-calc-pad">
+                <button type="button" onclick="socialCalcPress('7')">7</button>
+                <button type="button" onclick="socialCalcPress('8')">8</button>
+                <button type="button" onclick="socialCalcPress('9')">9</button>
+                <button type="button" onclick="socialCalcPress('/')">÷</button>
+                <button type="button" onclick="socialCalcPress('4')">4</button>
+                <button type="button" onclick="socialCalcPress('5')">5</button>
+                <button type="button" onclick="socialCalcPress('6')">6</button>
+                <button type="button" onclick="socialCalcPress('*')">×</button>
+                <button type="button" onclick="socialCalcPress('1')">1</button>
+                <button type="button" onclick="socialCalcPress('2')">2</button>
+                <button type="button" onclick="socialCalcPress('3')">3</button>
+                <button type="button" onclick="socialCalcPress('-')">−</button>
+                <button type="button" onclick="socialCalcPress('0')">0</button>
+                <button type="button" onclick="socialCalcPress('.')">.</button>
+                <button class="btn-secondary" type="button" onclick="socialCalcBackspace()">⌫</button>
+                <button type="button" onclick="socialCalcPress('+')">+</button>
+                <button class="btn-secondary" type="button" onclick="socialCalcClear()">C</button>
+                <button class="btn-secondary" type="button" onclick="socialCalcPress('(')">(</button>
+                <button class="btn-secondary" type="button" onclick="socialCalcPress(')')">)</button>
+                <button class="btn-secondary" type="button" onclick="socialCalcPress('%')">%</button>
+                <button class="social-calc-eq" type="button" onclick="socialCalcEvaluate()">=</button>
+              </div>
             </section>
-            <section>
-              <h3>Конвертация</h3>
+            <section class="social-conv-shell">
+              <h3>Конвертация и валюты</h3>
               <div class="grid-4">
                 <input id="socialConvValue" type="number" step="any" placeholder="Значение" />
                 <select id="socialConvType" onchange="socialRenderConverterOptions()">
@@ -998,9 +1036,8 @@
               </div>
               <button class="btn-secondary" type="button" onclick="socialConvert()">Конвертировать</button>
               <div id="socialConvResult" class="hint">-</div>
-            </section>
-            <section>
-              <h3>Объем из размеров</h3>
+              <div class="conv-divider"></div>
+              <h4>Объем из размеров</h4>
               <div class="grid-3">
                 <input id="socialVolA" type="number" step="any" placeholder="Длина, см" />
                 <input id="socialVolB" type="number" step="any" placeholder="Ширина, см" />

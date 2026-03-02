@@ -488,6 +488,7 @@ class SocialCalendarEvent(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
     actor_key: Mapped[str] = mapped_column(String(60), index=True)
+    is_public: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     title: Mapped[str] = mapped_column(String(255), default="")
     details: Mapped[str] = mapped_column(Text, default="")
     start_at: Mapped[datetime] = mapped_column(DateTime, index=True)

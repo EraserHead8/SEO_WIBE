@@ -1,4 +1,7 @@
-let adminToken = localStorage.getItem("admin_token") || "";
+const storedAdminSession = sessionStorage.getItem("admin_token") || "";
+const storedAdminLocal = localStorage.getItem("admin_token") || "";
+let adminToken = storedAdminSession || storedAdminLocal || "";
+let adminTokenStorage = storedAdminSession ? "session" : (storedAdminLocal ? "local" : "");
 let adminMe = null;
 let adminUsers = [];
 let adminModules = [];
@@ -11,6 +14,7 @@ let adminAuditTotal = 0;
 let adminAuditTotalPages = 0;
 let adminAiGlobalState = null;
 let adminSelectedUserAiState = null;
+let adminServerMetrics = null;
 const adminUserProfileCache = new Map();
 let adminTeamModalState = {
   userId: 0,
@@ -26,6 +30,34 @@ const BILLING_PLAN_CODES = ["starter", "pro", "business"];
 let adminLang = (localStorage.getItem("admin_ui_lang") || "ru").toLowerCase() === "en" ? "en" : "ru";
 let adminTheme = String(localStorage.getItem("admin_ui_theme") || "classic").toLowerCase();
 if (!UI_THEMES.includes(adminTheme)) adminTheme = "classic";
+
+function setAdminToken(nextToken = "", persist = null) {
+  adminToken = String(nextToken || "");
+  if (!adminToken) {
+    adminTokenStorage = "";
+    localStorage.removeItem("admin_token");
+    sessionStorage.removeItem("admin_token");
+    return;
+  }
+  const useLocal = persist === null ? adminTokenStorage === "local" : Boolean(persist);
+  adminTokenStorage = useLocal ? "local" : "session";
+  if (useLocal) {
+    localStorage.setItem("admin_token", adminToken);
+    sessionStorage.removeItem("admin_token");
+    localStorage.setItem("admin_remember_me", "1");
+  } else {
+    sessionStorage.setItem("admin_token", adminToken);
+    localStorage.removeItem("admin_token");
+    localStorage.setItem("admin_remember_me", "0");
+  }
+}
+
+function initAdminRemember() {
+  const rememberEl = document.getElementById("adminRemember");
+  if (rememberEl) {
+    rememberEl.checked = localStorage.getItem("admin_remember_me") !== "0";
+  }
+}
 
 const ADMIN_TABS = {
   dashboard: {
@@ -47,6 +79,10 @@ const ADMIN_TABS = {
   appearance: {
     ru: ["Оформление", "Темы интерфейса и политика выбора темы"],
     en: ["Appearance", "UI themes and theme access policy"],
+  },
+  server: {
+    ru: ["Сервер", "Нагрузка и ресурсы VPS в реальном времени"],
+    en: ["Server", "VPS load and resources in real time"],
   },
   credentials: {
     ru: ["API ключи", "Ключи WB/Ozon по пользователям"],
@@ -374,6 +410,10 @@ function summarizeAdminTeamAccess(scope = [], isOwner = false) {
 
 async function adminRequest(url, opts = {}) {
   const r = await fetch(url, opts);
+  const refreshed = r.headers.get("x-auth-refresh");
+  if (refreshed) {
+    setAdminToken(refreshed, adminTokenStorage === "local");
+  }
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.detail || data.message || aTr("Ошибка запроса", "Request failed"));
   return data;
@@ -420,6 +460,7 @@ function applyAdminLanguage() {
     ["modules", aTr("Модули", "Modules")],
     ["ai", aTr("AI", "AI")],
     ["appearance", aTr("Оформление", "Appearance")],
+    ["server", aTr("Сервер", "Server")],
     ["credentials", aTr("API ключи", "API Keys")],
     ["audit", aTr("Аудит", "Audit")],
   ];
@@ -459,6 +500,8 @@ function applyAdminLanguage() {
     ["#adminAppearanceSummary", aTr("Параметры оформления загружены.", "Appearance settings loaded.")],
     ["#adminThemeChoiceEnabled", aTr("Разрешить выбор темы пользователям", "Allow users to choose theme")],
     ["#adminForceThemeEnabled", aTr("Принудительно применять тему всем", "Force this theme for all users")],
+    ["#adminTab-server .panel h3", aTr("Мониторинг сервера", "Server monitoring")],
+    ["#adminTab-server .grid-3 button", aTr("Обновить метрики", "Refresh metrics")],
     ["#adminAppearanceModalTitle", aTr("Оформление интерфейса", "UI appearance")],
     ["#adminAppearanceModal .actions button", aTr("Сохранить оформление", "Save appearance")],
     ["#adminAppearanceModal .hint", aTr("Разрешенные темы для выбора:", "Allowed themes:")],
@@ -588,6 +631,7 @@ function applyAdminLanguage() {
   renderAdminAuditPager();
   renderAdminAppearance();
   renderAdminAiTab();
+  renderAdminServerMetrics();
 }
 
 function adminChangeLanguage() {
@@ -623,6 +667,9 @@ function showAdminTab(tab, btn = null) {
       loadAdminUserAi().catch(() => null);
     }
   }
+  if (tab === "server" && !adminServerMetrics) {
+    loadAdminServerMetrics().catch(() => null);
+  }
 }
 
 function buildUserOption(user) {
@@ -646,6 +693,7 @@ function refreshUserSelects() {
 async function adminLogin() {
   const email = document.getElementById("adminEmail")?.value.trim() || "";
   const password = document.getElementById("adminPassword")?.value || "";
+  const remember = Boolean(document.getElementById("adminRemember")?.checked);
   const data = await adminRequest("/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -655,8 +703,7 @@ async function adminLogin() {
     return null;
   });
   if (!data) return;
-  adminToken = data.access_token;
-  localStorage.setItem("admin_token", adminToken);
+  setAdminToken(data.access_token, remember);
   await ensureAdminAuth();
 }
 
@@ -667,7 +714,7 @@ async function adminLogout() {
       headers: adminHeaders(),
     }).catch(() => null);
   }
-  adminToken = "";
+  setAdminToken("");
   adminMe = null;
   adminUsers = [];
   adminModules = [];
@@ -681,6 +728,7 @@ async function adminLogout() {
   adminSelectedUserAiState = null;
   adminUserProfileCache.clear();
   localStorage.removeItem("admin_token");
+  sessionStorage.removeItem("admin_token");
   setAdminVisible(false);
 }
 
@@ -706,13 +754,14 @@ async function ensureAdminAuth() {
 }
 
 async function loadAdminAll() {
-  const [stats, users, modules, allCreds, uiSettings, aiGlobal] = await Promise.all([
+  const [stats, users, modules, allCreds, uiSettings, aiGlobal, serverMetrics] = await Promise.all([
     adminRequest("/api/admin/stats", { headers: adminHeaders() }).catch(() => null),
     adminRequest("/api/admin/users", { headers: adminHeaders() }).catch(() => null),
     adminRequest("/api/admin/modules", { headers: adminHeaders() }).catch(() => null),
     adminRequest("/api/admin/credentials/all", { headers: adminHeaders() }).catch(() => []),
     adminRequest("/api/admin/ui/settings", { headers: adminHeaders() }).catch(() => null),
     adminRequest("/api/admin/ai/global", { headers: adminHeaders() }).catch(() => null),
+    adminRequest("/api/admin/server/metrics", { headers: adminHeaders() }).catch(() => null),
   ]);
 
   const statsView = document.getElementById("adminStatsView");
@@ -728,6 +777,7 @@ async function loadAdminAll() {
   adminCredentials = Array.isArray(allCreds) ? allCreds : [];
   adminUiSettings = uiSettings && typeof uiSettings === "object" ? uiSettings : null;
   adminAiGlobalState = aiGlobal && typeof aiGlobal === "object" ? aiGlobal : null;
+  adminServerMetrics = serverMetrics && typeof serverMetrics === "object" ? serverMetrics : null;
   adminSelectedUserAiState = null;
 
   renderAdminDashboard(stats, users || [], modules || []);
@@ -736,6 +786,7 @@ async function loadAdminAll() {
   renderAdminCredentialsTable();
   renderAdminAppearance();
   renderAdminAiTab();
+  renderAdminServerMetrics();
 }
 
 function renderAdminDashboard(stats, users, modules) {
@@ -1628,10 +1679,10 @@ function renderAdminAiTab(preserveUserMode = false) {
     globalServiceSel.value = String(globalDefault.service_id);
   }
   globalTable.innerHTML = globalServices.length
-    ? globalServices.map((row) => `
+    ? globalServices.map((row, idx) => `
       <tr>
         <td>${Number(row.id || 0)}</td>
-        <td>${escapeHtml(String(row.name || "-"))}</td>
+        <td>${escapeHtml(String(row.name || "-"))}<div class="hint">${aTr("Приоритет", "Priority")} #${idx + 1}</div></td>
         <td>${escapeHtml(String(row.provider || "-"))}</td>
         <td>${escapeHtml(String(row.model || "-"))}</td>
         <td>${escapeHtml(String(row.base_url || "-"))}</td>
@@ -1710,9 +1761,13 @@ function renderAdminAiTab(preserveUserMode = false) {
     userServiceSel.value = String(userState.selection.service_id);
   }
   const effective = userState?.effective || {};
+  const chain = Array.isArray(userState?.effective_chain) ? userState.effective_chain : [];
   const eff = document.getElementById("adminAiUserEffective");
   if (eff) {
-    eff.textContent = `${aTr("Эффективно", "Effective")}: ${effective.mode || "-"} | ${effective.provider || "-"} | ${effective.model || "-"} | ${effective.service_name || "-"}`;
+    const chainText = chain.length
+      ? chain.map((x, idx) => `${idx + 1}. ${x.provider || "-"} ${x.model || "-"}`).join(" → ")
+      : `${effective.provider || "-"} ${effective.model || "-"}`;
+    eff.textContent = `${aTr("Эффективно", "Effective")}: ${effective.mode || "-"} | ${effective.provider || "-"} | ${effective.model || "-"} | ${effective.service_name || "-"} • ${aTr("Цепочка fallback", "Fallback chain")}: ${chainText}`;
   }
   const mergedRows = [...globalRows, ...userRows];
   userTable.innerHTML = mergedRows.length
@@ -1940,6 +1995,119 @@ async function adminAddUserAiService() {
   await loadAdminUserAi();
 }
 
+function formatAdminBytes(value) {
+  const num = Number(value || 0);
+  if (!Number.isFinite(num) || num <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let idx = 0;
+  let n = num;
+  while (n >= 1024 && idx < units.length - 1) {
+    n /= 1024;
+    idx += 1;
+  }
+  return `${n.toFixed(idx === 0 ? 0 : 2)} ${units[idx]}`;
+}
+
+function formatAdminDuration(seconds) {
+  const sec = Math.max(0, Number(seconds || 0));
+  const d = Math.floor(sec / 86400);
+  const h = Math.floor((sec % 86400) / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  if (d > 0) return `${d}д ${h}ч ${m}м`;
+  if (h > 0) return `${h}ч ${m}м`;
+  return `${m}м`;
+}
+
+function renderAdminServerMetrics() {
+  const meta = document.getElementById("adminServerMeta");
+  const uptime = document.getElementById("adminServerUptime");
+  const kpis = document.getElementById("adminServerKpis");
+  const table = document.getElementById("adminServerTable");
+  if (!meta || !uptime || !kpis || !table) return;
+
+  const payload = adminServerMetrics && typeof adminServerMetrics === "object" ? adminServerMetrics : null;
+  if (!payload) {
+    meta.textContent = aTr("Метрики недоступны.", "Metrics unavailable.");
+    uptime.textContent = "-";
+    kpis.innerHTML = "";
+    table.innerHTML = `<tr><td>${escapeHtml(aTr("Нет данных по серверу.", "No server data."))}</td></tr>`;
+    return;
+  }
+
+  const cpu = payload.cpu || {};
+  const memory = payload.memory || {};
+  const disk = payload.disk || {};
+  const network = payload.network || {};
+  const ts = formatDateTime(payload.timestamp || "");
+  meta.textContent = `${aTr("Обновлено", "Updated")}: ${ts}`;
+  uptime.textContent = `${aTr("Uptime", "Uptime")}: ${formatAdminDuration(payload.uptime_seconds || 0)}`;
+
+  const blocks = [
+    [aTr("CPU", "CPU"), `${Number(cpu.usage_percent || 0).toFixed(1)}%`],
+    [aTr("RAM", "RAM"), `${Number(memory.usage_percent || 0).toFixed(1)}%`],
+    [aTr("Диск /", "Disk /"), `${Number(disk.usage_percent || 0).toFixed(1)}%`],
+    [aTr("RX скорость", "RX speed"), `${formatAdminBytes(network.rx_bytes_per_sec || 0)}/s`],
+    [aTr("TX скорость", "TX speed"), `${formatAdminBytes(network.tx_bytes_per_sec || 0)}/s`],
+  ];
+  kpis.innerHTML = blocks.map(([name, value]) => `
+    <article class="kpi">
+      <div class="kpi-head"><strong>${escapeHtml(String(value || "-"))}</strong><span>${escapeHtml(String(name || "-"))}</span></div>
+    </article>
+  `).join("");
+
+  table.innerHTML = `
+    <tr><td>${escapeHtml(aTr("CPU ядра", "CPU cores"))}</td><td>${escapeHtml(String(cpu.cores || 1))}</td></tr>
+    <tr><td>${escapeHtml(aTr("Load average", "Load average"))}</td><td>${escapeHtml(`${cpu.load_avg_1m ?? 0} / ${cpu.load_avg_5m ?? 0} / ${cpu.load_avg_15m ?? 0}`)}</td></tr>
+    <tr><td>${escapeHtml(aTr("Память занято", "Memory used"))}</td><td>${escapeHtml(`${formatAdminBytes(memory.used_bytes || 0)} / ${formatAdminBytes(memory.total_bytes || 0)}`)}</td></tr>
+    <tr><td>${escapeHtml(aTr("Swap занято", "Swap used"))}</td><td>${escapeHtml(`${formatAdminBytes(memory.swap_used_bytes || 0)} / ${formatAdminBytes(memory.swap_total_bytes || 0)}`)}</td></tr>
+    <tr><td>${escapeHtml(aTr("Диск занято", "Disk used"))}</td><td>${escapeHtml(`${formatAdminBytes(disk.used_bytes || 0)} / ${formatAdminBytes(disk.total_bytes || 0)}`)}</td></tr>
+    <tr><td>${escapeHtml(aTr("Сеть RX/TX всего", "Network RX/TX total"))}</td><td>${escapeHtml(`${formatAdminBytes(network.rx_bytes_total || 0)} / ${formatAdminBytes(network.tx_bytes_total || 0)}`)}</td></tr>
+  `;
+}
+
+async function loadAdminServerMetrics() {
+  const data = await adminRequest("/api/admin/server/metrics", { headers: adminHeaders() }).catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  if (!data) return;
+  adminServerMetrics = data;
+  renderAdminServerMetrics();
+}
+
+function openAdminAuditDetails(row) {
+  const modal = document.getElementById("adminAuditDetailsModal");
+  const title = document.getElementById("adminAuditDetailsTitle");
+  const meta = document.getElementById("adminAuditDetailsMeta");
+  const raw = document.getElementById("adminAuditDetailsRaw");
+  if (!modal || !title || !meta || !raw) return;
+  const actionLabel = humanAuditAction(row?.action || "");
+  const moduleLabel = humanAuditModule(row?.module_code || "");
+  const actorEmail = String(row?.actor_email || "").trim();
+  const actorMemberId = Number(row?.actor_member_id || 0);
+  title.textContent = `${actionLabel} • ${moduleLabel}`;
+  meta.textContent = `${aTr("Время", "Time")}: ${formatDateTime(row?.created_at)} • ${aTr("Актер", "Actor")}: ${actorEmail || "-"}${actorMemberId > 0 ? ` (#${actorMemberId})` : ""} • ID: ${row?.id ?? "-"}`;
+  const pretty = {
+    ...row,
+    details_json: (() => {
+      try {
+        return JSON.parse(String(row?.details || ""));
+      } catch (_) {
+        return null;
+      }
+    })(),
+  };
+  raw.textContent = JSON.stringify(pretty, null, 2);
+  modal.classList.remove("hidden");
+}
+
+function adminCloseAuditDetailsModal(evt) {
+  const modal = document.getElementById("adminAuditDetailsModal");
+  if (!modal) return;
+  if (evt && evt.target && evt.target !== modal) return;
+  modal.classList.add("hidden");
+}
+
 function parseAuditDetails(raw) {
   const text = String(raw || "").trim();
   if (!text) return { summary: "-", kv: [] };
@@ -1998,8 +2166,16 @@ function renderAdminAuditTable() {
     const actorEmail = String(row.actor_email || "").trim();
     const actorMemberId = Number(row.actor_member_id || 0);
     const actorRole = row.actor_is_owner ? aTr("owner", "owner") : aTr("employee", "employee");
-    const actorLabel = actorEmail || fallbackUserLabel;
-    const actorMeta = actorMemberId > 0 ? `${aTr("member", "member")} #${actorMemberId} • ${actorRole}` : (row.user_id ? `user #${row.user_id}` : "-");
+    let actorLabel = actorEmail || fallbackUserLabel;
+    if (!row.actor_is_owner && actorMemberId > 0) {
+      const ownerHint = userEmail && actorEmail.toLowerCase() !== userEmail.toLowerCase()
+        ? ` (${userEmail})`
+        : (row.user_id ? ` (owner #${row.user_id})` : "");
+      actorLabel = `${actorLabel}${ownerHint}`;
+    }
+    const actorMeta = actorMemberId > 0
+      ? `${aTr("member", "member")} #${actorMemberId} • ${actorRole}`
+      : (row.user_id ? `user #${row.user_id}` : "-");
     const moduleLabel = humanAuditModule(row.module_code);
     const statusLabel = String(row.status || "").trim() || "ok";
     const actionLabel = humanAuditAction(row.action);
@@ -2021,8 +2197,10 @@ function renderAdminAuditTable() {
       <td><span class="admin-chip">${escapeHtml(actionLabel)}</span></td>
       <td><span class="admin-chip">${escapeHtml(statusLabel)}</span></td>
       <td>${escapeHtml(entityLabel)}</td>
-      <td>${detailHtml}</td>
+      <td><div class="admin-audit-row-detail">${detailHtml}<div class="actions"><button class="btn-secondary" type="button" data-audit-open="${Number(row.id || 0)}">${aTr("Открыть", "Open")}</button></div></div></td>
     `;
+    tr.querySelector(`[data-audit-open="${Number(row.id || 0)}"]`)?.addEventListener("click", () => openAdminAuditDetails(row));
+    tr.addEventListener("dblclick", () => openAdminAuditDetails(row));
     tbody.appendChild(tr);
   }
 }
@@ -2224,6 +2402,7 @@ document.addEventListener("keydown", (e) => {
   adminCloseAiGlobalModal();
   adminCloseAiUserModal();
   adminCloseAppearanceModal();
+  adminCloseAuditDetailsModal();
 });
 window.showAdminTab = showAdminTab;
 window.adminLogin = adminLogin;
@@ -2234,6 +2413,7 @@ window.loadAdminAuditReset = loadAdminAuditReset;
 window.adminAuditPrevPage = adminAuditPrevPage;
 window.adminAuditNextPage = adminAuditNextPage;
 window.adminSaveUiSettings = adminSaveUiSettings;
+window.loadAdminServerMetrics = loadAdminServerMetrics;
 window.adminOpenAppearanceModal = adminOpenAppearanceModal;
 window.adminCloseAppearanceModal = adminCloseAppearanceModal;
 window.adminSaveCredential2 = adminSaveCredential2;
@@ -2250,7 +2430,9 @@ window.adminChangeTheme = adminChangeTheme;
 window.adminOpenUserEditModal = adminOpenUserEditModal;
 window.adminCloseUserEditModal = adminCloseUserEditModal;
 window.adminCloseTeamMemberModal = adminCloseTeamMemberModal;
+window.adminCloseAuditDetailsModal = adminCloseAuditDetailsModal;
 
 applyAdminTheme(adminTheme);
 applyAdminLanguage();
+initAdminRemember();
 ensureAdminAuth();

@@ -217,6 +217,9 @@ AUDIT_STORAGE_TARGET_BYTES = int(AUDIT_STORAGE_MAX_BYTES * 0.9)
 AUDIT_PRUNE_BATCH = 5000
 _AUDIT_PRUNE_LAST_CHECK_AT: float = 0.0
 PRODUCT_PAGE_SIZE_OPTIONS = (30, 50, 100, 200, 500, 1000)
+_SERVER_CPU_SNAPSHOT: tuple[int, int] | None = None
+_SERVER_NET_SNAPSHOT: tuple[int, int] | None = None
+_SERVER_NET_TS: float = 0.0
 
 BILLING_PLANS: dict[str, dict[str, Any]] = {
     "starter": {"title": "Starter", "price": 990, "limits": {"products": 500, "seo_jobs_month": 1500, "ai_replies_month": 800}},
@@ -764,7 +767,7 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     )
     db.commit()
 
-    return TokenResponse(access_token=create_access_token(payload.email))
+    return TokenResponse(access_token=create_access_token(f"u:{user.id}"))
 
 
 @router.post("/auth/login", response_model=TokenResponse)
@@ -784,7 +787,7 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
             request=request,
         )
         db.commit()
-        return TokenResponse(access_token=create_access_token(user.email))
+        return TokenResponse(access_token=create_access_token(f"u:{user.id}"))
 
     member = db.scalar(
         select(TeamMember)
@@ -812,7 +815,7 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
                 request=request,
             )
             db.commit()
-            return TokenResponse(access_token=create_access_token(member.email))
+            return TokenResponse(access_token=create_access_token(f"m:{member.id}"))
     _audit(
         db,
         None,
@@ -847,6 +850,7 @@ def logout(request: Request, user: User = Depends(get_current_user), db: Session
 
 @router.get("/auth/me", response_model=UserOut)
 def me(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    actor_key, actor_nick, actor_member_id = _social_actor_identity(db, user)
     _audit(
         db,
         user,
@@ -859,7 +863,12 @@ def me(request: Request, user: User = Depends(get_current_user), db: Session = D
         request=request,
     )
     db.commit()
-    return user
+    payload = UserOut.model_validate(user)
+    payload.actor_key = actor_key
+    payload.actor_nick = actor_nick
+    payload.actor_is_owner = bool(_actor_is_owner(user))
+    payload.actor_member_id = int(actor_member_id or 0) if actor_member_id else None
+    return payload
 
 
 @router.get("/modules/current", response_model=list[CurrentModuleOut])
@@ -1185,6 +1194,7 @@ def wb_generate_reply(payload: GenerateReviewReplyIn, user: User = Depends(get_c
         query_text=f"{payload.product_name} {payload.review_text} {payload.reviewer_name}",
     )
     prompt = _compose_ai_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", knowledge_ctx, content_kind="review")
+    ai_trace: dict[str, Any] = {}
     reply = generate_review_reply(
         review_text=payload.review_text,
         product_name=payload.product_name,
@@ -1197,12 +1207,29 @@ def wb_generate_reply(payload: GenerateReviewReplyIn, user: User = Depends(get_c
         model=str(runtime.get("model") or ""),
         provider=str(runtime.get("provider") or ""),
         base_url=str(runtime.get("base_url") or ""),
+        fallback_chain=list(runtime.get("fallback_chain") or []),
+        trace=ai_trace,
     )
+    trace_attempts = [x for x in (ai_trace.get("attempts") or []) if isinstance(x, dict)]
+    details_payload = {
+        "provider": ai_trace.get("used_provider") or runtime.get("provider") or "builtin",
+        "model": ai_trace.get("used_model") or runtime.get("model") or settings.openai_model,
+        "mode": ai_trace.get("used_mode") or runtime.get("mode") or "builtin",
+        "service_id": ai_trace.get("used_service_id") or runtime.get("service_id"),
+        "switched": bool(ai_trace.get("switched")),
+        "attempts": len(trace_attempts),
+        "attempt_statuses": [str(x.get("status_code") or x.get("error") or "ok") for x in trace_attempts[:5]],
+        "marketplace": "wb",
+        "content_kind": "review",
+        "product": str(payload.product_name or "")[:180],
+        "question_or_review": str(payload.review_text or "")[:320],
+        "answer": str(reply or "")[:420],
+    }
     _audit(
         db,
         user,
         action="wb_review_reply_generated",
-        details=f"provider={runtime.get('provider') or 'builtin'};model={runtime.get('model') or settings.openai_model};mode={runtime.get('mode') or 'builtin'}",
+        details=json.dumps(details_payload, ensure_ascii=False),
         module_code="wb_reviews_ai",
         entity_type="review",
     )
@@ -1309,6 +1336,7 @@ def ozon_generate_reply(payload: GenerateReviewReplyIn, user: User = Depends(get
         query_text=f"{payload.product_name} {payload.review_text} {payload.reviewer_name}",
     )
     prompt = _compose_ai_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", knowledge_ctx, content_kind="review")
+    ai_trace: dict[str, Any] = {}
     reply = generate_review_reply(
         review_text=payload.review_text,
         product_name=payload.product_name,
@@ -1321,12 +1349,29 @@ def ozon_generate_reply(payload: GenerateReviewReplyIn, user: User = Depends(get
         model=str(runtime.get("model") or ""),
         provider=str(runtime.get("provider") or ""),
         base_url=str(runtime.get("base_url") or ""),
+        fallback_chain=list(runtime.get("fallback_chain") or []),
+        trace=ai_trace,
     )
+    trace_attempts = [x for x in (ai_trace.get("attempts") or []) if isinstance(x, dict)]
+    details_payload = {
+        "provider": ai_trace.get("used_provider") or runtime.get("provider") or "builtin",
+        "model": ai_trace.get("used_model") or runtime.get("model") or settings.openai_model,
+        "mode": ai_trace.get("used_mode") or runtime.get("mode") or "builtin",
+        "service_id": ai_trace.get("used_service_id") or runtime.get("service_id"),
+        "switched": bool(ai_trace.get("switched")),
+        "attempts": len(trace_attempts),
+        "attempt_statuses": [str(x.get("status_code") or x.get("error") or "ok") for x in trace_attempts[:5]],
+        "marketplace": "ozon",
+        "content_kind": "review",
+        "product": str(payload.product_name or "")[:180],
+        "question_or_review": str(payload.review_text or "")[:320],
+        "answer": str(reply or "")[:420],
+    }
     _audit(
         db,
         user,
         action="ozon_review_reply_generated",
-        details=f"provider={runtime.get('provider') or 'builtin'};model={runtime.get('model') or settings.openai_model};mode={runtime.get('mode') or 'builtin'}",
+        details=json.dumps(details_payload, ensure_ascii=False),
         module_code="wb_reviews_ai",
         entity_type="review",
     )
@@ -1439,6 +1484,7 @@ def wb_generate_question_reply(payload: GenerateReviewReplyIn, user: User = Depe
         query_text=f"{payload.product_name} {payload.review_text} {payload.reviewer_name}",
     )
     prompt = _compose_ai_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", knowledge_ctx, content_kind="question")
+    ai_trace: dict[str, Any] = {}
     reply = generate_review_reply(
         review_text=payload.review_text,
         product_name=payload.product_name,
@@ -1451,12 +1497,29 @@ def wb_generate_question_reply(payload: GenerateReviewReplyIn, user: User = Depe
         model=str(runtime.get("model") or ""),
         provider=str(runtime.get("provider") or ""),
         base_url=str(runtime.get("base_url") or ""),
+        fallback_chain=list(runtime.get("fallback_chain") or []),
+        trace=ai_trace,
     )
+    trace_attempts = [x for x in (ai_trace.get("attempts") or []) if isinstance(x, dict)]
+    details_payload = {
+        "provider": ai_trace.get("used_provider") or runtime.get("provider") or "builtin",
+        "model": ai_trace.get("used_model") or runtime.get("model") or settings.openai_model,
+        "mode": ai_trace.get("used_mode") or runtime.get("mode") or "builtin",
+        "service_id": ai_trace.get("used_service_id") or runtime.get("service_id"),
+        "switched": bool(ai_trace.get("switched")),
+        "attempts": len(trace_attempts),
+        "attempt_statuses": [str(x.get("status_code") or x.get("error") or "ok") for x in trace_attempts[:5]],
+        "marketplace": "wb",
+        "content_kind": "question",
+        "product": str(payload.product_name or "")[:180],
+        "question_or_review": str(payload.review_text or "")[:320],
+        "answer": str(reply or "")[:420],
+    }
     _audit(
         db,
         user,
         action="wb_question_reply_generated",
-        details=f"provider={runtime.get('provider') or 'builtin'};model={runtime.get('model') or settings.openai_model};mode={runtime.get('mode') or 'builtin'}",
+        details=json.dumps(details_payload, ensure_ascii=False),
         module_code="wb_questions_ai",
         entity_type="question",
     )
@@ -1563,6 +1626,7 @@ def ozon_generate_question_reply(payload: GenerateReviewReplyIn, user: User = De
         query_text=f"{payload.product_name} {payload.review_text} {payload.reviewer_name}",
     )
     prompt = _compose_ai_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", knowledge_ctx, content_kind="question")
+    ai_trace: dict[str, Any] = {}
     reply = generate_review_reply(
         review_text=payload.review_text,
         product_name=payload.product_name,
@@ -1575,12 +1639,29 @@ def ozon_generate_question_reply(payload: GenerateReviewReplyIn, user: User = De
         model=str(runtime.get("model") or ""),
         provider=str(runtime.get("provider") or ""),
         base_url=str(runtime.get("base_url") or ""),
+        fallback_chain=list(runtime.get("fallback_chain") or []),
+        trace=ai_trace,
     )
+    trace_attempts = [x for x in (ai_trace.get("attempts") or []) if isinstance(x, dict)]
+    details_payload = {
+        "provider": ai_trace.get("used_provider") or runtime.get("provider") or "builtin",
+        "model": ai_trace.get("used_model") or runtime.get("model") or settings.openai_model,
+        "mode": ai_trace.get("used_mode") or runtime.get("mode") or "builtin",
+        "service_id": ai_trace.get("used_service_id") or runtime.get("service_id"),
+        "switched": bool(ai_trace.get("switched")),
+        "attempts": len(trace_attempts),
+        "attempt_statuses": [str(x.get("status_code") or x.get("error") or "ok") for x in trace_attempts[:5]],
+        "marketplace": "ozon",
+        "content_kind": "question",
+        "product": str(payload.product_name or "")[:180],
+        "question_or_review": str(payload.review_text or "")[:320],
+        "answer": str(reply or "")[:420],
+    }
     _audit(
         db,
         user,
         action="ozon_question_reply_generated",
-        details=f"provider={runtime.get('provider') or 'builtin'};model={runtime.get('model') or settings.openai_model};mode={runtime.get('mode') or 'builtin'}",
+        details=json.dumps(details_payload, ensure_ascii=False),
         module_code="wb_questions_ai",
         entity_type="question",
     )
@@ -3768,6 +3849,57 @@ def sales_stats(
     chart = chart if isinstance(chart, list) else []
     totals = totals if isinstance(totals, dict) else {}
     warnings = warnings if isinstance(warnings, list) else []
+    comparison: dict[str, Any] = {}
+
+    try:
+        period_days = max(1, (right - left).days + 1)
+        prev_to = left - timedelta(days=1)
+        prev_from = prev_to - timedelta(days=period_days - 1)
+        prev_payload = build_sales_report(
+            marketplace=selected_market,
+            date_from=prev_from,
+            date_to=prev_to,
+            wb_api_key=wb_key,
+            ozon_api_key=ozon_key,
+            granularity=gran,
+            timezone=tz_name,
+        )
+        prev_totals = prev_payload.get("totals") if isinstance(prev_payload, dict) else {}
+        prev_totals = prev_totals if isinstance(prev_totals, dict) else {}
+
+        def _cmp(metric: str) -> dict[str, Any]:
+            cur = float(totals.get(metric) or 0.0)
+            prev = float(prev_totals.get(metric) or 0.0)
+            if abs(prev) < 1e-9:
+                delta_pct = 100.0 if abs(cur) > 1e-9 else 0.0
+            else:
+                delta_pct = ((cur - prev) / abs(prev)) * 100.0
+            return {
+                "current": cur,
+                "previous": prev,
+                "delta": cur - prev,
+                "delta_pct": round(delta_pct, 2),
+            }
+
+        comparison = {
+            "period_days": period_days,
+            "current_from": left.isoformat(),
+            "current_to": right.isoformat(),
+            "previous_from": prev_from.isoformat(),
+            "previous_to": prev_to.isoformat(),
+            "metrics": {
+                "orders": _cmp("orders"),
+                "units": _cmp("units"),
+                "revenue": _cmp("revenue"),
+                "returns": _cmp("returns"),
+                "ad_spend": _cmp("ad_spend"),
+                "penalties": _cmp("penalties"),
+                "gross_profit": _cmp("gross_profit"),
+            },
+        }
+    except Exception as exc:
+        comparison = {}
+        warnings.append(f"Сравнение с предыдущим периодом недоступно: {str(exc or '')[:140]}")
 
     report_granularity = str(payload.get("granularity") or ("hour" if gran == "hour" else "day"))
     report_tz = str(payload.get("timezone") or tz_name)
@@ -3775,7 +3907,7 @@ def sales_stats(
         db,
         user,
         action="sales_stats_read",
-        details=f"market={selected_market};from={left.isoformat()};to={right.isoformat()};rows={len(rows)};granularity={report_granularity};tz={report_tz}",
+        details=f"market={selected_market};from={left.isoformat()};to={right.isoformat()};rows={len(rows)};granularity={report_granularity};tz={report_tz};comparison={1 if comparison else 0}",
         module_code="sales_stats",
         entity_type="sales",
     )
@@ -3789,6 +3921,7 @@ def sales_stats(
         rows=rows,
         chart=chart,
         totals=totals,
+        comparison=comparison,
         warnings=[str(x) for x in warnings],
     )
 
@@ -4051,7 +4184,47 @@ def profile_change_password(
     if len(payload.new_password or "") < 8:
         raise HTTPException(status_code=400, detail="Новый пароль должен быть минимум 8 символов")
 
-    subject = str(decode_access_token(token) or "").strip().lower()
+    subject_raw = str(decode_access_token(token) or "").strip()
+    subject = subject_raw.lower()
+    if subject.startswith("u:"):
+        user_id = _to_int_safe(subject.split(":", 1)[1])
+        if user_id and int(user_id) == int(user.id):
+            if not verify_password(payload.current_password, user.hashed_password):
+                raise HTTPException(status_code=400, detail="Текущий пароль указан неверно")
+            user.hashed_password = get_password_hash(payload.new_password)
+            owner_member = db.scalar(select(TeamMember).where(TeamMember.user_id == user.id, TeamMember.is_owner.is_(True)))
+            if owner_member:
+                owner_member.hashed_password = user.hashed_password
+            _audit(
+                db,
+                user,
+                action="profile_password_changed",
+                details="kind=owner",
+                module_code="user_profile",
+                entity_type="password",
+            )
+            db.commit()
+            return MessageOut(message="Пароль обновлен")
+    if subject.startswith("m:"):
+        member_id = _to_int_safe(subject.split(":", 1)[1])
+        if member_id:
+            member = db.get(TeamMember, member_id)
+            if member and int(member.user_id) == int(user.id) and member.is_active and not member.is_owner:
+                if not member.hashed_password or not verify_password(payload.current_password, member.hashed_password):
+                    raise HTTPException(status_code=400, detail="Текущий пароль указан неверно")
+                member.hashed_password = get_password_hash(payload.new_password)
+                _audit(
+                    db,
+                    user,
+                    action="profile_password_changed",
+                    details=f"kind=team_member;member_id={member.id}",
+                    module_code="user_profile",
+                    entity_type="password",
+                    entity_id=str(member.id),
+                )
+                db.commit()
+                return MessageOut(message="Пароль сотрудника обновлен")
+
     if subject and subject == user.email:
         if not verify_password(payload.current_password, user.hashed_password):
             raise HTTPException(status_code=400, detail="Текущий пароль указан неверно")
@@ -4469,6 +4642,159 @@ def admin_stats(_: User = Depends(get_admin_user), db: Session = Depends(get_db)
         active_users_24h=active_users_24h,
         audit_events_24h=audit_events_24h,
     )
+
+
+def _proc_meminfo_kb() -> dict[str, int]:
+    out: dict[str, int] = {}
+    try:
+        with open("/proc/meminfo", "r", encoding="utf-8") as fh:
+            for line in fh:
+                if ":" not in line:
+                    continue
+                key, raw_val = line.split(":", 1)
+                token = raw_val.strip().split(" ")[0]
+                if token.isdigit():
+                    out[key.strip()] = int(token)
+    except Exception:
+        return {}
+    return out
+
+
+def _proc_cpu_times() -> tuple[int, int]:
+    try:
+        with open("/proc/stat", "r", encoding="utf-8") as fh:
+            first = fh.readline().strip().split()
+        if not first or first[0] != "cpu":
+            return (0, 0)
+        nums = [int(x) for x in first[1:] if str(x).isdigit()]
+        if not nums:
+            return (0, 0)
+        total = int(sum(nums))
+        idle = int(nums[3] + (nums[4] if len(nums) > 4 else 0))
+        return (total, idle)
+    except Exception:
+        return (0, 0)
+
+
+def _proc_net_bytes() -> tuple[int, int]:
+    rx = 0
+    tx = 0
+    try:
+        with open("/proc/net/dev", "r", encoding="utf-8") as fh:
+            rows = fh.readlines()[2:]
+        for line in rows:
+            if ":" not in line:
+                continue
+            iface, data = line.split(":", 1)
+            iface_name = iface.strip()
+            if iface_name in {"lo"}:
+                continue
+            cols = [x for x in data.strip().split() if x]
+            if len(cols) < 16:
+                continue
+            rx += int(cols[0] or 0)
+            tx += int(cols[8] or 0)
+    except Exception:
+        return (0, 0)
+    return (rx, tx)
+
+
+def _collect_server_metrics() -> dict[str, Any]:
+    global _SERVER_CPU_SNAPSHOT, _SERVER_NET_SNAPSHOT, _SERVER_NET_TS
+    now = datetime.utcnow().timestamp()
+    disk = os.statvfs("/")
+    disk_total = int(disk.f_blocks * disk.f_frsize)
+    disk_free = int(disk.f_bavail * disk.f_frsize)
+    disk_used = max(0, disk_total - disk_free)
+    disk_pct = round((disk_used / disk_total * 100.0), 2) if disk_total > 0 else 0.0
+
+    mem = _proc_meminfo_kb()
+    mem_total = int(mem.get("MemTotal", 0) * 1024)
+    mem_available = int(mem.get("MemAvailable", mem.get("MemFree", 0)) * 1024)
+    mem_used = max(0, mem_total - mem_available)
+    mem_pct = round((mem_used / mem_total * 100.0), 2) if mem_total > 0 else 0.0
+    swap_total = int(mem.get("SwapTotal", 0) * 1024)
+    swap_free = int(mem.get("SwapFree", 0) * 1024)
+    swap_used = max(0, swap_total - swap_free)
+
+    cpu_total, cpu_idle = _proc_cpu_times()
+    cpu_pct = 0.0
+    if _SERVER_CPU_SNAPSHOT is not None:
+        prev_total, prev_idle = _SERVER_CPU_SNAPSHOT
+        delta_total = max(0, cpu_total - prev_total)
+        delta_idle = max(0, cpu_idle - prev_idle)
+        if delta_total > 0:
+            cpu_pct = round((1.0 - (delta_idle / delta_total)) * 100.0, 2)
+    else:
+        try:
+            load1 = float(os.getloadavg()[0])
+            cpu_count = max(1, int(os.cpu_count() or 1))
+            cpu_pct = round(min(100.0, (load1 / cpu_count) * 100.0), 2)
+        except Exception:
+            cpu_pct = 0.0
+    _SERVER_CPU_SNAPSHOT = (cpu_total, cpu_idle)
+
+    net_rx, net_tx = _proc_net_bytes()
+    rx_rate = 0.0
+    tx_rate = 0.0
+    if _SERVER_NET_SNAPSHOT is not None and _SERVER_NET_TS > 0:
+        prev_rx, prev_tx = _SERVER_NET_SNAPSHOT
+        delta_sec = max(1e-6, now - _SERVER_NET_TS)
+        rx_rate = max(0.0, (net_rx - prev_rx) / delta_sec)
+        tx_rate = max(0.0, (net_tx - prev_tx) / delta_sec)
+    _SERVER_NET_SNAPSHOT = (net_rx, net_tx)
+    _SERVER_NET_TS = now
+
+    uptime_seconds = 0
+    try:
+        with open("/proc/uptime", "r", encoding="utf-8") as fh:
+            uptime_seconds = int(float(fh.read().split()[0]))
+    except Exception:
+        uptime_seconds = 0
+
+    try:
+        load_avg = os.getloadavg()
+    except Exception:
+        load_avg = (0.0, 0.0, 0.0)
+
+    return {
+        "timestamp": datetime.utcnow().isoformat(),
+        "uptime_seconds": uptime_seconds,
+        "cpu": {
+            "usage_percent": cpu_pct,
+            "cores": int(os.cpu_count() or 1),
+            "load_avg_1m": round(float(load_avg[0] or 0.0), 3),
+            "load_avg_5m": round(float(load_avg[1] or 0.0), 3),
+            "load_avg_15m": round(float(load_avg[2] or 0.0), 3),
+        },
+        "memory": {
+            "total_bytes": mem_total,
+            "used_bytes": mem_used,
+            "available_bytes": mem_available,
+            "usage_percent": mem_pct,
+            "swap_total_bytes": swap_total,
+            "swap_used_bytes": swap_used,
+            "swap_free_bytes": swap_free,
+        },
+        "disk": {
+            "mount": "/",
+            "total_bytes": disk_total,
+            "used_bytes": disk_used,
+            "free_bytes": disk_free,
+            "usage_percent": disk_pct,
+        },
+        "network": {
+            "rx_bytes_total": int(net_rx),
+            "tx_bytes_total": int(net_tx),
+            "rx_bytes_per_sec": round(float(rx_rate), 2),
+            "tx_bytes_per_sec": round(float(tx_rate), 2),
+        },
+    }
+
+
+@router.get("/admin/server/metrics", response_model=dict[str, Any])
+def admin_server_metrics(_: User = Depends(get_admin_user)):
+    return _collect_server_metrics()
 
 
 @router.post("/admin/users/password", response_model=MessageOut)
@@ -4986,6 +5312,7 @@ def admin_audit(
 SOCIAL_GAMES: dict[str, str] = {
     "snake": "Змейка",
     "tetris": "Тетрис",
+    "2048": "2048",
 }
 
 
@@ -6061,6 +6388,7 @@ def social_calendar_events(
     db: Session = Depends(get_db),
 ):
     ensure_module_enabled(db, user, "social_hub")
+    actor_key, _, _ = _social_actor_identity(db, user)
     left = _social_parse_dt(date_from) or (datetime.utcnow() - timedelta(days=180))
     right = _social_parse_dt(date_to) or (datetime.utcnow() + timedelta(days=365))
     rows = db.scalars(
@@ -6069,6 +6397,7 @@ def social_calendar_events(
             SocialCalendarEvent.user_id == user.id,
             SocialCalendarEvent.start_at >= left,
             SocialCalendarEvent.start_at <= right,
+            or_(SocialCalendarEvent.is_public.is_(True), SocialCalendarEvent.actor_key == actor_key),
         )
         .order_by(SocialCalendarEvent.start_at.asc(), SocialCalendarEvent.id.asc())
     ).all()
@@ -6080,6 +6409,7 @@ def social_calendar_events(
             start_at=row.start_at.isoformat() if row.start_at else "",
             end_at=row.end_at.isoformat() if row.end_at else None,
             created_at=row.created_at.isoformat() if row.created_at else "",
+            is_public=bool(row.is_public),
         )
         for row in rows
     ]
@@ -6100,6 +6430,7 @@ def social_calendar_create_event(
     row = SocialCalendarEvent(
         user_id=user.id,
         actor_key=actor_key,
+        is_public=bool(payload.is_public),
         title=str(payload.title or "").strip()[:255],
         details=str(payload.details or "")[:5000],
         start_at=start_at,
@@ -6114,6 +6445,7 @@ def social_calendar_create_event(
         start_at=row.start_at.isoformat() if row.start_at else "",
         end_at=row.end_at.isoformat() if row.end_at else None,
         created_at=row.created_at.isoformat() if row.created_at else "",
+        is_public=bool(row.is_public),
     )
 
 
@@ -6125,9 +6457,12 @@ def social_calendar_update_event(
     db: Session = Depends(get_db),
 ):
     ensure_module_enabled(db, user, "social_hub")
+    actor_key, _, _ = _social_actor_identity(db, user)
     row = db.get(SocialCalendarEvent, event_id)
     if not row or int(row.user_id) != int(user.id):
         raise HTTPException(status_code=404, detail="Событие не найдено")
+    if str(row.actor_key or "") != actor_key and not _actor_is_owner(user):
+        raise HTTPException(status_code=403, detail="Нет доступа к событию")
     start_at = _social_parse_dt(payload.start_at)
     if not start_at:
         raise HTTPException(status_code=400, detail="Некорректная дата начала")
@@ -6135,6 +6470,7 @@ def social_calendar_update_event(
     row.details = str(payload.details or "")[:5000]
     row.start_at = start_at
     row.end_at = _social_parse_dt(payload.end_at)
+    row.is_public = bool(payload.is_public)
     db.commit()
     return SocialCalendarEventOut(
         id=int(row.id),
@@ -6143,6 +6479,7 @@ def social_calendar_update_event(
         start_at=row.start_at.isoformat() if row.start_at else "",
         end_at=row.end_at.isoformat() if row.end_at else None,
         created_at=row.created_at.isoformat() if row.created_at else "",
+        is_public=bool(row.is_public),
     )
 
 
@@ -6153,9 +6490,12 @@ def social_calendar_delete_event(
     db: Session = Depends(get_db),
 ):
     ensure_module_enabled(db, user, "social_hub")
+    actor_key, _, _ = _social_actor_identity(db, user)
     row = db.get(SocialCalendarEvent, event_id)
     if not row or int(row.user_id) != int(user.id):
         raise HTTPException(status_code=404, detail="Событие не найдено")
+    if str(row.actor_key or "") != actor_key and not _actor_is_owner(user):
+        raise HTTPException(status_code=403, detail="Нет доступа к событию")
     db.delete(row)
     db.commit()
     return MessageOut(message="Событие удалено")
@@ -7696,44 +8036,37 @@ def _resolve_user_ai_runtime(db: Session, user_id: int) -> dict[str, Any]:
         mode = _normalize_ai_mode(str(global_default.get("mode") or "builtin"))
         service_id = _to_int_safe(global_default.get("service_id")) or None
 
-    service_row: AiServiceAccount | None = None
-    if mode == "global" and service_id:
-        candidate = db.get(AiServiceAccount, service_id)
-        if candidate and candidate.user_id is None and candidate.is_active:
-            service_row = candidate
-    elif mode == "user" and service_id:
-        candidate = db.get(AiServiceAccount, service_id)
-        if candidate and candidate.user_id == user_id and candidate.is_active:
-            service_row = candidate
-
-    if mode != "builtin" and not service_row:
-        mode = "builtin"
-        service_id = None
-
-    if mode == "builtin" and not str(settings.openai_api_key or "").strip():
-        # If built-in key is absent, transparently fallback to latest active global service.
-        fallback_global = db.scalar(
-            select(AiServiceAccount)
-            .where(
-                AiServiceAccount.user_id.is_(None),
-                AiServiceAccount.is_active.is_(True),
-            )
-            .order_by(AiServiceAccount.id.desc())
+    global_rows = db.scalars(
+        select(AiServiceAccount)
+        .where(
+            AiServiceAccount.user_id.is_(None),
+            AiServiceAccount.is_active.is_(True),
         )
-        if fallback_global and str(fallback_global.api_key or "").strip():
-            fallback_provider = fallback_global.provider or "openai"
-            return {
-                "mode": "global",
-                "service_id": fallback_global.id,
-                "service_name": fallback_global.name or f"AI #{fallback_global.id}",
-                "provider": fallback_provider,
-                "api_key": fallback_global.api_key or "",
-                "model": _sanitize_ai_service_model(fallback_global.model or "", provider=fallback_provider),
-                "base_url": fallback_global.base_url or "",
-                "source": "auto_global_fallback",
-            }
+        .order_by(AiServiceAccount.id.desc())
+    ).all()
+    user_rows = db.scalars(
+        select(AiServiceAccount)
+        .where(
+            AiServiceAccount.user_id == user_id,
+            AiServiceAccount.is_active.is_(True),
+        )
+        .order_by(AiServiceAccount.id.desc())
+    ).all()
 
-    if mode == "builtin":
+    def _row_to_runtime(row: AiServiceAccount, runtime_mode: str) -> dict[str, Any]:
+        resolved_provider = row.provider or "openai"
+        return {
+            "mode": runtime_mode,
+            "service_id": row.id,
+            "service_name": row.name or f"AI #{row.id}",
+            "provider": resolved_provider,
+            "api_key": row.api_key or "",
+            "model": _sanitize_ai_service_model(row.model or "", provider=resolved_provider),
+            "base_url": row.base_url or "",
+            "source": "service",
+        }
+
+    def _builtin_runtime() -> dict[str, Any]:
         return {
             "mode": "builtin",
             "service_id": None,
@@ -7744,28 +8077,62 @@ def _resolve_user_ai_runtime(db: Session, user_id: int) -> dict[str, Any]:
             "base_url": "",
             "source": "builtin",
         }
-    if not service_row:
-        return {
-            "mode": "builtin",
-            "service_id": None,
-            "service_name": "Built-in OpenAI",
-            "provider": "openai",
-            "api_key": settings.openai_api_key or "",
-            "model": _sanitize_ai_service_model(settings.openai_model or "", provider="openai"),
-            "base_url": "",
-            "source": "builtin",
-        }
-    resolved_provider = service_row.provider or "openai"
-    return {
-        "mode": mode,
-        "service_id": service_row.id,
-        "service_name": service_row.name or f"AI #{service_row.id}",
-        "provider": resolved_provider,
-        "api_key": service_row.api_key or "",
-        "model": _sanitize_ai_service_model(service_row.model or "", provider=resolved_provider),
-        "base_url": service_row.base_url or "",
-        "source": "service",
-    }
+
+    ai_chain: list[dict[str, Any]] = []
+    selected_row: AiServiceAccount | None = None
+    if mode == "global" and service_id:
+        selected_row = next((x for x in global_rows if int(x.id or 0) == int(service_id)), None)
+    elif mode == "user" and service_id:
+        selected_row = next((x for x in user_rows if int(x.id or 0) == int(service_id)), None)
+
+    if mode == "user" and selected_row:
+        ai_chain.append(_row_to_runtime(selected_row, "user"))
+        for row in user_rows:
+            if selected_row and int(row.id or 0) == int(selected_row.id or 0):
+                continue
+            ai_chain.append(_row_to_runtime(row, "user"))
+        for row in global_rows:
+            ai_chain.append(_row_to_runtime(row, "global"))
+    elif mode == "global" and selected_row:
+        ai_chain.append(_row_to_runtime(selected_row, "global"))
+        for row in global_rows:
+            if selected_row and int(row.id or 0) == int(selected_row.id or 0):
+                continue
+            ai_chain.append(_row_to_runtime(row, "global"))
+    else:
+        # Built-in as primary (if configured), then global fallbacks.
+        builtin = _builtin_runtime()
+        if str(builtin.get("api_key") or "").strip():
+            ai_chain.append(builtin)
+        for row in global_rows:
+            ai_chain.append(_row_to_runtime(row, "global"))
+
+    # If selected mode has no valid service, fallback to available chain.
+    if not ai_chain:
+        builtin = _builtin_runtime()
+        if str(builtin.get("api_key") or "").strip():
+            ai_chain.append(builtin)
+
+    # Ensure builtin is always the last fallback when configured.
+    builtin = _builtin_runtime()
+    builtin_token = str(builtin.get("api_key") or "").strip()
+    if builtin_token:
+        has_builtin = any(str(x.get("mode") or "") == "builtin" for x in ai_chain)
+        if not has_builtin:
+            ai_chain.append(builtin)
+
+    if not ai_chain:
+        # Keep shape stable even when no credentials are configured.
+        empty_builtin = _builtin_runtime()
+        empty_builtin["api_key"] = ""
+        ai_chain = [empty_builtin]
+
+    primary = dict(ai_chain[0])
+    primary["fallback_chain"] = [dict(x) for x in ai_chain[1:]]
+    primary["ai_chain"] = [dict(x) for x in ai_chain]
+    if str(primary.get("mode") or "") == "global" and mode == "builtin":
+        primary["source"] = "auto_global_fallback"
+    return primary
 
 
 def _build_ai_profile_payload(db: Session, user_id: int) -> AiProfileOut:
@@ -7782,6 +8149,18 @@ def _build_ai_profile_payload(db: Session, user_id: int) -> AiProfileOut:
         .order_by(AiServiceAccount.id.desc())
     ).all()
     runtime = _resolve_user_ai_runtime(db, user_id)
+    runtime_chain = [x for x in (runtime.get("ai_chain") or []) if isinstance(x, dict)]
+
+    def _runtime_to_effective(row: dict[str, Any]) -> AiEffectiveOut:
+        return AiEffectiveOut(
+            mode=str(row.get("mode") or "builtin"),
+            service_id=_to_int_safe(row.get("service_id")) or None,
+            service_name=str(row.get("service_name") or ""),
+            provider=str(row.get("provider") or "builtin"),
+            model=str(row.get("model") or ""),
+            source=str(row.get("source") or "service"),
+        )
+
     return AiProfileOut(
         selection=AiSelectionOut(
             use_global_default=bool(pref.use_global_default),
@@ -7801,6 +8180,7 @@ def _build_ai_profile_payload(db: Session, user_id: int) -> AiProfileOut:
             model=str(runtime.get("model") or ""),
             source=str(runtime.get("source") or "builtin"),
         ),
+        effective_chain=[_runtime_to_effective(x) for x in runtime_chain],
         user_services=[_ai_service_to_out(x, scope="user") for x in user_services],
         global_services=[_ai_service_to_out(x, scope="global") for x in global_services],
     )

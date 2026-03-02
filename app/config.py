@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "SEO WIBE"
     secret_key: str = ""
-    token_expire_minutes: int = 60 * 24
+    token_expire_minutes: int = 60 * 24 * 3
     database_url: str = "sqlite:///./seo_wibe.db"
     admin_emails: str = "makc200690@gmail.com"
     openai_api_key: str = ""

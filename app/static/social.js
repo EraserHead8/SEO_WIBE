@@ -8,12 +8,15 @@ let socialState = {
   chatActors: [],
   currentThreadId: 0,
   chatMessages: [],
+  chatOldestId: 0,
+  chatHasMore: true,
   chatRefreshTimer: null,
   actors: [],
   projects: [],
   tasks: [],
   calendarEvents: [],
   calendarDate: new Date(),
+  calendarSelectedDay: "",
   notes: [],
   currentNoteId: 0,
   noteSaveTimer: null,
@@ -115,11 +118,14 @@ function resetSocialState() {
     chatActors: [],
     currentThreadId: 0,
     chatMessages: [],
+    chatOldestId: 0,
+    chatHasMore: true,
     actors: [],
     projects: [],
     tasks: [],
     calendarEvents: [],
     calendarDate: new Date(),
+    calendarSelectedDay: "",
     notes: [],
     currentNoteId: 0,
     noteSaveTimer: null,
@@ -224,9 +230,10 @@ function socialRenderGames() {
     : [
       { code: "snake", title: "Змейка" },
       { code: "tetris", title: "Тетрис" },
+      { code: "2048", title: "2048" },
     ];
   host.innerHTML = games.map((game) => {
-    const icon = game.code === "snake" ? "🐍" : "🧩";
+    const icon = game.code === "snake" ? "🐍" : (game.code === "tetris" ? "🧩" : "🔢");
     return `
       <button class="social-game-card" type="button" ondblclick="socialOpenGameMenu('${escapeHtml(game.code)}')" onclick="socialOpenGameMenu('${escapeHtml(game.code)}')">
         <span class="social-game-icon" aria-hidden="true">${icon}</span>
@@ -243,7 +250,9 @@ async function socialOpenGameMenu(gameCode) {
   socialState.currentGameCode = code;
   const lb = await socialRequest(`/api/social/games/leaderboard?game_code=${encodeURIComponent(code)}&limit=10`).catch(() => ({ my_best: 0, my_rank: null, top: [] }));
   socialState.gamesLeaderboardCache.set(code, lb || {});
-  const title = code === "snake" ? tr("Змейка", "Snake") : tr("Тетрис", "Tetris");
+  const title = code === "snake"
+    ? tr("Змейка", "Snake")
+    : (code === "tetris" ? tr("Тетрис", "Tetris") : "2048");
   const myBest = Number(lb?.my_best || 0);
   const myRank = lb?.my_rank ? `#${lb.my_rank}` : "—";
   socialOpenModal(
@@ -263,11 +272,14 @@ async function socialOpenGameMenu(gameCode) {
 
 function socialShowGameTips(code) {
   const safe = String(code || "").toLowerCase();
-  const isSnake = safe === "snake";
-  const title = isSnake ? tr("Как играть в Змейку", "How to play Snake") : tr("Как играть в Тетрис", "How to play Tetris");
-  const body = isSnake
+  const title = safe === "snake"
+    ? tr("Как играть в Змейку", "How to play Snake")
+    : (safe === "tetris" ? tr("Как играть в Тетрис", "How to play Tetris") : tr("Как играть в 2048", "How to play 2048"));
+  const body = safe === "snake"
     ? tr("Управление: стрелки. Ешьте еду, не врезайтесь в стену и в себя. Каждые 5 очков скорость растет.", "Controls: arrows. Eat food and avoid walls or your body. Speed increases every 5 points.")
-    : tr("Управление: ← →, ↓, ↑ поворот, пробел — быстрый сброс. Собирайте линии и набирайте очки.", "Controls: ← →, ↓, ↑ rotate, Space hard drop. Complete lines to gain score.");
+    : (safe === "tetris"
+      ? tr("Управление: ← →, ↓, ↑ поворот, пробел — быстрый сброс. Собирайте линии и набирайте очки.", "Controls: ← →, ↓, ↑ rotate, Space hard drop. Complete lines to gain score.")
+      : tr("Управление: стрелки. Совмещайте одинаковые плитки, чтобы получить 2048. Ход завершает игру, когда нет доступных ходов.", "Controls: arrows. Merge equal tiles to reach 2048. Game ends when no moves are available."));
   socialOpenModal(title, `<div class="hint">${escapeHtml(body)}</div><div class="actions"><button type="button" onclick="socialOpenGameMenu('${escapeHtml(safe)}')">${tr("Назад", "Back")}</button></div>`);
 }
 
@@ -298,7 +310,7 @@ async function socialShowLeaderboard(code) {
 
 async function socialStoreGameScore(code, score) {
   const safe = String(code || "").toLowerCase();
-  if (!["snake", "tetris"].includes(safe)) return;
+  if (!["snake", "tetris", "2048"].includes(safe)) return;
   await socialRequest("/api/social/games/score", {
     method: "POST",
     body: JSON.stringify({ game_code: safe, score: Math.max(0, Math.floor(Number(score || 0)))}),
@@ -326,14 +338,33 @@ function socialGameRetry() {
 
 function socialStartGame(code) {
   const safe = String(code || "").toLowerCase();
-  const title = safe === "snake" ? tr("Змейка", "Snake") : tr("Тетрис", "Tetris");
+  const title = safe === "snake"
+    ? tr("Змейка", "Snake")
+    : (safe === "tetris" ? tr("Тетрис", "Tetris") : "2048");
+  const hint = safe === "snake"
+    ? tr("Управление: стрелки. Ешьте еду и не врезайтесь.", "Controls: arrows. Eat food and avoid collisions.")
+    : (safe === "tetris"
+      ? tr("Управление: ← →, ↓, ↑ поворот, пробел — быстрый сброс.", "Controls: ← →, ↓, ↑ rotate, Space hard drop.")
+      : tr("Управление: стрелки. Совмещайте одинаковые плитки.", "Controls: arrows. Merge equal tiles."));
+  const controls = safe === "tetris"
+    ? `
+      <div class="social-game-controls">
+        <button type="button" onclick="socialGameControl('left')">←</button>
+        <button type="button" onclick="socialGameControl('right')">→</button>
+        <button type="button" onclick="socialGameControl('down')">↓</button>
+        <button type="button" onclick="socialGameControl('rotate')">${tr("Поворот", "Rotate")}</button>
+        <button type="button" onclick="socialGameControl('drop')">${tr("Сброс", "Drop")}</button>
+      </div>
+    `
+    : "";
   socialOpenModal(
     title,
     `
       <div class="social-game-wrap">
-        <div class="hint">${tr("Управление: стрелки, Space — пауза/ускорение в зависимости от игры.", "Controls: arrows, Space for pause/hard-drop depending on game.")}</div>
+        <div class="hint">${escapeHtml(hint)}</div>
         <canvas id="socialGameCanvas" width="420" height="620"></canvas>
         <div id="socialGameInfo" class="hint">${tr("Счет", "Score")}: 0</div>
+        ${controls}
       </div>
     `
   );
@@ -341,7 +372,18 @@ function socialStartGame(code) {
     socialState.activeGameRunner.stop();
   }
   if (safe === "snake") socialState.activeGameRunner = socialRunSnake();
-  else socialState.activeGameRunner = socialRunTetris();
+  else if (safe === "tetris") socialState.activeGameRunner = socialRunTetris();
+  else socialState.activeGameRunner = socialRun2048();
+}
+
+function socialGameControl(action) {
+  const runner = socialState.activeGameRunner;
+  if (!runner) return;
+  if (action === "left" && typeof runner.moveLeft === "function") runner.moveLeft();
+  if (action === "right" && typeof runner.moveRight === "function") runner.moveRight();
+  if (action === "down" && typeof runner.moveDown === "function") runner.moveDown();
+  if (action === "rotate" && typeof runner.rotate === "function") runner.rotate();
+  if (action === "drop" && typeof runner.hardDrop === "function") runner.hardDrop();
 }
 
 function socialRunSnake() {
@@ -419,6 +461,10 @@ function socialRunSnake() {
 
   function onKey(e) {
     const k = e.key;
+    if (k.startsWith("Arrow")) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (k === "ArrowUp" && dir.y !== 1) nextDir = { x: 0, y: -1 };
     if (k === "ArrowDown" && dir.y !== -1) nextDir = { x: 0, y: 1 };
     if (k === "ArrowLeft" && dir.x !== 1) nextDir = { x: -1, y: 0 };
@@ -573,21 +619,48 @@ function socialRunTetris() {
     current.y -= 1;
   }
 
+  function moveLeft() {
+    const nextX = Math.max(0, current.x - 1);
+    const dx = nextX - current.x;
+    if (!dx) return;
+    current.x = nextX;
+    if (collides(current)) current.x -= dx;
+  }
+
+  function moveRight() {
+    const maxX = cols - current.matrix[0].length;
+    const nextX = Math.min(maxX, current.x + 1);
+    const dx = nextX - current.x;
+    if (!dx) return;
+    current.x = nextX;
+    if (collides(current)) current.x -= dx;
+  }
+
+  function moveDown() {
+    current.y += 1;
+    if (collides(current)) current.y -= 1;
+  }
+
+  function rotateCurrent() {
+    const prev = current.matrix;
+    current.matrix = rotate(current.matrix);
+    if (collides(current)) current.matrix = prev;
+  }
+
   function onKey(e) {
     if (!running) return;
+    if (e.key.startsWith("Arrow") || e.key === " ") {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (e.key === "ArrowLeft") {
-      current.x -= 1;
-      if (collides(current)) current.x += 1;
+      moveLeft();
     } else if (e.key === "ArrowRight") {
-      current.x += 1;
-      if (collides(current)) current.x -= 1;
+      moveRight();
     } else if (e.key === "ArrowDown") {
-      current.y += 1;
-      if (collides(current)) current.y -= 1;
+      moveDown();
     } else if (e.key === "ArrowUp") {
-      const prev = current.matrix;
-      current.matrix = rotate(current.matrix);
-      if (collides(current)) current.matrix = prev;
+      rotateCurrent();
     } else if (e.key === " ") {
       hardDrop();
     } else if (e.key === "Escape") {
@@ -614,6 +687,158 @@ function socialRunTetris() {
     stop() {
       running = false;
       if (timer) clearTimeout(timer);
+      document.removeEventListener("keydown", onKey);
+    },
+    moveLeft,
+    moveRight,
+    moveDown,
+    rotate: rotateCurrent,
+    hardDrop,
+  };
+}
+
+function socialRun2048() {
+  const canvas = document.getElementById("socialGameCanvas");
+  const info = document.getElementById("socialGameInfo");
+  if (!canvas || !info) return { stop() {} };
+  const ctx = canvas.getContext("2d");
+  const size = 4;
+  const cell = Math.floor(Math.min(canvas.width, canvas.height) / size);
+  const offsetX = Math.floor((canvas.width - cell * size) / 2);
+  const offsetY = Math.floor((canvas.height - cell * size) / 2);
+  let board = Array.from({ length: size }, () => Array(size).fill(0));
+  let score = 0;
+  let running = true;
+
+  function spawnTile() {
+    const empty = [];
+    for (let y = 0; y < size; y += 1) {
+      for (let x = 0; x < size; x += 1) {
+        if (!board[y][x]) empty.push([x, y]);
+      }
+    }
+    if (!empty.length) return;
+    const [x, y] = empty[Math.floor(Math.random() * empty.length)];
+    board[y][x] = Math.random() < 0.9 ? 2 : 4;
+  }
+
+  function canMove() {
+    for (let y = 0; y < size; y += 1) {
+      for (let x = 0; x < size; x += 1) {
+        if (!board[y][x]) return true;
+        const v = board[y][x];
+        if (x < size - 1 && board[y][x + 1] === v) return true;
+        if (y < size - 1 && board[y + 1][x] === v) return true;
+      }
+    }
+    return false;
+  }
+
+  function slide(row) {
+    const filtered = row.filter((v) => v);
+    const merged = [];
+    let i = 0;
+    while (i < filtered.length) {
+      if (filtered[i] && filtered[i] === filtered[i + 1]) {
+        const next = filtered[i] * 2;
+        score += next;
+        merged.push(next);
+        i += 2;
+      } else {
+        merged.push(filtered[i]);
+        i += 1;
+      }
+    }
+    while (merged.length < size) merged.push(0);
+    return merged;
+  }
+
+  function move(dir) {
+    const prev = board.map((r) => r.slice());
+    if (dir === "left") {
+      board = board.map((row) => slide(row));
+    } else if (dir === "right") {
+      board = board.map((row) => slide([...row].reverse()).reverse());
+    } else if (dir === "up") {
+      const cols = Array.from({ length: size }, (_, x) => slide(board.map((r) => r[x])));
+      board = board.map((_, y) => cols.map((c) => c[y]));
+    } else if (dir === "down") {
+      const cols = Array.from({ length: size }, (_, x) => slide(board.map((r) => r[x]).reverse()).reverse());
+      board = board.map((_, y) => cols.map((c) => c[y]));
+    }
+    const changed = board.some((row, y) => row.some((val, x) => val !== prev[y][x]));
+    if (changed) spawnTile();
+    draw();
+    if (!canMove()) {
+      running = false;
+      socialStoreGameScore("2048", score).catch(() => null);
+      socialOpenModal("2048", socialGameOverlay(tr("Игра окончена", "Game over"), score, () => socialStartGame("2048")));
+    }
+  }
+
+  function drawCell(x, y, value) {
+    const colors = {
+      0: "#111b33",
+      2: "#f5f3ff",
+      4: "#dbeafe",
+      8: "#bfdbfe",
+      16: "#93c5fd",
+      32: "#60a5fa",
+      64: "#3b82f6",
+      128: "#f59e0b",
+      256: "#f97316",
+      512: "#ef4444",
+      1024: "#ec4899",
+      2048: "#a855f7",
+    };
+    ctx.fillStyle = colors[value] || "#1f2937";
+    ctx.fillRect(offsetX + x * cell + 4, offsetY + y * cell + 4, cell - 8, cell - 8);
+    if (value) {
+      ctx.fillStyle = value <= 4 ? "#0f172a" : "#f8fafc";
+      ctx.font = `bold ${Math.floor(cell * 0.35)}px 'Unbounded', sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(value), offsetX + x * cell + cell / 2, offsetY + y * cell + cell / 2);
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#0f1731";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    for (let y = 0; y < size; y += 1) {
+      for (let x = 0; x < size; x += 1) {
+        drawCell(x, y, board[y][x]);
+      }
+    }
+    info.textContent = `${tr("Счет", "Score")}: ${score}`;
+  }
+
+  function onKey(e) {
+    if (!running) return;
+    if (e.key.startsWith("Arrow")) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (e.key === "ArrowLeft") move("left");
+    if (e.key === "ArrowRight") move("right");
+    if (e.key === "ArrowUp") move("up");
+    if (e.key === "ArrowDown") move("down");
+    if (e.key === "Escape") {
+      running = false;
+      socialStoreGameScore("2048", score).catch(() => null);
+      socialOpenGameMenu("2048");
+    }
+  }
+
+  document.addEventListener("keydown", onKey);
+  spawnTile();
+  spawnTile();
+  draw();
+
+  return {
+    stop() {
+      running = false;
       document.removeEventListener("keydown", onKey);
     },
   };
@@ -663,21 +888,48 @@ async function socialSelectThread(threadId) {
 async function socialLoadMessages(threadId, opts = {}) {
   const id = Number(threadId || socialState.currentThreadId || 0);
   if (!id) return;
-  const rows = await socialRequest(`/api/social/chat/messages/${id}?limit=80`).catch((e) => {
+  const beforeId = Number(opts.beforeId || 0);
+  const limit = Number(opts.limit || 80);
+  const host = document.getElementById("socialChatMessages");
+  const prevScrollHeight = host ? host.scrollHeight : 0;
+  const prevScrollTop = host ? host.scrollTop : 0;
+  const atBottom = host ? (host.scrollHeight - host.scrollTop - host.clientHeight < 40) : true;
+  const rows = await socialRequest(`/api/social/chat/messages/${id}?limit=${limit}${beforeId ? `&before_id=${beforeId}` : ""}`).catch((e) => {
     if (!opts.silent && e?.message) alert(e.message);
     return null;
   });
   if (!Array.isArray(rows)) return;
-  socialState.chatMessages = rows;
-  const host = document.getElementById("socialChatMessages");
+  if (beforeId) {
+    socialState.chatMessages = [...rows, ...(socialState.chatMessages || [])];
+  } else {
+    socialState.chatMessages = rows;
+  }
+  socialState.chatOldestId = socialState.chatMessages.length ? Number(socialState.chatMessages[0].id || 0) : 0;
+  socialState.chatHasMore = rows.length >= limit;
   if (!host) return;
-  host.innerHTML = rows.map((msg) => `
-    <div class="social-msg ${msg.is_mine ? "mine" : ""}">
-      <div class="social-msg-head"><b>${escapeHtml(msg.sender_nick || "-")}</b><small>${escapeHtml((msg.created_at || "").slice(0, 16).replace("T", " "))}</small></div>
-      <div class="social-msg-text">${escapeHtml(msg.text || "")}</div>
-    </div>
-  `).join("");
-  host.scrollTop = host.scrollHeight;
+  const loadMoreBtn = socialState.chatHasMore
+    ? `<button class="btn-secondary social-chat-loadmore" type="button" onclick="socialLoadOlderMessages()">${tr("Загрузить раньше", "Load earlier")}</button>`
+    : `<div class="hint">${tr("Начало чата", "Start of chat")}</div>`;
+  host.innerHTML = `
+    <div class="social-chat-load">${loadMoreBtn}</div>
+    ${socialState.chatMessages.map((msg) => `
+      <div class="social-msg ${msg.is_mine ? "mine" : ""}">
+        <div class="social-msg-head"><b>${escapeHtml(msg.sender_nick || "-")}</b><small>${escapeHtml((msg.created_at || "").slice(0, 16).replace("T", " "))}</small></div>
+        <div class="social-msg-text">${escapeHtml(msg.text || "")}</div>
+      </div>
+    `).join("")}
+  `;
+  if (beforeId) {
+    const nextScroll = host.scrollHeight - prevScrollHeight + prevScrollTop;
+    host.scrollTop = Math.max(0, nextScroll);
+  } else if (atBottom) {
+    host.scrollTop = host.scrollHeight;
+  }
+}
+
+function socialLoadOlderMessages() {
+  if (!socialState.chatOldestId || !socialState.chatHasMore) return;
+  socialLoadMessages(socialState.currentThreadId, { beforeId: socialState.chatOldestId, append: true, silent: true });
 }
 
 async function socialSendMessage() {
@@ -789,36 +1041,44 @@ async function socialLoadTasks() {
 function socialRenderTasks() {
   const host = document.getElementById("socialTasksBoard");
   if (!host) return;
-  const cols = [
-    { key: "todo", title: tr("Новые", "To do") },
-    { key: "in_progress", title: tr("В работе", "In progress") },
-    { key: "done", title: tr("Готово", "Done") },
-  ];
-  host.innerHTML = cols.map((col) => {
-    const items = socialState.tasks.filter((x) => String(x.status || "") === col.key);
-    return `
-      <section class="social-task-col">
-        <h4>${escapeHtml(col.title)} <span>${items.length}</span></h4>
-        <div class="social-task-col-body">
-          ${items.map((task) => `
-            <article class="social-task-card" ondblclick="socialOpenTaskModal(${Number(task.id || 0)})">
-              <div class="social-task-card-top">
+  const rows = socialState.tasks || [];
+  if (!rows.length) {
+    host.innerHTML = `<div class="hint">${tr("Задач пока нет", "No tasks yet")}</div>`;
+    return;
+  }
+  host.innerHTML = `
+    <div class="social-task-list">
+      ${rows.map((task) => {
+        const status = String(task.status || "todo");
+        const statusLabel = status === "todo"
+          ? tr("Новые", "To do")
+          : (status === "in_progress" ? tr("В работе", "In progress") : tr("Готово", "Done"));
+        const priority = String(task.priority || "normal");
+        const due = task.due_date ? String(task.due_date).slice(0, 10) : "";
+        const project = task.project_title || tr("Без проекта", "No project");
+        return `
+          <article class="social-task-row" ondblclick="socialOpenTaskModal(${Number(task.id || 0)})">
+            <div class="social-task-main">
+              <div class="social-task-title">
                 <b>${escapeHtml(task.title || "-")}</b>
-                <span class="social-priority ${escapeHtml(task.priority || "normal")}">${escapeHtml(task.priority || "normal")}</span>
+                <span class="social-status ${escapeHtml(status)}">${escapeHtml(statusLabel)}</span>
+                <span class="social-priority ${escapeHtml(priority)}">${escapeHtml(priority)}</span>
               </div>
-              <div class="hint">${escapeHtml(task.project_title || tr("Без проекта", "No project"))}</div>
-              <div class="hint">${tr("Исполнитель", "Assignee")}: <b>${escapeHtml(task.assignee_nick || "-")}</b></div>
-              <div class="hint">${task.due_date ? `${tr("Дедлайн", "Deadline")}: ${escapeHtml(task.due_date.slice(0, 10))}` : tr("Без дедлайна", "No deadline")}</div>
-              <div class="social-task-card-actions">
-                <button type="button" onclick="socialOpenTaskModal(${Number(task.id || 0)})">${tr("Открыть", "Open")}</button>
-                ${col.key !== "done" ? `<button class="btn-secondary" type="button" onclick="socialQuickDone(${Number(task.id || 0)})">${tr("Закрыть", "Done")}</button>` : ""}
+              <div class="social-task-meta">
+                <span>${escapeHtml(project)}</span>
+                <span>${tr("Исполнитель", "Assignee")}: <b>${escapeHtml(task.assignee_nick || "-")}</b></span>
+                <span>${due ? `${tr("Дедлайн", "Deadline")}: ${escapeHtml(due)}` : tr("Без дедлайна", "No deadline")}</span>
               </div>
-            </article>
-          `).join("") || `<div class="hint">${tr("Пусто", "Empty")}</div>`}
-        </div>
-      </section>
-    `;
-  }).join("");
+            </div>
+            <div class="social-task-actions">
+              <button type="button" onclick="socialOpenTaskModal(${Number(task.id || 0)})">${tr("Открыть", "Open")}</button>
+              ${status !== "done" ? `<button class="btn-secondary" type="button" onclick="socialQuickDone(${Number(task.id || 0)})">${tr("Закрыть", "Done")}</button>` : ""}
+            </div>
+          </article>
+        `;
+      }).join("")}
+    </div>
+  `;
 }
 
 function socialBuildTaskForm(task = null) {
@@ -949,6 +1209,18 @@ async function socialLoadCalendar() {
   socialRenderCalendar();
 }
 
+function socialShiftCalendar(deltaMonths = 0) {
+  const delta = Number(deltaMonths || 0);
+  if (!Number.isFinite(delta) || !delta) return;
+  const d = socialState.calendarDate;
+  socialState.calendarDate = new Date(d.getFullYear(), d.getMonth() + delta, 1);
+  const monthInput = document.getElementById("socialCalendarMonth");
+  if (monthInput) {
+    monthInput.value = `${socialState.calendarDate.getFullYear()}-${String(socialState.calendarDate.getMonth() + 1).padStart(2, "0")}`;
+  }
+  socialLoadCalendar();
+}
+
 function socialRenderCalendar() {
   const grid = document.getElementById("socialCalendarGrid");
   const list = document.getElementById("socialCalendarEvents");
@@ -973,29 +1245,47 @@ function socialRenderCalendar() {
     const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     const eventsCount = socialState.calendarEvents.filter((e) => String(e.start_at || "").slice(0, 10) === key).length;
     const tasksCount = (tasksByDay.get(key) || []).length;
-    html += `<button class="social-day" type="button" onclick="socialShowDay('${key}')"><b>${day}</b><small>${eventsCount} ${tr("соб.", "ev.")} • ${tasksCount} ${tr("задач", "tasks")}</small></button>`;
+    const active = socialState.calendarSelectedDay === key ? "active" : "";
+    const hasEvents = eventsCount > 0 ? "has-event" : "";
+    const hasTasks = tasksCount > 0 ? "has-task" : "";
+    html += `<button class="social-day ${active} ${hasEvents} ${hasTasks}" type="button" onclick="socialShowDay('${key}')"><b>${day}</b><small>${eventsCount} ${tr("соб.", "ev.")} • ${tasksCount} ${tr("задач", "tasks")}</small></button>`;
   }
   html += `</div>`;
   grid.innerHTML = html;
-  socialShowDay(`${year}-${String(month + 1).padStart(2, "0")}-01`);
+  const fallback = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+  const inMonth = String(socialState.calendarSelectedDay || "").startsWith(`${year}-${String(month + 1).padStart(2, "0")}-`);
+  socialShowDay(inMonth ? socialState.calendarSelectedDay : fallback);
 }
 
 function socialShowDay(dayKey) {
   const list = document.getElementById("socialCalendarEvents");
   if (!list) return;
+  socialState.calendarSelectedDay = dayKey;
   const events = socialState.calendarEvents.filter((e) => String(e.start_at || "").slice(0, 10) === dayKey);
   const tasks = (socialState.tasks || []).filter((t) => t.due_date && String(t.due_date).slice(0, 10) === dayKey);
   list.innerHTML = `
     <h4>${escapeHtml(dayKey)}</h4>
     <div class="social-day-events">
       <h5>${tr("События", "Events")}</h5>
-      ${events.length ? events.map((e) => `<div class="social-day-item"><b>${escapeHtml(e.title || "-")}</b><small>${escapeHtml(String(e.start_at || "").slice(11,16))}</small><div>${escapeHtml(e.details || "")}</div><div class="actions"><button type="button" onclick="socialOpenCalendarModal(${Number(e.id)})">${tr("Изменить", "Edit")}</button><button class="btn-danger" type="button" onclick="socialDeleteEvent(${Number(e.id)})">${tr("Удалить", "Delete")}</button></div></div>`).join("") : `<div class="hint">${tr("Нет событий", "No events")}</div>`}
+      ${events.length ? events.map((e) => `<div class="social-day-item"><b>${escapeHtml(e.title || "-")}</b><small>${escapeHtml(String(e.start_at || "").slice(11,16))}${e.is_public ? ` • ${escapeHtml(tr("Общее", "Public"))}` : ` • ${escapeHtml(tr("Личное", "Private"))}`}</small><div>${escapeHtml(e.details || "")}</div><div class="actions"><button type="button" onclick="socialOpenCalendarModal(${Number(e.id)})">${tr("Изменить", "Edit")}</button><button class="btn-danger" type="button" onclick="socialDeleteEvent(${Number(e.id)})">${tr("Удалить", "Delete")}</button></div></div>`).join("") : `<div class="hint">${tr("Нет событий", "No events")}</div>`}
     </div>
     <div class="social-day-events">
       <h5>${tr("Дедлайны задач", "Task deadlines")}</h5>
       ${tasks.length ? tasks.map((t) => `<div class="social-day-item"><b>${escapeHtml(t.title || "-")}</b><small>${escapeHtml(t.assignee_nick || "-")}</small><div>${escapeHtml(t.status || "")}</div></div>`).join("") : `<div class="hint">${tr("Нет задач", "No tasks")}</div>`}
     </div>
   `;
+  const grid = document.getElementById("socialCalendarGrid");
+  if (grid) {
+    grid.querySelectorAll(".social-day").forEach((btn) => {
+      const label = btn.querySelector("b");
+      if (!label) return;
+      const day = String(label.textContent || "").padStart(2, "0");
+      const month = String(socialState.calendarDate.getMonth() + 1).padStart(2, "0");
+      const year = String(socialState.calendarDate.getFullYear());
+      const key = `${year}-${month}-${day}`;
+      btn.classList.toggle("active", key === dayKey);
+    });
+  }
 }
 
 function socialOpenCalendarModal(eventId = 0) {
@@ -1007,6 +1297,7 @@ function socialOpenCalendarModal(eventId = 0) {
         <label><span>${tr("Название", "Title")}</span><input id="socialEventTitle" value="${escapeHtml(row?.title || "")}" /></label>
         <label><span>${tr("Начало", "Start")}</span><input id="socialEventStart" type="datetime-local" value="${escapeHtml(row?.start_at ? String(row.start_at).slice(0,16) : "")}" /></label>
         <label><span>${tr("Конец", "End")}</span><input id="socialEventEnd" type="datetime-local" value="${escapeHtml(row?.end_at ? String(row.end_at).slice(0,16) : "")}" /></label>
+        <label class="check"><input id="socialEventPublic" type="checkbox" ${row?.is_public ? "checked" : ""} /> ${tr("Общее событие (видно всем)", "Public event (visible to all)")}</label>
         <label class="full"><span>${tr("Описание", "Details")}</span><textarea id="socialEventDetails" rows="4">${escapeHtml(row?.details || "")}</textarea></label>
       </div>
       <div class="actions"><button type="button" onclick="socialSaveEvent(${row ? Number(row.id) : 0})">${row ? tr("Сохранить", "Save") : tr("Создать", "Create")}</button></div>
@@ -1020,6 +1311,7 @@ async function socialSaveEvent(eventId = 0) {
     details: String(document.getElementById("socialEventDetails")?.value || "").trim(),
     start_at: String(document.getElementById("socialEventStart")?.value || "").trim(),
     end_at: String(document.getElementById("socialEventEnd")?.value || "").trim() || null,
+    is_public: Boolean(document.getElementById("socialEventPublic")?.checked),
   };
   if (!payload.title || !payload.start_at) return alert(tr("Заполните название и дату начала", "Fill title and start date"));
   const req = eventId > 0
@@ -1057,6 +1349,25 @@ function socialCalcEvaluate() {
   } catch (_) {
     out.textContent = tr("Ошибка вычисления", "Calculation error");
   }
+}
+
+function socialCalcPress(value) {
+  const input = document.getElementById("socialCalcExpr");
+  if (!input) return;
+  input.value = `${input.value || ""}${value}`;
+}
+
+function socialCalcClear() {
+  const input = document.getElementById("socialCalcExpr");
+  const out = document.getElementById("socialCalcResult");
+  if (input) input.value = "";
+  if (out) out.textContent = "-";
+}
+
+function socialCalcBackspace() {
+  const input = document.getElementById("socialCalcExpr");
+  if (!input) return;
+  input.value = String(input.value || "").slice(0, -1);
 }
 
 function socialRenderConverterOptions() {
@@ -1136,10 +1447,13 @@ function socialRenderNotesList() {
   const host = document.getElementById("socialNotesList");
   if (!host) return;
   host.innerHTML = socialState.notes.map((row) => `
-    <button class="social-note-row ${Number(row.id) === socialState.currentNoteId ? "active" : ""}" type="button" onclick="socialSelectNote(${Number(row.id)})">
-      <b>${escapeHtml(row.title || tr("Без названия", "Untitled"))}</b>
-      <small>${escapeHtml(String(row.updated_at || "").slice(0,16).replace("T", " "))}</small>
-    </button>
+    <div class="social-note-row ${Number(row.id) === socialState.currentNoteId ? "active" : ""}">
+      <button class="social-note-main" type="button" onclick="socialSelectNote(${Number(row.id)})">
+        <b>${escapeHtml(row.title || tr("Без названия", "Untitled"))}</b>
+        <small>${escapeHtml(String(row.updated_at || "").slice(0,16).replace("T", " "))}</small>
+      </button>
+      <button class="btn-secondary social-note-delete" type="button" onclick="socialDeleteNote(${Number(row.id)})">✕</button>
+    </div>
   `).join("") || `<div class="hint">${tr("Заметок пока нет", "No notes yet")}</div>`;
 }
 
@@ -1213,12 +1527,22 @@ async function socialDeleteCurrentNote() {
   await socialLoadNotes();
 }
 
+async function socialDeleteNote(noteId) {
+  const id = Number(noteId || 0);
+  if (!id) return;
+  if (!confirm(tr("Удалить заметку?", "Delete note?"))) return;
+  await socialRequest(`/api/social/notes/${id}`, { method: "DELETE" }).catch((e) => alert(e.message));
+  if (socialState.currentNoteId === id) socialState.currentNoteId = 0;
+  await socialLoadNotes();
+}
+
 window.loadSocialWorkspace = loadSocialWorkspace;
 window.switchSocialSubtab = switchSocialSubtab;
 window.socialOpenGameMenu = socialOpenGameMenu;
 window.socialShowLeaderboard = socialShowLeaderboard;
 window.socialShowGameTips = socialShowGameTips;
 window.socialStartGame = socialStartGame;
+window.socialGameControl = socialGameControl;
 window.socialCloseModal = socialCloseModal;
 window.socialGameRetry = socialGameRetry;
 window.socialOpenDirectPicker = socialOpenDirectPicker;
@@ -1226,6 +1550,7 @@ window.socialFilterDirectActors = socialFilterDirectActors;
 window.socialStartDirectChat = socialStartDirectChat;
 window.socialSelectThread = socialSelectThread;
 window.socialSendMessage = socialSendMessage;
+window.socialLoadOlderMessages = socialLoadOlderMessages;
 window.socialOpenProjectModal = socialOpenProjectModal;
 window.socialCreateProject = socialCreateProject;
 window.socialOpenTaskModal = socialOpenTaskModal;
@@ -1235,9 +1560,14 @@ window.socialQuickDone = socialQuickDone;
 window.socialOpenCalendarModal = socialOpenCalendarModal;
 window.socialSaveEvent = socialSaveEvent;
 window.socialDeleteEvent = socialDeleteEvent;
+window.socialShiftCalendar = socialShiftCalendar;
+window.socialLoadCalendar = socialLoadCalendar;
 window.socialRenderCalendar = socialRenderCalendar;
 window.socialShowDay = socialShowDay;
 window.socialCalcEvaluate = socialCalcEvaluate;
+window.socialCalcPress = socialCalcPress;
+window.socialCalcClear = socialCalcClear;
+window.socialCalcBackspace = socialCalcBackspace;
 window.socialRenderConverterOptions = socialRenderConverterOptions;
 window.socialConvert = socialConvert;
 window.socialCalcVolume = socialCalcVolume;
@@ -1245,6 +1575,7 @@ window.socialCreateNote = socialCreateNote;
 window.socialSelectNote = socialSelectNote;
 window.socialScheduleNoteSave = socialScheduleNoteSave;
 window.socialDeleteCurrentNote = socialDeleteCurrentNote;
+window.socialDeleteNote = socialDeleteNote;
 window.socialStartGlobalHooks = socialStartGlobalHooks;
 window.socialStopGlobalHooks = socialStopGlobalHooks;
 window.resetSocialState = resetSocialState;

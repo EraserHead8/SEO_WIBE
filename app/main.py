@@ -6,9 +6,13 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from app.auth import create_access_token, decode_access_token_payload
 from app.api.routes import router
 from app.background import seo_recheck_loop, wb_ads_snapshot_sync_loop
 from app.db import Base, engine, ensure_admin_emails, run_lightweight_migrations
+from app.config import settings
+
+from datetime import datetime, timezone
 
 app = FastAPI(title="SEO WIBE")
 app.include_router(router)
@@ -25,6 +29,45 @@ async def disable_static_cache(request: Request, call_next):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
+    return response
+
+
+@app.middleware("http")
+async def refresh_access_token(request: Request, call_next):
+    response = await call_next(request)
+    if not request.url.path.startswith("/api/"):
+        return response
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.lower().startswith("bearer "):
+        return response
+    token = auth_header.split(" ", 1)[1].strip()
+    if not token:
+        return response
+    payload = decode_access_token_payload(token)
+    if not payload or "sub" not in payload:
+        return response
+    exp = payload.get("exp")
+    if not exp:
+        return response
+    exp_dt = None
+    if isinstance(exp, (int, float)):
+        exp_dt = datetime.fromtimestamp(float(exp), tz=timezone.utc)
+    elif isinstance(exp, str):
+        try:
+            exp_dt = datetime.fromisoformat(exp.replace("Z", "+00:00"))
+        except Exception:
+            exp_dt = None
+    elif isinstance(exp, datetime):
+        exp_dt = exp.astimezone(timezone.utc)
+    if not exp_dt:
+        return response
+    now = datetime.now(timezone.utc)
+    remaining_min = max(0, int((exp_dt - now).total_seconds() // 60))
+    refresh_threshold = max(30, min(60 * 24, int(settings.token_expire_minutes // 2)))
+    if remaining_min > refresh_threshold:
+        return response
+    new_token = create_access_token(str(payload.get("sub")))
+    response.headers["x-auth-refresh"] = new_token
     return response
 
 

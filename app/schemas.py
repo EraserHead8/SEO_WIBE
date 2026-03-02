@@ -26,6 +26,10 @@ class UserOut(BaseModel):
     email: EmailStr
     role: str
     created_at: datetime | None = None
+    actor_key: str | None = None
+    actor_nick: str | None = None
+    actor_is_owner: bool | None = None
+    actor_member_id: int | None = None
 
 
 class ApiCredentialIn(BaseModel):
@@ -494,6 +498,7 @@ class AiProfileOut(BaseModel):
     selection: AiSelectionOut
     global_default: AiSelectionOut
     effective: AiEffectiveOut
+    effective_chain: list[AiEffectiveOut] = Field(default_factory=list)
     user_services: list[AiServiceOut] = Field(default_factory=list)
     global_services: list[AiServiceOut] = Field(default_factory=list)
 
@@ -554,6 +559,7 @@ class SalesStatsOut(BaseModel):
     rows: list[SalesStatsRowOut]
     chart: list[SalesStatsPointOut]
     totals: dict[str, float | int]
+    comparison: dict[str, Any] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -757,6 +763,7 @@ class SocialCalendarEventIn(BaseModel):
     details: str = ""
     start_at: str
     end_at: str | None = None
+    is_public: bool = False
 
 
 class SocialCalendarEventOut(BaseModel):
@@ -766,6 +773,7 @@ class SocialCalendarEventOut(BaseModel):
     start_at: str
     end_at: str | None = None
     created_at: str
+    is_public: bool = False
 
 
 class SocialNoteIn(BaseModel):

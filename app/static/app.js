@@ -1,4 +1,8 @@
-let token = localStorage.getItem("token") || "";
+const storedSessionToken = sessionStorage.getItem("token") || "";
+const storedLocalToken = localStorage.getItem("token") || "";
+let token = storedSessionToken || storedLocalToken || "";
+let tokenStorage = storedSessionToken ? "session" : (storedLocalToken ? "local" : "");
+let suppressAlerts = false;
 let me = null;
 let selectedProducts = new Set();
 let selectedJobs = new Set();
@@ -40,6 +44,7 @@ let adsRecLoadProgress = { active: false, total: 0, loaded: 0 };
 let adsRecLoadToken = 0;
 let salesRows = [];
 let salesChartRows = [];
+let salesComparison = null;
 let salesLoadProgress = { active: false, total: 0, loaded: 0 };
 let salesLoadState = "idle";
 let salesLoadToken = 0;
@@ -79,6 +84,35 @@ const POSITION_LIMIT = 500;
 const uiActivityThrottle = new Map();
 const chartInstances = new Map();
 let chartResizeBound = false;
+
+const realAlert = window.alert ? window.alert.bind(window) : null;
+if (realAlert) {
+  window.alert = (msg) => {
+    if (suppressAlerts) return;
+    realAlert(msg);
+  };
+}
+
+function setToken(nextToken = "", persist = null) {
+  token = String(nextToken || "");
+  if (!token) {
+    tokenStorage = "";
+    localStorage.removeItem("token");
+    sessionStorage.removeItem("token");
+    return;
+  }
+  const useLocal = persist === null ? tokenStorage === "local" : Boolean(persist);
+  tokenStorage = useLocal ? "local" : "session";
+  if (useLocal) {
+    localStorage.setItem("token", token);
+    sessionStorage.removeItem("token");
+    localStorage.setItem("remember_me", "1");
+  } else {
+    sessionStorage.setItem("token", token);
+    localStorage.removeItem("token");
+    localStorage.setItem("remember_me", "0");
+  }
+}
 
 function canUseEcharts(host) {
   return Boolean(
@@ -432,6 +466,7 @@ function switchAuthMode(mode = "login") {
   document.getElementById("authModeRegisterBtn")?.classList.toggle("active", !isLogin);
   document.getElementById("authToolbarLoginBtn")?.classList.toggle("active", isLogin);
   document.getElementById("authToolbarRegisterBtn")?.classList.toggle("active", !isLogin);
+  if (isLogin) initAuthRemember();
 }
 
 function changeAuthLang() {
@@ -812,9 +847,8 @@ function applyUiLanguage() {
     isEn ? "Ads Spend" : "Реклама",
     isEn ? "Penalties" : "Штрафы",
   ]);
-  setCheckLabel("#sales .sales-chart-controls label:nth-of-type(1)", isEn ? "Total" : "Всего");
-  setCheckLabel("#sales .sales-chart-controls label:nth-of-type(2)", "WB");
-  setCheckLabel("#sales .sales-chart-controls label:nth-of-type(3)", "Ozon");
+  setCheckLabel("#sales .sales-chart-controls label:nth-of-type(1)", "WB");
+  setCheckLabel("#sales .sales-chart-controls label:nth-of-type(2)", "Ozon");
 
   const placeholders = [
     ["#loginEmail", "Email"],
@@ -954,6 +988,10 @@ async function requestJson(url, opts = {}) {
     throw new Error(currentLang === "en" ? "Network error. Check connection and retry." : "Сетевая ошибка. Проверьте соединение и повторите.");
   } finally {
     if (timer) clearTimeout(timer);
+  }
+  const refreshed = r.headers.get("x-auth-refresh");
+  if (refreshed) {
+    setToken(refreshed, tokenStorage === "local");
   }
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.detail || data.message || (currentLang === "en" ? "Request error" : "Ошибка запроса"));
@@ -1708,7 +1746,13 @@ async function preloadModulesInBackground({ force = false } = {}) {
 }
 
 async function refreshModulesInBackground() {
-  await preloadModulesInBackground({ force: true });
+  const prev = suppressAlerts;
+  suppressAlerts = true;
+  try {
+    await preloadModulesInBackground({ force: true });
+  } finally {
+    suppressAlerts = prev;
+  }
 }
 
 function stopModuleAutoRefresh() {
@@ -1795,22 +1839,24 @@ async function register() {
     body: JSON.stringify({ email, password }),
   }).catch((e) => alert(e.message));
   if (!data) return;
-  token = data.access_token;
-  localStorage.setItem("token", token);
+  const persist = localStorage.getItem("remember_me") !== "0";
+  setToken(data.access_token, persist);
+  localStorage.setItem("login_email", email);
   await ensureAuth();
 }
 
 async function login() {
   const email = document.getElementById("loginEmail").value.trim();
   const password = document.getElementById("loginPassword").value;
+  const remember = Boolean(document.getElementById("loginRemember")?.checked);
   const data = await requestJson("/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   }).catch((e) => alert(e.message));
   if (!data) return;
-  token = data.access_token;
-  localStorage.setItem("token", token);
+  setToken(data.access_token, remember);
+  localStorage.setItem("login_email", email);
   await ensureAuth();
 }
 
@@ -1823,8 +1869,9 @@ async function logout() {
       timeoutMs: 10000,
     }).catch(() => null);
   }
-  token = "";
+  setToken("");
   me = null;
+  renderTopbarUser();
   selectedProducts.clear();
   selectedJobs.clear();
   selectedProductId = null;
@@ -1840,6 +1887,7 @@ async function logout() {
   adsRecommendationRows = [];
   salesRows = [];
   salesChartRows = [];
+  salesComparison = null;
   moduleLoadState.clear();
   moduleInflightState.clear();
   currentProductsSubtab = "catalog";
@@ -1863,6 +1911,7 @@ async function logout() {
     try { window.resetSocialState(); } catch (_) {}
   }
   localStorage.removeItem("token");
+  sessionStorage.removeItem("token");
   document.getElementById("appSection").classList.add("hidden");
   document.getElementById("authSection").classList.remove("hidden");
   switchAuthMode("login");
@@ -1880,6 +1929,7 @@ async function ensureAuth() {
   document.getElementById("appSection").classList.remove("hidden");
   pruneLegacyUi();
   ensureProfileTeamUi();
+  renderTopbarUser();
 
   if (me.role !== "admin") {
     const adminBtn = document.querySelector(".nav-btn[data-tab='admin']");
@@ -1903,6 +1953,35 @@ async function ensureAuth() {
   setTimeout(() => {
     preloadModulesInBackground({ force: false });
   }, 250);
+}
+
+function renderTopbarUser() {
+  const btn = document.getElementById("topbarUserBtn");
+  if (!btn) return;
+  if (!me) {
+    btn.classList.add("hidden");
+    return;
+  }
+  const name = String(me.actor_nick || me.email || "-");
+  const isOwner = Boolean(me.actor_is_owner);
+  const roleText = me.role === "admin"
+    ? tr("Админ", "Admin")
+    : (isOwner ? tr("Владелец", "Owner") : tr("Сотрудник", "Member"));
+  const nameEl = document.getElementById("topbarUserName");
+  const roleEl = document.getElementById("topbarUserRole");
+  if (nameEl) nameEl.textContent = name;
+  if (roleEl) roleEl.textContent = roleText;
+  btn.classList.remove("hidden");
+}
+
+function initAuthRemember() {
+  const emailEl = document.getElementById("loginEmail");
+  const rememberEl = document.getElementById("loginRemember");
+  const savedEmail = String(localStorage.getItem("login_email") || "");
+  if (emailEl && savedEmail && !emailEl.value) emailEl.value = savedEmail;
+  if (rememberEl) {
+    rememberEl.checked = localStorage.getItem("remember_me") !== "0";
+  }
 }
 
 async function saveKey(marketplace) {
@@ -5756,7 +5835,10 @@ async function loadSeoJobs() {
     rowEl.onclick = () => renderSeoPreview(j);
     tbody.appendChild(rowEl);
   }
-  renderSeoKanban(rows);
+  const kanban = document.getElementById("seoKanban");
+  if (kanban && getComputedStyle(kanban).display !== "none") {
+    renderSeoKanban(rows);
+  }
   markModuleLoaded("seo");
 }
 
@@ -5914,10 +5996,8 @@ function initSalesPeriodDefaults() {
   const fromEl = document.getElementById("salesDateFrom");
   if (!toEl || !fromEl) return;
   if (marketEl && !marketEl.value) marketEl.value = "all";
-  const showTotal = document.getElementById("salesShowTotal");
   const showWb = document.getElementById("salesShowWb");
   const showOzon = document.getElementById("salesShowOzon");
-  if (showTotal && typeof showTotal.checked === "boolean") showTotal.checked = true;
   if (showWb && typeof showWb.checked === "boolean") showWb.checked = true;
   if (showOzon && typeof showOzon.checked === "boolean") showOzon.checked = true;
   if (!toEl.value || !fromEl.value) {
@@ -6034,7 +6114,6 @@ function renderSalesChart(points) {
     return;
   }
   const metric = (document.getElementById("salesMetricMode")?.value || "units").trim().toLowerCase();
-  const showTotal = Boolean(document.getElementById("salesShowTotal")?.checked);
   const showWb = Boolean(document.getElementById("salesShowWb")?.checked);
   const showOzon = Boolean(document.getElementById("salesShowOzon")?.checked);
   const chartPoints = points
@@ -6082,14 +6161,6 @@ function renderSalesChart(points) {
     return Number(bucket.units || 0);
   };
   const series = [];
-  if (showTotal) {
-    series.push({
-      key: "total",
-      label: tr("Всего", "Total"),
-      color: "#8a94ff",
-      values: chartPoints.map((point) => valueOf(point, metric)),
-    });
-  }
   const byBucketByMp = new Map();
   const byDayByMp = new Map();
   for (const row of Array.isArray(salesRows) ? salesRows : []) {
@@ -6150,7 +6221,7 @@ function renderSalesChart(points) {
     series.push({
       key: "wb",
       label: "WB",
-      color: "#20d7ff",
+      color: "#2ec5ff",
       values: resolveMarketplaceSeries("wb"),
     });
   }
@@ -6158,7 +6229,7 @@ function renderSalesChart(points) {
     series.push({
       key: "ozon",
       label: "Ozon",
-      color: "#39efc1",
+      color: "#34d9a3",
       values: resolveMarketplaceSeries("ozon"),
     });
   }
@@ -7809,6 +7880,7 @@ async function adminResetUserPassword() {
 applyTheme(currentTheme);
 applyUiLanguage();
 switchAuthMode("login");
+initAuthRemember();
 applySidebarMode();
 applyButtonTooltips();
 initHoverTips();

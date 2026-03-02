@@ -136,6 +136,10 @@ def run_lightweight_migrations():
             if "user_agent" not in audit_cols:
                 conn.execute(text("ALTER TABLE audit_logs ADD COLUMN user_agent VARCHAR(500) DEFAULT ''"))
 
+        calendar_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(social_calendar_events)"))}
+        if calendar_cols and "is_public" not in calendar_cols:
+            conn.execute(text("ALTER TABLE social_calendar_events ADD COLUMN is_public BOOLEAN DEFAULT 0"))
+
 
 def ensure_admin_emails():
     raw = settings.admin_emails or ""
