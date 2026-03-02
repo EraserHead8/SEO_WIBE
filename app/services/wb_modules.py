@@ -486,6 +486,324 @@ def generate_review_reply(
         return fallback
 
 
+def generate_help_assistant_reply(
+    question: str,
+    context_text: str,
+    prompt: str = "",
+    api_key: str = "",
+    model: str = "",
+    provider: str = "openai",
+    base_url: str = "",
+) -> str:
+    q = " ".join((question or "").split()).strip()
+    ctx = str(context_text or "").strip()
+    if len(ctx) > 24000:
+        ctx = ctx[:24000]
+    fallback = (
+        "Я помогу с этим вопросом. Уточните модуль и желаемый результат, "
+        "и я дам пошаговый ответ с учетом вашей базы знаний."
+    )
+    token = str(api_key or settings.openai_api_key or "").strip()
+    if not token:
+        return fallback
+    effective_provider = str(provider or "openai").strip().lower()
+    effective_model = str(model or "").strip()
+    if not effective_model:
+        effective_model = "deepseek-chat" if effective_provider == "deepseek" else (settings.openai_model or "gpt-4o-mini")
+    endpoint = _resolve_ai_chat_endpoint(effective_provider, base_url)
+    system_prompt = (
+        (prompt or "").strip()
+        or "Ты AI-помощник сервиса продавца маркетплейсов. Отвечай кратко, структурно и по делу на русском языке."
+    )
+    payload = {
+        "model": effective_model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": (
+                    f"Вопрос пользователя:\n{q or '[без текста]'}\n\n"
+                    f"Контекст:\n{ctx or '[контекст не передан]'}\n\n"
+                    "Сформируй полезный ответ по шагам."
+                ),
+            },
+        ],
+        "temperature": 0.3,
+        "max_tokens": 700,
+    }
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+    try:
+        with httpx.Client(timeout=OZON_TIMEOUT, follow_redirects=True) as client:
+            response = client.post(endpoint, headers=headers, json=payload)
+            if response.status_code >= 400:
+                return fallback
+            data = response.json()
+        answer = (
+            data.get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+            .strip()
+        )
+        return " ".join(answer.split()) if answer else fallback
+    except Exception:
+        return fallback
+
+
+def fetch_wb_returns(
+    api_key: str,
+    status: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> dict[str, Any]:
+    warnings: list[str] = []
+    rows: list[dict[str, Any]] = []
+    endpoints = [
+        "https://returns-api.wildberries.ru/api/v1/claims",
+        "https://returns-api.wildberries.ru/api/v1/returns",
+    ]
+    for endpoint in endpoints:
+        data = _request_wb_json("GET", endpoint, api_key=api_key, params={"limit": 500})
+        if data is None:
+            warnings.append(f"WB returns endpoint unavailable: {endpoint}")
+            continue
+        parsed = _extract_first_dict_list(data, preferred_keys=("claims", "returns", "items", "rows", "data", "list"))
+        if not parsed and isinstance(data, dict):
+            parsed = [data]
+        for raw in parsed:
+            rid = str(raw.get("id") or raw.get("claimId") or raw.get("returnId") or "").strip()
+            if not rid:
+                continue
+            row = {
+                "id": rid,
+                "status": str(raw.get("status") or raw.get("state") or "").strip(),
+                "created_at": str(raw.get("createdAt") or raw.get("created_at") or raw.get("date") or "").strip(),
+                "article": str(raw.get("article") or raw.get("supplierVendorCode") or "").strip(),
+                "product": str(raw.get("productName") or raw.get("name") or "").strip(),
+                "reason": str(raw.get("reason") or raw.get("comment") or "").strip(),
+                "marketplace": "wb",
+                "raw": raw,
+            }
+            rows.append(row)
+        if rows:
+            break
+    rows = _filter_rows_by_period(rows, date_from=date_from, date_to=date_to)
+    safe_status = str(status or "").strip().lower()
+    if safe_status and safe_status not in {"all", "any", "*"}:
+        rows = [x for x in rows if safe_status in str(x.get("status") or "").strip().lower()]
+    return {"rows": rows, "warnings": warnings}
+
+
+def fetch_wb_return_details(api_key: str, return_id: str) -> dict[str, Any]:
+    rid = str(return_id or "").strip()
+    if not rid:
+        return {}
+    candidates = [
+        ("GET", f"https://returns-api.wildberries.ru/api/v1/claims/{rid}", None),
+        ("GET", f"https://returns-api.wildberries.ru/api/v1/returns/{rid}", None),
+        ("GET", "https://returns-api.wildberries.ru/api/v1/claims", {"id": rid}),
+    ]
+    for method, endpoint, params in candidates:
+        data = _request_wb_json(method, endpoint, api_key=api_key, params=params)
+        if not data:
+            continue
+        if isinstance(data, dict):
+            candidate_id = str(data.get("id") or data.get("claimId") or data.get("returnId") or "").strip()
+            if not candidate_id or candidate_id == rid:
+                return data
+        rows = _extract_first_dict_list(data, preferred_keys=("claims", "returns", "items", "rows", "data", "list"))
+        for row in rows:
+            candidate_id = str(row.get("id") or row.get("claimId") or row.get("returnId") or "").strip()
+            if candidate_id == rid:
+                return row
+    return {}
+
+
+def action_wb_return(api_key: str, return_id: str, action: str, comment: str | None = None) -> tuple[bool, str, dict[str, Any] | None]:
+    rid = str(return_id or "").strip()
+    if not rid:
+        return False, "Некорректный ID возврата", None
+    safe_action = str(action or "").strip().lower()
+    if safe_action not in {"approve", "reject", "decline", "accept", "cancel"}:
+        safe_action = "approve"
+    payload = {"id": rid, "action": safe_action}
+    if comment:
+        payload["comment"] = str(comment).strip()[:500]
+    endpoints = [
+        "https://returns-api.wildberries.ru/api/v1/claims/action",
+        f"https://returns-api.wildberries.ru/api/v1/claims/{rid}/{safe_action}",
+    ]
+    for endpoint in endpoints:
+        data = _request_wb_json("POST", endpoint, api_key=api_key, payload=payload)
+        if data is not None:
+            return True, "Действие по возврату отправлено", data if isinstance(data, dict) else {"data": data}
+    return False, "WB API не принял действие по возврату", None
+
+
+def fetch_ozon_ads_campaigns(api_key: str) -> dict[str, Any]:
+    warnings: list[str] = []
+    rows: list[dict[str, Any]] = []
+    endpoints = [
+        "https://api-seller.ozon.ru/v1/adv/campaign/list",
+        "https://api-seller.ozon.ru/v1/campaign/list",
+    ]
+    for endpoint in endpoints:
+        data = _request_ozon_json("POST", endpoint, api_key=api_key, payload={"limit": 500, "offset": 0})
+        if data is None:
+            warnings.append(f"Ozon ads endpoint unavailable: {endpoint}")
+            continue
+        parsed = _extract_first_dict_list(data, preferred_keys=("campaigns", "items", "rows", "list", "result", "data"))
+        for raw in parsed:
+            cid = int(raw.get("id") or raw.get("campaign_id") or 0)
+            if cid <= 0:
+                continue
+            rows.append(
+                {
+                    "campaign_id": cid,
+                    "name": str(raw.get("title") or raw.get("name") or f"Campaign {cid}"),
+                    "status": str(raw.get("status") or raw.get("state") or "-"),
+                    "type": str(raw.get("type") or raw.get("campaign_type") or "-"),
+                    "budget": float(raw.get("budget") or raw.get("daily_budget") or 0.0),
+                    "marketplace": "ozon",
+                    "raw": raw,
+                }
+            )
+        if rows:
+            break
+    return {"rows": rows, "warnings": warnings}
+
+
+def fetch_ozon_ads_analytics(
+    api_key: str,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    campaign_id: int | None = None,
+) -> dict[str, Any]:
+    left = str(date_from or (date.today() - timedelta(days=6)).isoformat())
+    right = str(date_to or date.today().isoformat())
+    warnings: list[str] = []
+    rows: list[dict[str, Any]] = []
+    payload = {"date_from": left, "date_to": right}
+    if int(campaign_id or 0) > 0:
+        payload["campaign_id"] = int(campaign_id)
+    endpoints = [
+        "https://api-seller.ozon.ru/v1/adv/statistics",
+        "https://api-seller.ozon.ru/v1/campaign/statistics",
+    ]
+    for endpoint in endpoints:
+        data = _request_ozon_json("POST", endpoint, api_key=api_key, payload=payload)
+        if data is None:
+            warnings.append(f"Ozon ads analytics unavailable: {endpoint}")
+            continue
+        parsed = _extract_first_dict_list(data, preferred_keys=("rows", "items", "list", "result", "data", "campaigns"))
+        for raw in parsed:
+            views = float(raw.get("views") or raw.get("impressions") or 0.0)
+            clicks = float(raw.get("clicks") or 0.0)
+            orders = float(raw.get("orders") or raw.get("attributed_orders") or 0.0)
+            spent = float(raw.get("spent") or raw.get("cost") or raw.get("sum") or 0.0)
+            ctr = (clicks / views * 100.0) if views > 0 else 0.0
+            cr = (orders / clicks * 100.0) if clicks > 0 else 0.0
+            rows.append(
+                {
+                    "campaign_id": int(raw.get("campaign_id") or raw.get("id") or 0),
+                    "date": str(raw.get("date") or raw.get("day") or left),
+                    "views": round(views, 4),
+                    "clicks": round(clicks, 4),
+                    "orders": round(orders, 4),
+                    "spent": round(spent, 4),
+                    "ctr": round(ctr, 4),
+                    "cr": round(cr, 4),
+                    "raw": raw,
+                }
+            )
+        if rows:
+            break
+    totals = {
+        "views": round(sum(float(x.get("views") or 0.0) for x in rows), 4),
+        "clicks": round(sum(float(x.get("clicks") or 0.0) for x in rows), 4),
+        "orders": round(sum(float(x.get("orders") or 0.0) for x in rows), 4),
+        "spent": round(sum(float(x.get("spent") or 0.0) for x in rows), 4),
+        "ctr_avg": round((sum(float(x.get("ctr") or 0.0) for x in rows) / len(rows)) if rows else 0.0, 4),
+        "cr_avg": round((sum(float(x.get("cr") or 0.0) for x in rows) / len(rows)) if rows else 0.0, 4),
+    }
+    return {"rows": rows, "warnings": warnings, "date_from": left, "date_to": right, "totals": totals}
+
+
+def fetch_ozon_returns(
+    api_key: str,
+    status: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> dict[str, Any]:
+    warnings: list[str] = []
+    rows: list[dict[str, Any]] = []
+    payload = {"limit": 500, "offset": 0}
+    if status:
+        payload["status"] = status
+    if date_from:
+        payload["date_from"] = date_from
+    if date_to:
+        payload["date_to"] = date_to
+    endpoints = [
+        "https://api-seller.ozon.ru/v1/returns/list",
+        "https://api-seller.ozon.ru/v1/return/list",
+    ]
+    for endpoint in endpoints:
+        data = _request_ozon_json("POST", endpoint, api_key=api_key, payload=payload)
+        if data is None:
+            warnings.append(f"Ozon returns endpoint unavailable: {endpoint}")
+            continue
+        parsed = _extract_first_dict_list(data, preferred_keys=("returns", "items", "list", "rows", "result", "data"))
+        for raw in parsed:
+            rid = str(raw.get("id") or raw.get("return_id") or raw.get("posting_number") or "").strip()
+            if not rid:
+                continue
+            rows.append(
+                {
+                    "id": rid,
+                    "status": str(raw.get("status") or raw.get("state") or "").strip(),
+                    "created_at": str(raw.get("created_at") or raw.get("createdAt") or raw.get("date") or "").strip(),
+                    "article": str(raw.get("offer_id") or raw.get("article") or "").strip(),
+                    "product": str(raw.get("name") or raw.get("product_name") or "").strip(),
+                    "reason": str(raw.get("reason") or raw.get("comment") or "").strip(),
+                    "marketplace": "ozon",
+                    "raw": raw,
+                }
+            )
+        if rows:
+            break
+    rows = _filter_rows_by_period(rows, date_from=date_from, date_to=date_to)
+    safe_status = str(status or "").strip().lower()
+    if safe_status and safe_status not in {"all", "any", "*"}:
+        rows = [x for x in rows if safe_status in str(x.get("status") or "").lower()]
+    return {"rows": rows, "warnings": warnings}
+
+
+def fetch_ozon_return_details(api_key: str, return_id: str) -> dict[str, Any]:
+    rid = str(return_id or "").strip()
+    if not rid:
+        return {}
+    endpoints = [
+        ("POST", "https://api-seller.ozon.ru/v1/returns/get", {"id": rid}),
+        ("POST", "https://api-seller.ozon.ru/v1/return/get", {"id": rid}),
+    ]
+    for method, endpoint, payload in endpoints:
+        data = _request_ozon_json(method, endpoint, api_key=api_key, payload=payload)
+        if not data:
+            continue
+        if isinstance(data, dict):
+            if str(data.get("id") or data.get("return_id") or "").strip() in {"", rid}:
+                return data
+        rows = _extract_first_dict_list(data, preferred_keys=("returns", "items", "list", "rows", "result", "data"))
+        for row in rows:
+            candidate_id = str(row.get("id") or row.get("return_id") or row.get("posting_number") or "").strip()
+            if candidate_id == rid:
+                return row
+    return {}
+
+
 def fetch_wb_campaigns(api_key: str, enrich: bool = True) -> list[dict[str, Any]]:
     attempts: list[tuple[str, str, dict[str, Any] | list[Any] | None]] = [
         ("GET", "https://advert-api.wb.ru/adv/v1/promotion/count", None),
@@ -2356,6 +2674,20 @@ def _fallback_question_reply(question_text: str, product_name: str, reviewer_nam
         "Проверим по вашей ситуации и подскажем точные параметры. "
         "Если можете, уточните нужный размер/модель и условия использования."
     )
+
+
+def _resolve_ai_chat_endpoint(provider: str, base_url: str) -> str:
+    raw_base = str(base_url or "").strip()
+    if raw_base:
+        base = raw_base.rstrip("/")
+        if base.endswith("/chat/completions"):
+            return base
+        if base.endswith("/v1"):
+            return f"{base}/chat/completions"
+        return f"{base}/chat/completions"
+    if str(provider or "").strip().lower() == "deepseek":
+        return "https://api.deepseek.com/chat/completions"
+    return "https://api.openai.com/v1/chat/completions"
 
 
 def _build_ozon_headers(api_key: str) -> dict[str, str]:
