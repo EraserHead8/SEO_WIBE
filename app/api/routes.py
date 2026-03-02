@@ -59,6 +59,7 @@ from app.schemas import (
     AiSelectionIn,
     AiSelectionOut,
     AiServiceIn,
+    AiServiceReorderIn,
     AiServiceOut,
     AdminUserProfileOut,
     AdminCredentialRowOut,
@@ -1167,11 +1168,17 @@ def wb_reply_review(payload: WbReviewReplyIn, user: User = Depends(get_current_u
         item_external_id=str(payload.id or "").strip(),
     )
     ok, message = post_wb_review_reply(wb_key, payload.id, payload.text)
+    detail_payload = {
+        "review_id": str(payload.id or ""),
+        "ok": bool(ok),
+        "marketplace": "wb",
+        "reply": str(payload.text or "")[:800],
+    }
     _audit(
         db,
         user,
         action="wb_review_reply",
-        details=f"feedback_id={payload.id};ok={ok}",
+        details=json.dumps(detail_payload, ensure_ascii=False),
         module_code="wb_reviews_ai",
         entity_type="review",
         entity_id=str(payload.id or ""),
@@ -1309,11 +1316,18 @@ def ozon_reply_review(payload: WbReviewReplyIn, user: User = Depends(get_current
     )
     ok, message = post_ozon_review_reply(ozon_key, payload.id, payload.text)
     message_short = re.sub(r"\s+", " ", str(message or "")).strip()[:260]
+    detail_payload = {
+        "review_id": str(payload.id or ""),
+        "ok": bool(ok),
+        "marketplace": "ozon",
+        "reply": str(payload.text or "")[:800],
+        "message": message_short,
+    }
     _audit(
         db,
         user,
         action="ozon_review_reply",
-        details=f"review_id={payload.id};ok={ok};msg={message_short}",
+        details=json.dumps(detail_payload, ensure_ascii=False),
         module_code="wb_reviews_ai",
         entity_type="review",
         entity_id=str(payload.id or ""),
@@ -1457,11 +1471,19 @@ def wb_reply_question(payload: WbReviewReplyIn, user: User = Depends(get_current
         state=str(payload.state or "").strip(),
     )
     message_short = re.sub(r"\s+", " ", str(message or "")).strip()[:260]
+    detail_payload = {
+        "question_id": str(payload.id or ""),
+        "ok": bool(ok),
+        "marketplace": "wb",
+        "reply": str(payload.text or "")[:800],
+        "state": str(payload.state or "").strip(),
+        "message": message_short,
+    }
     _audit(
         db,
         user,
         action="wb_question_reply",
-        details=f"question_id={payload.id};ok={ok};msg={message_short}",
+        details=json.dumps(detail_payload, ensure_ascii=False),
         module_code="wb_questions_ai",
         entity_type="question",
         entity_id=str(payload.id or ""),
@@ -1599,11 +1621,19 @@ def ozon_reply_question(payload: WbReviewReplyIn, user: User = Depends(get_curre
         sku=int(payload.sku or 0) if int(payload.sku or 0) > 0 else None,
     )
     message_short = re.sub(r"\s+", " ", str(message or "")).strip()[:260]
+    detail_payload = {
+        "question_id": str(payload.id or ""),
+        "ok": bool(ok),
+        "marketplace": "ozon",
+        "reply": str(payload.text or "")[:800],
+        "sku": int(payload.sku or 0) if int(payload.sku or 0) > 0 else None,
+        "message": message_short,
+    }
     _audit(
         db,
         user,
         action="ozon_question_reply",
-        details=f"question_id={payload.id};ok={ok};msg={message_short}",
+        details=json.dumps(detail_payload, ensure_ascii=False),
         module_code="wb_questions_ai",
         entity_type="question",
         entity_id=str(payload.id or ""),
@@ -2670,11 +2700,19 @@ def help_assistant(payload: AiAssistantIn, user: User = Depends(get_current_user
         provider=str(runtime.get("provider") or ""),
         base_url=str(runtime.get("base_url") or ""),
     )
+    detail_payload = {
+        "module": module_code or "-",
+        "provider": runtime.get("provider") or "builtin",
+        "mode": runtime.get("mode") or "builtin",
+        "knowledge": int(bool(user_knowledge)),
+        "question": question[:600],
+        "answer": str(answer or "")[:800],
+    }
     _audit(
         db,
         user,
         action="help_assistant_asked",
-        details=f"module={module_code or '-'};provider={runtime.get('provider') or 'builtin'};mode={runtime.get('mode') or 'builtin'};knowledge={int(bool(user_knowledge))}",
+        details=json.dumps(detail_payload, ensure_ascii=False),
         module_code="ai_assistant",
         entity_type="question",
         status="ok",
@@ -4064,6 +4102,22 @@ def profile_ai_service_delete(service_id: int, user: User = Depends(get_current_
     return MessageOut(message="AI сервис удален")
 
 
+@router.post("/profile/ai/services/reorder", response_model=list[AiServiceOut])
+def profile_ai_service_reorder(payload: AiServiceReorderIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "user_profile")
+    ordered = _reorder_ai_services(db, user_id=user.id, service_ids=list(payload.service_ids or []))
+    _audit(
+        db,
+        user,
+        action="profile_ai_service_reordered",
+        details=json.dumps({"service_ids": [int(x) for x in payload.service_ids or []]}, ensure_ascii=False),
+        module_code="user_profile",
+        entity_type="ai_service",
+    )
+    db.commit()
+    return [_ai_service_to_out(row, scope="user") for row in ordered]
+
+
 @router.get("/profile/team", response_model=list[TeamMemberOut])
 def profile_team_list(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     ensure_module_enabled(db, user, "user_profile")
@@ -5012,7 +5066,7 @@ def admin_ai_global_state(_: User = Depends(get_admin_user), db: Session = Depen
     services = db.scalars(
         select(AiServiceAccount)
         .where(AiServiceAccount.user_id.is_(None))
-        .order_by(AiServiceAccount.id.desc())
+        .order_by(AiServiceAccount.priority.asc(), AiServiceAccount.id.desc())
     ).all()
     return {
         "global_default": {
@@ -5115,6 +5169,21 @@ def admin_ai_global_service_delete(service_id: int, me: User = Depends(get_admin
     )
     db.commit()
     return MessageOut(message="AI сервис удален")
+
+
+@router.post("/admin/ai/global/services/reorder", response_model=list[AiServiceOut])
+def admin_ai_global_service_reorder(payload: AiServiceReorderIn, me: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    ordered = _reorder_ai_services(db, user_id=None, service_ids=list(payload.service_ids or []))
+    _audit(
+        db,
+        me,
+        action="admin_ai_global_service_reordered",
+        details=json.dumps({"service_ids": [int(x) for x in payload.service_ids or []]}, ensure_ascii=False),
+        module_code="admin",
+        entity_type="ai_service",
+    )
+    db.commit()
+    return [_ai_service_to_out(row, scope="global") for row in ordered]
 
 
 @router.get("/admin/users/{user_id}/ai", response_model=AiProfileOut)
@@ -5228,6 +5297,30 @@ def admin_user_ai_service_delete(user_id: int, service_id: int, me: User = Depen
     )
     db.commit()
     return MessageOut(message="AI сервис удален")
+
+
+@router.post("/admin/users/{user_id}/ai/services/reorder", response_model=list[AiServiceOut])
+def admin_user_ai_service_reorder(
+    user_id: int,
+    payload: AiServiceReorderIn,
+    me: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    target = db.get(User, user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    ordered = _reorder_ai_services(db, user_id=user_id, service_ids=list(payload.service_ids or []))
+    _audit(
+        db,
+        me,
+        action="admin_user_ai_service_reordered",
+        details=json.dumps({"user_id": user_id, "service_ids": [int(x) for x in payload.service_ids or []]}, ensure_ascii=False),
+        module_code="admin",
+        entity_type="ai_service",
+        entity_id=str(user_id),
+    )
+    db.commit()
+    return [_ai_service_to_out(row, scope="user") for row in ordered]
 
 
 @router.get("/admin/audit", response_model=AuditLogPageOut)
@@ -5970,11 +6063,18 @@ def social_chat_send_message(
                 "sender_nick": actor_nick,
             },
         )
+    detail_payload = {
+        "thread_id": int(thread_id),
+        "message_id": int(message.id),
+        "thread_title": thread_title[:120],
+        "preview": text_msg[:500],
+        "recipients": len(recipients),
+    }
     _audit(
         db,
         user,
         action="social_chat_message_sent",
-        details=f"thread_id={thread_id};message_id={int(message.id)}",
+        details=json.dumps(detail_payload, ensure_ascii=False),
         module_code="social_hub",
         entity_type="chat_message",
         entity_id=str(message.id),
@@ -6437,6 +6537,24 @@ def social_calendar_create_event(
         end_at=end_at,
     )
     db.add(row)
+    db.flush()
+    _audit(
+        db,
+        user,
+        action="social_calendar_event_created",
+        details=json.dumps(
+            {
+                "event_id": int(row.id or 0),
+                "title": str(row.title or "")[:200],
+                "start_at": row.start_at.isoformat() if row.start_at else "",
+                "is_public": bool(row.is_public),
+            },
+            ensure_ascii=False,
+        ),
+        module_code="social_hub",
+        entity_type="calendar_event",
+        entity_id=str(row.id or ""),
+    )
     db.commit()
     return SocialCalendarEventOut(
         id=int(row.id),
@@ -6471,6 +6589,23 @@ def social_calendar_update_event(
     row.start_at = start_at
     row.end_at = _social_parse_dt(payload.end_at)
     row.is_public = bool(payload.is_public)
+    _audit(
+        db,
+        user,
+        action="social_calendar_event_updated",
+        details=json.dumps(
+            {
+                "event_id": int(row.id or 0),
+                "title": str(row.title or "")[:200],
+                "start_at": row.start_at.isoformat() if row.start_at else "",
+                "is_public": bool(row.is_public),
+            },
+            ensure_ascii=False,
+        ),
+        module_code="social_hub",
+        entity_type="calendar_event",
+        entity_id=str(row.id or ""),
+    )
     db.commit()
     return SocialCalendarEventOut(
         id=int(row.id),
@@ -6496,6 +6631,23 @@ def social_calendar_delete_event(
         raise HTTPException(status_code=404, detail="Событие не найдено")
     if str(row.actor_key or "") != actor_key and not _actor_is_owner(user):
         raise HTTPException(status_code=403, detail="Нет доступа к событию")
+    _audit(
+        db,
+        user,
+        action="social_calendar_event_deleted",
+        details=json.dumps(
+            {
+                "event_id": int(row.id or 0),
+                "title": str(row.title or "")[:200],
+                "start_at": row.start_at.isoformat() if row.start_at else "",
+                "is_public": bool(row.is_public),
+            },
+            ensure_ascii=False,
+        ),
+        module_code="social_hub",
+        entity_type="calendar_event",
+        entity_id=str(row.id or ""),
+    )
     db.delete(row)
     db.commit()
     return MessageOut(message="Событие удалено")
@@ -6542,6 +6694,16 @@ def social_create_note(
         content=str(payload.content or "")[:20000],
     )
     db.add(row)
+    db.flush()
+    _audit(
+        db,
+        user,
+        action="social_note_created",
+        details=json.dumps({"note_id": int(row.id or 0), "title": str(row.title or "")[:200]}, ensure_ascii=False),
+        module_code="social_hub",
+        entity_type="note",
+        entity_id=str(row.id or ""),
+    )
     db.commit()
     return SocialNoteOut(
         id=int(row.id),
@@ -6565,6 +6727,15 @@ def social_update_note(
         raise HTTPException(status_code=404, detail="Заметка не найдена")
     row.title = str(payload.title or "").strip()[:255] or "Без названия"
     row.content = str(payload.content or "")[:20000]
+    _audit(
+        db,
+        user,
+        action="social_note_updated",
+        details=json.dumps({"note_id": int(row.id or 0), "title": str(row.title or "")[:200]}, ensure_ascii=False),
+        module_code="social_hub",
+        entity_type="note",
+        entity_id=str(row.id or ""),
+    )
     db.commit()
     return SocialNoteOut(
         id=int(row.id),
@@ -6585,6 +6756,15 @@ def social_delete_note(
     row = db.get(SocialNote, note_id)
     if not row or int(row.user_id) != int(user.id) or str(row.actor_key or "") != actor_key:
         raise HTTPException(status_code=404, detail="Заметка не найдена")
+    _audit(
+        db,
+        user,
+        action="social_note_deleted",
+        details=json.dumps({"note_id": int(row.id or 0), "title": str(row.title or "")[:200]}, ensure_ascii=False),
+        module_code="social_hub",
+        entity_type="note",
+        entity_id=str(row.id or ""),
+    )
     db.delete(row)
     db.commit()
     return MessageOut(message="Заметка удалена")
@@ -7980,6 +8160,7 @@ def _ai_service_to_out(row: AiServiceAccount, *, scope: str) -> AiServiceOut:
         model=row.model or "",
         base_url=row.base_url or "",
         api_key_masked=mask_key(row.api_key or ""),
+        priority=int(row.priority or 1000),
         is_active=bool(row.is_active),
         created_at=row.created_at.isoformat() if row.created_at else None,
     )
@@ -7996,6 +8177,10 @@ def _update_ai_service_row(row: AiServiceAccount, payload: AiServiceIn) -> None:
 
 
 def _upsert_ai_service(db: Session, *, user_id: int | None, payload: AiServiceIn) -> AiServiceAccount:
+    max_priority = db.scalar(
+        select(func.max(AiServiceAccount.priority)).where(AiServiceAccount.user_id == user_id)
+    )
+    next_priority = int(max_priority or 0) + 1
     row = AiServiceAccount(
         user_id=user_id,
         name="",
@@ -8004,6 +8189,7 @@ def _upsert_ai_service(db: Session, *, user_id: int | None, payload: AiServiceIn
         model=settings.openai_model,
         base_url="",
         is_active=True,
+        priority=next_priority,
     )
     _update_ai_service_row(row, payload)
     if not row.api_key:
@@ -8019,6 +8205,23 @@ def _reset_ai_selection_if_deleted_service(db: Session, user_id: int, service_id
         pref.use_global_default = True
         pref.mode = "builtin"
         pref.service_id = None
+
+
+def _reorder_ai_services(db: Session, *, user_id: int | None, service_ids: list[int]) -> list[AiServiceAccount]:
+    safe_ids = [int(x) for x in service_ids if int(x or 0) > 0]
+    rows = db.scalars(
+        select(AiServiceAccount).where(AiServiceAccount.user_id == user_id)
+    ).all()
+    if not rows:
+        return []
+    row_by_id = {int(row.id): row for row in rows}
+    requested = [row_by_id[sid] for sid in safe_ids if sid in row_by_id]
+    remaining = [row for row in rows if int(row.id) not in set(safe_ids)]
+    remaining.sort(key=lambda r: (int(r.priority or 1000), int(r.id or 0)))
+    ordered = requested + remaining
+    for idx, row in enumerate(ordered, start=1):
+        row.priority = idx
+    return ordered
 
 
 def _resolve_user_ai_runtime(db: Session, user_id: int) -> dict[str, Any]:
@@ -8042,7 +8245,7 @@ def _resolve_user_ai_runtime(db: Session, user_id: int) -> dict[str, Any]:
             AiServiceAccount.user_id.is_(None),
             AiServiceAccount.is_active.is_(True),
         )
-        .order_by(AiServiceAccount.id.desc())
+        .order_by(AiServiceAccount.priority.asc(), AiServiceAccount.id.desc())
     ).all()
     user_rows = db.scalars(
         select(AiServiceAccount)
@@ -8050,7 +8253,7 @@ def _resolve_user_ai_runtime(db: Session, user_id: int) -> dict[str, Any]:
             AiServiceAccount.user_id == user_id,
             AiServiceAccount.is_active.is_(True),
         )
-        .order_by(AiServiceAccount.id.desc())
+        .order_by(AiServiceAccount.priority.asc(), AiServiceAccount.id.desc())
     ).all()
 
     def _row_to_runtime(row: AiServiceAccount, runtime_mode: str) -> dict[str, Any]:
@@ -8084,6 +8287,10 @@ def _resolve_user_ai_runtime(db: Session, user_id: int) -> dict[str, Any]:
         selected_row = next((x for x in global_rows if int(x.id or 0) == int(service_id)), None)
     elif mode == "user" and service_id:
         selected_row = next((x for x in user_rows if int(x.id or 0) == int(service_id)), None)
+    if mode == "user" and not selected_row and user_rows:
+        selected_row = user_rows[0]
+    if mode == "global" and not selected_row and global_rows:
+        selected_row = global_rows[0]
 
     if mode == "user" and selected_row:
         ai_chain.append(_row_to_runtime(selected_row, "user"))
@@ -8141,12 +8348,12 @@ def _build_ai_profile_payload(db: Session, user_id: int) -> AiProfileOut:
     user_services = db.scalars(
         select(AiServiceAccount)
         .where(AiServiceAccount.user_id == user_id)
-        .order_by(AiServiceAccount.id.desc())
+        .order_by(AiServiceAccount.priority.asc(), AiServiceAccount.id.desc())
     ).all()
     global_services = db.scalars(
         select(AiServiceAccount)
         .where(AiServiceAccount.user_id.is_(None))
-        .order_by(AiServiceAccount.id.desc())
+        .order_by(AiServiceAccount.priority.asc(), AiServiceAccount.id.desc())
     ).all()
     runtime = _resolve_user_ai_runtime(db, user_id)
     runtime_chain = [x for x in (runtime.get("ai_chain") or []) if isinstance(x, dict)]

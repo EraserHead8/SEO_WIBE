@@ -44,7 +44,10 @@ let adsRecLoadProgress = { active: false, total: 0, loaded: 0 };
 let adsRecLoadToken = 0;
 let salesRows = [];
 let salesChartRows = [];
-let salesComparison = null;
+let salesCompareRows = [];
+let salesCompareChartRows = [];
+let salesCompareLabel = "";
+let salesCurrentLabel = "";
 let salesLoadProgress = { active: false, total: 0, loaded: 0 };
 let salesLoadState = "idle";
 let salesLoadToken = 0;
@@ -550,6 +553,7 @@ function applyUiLanguage() {
   setText(".nav-btn[data-tab='social']", t("nav_social"));
   setText(".nav-btn[data-tab='profile']", t("nav_profile"));
   setText(".nav-btn[data-tab='help']", t("nav_help"));
+  setText("#topbarOpenProfileBtn", lang === "en" ? "Open profile" : "Открыть профиль");
   applyNavIcons();
   applySidebarMode();
   setText(".btn-danger.full", t("logout"));
@@ -1887,7 +1891,10 @@ async function logout() {
   adsRecommendationRows = [];
   salesRows = [];
   salesChartRows = [];
-  salesComparison = null;
+  salesCompareRows = [];
+  salesCompareChartRows = [];
+  salesCompareLabel = "";
+  salesCurrentLabel = "";
   moduleLoadState.clear();
   moduleInflightState.clear();
   currentProductsSubtab = "catalog";
@@ -1955,11 +1962,24 @@ async function ensureAuth() {
   }, 250);
 }
 
+function computeAvatarInitials(name, email) {
+  const raw = String(name || "").trim() || String(email || "").trim();
+  if (!raw) return "--";
+  const parts = raw.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
+  }
+  const base = raw.includes("@") ? raw.split("@")[0] : raw;
+  return base.slice(0, 2).toUpperCase();
+}
+
 function renderTopbarUser() {
-  const btn = document.getElementById("topbarUserBtn");
-  if (!btn) return;
+  const btn = document.getElementById("topbarAvatarBtn");
+  const popover = document.getElementById("topbarUserPopover");
+  if (!btn || !popover) return;
   if (!me) {
     btn.classList.add("hidden");
+    popover.classList.add("hidden");
     return;
   }
   const name = String(me.actor_nick || me.email || "-");
@@ -1967,11 +1987,29 @@ function renderTopbarUser() {
   const roleText = me.role === "admin"
     ? tr("Админ", "Admin")
     : (isOwner ? tr("Владелец", "Owner") : tr("Сотрудник", "Member"));
-  const nameEl = document.getElementById("topbarUserName");
-  const roleEl = document.getElementById("topbarUserRole");
-  if (nameEl) nameEl.textContent = name;
-  if (roleEl) roleEl.textContent = roleText;
+  const initials = computeAvatarInitials(name, me.email);
+  const avatarText = document.getElementById("topbarAvatarText");
+  const popAvatar = document.getElementById("topbarPopoverAvatar");
+  const popName = document.getElementById("topbarPopoverName");
+  const popRole = document.getElementById("topbarPopoverRole");
+  const popEmail = document.getElementById("topbarPopoverEmail");
+  if (avatarText) avatarText.textContent = initials;
+  if (popAvatar) popAvatar.textContent = initials;
+  if (popName) popName.textContent = name;
+  if (popRole) popRole.textContent = roleText;
+  if (popEmail) popEmail.textContent = String(me.email || "-");
   btn.classList.remove("hidden");
+}
+
+function toggleTopbarUserPopover() {
+  const popover = document.getElementById("topbarUserPopover");
+  if (!popover) return;
+  popover.classList.toggle("hidden");
+}
+
+function closeTopbarUserPopover() {
+  const popover = document.getElementById("topbarUserPopover");
+  if (popover) popover.classList.add("hidden");
 }
 
 function initAuthRemember() {
@@ -5987,7 +6025,6 @@ async function loadDashboard() {
 
   const points = await loadTrend({ days: 21 });
   renderTrendChart("dashboardTrendChart", "dashboardTrendMeta", points);
-  markModuleLoaded("sales");
 }
 
 function initSalesPeriodDefaults() {
@@ -6116,7 +6153,7 @@ function renderSalesChart(points) {
   const metric = (document.getElementById("salesMetricMode")?.value || "units").trim().toLowerCase();
   const showWb = Boolean(document.getElementById("salesShowWb")?.checked);
   const showOzon = Boolean(document.getElementById("salesShowOzon")?.checked);
-  const chartPoints = points
+  const normalizeChartPoints = (rows) => (Array.isArray(rows) ? rows : [])
     .map((row) => ({
       label: String(row?.bucket || row?.date || ""),
       day: String(row?.date || "").trim() || String(row?.bucket || "").trim().slice(0, 10),
@@ -6140,6 +6177,11 @@ function renderSalesChart(points) {
       ozon_penalties: Number(row?.ozon_penalties || 0),
     }))
     .filter((row) => row.label);
+  const chartPoints = normalizeChartPoints(points);
+  const compareSource = (Array.isArray(salesCompareChartRows) && salesCompareChartRows.length)
+    ? salesCompareChartRows
+    : buildSalesChartFromRows(salesCompareRows);
+  const comparePoints = normalizeChartPoints(compareSource);
   if (!chartPoints.length) {
     clearChartHost(svg);
     meta.textContent = tr("Нет данных за период.", "No data for selected period.");
@@ -6161,32 +6203,37 @@ function renderSalesChart(points) {
     return Number(bucket.units || 0);
   };
   const series = [];
-  const byBucketByMp = new Map();
-  const byDayByMp = new Map();
-  for (const row of Array.isArray(salesRows) ? salesRows : []) {
-    const bucket = String(row?.bucket || row?.date || "").trim();
-    const day = String(row?.date || "").trim() || bucket.slice(0, 10);
-    if (!bucket) continue;
-    const mp = String(row?.marketplace || "").trim().toLowerCase() === "ozon" ? "ozon" : "wb";
-    const key = `${bucket}::${mp}`;
-    const dayKey = `${day}::${mp}`;
-    const item = byBucketByMp.get(key) || { orders: 0, units: 0, revenue: 0, returns: 0, ad_spend: 0, penalties: 0 };
-    item.orders += Number(row?.orders || 0);
-    item.units += Number(row?.units || 0);
-    item.revenue += Number(row?.revenue || 0);
-    item.returns += Number(row?.returns || 0);
-    item.ad_spend += Number(row?.ad_spend || 0);
-    item.penalties += Number(row?.penalties || 0);
-    byBucketByMp.set(key, item);
-    const dayItem = byDayByMp.get(dayKey) || { orders: 0, units: 0, revenue: 0, returns: 0, ad_spend: 0, penalties: 0 };
-    dayItem.orders += Number(row?.orders || 0);
-    dayItem.units += Number(row?.units || 0);
-    dayItem.revenue += Number(row?.revenue || 0);
-    dayItem.returns += Number(row?.returns || 0);
-    dayItem.ad_spend += Number(row?.ad_spend || 0);
-    dayItem.penalties += Number(row?.penalties || 0);
-    byDayByMp.set(dayKey, dayItem);
-  }
+  const buildMpMaps = (rows) => {
+    const byBucket = new Map();
+    const byDay = new Map();
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const bucket = String(row?.bucket || row?.date || "").trim();
+      const day = String(row?.date || "").trim() || bucket.slice(0, 10);
+      if (!bucket) continue;
+      const mp = String(row?.marketplace || "").trim().toLowerCase() === "ozon" ? "ozon" : "wb";
+      const key = `${bucket}::${mp}`;
+      const dayKey = `${day}::${mp}`;
+      const item = byBucket.get(key) || { orders: 0, units: 0, revenue: 0, returns: 0, ad_spend: 0, penalties: 0 };
+      item.orders += Number(row?.orders || 0);
+      item.units += Number(row?.units || 0);
+      item.revenue += Number(row?.revenue || 0);
+      item.returns += Number(row?.returns || 0);
+      item.ad_spend += Number(row?.ad_spend || 0);
+      item.penalties += Number(row?.penalties || 0);
+      byBucket.set(key, item);
+      const dayItem = byDay.get(dayKey) || { orders: 0, units: 0, revenue: 0, returns: 0, ad_spend: 0, penalties: 0 };
+      dayItem.orders += Number(row?.orders || 0);
+      dayItem.units += Number(row?.units || 0);
+      dayItem.revenue += Number(row?.revenue || 0);
+      dayItem.returns += Number(row?.returns || 0);
+      dayItem.ad_spend += Number(row?.ad_spend || 0);
+      dayItem.penalties += Number(row?.penalties || 0);
+      byDay.set(dayKey, dayItem);
+    }
+    return { byBucket, byDay };
+  };
+  const currentMaps = buildMpMaps(salesRows);
+  const compareMaps = buildMpMaps(salesCompareRows);
   const pointMarketplaceValue = (point, mp, key) => {
     const map = {
       orders: `${mp}_orders`,
@@ -6199,19 +6246,19 @@ function renderSalesChart(points) {
     const prop = map[key] || map.units;
     return Number(point?.[prop] || 0);
   };
-  const hasPointMarketplaceData = (mp) => chartPoints.some((point) => {
+  const hasPointMarketplaceData = (pointsList, mp) => pointsList.some((point) => {
     const val = pointMarketplaceValue(point, mp, metric);
     return Number.isFinite(val) && Math.abs(val) > 0;
   });
-  const resolveMarketplaceSeries = (mp) => {
-    if (hasPointMarketplaceData(mp)) {
-      return chartPoints.map((point) => pointMarketplaceValue(point, mp, metric));
+  const resolveMarketplaceSeries = (pointsList, maps, mp) => {
+    if (hasPointMarketplaceData(pointsList, mp)) {
+      return pointsList.map((point) => pointMarketplaceValue(point, mp, metric));
     }
-    return chartPoints.map((point) => {
-      const exact = byBucketByMp.get(`${point.label}::${mp}`);
+    return pointsList.map((point) => {
+      const exact = maps.byBucket.get(`${point.label}::${mp}`);
       if (exact) return valueOf(exact, metric);
       const day = String(point.day || point.label || "").slice(0, 10);
-      const dayRow = byDayByMp.get(`${day}::${mp}`);
+      const dayRow = maps.byDay.get(`${day}::${mp}`);
       if (!dayRow) return 0;
       const bucketsPerDay = Math.max(1, Number(labelDayCount.get(day) || 1));
       return Number(valueOf(dayRow, metric) / bucketsPerDay);
@@ -6220,18 +6267,44 @@ function renderSalesChart(points) {
   if (showWb) {
     series.push({
       key: "wb",
-      label: "WB",
+      label: `WB${salesCurrentLabel ? ` • ${salesCurrentLabel}` : ""}`,
       color: "#2ec5ff",
-      values: resolveMarketplaceSeries("wb"),
+      values: resolveMarketplaceSeries(chartPoints, currentMaps, "wb"),
     });
   }
   if (showOzon) {
     series.push({
       key: "ozon",
-      label: "Ozon",
+      label: `Ozon${salesCurrentLabel ? ` • ${salesCurrentLabel}` : ""}`,
       color: "#34d9a3",
-      values: resolveMarketplaceSeries("ozon"),
+      values: resolveMarketplaceSeries(chartPoints, currentMaps, "ozon"),
     });
+  }
+  if (comparePoints.length) {
+    const alignCompareValues = (mp, fallbackColor) => {
+      const baseValues = resolveMarketplaceSeries(comparePoints, compareMaps, mp);
+      if (baseValues.length === labels.length) return baseValues;
+      const pad = labels.map((_, idx) => baseValues[idx] ?? 0);
+      return pad;
+    };
+    if (showWb) {
+      series.push({
+        key: "wb_prev",
+        label: `WB${salesCompareLabel ? ` • ${salesCompareLabel}` : " • prev"}`,
+        color: "rgba(46, 197, 255, 0.45)",
+        dashed: true,
+        values: alignCompareValues("wb", "#2ec5ff"),
+      });
+    }
+    if (showOzon) {
+      series.push({
+        key: "ozon_prev",
+        label: `Ozon${salesCompareLabel ? ` • ${salesCompareLabel}` : " • prev"}`,
+        color: "rgba(52, 217, 163, 0.45)",
+        dashed: true,
+        values: alignCompareValues("ozon", "#34d9a3"),
+      });
+    }
   }
   if (!series.length) {
     clearChartHost(svg);
@@ -6285,10 +6358,11 @@ function renderSalesChart(points) {
     return `<text x="${x}" y="${height - 2}" fill="rgba(205,222,255,0.66)" font-size="10" text-anchor="middle">${escapeHtml(short)}</text>`;
   }).join("");
   const lineMarkup = series.map((item, idx) => {
+    const dash = item.dashed ? ` stroke-dasharray="6 5"` : "";
     const line = item.values.length > 1
-      ? `<polyline points="${lineTo(item.values)}" fill="none" stroke="${item.color}" stroke-width="${idx === 0 ? 3.4 : 2.6}" stroke-linecap="round"></polyline>`
+      ? `<polyline points="${lineTo(item.values)}" fill="none" stroke="${item.color}" stroke-width="${idx === 0 ? 3.4 : 2.6}" stroke-linecap="round"${dash}></polyline>`
       : "";
-    const area = idx === 0 && item.values.length > 1
+    const area = idx === 0 && item.values.length > 1 && !item.dashed
       ? `<polygon points="${lineTo(item.values)} ${width - padX},${height - padY} ${padX},${height - padY}" fill="${item.color}" opacity="0.08"></polygon>`
       : "";
     const points = item.values.map((v, pointIdx) => circleAt(v, pointIdx, item.color)).join("");
@@ -6356,8 +6430,9 @@ function renderSalesChart(points) {
             smooth: true,
             showSymbol: false,
             data: item.values,
-            lineStyle: { width: idx === 0 ? 3 : 2.2, color: item.color },
-            areaStyle: idx === 0
+            lineStyle: { width: idx === 0 ? 3 : 2.2, color: item.color, type: item.dashed ? "dashed" : "solid" },
+            itemStyle: { color: item.color },
+            areaStyle: idx === 0 && !item.dashed
               ? {
                 color: {
                   type: "linear",
@@ -6548,6 +6623,31 @@ async function loadSalesStats(retryAttempt = 0) {
   const date_from = (document.getElementById("salesDateFrom")?.value || "").trim();
   const date_to = (document.getElementById("salesDateTo")?.value || "").trim();
   syncSalesRangeButtons();
+  let compare_from = "";
+  let compare_to = "";
+  salesCompareLabel = "";
+  salesCurrentLabel = "";
+  if (date_from && date_to) {
+    const fromDate = new Date(`${date_from}T00:00:00`);
+    const toDate = new Date(`${date_to}T00:00:00`);
+    const diffDays = Number.isFinite(fromDate.getTime()) && Number.isFinite(toDate.getTime())
+      ? Math.round((toDate.getTime() - fromDate.getTime()) / (24 * 3600 * 1000))
+      : 0;
+    if (diffDays >= 0) {
+      const prevTo = new Date(fromDate);
+      prevTo.setDate(prevTo.getDate() - 1);
+      const prevFrom = new Date(prevTo);
+      prevFrom.setDate(prevFrom.getDate() - diffDays);
+      compare_from = toYmd(prevFrom);
+      compare_to = toYmd(prevTo);
+      salesCurrentLabel = diffDays === 0
+        ? tr("Сегодня", "Today")
+        : tr("Текущий период", "Current period");
+      salesCompareLabel = diffDays === 0
+        ? tr("Вчера", "Yesterday")
+        : tr("Предыдущий период", "Previous period");
+    }
+  }
   const qp = new URLSearchParams();
   qp.set("marketplace", market || "all");
   qp.set("granularity", "auto");
@@ -6559,6 +6659,8 @@ async function loadSalesStats(retryAttempt = 0) {
   if (meta) meta.textContent = tr("Загрузка статистики продаж...", "Loading sales statistics...");
   salesRows = [];
   salesChartRows = [];
+  salesCompareRows = [];
+  salesCompareChartRows = [];
   renderSalesStats();
   salesLoadState = "loading";
   salesLoadProgress = { active: true, total: market === "all" ? 2 : 1, loaded: 0 };
@@ -6566,6 +6668,14 @@ async function loadSalesStats(retryAttempt = 0) {
 
   let data = null;
   let lastError = "";
+  const comparePromise = (compare_from && compare_to)
+    ? requestJson(`/api/sales/stats?${(() => {
+        const q = new URLSearchParams(qp);
+        q.set("date_from", compare_from);
+        q.set("date_to", compare_to);
+        return q.toString();
+      })()}`, { headers: authHeaders(), timeoutMs: 120000 }).catch(() => null)
+    : Promise.resolve(null);
   for (let attempt = 0; attempt < 2; attempt += 1) {
     data = await requestJson(`/api/sales/stats?${qp.toString()}`, {
       headers: authHeaders(),
@@ -6584,6 +6694,8 @@ async function loadSalesStats(retryAttempt = 0) {
     if (runToken !== salesLoadToken) return;
     salesRows = [];
     salesChartRows = [];
+    salesCompareRows = [];
+    salesCompareChartRows = [];
     salesLoadState = "error";
     salesLoadProgress = { active: false, total: market === "all" ? 2 : 1, loaded: 0 };
     updateSalesLoadStatus();
@@ -6603,6 +6715,19 @@ async function loadSalesStats(retryAttempt = 0) {
   salesChartRows = Array.isArray(data.chart) ? data.chart : [];
   if (!salesChartRows.length && salesRows.length) {
     salesChartRows = buildSalesChartFromRows(salesRows);
+  }
+  const compareData = await comparePromise;
+  if (compareData && runToken === salesLoadToken) {
+    const rawCompareRows = Array.isArray(compareData.rows) ? compareData.rows : [];
+    salesCompareRows = rawCompareRows.filter((row) => {
+      const mp = String(row?.marketplace || "").toLowerCase();
+      if (market === "all") return mp === "wb" || mp === "ozon";
+      return mp === market;
+    });
+    salesCompareChartRows = Array.isArray(compareData.chart) ? compareData.chart : [];
+    if (!salesCompareChartRows.length && salesCompareRows.length) {
+      salesCompareChartRows = buildSalesChartFromRows(salesCompareRows);
+    }
   }
   const totals = data.totals || {};
   const warnings = Array.isArray(data.warnings) ? data.warnings.filter(Boolean) : [];
@@ -8024,6 +8149,19 @@ if (profileSectionModal) {
     if (e.key === "Escape") closeProfileSectionModal();
   });
 }
+
+document.addEventListener("click", (e) => {
+  const popover = document.getElementById("topbarUserPopover");
+  const btn = document.getElementById("topbarAvatarBtn");
+  if (!popover || !btn) return;
+  if (popover.classList.contains("hidden")) return;
+  const target = e.target;
+  if (popover.contains(target) || btn.contains(target)) return;
+  closeTopbarUserPopover();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeTopbarUserPopover();
+});
 
 window.switchHelpSubtab = switchHelpSubtab;
 window.askHelpAssistant = askHelpAssistant;

@@ -460,6 +460,10 @@ class AiServiceIn(BaseModel):
     base_url: str = ""
 
 
+class AiServiceReorderIn(BaseModel):
+    service_ids: list[int] = Field(default_factory=list)
+
+
 class AiServiceOut(BaseModel):
     id: int
     scope: str
@@ -469,6 +473,7 @@ class AiServiceOut(BaseModel):
     model: str
     base_url: str
     api_key_masked: str
+    priority: int = 1000
     is_active: bool = True
     created_at: str | None = None
 

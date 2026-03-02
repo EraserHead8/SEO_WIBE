@@ -140,6 +140,10 @@ def run_lightweight_migrations():
         if calendar_cols and "is_public" not in calendar_cols:
             conn.execute(text("ALTER TABLE social_calendar_events ADD COLUMN is_public BOOLEAN DEFAULT 0"))
 
+        ai_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(ai_service_accounts)"))}
+        if ai_cols and "priority" not in ai_cols:
+            conn.execute(text("ALTER TABLE ai_service_accounts ADD COLUMN priority INTEGER DEFAULT 1000"))
+
 
 def ensure_admin_emails():
     raw = settings.admin_emails or ""

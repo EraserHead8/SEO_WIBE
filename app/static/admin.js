@@ -15,6 +15,7 @@ let adminAuditTotalPages = 0;
 let adminAiGlobalState = null;
 let adminSelectedUserAiState = null;
 let adminServerMetrics = null;
+let adminServerHistory = [];
 const adminUserProfileCache = new Map();
 let adminTeamModalState = {
   userId: 0,
@@ -254,11 +255,21 @@ const AUDIT_ACTION_TITLES = {
   admin_ai_global_service_added: { ru: "Админ добавил глобальный AI сервис", en: "Admin added global AI service" },
   admin_ai_global_service_updated: { ru: "Админ обновил глобальный AI сервис", en: "Admin updated global AI service" },
   admin_ai_global_service_deleted: { ru: "Админ удалил глобальный AI сервис", en: "Admin deleted global AI service" },
+  admin_ai_global_service_reordered: { ru: "Админ изменил порядок глобальных AI сервисов", en: "Admin reordered global AI services" },
   admin_user_ai_selected: { ru: "Админ изменил AI режим пользователя", en: "Admin changed user AI mode" },
   admin_user_ai_service_added: { ru: "Админ добавил AI сервис пользователю", en: "Admin added user AI service" },
   admin_user_ai_service_updated: { ru: "Админ обновил AI сервис пользователя", en: "Admin updated user AI service" },
   admin_user_ai_service_deleted: { ru: "Админ удалил AI сервис пользователя", en: "Admin deleted user AI service" },
+  admin_user_ai_service_reordered: { ru: "Админ изменил порядок AI сервисов пользователя", en: "Admin reordered user AI services" },
+  profile_ai_service_reordered: { ru: "Изменен порядок AI сервисов профиля", en: "Profile AI services reordered" },
   help_assistant_asked: { ru: "Запрос к AI помощнику", en: "AI assistant request" },
+  social_note_created: { ru: "Создана заметка", en: "Note created" },
+  social_note_updated: { ru: "Обновлена заметка", en: "Note updated" },
+  social_note_deleted: { ru: "Удалена заметка", en: "Note deleted" },
+  social_calendar_event_created: { ru: "Создано событие календаря", en: "Calendar event created" },
+  social_calendar_event_updated: { ru: "Обновлено событие календаря", en: "Calendar event updated" },
+  social_calendar_event_deleted: { ru: "Удалено событие календаря", en: "Calendar event deleted" },
+  social_chat_message_sent: { ru: "Сообщение в чате", en: "Chat message sent" },
   admin_ui_settings_updated: { ru: "Изменены настройки оформления", en: "UI settings updated" },
 };
 
@@ -302,7 +313,11 @@ function humanAuditDetailKey(keyRaw) {
     question_id: aTr("ID вопроса", "Question ID"),
     review_id: aTr("ID отзыва", "Review ID"),
     product_id: aTr("ID товара", "Product ID"),
+    event_id: aTr("ID события", "Event ID"),
+    thread_id: aTr("ID чата", "Thread ID"),
+    message_id: aTr("ID сообщения", "Message ID"),
     service_id: aTr("ID сервиса", "Service ID"),
+    service_ids: aTr("Сервисы", "Services"),
     action: aTr("Операция", "Operation"),
     role: aTr("Роль", "Role"),
     source: aTr("Источник", "Source"),
@@ -311,6 +326,17 @@ function humanAuditDetailKey(keyRaw) {
     mode: aTr("Режим", "Mode"),
     module: aTr("Модуль", "Module"),
     marketplace: aTr("Маркетплейс", "Marketplace"),
+    reply: aTr("Ответ", "Reply"),
+    answer: aTr("Ответ", "Answer"),
+    question: aTr("Вопрос", "Question"),
+    preview: aTr("Превью", "Preview"),
+    title: aTr("Название", "Title"),
+    start_at: aTr("Начало", "Start"),
+    is_public: aTr("Общее", "Public"),
+    recipients: aTr("Получатели", "Recipients"),
+    sku: "SKU",
+    state: aTr("Статус", "State"),
+    knowledge: aTr("База знаний", "Knowledge"),
     count: aTr("Количество", "Count"),
     rows: aTr("Строк", "Rows"),
     loaded: aTr("Загружено", "Loaded"),
@@ -494,6 +520,8 @@ function applyAdminLanguage() {
     ["#adminTab-ai .panel:nth-of-type(2) .grid-4 button", aTr("Сохранить выбор пользователя", "Save user selection")],
     ["#adminTab-ai .panel:nth-of-type(2) .actions button", aTr("Добавить AI пользователю", "Add AI for user")],
     ["#adminAiUserSaveBtn", aTr("Сохранить", "Save")],
+    ["#adminAiGlobalPrimary", aTr("Приоритет задается порядком в списке ниже", "Priority is defined by the list order below")],
+    ["#adminAiUserPrimary", aTr("Приоритет задается порядком в списке", "Priority is defined by the list order")],
     ["#adminTab-appearance .panel h3", aTr("Оформление интерфейса", "UI appearance")],
     ["#adminTab-appearance .grid-3 button:nth-of-type(1)", aTr("Настроить оформление", "Configure appearance")],
     ["#adminTab-appearance .grid-3 button:nth-of-type(2)", aTr("Обновить", "Refresh")],
@@ -1663,43 +1691,101 @@ function clearAiServiceForm(prefix) {
   }
 }
 
+function renderAiPriorityList(host, rows, options = {}) {
+  if (!host) return;
+  const list = Array.isArray(rows) ? rows : [];
+  if (!list.length) {
+    host.innerHTML = `<div class="hint">${aTr("Сервисов нет.", "No services yet.")}</div>`;
+    return;
+  }
+  const draggable = Boolean(options.draggable);
+  const readonly = Boolean(options.readonly);
+  host.innerHTML = list.map((row, idx) => {
+    const label = String(row?.name || "-");
+    const provider = String(row?.provider || "-");
+    const model = String(row?.model || "-");
+    const base = String(row?.base_url || "-");
+    return `
+      <div class="admin-ai-item${readonly ? " readonly" : ""}" draggable="${draggable ? "true" : "false"}" data-id="${Number(row.id || 0)}">
+        <div class="drag-handle" aria-hidden="true">${draggable ? "↕" : "•"}</div>
+        <div class="ai-main">
+          <div class="ai-title"><b>${escapeHtml(label)}</b><span class="hint">#${idx + 1}</span></div>
+          <div class="ai-meta">${escapeHtml(provider)} · ${escapeHtml(model)} · ${escapeHtml(base)}</div>
+        </div>
+        ${readonly ? "" : `
+          <div class="actions">
+            <button class="btn-secondary" type="button" data-ai-edit="${Number(row.id || 0)}">${aTr("Изменить", "Edit")}</button>
+            <button class="btn-danger" type="button" data-ai-del="${Number(row.id || 0)}">${aTr("Удалить", "Delete")}</button>
+          </div>
+        `}
+      </div>
+    `;
+  }).join("");
+}
+
+function bindAiDragSort(host, { onReorder } = {}) {
+  if (!host || typeof onReorder !== "function") return;
+  let dragItem = null;
+  host.querySelectorAll(".admin-ai-item").forEach((item) => {
+    if (item.getAttribute("draggable") !== "true") return;
+    item.addEventListener("dragstart", (e) => {
+      dragItem = item;
+      item.classList.add("dragging");
+      if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+    });
+    item.addEventListener("dragend", () => {
+      item.classList.remove("dragging");
+      dragItem = null;
+    });
+  });
+  host.addEventListener("dragover", (e) => {
+    if (!dragItem) return;
+    e.preventDefault();
+    const target = e.target.closest(".admin-ai-item");
+    if (!target || target === dragItem || target.getAttribute("draggable") !== "true") return;
+    const rect = target.getBoundingClientRect();
+    const after = e.clientY > rect.top + rect.height / 2;
+    host.insertBefore(dragItem, after ? target.nextSibling : target);
+  });
+  host.addEventListener("drop", (e) => {
+    if (!dragItem) return;
+    e.preventDefault();
+    dragItem.classList.remove("dragging");
+    dragItem = null;
+    const ids = [...host.querySelectorAll(".admin-ai-item")]
+      .map((el) => Number(el.dataset.id || 0))
+      .filter((id) => id > 0);
+    onReorder(ids);
+  });
+}
+
 function renderAdminAiTab(preserveUserMode = false) {
   const globalMode = document.getElementById("adminAiGlobalMode");
-  const globalServiceSel = document.getElementById("adminAiGlobalServiceSelect");
-  const globalTable = document.getElementById("adminAiGlobalTable");
-  if (!globalMode || !globalServiceSel || !globalTable) return;
+  const globalList = document.getElementById("adminAiGlobalPriorityList");
+  if (!globalMode || !globalList) return;
 
   const globalDefault = adminAiGlobalState?.global_default || { mode: "builtin", service_id: null };
   const globalServices = Array.isArray(adminAiGlobalState?.global_services) ? adminAiGlobalState.global_services : [];
   globalMode.value = String(globalDefault.mode || "builtin");
-  globalServiceSel.innerHTML = globalServices.length
-    ? globalServices.map((row) => `<option value="${Number(row.id || 0)}">#${Number(row.id || 0)} ${escapeHtml(String(row.name || "-"))} (${escapeHtml(String(row.provider || "-"))})</option>`).join("")
-    : `<option value="">${aTr("Сервисов нет", "No services")}</option>`;
-  if (globalDefault.service_id && [...globalServiceSel.options].some((x) => Number(x.value) === Number(globalDefault.service_id))) {
-    globalServiceSel.value = String(globalDefault.service_id);
-  }
-  globalTable.innerHTML = globalServices.length
-    ? globalServices.map((row, idx) => `
-      <tr>
-        <td>${Number(row.id || 0)}</td>
-        <td>${escapeHtml(String(row.name || "-"))}<div class="hint">${aTr("Приоритет", "Priority")} #${idx + 1}</div></td>
-        <td>${escapeHtml(String(row.provider || "-"))}</td>
-        <td>${escapeHtml(String(row.model || "-"))}</td>
-        <td>${escapeHtml(String(row.base_url || "-"))}</td>
-        <td>${escapeHtml(String(row.api_key_masked || "-"))}</td>
-        <td>
-          <div class="actions">
-            <button class="btn-secondary" type="button" data-ai-global-edit="${Number(row.id || 0)}">${aTr("Изменить", "Edit")}</button>
-            <button class="btn-danger" type="button" data-ai-global-del="${Number(row.id || 0)}">${aTr("Удалить", "Delete")}</button>
-          </div>
-        </td>
-      </tr>
-    `).join("")
-    : `<tr><td colspan="7">${aTr("Глобальные AI сервисы не добавлены.", "No global AI services.")}</td></tr>`;
-
-  globalTable.querySelectorAll("[data-ai-global-edit]").forEach((btn) => {
+  renderAiPriorityList(globalList, globalServices, { draggable: true });
+  bindAiDragSort(globalList, {
+    onReorder: async (ids) => {
+      const data = await adminRequest("/api/admin/ai/global/services/reorder", {
+        method: "POST",
+        headers: adminHeaders(),
+        body: JSON.stringify({ service_ids: ids }),
+      }).catch((e) => {
+        alert(e.message);
+        return null;
+      });
+      if (!data) return;
+      if (adminAiGlobalState) adminAiGlobalState.global_services = data;
+      renderAdminAiTab(true);
+    },
+  });
+  globalList.querySelectorAll("[data-ai-edit]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const id = Number(btn.dataset.aiGlobalEdit || 0);
+      const id = Number(btn.dataset.aiEdit || 0);
       const row = globalServices.find((x) => Number(x.id) === id);
       if (!row) return;
       const map = {
@@ -1723,9 +1809,9 @@ function renderAdminAiTab(preserveUserMode = false) {
       if (keyInput) keyInput.focus();
     });
   });
-  globalTable.querySelectorAll("[data-ai-global-del]").forEach((btn) => {
+  globalList.querySelectorAll("[data-ai-del]").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      const id = Number(btn.dataset.aiGlobalDel || 0);
+      const id = Number(btn.dataset.aiDel || 0);
       if (!id) return;
       if (!confirm(aTr(`Удалить глобальный AI сервис #${id}?`, `Delete global AI service #${id}?`))) return;
       await adminRequest(`/api/admin/ai/global/services/${id}`, {
@@ -1738,9 +1824,9 @@ function renderAdminAiTab(preserveUserMode = false) {
 
   const userSelect = document.getElementById("adminAiUserSelect");
   const userMode = document.getElementById("adminAiUserMode");
-  const userServiceSel = document.getElementById("adminAiUserServiceSelect");
-  const userTable = document.getElementById("adminAiUserTable");
-  if (!userSelect || !userMode || !userServiceSel || !userTable) return;
+  const userList = document.getElementById("adminAiUserPriorityList");
+  const userGlobalList = document.getElementById("adminAiUserGlobalList");
+  if (!userSelect || !userMode || !userList || !userGlobalList) return;
   if (userSelect.value && !adminSelectedUserAiState) {
     loadAdminUserAi().catch(() => null);
     return;
@@ -1753,13 +1839,6 @@ function renderAdminAiTab(preserveUserMode = false) {
   userMode.value = selectedMode;
   const globalRows = Array.isArray(userState?.global_services) ? userState.global_services : [];
   const userRows = Array.isArray(userState?.user_services) ? userState.user_services : [];
-  const activeRows = selectedMode === "global" ? globalRows : userRows;
-  userServiceSel.innerHTML = activeRows.length
-    ? activeRows.map((row) => `<option value="${Number(row.id || 0)}">#${Number(row.id || 0)} ${escapeHtml(String(row.name || "-"))} (${escapeHtml(String(row.provider || "-"))})</option>`).join("")
-    : `<option value="">${aTr("Сервисов нет", "No services")}</option>`;
-  if (userState?.selection?.service_id && [...userServiceSel.options].some((x) => Number(x.value) === Number(userState.selection.service_id))) {
-    userServiceSel.value = String(userState.selection.service_id);
-  }
   const effective = userState?.effective || {};
   const chain = Array.isArray(userState?.effective_chain) ? userState.effective_chain : [];
   const eff = document.getElementById("adminAiUserEffective");
@@ -1769,32 +1848,29 @@ function renderAdminAiTab(preserveUserMode = false) {
       : `${effective.provider || "-"} ${effective.model || "-"}`;
     eff.textContent = `${aTr("Эффективно", "Effective")}: ${effective.mode || "-"} | ${effective.provider || "-"} | ${effective.model || "-"} | ${effective.service_name || "-"} • ${aTr("Цепочка fallback", "Fallback chain")}: ${chainText}`;
   }
-  const mergedRows = [...globalRows, ...userRows];
-  userTable.innerHTML = mergedRows.length
-    ? mergedRows.map((row) => `
-      <tr>
-        <td>${Number(row.id || 0)}</td>
-        <td>${escapeHtml(String(row.scope || "-"))}</td>
-        <td>${escapeHtml(String(row.name || "-"))}</td>
-        <td>${escapeHtml(String(row.provider || "-"))}</td>
-        <td>${escapeHtml(String(row.model || "-"))}</td>
-        <td>${escapeHtml(String(row.base_url || "-"))}</td>
-        <td>${escapeHtml(String(row.api_key_masked || "-"))}</td>
-        <td>
-          ${row.scope === "user"
-            ? `<div class="actions">
-                <button class="btn-secondary" type="button" data-ai-user-edit="${Number(row.id || 0)}">${aTr("Изменить", "Edit")}</button>
-                <button class="btn-danger" type="button" data-ai-user-del="${Number(row.id || 0)}">${aTr("Удалить", "Delete")}</button>
-              </div>`
-            : "-"}
-        </td>
-      </tr>
-    `).join("")
-    : `<tr><td colspan="8">${aTr("AI сервисов у пользователя нет.", "No AI services for user.")}</td></tr>`;
+  renderAiPriorityList(userList, userRows, { draggable: true });
+  renderAiPriorityList(userGlobalList, globalRows, { draggable: false, readonly: true });
+  bindAiDragSort(userList, {
+    onReorder: async (ids) => {
+      const userId = Number(document.getElementById("adminAiUserSelect")?.value || 0);
+      if (!userId) return;
+      const data = await adminRequest(`/api/admin/users/${userId}/ai/services/reorder`, {
+        method: "POST",
+        headers: adminHeaders(),
+        body: JSON.stringify({ service_ids: ids }),
+      }).catch((e) => {
+        alert(e.message);
+        return null;
+      });
+      if (!data) return;
+      if (adminSelectedUserAiState) adminSelectedUserAiState.user_services = data;
+      renderAdminAiTab(true);
+    },
+  });
 
-  userTable.querySelectorAll("[data-ai-user-edit]").forEach((btn) => {
+  userList.querySelectorAll("[data-ai-edit]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const id = Number(btn.dataset.aiUserEdit || 0);
+      const id = Number(btn.dataset.aiEdit || 0);
       const row = userRows.find((x) => Number(x.id) === id);
       if (!row) return;
       const map = {
@@ -1818,9 +1894,9 @@ function renderAdminAiTab(preserveUserMode = false) {
       if (keyInput) keyInput.focus();
     });
   });
-  userTable.querySelectorAll("[data-ai-user-del]").forEach((btn) => {
+  userList.querySelectorAll("[data-ai-del]").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      const id = Number(btn.dataset.aiUserDel || 0);
+      const id = Number(btn.dataset.aiDel || 0);
       const userId = Number(document.getElementById("adminAiUserSelect")?.value || 0);
       if (!id || !userId) return;
       if (!confirm(aTr(`Удалить AI сервис пользователя #${id}?`, `Delete user AI service #${id}?`))) return;
@@ -1913,11 +1989,16 @@ function adminCloseAppearanceModal(evt) {
 
 async function adminSaveAiGlobalDefault() {
   const mode = String(document.getElementById("adminAiGlobalMode")?.value || "builtin").trim().toLowerCase();
-  const serviceId = Number(document.getElementById("adminAiGlobalServiceSelect")?.value || 0);
+  const globalRows = Array.isArray(adminAiGlobalState?.global_services) ? adminAiGlobalState.global_services : [];
+  const serviceId = Number(globalRows[0]?.id || 0);
+  if (mode === "global" && !serviceId) {
+    alert(aTr("Сначала добавьте глобальный AI сервис.", "Add a global AI service first."));
+    return;
+  }
   const payload = {
     use_global_default: false,
     mode,
-    service_id: mode === "global" ? serviceId : null,
+    service_id: mode === "global" ? (serviceId || null) : null,
   };
   await adminRequest("/api/admin/ai/global/default", {
     method: "POST",
@@ -1954,11 +2035,23 @@ async function adminSaveUserAiSelection() {
     return;
   }
   const rawMode = normalizeAiModeSelection(document.getElementById("adminAiUserMode")?.value || "global_default");
-  const serviceId = Number(document.getElementById("adminAiUserServiceSelect")?.value || 0);
+  const userRows = Array.isArray(adminSelectedUserAiState?.user_services) ? adminSelectedUserAiState.user_services : [];
+  const globalRows = Array.isArray(adminSelectedUserAiState?.global_services) ? adminSelectedUserAiState.global_services : [];
+  const topUserId = Number(userRows[0]?.id || 0);
+  const topGlobalId = Number(globalRows[0]?.id || 0);
+  const serviceId = rawMode === "user" ? topUserId : (rawMode === "global" ? topGlobalId : 0);
+  if (rawMode === "user" && !topUserId) {
+    alert(aTr("Сначала добавьте AI сервис пользователю.", "Add a user AI service first."));
+    return;
+  }
+  if (rawMode === "global" && !topGlobalId) {
+    alert(aTr("Сначала добавьте глобальный AI сервис.", "Add a global AI service first."));
+    return;
+  }
   const payload = {
     use_global_default: rawMode === "global_default",
     mode: rawMode === "global_default" ? "builtin" : rawMode,
-    service_id: rawMode === "global" || rawMode === "user" ? serviceId : null,
+    service_id: rawMode === "global" || rawMode === "user" ? (serviceId || null) : null,
   };
   await adminRequest(`/api/admin/users/${userId}/ai/select`, {
     method: "POST",
@@ -2018,6 +2111,98 @@ function formatAdminDuration(seconds) {
   return `${m}м`;
 }
 
+function formatAdminTimeShort(raw) {
+  if (!raw) return "-";
+  const dt = new Date(String(raw));
+  if (!dt || Number.isNaN(dt.getTime())) return "-";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+}
+
+function pushAdminServerHistory(payload) {
+  const ts = payload.timestamp || new Date().toISOString();
+  adminServerHistory.push({
+    ts,
+    cpu: Number(payload?.cpu?.usage_percent || 0),
+    mem: Number(payload?.memory?.usage_percent || 0),
+    disk: Number(payload?.disk?.usage_percent || 0),
+    rx: Number(payload?.network?.rx_bytes_per_sec || 0),
+    tx: Number(payload?.network?.tx_bytes_per_sec || 0),
+  });
+  if (adminServerHistory.length > 60) {
+    adminServerHistory = adminServerHistory.slice(-60);
+  }
+}
+
+function renderAdminServerChart(hostId, labels, series, { yMax = null, valueFormatter } = {}) {
+  const host = document.getElementById(hostId);
+  if (!host) return;
+  if (!labels.length || !series.length) {
+    host.innerHTML = `<div class="hint">${aTr("Нет данных", "No data")}</div>`;
+    return;
+  }
+  const canUseEcharts = Boolean(
+    typeof window !== "undefined"
+    && window.echarts
+    && typeof window.echarts.init === "function"
+    && host instanceof HTMLElement
+  );
+  if (!canUseEcharts) {
+    host.innerHTML = `<div class="hint">${aTr("Графики доступны при загрузке ECharts.", "Charts require ECharts.")}</div>`;
+    return;
+  }
+  let chart = null;
+  try {
+    chart = window.echarts.getInstanceByDom(host);
+  } catch (_) {
+    chart = null;
+  }
+  if (!chart) {
+    chart = window.echarts.init(host, null, { renderer: "canvas" });
+  }
+  chart.setOption(
+    {
+      animationDuration: 320,
+      grid: { top: 12, right: 16, bottom: 24, left: 46 },
+      tooltip: {
+        trigger: "axis",
+        backgroundColor: "rgba(17,31,58,0.92)",
+        borderWidth: 0,
+        textStyle: { color: "#eff6ff" },
+        valueFormatter: valueFormatter || undefined,
+      },
+      xAxis: {
+        type: "category",
+        boundaryGap: false,
+        data: labels,
+        axisLine: { lineStyle: { color: "rgba(97,122,156,0.35)" } },
+        axisTick: { show: false },
+        axisLabel: { color: "#6f86a7", fontSize: 10 },
+      },
+      yAxis: {
+        type: "value",
+        min: 0,
+        max: yMax || undefined,
+        splitLine: { lineStyle: { color: "rgba(95,121,162,0.17)" } },
+        axisLabel: { color: "#6f86a7", fontSize: 10 },
+      },
+      series: series.map((item) => ({
+        name: item.name,
+        type: "line",
+        smooth: true,
+        showSymbol: false,
+        data: item.values,
+        lineStyle: { width: 2.4, color: item.color },
+        itemStyle: { color: item.color },
+      })),
+    },
+    true
+  );
+  try {
+    chart.resize();
+  } catch (_) {}
+}
+
 function renderAdminServerMetrics() {
   const meta = document.getElementById("adminServerMeta");
   const uptime = document.getElementById("adminServerUptime");
@@ -2041,6 +2226,7 @@ function renderAdminServerMetrics() {
   const ts = formatDateTime(payload.timestamp || "");
   meta.textContent = `${aTr("Обновлено", "Updated")}: ${ts}`;
   uptime.textContent = `${aTr("Uptime", "Uptime")}: ${formatAdminDuration(payload.uptime_seconds || 0)}`;
+  pushAdminServerHistory(payload);
 
   const blocks = [
     [aTr("CPU", "CPU"), `${Number(cpu.usage_percent || 0).toFixed(1)}%`],
@@ -2063,6 +2249,21 @@ function renderAdminServerMetrics() {
     <tr><td>${escapeHtml(aTr("Диск занято", "Disk used"))}</td><td>${escapeHtml(`${formatAdminBytes(disk.used_bytes || 0)} / ${formatAdminBytes(disk.total_bytes || 0)}`)}</td></tr>
     <tr><td>${escapeHtml(aTr("Сеть RX/TX всего", "Network RX/TX total"))}</td><td>${escapeHtml(`${formatAdminBytes(network.rx_bytes_total || 0)} / ${formatAdminBytes(network.tx_bytes_total || 0)}`)}</td></tr>
   `;
+
+  const labels = adminServerHistory.map((row) => formatAdminTimeShort(row.ts));
+  renderAdminServerChart("adminServerChartCpu", labels, [
+    { name: "CPU %", values: adminServerHistory.map((row) => row.cpu), color: "#2ec5ff" },
+  ], { yMax: 100 });
+  renderAdminServerChart("adminServerChartMem", labels, [
+    { name: "RAM %", values: adminServerHistory.map((row) => row.mem), color: "#7c5cff" },
+  ], { yMax: 100 });
+  renderAdminServerChart("adminServerChartDisk", labels, [
+    { name: "Disk %", values: adminServerHistory.map((row) => row.disk), color: "#ffb347" },
+  ], { yMax: 100 });
+  renderAdminServerChart("adminServerChartNet", labels, [
+    { name: "RX", values: adminServerHistory.map((row) => row.rx), color: "#34d9a3" },
+    { name: "TX", values: adminServerHistory.map((row) => row.tx), color: "#ff6b6b" },
+  ], { valueFormatter: (val) => formatAdminBytes(val) });
 }
 
 async function loadAdminServerMetrics() {
@@ -2079,14 +2280,37 @@ function openAdminAuditDetails(row) {
   const modal = document.getElementById("adminAuditDetailsModal");
   const title = document.getElementById("adminAuditDetailsTitle");
   const meta = document.getElementById("adminAuditDetailsMeta");
+  const grid = document.getElementById("adminAuditDetailsGrid");
   const raw = document.getElementById("adminAuditDetailsRaw");
-  if (!modal || !title || !meta || !raw) return;
+  if (!modal || !title || !meta || !raw || !grid) return;
   const actionLabel = humanAuditAction(row?.action || "");
   const moduleLabel = humanAuditModule(row?.module_code || "");
   const actorEmail = String(row?.actor_email || "").trim();
   const actorMemberId = Number(row?.actor_member_id || 0);
   title.textContent = `${actionLabel} • ${moduleLabel}`;
   meta.textContent = `${aTr("Время", "Time")}: ${formatDateTime(row?.created_at)} • ${aTr("Актер", "Actor")}: ${actorEmail || "-"}${actorMemberId > 0 ? ` (#${actorMemberId})` : ""} • ID: ${row?.id ?? "-"}`;
+  const entityType = String(row?.entity_type || "").trim();
+  const entityId = String(row?.entity_id || "").trim();
+  const entityLabel = (entityType || entityId) ? `${entityType || "-"}:${entityId || "-"}` : "-";
+  const parsed = parseAuditDetails(row?.details || "");
+  const baseRows = [
+    [aTr("Актер", "Actor"), actorEmail || "-"],
+    [aTr("Роль", "Role"), row?.actor_is_owner ? aTr("Владелец", "Owner") : aTr("Сотрудник", "Employee")],
+    [aTr("Member ID", "Member ID"), actorMemberId > 0 ? `#${actorMemberId}` : "-"],
+    [aTr("Модуль", "Module"), moduleLabel || "-"],
+    [aTr("Действие", "Action"), actionLabel || "-"],
+    [aTr("Статус", "Status"), String(row?.status || "ok")],
+    [aTr("Entity", "Entity"), entityLabel],
+    [aTr("IP", "IP"), String(row?.ip || "-")],
+    [aTr("User-Agent", "User-Agent"), String(row?.user_agent || "-")],
+  ];
+  const detailRows = parsed.kv.length
+    ? parsed.kv.map(([k, v]) => [humanAuditDetailKey(k), v])
+    : (parsed.summary ? [[aTr("Детали", "Details"), parsed.summary]] : []);
+  grid.innerHTML = [...baseRows, ...detailRows]
+    .filter(([, v]) => String(v || "").trim())
+    .map(([k, v]) => `<div class="row"><b>${escapeHtml(String(k))}</b><span>${escapeHtml(String(v))}</span></div>`)
+    .join("");
   const pretty = {
     ...row,
     details_json: (() => {

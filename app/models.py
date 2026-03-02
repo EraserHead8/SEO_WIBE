@@ -292,6 +292,7 @@ class AiServiceAccount(Base):
     api_key: Mapped[str] = mapped_column(String(255), default="")
     model: Mapped[str] = mapped_column(String(120), default="")
     base_url: Mapped[str] = mapped_column(String(500), default="")
+    priority: Mapped[int] = mapped_column(Integer, default=1000, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

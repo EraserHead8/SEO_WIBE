@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260302a" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260302c" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -175,13 +175,6 @@
             <span class="bell-emoji" aria-hidden="true">🔔</span>
             <span id="socialBellBadge" class="icon-bell-badge hidden">0</span>
           </button>
-          <button id="topbarUserBtn" class="chip-btn topbar-user-btn hidden" type="button" onclick="showTab('profile', document.querySelector('.nav-btn[data-tab=profile]'))">
-            <span class="topbar-user-icon" aria-hidden="true">👤</span>
-            <span class="topbar-user-meta">
-              <span id="topbarUserName">-</span>
-              <small id="topbarUserRole">-</small>
-            </span>
-          </button>
           <select id="uiLangSelect" class="chip-select" onchange="changeUiLang()">
             <option value="ru">RU</option>
             <option value="en">EN</option>
@@ -199,6 +192,22 @@
             <option value="japan">Япония</option>
             <option value="greenland">Гренландия</option>
           </select>
+          <div class="topbar-user-wrap">
+            <button id="topbarAvatarBtn" class="chip-btn topbar-avatar-btn hidden" type="button" onclick="toggleTopbarUserPopover()">
+              <span id="topbarAvatarText">--</span>
+            </button>
+            <div id="topbarUserPopover" class="topbar-popover hidden">
+              <div class="topbar-popover-head">
+                <div class="avatar" id="topbarPopoverAvatar">--</div>
+                <div>
+                  <div id="topbarPopoverName">-</div>
+                  <div id="topbarPopoverRole" class="hint">-</div>
+                </div>
+              </div>
+              <div id="topbarPopoverEmail" class="hint">-</div>
+              <button id="topbarOpenProfileBtn" class="btn-secondary" type="button" onclick="showTab('profile', document.querySelector('.nav-btn[data-tab=profile]'))">Открыть профиль</button>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -363,7 +372,6 @@
               <option value="ad_spend">Реклама</option>
               <option value="penalties">Штрафы</option>
             </select>
-            <label class="check"><input id="salesShowTotal" type="checkbox" checked onchange="renderSalesStats()" /> Всего</label>
             <label class="check"><input id="salesShowWb" type="checkbox" checked onchange="renderSalesStats()" /> WB</label>
             <label class="check"><input id="salesShowOzon" type="checkbox" checked onchange="renderSalesStats()" /> Ozon</label>
           </div>
@@ -1255,7 +1263,7 @@
   <div id="hoverTip" class="hover-tip hidden"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script src="/static/app.js?v=20260302a"></script>
+  <script src="/static/app.js?v=20260302c"></script>
   <script src="/static/social.js?v=20260302a"></script>
 </body>
 </html>

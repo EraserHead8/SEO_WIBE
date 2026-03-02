@@ -410,6 +410,12 @@ def generate_review_reply(
     reviewer_name: str = "",
     marketplace: str = "wb",
     content_kind: str = "review",
+    api_key: str = "",
+    model: str = "",
+    provider: str = "openai",
+    base_url: str = "",
+    fallback_chain: list[dict[str, Any]] | None = None,
+    trace: dict[str, Any] | None = None,
 ) -> str:
     review = (review_text or "").strip()
     product = (product_name or "").strip() or "товар"
@@ -420,8 +426,6 @@ def generate_review_reply(
     kind = "question" if (content_kind or "").strip().lower() == "question" else "review"
 
     fallback = _fallback_question_reply(review, product, customer_name) if kind == "question" else _fallback_reply(review, product, rating, customer_name)
-    if not settings.openai_api_key:
-        return fallback
 
     if kind == "question":
         system_prompt = custom_prompt or (
@@ -455,7 +459,6 @@ def generate_review_reply(
             "Сформируй только текст ответа клиенту."
         )
     payload = {
-        "model": settings.openai_model,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -463,27 +466,153 @@ def generate_review_reply(
         "temperature": 0.6,
         "max_tokens": 260,
     }
-    headers = {
-        "Authorization": f"Bearer {settings.openai_api_key}",
-        "Content-Type": "application/json",
-    }
-    try:
-        with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
-            response = client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-        if response.status_code >= 400:
-            return fallback
-        data = response.json()
-        reply = (
-            data.get("choices", [{}])[0]
-            .get("message", {})
-            .get("content", "")
-            .strip()
+    attempts: list[dict[str, Any]] = []
+    candidates: list[dict[str, Any]] = []
+    primary_token = str(api_key or "").strip()
+    primary_provider = str(provider or "openai").strip().lower() or "openai"
+    primary_model = str(model or "").strip()
+    primary_base = str(base_url or "").strip()
+    if primary_token:
+        candidates.append(
+            {
+                "mode": "selected",
+                "service_id": None,
+                "service_name": "selected",
+                "provider": primary_provider,
+                "api_key": primary_token,
+                "model": primary_model or ("deepseek-chat" if primary_provider == "deepseek" else (settings.openai_model or "gpt-4o-mini")),
+                "base_url": primary_base,
+            }
         )
-        if not reply:
-            return fallback
-        return " ".join(reply.split())
-    except Exception:
+    for row in (fallback_chain or []):
+        if not isinstance(row, dict):
+            continue
+        token = str(row.get("api_key") or "").strip()
+        if not token:
+            continue
+        prov = str(row.get("provider") or "openai").strip().lower() or "openai"
+        mdl = str(row.get("model") or "").strip() or ("deepseek-chat" if prov == "deepseek" else (settings.openai_model or "gpt-4o-mini"))
+        entry = {
+            "mode": str(row.get("mode") or "fallback").strip().lower() or "fallback",
+            "service_id": int(row.get("service_id") or 0) or None,
+            "service_name": str(row.get("service_name") or "").strip(),
+            "provider": prov,
+            "api_key": token,
+            "model": mdl,
+            "base_url": str(row.get("base_url") or "").strip(),
+        }
+        # Skip exact duplicates in chain.
+        duplicate = any(
+            str(x.get("api_key") or "") == entry["api_key"]
+            and str(x.get("provider") or "") == entry["provider"]
+            and str(x.get("model") or "") == entry["model"]
+            and str(x.get("base_url") or "") == entry["base_url"]
+            for x in candidates
+        )
+        if not duplicate:
+            candidates.append(entry)
+    builtin_token = str(settings.openai_api_key or "").strip()
+    if builtin_token:
+        duplicate_builtin = any(
+            str(x.get("api_key") or "") == builtin_token
+            and str(x.get("provider") or "") == "openai"
+            for x in candidates
+        )
+        if not duplicate_builtin:
+            candidates.append(
+                {
+                    "mode": "builtin",
+                    "service_id": None,
+                    "service_name": "Built-in OpenAI",
+                    "provider": "openai",
+                    "api_key": builtin_token,
+                    "model": settings.openai_model or "gpt-4o-mini",
+                    "base_url": "",
+                }
+            )
+
+    if not candidates:
+        if isinstance(trace, dict):
+            trace.clear()
+            trace.update({"ok": False, "attempts": [], "error": "no_ai_token"})
         return fallback
+
+    for candidate in candidates:
+        endpoint = _resolve_ai_chat_endpoint(str(candidate.get("provider") or "openai"), str(candidate.get("base_url") or ""))
+        local_payload = dict(payload)
+        local_payload["model"] = str(candidate.get("model") or (settings.openai_model or "gpt-4o-mini"))
+        headers = {
+            "Authorization": f"Bearer {str(candidate.get('api_key') or '').strip()}",
+            "Content-Type": "application/json",
+        }
+        item: dict[str, Any] = {
+            "mode": str(candidate.get("mode") or ""),
+            "service_id": candidate.get("service_id"),
+            "service_name": str(candidate.get("service_name") or ""),
+            "provider": str(candidate.get("provider") or ""),
+            "model": local_payload["model"],
+            "endpoint": endpoint,
+        }
+        try:
+            with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
+                response = client.post(endpoint, headers=headers, json=local_payload)
+            item["status_code"] = int(response.status_code)
+            if response.status_code >= 400:
+                item["ok"] = False
+                item["error"] = _safe_response_text(response)[:260]
+                attempts.append(item)
+                continue
+            data = response.json()
+            reply = (
+                data.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+                .strip()
+            )
+            if not reply:
+                item["ok"] = False
+                item["error"] = "empty_reply"
+                attempts.append(item)
+                continue
+            answer = " ".join(reply.split())
+            item["ok"] = True
+            attempts.append(item)
+            if isinstance(trace, dict):
+                trace.clear()
+                trace.update(
+                    {
+                        "ok": True,
+                        "used_mode": item.get("mode"),
+                        "used_service_id": item.get("service_id"),
+                        "used_service_name": item.get("service_name"),
+                        "used_provider": item.get("provider"),
+                        "used_model": item.get("model"),
+                        "switched": len(attempts) > 1,
+                        "attempts": attempts,
+                    }
+                )
+            return answer
+        except Exception as exc:
+            item["ok"] = False
+            item["error"] = str(exc)[:260]
+            attempts.append(item)
+
+    if isinstance(trace, dict):
+        trace.clear()
+        trace.update(
+            {
+                "ok": False,
+                "used_mode": "",
+                "used_service_id": None,
+                "used_service_name": "",
+                "used_provider": "",
+                "used_model": "",
+                "switched": len(attempts) > 1,
+                "attempts": attempts,
+                "error": "all_attempts_failed",
+            }
+        )
+    return fallback
 
 
 def generate_help_assistant_reply(
@@ -804,7 +933,12 @@ def fetch_ozon_return_details(api_key: str, return_id: str) -> dict[str, Any]:
     return {}
 
 
-def fetch_wb_campaigns(api_key: str, enrich: bool = True) -> list[dict[str, Any]]:
+def fetch_wb_campaigns(
+    api_key: str,
+    enrich: bool = True,
+    fast_mode: bool = False,
+    max_attempts: int | None = None,
+) -> list[dict[str, Any]]:
     attempts: list[tuple[str, str, dict[str, Any] | list[Any] | None]] = [
         ("GET", "https://advert-api.wb.ru/adv/v1/promotion/count", None),
         ("POST", "https://advert-api.wb.ru/adv/v1/promotion/count", {}),
@@ -822,6 +956,10 @@ def fetch_wb_campaigns(api_key: str, enrich: bool = True) -> list[dict[str, Any]
         ("POST", "https://advert-api.wildberries.ru/adv/v1/promotion/count", {}),
         ("GET", "https://advert-api.wildberries.ru/api/v1/adverts", None),
     ]
+    if fast_mode:
+        attempts = attempts[:6]
+    if isinstance(max_attempts, int) and max_attempts > 0:
+        attempts = attempts[:max_attempts]
 
     discovered_ids: list[int] = []
     for method, endpoint, payload in attempts:

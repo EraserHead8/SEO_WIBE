@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260302a" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260302c" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -164,26 +164,20 @@
       <section id="adminTab-ai" class="admin-tab hidden">
         <div class="panel">
           <h3>Глобальные AI сервисы</h3>
+          <div class="hint">Добавьте несколько AI сервисов и перетаскивайте их для задания приоритета. Запросы идут к верхнему сервису, при ошибке автоматически пробуется следующий.</div>
           <div class="grid-4">
             <select id="adminAiGlobalMode">
               <option value="builtin">Встроенный OpenAI</option>
-              <option value="global">Глобальный сервис</option>
+              <option value="global">Глобальный сервис (верхний в списке)</option>
             </select>
-            <select id="adminAiGlobalServiceSelect"></select>
+            <div id="adminAiGlobalPrimary" class="hint">Приоритет задается порядком в списке ниже</div>
             <button onclick="adminSaveAiGlobalDefault()">Сохранить global default</button>
             <button class="btn-secondary" onclick="loadAdminAll()">Обновить</button>
           </div>
           <div class="actions">
             <button class="btn-secondary" type="button" onclick="adminOpenAiGlobalModal()">Добавить глобальный AI</button>
           </div>
-          <div class="table-card">
-            <table>
-              <thead>
-                <tr><th>ID</th><th>Название</th><th>Provider</th><th>Model</th><th>Base URL</th><th>Key</th><th>Действия</th></tr>
-              </thead>
-              <tbody id="adminAiGlobalTable"></tbody>
-            </table>
-          </div>
+          <div id="adminAiGlobalPriorityList" class="admin-ai-priority"></div>
         </div>
 
         <div class="panel">
@@ -193,23 +187,25 @@
             <select id="adminAiUserMode">
               <option value="global_default">Глобальный default (админ)</option>
               <option value="builtin">Встроенный OpenAI</option>
-              <option value="global">Глобальный сервис</option>
-              <option value="user">Сервис пользователя</option>
+              <option value="global">Глобальный сервис (верхний)</option>
+              <option value="user">Сервис пользователя (верхний)</option>
             </select>
-            <select id="adminAiUserServiceSelect"></select>
+            <div id="adminAiUserPrimary" class="hint">Приоритет задается порядком в списке</div>
             <button onclick="adminSaveUserAiSelection()">Сохранить выбор пользователя</button>
           </div>
           <div class="actions">
             <button class="btn-secondary" type="button" onclick="adminOpenAiUserModal()">Добавить AI пользователю</button>
           </div>
           <div id="adminAiUserEffective" class="hint">-</div>
-          <div class="table-card">
-            <table>
-              <thead>
-                <tr><th>ID</th><th>Scope</th><th>Название</th><th>Provider</th><th>Model</th><th>Base URL</th><th>Key</th><th>Действия</th></tr>
-              </thead>
-              <tbody id="adminAiUserTable"></tbody>
-            </table>
+          <div class="admin-ai-split">
+            <div>
+              <div class="hint">Сервисы пользователя (перетаскивание меняет порядок)</div>
+              <div id="adminAiUserPriorityList" class="admin-ai-priority"></div>
+            </div>
+            <div>
+              <div class="hint">Глобальные сервисы (fallback)</div>
+              <div id="adminAiUserGlobalList" class="admin-ai-priority readonly"></div>
+            </div>
           </div>
         </div>
       </section>
@@ -244,6 +240,18 @@
             <div class="hint" id="adminServerUptime">-</div>
           </div>
           <div id="adminServerKpis" class="kpis"></div>
+          <div class="admin-server-charts">
+            <div class="panel">
+              <h4>CPU & RAM</h4>
+              <div id="adminServerChartCpu" class="trend-chart mini"></div>
+              <div id="adminServerChartMem" class="trend-chart mini"></div>
+            </div>
+            <div class="panel">
+              <h4>Диск и сеть</h4>
+              <div id="adminServerChartDisk" class="trend-chart mini"></div>
+              <div id="adminServerChartNet" class="trend-chart mini"></div>
+            </div>
+          </div>
           <div class="table-card">
             <table>
               <tbody id="adminServerTable"></tbody>
@@ -455,11 +463,12 @@
         <button class="btn-secondary" type="button" onclick="adminCloseAuditDetailsModal()">Закрыть</button>
       </div>
       <div id="adminAuditDetailsMeta" class="hint">-</div>
+      <div id="adminAuditDetailsGrid" class="admin-audit-details">-</div>
       <pre id="adminAuditDetailsRaw">-</pre>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script src="/static/admin.js?v=20260302b"></script>
+  <script src="/static/admin.js?v=20260302c"></script>
 </body>
 </html>
