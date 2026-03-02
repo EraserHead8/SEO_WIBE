@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -264,5 +264,63 @@ class WbAdsCampaignSnapshot(Base):
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     synced_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+
+    user: Mapped["User"] = relationship()
+
+
+class AiServiceAccount(Base):
+    __tablename__ = "ai_service_accounts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
+    name: Mapped[str] = mapped_column(String(120), default="")
+    provider: Mapped[str] = mapped_column(String(40), default="openai")
+    api_key: Mapped[str] = mapped_column(String(255), default="")
+    model: Mapped[str] = mapped_column(String(120), default="")
+    base_url: Mapped[str] = mapped_column(String(500), default="")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped["User | None"] = relationship()
+
+
+class UserAiPreference(Base):
+    __tablename__ = "user_ai_preferences"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, unique=True)
+    use_global_default: Mapped[bool] = mapped_column(Boolean, default=True)
+    mode: Mapped[str] = mapped_column(String(16), default="builtin")
+    service_id: Mapped[int | None] = mapped_column(ForeignKey("ai_service_accounts.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped["User"] = relationship()
+    service: Mapped["AiServiceAccount | None"] = relationship()
+
+
+class WorkItemClaim(Base):
+    __tablename__ = "work_item_claims"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "module_code",
+            "marketplace",
+            "item_type",
+            "item_external_id",
+            name="uq_work_item_claim_key",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    module_code: Mapped[str] = mapped_column(String(60), index=True)
+    marketplace: Mapped[str] = mapped_column(String(30), index=True)
+    item_type: Mapped[str] = mapped_column(String(30), index=True)
+    item_external_id: Mapped[str] = mapped_column(String(128), index=True)
+    owner_member_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user: Mapped["User"] = relationship()
