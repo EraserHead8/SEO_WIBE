@@ -34,6 +34,16 @@ from app.models import (
     UserKnowledgeDoc,
     UserProfile,
     TeamMember,
+    SocialCalendarEvent,
+    SocialChatMessage,
+    SocialChatThread,
+    SocialChatThreadMember,
+    SocialGameScore,
+    SocialNote,
+    SocialNotification,
+    SocialTask,
+    SocialTaskComment,
+    SocialTaskProject,
     UserQuestionAiSettings,
     UserKeyword,
     SystemSetting,
@@ -102,6 +112,24 @@ from app.schemas import (
     UserProfilePasswordIn,
     UserProfileUpdateIn,
     UserOut,
+    SocialCalendarEventIn,
+    SocialCalendarEventOut,
+    SocialChatDirectStartIn,
+    SocialChatMessageIn,
+    SocialChatMessageOut,
+    SocialChatThreadOut,
+    SocialGameScoreIn,
+    SocialGameScoreOut,
+    SocialLeaderboardOut,
+    SocialNoteIn,
+    SocialNoteOut,
+    SocialNotificationOut,
+    SocialTaskCommentIn,
+    SocialTaskIn,
+    SocialTaskOut,
+    SocialTaskProjectIn,
+    SocialTaskProjectOut,
+    SocialTaskUpdateIn,
     WbCampaignRatesIn,
     WbCampaignDetailOut,
     WbAdsActionIn,
@@ -176,7 +204,7 @@ from app.services.wb_modules import (
 )
 
 router = APIRouter(prefix="/api")
-DISABLED_BY_DEFAULT_MODULES = {"billing", "wb_reviews_ai", "wb_questions_ai", "wb_ads", "wb_ads_analytics", "wb_ads_recommendations", "help_center"}
+DISABLED_BY_DEFAULT_MODULES = {"billing", "wb_reviews_ai", "wb_questions_ai", "wb_ads", "wb_ads_analytics", "wb_ads_recommendations", "help_center", "social_hub"}
 AVAILABLE_THEMES = ("classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring", "japan", "greenland", "moon")
 DEFAULT_UI_SETTINGS = {
     "theme_choice_enabled": True,
@@ -4955,6 +4983,1336 @@ def admin_audit(
     )
 
 
+SOCIAL_GAMES: dict[str, str] = {
+    "snake": "Змейка",
+    "tetris": "Тетрис",
+}
+
+
+def _social_actor_key(user: User) -> str:
+    member_id = _actor_member_id(user)
+    if not _actor_is_owner(user) and member_id > 0:
+        return f"m:{member_id}"
+    return f"u:{int(user.id)}"
+
+
+def _social_actor_identity(db: Session, user: User) -> tuple[str, str, int | None]:
+    actor_key = _social_actor_key(user)
+    if actor_key.startswith("m:"):
+        member_id = _to_int_safe(actor_key.split(":", 1)[1])
+        member = db.get(TeamMember, member_id) if member_id else None
+        nick = str((member.nickname if member and member.nickname else member.full_name if member else "") or "").strip()
+        if not nick:
+            nick = (member.email if member else _actor_email(user) or user.email).split("@")[0]
+        return actor_key, nick[:120], member_id
+    owner_member = db.scalar(
+        select(TeamMember).where(
+            TeamMember.user_id == user.id,
+            TeamMember.is_owner.is_(True),
+        ).order_by(TeamMember.id.asc())
+    )
+    nick = str((owner_member.nickname if owner_member and owner_member.nickname else owner_member.full_name if owner_member else "") or "").strip()
+    if not nick:
+        profile = db.scalar(select(UserProfile).where(UserProfile.user_id == user.id))
+        nick = str((profile.full_name if profile and profile.full_name else "") or "").strip()
+    if not nick:
+        nick = str(user.email or "").split("@")[0]
+    return actor_key, nick[:120], (owner_member.id if owner_member else None)
+
+
+def _social_identity_by_key(db: Session, actor_key: str) -> tuple[int, int | None, str]:
+    key = str(actor_key or "").strip().lower()
+    if key.startswith("m:"):
+        member_id = _to_int_safe(key.split(":", 1)[1])
+        member = db.get(TeamMember, member_id) if member_id else None
+        if not member or not member.is_active:
+            raise HTTPException(status_code=404, detail="Участник не найден")
+        nick = str((member.nickname or member.full_name or member.email).strip() or f"member-{member.id}")
+        return int(member.user_id), int(member.id), nick[:120]
+    if key.startswith("u:"):
+        user_id = _to_int_safe(key.split(":", 1)[1])
+        owner = db.get(User, user_id) if user_id else None
+        if not owner:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        owner_member = db.scalar(
+            select(TeamMember).where(
+                TeamMember.user_id == owner.id,
+                TeamMember.is_owner.is_(True),
+            ).order_by(TeamMember.id.asc())
+        )
+        nick = ""
+        if owner_member:
+            nick = str((owner_member.nickname or owner_member.full_name or "").strip())
+        if not nick:
+            nick = str(owner.email or "").split("@")[0]
+        return int(owner.id), None, nick[:120]
+    raise HTTPException(status_code=400, detail="Некорректный actor_key")
+
+
+def _social_ensure_thread_member(
+    db: Session,
+    *,
+    thread_id: int,
+    actor_key: str,
+    user_id: int,
+    member_id: int | None,
+    actor_nick: str,
+) -> SocialChatThreadMember:
+    row = db.scalar(
+        select(SocialChatThreadMember).where(
+            SocialChatThreadMember.thread_id == thread_id,
+            SocialChatThreadMember.actor_key == actor_key,
+        )
+    )
+    if row:
+        row.user_id = user_id
+        row.member_id = member_id
+        row.actor_nick = actor_nick[:120]
+        row.updated_at = datetime.utcnow()
+        return row
+    row = SocialChatThreadMember(
+        thread_id=thread_id,
+        user_id=user_id,
+        member_id=member_id,
+        actor_key=actor_key,
+        actor_nick=actor_nick[:120],
+        last_read_message_id=0,
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def _social_ensure_global_thread(db: Session) -> SocialChatThread:
+    thread = db.scalar(
+        select(SocialChatThread).where(
+            SocialChatThread.kind == "global",
+            SocialChatThread.owner_user_id.is_(None),
+        ).order_by(SocialChatThread.id.asc())
+    )
+    if thread:
+        return thread
+    thread = SocialChatThread(
+        kind="global",
+        owner_user_id=None,
+        title="Глобальный чат",
+    )
+    db.add(thread)
+    db.flush()
+    return thread
+
+
+def _social_ensure_company_thread(db: Session, user_id: int) -> SocialChatThread:
+    thread = db.scalar(
+        select(SocialChatThread).where(
+            SocialChatThread.kind == "company",
+            SocialChatThread.owner_user_id == user_id,
+        ).order_by(SocialChatThread.id.asc())
+    )
+    if thread:
+        return thread
+    thread = SocialChatThread(
+        kind="company",
+        owner_user_id=user_id,
+        title="Чат компании",
+    )
+    db.add(thread)
+    db.flush()
+    return thread
+
+
+def _social_thread_last_message(db: Session, thread_id: int) -> SocialChatMessage | None:
+    return db.scalar(
+        select(SocialChatMessage)
+        .where(SocialChatMessage.thread_id == thread_id)
+        .order_by(SocialChatMessage.id.desc())
+    )
+
+
+def _social_thread_to_out(db: Session, actor_key: str, row: SocialChatThread, member_row: SocialChatThreadMember) -> SocialChatThreadOut:
+    last = _social_thread_last_message(db, row.id)
+    last_payload: dict[str, Any] = {}
+    if last:
+        last_payload = {
+            "id": int(last.id),
+            "sender_key": str(last.sender_key or ""),
+            "sender_nick": str(last.sender_nick or ""),
+            "text": str(last.text or ""),
+            "created_at": last.created_at.isoformat() if last.created_at else "",
+        }
+    unread = db.scalar(
+        select(func.count())
+        .select_from(SocialChatMessage)
+        .where(
+            SocialChatMessage.thread_id == row.id,
+            SocialChatMessage.id > int(member_row.last_read_message_id or 0),
+            SocialChatMessage.sender_key != actor_key,
+        )
+    ) or 0
+    participants_rows = db.scalars(
+        select(SocialChatThreadMember)
+        .where(SocialChatThreadMember.thread_id == row.id)
+        .order_by(SocialChatThreadMember.id.asc())
+    ).all()
+    participants = [
+        {
+            "actor_key": str(x.actor_key or ""),
+            "nick": str(x.actor_nick or ""),
+            "is_me": str(x.actor_key or "") == actor_key,
+        }
+        for x in participants_rows
+    ]
+    return SocialChatThreadOut(
+        id=row.id,
+        kind=row.kind or "",
+        title=row.title or "",
+        last_message=last_payload,
+        unread=int(unread),
+        participants=participants,
+    )
+
+
+def _social_push_notification(
+    db: Session,
+    *,
+    user_id: int,
+    recipient_key: str,
+    kind: str,
+    dedupe_key: str,
+    title: str,
+    body: str,
+    payload: dict[str, Any] | None = None,
+) -> None:
+    key = str(dedupe_key or "").strip()[:120]
+    if not key:
+        return
+    existing = db.scalar(
+        select(SocialNotification).where(
+            SocialNotification.recipient_key == recipient_key,
+            SocialNotification.kind == kind,
+            SocialNotification.dedupe_key == key,
+        )
+    )
+    if existing:
+        return
+    db.add(
+        SocialNotification(
+            user_id=user_id,
+            recipient_key=recipient_key[:60],
+            kind=kind[:40],
+            dedupe_key=key,
+            title=title[:255],
+            body=body[:5000],
+            payload_json=json.dumps(payload or {}, ensure_ascii=False),
+            is_read=False,
+        )
+    )
+
+
+def _social_parse_dt(raw: str | None) -> datetime | None:
+    text_raw = str(raw or "").strip()
+    if not text_raw:
+        return None
+    try:
+        normalized = text_raw.replace("Z", "+00:00")
+        return datetime.fromisoformat(normalized)
+    except Exception:
+        return None
+
+
+@router.get("/social/bootstrap", response_model=dict[str, Any])
+def social_bootstrap(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, actor_nick, actor_member_id = _social_actor_identity(db, user)
+    global_thread = _social_ensure_global_thread(db)
+    company_thread = _social_ensure_company_thread(db, user.id)
+    _social_ensure_thread_member(
+        db,
+        thread_id=global_thread.id,
+        actor_key=actor_key,
+        user_id=user.id,
+        member_id=actor_member_id,
+        actor_nick=actor_nick,
+    )
+    _social_ensure_thread_member(
+        db,
+        thread_id=company_thread.id,
+        actor_key=actor_key,
+        user_id=user.id,
+        member_id=actor_member_id,
+        actor_nick=actor_nick,
+    )
+    company_actors = db.scalars(
+        select(TeamMember).where(
+            TeamMember.user_id == user.id,
+            TeamMember.is_active.is_(True),
+        ).order_by(TeamMember.is_owner.desc(), TeamMember.id.asc())
+    ).all()
+    db.commit()
+    _audit(
+        db,
+        user,
+        action="social_bootstrap_loaded",
+        details=f"actor={actor_key}",
+        module_code="social_hub",
+        entity_type="social",
+        entity_id=actor_key,
+        request=request,
+    )
+    db.commit()
+    return {
+        "actor": {
+            "actor_key": actor_key,
+            "nick": actor_nick,
+            "is_owner": bool(_actor_is_owner(user)),
+        },
+        "games": [{"code": code, "title": title} for code, title in SOCIAL_GAMES.items()],
+        "company_actors": [
+            {
+                "actor_key": f"u:{user.id}" if bool(row.is_owner) else f"m:{row.id}",
+                "nick": str((row.nickname or row.full_name or row.email).strip() or f"member-{row.id}"),
+                "is_owner": bool(row.is_owner),
+            }
+            for row in company_actors
+        ],
+    }
+
+
+@router.post("/social/games/score", response_model=SocialGameScoreOut)
+def social_save_game_score(
+    payload: SocialGameScoreIn,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    game_code = str(payload.game_code or "").strip().lower()
+    if game_code not in SOCIAL_GAMES:
+        raise HTTPException(status_code=400, detail="Неизвестная игра")
+    actor_key, actor_nick, _ = _social_actor_identity(db, user)
+    score = max(0, int(payload.score or 0))
+    row = db.scalar(
+        select(SocialGameScore).where(
+            SocialGameScore.game_code == game_code,
+            SocialGameScore.actor_key == actor_key,
+        )
+    )
+    if not row:
+        row = SocialGameScore(
+            user_id=user.id,
+            game_code=game_code,
+            actor_key=actor_key,
+            actor_nick=actor_nick,
+            best_score=score,
+            last_score=score,
+            play_count=1,
+        )
+        db.add(row)
+        db.flush()
+    else:
+        row.actor_nick = actor_nick[:120]
+        row.last_score = score
+        row.play_count = int(row.play_count or 0) + 1
+        row.best_score = max(int(row.best_score or 0), score)
+    _audit(
+        db,
+        user,
+        action="social_game_score_saved",
+        details=f"game={game_code};score={score};best={int(row.best_score or 0)}",
+        module_code="social_hub",
+        entity_type="game",
+        entity_id=f"{game_code}:{actor_key}",
+        request=request,
+    )
+    db.commit()
+    return SocialGameScoreOut(
+        game_code=game_code,
+        actor_key=actor_key,
+        actor_nick=str(row.actor_nick or ""),
+        best_score=int(row.best_score or 0),
+        last_score=int(row.last_score or 0),
+        play_count=int(row.play_count or 0),
+        updated_at=row.updated_at.isoformat() if row.updated_at else None,
+    )
+
+
+@router.get("/social/games/leaderboard", response_model=SocialLeaderboardOut)
+def social_leaderboard(
+    game_code: str,
+    limit: int = 50,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    safe_game = str(game_code or "").strip().lower()
+    if safe_game not in SOCIAL_GAMES:
+        raise HTTPException(status_code=400, detail="Неизвестная игра")
+    safe_limit = max(5, min(int(limit or 50), 200))
+    rows = db.scalars(
+        select(SocialGameScore)
+        .where(SocialGameScore.game_code == safe_game)
+        .order_by(SocialGameScore.best_score.desc(), SocialGameScore.updated_at.asc(), SocialGameScore.id.asc())
+        .limit(safe_limit)
+    ).all()
+    actor_key, _, _ = _social_actor_identity(db, user)
+    my_row = db.scalar(
+        select(SocialGameScore).where(
+            SocialGameScore.game_code == safe_game,
+            SocialGameScore.actor_key == actor_key,
+        )
+    )
+    my_best = int(my_row.best_score or 0) if my_row else 0
+    my_rank = None
+    if my_row:
+        higher = db.scalar(
+            select(func.count())
+            .select_from(SocialGameScore)
+            .where(
+                SocialGameScore.game_code == safe_game,
+                SocialGameScore.best_score > my_best,
+            )
+        ) or 0
+        my_rank = int(higher) + 1
+    top = []
+    for idx, row in enumerate(rows, start=1):
+        top.append(
+            {
+                "rank": idx,
+                "nick": str(row.actor_nick or ""),
+                "score": int(row.best_score or 0),
+                "is_me": str(row.actor_key or "") == actor_key,
+            }
+        )
+    return SocialLeaderboardOut(
+        game_code=safe_game,
+        top=top,
+        my_rank=my_rank,
+        my_best=my_best,
+    )
+
+
+@router.get("/social/chat/threads", response_model=list[SocialChatThreadOut])
+def social_chat_threads(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, actor_nick, member_id = _social_actor_identity(db, user)
+    global_thread = _social_ensure_global_thread(db)
+    company_thread = _social_ensure_company_thread(db, user.id)
+    _social_ensure_thread_member(
+        db,
+        thread_id=global_thread.id,
+        actor_key=actor_key,
+        user_id=user.id,
+        member_id=member_id,
+        actor_nick=actor_nick,
+    )
+    _social_ensure_thread_member(
+        db,
+        thread_id=company_thread.id,
+        actor_key=actor_key,
+        user_id=user.id,
+        member_id=member_id,
+        actor_nick=actor_nick,
+    )
+    mine = db.scalars(
+        select(SocialChatThreadMember)
+        .where(SocialChatThreadMember.actor_key == actor_key)
+        .order_by(SocialChatThreadMember.updated_at.desc(), SocialChatThreadMember.id.desc())
+    ).all()
+    out: list[SocialChatThreadOut] = []
+    for member_row in mine:
+        thread = db.get(SocialChatThread, member_row.thread_id)
+        if not thread:
+            continue
+        if thread.kind == "company" and int(thread.owner_user_id or 0) != int(user.id):
+            continue
+        out.append(_social_thread_to_out(db, actor_key, thread, member_row))
+    out.sort(key=lambda x: (x.unread, x.last_message.get("id", 0)), reverse=True)
+    db.commit()
+    return out
+
+
+@router.post("/social/chat/direct", response_model=SocialChatThreadOut)
+def social_start_direct_chat(
+    payload: SocialChatDirectStartIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, actor_nick, actor_member_id = _social_actor_identity(db, user)
+    peer_key = str(payload.actor_key or "").strip().lower()
+    if not peer_key or peer_key == actor_key:
+        raise HTTPException(status_code=400, detail="Выберите собеседника")
+    peer_user_id, peer_member_id, peer_nick = _social_identity_by_key(db, peer_key)
+    peer_thread_ids = select(SocialChatThreadMember.thread_id).where(SocialChatThreadMember.actor_key == peer_key)
+    thread = db.scalar(
+        select(SocialChatThread)
+        .join(SocialChatThreadMember, SocialChatThreadMember.thread_id == SocialChatThread.id)
+        .where(
+            SocialChatThread.kind == "direct",
+            SocialChatThreadMember.actor_key == actor_key,
+            SocialChatThread.id.in_(peer_thread_ids),
+        )
+        .order_by(SocialChatThread.id.desc())
+    )
+    if not thread:
+        thread = SocialChatThread(
+            kind="direct",
+            owner_user_id=None,
+            title=f"Личный чат: {actor_nick} ↔ {peer_nick}",
+        )
+        db.add(thread)
+        db.flush()
+    me_member = _social_ensure_thread_member(
+        db,
+        thread_id=thread.id,
+        actor_key=actor_key,
+        user_id=user.id,
+        member_id=actor_member_id,
+        actor_nick=actor_nick,
+    )
+    _social_ensure_thread_member(
+        db,
+        thread_id=thread.id,
+        actor_key=peer_key,
+        user_id=peer_user_id,
+        member_id=peer_member_id,
+        actor_nick=peer_nick,
+    )
+    db.commit()
+    return _social_thread_to_out(db, actor_key, thread, me_member)
+
+
+@router.get("/social/chat/actors", response_model=list[dict[str, Any]])
+def social_chat_actor_directory(
+    q: str = "",
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    search = str(q or "").strip().lower()
+    owners = db.scalars(select(User).order_by(User.id.asc()).limit(5000)).all()
+    members = db.scalars(
+        select(TeamMember).where(TeamMember.is_active.is_(True)).order_by(TeamMember.id.asc()).limit(15000)
+    ).all()
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    owner_has_member: set[int] = set()
+    for row in members:
+        if bool(row.is_owner):
+            owner_has_member.add(int(row.user_id))
+        key = f"m:{int(row.id)}"
+        nick = str((row.nickname or row.full_name or row.email).strip() or f"member-{row.id}")
+        company = str((row.user.email if row.user else "") or "").strip().lower()
+        hay = f"{nick} {row.email or ''} {company}".lower()
+        if search and search not in hay:
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({
+            "actor_key": key,
+            "nick": nick[:120],
+            "company": company,
+            "is_owner": bool(row.is_owner),
+        })
+    for row in owners:
+        if int(row.id) in owner_has_member:
+            continue
+        key = f"u:{int(row.id)}"
+        nick = str((row.email or "").split("@")[0] or f"user-{row.id}")
+        hay = f"{nick} {row.email or ''}".lower()
+        if search and search not in hay:
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({
+            "actor_key": key,
+            "nick": nick[:120],
+            "company": str(row.email or "").strip().lower(),
+            "is_owner": True,
+        })
+    return out[:500]
+
+
+@router.get("/social/chat/messages/{thread_id}", response_model=list[SocialChatMessageOut])
+def social_chat_messages(
+    thread_id: int,
+    before_id: int = 0,
+    limit: int = 80,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, _, _ = _social_actor_identity(db, user)
+    member_row = db.scalar(
+        select(SocialChatThreadMember).where(
+            SocialChatThreadMember.thread_id == thread_id,
+            SocialChatThreadMember.actor_key == actor_key,
+        )
+    )
+    if not member_row:
+        raise HTTPException(status_code=403, detail="Нет доступа к чату")
+    safe_limit = max(20, min(int(limit or 80), 200))
+    query = select(SocialChatMessage).where(SocialChatMessage.thread_id == thread_id)
+    if int(before_id or 0) > 0:
+        query = query.where(SocialChatMessage.id < int(before_id))
+    rows = db.scalars(query.order_by(SocialChatMessage.id.desc()).limit(safe_limit)).all()
+    rows = list(reversed(rows))
+    if rows:
+        member_row.last_read_message_id = max(int(member_row.last_read_message_id or 0), int(rows[-1].id))
+        member_row.updated_at = datetime.utcnow()
+    db.commit()
+    return [
+        SocialChatMessageOut(
+            id=int(row.id),
+            thread_id=int(row.thread_id),
+            sender_key=str(row.sender_key or ""),
+            sender_nick=str(row.sender_nick or ""),
+            text=str(row.text or ""),
+            created_at=row.created_at.isoformat() if row.created_at else "",
+            is_mine=str(row.sender_key or "") == actor_key,
+        )
+        for row in rows
+    ]
+
+
+@router.post("/social/chat/messages/{thread_id}", response_model=SocialChatMessageOut)
+def social_chat_send_message(
+    thread_id: int,
+    payload: SocialChatMessageIn,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, actor_nick, _ = _social_actor_identity(db, user)
+    member_row = db.scalar(
+        select(SocialChatThreadMember).where(
+            SocialChatThreadMember.thread_id == thread_id,
+            SocialChatThreadMember.actor_key == actor_key,
+        )
+    )
+    if not member_row:
+        raise HTTPException(status_code=403, detail="Нет доступа к чату")
+    text_msg = str(payload.text or "").strip()
+    if not text_msg:
+        raise HTTPException(status_code=400, detail="Сообщение пустое")
+    message = SocialChatMessage(
+        thread_id=thread_id,
+        sender_user_id=user.id,
+        sender_member_id=_actor_member_id(user) if not _actor_is_owner(user) else None,
+        sender_key=actor_key,
+        sender_nick=actor_nick[:120],
+        text=text_msg[:5000],
+    )
+    db.add(message)
+    db.flush()
+    thread = db.get(SocialChatThread, thread_id)
+    if thread:
+        thread.updated_at = datetime.utcnow()
+    member_row.last_read_message_id = int(message.id)
+    member_row.updated_at = datetime.utcnow()
+    recipients = db.scalars(
+        select(SocialChatThreadMember).where(
+            SocialChatThreadMember.thread_id == thread_id,
+            SocialChatThreadMember.actor_key != actor_key,
+        )
+    ).all()
+    thread_title = str(thread.title if thread else "Чат").strip() or "Чат"
+    for rcpt in recipients:
+        _social_push_notification(
+            db,
+            user_id=int(rcpt.user_id or 0),
+            recipient_key=str(rcpt.actor_key or ""),
+            kind="chat_message",
+            dedupe_key=f"chat:{message.id}:{rcpt.actor_key}",
+            title=f"Новое сообщение: {thread_title}",
+            body=f"{actor_nick}: {text_msg[:180]}",
+            payload={
+                "thread_id": thread_id,
+                "message_id": int(message.id),
+                "sender_key": actor_key,
+                "sender_nick": actor_nick,
+            },
+        )
+    _audit(
+        db,
+        user,
+        action="social_chat_message_sent",
+        details=f"thread_id={thread_id};message_id={int(message.id)}",
+        module_code="social_hub",
+        entity_type="chat_message",
+        entity_id=str(message.id),
+        request=request,
+    )
+    db.commit()
+    return SocialChatMessageOut(
+        id=int(message.id),
+        thread_id=int(message.thread_id),
+        sender_key=actor_key,
+        sender_nick=actor_nick,
+        text=str(message.text or ""),
+        created_at=message.created_at.isoformat() if message.created_at else "",
+        is_mine=True,
+    )
+
+
+@router.post("/social/chat/read/{thread_id}", response_model=MessageOut)
+def social_mark_chat_read(
+    thread_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, _, _ = _social_actor_identity(db, user)
+    member_row = db.scalar(
+        select(SocialChatThreadMember).where(
+            SocialChatThreadMember.thread_id == thread_id,
+            SocialChatThreadMember.actor_key == actor_key,
+        )
+    )
+    if not member_row:
+        raise HTTPException(status_code=403, detail="Нет доступа к чату")
+    last_id = db.scalar(
+        select(func.max(SocialChatMessage.id)).where(SocialChatMessage.thread_id == thread_id)
+    ) or 0
+    member_row.last_read_message_id = int(last_id)
+    member_row.updated_at = datetime.utcnow()
+    db.commit()
+    return MessageOut(message="Ок")
+
+
+@router.get("/social/tasks/actors", response_model=list[dict[str, Any]])
+def social_task_actors(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    rows = db.scalars(
+        select(TeamMember).where(
+            TeamMember.user_id == user.id,
+            TeamMember.is_active.is_(True),
+        ).order_by(TeamMember.is_owner.desc(), TeamMember.id.asc())
+    ).all()
+    out = []
+    for row in rows:
+        out.append(
+            {
+                "actor_key": f"u:{user.id}" if bool(row.is_owner) else f"m:{row.id}",
+                "nick": str((row.nickname or row.full_name or row.email).strip() or f"member-{row.id}"),
+                "is_owner": bool(row.is_owner),
+            }
+        )
+    return out
+
+
+@router.get("/social/tasks/projects", response_model=list[SocialTaskProjectOut])
+def social_task_projects(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    rows = db.scalars(
+        select(SocialTaskProject)
+        .where(SocialTaskProject.user_id == user.id)
+        .order_by(SocialTaskProject.updated_at.desc(), SocialTaskProject.id.desc())
+    ).all()
+    return [
+        SocialTaskProjectOut(
+            id=int(row.id),
+            title=str(row.title or ""),
+            description=str(row.description or ""),
+            created_by_key=str(row.created_by_key or ""),
+            created_by_nick=str(row.created_by_nick or ""),
+            created_at=row.created_at.isoformat() if row.created_at else "",
+        )
+        for row in rows
+    ]
+
+
+@router.post("/social/tasks/projects", response_model=SocialTaskProjectOut)
+def social_create_project(
+    payload: SocialTaskProjectIn,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, actor_nick, _ = _social_actor_identity(db, user)
+    title = str(payload.title or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Укажите название проекта")
+    row = SocialTaskProject(
+        user_id=user.id,
+        title=title[:255],
+        description=str(payload.description or "")[:5000],
+        created_by_key=actor_key,
+        created_by_nick=actor_nick[:120],
+    )
+    db.add(row)
+    db.flush()
+    _audit(
+        db,
+        user,
+        action="social_project_created",
+        details=f"project_id={row.id}",
+        module_code="social_hub",
+        entity_type="task_project",
+        entity_id=str(row.id),
+        request=request,
+    )
+    db.commit()
+    return SocialTaskProjectOut(
+        id=int(row.id),
+        title=str(row.title or ""),
+        description=str(row.description or ""),
+        created_by_key=str(row.created_by_key or ""),
+        created_by_nick=str(row.created_by_nick or ""),
+        created_at=row.created_at.isoformat() if row.created_at else "",
+    )
+
+
+def _social_task_to_out(db: Session, task: SocialTask) -> SocialTaskOut:
+    project = db.get(SocialTaskProject, task.project_id) if task.project_id else None
+    comments = db.scalars(
+        select(SocialTaskComment)
+        .where(SocialTaskComment.task_id == task.id)
+        .order_by(SocialTaskComment.id.asc())
+    ).all()
+    return SocialTaskOut(
+        id=int(task.id),
+        project_id=int(task.project_id) if task.project_id else None,
+        project_title=str(project.title if project else ""),
+        title=str(task.title or ""),
+        description=str(task.description or ""),
+        status=str(task.status or "todo"),
+        priority=str(task.priority or "normal"),
+        due_date=task.due_date.isoformat() if task.due_date else None,
+        assignee_key=str(task.assignee_key or ""),
+        assignee_nick=str(task.assignee_nick or ""),
+        creator_key=str(task.creator_key or ""),
+        creator_nick=str(task.creator_nick or ""),
+        comments=[
+            {
+                "id": int(c.id),
+                "author_key": str(c.author_key or ""),
+                "author_nick": str(c.author_nick or ""),
+                "text": str(c.text or ""),
+                "created_at": c.created_at.isoformat() if c.created_at else "",
+            }
+            for c in comments
+        ],
+        created_at=task.created_at.isoformat() if task.created_at else "",
+        updated_at=task.updated_at.isoformat() if task.updated_at else "",
+    )
+
+
+@router.get("/social/tasks", response_model=list[SocialTaskOut])
+def social_tasks_list(
+    project_id: int = 0,
+    status: str = "",
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, actor_nick, _ = _social_actor_identity(db, user)
+    query = select(SocialTask).where(SocialTask.user_id == user.id)
+    if int(project_id or 0) > 0:
+        query = query.where(SocialTask.project_id == int(project_id))
+    safe_status = str(status or "").strip().lower()
+    if safe_status and safe_status in {"todo", "in_progress", "done"}:
+        query = query.where(SocialTask.status == safe_status)
+    rows = db.scalars(query.order_by(SocialTask.updated_at.desc(), SocialTask.id.desc()).limit(500)).all()
+
+    now = datetime.utcnow()
+    for task in rows:
+        if task.status == "done" or not task.due_date or task.due_date >= now:
+            continue
+        if str(task.assignee_key or "") != actor_key:
+            continue
+        _social_push_notification(
+            db,
+            user_id=user.id,
+            recipient_key=actor_key,
+            kind="task_reminder",
+            dedupe_key=f"task_overdue:{task.id}:{now.date().isoformat()}",
+            title="Задача просрочена",
+            body=f"{task.title[:120]} — дедлайн истек.",
+            payload={"task_id": int(task.id), "assignee": actor_nick},
+        )
+    db.commit()
+    return [_social_task_to_out(db, row) for row in rows]
+
+
+@router.post("/social/tasks", response_model=SocialTaskOut)
+def social_create_task(
+    payload: SocialTaskIn,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, actor_nick, _ = _social_actor_identity(db, user)
+    title = str(payload.title or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Укажите название задачи")
+    assignee_key = str(payload.assignee_key or actor_key).strip().lower()
+    if not assignee_key:
+        assignee_key = actor_key
+    assignee_user_id, _, assignee_nick = _social_identity_by_key(db, assignee_key)
+    if int(assignee_user_id) != int(user.id):
+        raise HTTPException(status_code=400, detail="Назначать можно только участников своей компании")
+    due_dt = _social_parse_dt(payload.due_date)
+    project_id = _to_int_safe(payload.project_id) or None
+    if project_id:
+        project = db.get(SocialTaskProject, project_id)
+        if not project or int(project.user_id) != int(user.id):
+            raise HTTPException(status_code=404, detail="Проект не найден")
+    task = SocialTask(
+        user_id=user.id,
+        project_id=project_id,
+        title=title[:255],
+        description=str(payload.description or "")[:5000],
+        status="todo",
+        priority=str(payload.priority or "normal")[:20],
+        due_date=due_dt,
+        assignee_key=assignee_key,
+        assignee_nick=assignee_nick[:120],
+        creator_key=actor_key,
+        creator_nick=actor_nick[:120],
+    )
+    db.add(task)
+    db.flush()
+    if assignee_key != actor_key:
+        _social_push_notification(
+            db,
+            user_id=user.id,
+            recipient_key=assignee_key,
+            kind="task_assigned",
+            dedupe_key=f"task_assigned:{task.id}:{int(datetime.utcnow().timestamp())}",
+            title="Вам назначена задача",
+            body=f"{actor_nick}: {title[:180]}",
+            payload={"task_id": int(task.id)},
+        )
+    _audit(
+        db,
+        user,
+        action="social_task_created",
+        details=f"task_id={task.id};assignee={assignee_key}",
+        module_code="social_hub",
+        entity_type="task",
+        entity_id=str(task.id),
+        request=request,
+    )
+    db.commit()
+    return _social_task_to_out(db, task)
+
+
+@router.put("/social/tasks/{task_id}", response_model=SocialTaskOut)
+def social_update_task(
+    task_id: int,
+    payload: SocialTaskUpdateIn,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, actor_nick, _ = _social_actor_identity(db, user)
+    task = db.get(SocialTask, task_id)
+    if not task or int(task.user_id) != int(user.id):
+        raise HTTPException(status_code=404, detail="Задача не найдена")
+    old_assignee = str(task.assignee_key or "")
+    old_status = str(task.status or "todo")
+    if payload.project_id is not None:
+        pid = _to_int_safe(payload.project_id) or None
+        if pid:
+            project = db.get(SocialTaskProject, pid)
+            if not project or int(project.user_id) != int(user.id):
+                raise HTTPException(status_code=404, detail="Проект не найден")
+        task.project_id = pid
+    if payload.title is not None:
+        title = str(payload.title or "").strip()
+        if not title:
+            raise HTTPException(status_code=400, detail="Название задачи не может быть пустым")
+        task.title = title[:255]
+    if payload.description is not None:
+        task.description = str(payload.description or "")[:5000]
+    if payload.priority is not None:
+        task.priority = str(payload.priority or "normal")[:20]
+    if payload.due_date is not None:
+        task.due_date = _social_parse_dt(payload.due_date)
+    if payload.assignee_key is not None:
+        assignee_key = str(payload.assignee_key or "").strip().lower()
+        if assignee_key:
+            assignee_user_id, _, assignee_nick = _social_identity_by_key(db, assignee_key)
+            if int(assignee_user_id) != int(user.id):
+                raise HTTPException(status_code=400, detail="Назначать можно только участников своей компании")
+            task.assignee_key = assignee_key
+            task.assignee_nick = assignee_nick[:120]
+    if payload.status is not None:
+        safe_status = str(payload.status or "").strip().lower()
+        if safe_status not in {"todo", "in_progress", "done"}:
+            raise HTTPException(status_code=400, detail="Некорректный статус задачи")
+        task.status = safe_status
+        if safe_status == "done":
+            task.closed_at = datetime.utcnow()
+    if str(task.assignee_key or "") != old_assignee:
+        _social_push_notification(
+            db,
+            user_id=user.id,
+            recipient_key=str(task.assignee_key or ""),
+            kind="task_assigned",
+            dedupe_key=f"task_assigned:{task.id}:{int(datetime.utcnow().timestamp())}",
+            title="Вам назначена задача",
+            body=f"{actor_nick}: {str(task.title or '')[:180]}",
+            payload={"task_id": int(task.id)},
+        )
+    if old_status != "done" and str(task.status or "") == "done" and str(task.creator_key or "") != actor_key:
+        _social_push_notification(
+            db,
+            user_id=user.id,
+            recipient_key=str(task.creator_key or ""),
+            kind="task_done",
+            dedupe_key=f"task_done:{task.id}",
+            title="Задача закрыта",
+            body=f"{actor_nick} закрыл(а) задачу «{str(task.title or '')[:140]}».",
+            payload={"task_id": int(task.id)},
+        )
+    _audit(
+        db,
+        user,
+        action="social_task_updated",
+        details=f"task_id={task.id};status={task.status};assignee={task.assignee_key}",
+        module_code="social_hub",
+        entity_type="task",
+        entity_id=str(task.id),
+        request=request,
+    )
+    db.commit()
+    return _social_task_to_out(db, task)
+
+
+@router.post("/social/tasks/{task_id}/comments", response_model=SocialTaskOut)
+def social_add_task_comment(
+    task_id: int,
+    payload: SocialTaskCommentIn,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, actor_nick, _ = _social_actor_identity(db, user)
+    task = db.get(SocialTask, task_id)
+    if not task or int(task.user_id) != int(user.id):
+        raise HTTPException(status_code=404, detail="Задача не найдена")
+    text_comment = str(payload.text or "").strip()
+    if not text_comment:
+        raise HTTPException(status_code=400, detail="Комментарий пустой")
+    db.add(
+        SocialTaskComment(
+            task_id=task.id,
+            author_key=actor_key,
+            author_nick=actor_nick[:120],
+            text=text_comment[:5000],
+        )
+    )
+    recipients = {str(task.creator_key or ""), str(task.assignee_key or "")}
+    recipients.discard(actor_key)
+    for recipient in recipients:
+        if not recipient:
+            continue
+        _social_push_notification(
+            db,
+            user_id=user.id,
+            recipient_key=recipient,
+            kind="task_comment",
+            dedupe_key=f"task_comment:{task.id}:{int(datetime.utcnow().timestamp())}:{recipient}",
+            title="Новый комментарий к задаче",
+            body=f"{actor_nick}: {text_comment[:180]}",
+            payload={"task_id": int(task.id)},
+        )
+    _audit(
+        db,
+        user,
+        action="social_task_comment_added",
+        details=f"task_id={task.id}",
+        module_code="social_hub",
+        entity_type="task",
+        entity_id=str(task.id),
+        request=request,
+    )
+    db.commit()
+    return _social_task_to_out(db, task)
+
+
+@router.get("/social/calendar/events", response_model=list[SocialCalendarEventOut])
+def social_calendar_events(
+    date_from: str = "",
+    date_to: str = "",
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    left = _social_parse_dt(date_from) or (datetime.utcnow() - timedelta(days=180))
+    right = _social_parse_dt(date_to) or (datetime.utcnow() + timedelta(days=365))
+    rows = db.scalars(
+        select(SocialCalendarEvent)
+        .where(
+            SocialCalendarEvent.user_id == user.id,
+            SocialCalendarEvent.start_at >= left,
+            SocialCalendarEvent.start_at <= right,
+        )
+        .order_by(SocialCalendarEvent.start_at.asc(), SocialCalendarEvent.id.asc())
+    ).all()
+    return [
+        SocialCalendarEventOut(
+            id=int(row.id),
+            title=str(row.title or ""),
+            details=str(row.details or ""),
+            start_at=row.start_at.isoformat() if row.start_at else "",
+            end_at=row.end_at.isoformat() if row.end_at else None,
+            created_at=row.created_at.isoformat() if row.created_at else "",
+        )
+        for row in rows
+    ]
+
+
+@router.post("/social/calendar/events", response_model=SocialCalendarEventOut)
+def social_calendar_create_event(
+    payload: SocialCalendarEventIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, _, _ = _social_actor_identity(db, user)
+    start_at = _social_parse_dt(payload.start_at)
+    if not start_at:
+        raise HTTPException(status_code=400, detail="Некорректная дата начала")
+    end_at = _social_parse_dt(payload.end_at)
+    row = SocialCalendarEvent(
+        user_id=user.id,
+        actor_key=actor_key,
+        title=str(payload.title or "").strip()[:255],
+        details=str(payload.details or "")[:5000],
+        start_at=start_at,
+        end_at=end_at,
+    )
+    db.add(row)
+    db.commit()
+    return SocialCalendarEventOut(
+        id=int(row.id),
+        title=str(row.title or ""),
+        details=str(row.details or ""),
+        start_at=row.start_at.isoformat() if row.start_at else "",
+        end_at=row.end_at.isoformat() if row.end_at else None,
+        created_at=row.created_at.isoformat() if row.created_at else "",
+    )
+
+
+@router.put("/social/calendar/events/{event_id}", response_model=SocialCalendarEventOut)
+def social_calendar_update_event(
+    event_id: int,
+    payload: SocialCalendarEventIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    row = db.get(SocialCalendarEvent, event_id)
+    if not row or int(row.user_id) != int(user.id):
+        raise HTTPException(status_code=404, detail="Событие не найдено")
+    start_at = _social_parse_dt(payload.start_at)
+    if not start_at:
+        raise HTTPException(status_code=400, detail="Некорректная дата начала")
+    row.title = str(payload.title or "").strip()[:255]
+    row.details = str(payload.details or "")[:5000]
+    row.start_at = start_at
+    row.end_at = _social_parse_dt(payload.end_at)
+    db.commit()
+    return SocialCalendarEventOut(
+        id=int(row.id),
+        title=str(row.title or ""),
+        details=str(row.details or ""),
+        start_at=row.start_at.isoformat() if row.start_at else "",
+        end_at=row.end_at.isoformat() if row.end_at else None,
+        created_at=row.created_at.isoformat() if row.created_at else "",
+    )
+
+
+@router.delete("/social/calendar/events/{event_id}", response_model=MessageOut)
+def social_calendar_delete_event(
+    event_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    row = db.get(SocialCalendarEvent, event_id)
+    if not row or int(row.user_id) != int(user.id):
+        raise HTTPException(status_code=404, detail="Событие не найдено")
+    db.delete(row)
+    db.commit()
+    return MessageOut(message="Событие удалено")
+
+
+@router.get("/social/notes", response_model=list[SocialNoteOut])
+def social_notes_list(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, _, _ = _social_actor_identity(db, user)
+    rows = db.scalars(
+        select(SocialNote)
+        .where(
+            SocialNote.user_id == user.id,
+            SocialNote.actor_key == actor_key,
+        )
+        .order_by(SocialNote.updated_at.desc(), SocialNote.id.desc())
+    ).all()
+    return [
+        SocialNoteOut(
+            id=int(row.id),
+            title=str(row.title or ""),
+            content=str(row.content or ""),
+            updated_at=row.updated_at.isoformat() if row.updated_at else "",
+        )
+        for row in rows
+    ]
+
+
+@router.post("/social/notes", response_model=SocialNoteOut)
+def social_create_note(
+    payload: SocialNoteIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, _, _ = _social_actor_identity(db, user)
+    row = SocialNote(
+        user_id=user.id,
+        actor_key=actor_key,
+        title=str(payload.title or "").strip()[:255] or "Новая заметка",
+        content=str(payload.content or "")[:20000],
+    )
+    db.add(row)
+    db.commit()
+    return SocialNoteOut(
+        id=int(row.id),
+        title=str(row.title or ""),
+        content=str(row.content or ""),
+        updated_at=row.updated_at.isoformat() if row.updated_at else "",
+    )
+
+
+@router.put("/social/notes/{note_id}", response_model=SocialNoteOut)
+def social_update_note(
+    note_id: int,
+    payload: SocialNoteIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, _, _ = _social_actor_identity(db, user)
+    row = db.get(SocialNote, note_id)
+    if not row or int(row.user_id) != int(user.id) or str(row.actor_key or "") != actor_key:
+        raise HTTPException(status_code=404, detail="Заметка не найдена")
+    row.title = str(payload.title or "").strip()[:255] or "Без названия"
+    row.content = str(payload.content or "")[:20000]
+    db.commit()
+    return SocialNoteOut(
+        id=int(row.id),
+        title=str(row.title or ""),
+        content=str(row.content or ""),
+        updated_at=row.updated_at.isoformat() if row.updated_at else "",
+    )
+
+
+@router.delete("/social/notes/{note_id}", response_model=MessageOut)
+def social_delete_note(
+    note_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, _, _ = _social_actor_identity(db, user)
+    row = db.get(SocialNote, note_id)
+    if not row or int(row.user_id) != int(user.id) or str(row.actor_key or "") != actor_key:
+        raise HTTPException(status_code=404, detail="Заметка не найдена")
+    db.delete(row)
+    db.commit()
+    return MessageOut(message="Заметка удалена")
+
+
+@router.get("/social/notifications", response_model=dict[str, Any])
+def social_notifications(
+    since_id: int = 0,
+    limit: int = 40,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, _, _ = _social_actor_identity(db, user)
+    safe_limit = max(10, min(int(limit or 40), 200))
+    query = select(SocialNotification).where(SocialNotification.recipient_key == actor_key)
+    if int(since_id or 0) > 0:
+        query = query.where(SocialNotification.id > int(since_id))
+    rows = db.scalars(query.order_by(SocialNotification.id.desc()).limit(safe_limit)).all()
+    unread = db.scalar(
+        select(func.count())
+        .select_from(SocialNotification)
+        .where(
+            SocialNotification.recipient_key == actor_key,
+            SocialNotification.is_read.is_(False),
+        )
+    ) or 0
+    data_rows = []
+    for row in reversed(rows):
+        payload: dict[str, Any]
+        try:
+            payload = json.loads(str(row.payload_json or "{}"))
+        except Exception:
+            payload = {}
+        data_rows.append(
+            SocialNotificationOut(
+                id=int(row.id),
+                kind=str(row.kind or ""),
+                title=str(row.title or ""),
+                body=str(row.body or ""),
+                payload=payload,
+                created_at=row.created_at.isoformat() if row.created_at else "",
+            ).model_dump()
+        )
+    return {"unread": int(unread), "rows": data_rows}
+
+
+@router.post("/social/notifications/read-all", response_model=MessageOut)
+def social_notifications_read_all(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, _, _ = _social_actor_identity(db, user)
+    db.execute(
+        text(
+            """
+            UPDATE social_notifications
+            SET is_read = 1
+            WHERE recipient_key = :key AND is_read = 0
+            """
+        ),
+        {"key": actor_key},
+    )
+    db.commit()
+    return MessageOut(message="Ок")
+
+
 def upsert_products(
     db: Session,
     user_id: int,
@@ -5408,6 +6766,7 @@ def _safe_team_scope(values: list[str] | None) -> list[str]:
         "user_profile",
         "help_center",
         "ai_assistant",
+        "social_hub",
     }
     out: list[str] = []
     seen: set[str] = set()

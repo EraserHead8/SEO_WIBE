@@ -338,3 +338,175 @@ class WorkItemClaim(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user: Mapped["User"] = relationship()
+
+
+class SocialGameScore(Base):
+    __tablename__ = "social_game_scores"
+    __table_args__ = (
+        UniqueConstraint("game_code", "actor_key", name="uq_social_game_actor"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    game_code: Mapped[str] = mapped_column(String(40), index=True)
+    actor_key: Mapped[str] = mapped_column(String(60), index=True)
+    actor_nick: Mapped[str] = mapped_column(String(120), default="")
+    best_score: Mapped[int] = mapped_column(Integer, default=0)
+    last_score: Mapped[int] = mapped_column(Integer, default=0)
+    play_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped["User"] = relationship()
+
+
+class SocialChatThread(Base):
+    __tablename__ = "social_chat_threads"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(20), index=True)  # global | company | direct
+    owner_user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped["User | None"] = relationship()
+
+
+class SocialChatThreadMember(Base):
+    __tablename__ = "social_chat_thread_members"
+    __table_args__ = (
+        UniqueConstraint("thread_id", "actor_key", name="uq_social_chat_thread_actor"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    thread_id: Mapped[int] = mapped_column(Integer, ForeignKey("social_chat_threads.id"), index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    member_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("team_members.id"), nullable=True, index=True)
+    actor_key: Mapped[str] = mapped_column(String(60), index=True)
+    actor_nick: Mapped[str] = mapped_column(String(120), default="")
+    last_read_message_id: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    thread: Mapped["SocialChatThread"] = relationship()
+    user: Mapped["User"] = relationship()
+    member: Mapped["TeamMember | None"] = relationship()
+
+
+class SocialChatMessage(Base):
+    __tablename__ = "social_chat_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    thread_id: Mapped[int] = mapped_column(Integer, ForeignKey("social_chat_threads.id"), index=True)
+    sender_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    sender_member_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("team_members.id"), nullable=True, index=True)
+    sender_key: Mapped[str] = mapped_column(String(60), index=True)
+    sender_nick: Mapped[str] = mapped_column(String(120), default="")
+    text: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    thread: Mapped["SocialChatThread"] = relationship()
+    sender_user: Mapped["User"] = relationship()
+    sender_member: Mapped["TeamMember | None"] = relationship()
+
+
+class SocialTaskProject(Base):
+    __tablename__ = "social_task_projects"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    title: Mapped[str] = mapped_column(String(255), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    created_by_key: Mapped[str] = mapped_column(String(60), index=True)
+    created_by_nick: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped["User"] = relationship()
+
+
+class SocialTask(Base):
+    __tablename__ = "social_tasks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    project_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("social_task_projects.id"), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(30), default="todo", index=True)  # todo | in_progress | done
+    priority: Mapped[str] = mapped_column(String(20), default="normal")
+    due_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    assignee_key: Mapped[str] = mapped_column(String(60), default="", index=True)
+    assignee_nick: Mapped[str] = mapped_column(String(120), default="")
+    creator_key: Mapped[str] = mapped_column(String(60), default="", index=True)
+    creator_nick: Mapped[str] = mapped_column(String(120), default="")
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped["User"] = relationship()
+    project: Mapped["SocialTaskProject | None"] = relationship()
+
+
+class SocialTaskComment(Base):
+    __tablename__ = "social_task_comments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    task_id: Mapped[int] = mapped_column(Integer, ForeignKey("social_tasks.id"), index=True)
+    author_key: Mapped[str] = mapped_column(String(60), index=True)
+    author_nick: Mapped[str] = mapped_column(String(120), default="")
+    text: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    task: Mapped["SocialTask"] = relationship()
+
+
+class SocialNotification(Base):
+    __tablename__ = "social_notifications"
+    __table_args__ = (
+        UniqueConstraint("recipient_key", "kind", "dedupe_key", name="uq_social_notif_dedupe"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    recipient_key: Mapped[str] = mapped_column(String(60), index=True)
+    kind: Mapped[str] = mapped_column(String(40), index=True)
+    dedupe_key: Mapped[str] = mapped_column(String(120), default="")
+    title: Mapped[str] = mapped_column(String(255), default="")
+    body: Mapped[str] = mapped_column(Text, default="")
+    payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    user: Mapped["User"] = relationship()
+
+
+class SocialCalendarEvent(Base):
+    __tablename__ = "social_calendar_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    actor_key: Mapped[str] = mapped_column(String(60), index=True)
+    title: Mapped[str] = mapped_column(String(255), default="")
+    details: Mapped[str] = mapped_column(Text, default="")
+    start_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    end_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped["User"] = relationship()
+
+
+class SocialNote(Base):
+    __tablename__ = "social_notes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    actor_key: Mapped[str] = mapped_column(String(60), index=True)
+    title: Mapped[str] = mapped_column(String(255), default="")
+    content: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped["User"] = relationship()

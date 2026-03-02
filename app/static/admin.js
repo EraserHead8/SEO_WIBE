@@ -73,6 +73,7 @@ const DEFAULT_MODULE_CODES = [
   "wb_ads_recommendations",
   "help_center",
   "ai_assistant",
+  "social_hub",
   "billing",
 ];
 
@@ -89,6 +90,7 @@ const TEAM_ACCESS_MODULES = [
   "user_profile",
   "help_center",
   "ai_assistant",
+  "social_hub",
 ];
 
 const MODULE_TITLES = {
@@ -106,6 +108,7 @@ const MODULE_TITLES = {
   wb_ads_recommendations: { ru: "Рекомендации WB Ads", en: "WB Ads recommendations" },
   help_center: { ru: "Справка по модулям", en: "Help center" },
   ai_assistant: { ru: "AI помощник", en: "AI assistant" },
+  social_hub: { ru: "Социальный модуль", en: "Social hub" },
   billing: { ru: "Биллинг", en: "Billing" },
 };
 
@@ -138,6 +141,7 @@ const AUDIT_MODULE_TITLES = {
   user_profile: { ru: "Профиль", en: "Profile" },
   help_center: { ru: "Справка", en: "Help center" },
   ai_assistant: { ru: "AI помощник", en: "AI assistant" },
+  social_hub: { ru: "Социальный модуль", en: "Social hub" },
   admin: { ru: "Админка", en: "Admin panel" },
 };
 

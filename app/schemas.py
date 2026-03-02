@@ -646,3 +646,144 @@ class UiSettingsIn(BaseModel):
     force_theme: bool = False
     default_theme: str = "classic"
     allowed_themes: list[str] = Field(default_factory=lambda: ["classic", "dark", "light", "newyear", "summer", "autumn", "winter", "spring", "japan", "greenland", "moon"])
+
+
+class SocialGameScoreIn(BaseModel):
+    game_code: str
+    score: int = 0
+
+
+class SocialGameScoreOut(BaseModel):
+    game_code: str
+    actor_key: str
+    actor_nick: str
+    best_score: int
+    last_score: int
+    play_count: int
+    updated_at: str | None = None
+
+
+class SocialLeaderboardOut(BaseModel):
+    game_code: str
+    top: list[dict[str, Any]] = Field(default_factory=list)
+    my_rank: int | None = None
+    my_best: int = 0
+
+
+class SocialChatDirectStartIn(BaseModel):
+    actor_key: str
+
+
+class SocialChatMessageIn(BaseModel):
+    text: str
+
+
+class SocialChatThreadOut(BaseModel):
+    id: int
+    kind: str
+    title: str
+    last_message: dict[str, Any] = Field(default_factory=dict)
+    unread: int = 0
+    participants: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class SocialChatMessageOut(BaseModel):
+    id: int
+    thread_id: int
+    sender_key: str
+    sender_nick: str
+    text: str
+    created_at: str
+    is_mine: bool = False
+
+
+class SocialTaskProjectIn(BaseModel):
+    title: str
+    description: str = ""
+
+
+class SocialTaskProjectOut(BaseModel):
+    id: int
+    title: str
+    description: str = ""
+    created_by_key: str
+    created_by_nick: str
+    created_at: str
+
+
+class SocialTaskIn(BaseModel):
+    project_id: int | None = None
+    title: str
+    description: str = ""
+    priority: str = "normal"
+    due_date: str | None = None
+    assignee_key: str = ""
+
+
+class SocialTaskUpdateIn(BaseModel):
+    project_id: int | None = None
+    title: str | None = None
+    description: str | None = None
+    status: str | None = None
+    priority: str | None = None
+    due_date: str | None = None
+    assignee_key: str | None = None
+
+
+class SocialTaskCommentIn(BaseModel):
+    text: str
+
+
+class SocialTaskOut(BaseModel):
+    id: int
+    project_id: int | None = None
+    project_title: str = ""
+    title: str
+    description: str
+    status: str
+    priority: str
+    due_date: str | None = None
+    assignee_key: str = ""
+    assignee_nick: str = ""
+    creator_key: str = ""
+    creator_nick: str = ""
+    comments: list[dict[str, Any]] = Field(default_factory=list)
+    created_at: str
+    updated_at: str
+
+
+class SocialCalendarEventIn(BaseModel):
+    title: str
+    details: str = ""
+    start_at: str
+    end_at: str | None = None
+
+
+class SocialCalendarEventOut(BaseModel):
+    id: int
+    title: str
+    details: str = ""
+    start_at: str
+    end_at: str | None = None
+    created_at: str
+
+
+class SocialNoteIn(BaseModel):
+    title: str = ""
+    content: str = ""
+
+
+class SocialNoteOut(BaseModel):
+    id: int
+    title: str
+    content: str
+    updated_at: str
+
+
+class SocialNotificationOut(BaseModel):
+    id: int
+    kind: str
+    title: str
+    body: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+    created_at: str

@@ -69,6 +69,7 @@ let currentProductsSubtab = "catalog";
 let currentReviewsSubtab = "reviews";
 let currentAdsSubtab = "campaigns";
 let currentHelpSubtab = "docs";
+let currentSocialSubtab = "games";
 const moduleLoadState = new Map();
 const moduleInflightState = new Map();
 const MODULE_CACHE_TTL_MS = 30 * 60 * 1000;
@@ -142,6 +143,7 @@ const TAB_TITLES = {
   sales: { ru: ["Статистика и дашборд", "Продажи, KPI и динамика в одном модуле"], en: ["Statistics & Dashboard", "Sales, KPIs and trends in one module"] },
   reviews: { ru: ["Отзывы/Вопросы", "Единый модуль обратной связи"], en: ["Reviews/Questions", "Unified customer feedback module"] },
   ads: { ru: ["Реклама WB/Ozon", "Кампании, аналитика и рекомендации"], en: ["WB/Ozon Ads", "Campaigns, analytics and recommendations"] },
+  social: { ru: ["Социальный", "Пауза, взаимодействие и командная работа"], en: ["Social Hub", "Break, communication and teamwork"] },
   profile: { ru: ["Профиль", "Профиль компании, доступы команды и интеграции"], en: ["Profile", "Company profile, team access and integrations"] },
   billing: { ru: ["Биллинг", "Тарифы, лимиты, продление и история операций"], en: ["Billing", "Plans, limits, renewals and history"] },
   help: { ru: ["Справка", "Документация по модулям"], en: ["Help Center", "Module usage documentation"] },
@@ -170,6 +172,7 @@ const TEAM_ACCESS_MODULES = [
   "user_profile",
   "help_center",
   "ai_assistant",
+  "social_hub",
 ];
 
 const NAV_BUTTON_ICONS = {
@@ -177,6 +180,7 @@ const NAV_BUTTON_ICONS = {
   sales: "/static/icons/nav-sales.svg",
   reviews: "/static/icons/nav-reviews.svg",
   ads: "/static/icons/nav-ads.svg",
+  social: "/static/icons/nav-help.svg",
   profile: "/static/icons/nav-profile.svg",
   help: "/static/icons/nav-help.svg",
 };
@@ -187,6 +191,7 @@ const UI_TEXT = {
     nav_sales: "Статистика и дашборд",
     nav_reviews: "Отзывы/Вопросы",
     nav_ads: "Реклама WB/Ozon",
+    nav_social: "Социальный",
     nav_profile: "Профиль",
     nav_help: "Справка",
     logout: "Выйти",
@@ -207,6 +212,7 @@ const UI_TEXT = {
     nav_sales: "Statistics & Dashboard",
     nav_reviews: "Reviews/Questions",
     nav_ads: "WB/Ozon Ads",
+    nav_social: "Social Hub",
     nav_profile: "Profile",
     nav_help: "Help Center",
     logout: "Logout",
@@ -279,6 +285,7 @@ function moduleLabel(code) {
     user_profile: tr("Профиль", "Profile"),
     help_center: tr("Справка", "Help"),
     ai_assistant: tr("AI помощник", "AI Assistant"),
+    social_hub: tr("Социальный", "Social Hub"),
   };
   return labels[key] || key;
 }
@@ -505,6 +512,7 @@ function applyUiLanguage() {
   setText(".nav-btn[data-tab='sales']", t("nav_sales"));
   setText(".nav-btn[data-tab='reviews']", t("nav_reviews"));
   setText(".nav-btn[data-tab='ads']", t("nav_ads"));
+  setText(".nav-btn[data-tab='social']", t("nav_social"));
   setText(".nav-btn[data-tab='profile']", t("nav_profile"));
   setText(".nav-btn[data-tab='help']", t("nav_help"));
   applyNavIcons();
@@ -647,6 +655,12 @@ function applyUiLanguage() {
   setText("#adsSubtabAnalyticsBtn", isEn ? "Analytics" : "Аналитика");
   setText("#adsSubtabRecommendationsBtn", isEn ? "Recommendations" : "Рекомендации");
   setText("#adsSubtabOzonBtn", isEn ? "Ozon Ads" : "Реклама Ozon");
+  setText("#socialSubtabGamesBtn", isEn ? "Games" : "Игры");
+  setText("#socialSubtabChatBtn", isEn ? "Chat" : "Чат");
+  setText("#socialSubtabTasksBtn", isEn ? "Tasks" : "Задачи");
+  setText("#socialSubtabCalendarBtn", isEn ? "Calendar" : "Календарь");
+  setText("#socialSubtabCalculatorBtn", isEn ? "Calculator" : "Калькулятор");
+  setText("#socialSubtabNotesBtn", isEn ? "Notes" : "Заметки");
   setText("#reviews .grid-6 button.btn-secondary", isEn ? "Refresh Reviews" : "Обновить отзывы");
   setText("#reviews .grid-2 button", isEn ? "Save AI Settings" : "Сохранить AI-настройки");
   setText("#reviewsSubtabQuestions .grid-6 button.btn-secondary", isEn ? "Refresh Questions" : "Обновить вопросы");
@@ -1680,6 +1694,7 @@ async function preloadModulesInBackground({ force = false } = {}) {
     { key: "products", load: loadProductsWorkspace, enabled: () => true },
     { key: "reviews", load: loadReviewsWorkspace, enabled: () => enabledModules.has("wb_reviews_ai") || enabledModules.has("wb_questions_ai") || enabledModules.has("returns") },
     { key: "ads", load: loadAdsWorkspace, enabled: () => enabledModules.has("wb_ads") || enabledModules.has("wb_ads_analytics") || enabledModules.has("wb_ads_recommendations") },
+    { key: "social", load: () => (typeof loadSocialWorkspace === "function" ? loadSocialWorkspace() : Promise.resolve()), enabled: () => enabledModules.has("social_hub") },
     { key: "profile", load: loadProfile, enabled: () => enabledModules.has("user_profile") },
     { key: "help", load: loadHelpWorkspace, enabled: () => enabledModules.has("help_center") || enabledModules.has("ai_assistant") },
   ];
@@ -1747,6 +1762,7 @@ function showTab(name, btn = null) {
   if (targetTab === "products") runModuleLoader("products", loadProductsWorkspace);
   if (targetTab === "reviews") runModuleLoader("reviews", loadReviewsWorkspace);
   if (targetTab === "ads") runModuleLoader("ads", loadAdsWorkspace);
+  if (targetTab === "social") runModuleLoader("social", () => (typeof loadSocialWorkspace === "function" ? loadSocialWorkspace() : Promise.resolve()));
   if (targetTab === "profile") runModuleLoader("profile", loadProfile);
   if (targetTab === "billing") runModuleLoader("billing", loadBilling);
   if (targetTab === "help") runModuleLoader("help", loadHelpWorkspace, { maxAgeMs: MODULE_CACHE_TTL_MS });
@@ -1756,6 +1772,7 @@ function showTab(name, btn = null) {
     products: currentProductsSubtab === "seo" ? "seo_generation" : "products",
     reviews: currentReviewsSubtab === "questions" ? "wb_questions_ai" : (currentReviewsSubtab === "returns" ? "returns" : "wb_reviews_ai"),
     ads: currentAdsSubtab === "analytics" ? "wb_ads_analytics" : (currentAdsSubtab === "recommendations" ? "wb_ads_recommendations" : "wb_ads"),
+    social: "social_hub",
     profile: "user_profile",
     billing: "billing",
     help: currentHelpSubtab === "assistant" ? "ai_assistant" : "help_center",
@@ -1829,6 +1846,7 @@ async function logout() {
   currentReviewsSubtab = "reviews";
   currentAdsSubtab = "campaigns";
   currentHelpSubtab = "docs";
+  currentSocialSubtab = "games";
   helpAssistantHistory = [];
   profileAiState = null;
   wbReviewDrafts.clear();
@@ -1841,6 +1859,9 @@ async function logout() {
   questionLoadProgress = { active: false, total: 0, loaded: 0 };
   wbAdsLoadProgress = { active: false, total: 0, loaded: 0, failed: 0 };
   adsRecLoadProgress = { active: false, total: 0, loaded: 0 };
+  if (typeof window.resetSocialState === "function") {
+    try { window.resetSocialState(); } catch (_) {}
+  }
   localStorage.removeItem("token");
   document.getElementById("appSection").classList.add("hidden");
   document.getElementById("authSection").classList.remove("hidden");
@@ -1875,6 +1896,9 @@ async function ensureAuth() {
   applySidebarMode();
   applyButtonTooltips();
   startModuleAutoRefresh();
+  if (typeof window.socialStartGlobalHooks === "function") {
+    try { window.socialStartGlobalHooks(); } catch (_) {}
+  }
   showTab("sales", document.querySelector(".nav-btn[data-tab='sales']"));
   setTimeout(() => {
     preloadModulesInBackground({ force: false });

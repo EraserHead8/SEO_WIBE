@@ -14,4 +14,5 @@ DEFAULT_MODULES = [
     "help_center",
     "ai_assistant",
     "billing",
+    "social_hub",
 ]

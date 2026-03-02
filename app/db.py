@@ -76,6 +76,21 @@ def run_lightweight_migrations():
                     ),
                     {"code": code},
                 )
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO module_access (user_id, module_code, enabled, created_at)
+                    SELECT u.id, :code, 0, CURRENT_TIMESTAMP
+                    FROM users u
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM module_access m
+                        WHERE m.user_id = u.id AND m.module_code = :code
+                    )
+                    """
+                ),
+                {"code": "social_hub"},
+            )
 
         settings_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(system_settings)"))}
         if settings_cols:
