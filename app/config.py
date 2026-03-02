@@ -1,4 +1,5 @@
 import secrets
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -18,5 +19,15 @@ class Settings(BaseSettings):
 settings = Settings()
 
 if not settings.secret_key or settings.secret_key == "change-me-in-production":
-    # Ephemeral fallback for local/dev startup when SECRET_KEY is not set.
-    settings.secret_key = secrets.token_urlsafe(48)
+    # Persist local secret to avoid invalidating tokens after restarts.
+    secret_path = Path(__file__).resolve().parent.parent / ".secret_key"
+    try:
+        if secret_path.exists():
+            persisted = secret_path.read_text(encoding="utf-8").strip()
+            if persisted:
+                settings.secret_key = persisted
+        if not settings.secret_key:
+            settings.secret_key = secrets.token_urlsafe(48)
+            secret_path.write_text(settings.secret_key, encoding="utf-8")
+    except Exception:
+        settings.secret_key = secrets.token_urlsafe(48)

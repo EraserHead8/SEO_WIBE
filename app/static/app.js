@@ -1874,6 +1874,7 @@ async function logout() {
     }).catch(() => null);
   }
   setToken("");
+  window.__socialHooksRequested = false;
   me = null;
   renderTopbarUser();
   selectedProducts.clear();
@@ -1953,10 +1954,20 @@ async function ensureAuth() {
   applySidebarMode();
   applyButtonTooltips();
   startModuleAutoRefresh();
+  window.__socialHooksRequested = true;
   if (typeof window.socialStartGlobalHooks === "function") {
     try { window.socialStartGlobalHooks(); } catch (_) {}
   }
+  try { window.dispatchEvent(new Event("seo-wibe-auth")); } catch (_) {}
   showTab("sales", document.querySelector(".nav-btn[data-tab='sales']"));
+  setTimeout(() => {
+    if (currentTab === "sales") {
+      runModuleLoader("sales", async () => {
+        await loadDashboard();
+        await loadSalesStats();
+      }, { force: true, maxAgeMs: 0 });
+    }
+  }, 120);
   setTimeout(() => {
     preloadModulesInBackground({ force: false });
   }, 250);
@@ -2249,24 +2260,17 @@ async function loadReviewsWorkspace() {
   normalizeFeedbackDateDefaults("reviews", "reviewDateFrom", "reviewDateTo");
   normalizeFeedbackDateDefaults("questions", "questionDateFrom", "questionDateTo");
   syncReviewsSubtabAccess();
-  if (hasReviews) {
+  const next = currentReviewsSubtab || (hasReviews ? "reviews" : (hasQuestions ? "questions" : "returns"));
+  switchReviewsSubtab(next, false);
+  if (next === "reviews" && hasReviews) {
     await loadReviewAiSettings();
     await loadWbReviews();
-  }
-  if (hasQuestions) {
+  } else if (next === "questions" && hasQuestions) {
     await loadQuestionAiSettings();
     await loadAiDocs();
     await loadWbQuestions();
-  }
-  if (hasReturns) {
+  } else if (next === "returns" && hasReturns) {
     await loadReturns();
-  }
-  if (!hasReviews && hasQuestions) {
-    switchReviewsSubtab("questions", false);
-  } else if (!hasReviews && !hasQuestions && hasReturns) {
-    switchReviewsSubtab("returns", false);
-  } else {
-    switchReviewsSubtab(currentReviewsSubtab || "reviews", false);
   }
 }
 
@@ -6202,6 +6206,10 @@ function renderSalesChart(points) {
     if (key === "penalties") return Number(bucket.penalties || 0);
     return Number(bucket.units || 0);
   };
+  const countMetrics = new Set(["orders", "units", "returns"]);
+  const normalizeMetricValue = (value) => (
+    countMetrics.has(metric) ? Math.round(Number(value || 0)) : Number(value || 0)
+  );
   const series = [];
   const buildMpMaps = (rows) => {
     const byBucket = new Map();
@@ -6252,16 +6260,16 @@ function renderSalesChart(points) {
   });
   const resolveMarketplaceSeries = (pointsList, maps, mp) => {
     if (hasPointMarketplaceData(pointsList, mp)) {
-      return pointsList.map((point) => pointMarketplaceValue(point, mp, metric));
+      return pointsList.map((point) => normalizeMetricValue(pointMarketplaceValue(point, mp, metric)));
     }
     return pointsList.map((point) => {
       const exact = maps.byBucket.get(`${point.label}::${mp}`);
-      if (exact) return valueOf(exact, metric);
+      if (exact) return normalizeMetricValue(valueOf(exact, metric));
       const day = String(point.day || point.label || "").slice(0, 10);
       const dayRow = maps.byDay.get(`${day}::${mp}`);
       if (!dayRow) return 0;
       const bucketsPerDay = Math.max(1, Number(labelDayCount.get(day) || 1));
-      return Number(valueOf(dayRow, metric) / bucketsPerDay);
+      return normalizeMetricValue(Number(valueOf(dayRow, metric) / bucketsPerDay));
     });
   };
   const currentLabel = salesCurrentLabel || tr("Текущий период", "Current period");

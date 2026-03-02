@@ -26,6 +26,13 @@ let socialState = {
   toastsSeen: new Set(),
 };
 
+function socialMaybeStartHooks() {
+  if (!token) return;
+  if (window.__socialHooksRequested) {
+    try { socialStartGlobalHooks(); } catch (_) {}
+  }
+}
+
 function socialRequest(url, opts = {}) {
   return requestJson(url, {
     ...opts,
@@ -837,6 +844,19 @@ function socialRun2048() {
   };
 }
 
+if (typeof window !== "undefined") {
+  window.addEventListener("seo-wibe-auth", () => {
+    socialMaybeStartHooks();
+  });
+  if (document.readyState === "complete") {
+    setTimeout(() => socialMaybeStartHooks(), 0);
+  } else {
+    window.addEventListener("load", () => {
+      setTimeout(() => socialMaybeStartHooks(), 0);
+    });
+  }
+}
+
 async function socialLoadThreads(opts = {}) {
   const data = await socialRequest("/api/social/chat/threads").catch((e) => {
     if (!opts.silent && e?.message) alert(e.message);
@@ -1035,6 +1055,7 @@ function socialRenderTasks() {
   const host = document.getElementById("socialTasksBoard");
   if (!host) return;
   const rows = socialState.tasks || [];
+  const myActorKey = String(socialState.boot?.actor?.actor_key || "").trim();
   if (!rows.length) {
     host.innerHTML = `<div class="hint">${tr("Задач пока нет", "No tasks yet")}</div>`;
     return;
@@ -1049,11 +1070,14 @@ function socialRenderTasks() {
         const priority = String(task.priority || "normal");
         const due = task.due_date ? String(task.due_date).slice(0, 10) : "";
         const project = task.project_title || tr("Без проекта", "No project");
+        const isMine = myActorKey && String(task.assignee_key || "") === myActorKey;
+        const mineBadge = isMine ? `<span class="social-task-tag">${tr("Ваша задача", "Your task")}</span>` : "";
         return `
-          <article class="social-task-row" ondblclick="socialOpenTaskModal(${Number(task.id || 0)})">
+          <article class="social-task-row ${isMine ? "is-assignee" : ""}" ondblclick="socialOpenTaskModal(${Number(task.id || 0)})">
             <div class="social-task-main">
               <div class="social-task-title">
                 <b>${escapeHtml(task.title || "-")}</b>
+                ${mineBadge}
                 <span class="social-status ${escapeHtml(status)}">${escapeHtml(statusLabel)}</span>
                 <span class="social-priority ${escapeHtml(priority)}">${escapeHtml(priority)}</span>
               </div>

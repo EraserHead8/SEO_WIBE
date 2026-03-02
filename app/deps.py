@@ -1,3 +1,5 @@
+import json
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
@@ -10,6 +12,23 @@ from app.models import TeamMember, User
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 
+def _team_scope_from_member(member: TeamMember | None) -> list[str]:
+    if not member:
+        return ["*"]
+    if member.is_owner:
+        return ["*"]
+    raw = str(member.access_scope or "").strip()
+    if not raw:
+        return ["products", "sales_stats"]
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        parsed = []
+    if not isinstance(parsed, list):
+        return ["products", "sales_stats"]
+    return [str(x).strip().lower() for x in parsed if str(x).strip()]
+
+
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
     subject = decode_access_token(token)
     if not subject:
@@ -19,6 +38,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     actor_email = ""
     actor_member_id = 0
     actor_is_owner = True
+    actor_scope: list[str] = ["*"]
     user = None
 
     if subject_value.startswith("u:"):
@@ -37,6 +57,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         )
         if owner_member:
             actor_member_id = int(owner_member.id or 0)
+            actor_scope = _team_scope_from_member(owner_member)
     elif subject_value.startswith("m:"):
         member_id = int(subject_value.split(":", 1)[1] or 0)
         member = db.get(TeamMember, member_id)
@@ -48,6 +69,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         actor_email = str(member.email or "").strip().lower()
         actor_member_id = int(member.id or 0)
         actor_is_owner = bool(member.is_owner)
+        actor_scope = _team_scope_from_member(member)
     else:
         subject_email = subject_value.lower()
         user = db.scalar(select(User).where(User.email == subject_email))
@@ -71,6 +93,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
             actor_email = str(member.email or subject_email).strip().lower()
             actor_member_id = int(member.id or 0)
             actor_is_owner = bool(member.is_owner)
+            actor_scope = _team_scope_from_member(member)
         else:
             owner_member = db.scalar(
                 select(TeamMember)
@@ -82,11 +105,13 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
             )
             if owner_member:
                 actor_member_id = int(owner_member.id or 0)
+                actor_scope = _team_scope_from_member(owner_member)
 
     # Runtime actor context is used by audit and permission filters.
     user._actor_email = actor_email
     user._actor_member_id = actor_member_id
     user._actor_is_owner = actor_is_owner
+    user._actor_member_scope = actor_scope
     return user
 
 

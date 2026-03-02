@@ -537,10 +537,6 @@ function applyAdminLanguage() {
     ["#adminTab-credentials .grid-2 button", aTr("Обновить таблицу", "Refresh table")],
     ["#adminTab-audit .panel h3", aTr("Журнал действий", "Activity log")],
     ["#adminAuditRefreshBtn", aTr("Обновить журнал", "Refresh log")],
-    ["#adminAuditActionFilter", aTr("Действие (например: auth_login_success)", "Action (e.g. auth_login_success)")],
-    ["#adminAuditModuleFilter", aTr("Модуль (например: sales_stats)", "Module (e.g. sales_stats)")],
-    ["#adminAuditUserFilter", aTr("user_id / actor email", "user_id / actor email")],
-    ["#adminAuditMemberFilter", aTr("member_id сотрудника", "employee member_id")],
     ["#adminAuditTextFilter", aTr("Поиск по деталям / entity / actor / ip / ua", "Search in details / entity / actor / ip / ua")],
     ["#adminAuditPageInfo", aTr("Страница 1 из 1", "Page 1 of 1")],
     ["#adminAuditPrevBtn", aTr("Назад", "Prev")],
@@ -655,6 +651,7 @@ function applyAdminLanguage() {
   renderAdminUsersTable();
   renderAdminModulesTable();
   renderAdminCredentialsTable();
+  refreshAdminAuditFilterOptions(adminAuditRows);
   renderAdminAuditTable();
   renderAdminAuditPager();
   renderAdminAppearance();
@@ -2445,6 +2442,61 @@ function renderAdminAuditPager() {
   if (next) next.disabled = safePage >= safePages;
 }
 
+function refreshAdminAuditFilterOptions(rows) {
+  const actionEl = document.getElementById("adminAuditActionFilter");
+  const moduleEl = document.getElementById("adminAuditModuleFilter");
+  const actorEl = document.getElementById("adminAuditActorFilter");
+  const memberEl = document.getElementById("adminAuditMemberFilter");
+  if (!actionEl || !moduleEl || !actorEl || !memberEl) return;
+
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const uniq = (items) => [...new Set(items.filter(Boolean))];
+  const actions = uniq([
+    ...Object.keys(AUDIT_ACTION_TITLES || {}),
+    ...safeRows.map((row) => String(row.action || "").trim()),
+  ]).sort();
+  const modules = uniq([
+    ...Object.keys(MODULE_TITLES || {}),
+    ...Object.keys(AUDIT_MODULE_TITLES || {}),
+    ...safeRows.map((row) => String(row.module_code || "").trim()),
+  ]).sort();
+  const actorEmails = uniq(safeRows.map((row) => String(row.actor_email || "").trim().toLowerCase())).sort();
+  const memberIds = uniq(safeRows.map((row) => Number(row.actor_member_id || 0)).filter((x) => x > 0)).sort((a, b) => a - b);
+
+  const currentAction = String(actionEl.value || "");
+  const currentModule = String(moduleEl.value || "");
+  const currentActor = String(actorEl.value || "");
+  const currentMember = String(memberEl.value || "");
+
+  actionEl.innerHTML = `<option value="">${aTr("Все действия", "All actions")}</option>` +
+    actions.map((val) => `<option value="${escapeHtml(val)}">${escapeHtml(val)}</option>`).join("");
+  if (currentAction && !actions.includes(currentAction)) {
+    actionEl.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(currentAction)}">${escapeHtml(currentAction)}</option>`);
+  }
+  actionEl.value = currentAction;
+
+  moduleEl.innerHTML = `<option value="">${aTr("Все модули", "All modules")}</option>` +
+    modules.map((val) => `<option value="${escapeHtml(val)}">${escapeHtml(humanAuditModule(val))}</option>`).join("");
+  if (currentModule && !modules.includes(currentModule)) {
+    moduleEl.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(currentModule)}">${escapeHtml(currentModule)}</option>`);
+  }
+  moduleEl.value = currentModule;
+
+  actorEl.innerHTML = `<option value="">${aTr("Все пользователи", "All actors")}</option>` +
+    actorEmails.map((val) => `<option value="${escapeHtml(val)}">${escapeHtml(val)}</option>`).join("");
+  if (currentActor && !actorEmails.includes(currentActor)) {
+    actorEl.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(currentActor)}">${escapeHtml(currentActor)}</option>`);
+  }
+  actorEl.value = currentActor;
+
+  memberEl.innerHTML = `<option value="">${aTr("Все сотрудники", "All members")}</option>` +
+    memberIds.map((val) => `<option value="${val}">#${val}</option>`).join("");
+  if (currentMember && !memberIds.map((x) => String(x)).includes(currentMember)) {
+    memberEl.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(currentMember)}">#${escapeHtml(currentMember)}</option>`);
+  }
+  memberEl.value = currentMember;
+}
+
 async function loadAdminAudit(options = {}) {
   const resetPage = Boolean(options && options.resetPage);
   const pageSize = Number(document.getElementById("adminAuditLimit")?.value || adminAuditPageSize || 100);
@@ -2458,7 +2510,7 @@ async function loadAdminAudit(options = {}) {
   const dateFrom = String(document.getElementById("adminAuditDateFrom")?.value || "").trim();
   const dateTo = String(document.getElementById("adminAuditDateTo")?.value || "").trim();
   const textFilter = String(document.getElementById("adminAuditTextFilter")?.value || "").trim();
-  const userFilter = String(document.getElementById("adminAuditUserFilter")?.value || "").trim();
+  const actorFilter = String(document.getElementById("adminAuditActorFilter")?.value || "").trim();
   const memberFilter = String(document.getElementById("adminAuditMemberFilter")?.value || "").trim();
 
   const qp = new URLSearchParams();
@@ -2470,10 +2522,7 @@ async function loadAdminAudit(options = {}) {
   if (dateFrom) qp.set("date_from", dateFrom);
   if (dateTo) qp.set("date_to", dateTo);
   if (textFilter) qp.set("q", textFilter);
-  if (userFilter) {
-    if (/^\d+$/.test(userFilter)) qp.set("user_id", userFilter);
-    else qp.set("actor_email", userFilter);
-  }
+  if (actorFilter) qp.set("actor_email", actorFilter);
   if (/^\d+$/.test(memberFilter)) qp.set("actor_member_id", memberFilter);
 
   const data = await adminRequest(`/api/admin/audit?${qp.toString()}`, { headers: adminHeaders() }).catch((e) => {
@@ -2495,6 +2544,7 @@ async function loadAdminAudit(options = {}) {
   }
   const raw = document.getElementById("adminAuditView");
   if (raw) raw.textContent = JSON.stringify(data, null, 2);
+  refreshAdminAuditFilterOptions(adminAuditRows);
   renderAdminAuditTable();
   renderAdminAuditPager();
 }

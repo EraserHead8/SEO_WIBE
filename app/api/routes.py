@@ -6113,6 +6113,21 @@ def social_mark_chat_read(
     ) or 0
     member_row.last_read_message_id = int(last_id)
     member_row.updated_at = datetime.utcnow()
+    # Mark related chat notifications as read for this thread.
+    notif_rows = db.scalars(
+        select(SocialNotification).where(
+            SocialNotification.recipient_key == actor_key,
+            SocialNotification.kind == "chat_message",
+            SocialNotification.is_read.is_(False),
+        )
+    ).all()
+    for notif in notif_rows:
+        try:
+            payload = json.loads(str(notif.payload_json or "{}"))
+        except Exception:
+            payload = {}
+        if int(payload.get("thread_id") or 0) == int(thread_id):
+            notif.is_read = True
     db.commit()
     return MessageOut(message="Ок")
 

@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260303a" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260303b" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -294,10 +294,18 @@
               <option value="250">250</option>
               <option value="500">500</option>
             </select>
-            <input id="adminAuditActionFilter" placeholder="Действие (например: auth_login_success)" oninput="loadAdminAuditReset()" />
-            <input id="adminAuditModuleFilter" placeholder="Модуль (например: sales_stats)" oninput="loadAdminAuditReset()" />
-            <input id="adminAuditUserFilter" placeholder="user_id / actor email" oninput="loadAdminAuditReset()" />
-            <input id="adminAuditMemberFilter" placeholder="member_id сотрудника" oninput="loadAdminAuditReset()" />
+            <select id="adminAuditActionFilter" onchange="loadAdminAuditReset()">
+              <option value="">Все действия</option>
+            </select>
+            <select id="adminAuditModuleFilter" onchange="loadAdminAuditReset()">
+              <option value="">Все модули</option>
+            </select>
+            <select id="adminAuditActorFilter" onchange="loadAdminAuditReset()">
+              <option value="">Все пользователи</option>
+            </select>
+            <select id="adminAuditMemberFilter" onchange="loadAdminAuditReset()">
+              <option value="">Все сотрудники</option>
+            </select>
             <select id="adminAuditStatusFilter" onchange="loadAdminAuditReset()">
               <option value="">Все статусы</option>
               <option value="ok">ok</option>
@@ -469,6 +477,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script src="/static/admin.js?v=20260302c"></script>
+  <script src="/static/admin.js?v=20260303b"></script>
 </body>
 </html>

@@ -766,11 +766,23 @@ body[data-theme="light"] .review-type-pill {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  row-gap: 10px;
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 14px;
   background: rgba(9, 16, 39, 0.68);
   margin-bottom: 14px;
+}
+.topbar-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.topbar-title h1,
+.topbar-title p {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
 }
 .topbar h1 { margin: 0; font-size: 28px; font-family: "Unbounded", sans-serif; }
 .topbar p { margin: 6px 0 0; color: var(--muted); }
@@ -779,6 +791,7 @@ body[data-theme="light"] .review-type-pill {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  flex: 0 0 auto;
 }
 .topbar-user-btn {
   display: inline-flex;
@@ -5790,12 +5803,12 @@ body[data-theme="dark"] .landing-band .band-stats span {
 
 .social-toast {
   width: min(340px, calc(100vw - 36px));
-  background: var(--panel-bg);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-soft);
+  background: #0f1731;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 24px rgba(5, 10, 30, 0.45);
   border-radius: 12px;
   padding: 10px 12px;
-  color: var(--text);
+  color: #f3f7ff;
   opacity: 0;
   transform: translateY(-8px);
   transition: all .2s ease;
@@ -5804,6 +5817,10 @@ body[data-theme="dark"] .landing-band .band-stats span {
 .social-toast.show {
   opacity: 1;
   transform: translateY(0);
+}
+
+.social-toast strong {
+  color: #ffffff;
 }
 
 .social-games-grid {
@@ -6057,6 +6074,24 @@ body[data-theme="dark"] .landing-band .band-stats span {
   gap: 12px;
   align-items: center;
   cursor: pointer;
+}
+
+.social-task-row.is-assignee {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel-bg-soft) 90%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.social-task-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent-strong);
 }
 
 .social-task-title {
