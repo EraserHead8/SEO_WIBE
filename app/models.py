@@ -51,9 +51,11 @@ class Product(Base):
     barcode: Mapped[str] = mapped_column(String(64), default="", index=True)
     photo_url: Mapped[str] = mapped_column(String(500), default="")
     name: Mapped[str] = mapped_column(String(255))
+    category_name: Mapped[str] = mapped_column(String(255), default="", index=True)
     current_description: Mapped[str] = mapped_column(Text, default="")
     target_keywords: Mapped[str] = mapped_column(Text, default="")
     last_position: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    owner_member_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -79,6 +81,7 @@ class SeoJob(Base):
     current_position: Mapped[int | None] = mapped_column(Integer, nullable=True)
     next_check_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    owner_member_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -92,6 +95,7 @@ class UserKeyword(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     marketplace: Mapped[str] = mapped_column(String(30), default="all", index=True)
     keyword: Mapped[str] = mapped_column(String(255), index=True)
+    owner_member_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     user: Mapped["User"] = relationship(back_populates="keywords")
@@ -141,6 +145,7 @@ class UserKnowledgeDoc(Base):
     filename: Mapped[str] = mapped_column(String(255), default="")
     content_type: Mapped[str] = mapped_column(String(120), default="")
     content_text: Mapped[str] = mapped_column(Text, default="")
+    owner_member_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

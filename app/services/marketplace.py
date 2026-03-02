@@ -935,6 +935,105 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
     return mapped
 
 
+def enrich_ozon_category_names(api_key: str, refs: list[dict[str, str]]) -> dict[tuple[str, str], str]:
+    """
+    Возвращает категории Ozon для пар (article, external_id).
+    Ключ результата: (article_lower, external_id_raw)
+    """
+    if not httpx:
+        return {}
+    creds = _parse_ozon_credentials(api_key)
+    if not creds:
+        return {}
+    client_id, token = creds
+    normalized_refs: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    offer_ids: list[str] = []
+    product_ids: list[int] = []
+    for raw in refs or []:
+        if not isinstance(raw, dict):
+            continue
+        article = str(raw.get("article") or "").strip()
+        external = str(raw.get("external_id") or "").strip()
+        key = (article.lower(), external)
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized_refs.append(key)
+        if article:
+            offer_ids.append(article)
+        if external.isdigit():
+            product_ids.append(int(external))
+    if not normalized_refs:
+        return {}
+    headers = {
+        "Client-Id": client_id,
+        "Api-Key": token,
+        "Content-Type": "application/json",
+    }
+    endpoint = "https://api-seller.ozon.ru/v3/product/info/list"
+    by_offer: dict[str, str] = {}
+    by_product_id: dict[str, str] = {}
+    offer_ids = list(dict.fromkeys(offer_ids))
+    product_ids = list(dict.fromkeys(product_ids))
+
+    def _chunks(items: list[Any], size: int = 200) -> list[list[Any]]:
+        if not items:
+            return []
+        return [items[i : i + size] for i in range(0, len(items), size)]
+
+    try:
+        with httpx.Client(timeout=25.0) as client:
+            chunks_offers = _chunks(offer_ids, 200) or [[]]
+            chunks_products = _chunks(product_ids, 200) or [[]]
+            total = max(len(chunks_offers), len(chunks_products))
+            for idx in range(total):
+                payload: dict[str, Any] = {
+                    "offer_id": chunks_offers[idx] if idx < len(chunks_offers) else [],
+                    "product_id": chunks_products[idx] if idx < len(chunks_products) else [],
+                    "sku": [],
+                }
+                if not payload["offer_id"] and not payload["product_id"]:
+                    continue
+                resp = client.post(endpoint, headers=headers, json=payload)
+                if resp.status_code >= 400:
+                    continue
+                data = resp.json()
+                items = (data.get("result") or {}).get("items") or data.get("items") or []
+                for item in items:
+                    source = item.get("product_info") or item
+                    category_name = _extract_ozon_category_name(source)
+                    if not category_name:
+                        category_name = _extract_ozon_category_name(item)
+                    if not category_name:
+                        continue
+                    offer = str(
+                        source.get("offer_id")
+                        or item.get("offer_id")
+                        or ""
+                    ).strip().lower()
+                    product_id = str(
+                        source.get("id")
+                        or source.get("product_id")
+                        or item.get("product_id")
+                        or item.get("id")
+                        or ""
+                    ).strip()
+                    if offer and offer not in by_offer:
+                        by_offer[offer] = category_name
+                    if product_id and product_id not in by_product_id:
+                        by_product_id[product_id] = category_name
+    except Exception:
+        return {}
+
+    mapped: dict[tuple[str, str], str] = {}
+    for article_key, external in normalized_refs:
+        category_name = by_offer.get(article_key) or by_product_id.get(external) or ""
+        if category_name:
+            mapped[(article_key, external)] = category_name
+    return mapped
+
+
 def _update_wb_description(api_key: str, article: str, description: str) -> bool:
     if not httpx:
         return False
@@ -1018,6 +1117,23 @@ def _extract_ozon_photo(source: dict[str, Any]) -> str:
     primary = source.get("primary_image")
     if isinstance(primary, str):
         return _normalize_photo_url(primary)
+    return ""
+
+
+def _extract_ozon_category_name(source: dict[str, Any]) -> str:
+    if not isinstance(source, dict):
+        return ""
+    direct = str(source.get("category_name") or "").strip()
+    if direct:
+        return direct
+    category = source.get("category")
+    if isinstance(category, dict):
+        nested = str(category.get("name") or category.get("title") or "").strip()
+        if nested:
+            return nested
+    type_name = str(source.get("type_name") or source.get("category_title") or "").strip()
+    if type_name:
+        return type_name
     return ""
 
 

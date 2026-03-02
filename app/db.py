@@ -35,14 +35,28 @@ def run_lightweight_migrations():
             conn.execute(text("ALTER TABLE products ADD COLUMN barcode VARCHAR(64) DEFAULT ''"))
         if product_cols and "photo_url" not in product_cols:
             conn.execute(text("ALTER TABLE products ADD COLUMN photo_url VARCHAR(500) DEFAULT ''"))
+        if product_cols and "category_name" not in product_cols:
+            conn.execute(text("ALTER TABLE products ADD COLUMN category_name VARCHAR(255) DEFAULT ''"))
+        if product_cols and "owner_member_id" not in product_cols:
+            conn.execute(text("ALTER TABLE products ADD COLUMN owner_member_id INTEGER"))
 
         seo_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(seo_jobs)"))}
         if seo_cols and "competitor_snapshot" not in seo_cols:
             conn.execute(text("ALTER TABLE seo_jobs ADD COLUMN competitor_snapshot TEXT"))
+        if seo_cols and "owner_member_id" not in seo_cols:
+            conn.execute(text("ALTER TABLE seo_jobs ADD COLUMN owner_member_id INTEGER"))
 
         team_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(team_members)"))}
         if team_cols and "hashed_password" not in team_cols:
             conn.execute(text("ALTER TABLE team_members ADD COLUMN hashed_password VARCHAR(255) DEFAULT ''"))
+
+        keyword_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(user_keywords)"))}
+        if keyword_cols and "owner_member_id" not in keyword_cols:
+            conn.execute(text("ALTER TABLE user_keywords ADD COLUMN owner_member_id INTEGER"))
+
+        doc_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(user_knowledge_docs)"))}
+        if doc_cols and "owner_member_id" not in doc_cols:
+            conn.execute(text("ALTER TABLE user_knowledge_docs ADD COLUMN owner_member_id INTEGER"))
 
         module_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(module_access)"))}
         if module_cols:
