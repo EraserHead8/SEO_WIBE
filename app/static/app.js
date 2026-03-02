@@ -48,6 +48,8 @@ let teamMembers = [];
 let activeTeamMemberId = 0;
 let teamModalMode = "edit";
 let profileAiState = null;
+let activeProfileSectionId = "";
+const profileSectionNodes = new Map();
 let reviewPhotoItems = [];
 let reviewPhotoIndex = 0;
 let helpDocsRows = [];
@@ -140,7 +142,7 @@ const TAB_TITLES = {
   sales: { ru: ["Статистика и дашборд", "Продажи, KPI и динамика в одном модуле"], en: ["Statistics & Dashboard", "Sales, KPIs and trends in one module"] },
   reviews: { ru: ["Отзывы/Вопросы", "Единый модуль обратной связи"], en: ["Reviews/Questions", "Unified customer feedback module"] },
   ads: { ru: ["Реклама WB/Ozon", "Кампании, аналитика и рекомендации"], en: ["WB/Ozon Ads", "Campaigns, analytics and recommendations"] },
-  profile: { ru: ["Профиль", "Личные данные, тариф, API ключи и безопасность"], en: ["Profile", "Personal data, plan, API keys and security"] },
+  profile: { ru: ["Профиль", "Профиль компании, доступы команды и интеграции"], en: ["Profile", "Company profile, team access and integrations"] },
   billing: { ru: ["Биллинг", "Тарифы, лимиты, продление и история операций"], en: ["Billing", "Plans, limits, renewals and history"] },
   help: { ru: ["Справка", "Документация по модулям"], en: ["Help Center", "Module usage documentation"] },
   admin: { ru: ["Админка", "Управление пользователями и модулями"], en: ["Admin", "Users and modules management"] },
@@ -521,31 +523,31 @@ function applyUiLanguage() {
   setText("#authRegisterSubmitBtn", lang === "en" ? "Create Account" : "Создать аккаунт");
   setText("#authToRegisterBtn", lang === "en" ? "No account? Sign up" : "Нет аккаунта? Регистрация");
   setText("#authToLoginBtn", lang === "en" ? "Already have account? Login" : "Уже есть аккаунт? Вход");
-  setText("#authLeadText", lang === "en" ? "Seller operating system for marketplaces: sales, products, ads, feedback, AI and team workflows in one workspace." : "Операционная система продавца на маркетплейсах: продажи, товары, реклама, отзывы, AI и команда в одном кабинете.");
-  setText("#authWhatTitle", lang === "en" ? "What it does" : "Что делает");
-  setText("#authWhatItem1", lang === "en" ? "Collects sales, penalties, ads and KPIs from WB/Ozon." : "Собирает продажи, штрафы, рекламу и KPI по WB/Ozon.");
-  setText("#authWhatItem2", lang === "en" ? "Manages catalog: import, updates, SEO tasks and ranking checks." : "Управляет каталогом: импорт, обновление, SEO и позициями.");
-  setText("#authWhatItem3", lang === "en" ? "Accelerates reviews/questions processing with AI and knowledge base." : "Ускоряет работу с отзывами/вопросами через AI и базу знаний.");
-  setText("#authStartTitle", lang === "en" ? "How to start" : "Как начать");
-  setText("#authStartItem1", lang === "en" ? "Sign in to workspace (or create account)." : "Войдите в кабинет (или зарегистрируйтесь).");
-  setText("#authStartItem2", lang === "en" ? "Connect WB and Ozon API keys in profile." : "Подключите API-ключи WB и Ozon в профиле.");
-  setText("#authStartItem3", lang === "en" ? "Select a module and run your first workflow." : "Выберите модуль и запустите первый рабочий сценарий.");
-  setText("#authPitchNote", lang === "en" ? "Built for teams from 1 to 100+ employees with strict access control and activity audit." : "Для команд от 1 до 100+ сотрудников, с разделением доступа и аудитом действий.");
-  setText("#landingCard1Title", lang === "en" ? "Sales and KPI" : "Продажи и KPI");
-  setText("#landingCard1Text", lang === "en" ? "Unified period analytics: revenue, orders, penalties, ad spend and gross profit." : "Единая статистика по периодам: выручка, заказы, штрафы, расходы на рекламу и валовая прибыль.");
-  setText("#landingCard2Title", lang === "en" ? "Catalog and cards" : "Каталог и карточки");
-  setText("#landingCard2Text", lang === "en" ? "WB/Ozon import, card editing, SEO jobs and ranking control by target queries." : "Импорт WB/Ozon, редактирование карточек, SEO-задачи и контроль позиций по ключевым запросам.");
-  setText("#landingCard3Title", lang === "en" ? "Team and permissions" : "Команда и доступы");
-  setText("#landingCard3Quote1", lang === "en" ? "Owner controls all data, employees only their own tasks." : "«Владелец управляет всем, сотрудники работают только со своими задачами»");
-  setText("#landingCard3Meta1", lang === "en" ? "Granular permissions with audit log" : "Гибкие права и аудит действий");
-  setText("#landingCard3Quote2", lang === "en" ? "AI speeds up review/question replies without quality loss." : "«AI ускорил ответы на отзывы и вопросы без потери качества»");
-  setText("#landingCard3Meta2", lang === "en" ? "Reply templates + knowledge base" : "Сценарии ответов + база знаний");
-  setText("#landingCard4Title", lang === "en" ? "Active modules" : "Модули в работе");
-  setText("#landingCard4Item1", lang === "en" ? "Products: import, edit, photos, rankings." : "Товары: импорт, редактирование, фото, позиции.");
-  setText("#landingCard4Item2", lang === "en" ? "Reviews/questions/returns in one operations flow." : "Отзывы/вопросы/возвраты: обработка в одном контуре.");
-  setText("#landingCard4Item3", lang === "en" ? "Ads: campaigns, analytics and recommendations." : "Реклама: кампании, аналитика и рекомендации.");
-  setText("#landingBandTitle", lang === "en" ? "Commercial impact" : "Коммерческий эффект");
-  setText("#landingBandText", lang === "en" ? "SEO WIBE reduces manual load, shortens the cycle from data to action, and helps scale marketplace sales." : "SEO WIBE снижает ручную нагрузку команды, ускоряет цикл “данные → действие → результат” и помогает масштабировать продажи на маркетплейсах.");
+  setText("#authLeadText", lang === "en" ? "Grow revenue on WB/Ozon with one operating system: products, ads, analytics, feedback and team control in a single workspace." : "Ускоряйте рост выручки на WB/Ozon в одной системе: товары, реклама, аналитика, обратная связь и управление командой в едином кабинете.");
+  setText("#authWhatTitle", lang === "en" ? "Business value" : "Бизнес-ценность");
+  setText("#authWhatItem1", lang === "en" ? "Transparent unit-economics: revenue, ad spend, penalties and margin by period." : "Прозрачная юнит-экономика: выручка, рекламные расходы, штрафы и маржа по периодам.");
+  setText("#authWhatItem2", lang === "en" ? "Faster catalog operations: bulk product updates, SEO workflows and ranking control." : "Более быстрые операции с каталогом: массовые обновления карточек, SEO-сценарии и контроль позиций.");
+  setText("#authWhatItem3", lang === "en" ? "Operational speedup for reviews/questions with AI templates and knowledge base." : "Ускорение обработки отзывов и вопросов через AI-шаблоны и базу знаний.");
+  setText("#authStartTitle", lang === "en" ? "Why teams choose SEO WIBE" : "Почему команды выбирают SEO WIBE");
+  setText("#authStartItem1", lang === "en" ? "Single control panel for owner, marketers and content managers." : "Единый контур управления для владельца, маркетолога и контент-менеджера.");
+  setText("#authStartItem2", lang === "en" ? "Role-based access model with employee-level audit trail." : "Ролевая модель доступа с аудитом действий по каждому сотруднику.");
+  setText("#authStartItem3", lang === "en" ? "Scales from one account to distributed teams and multiple brands." : "Масштабируется от одного кабинета до распределенной команды и нескольких брендов.");
+  setText("#authPitchNote", lang === "en" ? "Built for teams from 1 to 100+ employees with strict access control and measurable KPIs." : "Подходит для команд от 1 до 100+ сотрудников: строгие доступы, контроль KPI и предсказуемый операционный цикл.");
+  setText("#landingCard1Title", lang === "en" ? "Revenue control center" : "Центр управления выручкой");
+  setText("#landingCard1Text", lang === "en" ? "Monitor orders, units, returns, penalties and ad costs in one timeline and quickly find growth bottlenecks." : "Контролируйте заказы, штуки, возвраты, штрафы и рекламные расходы в одной ленте, чтобы быстро находить точки роста.");
+  setText("#landingCard2Title", lang === "en" ? "Catalog performance" : "Эффективность каталога");
+  setText("#landingCard2Text", lang === "en" ? "Sync WB/Ozon cards, enrich content, run SEO tasks and keep product visibility under control." : "Синхронизируйте карточки WB/Ozon, улучшайте контент, запускайте SEO-задачи и держите видимость товаров под контролем.");
+  setText("#landingCard3Title", lang === "en" ? "Team productivity" : "Продуктивность команды");
+  setText("#landingCard3Quote1", lang === "en" ? "Owner has full control, employees work only within assigned modules." : "«Владелец контролирует весь кабинет, сотрудники работают только в назначенных модулях»");
+  setText("#landingCard3Meta1", lang === "en" ? "Granular permissions + action history" : "Гибкие права + история действий");
+  setText("#landingCard3Quote2", lang === "en" ? "AI keeps response quality high while reducing routine workload." : "«AI сохраняет качество ответов и снижает рутинную нагрузку команды»");
+  setText("#landingCard3Meta2", lang === "en" ? "Reply templates + knowledge snippets" : "Шаблоны ответов + база знаний");
+  setText("#landingCard4Title", lang === "en" ? "Execution modules" : "Рабочие модули");
+  setText("#landingCard4Item1", lang === "en" ? "Products: import, editing, media and ranking checkpoints." : "Товары: импорт, редактирование, медиа и контроль позиций.");
+  setText("#landingCard4Item2", lang === "en" ? "Feedback: reviews, questions and returns in one operational queue." : "Обратная связь: отзывы, вопросы и возвраты в единой рабочей очереди.");
+  setText("#landingCard4Item3", lang === "en" ? "Ads: campaign table, analytics and actionable recommendations." : "Реклама: кампании, аналитика и рекомендации для роста эффективности.");
+  setText("#landingBandTitle", lang === "en" ? "Commercial outcome" : "Коммерческий результат");
+  setText("#landingBandText", lang === "en" ? "SEO WIBE shortens the cycle from data to action, reduces manual operations and helps teams scale marketplace turnover with less operational risk." : "SEO WIBE сокращает путь от данных к действию, уменьшает ручные операции и помогает командам масштабировать оборот на маркетплейсах с меньшими операционными рисками.");
 
   const isEn = lang === "en";
   setText("#sales .panel:nth-of-type(3) h3", isEn ? "Quick Actions" : "Быстрые действия");
@@ -601,7 +603,18 @@ function applyUiLanguage() {
   setText("#adsSubtabRecommendations .panel h3", isEn ? "WB Ads Recommendations" : "Рекомендации WB Ads");
   setText("#adsSubtabRecommendations .grid-4 button", isEn ? "Build Recommendations" : "Построить рекомендации");
   setText("#adsSubtabOzon .panel h3", isEn ? "Ozon Ads (beta)" : "Реклама Ozon (бета)");
-  setText("#profileMainPanel h3", isEn ? "User Profile" : "Профиль пользователя");
+  setText("#profileCompanyHeader", isEn ? "Company Profile" : "Профиль компании");
+  setText("#profileMainPanel h3", isEn ? "Company Profile" : "Профиль компании");
+  setText("#profileMenuCompanyTitle", isEn ? "Company" : "Компания");
+  setText("#profileMenuCompanyMeta", isEn ? "Company legal details and owner identity" : "Реквизиты и данные директора/ИП");
+  setText("#profileMenuPlanTitle", isEn ? "Plan" : "Тариф");
+  setText("#profileMenuPlanMeta", isEn ? "Subscription, renewal and status" : "План, продление и статус");
+  setText("#profileMenuKeysTitle", isEn ? "API Keys" : "API ключи");
+  setText("#profileMenuKeysMeta", isEn ? "WB/Ozon integration keys" : "Подключение WB и Ozon");
+  setText("#profileMenuAiTitle", isEn ? "AI Services" : "AI сервисы");
+  setText("#profileMenuAiMeta", isEn ? "AI source and custom providers" : "Источник AI и пользовательские сервисы");
+  setText("#profileMenuTeamTitle", isEn ? "Employees" : "Сотрудники");
+  setText("#profileMenuTeamMeta", isEn ? "Roles and module access" : "Доступы и роли команды");
   setText("#profileMainPanel .grid-3 button:nth-of-type(1)", isEn ? "Save Profile" : "Сохранить профиль");
   setText("#profileMainPanel .grid-3 button:nth-of-type(2)", isEn ? "Refresh Profile" : "Обновить профиль");
   setText("#profilePlanPanel h3", isEn ? "Plan" : "Тариф");
@@ -613,8 +626,6 @@ function applyUiLanguage() {
   setText("#profileAiPanel .grid-4 button:nth-of-type(1)", isEn ? "Save AI Selection" : "Сохранить выбор AI");
   setText("#profileAiPanel .grid-4 button:nth-of-type(2)", isEn ? "Refresh AI" : "Обновить AI");
   setText("#profileAiPanel .grid-6 button", isEn ? "Add AI Service" : "Добавить AI сервис");
-  setText("#profileSecurityPanel h3", isEn ? "Security" : "Безопасность");
-  setText("#profileSecurityPanel .grid-3 button", isEn ? "Change Password" : "Сменить пароль");
   setText("#profileTeamPanel h3", isEn ? "Workspace Team" : "Сотрудники кабинета");
   setText("#teamPanelHint", isEn ? "Add or edit employees via popup window." : "Добавление и редактирование сотрудника выполняется через pop-up окно.");
   setText("#teamAddMemberBtn", isEn ? "Add employee" : "Добавить сотрудника");
@@ -807,7 +818,7 @@ function applyUiLanguage() {
     ["#reviewAiPrompt", isEn ? "Optional prompt for review replies" : "Промпт для генерации ответов (опционально)"],
     ["#adsAnalyticsCampaignId", isEn ? "campaign_id (optional)" : "campaign_id (опционально)"],
     ["#adsRecMinSpent", isEn ? "Min spend" : "Мин. расход"],
-    ["#profileFullName", isEn ? "Full name" : "ФИО"],
+    ["#profileFullName", isEn ? "Director / Sole proprietor full name" : "ФИО директора/ИП"],
     ["#profilePositionTitle", isEn ? "Position title" : "Должность"],
     ["#profileCompanyName", isEn ? "Company name" : "Название компании"],
     ["#profileCity", isEn ? "City" : "Город"],
@@ -819,8 +830,6 @@ function applyUiLanguage() {
     ["#profileTeamSize", isEn ? "Team size" : "Состав компании, чел."],
     ["#profileAvatarUrl", isEn ? "Avatar URL" : "Ссылка на аватар"],
     ["#profileCompanyStructure", isEn ? "Team structure, roles, departments" : "Структура компании, роли, отделы"],
-    ["#profileCurrentPassword", isEn ? "Current password" : "Текущий пароль"],
-    ["#profileNewPassword", isEn ? "New password (>=8)" : "Новый пароль (>=8)"],
     ["#teamModalEmail", isEn ? "Employee email" : "Email сотрудника"],
     ["#teamModalPassword", isEn ? "New password (optional)" : "Новый пароль (опц.)"],
     ["#teamModalPhone", isEn ? "Phone" : "Телефон"],
@@ -1731,6 +1740,9 @@ function showTab(name, btn = null) {
       await loadDashboard();
       await loadSalesStats();
     });
+    setTimeout(() => {
+      if (currentTab === "sales") renderSalesStats();
+    }, 120);
   }
   if (targetTab === "products") runModuleLoader("products", loadProductsWorkspace);
   if (targetTab === "reviews") runModuleLoader("reviews", loadReviewsWorkspace);
@@ -3805,13 +3817,55 @@ function normalizeCampaignType(value) {
 }
 
 function parseCampaignBudget(row) {
-  const raw = row?.dailyBudget ?? row?.budget ?? row?.sum ?? row?.money ?? 0;
-  const num = Number(raw);
+  const finance = (row && typeof row.finance === "object") ? row.finance : {};
+  const settings = (row && typeof row.settings === "object") ? row.settings : {};
+  const raw = row?.dailyBudget
+    ?? row?.budget
+    ?? row?.sum
+    ?? row?.money
+    ?? finance?.budget
+    ?? finance?.dailyBudget
+    ?? settings?.budget
+    ?? settings?.dailyBudget
+    ?? row?.balance
+    ?? 0;
+  const normalized = normalizeCampaignNumber(raw);
+  const num = Number(normalized);
   return Number.isFinite(num) ? num : 0;
 }
 
+function normalizeCampaignNumber(value) {
+  if (typeof value === "number") return value;
+  if (typeof value !== "string") return value;
+  const compact = value
+    .replace(/\s+/g, "")
+    .replace(",", ".")
+    .replace(/[^\d.\-]/g, "");
+  return compact;
+}
+
 function parseCampaignMetric(row, key, fixed = 0) {
-  const val = Number(row?.[key]);
+  const aliases = {
+    views: ["views", "impressions", "shows", "view_count"],
+    clicks: ["clicks", "click_count"],
+    orders: ["orders", "orders_count", "order_count", "orders_sum", "purchases", "atbs", "ordersCnt"],
+    spent: ["spent", "sum", "cost", "expense", "total_spent", "totalCost"],
+    ctr: ["ctr"],
+    cr: ["cr", "cvr", "conversion"],
+    cpc: ["cpc"],
+    cpo: ["cpo", "cpa"],
+  };
+  const keyList = aliases[key] || [key];
+  let raw = null;
+  for (const code of keyList) {
+    if (row && row[code] !== undefined && row[code] !== null && row[code] !== "") {
+      raw = row[code];
+      break;
+    }
+  }
+  if (raw === null) return "-";
+  const normalized = normalizeCampaignNumber(raw);
+  const val = Number(normalized);
   if (!Number.isFinite(val)) return "-";
   if (fixed > 0) return val.toFixed(fixed);
   if (Number.isInteger(val)) return String(val);
@@ -3972,8 +4026,9 @@ function renderWbCampaignRows() {
         else if (typeRaw.includes("search")) typeInput.value = "search";
       }
       renderWbCampaignRows();
+      openCampaignDetailModal(Number(id));
     };
-    tr.ondblclick = () => {
+    rowEl.ondblclick = () => {
       if (id === "-") return;
       openCampaignDetailModal(Number(id));
     };
@@ -3999,20 +4054,91 @@ function renderCampaignDetail(data) {
   if (!summaryEl || !productsEl || !ratesEl || !statsEl || !rawEl) return;
 
   const summary = data?.summary || {};
+  const statsPayload = data?.stats && typeof data.stats === "object" ? data.stats : {};
+  const statItems = Array.isArray(statsPayload.items) ? statsPayload.items : [];
+  const collectByKey = (node, matcher, out, depth = 0) => {
+    if (!node || depth > 8 || out.length >= 120) return;
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        if (out.length >= 120) break;
+        collectByKey(item, matcher, out, depth + 1);
+      }
+      return;
+    }
+    if (typeof node !== "object") return;
+    for (const [k, v] of Object.entries(node)) {
+      if (out.length >= 120) break;
+      const key = String(k || "").toLowerCase();
+      if (matcher(key)) {
+        if (Array.isArray(v)) {
+          for (const item of v) {
+            if (out.length >= 120) break;
+            const text = String(item ?? "").trim();
+            if (text) out.push(text);
+          }
+        } else {
+          const text = String(v ?? "").trim();
+          if (text) out.push(text);
+        }
+      }
+      collectByKey(v, matcher, out, depth + 1);
+    }
+  };
+  const dedupeTexts = (items) => {
+    const seen = new Set();
+    const out = [];
+    for (const raw of Array.isArray(items) ? items : []) {
+      const text = String(raw || "").replace(/\s+/g, " ").trim();
+      if (!text) continue;
+      const key = text.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(text);
+      if (out.length >= 40) break;
+    }
+    return out;
+  };
+  const keywords = [];
+  const minusWords = [];
+  collectByKey(data?.raw || {}, (k) => /keyword|phrase|query|search/.test(k), keywords);
+  collectByKey(data?.rates || {}, (k) => /keyword|phrase|query|search/.test(k), keywords);
+  collectByKey(data?.raw || {}, (k) => /minus|negative|excluded|stopword|stop_word/.test(k), minusWords);
+  collectByKey(data?.rates || {}, (k) => /minus|negative|excluded|stopword|stop_word/.test(k), minusWords);
+  const keywordList = dedupeTexts(keywords);
+  const minusList = dedupeTexts(minusWords);
+  const statsRows = Array.isArray(statItems) ? statItems.filter((x) => x && typeof x === "object") : [];
+  const sumMetric = (name) => statsRows.reduce((acc, row) => {
+    const n = Number(row?.[name] || 0);
+    return acc + (Number.isFinite(n) ? n : 0);
+  }, 0);
+  const statTotals = {
+    views: sumMetric("views"),
+    clicks: sumMetric("clicks"),
+    orders: sumMetric("orders"),
+    spent: sumMetric("spent"),
+  };
+  const ctr = statTotals.views > 0 ? (statTotals.clicks / statTotals.views) * 100 : 0;
+  const cpo = statTotals.orders > 0 ? (statTotals.spent / statTotals.orders) : 0;
   const statusText = normalizeCampaignStatus(summary.status || "-");
   const typeText = normalizeCampaignType(summary.type || "-");
   const workingText = campaignStatusMeta(summary.status || "-").isWorking ? tr("Да", "Yes") : tr("Нет", "No");
   const summaryRows = [
-    `ID: ${summary.campaign_id || "-"}`,
+    `${tr("ID", "ID")}: ${summary.campaign_id || "-"}`,
     `${tr("Название", "Name")}: ${summary.name || "-"}`,
     `${tr("Статус", "Status")}: ${statusText}`,
     `${tr("Тип", "Type")}: ${typeText}`,
     `${tr("Работает", "Running")}: ${workingText}`,
     `${tr("Бюджет", "Budget")}: ${summary.budget || "-"}`,
+    `${tr("Показы", "Views")}: ${formatInt(statTotals.views)}`,
+    `${tr("Клики", "Clicks")}: ${formatInt(statTotals.clicks)}`,
+    `${tr("Заказы", "Orders")}: ${formatInt(statTotals.orders)}`,
+    `${tr("Расход", "Spend")}: ${formatMoney(statTotals.spent)}`,
+    `CTR: ${Number(ctr || 0).toFixed(2)}%`,
+    `CPO: ${formatMoney(cpo)}`,
     `${tr("Создана", "Created")}: ${summary.created_at || "-"}`,
     `${tr("Обновлена", "Updated")}: ${summary.updated_at || "-"}`,
   ];
-  summaryEl.textContent = summaryRows.join(" | ");
+  summaryEl.textContent = summaryRows.join(" • ");
 
   productsEl.innerHTML = "";
   const products = Array.isArray(data?.products) ? data.products : [];
@@ -4032,8 +4158,47 @@ function renderCampaignDetail(data) {
     }
   }
 
-  ratesEl.textContent = JSON.stringify(data?.rates || {}, null, 2);
-  statsEl.textContent = JSON.stringify(data?.stats || {}, null, 2);
+  const ratesSource = data?.rates && typeof data.rates === "object" ? data.rates : {};
+  const ratesLines = [];
+  for (const [mode, payload] of Object.entries(ratesSource)) {
+    const body = payload && typeof payload === "object" ? payload : {};
+    const cpm = body.cpm ?? body.bid ?? body.price ?? "-";
+    const updated = body.updatedAt ?? body.updated_at ?? body.last_update ?? "-";
+    ratesLines.push(`[${mode}] ${tr("Ставка", "Bid")}: ${cpm}; ${tr("Обновлено", "Updated")}: ${updated}`);
+  }
+  if (!ratesLines.length) {
+    ratesLines.push(tr("Ставки не получены по API.", "Rates were not returned by API."));
+  }
+  if (keywordList.length) {
+    ratesLines.push("");
+    ratesLines.push(tr("Ключевые фразы:", "Keywords:"));
+    ratesLines.push(...keywordList.slice(0, 30).map((x) => `• ${x}`));
+  }
+  if (minusList.length) {
+    ratesLines.push("");
+    ratesLines.push(tr("Минус-слова:", "Negative keywords:"));
+    ratesLines.push(...minusList.slice(0, 30).map((x) => `• ${x}`));
+  }
+  ratesEl.textContent = ratesLines.join("\n");
+
+  const statsLines = [];
+  if (statsRows.length) {
+    statsLines.push(tr(`Строк статистики: ${statsRows.length}`, `Stats rows: ${statsRows.length}`));
+    const sorted = [...statsRows]
+      .sort((a, b) => Number(b?.spent || 0) - Number(a?.spent || 0))
+      .slice(0, 20);
+    for (const row of sorted) {
+      const dateLabel = String(row?.date || row?.day || row?.bucket || "-");
+      const views = formatInt(Number(row?.views || 0));
+      const clicks = formatInt(Number(row?.clicks || 0));
+      const orders = formatInt(Number(row?.orders || 0));
+      const spent = formatMoney(Number(row?.spent || 0));
+      statsLines.push(`${dateLabel}: ${tr("показы", "views")} ${views}, ${tr("клики", "clicks")} ${clicks}, ${tr("заказы", "orders")} ${orders}, ${tr("расход", "spent")} ${spent}`);
+    }
+  } else {
+    statsLines.push(tr("Статистика недоступна по API.", "Stats are unavailable from API."));
+  }
+  statsEl.textContent = statsLines.join("\n");
   rawEl.textContent = JSON.stringify(data?.raw || {}, null, 2);
 }
 
@@ -5851,12 +6016,25 @@ function renderSalesChart(points) {
   const chartPoints = points
     .map((row) => ({
       label: String(row?.bucket || row?.date || ""),
+      day: String(row?.date || "").trim() || String(row?.bucket || "").trim().slice(0, 10),
       orders: Number(row?.orders || 0),
       units: Number(row?.units || 0),
       revenue: Number(row?.revenue || 0),
       returns: Number(row?.returns || 0),
       ad_spend: Number(row?.ad_spend || 0),
       penalties: Number(row?.penalties || 0),
+      wb_orders: Number(row?.wb_orders || 0),
+      wb_units: Number(row?.wb_units || 0),
+      wb_revenue: Number(row?.wb_revenue || 0),
+      wb_returns: Number(row?.wb_returns || 0),
+      wb_ad_spend: Number(row?.wb_ad_spend || 0),
+      wb_penalties: Number(row?.wb_penalties || 0),
+      ozon_orders: Number(row?.ozon_orders || 0),
+      ozon_units: Number(row?.ozon_units || 0),
+      ozon_revenue: Number(row?.ozon_revenue || 0),
+      ozon_returns: Number(row?.ozon_returns || 0),
+      ozon_ad_spend: Number(row?.ozon_ad_spend || 0),
+      ozon_penalties: Number(row?.ozon_penalties || 0),
     }))
     .filter((row) => row.label);
   if (!chartPoints.length) {
@@ -5865,6 +6043,12 @@ function renderSalesChart(points) {
     return;
   }
   const labels = chartPoints.map((x) => x.label);
+  const labelDayCount = new Map();
+  for (const point of chartPoints) {
+    const day = String(point.day || point.label || "").slice(0, 10);
+    if (!day) continue;
+    labelDayCount.set(day, Number(labelDayCount.get(day) || 0) + 1);
+  }
   const valueOf = (bucket, key) => {
     if (key === "orders") return Number(bucket.orders || 0);
     if (key === "revenue") return Number(bucket.revenue || 0);
@@ -5883,11 +6067,14 @@ function renderSalesChart(points) {
     });
   }
   const byBucketByMp = new Map();
+  const byDayByMp = new Map();
   for (const row of Array.isArray(salesRows) ? salesRows : []) {
     const bucket = String(row?.bucket || row?.date || "").trim();
+    const day = String(row?.date || "").trim() || bucket.slice(0, 10);
     if (!bucket) continue;
     const mp = String(row?.marketplace || "").trim().toLowerCase() === "ozon" ? "ozon" : "wb";
     const key = `${bucket}::${mp}`;
+    const dayKey = `${day}::${mp}`;
     const item = byBucketByMp.get(key) || { orders: 0, units: 0, revenue: 0, returns: 0, ad_spend: 0, penalties: 0 };
     item.orders += Number(row?.orders || 0);
     item.units += Number(row?.units || 0);
@@ -5896,13 +6083,51 @@ function renderSalesChart(points) {
     item.ad_spend += Number(row?.ad_spend || 0);
     item.penalties += Number(row?.penalties || 0);
     byBucketByMp.set(key, item);
+    const dayItem = byDayByMp.get(dayKey) || { orders: 0, units: 0, revenue: 0, returns: 0, ad_spend: 0, penalties: 0 };
+    dayItem.orders += Number(row?.orders || 0);
+    dayItem.units += Number(row?.units || 0);
+    dayItem.revenue += Number(row?.revenue || 0);
+    dayItem.returns += Number(row?.returns || 0);
+    dayItem.ad_spend += Number(row?.ad_spend || 0);
+    dayItem.penalties += Number(row?.penalties || 0);
+    byDayByMp.set(dayKey, dayItem);
   }
+  const pointMarketplaceValue = (point, mp, key) => {
+    const map = {
+      orders: `${mp}_orders`,
+      units: `${mp}_units`,
+      revenue: `${mp}_revenue`,
+      returns: `${mp}_returns`,
+      ad_spend: `${mp}_ad_spend`,
+      penalties: `${mp}_penalties`,
+    };
+    const prop = map[key] || map.units;
+    return Number(point?.[prop] || 0);
+  };
+  const hasPointMarketplaceData = (mp) => chartPoints.some((point) => {
+    const val = pointMarketplaceValue(point, mp, metric);
+    return Number.isFinite(val) && Math.abs(val) > 0;
+  });
+  const resolveMarketplaceSeries = (mp) => {
+    if (hasPointMarketplaceData(mp)) {
+      return chartPoints.map((point) => pointMarketplaceValue(point, mp, metric));
+    }
+    return chartPoints.map((point) => {
+      const exact = byBucketByMp.get(`${point.label}::${mp}`);
+      if (exact) return valueOf(exact, metric);
+      const day = String(point.day || point.label || "").slice(0, 10);
+      const dayRow = byDayByMp.get(`${day}::${mp}`);
+      if (!dayRow) return 0;
+      const bucketsPerDay = Math.max(1, Number(labelDayCount.get(day) || 1));
+      return Number(valueOf(dayRow, metric) / bucketsPerDay);
+    });
+  };
   if (showWb) {
     series.push({
       key: "wb",
       label: "WB",
       color: "#20d7ff",
-      values: labels.map((bucket) => valueOf(byBucketByMp.get(`${bucket}::wb`) || {}, metric)),
+      values: resolveMarketplaceSeries("wb"),
     });
   }
   if (showOzon) {
@@ -5910,7 +6135,7 @@ function renderSalesChart(points) {
       key: "ozon",
       label: "Ozon",
       color: "#39efc1",
-      values: labels.map((bucket) => valueOf(byBucketByMp.get(`${bucket}::ozon`) || {}, metric)),
+      values: resolveMarketplaceSeries("ozon"),
     });
   }
   if (!series.length) {
@@ -5922,28 +6147,34 @@ function renderSalesChart(points) {
   const allValues = series.flatMap((x) => x.values);
   const min = Math.min(...allValues, 0);
   const max = Math.max(...allValues, 0);
-  const range = Math.max(1, max - min);
+  const rawRange = Math.max(0, max - min);
+  const yPadding = rawRange > 0 ? (rawRange * 0.08) : 1;
+  const yMin = min - yPadding;
+  const yMax = max + yPadding;
+  const ySpan = Math.max(1e-9, yMax - yMin);
   const width = 720;
   const height = 220;
   const padX = 14;
   const padY = 12;
+  const singlePoint = labels.length <= 1;
   const step = (width - padX * 2) / Math.max(1, labels.length - 1);
+  const calcY = (value) => padY + (1 - ((Number(value || 0) - yMin) / ySpan)) * (height - padY * 2);
   const lineTo = (values) => values
     .map((v, idx) => {
-      const x = padX + idx * step;
-      const y = padY + (1 - ((Number(v || 0) - min) / range)) * (height - padY * 2);
+      const x = singlePoint ? (width / 2) : (padX + idx * step);
+      const y = calcY(v);
       return `${x},${y}`;
     })
     .join(" ");
   const circleAt = (value, idx, color) => {
-    const x = padX + idx * step;
-    const y = padY + (1 - ((Number(value || 0) - min) / range)) * (height - padY * 2);
+    const x = singlePoint ? (width / 2) : (padX + idx * step);
+    const y = calcY(value);
     return `<circle cx="${x}" cy="${y}" r="4.5" fill="${color}" stroke="rgba(255,255,255,0.48)" stroke-width="1"></circle>`;
   };
   const gridLines = Array.from({ length: 5 }).map((_, idx) => {
     const ratio = idx / 4;
     const y = padY + ratio * (height - padY * 2);
-    const val = max - ratio * range;
+    const val = yMax - ratio * ySpan;
     const valueText = (metric === "revenue" || metric === "ad_spend" || metric === "penalties")
       ? formatMoney(val)
       : formatInt(val);
@@ -5954,8 +6185,8 @@ function renderSalesChart(points) {
   }).join("");
   const xTicks = labels.map((label, idx) => {
     if (labels.length > 12 && idx % Math.ceil(labels.length / 6) !== 0 && idx !== labels.length - 1) return "";
-    const x = padX + idx * step;
-    const short = String(label || "").slice(-5);
+    const x = singlePoint ? (width / 2) : (padX + idx * step);
+    const short = formatBucketLabel(label);
     return `<text x="${x}" y="${height - 2}" fill="rgba(205,222,255,0.66)" font-size="10" text-anchor="middle">${escapeHtml(short)}</text>`;
   }).join("");
   const lineMarkup = series.map((item, idx) => {
@@ -5983,6 +6214,13 @@ function renderSalesChart(points) {
   const peak = topValues.length ? Math.max(...topValues) : 0;
   const low = topValues.length ? Math.min(...topValues) : 0;
 
+  function formatBucketLabel(raw) {
+    const text = String(raw || "").trim();
+    if (!text) return "";
+    if (text.includes(" ")) return text.slice(-5);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text.slice(5);
+    return text.length > 8 ? text.slice(-8) : text;
+  }
   const echartsHost = canUseEcharts(svg) ? svg : null;
   if (echartsHost) {
     const chart = getOrCreateChart(echartsHost);
@@ -6004,16 +6242,16 @@ function renderSalesChart(points) {
           },
           xAxis: {
             type: "category",
-            boundaryGap: false,
-            data: labels.map((x) => String(x || "").slice(-5)),
+            boundaryGap: singlePoint,
+            data: labels.map((x) => formatBucketLabel(x)),
             axisLine: { lineStyle: { color: "rgba(99,124,161,0.35)" } },
             axisTick: { show: false },
             axisLabel: { color: "#6e86a8", fontSize: 11 },
           },
           yAxis: {
             type: "value",
-            min,
-            max,
+            min: yMin,
+            max: yMax,
             splitLine: { lineStyle: { color: "rgba(96,122,162,0.16)" } },
             axisLabel: { color: "#6e86a8", fontSize: 11 },
           },
@@ -6040,6 +6278,19 @@ function renderSalesChart(points) {
         },
         true
       );
+      try {
+        chart.resize();
+      } catch (_) {}
+      requestAnimationFrame(() => {
+        try {
+          chart.resize();
+        } catch (_) {}
+        setTimeout(() => {
+          try {
+            chart.resize();
+          } catch (_) {}
+        }, 90);
+      });
       meta.innerHTML = `
         <span>${metricLabel}: <b>${series.map((item) => `${item.label} ${formatValue(item.values.reduce((a, b) => a + Number(b || 0), 0))}`).join(" • ")}</b></span>
         <span>${tr("Пик", "Peak")}: <b>${formatValue(peak)}</b></span>
@@ -6079,13 +6330,34 @@ function buildSalesChartFromRows(rows) {
       returns: 0,
       ad_spend: 0,
       penalties: 0,
+      wb_orders: 0,
+      wb_units: 0,
+      wb_revenue: 0,
+      wb_returns: 0,
+      wb_ad_spend: 0,
+      wb_penalties: 0,
+      ozon_orders: 0,
+      ozon_units: 0,
+      ozon_revenue: 0,
+      ozon_returns: 0,
+      ozon_ad_spend: 0,
+      ozon_penalties: 0,
     };
+    const mp = String(row?.marketplace || "").trim().toLowerCase();
     bucket.orders += Number(row?.orders || 0);
     bucket.units += Number(row?.units || 0);
     bucket.revenue += Number(row?.revenue || 0);
     bucket.returns += Number(row?.returns || 0);
     bucket.ad_spend += Number(row?.ad_spend || 0);
     bucket.penalties += Number(row?.penalties || 0);
+    if (mp === "wb" || mp === "ozon") {
+      bucket[`${mp}_orders`] += Number(row?.orders || 0);
+      bucket[`${mp}_units`] += Number(row?.units || 0);
+      bucket[`${mp}_revenue`] += Number(row?.revenue || 0);
+      bucket[`${mp}_returns`] += Number(row?.returns || 0);
+      bucket[`${mp}_ad_spend`] += Number(row?.ad_spend || 0);
+      bucket[`${mp}_penalties`] += Number(row?.penalties || 0);
+    }
     dayMap.set(bucketKey, bucket);
   }
   return [...dayMap.values()].sort((a, b) => String(a.bucket || a.date).localeCompare(String(b.bucket || b.date)));
@@ -6133,8 +6405,7 @@ function resolveSalesLoadProgress(market, rows, warnings = []) {
 
 function renderSalesStats() {
   const tbody = document.getElementById("salesTable");
-  const raw = document.getElementById("salesRaw");
-  if (!tbody || !raw) return;
+  if (!tbody) return;
   tbody.innerHTML = "";
   if (!Array.isArray(salesRows) || !salesRows.length) {
     const trEl = document.createElement("tr");
@@ -6161,10 +6432,6 @@ function renderSalesStats() {
     ? salesChartRows
     : buildSalesChartFromRows(salesRows);
   renderSalesChart(chartRows);
-  raw.textContent = JSON.stringify({
-    rows: salesRows,
-    chart: chartRows,
-  }, null, 2);
 }
 
 async function loadSalesStats(retryAttempt = 0) {
@@ -6353,6 +6620,45 @@ function setInputValue(id, value) {
   if (el) el.value = value ?? "";
 }
 
+function getProfileSectionNode(sectionId) {
+  const key = String(sectionId || "").trim().toLowerCase();
+  if (!key) return null;
+  if (profileSectionNodes.has(key)) return profileSectionNodes.get(key) || null;
+  const node = document.querySelector(`#profileSectionsStorage [data-profile-section="${key}"]`);
+  if (node) profileSectionNodes.set(key, node);
+  return node || null;
+}
+
+function openProfileSectionModal(sectionId) {
+  const key = String(sectionId || "").trim().toLowerCase();
+  const modal = document.getElementById("profileSectionModal");
+  const host = document.getElementById("profileSectionModalHost");
+  const title = document.getElementById("profileSectionModalTitle");
+  if (!modal || !host || !key) return;
+  const node = getProfileSectionNode(key);
+  if (!node) return;
+  closeProfileSectionModal();
+  activeProfileSectionId = key;
+  host.appendChild(node);
+  const header = String(node.dataset.profileSectionTitle || node.querySelector("h3")?.textContent || "").trim();
+  if (title) title.textContent = header || tr("Профиль компании", "Company profile");
+  modal.classList.remove("hidden");
+}
+
+function closeProfileSectionModal(evt) {
+  const modal = document.getElementById("profileSectionModal");
+  const host = document.getElementById("profileSectionModalHost");
+  const storage = document.getElementById("profileSectionsStorage");
+  if (!modal || !host || !storage) return;
+  if (evt && evt.target && evt.target !== modal) return;
+  if (activeProfileSectionId) {
+    const node = getProfileSectionNode(activeProfileSectionId);
+    if (node) storage.appendChild(node);
+  }
+  activeProfileSectionId = "";
+  modal.classList.add("hidden");
+}
+
 function renderProfileData(data) {
   setInputValue("profileFullName", data.full_name || "");
   setInputValue("profilePositionTitle", data.position_title || "");
@@ -6382,23 +6688,65 @@ function renderProfileData(data) {
     planSelect.value = data.plan_code || "starter";
   }
 
-  const planSummary = document.getElementById("profilePlanSummary");
-  if (planSummary) {
-    planSummary.textContent = JSON.stringify(
-      {
-        email: data.email || "",
-        plan_code: data.plan_code || "",
-        plan_status: data.plan_status || "",
-        monthly_price: data.monthly_price || 0,
-        renew_at: data.renew_at || null,
-      },
-      null,
-      2
-    );
+  const planSummaryTable = document.getElementById("profilePlanSummaryTable");
+  if (planSummaryTable) {
+    const renewAt = String(data.renew_at || "").trim();
+    const planStatus = String(data.plan_status || "-").trim() || "-";
+    const planCode = String(data.plan_code || "-").trim() || "-";
+    const monthlyPrice = formatMoney(Number(data.monthly_price || 0));
+    planSummaryTable.innerHTML = `
+      <tr><td>${escapeHtml(tr("План", "Plan"))}</td><td><b>${escapeHtml(planCode)}</b></td></tr>
+      <tr><td>${escapeHtml(tr("Статус", "Status"))}</td><td>${escapeHtml(planStatus)}</td></tr>
+      <tr><td>${escapeHtml(tr("Цена/мес.", "Monthly price"))}</td><td>${escapeHtml(monthlyPrice)}</td></tr>
+      <tr><td>${escapeHtml(tr("Продление", "Renew date"))}</td><td>${escapeHtml(renewAt || "-")}</td></tr>
+    `;
   }
 
-  const keysView = document.getElementById("profileKeysList");
-  if (keysView) keysView.textContent = JSON.stringify(data.credentials || [], null, 2);
+  const credentials = Array.isArray(data.credentials) ? data.credentials : [];
+  const keysTable = document.getElementById("profileKeysTable");
+  if (keysTable) {
+    if (!credentials.length) {
+      keysTable.innerHTML = `<tr><td colspan="3">${escapeHtml(tr("Ключи не подключены.", "No API keys connected."))}</td></tr>`;
+    } else {
+      keysTable.innerHTML = credentials
+        .map((row) => `
+          <tr>
+            <td>${escapeHtml(String(row.marketplace || "-").toUpperCase())}</td>
+            <td>${escapeHtml(String(row.api_key_masked || "-"))}</td>
+            <td>${row.active ? escapeHtml(tr("Активен", "Active")) : escapeHtml(tr("Отключен", "Disabled"))}</td>
+          </tr>
+        `)
+        .join("");
+    }
+  }
+
+  const companySummary = document.getElementById("profileCompanySummary");
+  if (companySummary) {
+    const parts = [String(data.company_name || "").trim(), String(data.full_name || "").trim()].filter(Boolean);
+    companySummary.textContent = parts.join(" • ") || "-";
+  }
+  const planSummaryShort = document.getElementById("profilePlanSummaryShort");
+  if (planSummaryShort) {
+    const code = String(data.plan_code || "-").trim() || "-";
+    const status = String(data.plan_status || "-").trim() || "-";
+    planSummaryShort.textContent = `${code} • ${status}`;
+  }
+  const keysSummaryShort = document.getElementById("profileKeysSummaryShort");
+  if (keysSummaryShort) {
+    const activeCount = credentials.filter((x) => Boolean(x?.active)).length;
+    keysSummaryShort.textContent = tr(`${activeCount} активных`, `${activeCount} active`);
+  }
+  const aiSummaryShort = document.getElementById("profileAiSummaryShort");
+  if (aiSummaryShort) {
+    const effective = profileAiState?.effective || null;
+    aiSummaryShort.textContent = effective
+      ? `${effective.provider || "-"} • ${effective.model || "-"}`
+      : tr("Не выбран", "Not selected");
+  }
+  const teamSummaryShort = document.getElementById("profileTeamSummaryShort");
+  if (teamSummaryShort) {
+    teamSummaryShort.textContent = tr(`${Array.isArray(data.team_members) ? data.team_members.length : 0} сотрудников`, `${Array.isArray(data.team_members) ? data.team_members.length : 0} employees`);
+  }
 
   teamMembers = Array.isArray(data.team_members) ? data.team_members : [];
   renderTeamMembers();
@@ -6443,6 +6791,10 @@ function renderProfileAiState(data) {
 
   const effective = profileAiState?.effective || {};
   effectiveBox.textContent = `${tr("Эффективный AI", "Effective AI")}: ${effective.mode || "-"} | ${effective.provider || "-"} | ${effective.model || "-"} | ${effective.service_name || "-"}`;
+  const aiSummaryShort = document.getElementById("profileAiSummaryShort");
+  if (aiSummaryShort) {
+    aiSummaryShort.textContent = `${effective.provider || "-"} • ${effective.model || "-"}`;
+  }
 
   const merged = [...globalRows, ...userRows];
   table.innerHTML = merged.length
@@ -7566,11 +7918,24 @@ if (teamMemberEditModal) {
   });
 }
 
+const profileSectionModal = document.getElementById("profileSectionModal");
+if (profileSectionModal) {
+  profileSectionModal.addEventListener("click", (e) => {
+    if (e.target === profileSectionModal) closeProfileSectionModal();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (profileSectionModal.classList.contains("hidden")) return;
+    if (e.key === "Escape") closeProfileSectionModal();
+  });
+}
+
 window.switchHelpSubtab = switchHelpSubtab;
 window.askHelpAssistant = askHelpAssistant;
 window.loadProfileAi = loadProfileAi;
 window.saveProfileAiSelection = saveProfileAiSelection;
 window.addProfileAiService = addProfileAiService;
+window.openProfileSectionModal = openProfileSectionModal;
+window.closeProfileSectionModal = closeProfileSectionModal;
 window.closeTeamMemberEditor = closeTeamMemberEditor;
 window.saveTeamMemberEditor = saveTeamMemberEditor;
 window.deleteTeamMemberFromModal = deleteTeamMemberFromModal;

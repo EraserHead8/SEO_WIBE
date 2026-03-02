@@ -12,6 +12,13 @@ let adminAuditTotalPages = 0;
 let adminAiGlobalState = null;
 let adminSelectedUserAiState = null;
 const adminUserProfileCache = new Map();
+let adminTeamModalState = {
+  userId: 0,
+  rowId: "",
+  mode: "create",
+  memberId: 0,
+  teamMembers: [],
+};
 
 const UI_THEMES = ["classic", "dark", "light", "moon", "newyear", "summer", "autumn", "winter", "spring", "japan", "greenland"];
 const BILLING_PLAN_CODES = ["starter", "pro", "business"];
@@ -352,6 +359,15 @@ function collectAdminTeamScope(root, memberId, key = "row") {
   return normalizeAdminTeamScope(values);
 }
 
+function summarizeAdminTeamAccess(scope = [], isOwner = false) {
+  if (isOwner) return aTr("Полный доступ", "Full access");
+  const values = normalizeAdminTeamScope(scope);
+  if (!values.length) return aTr("Доступы не выданы", "No access granted");
+  const head = values.slice(0, 3).map((code) => MODULE_TITLES[code]?.[adminLang] || code);
+  const tail = values.length - head.length;
+  return tail > 0 ? `${head.join(", ")} ${aTr(`и еще ${tail}`, `and ${tail} more`)}` : head.join(", ");
+}
+
 async function adminRequest(url, opts = {}) {
   const r = await fetch(url, opts);
   const data = await r.json().catch(() => ({}));
@@ -427,15 +443,21 @@ function applyAdminLanguage() {
     ["#adminTab-ai .panel:nth-of-type(1) h3", aTr("Глобальные AI сервисы", "Global AI services")],
     ["#adminTab-ai .panel:nth-of-type(1) .grid-4 button:nth-of-type(1)", aTr("Сохранить global default", "Save global default")],
     ["#adminTab-ai .panel:nth-of-type(1) .grid-4 button:nth-of-type(2)", aTr("Обновить", "Refresh")],
-    ["#adminTab-ai .panel:nth-of-type(1) .grid-6 button", aTr("Добавить глобальный AI", "Add global AI")],
+    ["#adminTab-ai .panel:nth-of-type(1) .actions button", aTr("Добавить глобальный AI", "Add global AI")],
+    ["#adminAiGlobalSaveBtn", aTr("Сохранить", "Save")],
     ["#adminTab-ai .panel:nth-of-type(2) h3", aTr("AI сервисы пользователей", "User AI services")],
     ["#adminTab-ai .panel:nth-of-type(2) .grid-4 button", aTr("Сохранить выбор пользователя", "Save user selection")],
-    ["#adminTab-ai .panel:nth-of-type(2) .grid-6 button", aTr("Добавить AI пользователю", "Add AI for user")],
+    ["#adminTab-ai .panel:nth-of-type(2) .actions button", aTr("Добавить AI пользователю", "Add AI for user")],
+    ["#adminAiUserSaveBtn", aTr("Сохранить", "Save")],
     ["#adminTab-appearance .panel h3", aTr("Оформление интерфейса", "UI appearance")],
+    ["#adminTab-appearance .grid-3 button:nth-of-type(1)", aTr("Настроить оформление", "Configure appearance")],
+    ["#adminTab-appearance .grid-3 button:nth-of-type(2)", aTr("Обновить", "Refresh")],
+    ["#adminAppearanceSummary", aTr("Параметры оформления загружены.", "Appearance settings loaded.")],
     ["#adminThemeChoiceEnabled", aTr("Разрешить выбор темы пользователям", "Allow users to choose theme")],
     ["#adminForceThemeEnabled", aTr("Принудительно применять тему всем", "Force this theme for all users")],
-    ["#adminTab-appearance .grid-3 button", aTr("Сохранить оформление", "Save appearance")],
-    ["#adminTab-appearance .hint", aTr("Разрешенные темы для выбора:", "Allowed themes:")],
+    ["#adminAppearanceModalTitle", aTr("Оформление интерфейса", "UI appearance")],
+    ["#adminAppearanceModal .actions button", aTr("Сохранить оформление", "Save appearance")],
+    ["#adminAppearanceModal .hint", aTr("Разрешенные темы для выбора:", "Allowed themes:")],
     ["#adminTab-credentials .panel h3", aTr("API ключи пользователей", "User API keys")],
     ["#adminTab-credentials .grid-2 button", aTr("Обновить таблицу", "Refresh table")],
     ["#adminTab-audit .panel h3", aTr("Журнал действий", "Activity log")],
@@ -448,6 +470,22 @@ function applyAdminLanguage() {
     ["#adminAuditPageInfo", aTr("Страница 1 из 1", "Page 1 of 1")],
     ["#adminAuditPrevBtn", aTr("Назад", "Prev")],
     ["#adminAuditNextBtn", aTr("Далее", "Next")],
+    ["#adminTeamModalSaveBtn", aTr("Сохранить", "Save")],
+    ["#adminTeamModalDeleteBtn", aTr("Удалить", "Delete")],
+    ["#adminTeamModalEmail", aTr("Email сотрудника", "Employee email")],
+    ["#adminTeamModalPassword", aTr("Новый пароль (опц.)", "New password (optional)")],
+    ["#adminTeamModalFullName", aTr("ФИО", "Full name")],
+    ["#adminTeamModalPhone", aTr("Телефон", "Phone")],
+    ["#adminTeamModalNickname", aTr("Ник", "Nickname")],
+    ["#adminTeamModalAvatar", aTr("Ссылка на аватар", "Avatar URL")],
+    ["#adminAiGlobalName", aTr("Название сервиса", "Service name")],
+    ["#adminAiGlobalModel", aTr("Модель", "Model")],
+    ["#adminAiGlobalBaseUrl", aTr("Base URL (опц.)", "Base URL (opt.)")],
+    ["#adminAiGlobalApiKey", "API key"],
+    ["#adminAiUserName", aTr("Название сервиса пользователя", "User service name")],
+    ["#adminAiUserModel", aTr("Модель", "Model")],
+    ["#adminAiUserBaseUrl", aTr("Base URL (опц.)", "Base URL (opt.)")],
+    ["#adminAiUserApiKey", "API key"],
   ];
 
   for (const [selector, value] of staticTexts) {
@@ -474,6 +512,18 @@ function applyAdminLanguage() {
       el.textContent = value;
     }
   }
+
+  const appearanceSummaryRows = document.querySelectorAll("#adminAppearanceSummaryTable tr");
+  const appearanceLabels = [
+    aTr("Выбор темы", "Theme choice"),
+    aTr("Принудительная тема", "Forced theme"),
+    aTr("Тема по умолчанию", "Default theme"),
+    aTr("Разрешено тем", "Allowed themes"),
+  ];
+  appearanceSummaryRows.forEach((row, idx) => {
+    const first = row.querySelector("td:first-child");
+    if (first && appearanceLabels[idx]) first.textContent = appearanceLabels[idx];
+  });
 
   document.querySelectorAll("#adminTab-users thead th").forEach((th, idx) => {
     const labels = [
@@ -1017,72 +1067,46 @@ function renderAdminUserProfilePanel(payload, rowId) {
       <div class="admin-team-box">
         <div class="admin-team-head">
           <strong>${aTr("Сотрудники кабинета", "Workspace employees")}</strong>
-          <span class="hint">${aTr("Владелец имеет полный доступ (*).", "Owner always has full access (*).")}</span>
+          <div class="actions">
+            <span class="hint">${aTr("Редактирование сотрудника открывается в pop-up.", "Employee editing opens in popup.")}</span>
+            <button class="btn-secondary" type="button" data-team-open-create>${aTr("Добавить сотрудника", "Add employee")}</button>
+          </div>
         </div>
-        <div class="admin-team-create">
-          <input data-team-new-email placeholder="${escapeHtml(aTr("Email сотрудника", "Employee email"))}" />
-          <input data-team-new-password type="password" placeholder="${escapeHtml(aTr("Пароль (>=8)", "Password (>=8)"))}" />
-          <input data-team-new-full placeholder="${escapeHtml(aTr("ФИО", "Full name"))}" />
-          <input data-team-new-phone placeholder="${escapeHtml(aTr("Телефон", "Phone"))}" />
-          <input data-team-new-nick placeholder="${escapeHtml(aTr("Ник", "Nickname"))}" />
-          <input data-team-new-avatar placeholder="${escapeHtml(aTr("Ссылка на аватар", "Avatar URL"))}" />
-          <div class="admin-team-access-wrap">${renderAdminTeamScopePicks([], payload.user_id, false, "new")}</div>
-          <button type="button" data-team-add>${aTr("Добавить сотрудника", "Add employee")}</button>
-        </div>
-        <div class="admin-team-list">
-          ${
-            teamMembers.length
-              ? teamMembers
-                  .map((member) => {
+        <div class="table-card admin-team-table-wrap">
+          <table class="admin-team-table">
+            <thead>
+              <tr>
+                <th>${aTr("Сотрудник", "Employee")}</th>
+                <th>${aTr("Роль", "Role")}</th>
+                <th>${aTr("Доступ к модулям", "Module access")}</th>
+                <th>${aTr("Действия", "Actions")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${
+                teamMembers.length
+                  ? teamMembers.map((member) => {
                     const memberId = Number(member.id || 0);
                     const isOwner = Boolean(member.is_owner);
-                    const access = Array.isArray(member.access_scope) ? member.access_scope : [];
+                    const memberTitle = String(member.full_name || "").trim() || String(member.nickname || "").trim() || String(member.email || "-");
+                    const roleTitle = isOwner ? aTr("Владелец", "Owner") : aTr("Сотрудник", "Employee");
+                    const accessSummary = summarizeAdminTeamAccess(member.access_scope, isOwner);
                     return `
-                      <article class="admin-team-card" data-team-row="${memberId}">
-                        <div class="admin-team-card-head">
-                          <div>
-                            <strong>#${memberId || "-"} ${escapeHtml(String(member.email || "-"))}</strong>
-                            <div class="hint">${isOwner ? aTr("Владелец кабинета", "Workspace owner") : aTr("Сотрудник кабинета", "Workspace employee")}</div>
-                          </div>
-                          <span class="admin-chip">${isOwner ? aTr("Владелец", "Owner") : aTr("Сотрудник", "Employee")}</span>
-                        </div>
-                        <div class="admin-team-card-grid">
-                          <label>
-                            <span>${aTr("Email", "Email")}</span>
-                            <input data-team-email="${memberId}" value="${escapeHtml(String(member.email || ""))}" ${isOwner ? "disabled" : ""} />
-                          </label>
-                          <label>
-                            <span>${aTr("ФИО", "Full name")}</span>
-                            <input data-team-full="${memberId}" value="${escapeHtml(String(member.full_name || ""))}" />
-                          </label>
-                          <label>
-                            <span>${aTr("Телефон", "Phone")}</span>
-                            <input data-team-phone="${memberId}" value="${escapeHtml(String(member.phone || ""))}" />
-                          </label>
-                          <label>
-                            <span>${aTr("Ник", "Nickname")}</span>
-                            <input data-team-nick="${memberId}" value="${escapeHtml(String(member.nickname || ""))}" />
-                          </label>
-                          ${
-                            isOwner
-                              ? ""
-                              : `<label><span>${aTr("Новый пароль", "New password")}</span><input type="password" data-team-pass="${memberId}" placeholder="${escapeHtml(aTr("Новый пароль", "New password"))}" /></label>`
-                          }
-                          <div>
-                            <span class="hint">${aTr("Доступ к модулям", "Module access")}</span>
-                            ${renderAdminTeamScopePicks(access, memberId, isOwner, "row")}
-                          </div>
-                        </div>
-                        <div class="actions">
-                          <button class="btn-secondary" type="button" data-team-save="${memberId}">${aTr("Сохранить", "Save")}</button>
-                          ${isOwner ? "" : `<button class="btn-danger" type="button" data-team-del="${memberId}">${aTr("Удалить", "Delete")}</button>`}
-                        </div>
-                      </article>
+                      <tr data-team-row="${memberId}">
+                        <td>
+                          <strong>${escapeHtml(memberTitle)}</strong>
+                          <div class="hint">${escapeHtml(String(member.email || "-"))}</div>
+                        </td>
+                        <td><span class="admin-chip">${roleTitle}</span></td>
+                        <td>${escapeHtml(accessSummary)}</td>
+                        <td class="admin-user-row-actions"><button class="btn-secondary admin-user-edit-btn" type="button" data-team-open-edit="${memberId}">${aTr("Изменить", "Edit")}</button></td>
+                      </tr>
                     `;
-                  })
-                  .join("")
-              : `<div class="hint">${aTr("Сотрудники не добавлены.", "No employees added.")}</div>`
-          }
+                  }).join("")
+                  : `<tr><td colspan="4">${aTr("Сотрудники не добавлены.", "No employees added.")}</td></tr>`
+              }
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -1117,72 +1141,24 @@ function renderAdminUserProfilePanel(payload, rowId) {
   host.querySelector("[data-refresh-profile]")?.addEventListener("click", async () => {
     await refreshProfile();
   });
-  host.querySelector("[data-team-add]")?.addEventListener("click", async () => {
-    const teamPayload = {
-      email: String(host.querySelector("[data-team-new-email]")?.value || "").trim().toLowerCase(),
-      password: String(host.querySelector("[data-team-new-password]")?.value || ""),
-      full_name: String(host.querySelector("[data-team-new-full]")?.value || "").trim(),
-      phone: String(host.querySelector("[data-team-new-phone]")?.value || "").trim(),
-      nickname: String(host.querySelector("[data-team-new-nick]")?.value || "").trim(),
-      avatar_url: String(host.querySelector("[data-team-new-avatar]")?.value || "").trim(),
-      access_scope: collectAdminTeamScope(host, payload.user_id, "new"),
-    };
-    if (!teamPayload.email) {
-      alert(aTr("Укажите email сотрудника", "Enter employee email"));
-      return;
-    }
-    const created = await adminRequest(`/api/admin/users/${payload.user_id}/team`, {
-      method: "POST",
-      headers: adminHeaders(),
-      body: JSON.stringify(teamPayload),
-    }).catch((e) => {
-      alert(e.message);
-      return null;
-    });
-    if (!created) return;
-    await refreshProfile();
-  });
-  host.querySelectorAll("[data-team-save]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const memberId = Number(btn.dataset.teamSave || 0);
-      if (!memberId) return;
-      const updatePayload = {
-        email: String(host.querySelector(`[data-team-email="${memberId}"]`)?.value || "").trim().toLowerCase(),
-        password: String(host.querySelector(`[data-team-pass="${memberId}"]`)?.value || ""),
-        full_name: String(host.querySelector(`[data-team-full="${memberId}"]`)?.value || "").trim(),
-        phone: String(host.querySelector(`[data-team-phone="${memberId}"]`)?.value || "").trim(),
-        nickname: String(host.querySelector(`[data-team-nick="${memberId}"]`)?.value || "").trim(),
-        avatar_url: "",
-        access_scope: collectAdminTeamScope(host, memberId, "row"),
-      };
-      const current = teamMembers.find((x) => Number(x.id) === memberId);
-      updatePayload.avatar_url = String(current?.avatar_url || "").trim();
-      const updated = await adminRequest(`/api/admin/users/${payload.user_id}/team/${memberId}`, {
-        method: "PUT",
-        headers: adminHeaders(),
-        body: JSON.stringify(updatePayload),
-      }).catch((e) => {
-        alert(e.message);
-        return null;
-      });
-      if (!updated) return;
-      await refreshProfile();
+  host.querySelector("[data-team-open-create]")?.addEventListener("click", () => {
+    adminOpenTeamMemberModal({
+      userId: Number(payload.user_id || 0),
+      rowId,
+      mode: "create",
+      teamMembers,
     });
   });
-  host.querySelectorAll("[data-team-del]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const memberId = Number(btn.dataset.teamDel || 0);
-      if (!memberId) return;
-      if (!confirm(aTr("Удалить сотрудника из кабинета?", "Delete employee from workspace?"))) return;
-      const deleted = await adminRequest(`/api/admin/users/${payload.user_id}/team/${memberId}`, {
-        method: "DELETE",
-        headers: adminHeaders(),
-      }).catch((e) => {
-        alert(e.message);
-        return null;
+  host.querySelectorAll("[data-team-open-edit]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const memberId = Number(btn.dataset.teamOpenEdit || 0);
+      adminOpenTeamMemberModal({
+        userId: Number(payload.user_id || 0),
+        rowId,
+        mode: "edit",
+        memberId,
+        teamMembers,
       });
-      if (!deleted) return;
-      await refreshProfile();
     });
   });
 }
@@ -1302,6 +1278,144 @@ function adminCloseUserEditModal(evt) {
   if (!modal) return;
   if (evt && evt.target && evt.target !== modal) return;
   modal.classList.add("hidden");
+}
+
+function getAdminTeamMemberFromState(memberId) {
+  const id = Number(memberId || 0);
+  if (!id) return null;
+  return (Array.isArray(adminTeamModalState.teamMembers) ? adminTeamModalState.teamMembers : [])
+    .find((row) => Number(row.id || 0) === id) || null;
+}
+
+function fillAdminTeamMemberModal() {
+  const modal = document.getElementById("adminTeamMemberModal");
+  const titleEl = document.getElementById("adminTeamMemberModalTitle");
+  const metaEl = document.getElementById("adminTeamMemberModalMeta");
+  const scopeEl = document.getElementById("adminTeamModalScope");
+  const saveBtn = document.getElementById("adminTeamModalSaveBtn");
+  const delBtn = document.getElementById("adminTeamModalDeleteBtn");
+  if (!modal || !titleEl || !metaEl || !scopeEl || !saveBtn || !delBtn) return;
+
+  const mode = adminTeamModalState.mode === "create" ? "create" : "edit";
+  const member = mode === "edit" ? getAdminTeamMemberFromState(adminTeamModalState.memberId) : null;
+  const isOwner = Boolean(member?.is_owner);
+  const scopeKey = mode === "create" ? "new" : String(Number(member?.id || 0));
+  titleEl.textContent = mode === "create"
+    ? aTr("Новый сотрудник", "New employee")
+    : (isOwner ? aTr("Владелец кабинета", "Workspace owner") : aTr("Сотрудник кабинета", "Workspace employee"));
+  metaEl.textContent = mode === "create"
+    ? aTr("Заполните данные и назначьте доступы к модулям.", "Fill details and assign module access.")
+    : `#${Number(member?.id || 0)} • ${isOwner ? aTr("Права владельца фиксированы.", "Owner access is fixed.") : aTr("Измените данные и доступы.", "Update fields and access.")}`;
+  saveBtn.textContent = mode === "create" ? aTr("Добавить", "Add") : aTr("Сохранить", "Save");
+  delBtn.classList.toggle("hidden", mode === "create" || isOwner);
+
+  const emailEl = document.getElementById("adminTeamModalEmail");
+  const passEl = document.getElementById("adminTeamModalPassword");
+  const fullEl = document.getElementById("adminTeamModalFullName");
+  const phoneEl = document.getElementById("adminTeamModalPhone");
+  const nickEl = document.getElementById("adminTeamModalNickname");
+  const avatarEl = document.getElementById("adminTeamModalAvatar");
+
+  if (emailEl) {
+    emailEl.value = String(member?.email || "");
+    emailEl.disabled = isOwner;
+  }
+  if (passEl) {
+    passEl.value = "";
+    passEl.placeholder = mode === "create"
+      ? aTr("Пароль сотрудника (>=8)", "Employee password (>=8)")
+      : aTr("Новый пароль (опц.)", "New password (optional)");
+  }
+  if (fullEl) fullEl.value = String(member?.full_name || "");
+  if (phoneEl) phoneEl.value = String(member?.phone || "");
+  if (nickEl) nickEl.value = String(member?.nickname || "");
+  if (avatarEl) avatarEl.value = String(member?.avatar_url || "");
+
+  scopeEl.innerHTML = renderAdminTeamScopePicks(member?.access_scope || [], scopeKey, isOwner, "modal");
+  modal.classList.remove("hidden");
+}
+
+function adminOpenTeamMemberModal({ userId, rowId, mode, memberId = 0, teamMembers = [] }) {
+  adminTeamModalState = {
+    userId: Number(userId || 0),
+    rowId: String(rowId || ""),
+    mode: mode === "create" ? "create" : "edit",
+    memberId: Number(memberId || 0),
+    teamMembers: Array.isArray(teamMembers) ? teamMembers : [],
+  };
+  fillAdminTeamMemberModal();
+}
+
+function adminCloseTeamMemberModal(evt) {
+  const modal = document.getElementById("adminTeamMemberModal");
+  if (!modal) return;
+  if (evt && evt.target && evt.target !== modal) return;
+  modal.classList.add("hidden");
+}
+
+async function adminSaveTeamMemberFromModal() {
+  const userId = Number(adminTeamModalState.userId || 0);
+  const rowId = String(adminTeamModalState.rowId || "");
+  if (!userId || !rowId) return;
+  const mode = adminTeamModalState.mode === "create" ? "create" : "edit";
+  const member = mode === "edit" ? getAdminTeamMemberFromState(adminTeamModalState.memberId) : null;
+  const memberId = Number(member?.id || 0);
+  const scopeKey = mode === "create" ? "new" : String(memberId);
+  const modal = document.getElementById("adminTeamMemberModal");
+
+  const payload = {
+    email: String(document.getElementById("adminTeamModalEmail")?.value || "").trim().toLowerCase(),
+    password: String(document.getElementById("adminTeamModalPassword")?.value || ""),
+    full_name: String(document.getElementById("adminTeamModalFullName")?.value || "").trim(),
+    phone: String(document.getElementById("adminTeamModalPhone")?.value || "").trim(),
+    nickname: String(document.getElementById("adminTeamModalNickname")?.value || "").trim(),
+    avatar_url: String(document.getElementById("adminTeamModalAvatar")?.value || "").trim(),
+    access_scope: collectAdminTeamScope(modal, scopeKey, "modal"),
+  };
+  if (!payload.email && !Boolean(member?.is_owner)) {
+    alert(aTr("Укажите email сотрудника", "Enter employee email"));
+    return;
+  }
+  if (Boolean(member?.is_owner)) {
+    payload.email = String(member?.email || "").trim().toLowerCase();
+    payload.access_scope = normalizeAdminTeamScope(member?.access_scope || []);
+  }
+
+  const url = mode === "create"
+    ? `/api/admin/users/${userId}/team`
+    : `/api/admin/users/${userId}/team/${memberId}`;
+  const method = mode === "create" ? "POST" : "PUT";
+  const saved = await adminRequest(url, {
+    method,
+    headers: adminHeaders(),
+    body: JSON.stringify(payload),
+  }).catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  if (!saved) return;
+  adminCloseTeamMemberModal();
+  await adminLoadUserProfileInto(userId, rowId, true);
+}
+
+async function adminDeleteTeamMemberFromModal() {
+  const userId = Number(adminTeamModalState.userId || 0);
+  const rowId = String(adminTeamModalState.rowId || "");
+  const member = getAdminTeamMemberFromState(adminTeamModalState.memberId);
+  const memberId = Number(member?.id || 0);
+  if (!userId || !rowId || !memberId) return;
+  if (Boolean(member?.is_owner)) return;
+  if (!confirm(aTr("Удалить сотрудника из кабинета?", "Delete employee from workspace?"))) return;
+  const deleted = await adminRequest(`/api/admin/users/${userId}/team/${memberId}`, {
+    method: "DELETE",
+    headers: adminHeaders(),
+  }).catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  if (!deleted) return;
+  adminCloseTeamMemberModal();
+  await adminLoadUserProfileInto(userId, rowId, true);
 }
 
 async function adminSaveUserProfileFromPanel(userId, rowId) {
@@ -1485,7 +1599,7 @@ function clearAiServiceForm(prefix) {
   });
   const providerSel = document.getElementById(`${prefix}Provider`);
   if (providerSel) providerSel.value = "openai";
-  const actionBtn = document.querySelector(`button[onclick^="${prefix.includes('Global') ? "adminAddGlobalAiService" : "adminAddUserAiService"}"]`);
+  const actionBtn = document.getElementById(prefix.includes("Global") ? "adminAiGlobalSaveBtn" : "adminAiUserSaveBtn");
   if (actionBtn) {
     actionBtn.dataset.editId = "";
     actionBtn.textContent = prefix.includes("Global")
@@ -1544,11 +1658,12 @@ function renderAdminAiTab(preserveUserMode = false) {
       });
       const p = document.getElementById("adminAiGlobalProvider");
       if (p) p.value = String(row.provider || "openai");
-      const actionBtn = document.querySelector("button[onclick='adminAddGlobalAiService()']");
+      const actionBtn = document.getElementById("adminAiGlobalSaveBtn");
       if (actionBtn) {
         actionBtn.dataset.editId = String(id);
         actionBtn.textContent = aTr("Сохранить изменения", "Save changes");
       }
+      adminOpenAiGlobalModal(true);
       const keyInput = document.getElementById("adminAiGlobalApiKey");
       if (keyInput) keyInput.focus();
     });
@@ -1634,11 +1749,12 @@ function renderAdminAiTab(preserveUserMode = false) {
       });
       const p = document.getElementById("adminAiUserProvider");
       if (p) p.value = String(row.provider || "openai");
-      const actionBtn = document.querySelector("button[onclick='adminAddUserAiService()']");
+      const actionBtn = document.getElementById("adminAiUserSaveBtn");
       if (actionBtn) {
         actionBtn.dataset.editId = String(id);
         actionBtn.textContent = aTr("Сохранить изменения", "Save changes");
       }
+      adminOpenAiUserModal(true);
       const keyInput = document.getElementById("adminAiUserApiKey");
       if (keyInput) keyInput.focus();
     });
@@ -1676,6 +1792,66 @@ async function loadAdminUserAi() {
   renderAdminAiTab();
 }
 
+function adminOpenAiGlobalModal(preserveState = false) {
+  const modal = document.getElementById("adminAiGlobalModal");
+  if (!modal) return;
+  if (!preserveState) clearAiServiceForm("adminAiGlobal");
+  const title = document.getElementById("adminAiGlobalModalTitle");
+  const saveBtn = document.getElementById("adminAiGlobalSaveBtn");
+  if (title) {
+    title.textContent = saveBtn?.dataset?.editId
+      ? aTr("Глобальный AI сервис: редактирование", "Global AI service: edit")
+      : aTr("Глобальный AI сервис: добавление", "Global AI service: add");
+  }
+  modal.classList.remove("hidden");
+}
+
+function adminCloseAiGlobalModal(evt) {
+  const modal = document.getElementById("adminAiGlobalModal");
+  if (!modal) return;
+  if (evt && evt.target && evt.target !== modal) return;
+  modal.classList.add("hidden");
+}
+
+function adminOpenAiUserModal(preserveState = false) {
+  const userId = Number(document.getElementById("adminAiUserSelect")?.value || 0);
+  if (!userId) {
+    alert(aTr("Сначала выберите пользователя", "Select user first"));
+    return;
+  }
+  const modal = document.getElementById("adminAiUserModal");
+  if (!modal) return;
+  if (!preserveState) clearAiServiceForm("adminAiUser");
+  const title = document.getElementById("adminAiUserModalTitle");
+  const saveBtn = document.getElementById("adminAiUserSaveBtn");
+  if (title) {
+    title.textContent = saveBtn?.dataset?.editId
+      ? aTr("AI сервис пользователя: редактирование", "User AI service: edit")
+      : aTr("AI сервис пользователя: добавление", "User AI service: add");
+  }
+  modal.classList.remove("hidden");
+}
+
+function adminCloseAiUserModal(evt) {
+  const modal = document.getElementById("adminAiUserModal");
+  if (!modal) return;
+  if (evt && evt.target && evt.target !== modal) return;
+  modal.classList.add("hidden");
+}
+
+function adminOpenAppearanceModal() {
+  const modal = document.getElementById("adminAppearanceModal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+}
+
+function adminCloseAppearanceModal(evt) {
+  const modal = document.getElementById("adminAppearanceModal");
+  if (!modal) return;
+  if (evt && evt.target && evt.target !== modal) return;
+  modal.classList.add("hidden");
+}
+
 async function adminSaveAiGlobalDefault() {
   const mode = String(document.getElementById("adminAiGlobalMode")?.value || "builtin").trim().toLowerCase();
   const serviceId = Number(document.getElementById("adminAiGlobalServiceSelect")?.value || 0);
@@ -1693,7 +1869,7 @@ async function adminSaveAiGlobalDefault() {
 }
 
 async function adminAddGlobalAiService() {
-  const btn = document.querySelector("button[onclick='adminAddGlobalAiService()']");
+  const btn = document.getElementById("adminAiGlobalSaveBtn");
   const editId = Number(btn?.dataset?.editId || 0);
   const payload = buildAiServicePayload("adminAiGlobal");
   if (!payload.name || !payload.api_key) {
@@ -1708,6 +1884,7 @@ async function adminAddGlobalAiService() {
     body: JSON.stringify(payload),
   }).catch((e) => alert(e.message));
   clearAiServiceForm("adminAiGlobal");
+  adminCloseAiGlobalModal();
   await loadAdminAll();
 }
 
@@ -1738,7 +1915,7 @@ async function adminAddUserAiService() {
     alert(aTr("Выберите пользователя", "Select user"));
     return;
   }
-  const btn = document.querySelector("button[onclick='adminAddUserAiService()']");
+  const btn = document.getElementById("adminAiUserSaveBtn");
   const editId = Number(btn?.dataset?.editId || 0);
   const payload = buildAiServicePayload("adminAiUser");
   if (!payload.name || !payload.api_key) {
@@ -1755,6 +1932,7 @@ async function adminAddUserAiService() {
     body: JSON.stringify(payload),
   }).catch((e) => alert(e.message));
   clearAiServiceForm("adminAiUser");
+  adminCloseAiUserModal();
   await loadAdminUserAi();
 }
 
@@ -1932,12 +2110,13 @@ async function adminAuditNextPage() {
 }
 
 function renderAdminAppearance() {
-  const rawEl = document.getElementById("adminUiSettingsRaw");
+  const summaryEl = document.getElementById("adminAppearanceSummary");
+  const summaryTable = document.getElementById("adminAppearanceSummaryTable");
   const enabledEl = document.getElementById("adminThemeChoiceEnabled");
   const forceEl = document.getElementById("adminForceThemeEnabled");
   const defaultEl = document.getElementById("adminDefaultThemeSelect");
   const allowedEl = document.getElementById("adminAllowedThemes");
-  if (!rawEl || !enabledEl || !forceEl || !defaultEl || !allowedEl) return;
+  if (!enabledEl || !forceEl || !defaultEl || !allowedEl) return;
 
   const payload = adminUiSettings && typeof adminUiSettings === "object"
     ? adminUiSettings
@@ -1956,7 +2135,26 @@ function renderAdminAppearance() {
     const label = THEME_LABELS[code]?.[adminLang] || code;
     return `<label class="check"><input type="checkbox" data-theme-code="${code}" ${checked} /> ${escapeHtml(label)} (${code})</label>`;
   }).join("");
-  rawEl.textContent = JSON.stringify(payload, null, 2);
+
+  if (summaryEl) {
+    const forceLabel = forceEl.checked
+      ? aTr("включено", "enabled")
+      : aTr("выключено", "disabled");
+    summaryEl.textContent = aTr(
+      `Тема: ${defaultEl.value || "classic"} • Принудительно: ${forceLabel}`,
+      `Theme: ${defaultEl.value || "classic"} • Forced: ${forceLabel}`
+    );
+  }
+  if (summaryTable) {
+    const selectedTheme = String(defaultEl.value || "classic");
+    const allowedCount = allowed.length;
+    summaryTable.innerHTML = `
+      <tr><td>${escapeHtml(aTr("Выбор темы", "Theme choice"))}</td><td>${enabledEl.checked ? escapeHtml(aTr("Разрешен", "Enabled")) : escapeHtml(aTr("Отключен", "Disabled"))}</td></tr>
+      <tr><td>${escapeHtml(aTr("Принудительная тема", "Forced theme"))}</td><td>${forceEl.checked ? escapeHtml(aTr("Да", "Yes")) : escapeHtml(aTr("Нет", "No"))}</td></tr>
+      <tr><td>${escapeHtml(aTr("Тема по умолчанию", "Default theme"))}</td><td>${escapeHtml(THEME_LABELS[selectedTheme]?.[adminLang] || selectedTheme)}</td></tr>
+      <tr><td>${escapeHtml(aTr("Разрешено тем", "Allowed themes"))}</td><td>${escapeHtml(String(allowedCount))}</td></tr>
+    `;
+  }
 }
 
 async function adminSaveUiSettings() {
@@ -1984,6 +2182,7 @@ async function adminSaveUiSettings() {
   if (!data) return;
   adminUiSettings = data;
   renderAdminAppearance();
+  adminCloseAppearanceModal();
   alert(aTr("Оформление сохранено", "Appearance saved"));
 }
 
@@ -1993,6 +2192,18 @@ document.getElementById("adminAiUserSelect")?.addEventListener("change", () => {
   loadAdminUserAi().catch(() => null);
 });
 document.getElementById("adminAiUserMode")?.addEventListener("change", () => renderAdminAiTab(true));
+document.getElementById("adminTeamModalSaveBtn")?.addEventListener("click", () => {
+  adminSaveTeamMemberFromModal().catch(() => null);
+});
+document.getElementById("adminTeamModalDeleteBtn")?.addEventListener("click", () => {
+  adminDeleteTeamMemberFromModal().catch(() => null);
+});
+document.getElementById("adminAiGlobalSaveBtn")?.addEventListener("click", () => {
+  adminAddGlobalAiService().catch(() => null);
+});
+document.getElementById("adminAiUserSaveBtn")?.addEventListener("click", () => {
+  adminAddUserAiService().catch(() => null);
+});
 ["adminEmail", "adminPassword"].forEach((id) => {
   const el = document.getElementById(id);
   if (!el) return;
@@ -2005,6 +2216,10 @@ document.getElementById("adminAiUserMode")?.addEventListener("change", () => ren
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   adminCloseUserEditModal();
+  adminCloseTeamMemberModal();
+  adminCloseAiGlobalModal();
+  adminCloseAiUserModal();
+  adminCloseAppearanceModal();
 });
 window.showAdminTab = showAdminTab;
 window.adminLogin = adminLogin;
@@ -2015,15 +2230,22 @@ window.loadAdminAuditReset = loadAdminAuditReset;
 window.adminAuditPrevPage = adminAuditPrevPage;
 window.adminAuditNextPage = adminAuditNextPage;
 window.adminSaveUiSettings = adminSaveUiSettings;
+window.adminOpenAppearanceModal = adminOpenAppearanceModal;
+window.adminCloseAppearanceModal = adminCloseAppearanceModal;
 window.adminSaveCredential2 = adminSaveCredential2;
 window.adminSaveAiGlobalDefault = adminSaveAiGlobalDefault;
 window.adminAddGlobalAiService = adminAddGlobalAiService;
+window.adminOpenAiGlobalModal = adminOpenAiGlobalModal;
+window.adminCloseAiGlobalModal = adminCloseAiGlobalModal;
 window.adminSaveUserAiSelection = adminSaveUserAiSelection;
 window.adminAddUserAiService = adminAddUserAiService;
+window.adminOpenAiUserModal = adminOpenAiUserModal;
+window.adminCloseAiUserModal = adminCloseAiUserModal;
 window.adminChangeLanguage = adminChangeLanguage;
 window.adminChangeTheme = adminChangeTheme;
 window.adminOpenUserEditModal = adminOpenUserEditModal;
 window.adminCloseUserEditModal = adminCloseUserEditModal;
+window.adminCloseTeamMemberModal = adminCloseTeamMemberModal;
 
 applyAdminTheme(adminTheme);
 applyAdminLanguage();

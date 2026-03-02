@@ -4,14 +4,27 @@ from datetime import date, datetime, timedelta
 import math
 import time
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 from app.services.wb_modules import fetch_wb_campaign_stats_bulk, fetch_wb_campaigns
 
 
 SALES_TIMEOUT = httpx.Timeout(connect=6.0, read=25.0, write=25.0, pool=25.0)
+WB_SALES_TIMEOUT = httpx.Timeout(connect=4.0, read=12.0, write=12.0, pool=12.0)
 WB_SALES_CACHE_TTL_SEC = 180
 _WB_SALES_CACHE: dict[tuple[str, str, str], tuple[float, list[dict[str, Any]], list[str]]] = {}
+WB_SALES_MAX_PAGES = 3
+WB_SALES_CONTINUATION_THRESHOLD = 79_500
+WB_SALES_LONG_RANGE_DAYS = 10
+WB_REPORT_DETAIL_LIMIT = 50_000
+WB_REPORT_DETAIL_MAX_PAGES = 3
+WB_ADS_TIMEOUT = httpx.Timeout(connect=4.0, read=9.0, write=9.0, pool=9.0)
+WB_AD_SPEND_CACHE_TTL_SEC = 180
+WB_ADS_MAX_CAMPAIGNS = 120
+WB_ADS_MAX_CAMPAIGNS_LONG_RANGE = 60
+WB_ADS_MAX_STATS_CHUNKS = 3
+_WB_AD_SPEND_CACHE: dict[tuple[str, str, str], tuple[float, float, list[str]]] = {}
 
 
 def build_sales_report(
@@ -20,6 +33,8 @@ def build_sales_report(
     date_to: date,
     wb_api_key: str = "",
     ozon_api_key: str = "",
+    granularity: str = "auto",
+    timezone: str = "UTC",
 ) -> dict[str, Any]:
     selected = (marketplace or "all").strip().lower()
     if selected not in {"all", "wb", "ozon"}:
@@ -41,6 +56,7 @@ def build_sales_report(
             ozon_rows, ozon_warn = _fetch_ozon_sales_rows(ozon_api_key.strip(), date_from=date_from, date_to=date_to)
             collected.extend(ozon_rows)
             warnings.extend(ozon_warn)
+            warnings.append("Ozon penalties недоступны по текущему API: используем 0.")
         else:
             warnings.append("Ozon ключ не подключен.")
 
@@ -59,18 +75,26 @@ def build_sales_report(
                     wb_ad_spend_by_day[days[-1].isoformat()] = round(wb_ad_spend_by_day.get(days[-1].isoformat(), 0.0) + drift, 2)
 
     rows = _aggregate_rows(collected, wb_ad_spend_by_day=wb_ad_spend_by_day)
-    chart = _build_chart(rows)
+    resolved_granularity = _resolve_granularity(granularity, date_from, date_to)
+    chart = _build_chart(rows, source_rows=collected, granularity=resolved_granularity, date_from=date_from, date_to=date_to, timezone=timezone)
     totals = {
         "orders": int(sum(int(x.get("orders") or 0) for x in rows)),
         "units": int(sum(int(x.get("units") or 0) for x in rows)),
         "revenue": float(round(sum(float(x.get("revenue") or 0.0) for x in rows), 2)),
         "returns": int(sum(int(x.get("returns") or 0) for x in rows)),
         "ad_spend": float(round(sum(float(x.get("ad_spend") or 0.0) for x in rows), 2)),
-        "other_costs": float(round(sum(float(x.get("other_costs") or 0.0) for x in rows), 2)),
+        "penalties": float(round(sum(float(x.get("penalties") or 0.0) for x in rows), 2)),
         "days": len({str(x.get("date") or "") for x in rows}),
     }
-    totals["gross_profit"] = float(round(float(totals["revenue"]) - float(totals["ad_spend"]) - float(totals["other_costs"]), 2))
-    return {"rows": rows, "chart": chart, "totals": totals, "warnings": warnings}
+    totals["gross_profit"] = float(round(float(totals["revenue"]) - float(totals["ad_spend"]) - float(totals["penalties"]), 2))
+    return {
+        "rows": rows,
+        "chart": chart,
+        "totals": totals,
+        "warnings": warnings,
+        "granularity": resolved_granularity,
+        "timezone": timezone,
+    }
 
 
 def _fetch_wb_sales_rows(api_key: str, date_from: date, date_to: date) -> tuple[list[dict[str, Any]], list[str]]:
@@ -79,114 +103,121 @@ def _fetch_wb_sales_rows(api_key: str, date_from: date, date_to: date) -> tuple[
     now = time.monotonic()
     if cached and now - cached[0] <= WB_SALES_CACHE_TTL_SEC:
         return list(cached[1]), list(cached[2])
+    period_days = max(1, (date_to - date_from).days + 1)
+    max_pages = 1 if period_days >= WB_SALES_LONG_RANGE_DAYS else WB_SALES_MAX_PAGES
 
     rows: list[dict[str, Any]] = []
     warnings: list[str] = []
     endpoint = "https://statistics-api.wildberries.ru/api/v1/supplier/sales"
-    params = {"dateFrom": date_from.isoformat()}
-    payload: Any = None
+    cursor = date_from.isoformat()
+    seen_cursors: set[str] = set()
+    response_pages: list[list[dict[str, Any]]] = []
     last_error = "WB sales API недоступен."
-    for auth_value in (api_key.strip(), f"Bearer {api_key.strip()}"):
-        if not auth_value.strip():
-            continue
-        headers = {"Authorization": auth_value}
-        response = None
-        for attempt in range(4):
-            try:
-                with httpx.Client(timeout=SALES_TIMEOUT, follow_redirects=True) as client:
-                    response = client.get(endpoint, headers=headers, params=params)
-            except Exception:
-                response = None
-            if response is None:
-                if attempt < 3:
-                    time.sleep(0.6 * (attempt + 1))
-                continue
-            if response.status_code == 429:
-                if attempt < 3:
-                    time.sleep(0.85 * (attempt + 1))
-                    continue
-                last_error = "WB sales API временно ограничил запросы (429)."
+    for page_idx in range(max_pages):
+        params = {"dateFrom": cursor, "flag": 0}
+        payload, status = _request_wb_sales_payload(api_key=api_key, endpoint=endpoint, params=params)
+        if payload is None:
+            if status == "rate_limited":
+                warnings.append("WB sales API вернул 429, показана частичная статистика.")
                 break
+            if page_idx == 0:
+                if cached:
+                    return list(cached[1]), list(cached[2]) + ["WB sales API недоступен, показаны кэшированные данные."]
+                return [], [last_error if status == "unavailable" else status]
+            warnings.append("WB sales API недоступен, показана частичная статистика.")
             break
-        if response is None:
-            continue
-        if response.status_code in {401, 403}:
-            last_error = "WB sales API отклонил ключ (401/403)."
-            continue
-        if response.status_code == 429:
-            continue
-        if response.status_code >= 400:
-            return [], [f"WB sales API error {response.status_code}"]
-        try:
-            payload = response.json()
-        except Exception:
-            payload = None
-        if payload is not None:
+        if not isinstance(payload, list) or not payload:
             break
-    if payload is None:
-        if cached:
-            return list(cached[1]), list(cached[2]) + ["WB sales API вернул лимит, показаны кэшированные данные."]
-        return [], [last_error]
+        response_pages.append(payload)
 
-    if not isinstance(payload, list):
-        return rows, warnings
+        if len(payload) < WB_SALES_CONTINUATION_THRESHOLD:
+            break
+        if max_pages == 1:
+            warnings.append(
+                "WB sales: период большой, используем ускоренный одностраничный режим (ограничение WB 1 запрос/мин)."
+            )
+            break
+        next_cursor = _extract_wb_sales_cursor(payload[-1])
+        if not next_cursor or next_cursor in seen_cursors:
+            break
+        seen_cursors.add(next_cursor)
+        cursor = next_cursor
+        if page_idx == 0:
+            warnings.append("WB sales: период большой, догружаем данные порциями.")
 
-    for item in payload:
-        if not isinstance(item, dict):
-            continue
-        day = _parse_any_date(
-            item.get("date")
-            or item.get("saleDate")
-            or item.get("lastChangeDate")
-        )
-        if not day or day < date_from or day > date_to:
-            continue
+    dedupe_keys: set[str] = set()
+    for payload in response_pages:
+        for item in payload:
+            if not isinstance(item, dict):
+                continue
+            day = _parse_any_date(
+                item.get("date")
+                or item.get("saleDate")
+                or item.get("lastChangeDate")
+            )
+            if not day or day < date_from or day > date_to:
+                continue
+            unique_key = _wb_sale_row_key(item)
+            if unique_key in dedupe_keys:
+                continue
+            dedupe_keys.add(unique_key)
 
-        units_raw = _to_float(item.get("quantity") or item.get("saleQty") or item.get("quantityFull") or 0)
-        units = int(round(abs(units_raw)))
-        if units <= 0:
-            units = 1
-        revenue = _to_float(
-            item.get("forPay")
-            or item.get("totalPrice")
-            or item.get("finishedPrice")
-            or item.get("priceWithDisc")
-            or 0.0
-        )
-        is_return = bool(
-            _is_truthy(item.get("isReturn"))
-            or _is_truthy(item.get("is_return"))
-            or units_raw < 0
-            or revenue < 0
-            or str(item.get("saleID") or "").upper().startswith("R")
-        )
-        safe_revenue = abs(float(round(revenue, 2)))
-        if is_return:
+            units_raw = _to_float(item.get("quantity") or item.get("saleQty") or item.get("quantityFull") or 0)
+            units = int(round(abs(units_raw)))
+            if units <= 0:
+                units = 1
+            revenue = _to_float(
+                item.get("forPay")
+                or item.get("totalPrice")
+                or item.get("finishedPrice")
+                or item.get("priceWithDisc")
+                or 0.0
+            )
+            is_return = bool(
+                _is_truthy(item.get("isReturn"))
+                or _is_truthy(item.get("is_return"))
+                or units_raw < 0
+                or revenue < 0
+                or str(item.get("saleID") or "").upper().startswith("R")
+            )
+            safe_revenue = abs(float(round(revenue, 2)))
+            if is_return:
+                rows.append(
+                    {
+                        "date": day.isoformat(),
+                        "occurred_at": str(item.get("date") or item.get("saleDate") or item.get("lastChangeDate") or ""),
+                        "marketplace": "wb",
+                        "orders": 0,
+                        "units": 0,
+                        "revenue": 0.0,
+                        "returns": units,
+                        "ad_spend": 0.0,
+                        "penalties": safe_revenue,
+                    }
+                )
+                continue
             rows.append(
                 {
                     "date": day.isoformat(),
+                    "occurred_at": str(item.get("date") or item.get("saleDate") or item.get("lastChangeDate") or ""),
                     "marketplace": "wb",
-                    "orders": 0,
-                    "units": 0,
-                    "revenue": 0.0,
-                    "returns": units,
+                    "orders": 1,
+                    "units": units,
+                    "revenue": safe_revenue,
+                    "returns": 0,
                     "ad_spend": 0.0,
-                    "other_costs": safe_revenue,
+                    "penalties": 0.0,
                 }
             )
-            continue
-        rows.append(
-            {
-                "date": day.isoformat(),
-                "marketplace": "wb",
-                "orders": 1,
-                "units": units,
-                "revenue": safe_revenue,
-                "returns": 0,
-                "ad_spend": 0.0,
-                "other_costs": 0.0,
-            }
-        )
+
+    if not rows and not response_pages:
+        fallback_rows, fallback_warning = _fetch_wb_sales_rows_report_detail(api_key=api_key, date_from=date_from, date_to=date_to)
+        if fallback_rows:
+            if fallback_warning:
+                warnings.append(fallback_warning)
+            _WB_SALES_CACHE[cache_key] = (time.monotonic(), list(fallback_rows), list(warnings))
+            return fallback_rows, warnings
+
     _WB_SALES_CACHE[cache_key] = (time.monotonic(), list(rows), list(warnings))
     return rows, warnings
 
@@ -255,13 +286,14 @@ def _fetch_ozon_sales_rows(api_key: str, date_from: date, date_to: date) -> tupl
         rows.append(
             {
                 "date": day.isoformat(),
+                "occurred_at": str(item.get("date") or item.get("day") or ""),
                 "marketplace": "ozon",
                 "orders": orders,
                 "units": units,
                 "revenue": revenue,
                 "returns": 0,
                 "ad_spend": 0.0,
-                "other_costs": 0.0,
+                "penalties": 0.0,
             }
         )
     return rows, warnings
@@ -286,7 +318,7 @@ def _aggregate_rows(rows: list[dict[str, Any]], wb_ad_spend_by_day: dict[str, fl
                 "revenue": 0.0,
                 "returns": 0,
                 "ad_spend": 0.0,
-                "other_costs": 0.0,
+                "penalties": 0.0,
             },
         )
         row["orders"] += int(item.get("orders") or 0)
@@ -294,7 +326,7 @@ def _aggregate_rows(rows: list[dict[str, Any]], wb_ad_spend_by_day: dict[str, fl
         row["revenue"] = float(round(float(row["revenue"]) + float(item.get("revenue") or 0.0), 2))
         row["returns"] += int(item.get("returns") or 0)
         row["ad_spend"] = float(round(float(row["ad_spend"]) + float(item.get("ad_spend") or 0.0), 2))
-        row["other_costs"] = float(round(float(row["other_costs"]) + float(item.get("other_costs") or 0.0), 2))
+        row["penalties"] = float(round(float(row["penalties"]) + float(item.get("penalties") or 0.0), 2))
     if ad_map:
         for row in bucket.values():
             if str(row.get("marketplace") or "").lower() != "wb":
@@ -306,29 +338,224 @@ def _aggregate_rows(rows: list[dict[str, Any]], wb_ad_spend_by_day: dict[str, fl
     return out
 
 
-def _build_chart(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _build_chart(
+    rows: list[dict[str, Any]],
+    *,
+    source_rows: list[dict[str, Any]] | None = None,
+    granularity: str = "day",
+    date_from: date | None = None,
+    date_to: date | None = None,
+    timezone: str = "UTC",
+) -> list[dict[str, Any]]:
+    if granularity == "hour":
+        return _build_chart_hour(source_rows or rows, date_from=date_from, date_to=date_to, timezone=timezone)
     bucket: dict[str, dict[str, Any]] = {}
     for item in rows:
         day = str(item.get("date") or "")
         if not day:
             continue
-        row = bucket.setdefault(day, {"date": day, "orders": 0, "units": 0, "revenue": 0.0, "returns": 0, "ad_spend": 0.0, "other_costs": 0.0})
-        row["orders"] += int(item.get("orders") or 0)
-        row["units"] += int(item.get("units") or 0)
-        row["revenue"] = float(round(float(row["revenue"]) + float(item.get("revenue") or 0.0), 2))
-        row["returns"] += int(item.get("returns") or 0)
-        row["ad_spend"] = float(round(float(row["ad_spend"]) + float(item.get("ad_spend") or 0.0), 2))
-        row["other_costs"] = float(round(float(row["other_costs"]) + float(item.get("other_costs") or 0.0), 2))
+        row = bucket.setdefault(day, _new_chart_bucket(day=day, bucket=day))
+        _apply_metrics_to_bucket(row, item)
+        mp = str(item.get("marketplace") or "").strip().lower()
+        if mp in {"wb", "ozon"}:
+            _apply_metrics_to_bucket(row, item, prefix=f"{mp}_")
     out = list(bucket.values())
     out.sort(key=lambda x: str(x.get("date") or ""))
     return out
 
 
+def _resolve_granularity(value: str, date_from: date, date_to: date) -> str:
+    code = str(value or "auto").strip().lower()
+    if code == "hour":
+        return "hour"
+    if code == "day":
+        return "day"
+    return "hour" if date_from == date_to else "day"
+
+
+def _build_chart_hour(
+    rows: list[dict[str, Any]],
+    *,
+    date_from: date | None,
+    date_to: date | None,
+    timezone: str,
+) -> list[dict[str, Any]]:
+    left = date_from or date.today()
+    right = date_to or left
+    if left > right:
+        left, right = right, left
+    day = left
+    try:
+        tzinfo = ZoneInfo(str(timezone or "UTC"))
+    except Exception:
+        tzinfo = ZoneInfo("UTC")
+
+    buckets: dict[int, dict[str, Any]] = {
+        hour: _new_chart_bucket(day=day.isoformat(), bucket=f"{day.isoformat()} {hour:02d}:00")
+        for hour in range(24)
+    }
+    daily_rows: list[dict[str, Any]] = []
+
+    for item in rows:
+        row_day = _parse_any_date(item.get("date") or item.get("occurred_at"))
+        if row_day is None:
+            row_day = day
+        if row_day < left or row_day > right:
+            continue
+        if not _row_has_explicit_time(item):
+            daily_rows.append(item)
+            continue
+        hour = _row_to_hour_bucket(item, tzinfo=tzinfo)
+        bucket = buckets.get(hour)
+        if not bucket:
+            continue
+        _apply_metrics_to_bucket(bucket, item)
+        mp = str(item.get("marketplace") or "").strip().lower()
+        if mp in {"wb", "ozon"}:
+            _apply_metrics_to_bucket(bucket, item, prefix=f"{mp}_")
+
+    # Some sources return daily aggregates without hour timestamps.
+    # Spread them across 24 buckets to avoid a misleading left-side spike at 00:00.
+    for item in daily_rows:
+        _spread_daily_item_across_hours(buckets, item)
+
+    return [buckets[x] for x in range(24)]
+
+
+def _new_chart_bucket(day: str, bucket: str) -> dict[str, Any]:
+    return {
+        "date": day,
+        "bucket": bucket,
+        "orders": 0,
+        "units": 0,
+        "revenue": 0.0,
+        "returns": 0,
+        "ad_spend": 0.0,
+        "penalties": 0.0,
+        "wb_orders": 0,
+        "wb_units": 0,
+        "wb_revenue": 0.0,
+        "wb_returns": 0,
+        "wb_ad_spend": 0.0,
+        "wb_penalties": 0.0,
+        "ozon_orders": 0,
+        "ozon_units": 0,
+        "ozon_revenue": 0.0,
+        "ozon_returns": 0,
+        "ozon_ad_spend": 0.0,
+        "ozon_penalties": 0.0,
+    }
+
+
+def _apply_metrics_to_bucket(target: dict[str, Any], source: dict[str, Any], prefix: str = "") -> None:
+    orders_key = f"{prefix}orders"
+    units_key = f"{prefix}units"
+    revenue_key = f"{prefix}revenue"
+    returns_key = f"{prefix}returns"
+    ad_spend_key = f"{prefix}ad_spend"
+    penalties_key = f"{prefix}penalties"
+
+    target[orders_key] = int(target.get(orders_key) or 0) + int(source.get("orders") or 0)
+    target[units_key] = int(target.get(units_key) or 0) + int(source.get("units") or 0)
+    target[revenue_key] = float(round(float(target.get(revenue_key) or 0.0) + float(source.get("revenue") or 0.0), 2))
+    target[returns_key] = int(target.get(returns_key) or 0) + int(source.get("returns") or 0)
+    target[ad_spend_key] = float(round(float(target.get(ad_spend_key) or 0.0) + float(source.get("ad_spend") or 0.0), 2))
+    target[penalties_key] = float(round(float(target.get(penalties_key) or 0.0) + float(source.get("penalties") or 0.0), 2))
+
+
+def _row_has_explicit_time(item: dict[str, Any]) -> bool:
+    raw = item.get("occurred_at") or item.get("datetime") or item.get("created_at")
+    if raw is None:
+        return False
+    text = str(raw).strip()
+    if not text:
+        return False
+    return "T" in text or (":" in text and " " in text)
+
+
+def _spread_daily_item_across_hours(buckets: dict[int, dict[str, Any]], item: dict[str, Any]) -> None:
+    int_parts = {
+        "orders": _split_int_24(int(item.get("orders") or 0)),
+        "units": _split_int_24(int(item.get("units") or 0)),
+        "returns": _split_int_24(int(item.get("returns") or 0)),
+    }
+    float_parts = {
+        "revenue": _split_float_24(float(item.get("revenue") or 0.0)),
+        "ad_spend": _split_float_24(float(item.get("ad_spend") or 0.0)),
+        "penalties": _split_float_24(float(item.get("penalties") or 0.0)),
+    }
+    mp = str(item.get("marketplace") or "").strip().lower()
+
+    for hour in range(24):
+        bucket = buckets.get(hour)
+        if not bucket:
+            continue
+        chunk = {
+            "orders": int_parts["orders"][hour],
+            "units": int_parts["units"][hour],
+            "revenue": float_parts["revenue"][hour],
+            "returns": int_parts["returns"][hour],
+            "ad_spend": float_parts["ad_spend"][hour],
+            "penalties": float_parts["penalties"][hour],
+        }
+        _apply_metrics_to_bucket(bucket, chunk)
+        if mp in {"wb", "ozon"}:
+            _apply_metrics_to_bucket(bucket, chunk, prefix=f"{mp}_")
+
+
+def _split_int_24(value: int) -> list[int]:
+    base = int(value // 24)
+    remainder = int(value - (base * 24))
+    out = [base for _ in range(24)]
+    if remainder == 0:
+        return out
+    step = 1 if remainder > 0 else -1
+    for idx in range(abs(remainder)):
+        out[idx % 24] += step
+    return out
+
+
+def _split_float_24(value: float) -> list[float]:
+    if not math.isfinite(value):
+        return [0.0 for _ in range(24)]
+    base = round(value / 24.0, 2)
+    out = [base for _ in range(24)]
+    drift = round(value - (base * 24.0), 2)
+    out[-1] = round(out[-1] + drift, 2)
+    return out
+
+
+def _row_to_hour_bucket(item: dict[str, Any], tzinfo: ZoneInfo) -> int:
+    raw = item.get("occurred_at") or item.get("datetime") or item.get("created_at") or item.get("date")
+    dt = _parse_any_datetime(raw)
+    if dt is None:
+        return 12
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+    local = dt.astimezone(tzinfo)
+    return int(local.hour)
+
+
 def _fetch_wb_ad_spent_total(api_key: str, date_from: date, date_to: date) -> tuple[float, list[str]]:
+    cache_key = (api_key[-12:], date_from.isoformat(), date_to.isoformat())
+    cached = _WB_AD_SPEND_CACHE.get(cache_key)
+    now = time.monotonic()
+    if cached and now - cached[0] <= WB_AD_SPEND_CACHE_TTL_SEC:
+        return float(cached[1]), list(cached[2])
+
     warnings: list[str] = []
     spent_total = 0.0
+    period_days = max(1, (date_to - date_from).days + 1)
+    max_campaigns = WB_ADS_MAX_CAMPAIGNS_LONG_RANGE if period_days >= 14 else WB_ADS_MAX_CAMPAIGNS
+    max_chunks = 2 if period_days >= 14 else WB_ADS_MAX_STATS_CHUNKS
     try:
-        campaign_rows = fetch_wb_campaigns(api_key, enrich=False)
+        campaign_rows = fetch_wb_campaigns(
+            api_key,
+            enrich=False,
+            fast_mode=True,
+            request_timeout=WB_ADS_TIMEOUT,
+            max_attempts=1,
+        )
     except Exception:
         return 0.0, ["WB Ads API недоступен для расчета рекламных расходов."]
     ids: list[int] = []
@@ -339,7 +566,6 @@ def _fetch_wb_ad_spent_total(api_key: str, date_from: date, date_to: date) -> tu
     ids = sorted(set(ids))
     if not ids:
         return 0.0, warnings
-    max_campaigns = 300
     if len(ids) > max_campaigns:
         warnings.append(f"WB Ads: кампаний много ({len(ids)}), для скорости учитываем первые {max_campaigns}.")
         ids = ids[:max_campaigns]
@@ -349,14 +575,22 @@ def _fetch_wb_ad_spent_total(api_key: str, date_from: date, date_to: date) -> tu
             campaign_ids=ids,
             date_from=date_from.isoformat(),
             date_to=date_to.isoformat(),
+            fast_mode=True,
+            request_timeout=WB_ADS_TIMEOUT,
+            max_attempts=1,
+            max_chunks=max_chunks,
         )
     except Exception:
         return 0.0, ["WB Ads статистика недоступна для расчета расходов."]
     if not isinstance(stats, dict) or not stats:
         return 0.0, ["WB Ads статистика недоступна для расчета расходов (пустой ответ/лимит API)."]
+    if len(stats) < len(ids):
+        warnings.append(f"WB Ads: обработано кампаний {len(stats)}/{len(ids)} для ускорения ответа.")
     for payload in stats.values() if isinstance(stats, dict) else []:
         spent_total += float(payload.get("spent") or 0.0)
-    return float(round(max(0.0, spent_total), 2)), warnings
+    result = float(round(max(0.0, spent_total), 2))
+    _WB_AD_SPEND_CACHE[cache_key] = (time.monotonic(), result, list(warnings))
+    return result, warnings
 
 
 def _campaign_id_from_any(row: Any) -> int:
@@ -371,6 +605,163 @@ def _campaign_id_from_any(row: Any) -> int:
         if num > 0:
             return num
     return 0
+
+
+def _fetch_wb_sales_rows_report_detail(api_key: str, date_from: date, date_to: date) -> tuple[list[dict[str, Any]], str]:
+    endpoint = "https://statistics-api.wildberries.ru/api/v5/supplier/reportDetailByPeriod"
+    rrdid = 0
+    source_rows: list[dict[str, Any]] = []
+    for _ in range(WB_REPORT_DETAIL_MAX_PAGES):
+        params = {
+            "dateFrom": date_from.isoformat(),
+            "dateTo": date_to.isoformat(),
+            "limit": WB_REPORT_DETAIL_LIMIT,
+            "rrdid": rrdid,
+        }
+        payload, status = _request_wb_sales_payload(api_key=api_key, endpoint=endpoint, params=params)
+        if payload is None:
+            return [], status
+        if not payload:
+            break
+        source_rows.extend(payload)
+        if len(payload) < WB_REPORT_DETAIL_LIMIT:
+            break
+        next_rrdid = _to_int(payload[-1].get("rrd_id") or payload[-1].get("rrdId") or payload[-1].get("rrdid") or 0)
+        if not next_rrdid or next_rrdid <= rrdid:
+            break
+        rrdid = next_rrdid
+
+    if not source_rows:
+        return [], ""
+
+    rows: list[dict[str, Any]] = []
+    dedupe_keys: set[str] = set()
+    for item in source_rows:
+        if not isinstance(item, dict):
+            continue
+        day = _parse_any_date(
+            item.get("sale_dt")
+            or item.get("saleDt")
+            or item.get("order_dt")
+            or item.get("rr_dt")
+            or item.get("date")
+            or item.get("date_from")
+        )
+        if not day or day < date_from or day > date_to:
+            continue
+        marker = "|".join(
+            [
+                str(item.get("rrd_id") or item.get("rrdId") or ""),
+                str(item.get("rid") or ""),
+                str(item.get("srid") or ""),
+                str(item.get("sale_dt") or item.get("order_dt") or item.get("rr_dt") or ""),
+                str(item.get("nm_id") or item.get("nmId") or ""),
+                str(item.get("quantity") or ""),
+            ]
+        )
+        if marker in dedupe_keys:
+            continue
+        dedupe_keys.add(marker)
+
+        units = int(round(abs(_to_float(item.get("quantity") or 0))))
+        if units <= 0:
+            units = 1
+        revenue = _to_float(
+            item.get("ppvz_for_pay")
+            or item.get("forPay")
+            or item.get("retail_amount")
+            or item.get("retail_price_withdisc_rub")
+            or 0.0
+        )
+        return_amount = abs(float(round(_to_float(item.get("return_amount") or item.get("returnAmount") or 0.0), 2)))
+        op_name = str(item.get("supplier_oper_name") or item.get("doc_type_name") or "").lower()
+        is_return = bool(return_amount > 0 or "возврат" in op_name or "return" in op_name or revenue < 0)
+        safe_revenue = abs(float(round(revenue, 2)))
+        if is_return:
+            rows.append(
+                {
+                    "date": day.isoformat(),
+                    "occurred_at": str(item.get("sale_dt") or item.get("saleDt") or item.get("order_dt") or item.get("rr_dt") or ""),
+                    "marketplace": "wb",
+                    "orders": 0,
+                    "units": 0,
+                    "revenue": 0.0,
+                    "returns": units,
+                    "ad_spend": 0.0,
+                    "penalties": return_amount if return_amount > 0 else safe_revenue,
+                }
+            )
+            continue
+        rows.append(
+            {
+                "date": day.isoformat(),
+                "occurred_at": str(item.get("sale_dt") or item.get("saleDt") or item.get("order_dt") or item.get("rr_dt") or ""),
+                "marketplace": "wb",
+                "orders": 1,
+                "units": units,
+                "revenue": safe_revenue,
+                "returns": 0,
+                "ad_spend": 0.0,
+                "penalties": 0.0,
+            }
+        )
+    if not rows:
+        return [], ""
+    return rows, "WB sales: использован fallback API reportDetailByPeriod."
+
+
+def _request_wb_sales_payload(api_key: str, endpoint: str, params: dict[str, Any]) -> tuple[list[dict[str, Any]] | None, str]:
+    token = (api_key or "").strip()
+    if not token:
+        return None, "WB ключ не подключен."
+    auth_variants = (token, f"Bearer {token}")
+    last_error = "WB sales API недоступен."
+    for auth_value in auth_variants:
+        headers = {"Authorization": auth_value}
+        response = None
+        try:
+            with httpx.Client(timeout=WB_SALES_TIMEOUT, follow_redirects=True) as client:
+                response = client.get(endpoint, headers=headers, params=params)
+        except Exception:
+            response = None
+        if response is None:
+            continue
+        if response.status_code in {401, 403}:
+            last_error = "WB sales API отклонил ключ (401/403)."
+            continue
+        if response.status_code == 429:
+            return None, "rate_limited"
+        if response.status_code >= 400:
+            return None, f"WB sales API error {response.status_code}"
+        try:
+            payload = response.json()
+        except Exception:
+            return None, "WB sales API вернул некорректный ответ."
+        if isinstance(payload, list):
+            return payload, "ok"
+        return None, "WB sales API вернул неожиданный формат."
+    return None, last_error if last_error else "unavailable"
+
+
+def _extract_wb_sales_cursor(item: dict[str, Any]) -> str:
+    for key in ("lastChangeDate", "last_change_date", "date", "saleDate"):
+        value = item.get(key)
+        text = str(value or "").strip()
+        if text:
+            return text
+    return ""
+
+
+def _wb_sale_row_key(item: dict[str, Any]) -> str:
+    return "|".join(
+        [
+            str(item.get("srid") or ""),
+            str(item.get("saleID") or item.get("saleId") or ""),
+            str(item.get("lastChangeDate") or ""),
+            str(item.get("date") or ""),
+            str(item.get("nmId") or ""),
+        ]
+    )
 
 
 def _iter_days(left: date, right: date) -> list[date]:
@@ -484,6 +875,26 @@ def _parse_any_date(value: Any) -> date | None:
     return None
 
 
+def _parse_any_datetime(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except Exception:
+        pass
+    for candidate in (text, text[:19], text[:16]):
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M"):
+            try:
+                return datetime.strptime(candidate, fmt)
+            except Exception:
+                continue
+    base = _parse_any_date(text)
+    if base is not None:
+        return datetime.combine(base, datetime.min.time())
+    return None
+
+
 def _to_float(value: Any) -> float:
     try:
         num = float(value)
@@ -495,3 +906,10 @@ def _to_float(value: Any) -> float:
     if not math.isfinite(num):
         return 0.0
     return float(num)
+
+
+def _to_int(value: Any) -> int:
+    try:
+        return int(str(value).strip())
+    except Exception:
+        return 0

@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260301h" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260302a" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -171,22 +171,8 @@
             <button onclick="adminSaveAiGlobalDefault()">Сохранить global default</button>
             <button class="btn-secondary" onclick="loadAdminAll()">Обновить</button>
           </div>
-          <div class="grid-6">
-            <input id="adminAiGlobalName" placeholder="Название сервиса" />
-            <select id="adminAiGlobalProvider">
-              <option value="openai">openai</option>
-              <option value="openrouter">openrouter</option>
-              <option value="deepseek">deepseek</option>
-              <option value="groq">groq</option>
-              <option value="together">together</option>
-              <option value="mistral">mistral</option>
-              <option value="xai">xai</option>
-              <option value="custom">custom</option>
-            </select>
-            <input id="adminAiGlobalModel" placeholder="Модель" />
-            <input id="adminAiGlobalBaseUrl" placeholder="Base URL (опц.)" />
-            <input id="adminAiGlobalApiKey" placeholder="API key" />
-            <button class="btn-secondary" onclick="adminAddGlobalAiService()">Добавить глобальный AI</button>
+          <div class="actions">
+            <button class="btn-secondary" type="button" onclick="adminOpenAiGlobalModal()">Добавить глобальный AI</button>
           </div>
           <div class="table-card">
             <table>
@@ -211,22 +197,8 @@
             <select id="adminAiUserServiceSelect"></select>
             <button onclick="adminSaveUserAiSelection()">Сохранить выбор пользователя</button>
           </div>
-          <div class="grid-6">
-            <input id="adminAiUserName" placeholder="Название сервиса пользователя" />
-            <select id="adminAiUserProvider">
-              <option value="openai">openai</option>
-              <option value="openrouter">openrouter</option>
-              <option value="deepseek">deepseek</option>
-              <option value="groq">groq</option>
-              <option value="together">together</option>
-              <option value="mistral">mistral</option>
-              <option value="xai">xai</option>
-              <option value="custom">custom</option>
-            </select>
-            <input id="adminAiUserModel" placeholder="Модель" />
-            <input id="adminAiUserBaseUrl" placeholder="Base URL (опц.)" />
-            <input id="adminAiUserApiKey" placeholder="API key" />
-            <button class="btn-secondary" onclick="adminAddUserAiService()">Добавить AI пользователю</button>
+          <div class="actions">
+            <button class="btn-secondary" type="button" onclick="adminOpenAiUserModal()">Добавить AI пользователю</button>
           </div>
           <div id="adminAiUserEffective" class="hint">-</div>
           <div class="table-card">
@@ -244,14 +216,20 @@
         <div class="panel">
           <h3>Оформление интерфейса</h3>
           <div class="grid-3">
-            <label class="check"><input id="adminThemeChoiceEnabled" type="checkbox" /> Разрешить выбор темы пользователям</label>
-            <label class="check"><input id="adminForceThemeEnabled" type="checkbox" /> Принудительно применять тему всем</label>
-            <select id="adminDefaultThemeSelect"></select>
-            <button onclick="adminSaveUiSettings()">Сохранить оформление</button>
+            <button class="btn-secondary" type="button" onclick="adminOpenAppearanceModal()">Настроить оформление</button>
+            <button class="btn-secondary" type="button" onclick="loadAdminAll()">Обновить</button>
+            <div id="adminAppearanceSummary" class="hint">-</div>
           </div>
-          <div class="hint">Разрешенные темы для выбора:</div>
-          <div id="adminAllowedThemes" class="theme-picks"></div>
-          <pre id="adminUiSettingsRaw">-</pre>
+          <div class="table-card">
+            <table>
+              <tbody id="adminAppearanceSummaryTable">
+                <tr><td>Выбор темы</td><td>-</td></tr>
+                <tr><td>Принудительная тема</td><td>-</td></tr>
+                <tr><td>Тема по умолчанию</td><td>-</td></tr>
+                <tr><td>Разрешено тем</td><td>-</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
 
@@ -341,7 +319,117 @@
     </div>
   </div>
 
+  <div id="adminTeamMemberModal" class="team-modal hidden" onclick="adminCloseTeamMemberModal(event)">
+    <div class="team-modal-card" onclick="event.stopPropagation()">
+      <div class="team-modal-head">
+        <h3 id="adminTeamMemberModalTitle">Сотрудник кабинета</h3>
+        <button class="btn-secondary" type="button" onclick="adminCloseTeamMemberModal()">Закрыть</button>
+      </div>
+      <div id="adminTeamMemberModalMeta" class="hint">-</div>
+      <div class="team-modal-grid">
+        <label><span>Email</span><input id="adminTeamModalEmail" placeholder="Email сотрудника" /></label>
+        <label><span>Пароль</span><input id="adminTeamModalPassword" type="password" placeholder="Новый пароль (опц.)" /></label>
+        <label><span>ФИО</span><input id="adminTeamModalFullName" placeholder="ФИО" /></label>
+        <label><span>Телефон</span><input id="adminTeamModalPhone" placeholder="Телефон" /></label>
+        <label><span>Ник</span><input id="adminTeamModalNickname" placeholder="Ник" /></label>
+        <label><span>Ссылка на аватар</span><input id="adminTeamModalAvatar" placeholder="Avatar URL" /></label>
+      </div>
+      <div class="team-modal-access">
+        <span>Доступ к модулям</span>
+        <div id="adminTeamModalScope" class="team-access-picks"></div>
+      </div>
+      <div class="actions">
+        <button id="adminTeamModalSaveBtn" type="button">Сохранить</button>
+        <button id="adminTeamModalDeleteBtn" class="btn-danger" type="button">Удалить</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="adminAiGlobalModal" class="team-modal hidden" onclick="adminCloseAiGlobalModal(event)">
+    <div class="team-modal-card" onclick="event.stopPropagation()">
+      <div class="team-modal-head">
+        <h3 id="adminAiGlobalModalTitle">Глобальный AI сервис</h3>
+        <button class="btn-secondary" type="button" onclick="adminCloseAiGlobalModal()">Закрыть</button>
+      </div>
+      <div class="team-modal-grid">
+        <label><span>Название сервиса</span><input id="adminAiGlobalName" placeholder="Название сервиса" /></label>
+        <label>
+          <span>Provider</span>
+          <select id="adminAiGlobalProvider">
+            <option value="openai">openai</option>
+            <option value="openrouter">openrouter</option>
+            <option value="deepseek">deepseek</option>
+            <option value="groq">groq</option>
+            <option value="together">together</option>
+            <option value="mistral">mistral</option>
+            <option value="xai">xai</option>
+            <option value="custom">custom</option>
+          </select>
+        </label>
+        <label><span>Модель</span><input id="adminAiGlobalModel" placeholder="Модель" /></label>
+        <label><span>Base URL (опц.)</span><input id="adminAiGlobalBaseUrl" placeholder="Base URL (опц.)" /></label>
+        <label class="admin-user-field-wide"><span>API key</span><input id="adminAiGlobalApiKey" placeholder="API key" /></label>
+      </div>
+      <div class="actions">
+        <button id="adminAiGlobalSaveBtn" type="button">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="adminAiUserModal" class="team-modal hidden" onclick="adminCloseAiUserModal(event)">
+    <div class="team-modal-card" onclick="event.stopPropagation()">
+      <div class="team-modal-head">
+        <h3 id="adminAiUserModalTitle">AI сервис пользователя</h3>
+        <button class="btn-secondary" type="button" onclick="adminCloseAiUserModal()">Закрыть</button>
+      </div>
+      <div class="team-modal-grid">
+        <label><span>Название сервиса</span><input id="adminAiUserName" placeholder="Название сервиса пользователя" /></label>
+        <label>
+          <span>Provider</span>
+          <select id="adminAiUserProvider">
+            <option value="openai">openai</option>
+            <option value="openrouter">openrouter</option>
+            <option value="deepseek">deepseek</option>
+            <option value="groq">groq</option>
+            <option value="together">together</option>
+            <option value="mistral">mistral</option>
+            <option value="xai">xai</option>
+            <option value="custom">custom</option>
+          </select>
+        </label>
+        <label><span>Модель</span><input id="adminAiUserModel" placeholder="Модель" /></label>
+        <label><span>Base URL (опц.)</span><input id="adminAiUserBaseUrl" placeholder="Base URL (опц.)" /></label>
+        <label class="admin-user-field-wide"><span>API key</span><input id="adminAiUserApiKey" placeholder="API key" /></label>
+      </div>
+      <div class="actions">
+        <button id="adminAiUserSaveBtn" type="button">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="adminAppearanceModal" class="team-modal hidden" onclick="adminCloseAppearanceModal(event)">
+    <div class="team-modal-card" onclick="event.stopPropagation()">
+      <div class="team-modal-head">
+        <h3 id="adminAppearanceModalTitle">Оформление интерфейса</h3>
+        <button class="btn-secondary" type="button" onclick="adminCloseAppearanceModal()">Закрыть</button>
+      </div>
+      <div class="grid-3">
+        <label class="check"><input id="adminThemeChoiceEnabled" type="checkbox" /> Разрешить выбор темы пользователям</label>
+        <label class="check"><input id="adminForceThemeEnabled" type="checkbox" /> Принудительно применять тему всем</label>
+        <label>
+          <span>Тема по умолчанию</span>
+          <select id="adminDefaultThemeSelect"></select>
+        </label>
+      </div>
+      <div class="hint">Разрешенные темы для выбора:</div>
+      <div id="adminAllowedThemes" class="theme-picks"></div>
+      <div class="actions">
+        <button type="button" onclick="adminSaveUiSettings()">Сохранить оформление</button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script src="/static/admin.js?v=20260301d"></script>
+  <script src="/static/admin.js?v=20260302a"></script>
 </body>
 </html>
