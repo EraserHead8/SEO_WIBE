@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260303g" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260303h" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -1051,36 +1051,34 @@
                   <button class="social-calc-eq" type="button" onclick="socialCalcEvaluate()">=</button>
                 </div>
               </section>
-              <section class="social-volume-shell">
-                <h3>Объем из размеров</h3>
-                <div class="grid-3">
-                  <input id="socialVolA" type="number" step="any" placeholder="Длина, см" />
-                  <input id="socialVolB" type="number" step="any" placeholder="Ширина, см" />
-                  <input id="socialVolC" type="number" step="any" placeholder="Высота, см" />
-                </div>
-                <button class="btn-secondary" type="button" onclick="socialCalcVolume()">Рассчитать объем</button>
-                <div id="socialVolResult" class="hint">-</div>
-              </section>
-              <section class="social-conv-shell">
-                <h3>Конвертация и валюты</h3>
-                <div class="grid-4">
-                  <input id="socialConvValue" type="number" step="any" placeholder="Значение" />
-                  <select id="socialConvType" onchange="socialRenderConverterOptions()">
-                    <option value="currency">Валюта</option>
-                    <option value="length">Длина</option>
-                    <option value="weight">Вес</option>
-                    <option value="volume">Объем</option>
-                  </select>
-                  <select id="socialConvFrom"></select>
-                  <select id="socialConvTo"></select>
-                </div>
-                <button class="btn-secondary" type="button" onclick="socialConvert()">Конвертировать</button>
-                <div id="socialConvResult" class="hint">-</div>
-              </section>
-              <section class="social-calc-placeholder">
-                <h3>Дополнительный блок</h3>
-                <div class="hint">Пусто. Можно добавить новый расчет позже.</div>
-              </section>
+              <div class="social-calc-side">
+                <section class="social-volume-shell">
+                  <h3>Объем из размеров</h3>
+                  <div class="grid-3">
+                    <input id="socialVolA" type="number" step="any" placeholder="Длина, см" />
+                    <input id="socialVolB" type="number" step="any" placeholder="Ширина, см" />
+                    <input id="socialVolC" type="number" step="any" placeholder="Высота, см" />
+                  </div>
+                  <button class="btn-secondary" type="button" onclick="socialCalcVolume()">Рассчитать объем</button>
+                  <div id="socialVolResult" class="hint">-</div>
+                </section>
+                <section class="social-conv-shell">
+                  <h3>Конвертация и валюты</h3>
+                  <div class="grid-4">
+                    <input id="socialConvValue" type="number" step="any" placeholder="Значение" />
+                    <select id="socialConvType" onchange="socialRenderConverterOptions()">
+                      <option value="currency">Валюта</option>
+                      <option value="length">Длина</option>
+                      <option value="weight">Вес</option>
+                      <option value="volume">Объем</option>
+                    </select>
+                    <select id="socialConvFrom"></select>
+                    <select id="socialConvTo"></select>
+                  </div>
+                  <button class="btn-secondary" type="button" onclick="socialConvert()">Конвертировать</button>
+                  <div id="socialConvResult" class="hint">-</div>
+                </section>
+              </div>
             </div>
           </div>
         </div>
@@ -1300,7 +1298,7 @@
   <div id="hoverTip" class="hover-tip hidden"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script src="/static/app.js?v=20260303g"></script>
+  <script src="/static/app.js?v=20260303h"></script>
   <script src="/static/social.js?v=20260303d"></script>
 </body>
 </html>

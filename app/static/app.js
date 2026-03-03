@@ -122,15 +122,9 @@ function setToken(nextToken = "", persist = null) {
   }
   const useLocal = persist === null ? tokenStorage === "local" : Boolean(persist);
   tokenStorage = useLocal ? "local" : "session";
-  if (useLocal) {
-    localStorage.setItem("token", token);
-    sessionStorage.removeItem("token");
-    localStorage.setItem("remember_me", "1");
-  } else {
-    sessionStorage.setItem("token", token);
-    localStorage.removeItem("token");
-    localStorage.setItem("remember_me", "0");
-  }
+  localStorage.setItem("token", token);
+  sessionStorage.setItem("token", token);
+  localStorage.setItem("remember_me", useLocal ? "1" : "0");
   localStorage.setItem("token_shadow", token);
 }
 
@@ -1967,6 +1961,12 @@ async function logout() {
 }
 
 async function ensureAuth() {
+  if (!token) {
+    const fallback = sanitizeToken(sessionStorage.getItem("token") || "")
+      || sanitizeToken(localStorage.getItem("token") || "")
+      || sanitizeToken(localStorage.getItem("token_shadow") || "");
+    if (fallback) setToken(fallback, true);
+  }
   if (!token) return;
   document.getElementById("authSection").classList.add("hidden");
   document.getElementById("appSection").classList.remove("hidden");
@@ -1979,6 +1979,12 @@ async function ensureAuth() {
     const status = Number(authError?.status || 0);
     const message = String(authError?.message || "").toLowerCase();
     if (status === 401 || status === 403 || message.includes("токен") || message.includes("token")) {
+      const shadow = sanitizeToken(localStorage.getItem("token_shadow") || "");
+      if (shadow && shadow !== token) {
+        setToken(shadow, true);
+        setTimeout(() => ensureAuth().catch(() => null), 400);
+        return;
+      }
       logout();
       return;
     }
