@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260303b" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260303c" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -52,7 +52,8 @@
   </section>
 
   <section id="adminPanelSection" class="app-shell hidden">
-    <aside class="sidebar">
+    <div id="adminMobileNavOverlay" class="mobile-nav-overlay" onclick="adminCloseMobileNav(event)"></div>
+    <aside class="sidebar" id="adminSidebar">
       <div class="brand">
         <h2 class="logo-mark"><img src="/static/favicon.svg?v=20260228c" alt="SEO WIBE" class="brand-logo" /><span class="logo-a">SEO</span> <span class="logo-b">WIBE</span></h2>
         <p>Admin Console</p>
@@ -72,11 +73,12 @@
 
     <main class="workspace">
       <header class="topbar">
-        <div>
+        <div class="topbar-title">
           <h1 id="adminSectionTitle">Админ дашборд</h1>
           <p id="adminSectionSubtitle">Обзор системы и быстрый контроль</p>
         </div>
         <div class="topbar-controls">
+          <button id="adminMobileNavToggle" class="chip-btn mobile-nav-toggle" type="button" onclick="adminToggleMobileNav()" aria-label="Навигация" aria-controls="adminSidebar" aria-expanded="false" aria-haspopup="true">☰</button>
           <select id="adminUiLangSelect" class="chip-select" onchange="adminChangeLanguage()">
             <option value="ru">RU</option>
             <option value="en">EN</option>
@@ -477,6 +479,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script src="/static/admin.js?v=20260303b"></script>
+  <script src="/static/admin.js?v=20260303c"></script>
 </body>
 </html>

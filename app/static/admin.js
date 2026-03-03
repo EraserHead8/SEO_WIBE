@@ -695,6 +695,24 @@ function showAdminTab(tab, btn = null) {
   if (tab === "server" && !adminServerMetrics) {
     loadAdminServerMetrics().catch(() => null);
   }
+  adminCloseMobileNav();
+}
+
+function adminToggleMobileNav() {
+  const shell = document.getElementById("adminPanelSection");
+  if (!shell) return;
+  shell.classList.toggle("nav-open");
+  const btn = document.getElementById("adminMobileNavToggle");
+  if (btn) btn.setAttribute("aria-expanded", shell.classList.contains("nav-open") ? "true" : "false");
+}
+
+function adminCloseMobileNav(evt = null) {
+  const shell = document.getElementById("adminPanelSection");
+  if (!shell) return;
+  if (evt && evt.target && evt.target.id !== "adminMobileNavOverlay") return;
+  shell.classList.remove("nav-open");
+  const btn = document.getElementById("adminMobileNavToggle");
+  if (btn) btn.setAttribute("aria-expanded", "false");
 }
 
 function buildUserOption(user) {
@@ -2705,6 +2723,8 @@ window.adminOpenUserEditModal = adminOpenUserEditModal;
 window.adminCloseUserEditModal = adminCloseUserEditModal;
 window.adminCloseTeamMemberModal = adminCloseTeamMemberModal;
 window.adminCloseAuditDetailsModal = adminCloseAuditDetailsModal;
+window.adminToggleMobileNav = adminToggleMobileNav;
+window.adminCloseMobileNav = adminCloseMobileNav;
 
 applyAdminTheme(adminTheme);
 applyAdminLanguage();

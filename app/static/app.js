@@ -1815,6 +1815,7 @@ function showTab(name, btn = null) {
   if (targetTab === "billing") runModuleLoader("billing", loadBilling);
   if (targetTab === "help") runModuleLoader("help", loadHelpWorkspace, { maxAgeMs: MODULE_CACHE_TTL_MS });
   if (targetTab === "admin") loadAdmin();
+  closeMobileNav();
   const activityMap = {
     sales: "sales_stats",
     products: currentProductsSubtab === "seo" ? "seo_generation" : "products",
@@ -1832,6 +1833,23 @@ function showTab(name, btn = null) {
     applyModuleActionIcons();
     applyButtonTooltips();
   }, 0);
+}
+
+function toggleMobileNav() {
+  const shell = document.getElementById("appSection");
+  if (!shell) return;
+  shell.classList.toggle("nav-open");
+  const btn = document.getElementById("mobileNavToggle");
+  if (btn) btn.setAttribute("aria-expanded", shell.classList.contains("nav-open") ? "true" : "false");
+}
+
+function closeMobileNav(evt = null) {
+  const shell = document.getElementById("appSection");
+  if (!shell) return;
+  if (evt && evt.target && evt.target.id !== "mobileNavOverlay") return;
+  shell.classList.remove("nav-open");
+  const btn = document.getElementById("mobileNavToggle");
+  if (btn) btn.setAttribute("aria-expanded", "false");
 }
 
 async function register() {
@@ -8169,3 +8187,5 @@ window.closeProfileSectionModal = closeProfileSectionModal;
 window.closeTeamMemberEditor = closeTeamMemberEditor;
 window.saveTeamMemberEditor = saveTeamMemberEditor;
 window.deleteTeamMemberFromModal = deleteTeamMemberFromModal;
+window.toggleMobileNav = toggleMobileNav;
+window.closeMobileNav = closeMobileNav;

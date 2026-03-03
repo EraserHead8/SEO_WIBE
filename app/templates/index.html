@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260303b" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260303c" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -146,6 +146,7 @@
   </section>
 
   <section id="appSection" class="app-shell hidden">
+    <div id="mobileNavOverlay" class="mobile-nav-overlay" onclick="closeMobileNav(event)"></div>
     <aside class="sidebar" id="mainSidebar">
       <div class="brand">
         <h2 class="logo-mark"><img src="/static/favicon.svg?v=20260228c" alt="SEO WIBE" class="brand-logo" /><span class="logo-a">SEO</span> <span class="logo-b">WIBE</span></h2>
@@ -166,11 +167,12 @@
 
     <main class="workspace">
       <header class="topbar">
-        <div>
+        <div class="topbar-title">
           <h1 id="sectionTitle">Статистика и дашборд</h1>
           <p id="sectionSubtitle">Продажи, KPI и динамика в одном модуле</p>
         </div>
         <div class="topbar-controls">
+          <button id="mobileNavToggle" class="chip-btn mobile-nav-toggle" type="button" onclick="toggleMobileNav()" aria-label="Навигация" aria-controls="mainSidebar" aria-expanded="false" aria-haspopup="true">☰</button>
           <button id="socialBellBtn" class="chip-btn icon-bell-btn hidden" type="button" onclick="showTab('social', document.querySelector('.nav-btn[data-tab=social]'))" title="Уведомления">
             <span class="bell-emoji" aria-hidden="true">🔔</span>
             <span id="socialBellBadge" class="icon-bell-badge hidden">0</span>
@@ -1263,7 +1265,7 @@
   <div id="hoverTip" class="hover-tip hidden"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script src="/static/app.js?v=20260303b"></script>
+  <script src="/static/app.js?v=20260303c"></script>
   <script src="/static/social.js?v=20260303b"></script>
 </body>
 </html>
