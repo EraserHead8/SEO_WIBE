@@ -1,7 +1,10 @@
 const storedSessionToken = sessionStorage.getItem("token") || "";
 const storedLocalToken = localStorage.getItem("token") || "";
-let token = storedSessionToken || storedLocalToken || "";
-let tokenStorage = storedSessionToken ? "session" : (storedLocalToken ? "local" : "");
+const storedShadowToken = localStorage.getItem("token_shadow") || "";
+let token = storedSessionToken || storedLocalToken || storedShadowToken || "";
+let tokenStorage = storedSessionToken
+  ? "session"
+  : (storedLocalToken || storedShadowToken ? "local" : "");
 let suppressAlerts = false;
 let me = null;
 let selectedProducts = new Set();
@@ -101,6 +104,7 @@ function setToken(nextToken = "", persist = null) {
   if (!token) {
     tokenStorage = "";
     localStorage.removeItem("token");
+    localStorage.removeItem("token_shadow");
     sessionStorage.removeItem("token");
     return;
   }
@@ -115,6 +119,7 @@ function setToken(nextToken = "", persist = null) {
     localStorage.removeItem("token");
     localStorage.setItem("remember_me", "0");
   }
+  localStorage.setItem("token_shadow", token);
 }
 
 function canUseEcharts(host) {

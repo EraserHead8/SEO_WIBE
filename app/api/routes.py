@@ -5917,6 +5917,7 @@ def social_chat_actor_directory(
 ):
     ensure_module_enabled(db, user, "social_hub")
     search = str(q or "").strip().lower()
+    allow_cross_company = "@" in search and len(search) >= 3
     owners = db.scalars(select(User).order_by(User.id.asc()).limit(5000)).all()
     members = db.scalars(
         select(TeamMember).where(TeamMember.is_active.is_(True)).order_by(TeamMember.id.asc()).limit(15000)
@@ -5927,12 +5928,19 @@ def social_chat_actor_directory(
     for row in members:
         if bool(row.is_owner):
             owner_has_member.add(int(row.user_id))
+        if row.user_id != user.id and not allow_cross_company:
+            continue
         key = f"m:{int(row.id)}"
         nick = str((row.nickname or row.full_name or row.email).strip() or f"member-{row.id}")
         company = str((row.user.email if row.user else "") or "").strip().lower()
-        hay = f"{nick} {row.email or ''} {company}".lower()
-        if search and search not in hay:
-            continue
+        if row.user_id != user.id:
+            hay = f"{row.email or ''}".lower()
+            if search and search not in hay:
+                continue
+        else:
+            hay = f"{nick} {row.email or ''} {company}".lower()
+            if search and search not in hay:
+                continue
         if key in seen:
             continue
         seen.add(key)
@@ -5945,11 +5953,18 @@ def social_chat_actor_directory(
     for row in owners:
         if int(row.id) in owner_has_member:
             continue
+        if row.id != user.id and not allow_cross_company:
+            continue
         key = f"u:{int(row.id)}"
         nick = str((row.email or "").split("@")[0] or f"user-{row.id}")
-        hay = f"{nick} {row.email or ''}".lower()
-        if search and search not in hay:
-            continue
+        if row.id != user.id:
+            hay = f"{row.email or ''}".lower()
+            if search and search not in hay:
+                continue
+        else:
+            hay = f"{nick} {row.email or ''}".lower()
+            if search and search not in hay:
+                continue
         if key in seen:
             continue
         seen.add(key)

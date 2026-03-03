@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260303d" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260303e" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -1008,30 +1008,31 @@
             <section class="social-calc-shell">
               <h3>Калькулятор</h3>
               <div class="social-calc-display">
-                <input id="socialCalcExpr" placeholder="0" />
-                <div id="socialCalcResult" class="hint">-</div>
+                <div class="social-calc-line">
+                  <input id="socialCalcExpr" class="social-calc-input" placeholder="0" />
+                  <button class="social-calc-back" type="button" onclick="socialCalcBackspace()">⌫</button>
+                </div>
+                <div id="socialCalcResult" class="social-calc-result">0</div>
               </div>
               <div class="social-calc-pad">
+                <button class="calc-fn" type="button" onclick="socialCalcClear()">AC</button>
+                <button class="calc-fn" type="button" onclick="socialCalcToggleSign()">±</button>
+                <button class="calc-fn" type="button" onclick="socialCalcPress('%')">%</button>
+                <button class="calc-op" type="button" onclick="socialCalcPress('/')">÷</button>
                 <button type="button" onclick="socialCalcPress('7')">7</button>
                 <button type="button" onclick="socialCalcPress('8')">8</button>
                 <button type="button" onclick="socialCalcPress('9')">9</button>
-                <button type="button" onclick="socialCalcPress('/')">÷</button>
+                <button class="calc-op" type="button" onclick="socialCalcPress('*')">×</button>
                 <button type="button" onclick="socialCalcPress('4')">4</button>
                 <button type="button" onclick="socialCalcPress('5')">5</button>
                 <button type="button" onclick="socialCalcPress('6')">6</button>
-                <button type="button" onclick="socialCalcPress('*')">×</button>
+                <button class="calc-op" type="button" onclick="socialCalcPress('-')">−</button>
                 <button type="button" onclick="socialCalcPress('1')">1</button>
                 <button type="button" onclick="socialCalcPress('2')">2</button>
                 <button type="button" onclick="socialCalcPress('3')">3</button>
-                <button type="button" onclick="socialCalcPress('-')">−</button>
-                <button type="button" onclick="socialCalcPress('0')">0</button>
+                <button class="calc-op" type="button" onclick="socialCalcPress('+')">+</button>
+                <button class="calc-zero" type="button" onclick="socialCalcPress('0')">0</button>
                 <button type="button" onclick="socialCalcPress('.')">.</button>
-                <button class="btn-secondary" type="button" onclick="socialCalcBackspace()">⌫</button>
-                <button type="button" onclick="socialCalcPress('+')">+</button>
-                <button class="btn-secondary" type="button" onclick="socialCalcClear()">C</button>
-                <button class="btn-secondary" type="button" onclick="socialCalcPress('(')">(</button>
-                <button class="btn-secondary" type="button" onclick="socialCalcPress(')')">)</button>
-                <button class="btn-secondary" type="button" onclick="socialCalcPress('%')">%</button>
                 <button class="social-calc-eq" type="button" onclick="socialCalcEvaluate()">=</button>
               </div>
             </section>
@@ -1268,7 +1269,7 @@
   <div id="hoverTip" class="hover-tip hidden"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script src="/static/app.js?v=20260303c"></script>
-  <script src="/static/social.js?v=20260303c"></script>
+  <script src="/static/app.js?v=20260303d"></script>
+  <script src="/static/social.js?v=20260303d"></script>
 </body>
 </html>

@@ -6518,31 +6518,80 @@ body[data-theme="dark"] .landing-band .band-stats span {
 
 .social-calc-display {
   display: grid;
-  gap: 8px;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--panel-bg) 82%, var(--panel-bg-soft));
+  border: 1px solid var(--line);
 }
 
-.social-calc-display input {
-  font-size: 24px;
-  font-weight: 700;
+.social-calc-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.social-calc-input {
+  font-size: 16px;
+  font-weight: 600;
   text-align: right;
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  padding: 4px 0;
+}
+
+.social-calc-back {
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-weight: 700;
+}
+
+.social-calc-result {
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 800;
+  text-align: right;
+  color: var(--text);
+  letter-spacing: 0.01em;
 }
 
 .social-calc-pad {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  gap: 10px;
 }
 
 .social-calc-pad button {
-  border-radius: 12px;
-  padding: 10px 0;
+  border-radius: 14px;
+  padding: 12px 0;
   font-weight: 700;
+  font-size: 16px;
+  background: var(--panel-bg);
+  color: var(--text);
+  border: 1px solid color-mix(in oklab, var(--line) 75%, transparent);
 }
 
 .social-calc-eq {
-  grid-column: span 2;
   background: linear-gradient(120deg, var(--accent), #5ad0ff);
   color: #071423;
+  box-shadow: 0 8px 18px rgba(30, 140, 255, 0.28);
+}
+
+.calc-op {
+  background: color-mix(in oklab, var(--accent) 15%, var(--panel-bg));
+  color: var(--accent);
+}
+
+.calc-fn {
+  background: color-mix(in oklab, var(--panel-bg) 85%, var(--line));
+  color: var(--text);
+}
+
+.calc-zero {
+  grid-column: span 2;
+  text-align: left;
+  padding-left: 18px;
 }
 
 .conv-divider {

@@ -985,41 +985,49 @@ async function socialSendMessage() {
 }
 
 async function socialOpenDirectPicker() {
-  const actors = await socialRequest("/api/social/chat/actors").catch((e) => {
-    alert(e.message);
+  socialOpenModal(
+    tr("Личный чат", "Direct chat"),
+    `
+      <div class="grid-2">
+        <input id="socialDirectSearch" placeholder="${tr("Поиск по email", "Search by email")}" oninput="socialFilterDirectActors()" />
+        <button type="button" onclick="socialFilterDirectActors()">${tr("Найти", "Search")}</button>
+      </div>
+      <div class="hint">${tr("Другие компании доступны через поиск по email.", "Other companies appear only via email search.")}</div>
+      <div id="socialDirectActors" class="social-direct-list"></div>
+    `
+  );
+  socialLoadDirectActors("");
+}
+
+let socialDirectSearchTimer = null;
+
+async function socialLoadDirectActors(query) {
+  const q = String(query || "").trim();
+  const host = document.getElementById("socialDirectActors");
+  if (!host) return;
+  const endpoint = q ? `/api/social/chat/actors?q=${encodeURIComponent(q)}` : "/api/social/chat/actors";
+  const actors = await socialRequest(endpoint).catch((e) => {
+    host.innerHTML = `<div class="hint">${escapeHtml(e.message || tr("Ошибка загрузки", "Loading error"))}</div>`;
     return [];
   });
   if (!Array.isArray(actors)) return;
   const myActor = socialState.boot?.actor?.actor_key || "";
   socialState.chatActors = actors.filter((x) => String(x.actor_key || "") !== String(myActor || ""));
-  socialOpenModal(
-    tr("Личный чат", "Direct chat"),
-    `
-      <div class="grid-2">
-        <input id="socialDirectSearch" placeholder="${tr("Поиск по нику или компании", "Search by nickname or company")}" oninput="socialFilterDirectActors()" />
-        <button type="button" onclick="socialFilterDirectActors()">${tr("Найти", "Search")}</button>
-      </div>
-      <div id="socialDirectActors" class="social-direct-list"></div>
-    `
-  );
-  socialFilterDirectActors();
-}
-
-function socialFilterDirectActors() {
-  const q = String(document.getElementById("socialDirectSearch")?.value || "").trim().toLowerCase();
-  const host = document.getElementById("socialDirectActors");
-  if (!host) return;
-  const rows = socialState.chatActors.filter((row) => {
-    if (!q) return true;
-    const hay = `${row.nick || ""} ${row.company || ""}`.toLowerCase();
-    return hay.includes(q);
-  });
+  const rows = socialState.chatActors;
   host.innerHTML = rows.map((row) => `
     <button class="social-direct-row" type="button" onclick="socialStartDirectChat('${escapeHtml(String(row.actor_key || ""))}')">
       <b>${escapeHtml(row.nick || "-")}</b>
       <small>${escapeHtml(row.company || "")}</small>
     </button>
   `).join("") || `<div class="hint">${tr("Никого не найдено", "No users found")}</div>`;
+}
+
+function socialFilterDirectActors() {
+  const q = String(document.getElementById("socialDirectSearch")?.value || "");
+  if (socialDirectSearchTimer) clearTimeout(socialDirectSearchTimer);
+  socialDirectSearchTimer = setTimeout(() => {
+    socialLoadDirectActors(q);
+  }, 240);
 }
 
 async function socialStartDirectChat(actorKey) {
@@ -1442,7 +1450,7 @@ function socialCalcEvaluate() {
   const out = document.getElementById("socialCalcResult");
   if (!out) return;
   if (!expr) {
-    out.textContent = "-";
+    out.textContent = "0";
     return;
   }
   const safe = expr.replace(/\s+/g, "");
@@ -1453,7 +1461,14 @@ function socialCalcEvaluate() {
   try {
     // eslint-disable-next-line no-new-func
     const value = Function(`return (${safe.replace(/%/g, "/100")});`)();
-    out.textContent = `${tr("Результат", "Result")}: ${Number(value).toLocaleString("ru-RU", { maximumFractionDigits: 8 })}`;
+    const normalized = Number(value);
+    out.textContent = Number.isFinite(normalized)
+      ? normalized.toLocaleString("ru-RU", { maximumFractionDigits: 8 })
+      : tr("Ошибка вычисления", "Calculation error");
+    const input = document.getElementById("socialCalcExpr");
+    if (input && Number.isFinite(normalized)) {
+      input.value = String(normalized);
+    }
   } catch (_) {
     out.textContent = tr("Ошибка вычисления", "Calculation error");
   }
@@ -1462,20 +1477,42 @@ function socialCalcEvaluate() {
 function socialCalcPress(value) {
   const input = document.getElementById("socialCalcExpr");
   if (!input) return;
-  input.value = `${input.value || ""}${value}`;
+  const next = String(value || "");
+  if (!input.value || input.value === "0") {
+    input.value = next === "." ? "0." : next;
+  } else {
+    input.value = `${input.value || ""}${next}`;
+  }
 }
 
 function socialCalcClear() {
   const input = document.getElementById("socialCalcExpr");
   const out = document.getElementById("socialCalcResult");
   if (input) input.value = "";
-  if (out) out.textContent = "-";
+  if (out) out.textContent = "0";
 }
 
 function socialCalcBackspace() {
   const input = document.getElementById("socialCalcExpr");
   if (!input) return;
   input.value = String(input.value || "").slice(0, -1);
+}
+
+function socialCalcToggleSign() {
+  const input = document.getElementById("socialCalcExpr");
+  if (!input) return;
+  const expr = String(input.value || "").trim();
+  if (!expr) {
+    input.value = "-";
+    return;
+  }
+  const match = expr.match(/(-?\d*\.?\d+)(?!.*\d)/);
+  if (!match || match.index === undefined) return;
+  const numberText = match[1];
+  const toggled = numberText.startsWith("-") ? numberText.slice(1) : `-${numberText}`;
+  const start = match.index;
+  const end = start + numberText.length;
+  input.value = `${expr.slice(0, start)}${toggled}${expr.slice(end)}`;
 }
 
 function socialRenderConverterOptions() {
@@ -1681,6 +1718,7 @@ window.socialCalcEvaluate = socialCalcEvaluate;
 window.socialCalcPress = socialCalcPress;
 window.socialCalcClear = socialCalcClear;
 window.socialCalcBackspace = socialCalcBackspace;
+window.socialCalcToggleSign = socialCalcToggleSign;
 window.socialRenderConverterOptions = socialRenderConverterOptions;
 window.socialConvert = socialConvert;
 window.socialCalcVolume = socialCalcVolume;
