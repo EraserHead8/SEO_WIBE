@@ -22,6 +22,7 @@ let socialState = {
   noteSaveTimer: null,
   notificationsTimer: null,
   lastNotificationId: 0,
+  unreadCount: 0,
   moduleLoaded: false,
   toastsSeen: new Set(),
 };
@@ -54,7 +55,7 @@ function socialShowToast(title, body) {
   setTimeout(() => {
     item.classList.remove("show");
     setTimeout(() => item.remove(), 260);
-  }, 10000);
+  }, 2600);
 }
 
 function socialSetBell(unread) {
@@ -77,7 +78,8 @@ async function socialPollNotifications() {
   }
   const data = await socialRequest(`/api/social/notifications?since_id=${socialState.lastNotificationId}&limit=60`).catch(() => null);
   if (!data || typeof data !== "object") return;
-  socialSetBell(Number(data.unread || 0));
+  socialState.unreadCount = Number(data.unread || 0);
+  socialSetBell(socialState.unreadCount);
   const rows = Array.isArray(data.rows) ? data.rows : [];
   for (const row of rows) {
     const id = Number(row.id || 0);
@@ -96,6 +98,7 @@ async function socialPollNotifications() {
 
 function socialStartGlobalHooks() {
   if (socialState.notificationsTimer) clearInterval(socialState.notificationsTimer);
+  socialSetBell(socialState.unreadCount || 0);
   socialState.notificationsTimer = setInterval(() => {
     socialPollNotifications().catch(() => null);
   }, 8000);
@@ -138,6 +141,7 @@ function resetSocialState() {
     noteSaveTimer: null,
     notificationsTimer: null,
     lastNotificationId: 0,
+    unreadCount: 0,
     moduleLoaded: false,
     toastsSeen: new Set(),
   };
@@ -498,7 +502,9 @@ function socialRunTetris() {
   const ctx = canvas.getContext("2d");
   const cols = 10;
   const rows = 20;
-  const cell = Math.floor(Math.min(canvas.width / cols, canvas.height / rows));
+  const cell = Math.floor(canvas.width / cols);
+  canvas.height = cell * rows;
+  const pad = Math.max(1, Math.round(cell * 0.08));
   const board = Array.from({ length: rows }, () => Array(cols).fill(0));
   const colors = ["#000000", "#19d3a2", "#52a7ff", "#ffb347", "#ff6f91", "#c39bff", "#4dd0e1", "#8bc34a"];
   const shapes = [
@@ -577,7 +583,7 @@ function socialRunTetris() {
 
   function drawCell(x, y, val) {
     ctx.fillStyle = colors[val] || "#ffffff";
-    ctx.fillRect(x * cell + 1, y * cell + 1, cell - 2, cell - 2);
+    ctx.fillRect(x * cell + pad, y * cell + pad, cell - pad * 2, cell - pad * 2);
   }
 
   function draw() {
@@ -855,6 +861,19 @@ if (typeof window !== "undefined") {
       setTimeout(() => socialMaybeStartHooks(), 0);
     });
   }
+  document.addEventListener("click", (e) => {
+    const picker = document.getElementById("socialEmojiPicker");
+    const btn = document.getElementById("socialEmojiBtn");
+    if (!picker || picker.classList.contains("hidden")) return;
+    const target = e.target;
+    if (picker.contains(target) || (btn && btn.contains(target))) return;
+    socialToggleEmojiPicker(false);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    const picker = document.getElementById("socialEmojiPicker");
+    if (picker && !picker.classList.contains("hidden")) socialToggleEmojiPicker(false);
+  });
 }
 
 async function socialLoadThreads(opts = {}) {
@@ -1243,6 +1262,7 @@ function socialRenderCalendar() {
   const list = document.getElementById("socialCalendarEvents");
   if (!grid || !list) return;
   const d = socialState.calendarDate;
+  const todayKey = typeof toYmd === "function" ? toYmd(new Date()) : "";
   const year = d.getFullYear();
   const month = d.getMonth();
   const firstDay = new Date(year, month, 1);
@@ -1263,9 +1283,10 @@ function socialRenderCalendar() {
     const eventsCount = socialState.calendarEvents.filter((e) => String(e.start_at || "").slice(0, 10) === key).length;
     const tasksCount = (tasksByDay.get(key) || []).length;
     const active = socialState.calendarSelectedDay === key ? "active" : "";
+    const isToday = todayKey && key === todayKey ? "today" : "";
     const hasEvents = eventsCount > 0 ? "has-event" : "";
     const hasTasks = tasksCount > 0 ? "has-task" : "";
-    html += `<button class="social-day ${active} ${hasEvents} ${hasTasks}" type="button" onclick="socialShowDay('${key}')"><b>${day}</b><small>${eventsCount} ${tr("соб.", "ev.")} • ${tasksCount} ${tr("задач", "tasks")}</small></button>`;
+    html += `<button class="social-day ${active} ${isToday} ${hasEvents} ${hasTasks}" type="button" onclick="socialShowDay('${key}')"><b>${day}</b><small>${eventsCount} ${tr("соб.", "ev.")} • ${tasksCount} ${tr("задач", "tasks")}</small></button>`;
   }
   html += `</div>`;
   grid.innerHTML = html;
@@ -1303,6 +1324,67 @@ function socialShowDay(dayKey) {
       btn.classList.toggle("active", key === dayKey);
     });
   }
+}
+
+const SOCIAL_EMOJI_SETS = {
+  business: { label: "Деловые", items: ["👍", "✅", "📌", "📊", "📈", "💼", "🧾", "📎", "✉️", "🤝", "💬", "⏱️"] },
+  quick: { label: "Быстрые", items: ["👌", "⚡", "🔥", "💡", "👏", "🙏", "🎯", "💥", "🔔", "🔎", "🧠", "🛠️"] },
+  smile: { label: "Эмоции", items: ["🙂", "😀", "😁", "😅", "😊", "😎", "🤗", "😇", "🙌", "😉", "🫡", "🤩"] },
+};
+let socialEmojiSetKey = "business";
+
+function socialEnsureEmojiPicker() {
+  const host = document.getElementById("socialEmojiPicker");
+  if (!host || host.childElementCount) return;
+  const setEntries = Object.entries(SOCIAL_EMOJI_SETS);
+  const setHtml = setEntries.map(([key, meta]) => `
+    <button type="button" class="social-emoji-tab ${key === socialEmojiSetKey ? "active" : ""}" onclick="socialSwitchEmojiSet('${key}')">
+      ${escapeHtml(meta.label)}
+    </button>
+  `).join("");
+  const items = SOCIAL_EMOJI_SETS[socialEmojiSetKey]?.items || [];
+  const itemsHtml = items.map((emoji) => `
+    <button type="button" class="social-emoji-item" onclick="socialInsertEmoji('${emoji}')">${emoji}</button>
+  `).join("");
+  host.innerHTML = `
+    <div class="social-emoji-tabs">${setHtml}</div>
+    <div class="social-emoji-grid">${itemsHtml}</div>
+  `;
+}
+
+function socialToggleEmojiPicker(force = null) {
+  const host = document.getElementById("socialEmojiPicker");
+  if (!host) return;
+  socialEnsureEmojiPicker();
+  const shouldOpen = force === null ? host.classList.contains("hidden") : Boolean(force);
+  host.classList.toggle("hidden", !shouldOpen);
+  if (shouldOpen) {
+    const input = document.getElementById("socialChatInput");
+    if (input) input.focus();
+  }
+}
+
+function socialSwitchEmojiSet(key) {
+  if (!SOCIAL_EMOJI_SETS[key]) return;
+  socialEmojiSetKey = key;
+  const host = document.getElementById("socialEmojiPicker");
+  if (!host) return;
+  host.innerHTML = "";
+  socialEnsureEmojiPicker();
+}
+
+function socialInsertEmoji(emoji) {
+  const input = document.getElementById("socialChatInput");
+  if (!input) return;
+  const value = String(input.value || "");
+  const start = Number(input.selectionStart || value.length);
+  const end = Number(input.selectionEnd || value.length);
+  const next = `${value.slice(0, start)}${emoji}${value.slice(end)}`;
+  input.value = next;
+  const caret = start + emoji.length;
+  input.setSelectionRange(caret, caret);
+  input.focus();
+  socialToggleEmojiPicker(true);
 }
 
 function socialOpenCalendarModal(eventId = 0) {
@@ -1581,6 +1663,11 @@ window.socialShiftCalendar = socialShiftCalendar;
 window.socialLoadCalendar = socialLoadCalendar;
 window.socialRenderCalendar = socialRenderCalendar;
 window.socialShowDay = socialShowDay;
+window.socialSetBell = socialSetBell;
+window.socialMaybeStartHooks = socialMaybeStartHooks;
+window.socialToggleEmojiPicker = socialToggleEmojiPicker;
+window.socialInsertEmoji = socialInsertEmoji;
+window.socialSwitchEmojiSet = socialSwitchEmojiSet;
 window.socialCalcEvaluate = socialCalcEvaluate;
 window.socialCalcPress = socialCalcPress;
 window.socialCalcClear = socialCalcClear;

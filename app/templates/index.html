@@ -958,7 +958,11 @@
               <div id="socialChatHead" class="social-chat-head">Выберите чат</div>
               <div id="socialChatMessages" class="social-chat-messages"></div>
               <div class="social-chat-compose">
-                <textarea id="socialChatInput" rows="2" placeholder="Введите сообщение..."></textarea>
+                <div class="social-chat-input-wrap">
+                  <textarea id="socialChatInput" rows="2" placeholder="Введите сообщение..."></textarea>
+                  <button id="socialEmojiBtn" class="btn-secondary social-emoji-btn" type="button" onclick="socialToggleEmojiPicker()" title="Эмодзи">😊</button>
+                  <div id="socialEmojiPicker" class="social-emoji-picker hidden"></div>
+                </div>
                 <button type="button" onclick="socialSendMessage()">Отправить</button>
               </div>
             </section>

@@ -1971,11 +1971,24 @@ async function ensureAuth() {
   applyUiLanguage();
   applySidebarMode();
   applyButtonTooltips();
-  startModuleAutoRefresh();
-  window.__socialHooksRequested = true;
-  if (typeof window.socialStartGlobalHooks === "function") {
-    try { window.socialStartGlobalHooks(); } catch (_) {}
+  if (enabledModules.has("social_hub")) {
+    window.__socialHooksRequested = true;
+    if (typeof window.socialSetBell === "function") window.socialSetBell(0);
+    if (typeof window.socialMaybeStartHooks === "function") {
+      window.socialMaybeStartHooks();
+    } else if (typeof window.socialStartGlobalHooks === "function") {
+      try { window.socialStartGlobalHooks(); } catch (_) {}
+    }
+  } else {
+    window.__socialHooksRequested = false;
   }
+  if (enabledModules.has("sales_stats")) {
+    await runModuleLoader("sales", async () => {
+      await loadDashboard();
+      await loadSalesStats();
+    }, { force: true, maxAgeMs: 0 });
+  }
+  startModuleAutoRefresh();
   try { window.dispatchEvent(new Event("seo-wibe-auth")); } catch (_) {}
   showTab("sales", document.querySelector(".nav-btn[data-tab='sales']"));
   setTimeout(() => {
