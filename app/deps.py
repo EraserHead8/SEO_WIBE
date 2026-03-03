@@ -19,14 +19,17 @@ def _team_scope_from_member(member: TeamMember | None) -> list[str]:
         return ["*"]
     raw = str(member.access_scope or "").strip()
     if not raw:
-        return ["products", "sales_stats"]
+        return ["products", "sales_stats", "wb_reviews_ai", "wb_questions_ai", "returns", "social_hub"]
     try:
         parsed = json.loads(raw)
     except Exception:
         parsed = []
     if not isinstance(parsed, list):
-        return ["products", "sales_stats"]
-    return [str(x).strip().lower() for x in parsed if str(x).strip()]
+        return ["products", "sales_stats", "wb_reviews_ai", "wb_questions_ai", "returns", "social_hub"]
+    cleaned = [str(x).strip().lower() for x in parsed if str(x).strip()]
+    if not member.is_owner and cleaned and all(x in {"products", "sales_stats"} for x in cleaned):
+        return ["products", "sales_stats", "wb_reviews_ai", "wb_questions_ai", "returns", "social_hub"]
+    return cleaned
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:

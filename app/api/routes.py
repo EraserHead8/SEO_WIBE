@@ -7312,7 +7312,7 @@ def _safe_team_scope(values: list[str] | None) -> list[str]:
         seen.add(code)
         out.append(code)
     if not out:
-        return ["products", "sales_stats"]
+        return ["products", "sales_stats", "wb_reviews_ai", "wb_questions_ai", "returns", "social_hub"]
     return out
 
 
@@ -7352,7 +7352,7 @@ def _validate_team_member_password(raw_password: str, *, required: bool) -> str:
 def _team_scope_from_row(row: TeamMember) -> list[str]:
     raw = str(row.access_scope or "").strip()
     if not raw:
-        return ["*"] if row.is_owner else ["products", "sales_stats"]
+        return ["*"] if row.is_owner else ["products", "sales_stats", "wb_reviews_ai", "wb_questions_ai", "returns", "social_hub"]
     try:
         parsed = json.loads(raw)
     except Exception:
@@ -7360,8 +7360,11 @@ def _team_scope_from_row(row: TeamMember) -> list[str]:
     if row.is_owner:
         return ["*"]
     if not isinstance(parsed, list):
-        return ["products", "sales_stats"]
-    return _safe_team_scope([str(x) for x in parsed])
+        return ["products", "sales_stats", "wb_reviews_ai", "wb_questions_ai", "returns", "social_hub"]
+    cleaned = _safe_team_scope([str(x) for x in parsed])
+    if cleaned and all(x in {"products", "sales_stats"} for x in cleaned):
+        return ["products", "sales_stats", "wb_reviews_ai", "wb_questions_ai", "returns", "social_hub"]
+    return cleaned
 
 
 def _team_member_to_out(row: TeamMember) -> TeamMemberOut:

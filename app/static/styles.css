@@ -2990,6 +2990,42 @@ pre {
   margin-top: 0;
 }
 
+#adminPanelSection .panel,
+#adminPanelSection .table-card,
+#adminPanelSection .admin-user-profile-card,
+#adminPanelSection .admin-team-card,
+#adminPanelSection .admin-ai-item,
+#adminPanelSection .admin-audit-details {
+  color: var(--text);
+}
+
+#adminPanelSection .panel h1,
+#adminPanelSection .panel h2,
+#adminPanelSection .panel h3,
+#adminPanelSection .panel h4,
+#adminPanelSection .table-card h1,
+#adminPanelSection .table-card h2,
+#adminPanelSection .table-card h3,
+#adminPanelSection .table-card h4,
+#adminPanelSection .table-card th,
+#adminPanelSection .table-card td,
+#adminPanelSection .admin-team-card-grid label,
+#adminPanelSection .admin-user-field,
+#adminPanelSection .admin-user-profile-head,
+#adminPanelSection .admin-ai-item .ai-title {
+  color: var(--text);
+}
+
+#adminPanelSection .hint,
+#adminPanelSection .admin-user-field span,
+#adminPanelSection .admin-team-card-grid label > span {
+  color: color-mix(in oklab, var(--text) 85%, var(--text-muted));
+}
+
+#adminPanelSection .admin-audit-details .row b {
+  color: var(--text);
+}
+
 .admin-ai-split {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));

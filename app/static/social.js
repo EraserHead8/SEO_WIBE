@@ -1692,3 +1692,5 @@ window.socialDeleteNote = socialDeleteNote;
 window.socialStartGlobalHooks = socialStartGlobalHooks;
 window.socialStopGlobalHooks = socialStopGlobalHooks;
 window.resetSocialState = resetSocialState;
+
+socialMaybeStartHooks();
