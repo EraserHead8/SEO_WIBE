@@ -32,6 +32,10 @@ class UserOut(BaseModel):
     actor_member_id: int | None = None
 
 
+class AvatarUploadOut(BaseModel):
+    url: str
+
+
 class ApiCredentialIn(BaseModel):
     marketplace: str
     api_key: str

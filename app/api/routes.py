@@ -6,6 +6,8 @@ import math
 import hashlib
 import os
 import re
+import secrets
+from pathlib import Path
 from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -69,6 +71,7 @@ from app.schemas import (
     AdminPasswordResetIn,
     AdminRoleUpdateIn,
     AdminStatsOut,
+    AvatarUploadOut,
     AuditLogOut,
     AuditLogPageOut,
     ApiCredentialIn,
@@ -4007,6 +4010,85 @@ def profile_update(payload: UserProfileUpdateIn, user: User = Depends(get_curren
     account = _get_or_create_billing_account(db, user.id)
     db.commit()
     return _build_user_profile_payload(db, user, profile, account)
+
+
+def _save_avatar_upload(file: UploadFile, *, user_id: int, prefix: str) -> str:
+    if not file or not file.filename:
+        raise HTTPException(status_code=400, detail="Файл не выбран")
+    content_type = str(file.content_type or "").lower()
+    if not content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Файл должен быть изображением")
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}:
+        ext = ".png"
+    raw = file.file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Файл пустой")
+    if len(raw) > 4 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Файл слишком большой (до 4 МБ)")
+    static_root = Path(__file__).resolve().parent.parent / "static"
+    target_dir = static_root / "uploads" / "avatars"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"{prefix}-{user_id}-{secrets.token_hex(6)}{ext}"
+    path = target_dir / filename
+    path.write_bytes(raw)
+    return f"/static/uploads/avatars/{filename}"
+
+
+@router.post("/profile/avatar/upload", response_model=AvatarUploadOut)
+def profile_avatar_upload(
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "user_profile")
+    url = _save_avatar_upload(file, user_id=user.id, prefix="avatar")
+    if _actor_is_owner(user):
+        profile = _get_or_create_user_profile(db, user.id)
+        profile.avatar_url = url
+    else:
+        member_id = _actor_member_id(user)
+        row = db.get(TeamMember, member_id)
+        if not row or row.user_id != user.id:
+            raise HTTPException(status_code=404, detail="Сотрудник не найден")
+        row.avatar_url = url
+    _audit(
+        db,
+        user,
+        action="profile_avatar_uploaded",
+        details=f"url={url}",
+        module_code="user_profile",
+        entity_type="profile",
+    )
+    db.commit()
+    return AvatarUploadOut(url=url)
+
+
+@router.post("/profile/team/{member_id}/avatar/upload", response_model=AvatarUploadOut)
+def profile_team_avatar_upload(
+    member_id: int,
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "user_profile")
+    _require_owner_actor(user)
+    row = db.get(TeamMember, member_id)
+    if not row or row.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+    url = _save_avatar_upload(file, user_id=user.id, prefix=f"member{member_id}")
+    row.avatar_url = url
+    _audit(
+        db,
+        user,
+        action="profile_team_avatar_uploaded",
+        details=f"member_id={row.id};url={url}",
+        module_code="user_profile",
+        entity_type="team_member",
+        entity_id=str(row.id),
+    )
+    db.commit()
+    return AvatarUploadOut(url=url)
 
 
 @router.get("/profile/ai", response_model=AiProfileOut)

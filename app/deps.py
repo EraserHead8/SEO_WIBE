@@ -9,6 +9,36 @@ from app.auth import decode_access_token
 from app.db import get_db
 from app.models import TeamMember, User
 
+
+def _ensure_owner_member(db: Session, user: User) -> TeamMember | None:
+    owner = db.scalar(
+        select(TeamMember)
+        .where(
+            TeamMember.user_id == user.id,
+            TeamMember.is_owner.is_(True),
+        )
+        .order_by(TeamMember.id.asc())
+    )
+    if owner:
+        return owner
+    try:
+        owner = TeamMember(
+            user_id=user.id,
+            email=user.email,
+            full_name="",
+            nickname="owner",
+            avatar_url="",
+            hashed_password=user.hashed_password,
+            access_scope=json.dumps(["*"], ensure_ascii=False),
+            is_owner=True,
+            is_active=True,
+        )
+        db.add(owner)
+        db.flush()
+        return owner
+    except Exception:
+        return None
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 
@@ -51,14 +81,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         if not user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Пользователь не найден")
         actor_email = str(user.email or "").strip().lower()
-        owner_member = db.scalar(
-            select(TeamMember)
-            .where(
-                TeamMember.user_id == user.id,
-                TeamMember.is_owner.is_(True),
-            )
-            .order_by(TeamMember.id.asc())
-        )
+        owner_member = _ensure_owner_member(db, user)
         if owner_member:
             actor_member_id = int(owner_member.id or 0)
             actor_scope = _team_scope_from_member(owner_member)
@@ -75,14 +98,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         actor_member_id = int(member.id or 0)
         actor_is_owner = bool(member.is_owner)
         actor_scope = _team_scope_from_member(member)
-        owner_member = db.scalar(
-            select(TeamMember)
-            .where(
-                TeamMember.user_id == user.id,
-                TeamMember.is_owner.is_(True),
-            )
-            .order_by(TeamMember.id.asc())
-        )
+        owner_member = _ensure_owner_member(db, user)
         if owner_member:
             owner_member_id = int(owner_member.id or 0)
     else:
@@ -109,25 +125,11 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
             actor_member_id = int(member.id or 0)
             actor_is_owner = bool(member.is_owner)
             actor_scope = _team_scope_from_member(member)
-            owner_member = db.scalar(
-                select(TeamMember)
-                .where(
-                    TeamMember.user_id == user.id,
-                    TeamMember.is_owner.is_(True),
-                )
-                .order_by(TeamMember.id.asc())
-            )
+            owner_member = _ensure_owner_member(db, user)
             if owner_member:
                 owner_member_id = int(owner_member.id or 0)
         else:
-            owner_member = db.scalar(
-                select(TeamMember)
-                .where(
-                    TeamMember.user_id == user.id,
-                    TeamMember.is_owner.is_(True),
-                )
-                .order_by(TeamMember.id.asc())
-            )
+            owner_member = _ensure_owner_member(db, user)
             if owner_member:
                 actor_member_id = int(owner_member.id or 0)
                 actor_scope = _team_scope_from_member(owner_member)

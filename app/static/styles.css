@@ -843,6 +843,22 @@ body[data-theme="light"] .review-type-pill {
   place-items: center;
   font-weight: 800;
   letter-spacing: 0.5px;
+  overflow: hidden;
+}
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+.topbar-avatar-btn .avatar-img {
+  border-radius: 50%;
+}
+.topbar-avatar-btn .avatar-img.hidden + #topbarAvatarText {
+  display: inline;
+}
+.topbar-avatar-btn .avatar-img:not(.hidden) + #topbarAvatarText {
+  display: none;
 }
 .topbar-popover {
   position: absolute;
@@ -872,6 +888,10 @@ body[data-theme="light"] .review-type-pill {
   display: grid;
   place-items: center;
   font-weight: 800;
+  overflow: hidden;
+}
+.topbar-popover .avatar.has-avatar #topbarPopoverAvatarText {
+  display: none;
 }
 .chip {
   border: 1px solid var(--line);
@@ -2997,6 +3017,14 @@ pre {
 #adminPanelSection .admin-ai-item,
 #adminPanelSection .admin-audit-details {
   color: var(--text);
+}
+
+#adminPanelSection .table-card table,
+#adminPanelSection .table-card th,
+#adminPanelSection .table-card td,
+#adminPanelSection .table-card tr {
+  color: var(--text);
+  opacity: 1;
 }
 
 #adminPanelSection .panel h1,
@@ -6488,17 +6516,20 @@ body[data-theme="dark"] .landing-band .band-stats span {
 
 .social-calc-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  width: min(100%, 1100px);
+  margin-right: auto;
 }
 
 .social-calc-grid section {
   border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 12px;
+  border-radius: 14px;
+  padding: 14px;
   background: var(--panel-bg-soft);
   display: grid;
-  gap: 10px;
+  gap: 12px;
+  min-height: 260px;
 }
 
 .social-calc-stack {
@@ -6507,13 +6538,21 @@ body[data-theme="dark"] .landing-band .band-stats span {
 }
 
 .social-calc-shell,
-.social-conv-shell {
+.social-conv-shell,
+.social-volume-shell,
+.social-calc-placeholder {
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 14px;
   background: var(--panel-bg-soft);
   display: grid;
   gap: 12px;
+}
+
+.social-calc-placeholder {
+  background: color-mix(in oklab, var(--panel-bg-soft) 75%, var(--panel-bg));
+  border-style: dashed;
+  color: var(--text-muted);
 }
 
 .social-calc-display {
@@ -6567,25 +6606,28 @@ body[data-theme="dark"] .landing-band .band-stats span {
   padding: 12px 0;
   font-weight: 700;
   font-size: 16px;
-  background: var(--panel-bg);
+  background: color-mix(in oklab, var(--panel-bg) 72%, var(--line) 28%);
   color: var(--text);
-  border: 1px solid color-mix(in oklab, var(--line) 75%, transparent);
+  border: 1px solid color-mix(in oklab, var(--line) 70%, transparent);
+  box-shadow: 0 2px 6px rgba(5, 15, 35, 0.08);
 }
 
 .social-calc-eq {
   background: linear-gradient(120deg, var(--accent), #5ad0ff);
   color: #071423;
-  box-shadow: 0 8px 18px rgba(30, 140, 255, 0.28);
+  box-shadow: 0 10px 20px rgba(30, 140, 255, 0.32);
 }
 
 .calc-op {
-  background: color-mix(in oklab, var(--accent) 15%, var(--panel-bg));
-  color: var(--accent);
+  background: linear-gradient(120deg, color-mix(in oklab, var(--accent) 72%, #ffffff), var(--accent));
+  color: #071423;
+  border-color: color-mix(in oklab, var(--accent) 70%, var(--line));
 }
 
 .calc-fn {
-  background: color-mix(in oklab, var(--panel-bg) 85%, var(--line));
+  background: color-mix(in oklab, var(--panel-bg) 55%, var(--line) 45%);
   color: var(--text);
+  border-color: color-mix(in oklab, var(--line) 85%, transparent);
 }
 
 .calc-zero {
@@ -6615,6 +6657,72 @@ body[data-theme="dark"] .landing-band .band-stats span {
   grid-template-rows: auto 1fr;
   gap: 10px;
   min-height: 520px;
+}
+
+.profile-avatar-grid {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 12px;
+  align-items: start;
+}
+.profile-avatar-preview {
+  width: 110px;
+  height: 110px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: color-mix(in oklab, var(--panel-bg) 75%, var(--line));
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  color: var(--text);
+  overflow: hidden;
+}
+.profile-avatar-controls {
+  display: grid;
+  gap: 10px;
+}
+.profile-avatar-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.avatar-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(56px, 1fr));
+  gap: 8px;
+}
+.avatar-chip {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 4px;
+  background: color-mix(in oklab, var(--panel-bg) 88%, var(--line));
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.avatar-chip img {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+.avatar-chip.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 45%, transparent);
+  transform: translateY(-1px);
+}
+.team-avatar-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 10px;
+  align-items: center;
+}
+.team-avatar-controls {
+  display: grid;
+  gap: 8px;
 }
 
 .social-notes-list {
@@ -6703,6 +6811,16 @@ body[data-theme="dark"] .landing-band .band-stats span {
   #appSection.app-shell {
     margin: 6px auto;
     padding-top: 0;
+  }
+  .profile-avatar-grid {
+    grid-template-columns: 1fr;
+  }
+  .profile-avatar-preview {
+    width: 96px;
+    height: 96px;
+  }
+  .team-avatar-row {
+    grid-template-columns: 1fr;
   }
   .sidebar {
     position: fixed;

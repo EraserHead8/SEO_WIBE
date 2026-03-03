@@ -1,10 +1,21 @@
-const storedSessionToken = sessionStorage.getItem("token") || "";
-const storedLocalToken = localStorage.getItem("token") || "";
-const storedShadowToken = localStorage.getItem("token_shadow") || "";
+function sanitizeToken(raw) {
+  const value = String(raw || "").trim();
+  if (!value || value === "null" || value === "undefined") return "";
+  if (!value.includes(".") || value.split(".").length < 3) return "";
+  return value;
+}
+
+const storedSessionToken = sanitizeToken(sessionStorage.getItem("token") || "");
+const storedLocalToken = sanitizeToken(localStorage.getItem("token") || "");
+const storedShadowToken = sanitizeToken(localStorage.getItem("token_shadow") || "");
 let token = storedSessionToken || storedLocalToken || storedShadowToken || "";
 let tokenStorage = storedSessionToken
   ? "session"
   : (storedLocalToken || storedShadowToken ? "local" : "");
+if (token && !storedSessionToken && !storedLocalToken) {
+  localStorage.setItem("token", token);
+  tokenStorage = "local";
+}
 let suppressAlerts = false;
 let me = null;
 let selectedProducts = new Set();
@@ -65,6 +76,7 @@ let reviewPhotoItems = [];
 let reviewPhotoIndex = 0;
 let helpDocsRows = [];
 let helpAssistantHistory = [];
+const DEFAULT_AVATARS = Array.from({ length: 8 }, (_, i) => `/static/avatars/avatar-${String(i + 1).padStart(2, "0")}.svg`);
 let currentLang = (localStorage.getItem("ui_lang") || "ru").toLowerCase() === "en" ? "en" : "ru";
 let currentTheme = (localStorage.getItem("ui_theme") || "classic").toLowerCase();
 let sidebarCompact = localStorage.getItem("sidebar_compact") === "1";
@@ -1003,7 +1015,12 @@ async function requestJson(url, opts = {}) {
     setToken(refreshed, tokenStorage === "local");
   }
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.detail || data.message || (currentLang === "en" ? "Request error" : "Ошибка запроса"));
+  if (!r.ok) {
+    const err = new Error(data.detail || data.message || (currentLang === "en" ? "Request error" : "Ошибка запроса"));
+    err.status = r.status;
+    err.payload = data;
+    throw err;
+  }
   return data;
 }
 
@@ -1664,7 +1681,8 @@ function applyModuleVisibility() {
 }
 
 async function loadCurrentModules() {
-  const rows = await requestJson("/api/modules/current", { headers: authHeaders() }).catch(() => []);
+  const rows = await requestJson("/api/modules/current", { headers: authHeaders() }).catch(() => null);
+  if (!rows) return;
   const active = new Set();
   if (Array.isArray(rows)) {
     for (const row of rows) {
@@ -1950,14 +1968,26 @@ async function logout() {
 
 async function ensureAuth() {
   if (!token) return;
-  const user = await requestJson("/api/auth/me", { headers: authHeaders() }).catch(() => null);
+  document.getElementById("authSection").classList.add("hidden");
+  document.getElementById("appSection").classList.remove("hidden");
+  let authError = null;
+  const user = await requestJson("/api/auth/me", { headers: authHeaders() }).catch((e) => {
+    authError = e;
+    return null;
+  });
   if (!user) {
-    logout();
+    const status = Number(authError?.status || 0);
+    const message = String(authError?.message || "").toLowerCase();
+    if (status === 401 || status === 403 || message.includes("токен") || message.includes("token")) {
+      logout();
+      return;
+    }
+    setTimeout(() => {
+      ensureAuth().catch(() => null);
+    }, 1200);
     return;
   }
   me = user;
-  document.getElementById("authSection").classList.add("hidden");
-  document.getElementById("appSection").classList.remove("hidden");
   pruneLegacyUi();
   ensureProfileTeamUi();
   renderTopbarUser();
@@ -1976,7 +2006,11 @@ async function ensureAuth() {
   applyUiLanguage();
   applySidebarMode();
   applyButtonTooltips();
-  if (enabledModules.has("social_hub")) {
+  const hasModules = enabledModules instanceof Set && enabledModules.size > 0;
+  const canSocial = !hasModules || enabledModules.has("social_hub");
+  const canSales = !hasModules || enabledModules.has("sales_stats");
+
+  if (canSocial) {
     window.__socialHooksRequested = true;
     if (typeof window.socialSetBell === "function") window.socialSetBell(0);
     if (typeof window.socialStartGlobalHooks === "function") {
@@ -1987,7 +2021,7 @@ async function ensureAuth() {
   } else {
     window.__socialHooksRequested = false;
   }
-  if (enabledModules.has("sales_stats")) {
+  if (canSales) {
     await runModuleLoader("sales", async () => {
       await loadDashboard();
       await loadSalesStats();
@@ -2037,11 +2071,33 @@ function renderTopbarUser() {
   const initials = computeAvatarInitials(name, me.email);
   const avatarText = document.getElementById("topbarAvatarText");
   const popAvatar = document.getElementById("topbarPopoverAvatar");
+  const avatarImg = document.getElementById("topbarAvatarImg");
+  const popAvatarImg = document.getElementById("topbarPopoverAvatarImg");
+  const popAvatarText = document.getElementById("topbarPopoverAvatarText");
   const popName = document.getElementById("topbarPopoverName");
   const popRole = document.getElementById("topbarPopoverRole");
   const popEmail = document.getElementById("topbarPopoverEmail");
   if (avatarText) avatarText.textContent = initials;
-  if (popAvatar) popAvatar.textContent = initials;
+  if (popAvatarText) popAvatarText.textContent = initials;
+  if (popAvatar) popAvatar.classList.toggle("has-avatar", Boolean(me.avatar_url));
+  if (avatarImg) {
+    if (me.avatar_url) {
+      avatarImg.src = me.avatar_url;
+      avatarImg.classList.remove("hidden");
+    } else {
+      avatarImg.classList.add("hidden");
+      avatarImg.removeAttribute("src");
+    }
+  }
+  if (popAvatarImg) {
+    if (me.avatar_url) {
+      popAvatarImg.src = me.avatar_url;
+      popAvatarImg.classList.remove("hidden");
+    } else {
+      popAvatarImg.classList.add("hidden");
+      popAvatarImg.removeAttribute("src");
+    }
+  }
   if (popName) popName.textContent = name;
   if (popRole) popRole.textContent = roleText;
   if (popEmail) popEmail.textContent = String(me.email || "-");
@@ -2057,6 +2113,102 @@ function toggleTopbarUserPopover() {
 function closeTopbarUserPopover() {
   const popover = document.getElementById("topbarUserPopover");
   if (popover) popover.classList.add("hidden");
+}
+
+function renderAvatarPreview(previewId, url, fallbackText = "--") {
+  const preview = document.getElementById(previewId);
+  if (!preview) return;
+  const safe = String(url || "").trim();
+  if (!safe) {
+    preview.innerHTML = escapeHtml(fallbackText);
+    return;
+  }
+  preview.innerHTML = `<img src="${escapeHtml(safe)}" alt="avatar" class="avatar-img" />`;
+}
+
+function renderAvatarPicker(hostId, currentUrl, onPick) {
+  const host = document.getElementById(hostId);
+  if (!host) return;
+  const selected = String(currentUrl || "").trim();
+  host.innerHTML = DEFAULT_AVATARS
+    .map((url) => {
+      const active = selected && url === selected ? "active" : "";
+      return `<button type="button" class="avatar-chip ${active}" data-avatar-url="${escapeHtml(url)}"><img src="${escapeHtml(url)}" alt="avatar" /></button>`;
+    })
+    .join("");
+  host.querySelectorAll("[data-avatar-url]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const url = String(btn.dataset.avatarUrl || "").trim();
+      if (typeof onPick === "function") onPick(url);
+    });
+  });
+}
+
+async function uploadAvatarFile(inputId, endpoint) {
+  const input = document.getElementById(inputId);
+  const file = input?.files?.[0] || null;
+  if (!file) {
+    alert(tr("Выберите файл изображения.", "Choose an image file."));
+    return null;
+  }
+  if (!String(file.type || "").startsWith("image/")) {
+    alert(tr("Файл должен быть изображением.", "File must be an image."));
+    return null;
+  }
+  if (file.size > 4 * 1024 * 1024) {
+    alert(tr("Файл слишком большой (до 4 МБ).", "File is too large (max 4 MB)."));
+    return null;
+  }
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${token}` },
+    body: form,
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.detail || data.message || tr("Ошибка загрузки файла.", "Upload failed."));
+  }
+  return data;
+}
+
+async function uploadProfileAvatar() {
+  try {
+    const data = await uploadAvatarFile("profileAvatarUpload", "/api/profile/avatar/upload");
+    if (!data?.url) return;
+    setInputValue("profileAvatarUrl", String(data.url || ""));
+    renderAvatarPreview("profileAvatarPreview", String(data.url || ""), computeAvatarInitials(me?.actor_nick, me?.email));
+    renderAvatarPicker("profileAvatarPicker", String(data.url || ""), (url) => {
+      setInputValue("profileAvatarUrl", url);
+      renderAvatarPreview("profileAvatarPreview", url, computeAvatarInitials(me?.actor_nick, me?.email));
+    });
+    if (me) {
+      me.avatar_url = String(data.url || "");
+      renderTopbarUser();
+    }
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+async function uploadTeamAvatar() {
+  if (!activeTeamMemberId) {
+    alert(tr("Сначала выберите сотрудника.", "Select a team member first."));
+    return;
+  }
+  try {
+    const data = await uploadAvatarFile("teamAvatarUpload", `/api/profile/team/${activeTeamMemberId}/avatar/upload`);
+    if (!data?.url) return;
+    setInputValue("teamModalAvatar", String(data.url || ""));
+    renderAvatarPreview("teamAvatarPreview", String(data.url || ""), "--");
+    renderAvatarPicker("teamAvatarPicker", String(data.url || ""), (url) => {
+      setInputValue("teamModalAvatar", url);
+      renderAvatarPreview("teamAvatarPreview", url, "--");
+    });
+  } catch (e) {
+    alert(e.message);
+  }
 }
 
 function initAuthRemember() {
@@ -6972,6 +7124,16 @@ function renderProfileData(data) {
   setInputValue("profilePhone", data.phone || "");
   setInputValue("profileTeamSize", data.team_size ?? 1);
   setInputValue("profileAvatarUrl", data.avatar_url || "");
+  const initials = computeAvatarInitials(me?.actor_nick, me?.email);
+  renderAvatarPreview("profileAvatarPreview", data.avatar_url || "", initials);
+  renderAvatarPicker("profileAvatarPicker", data.avatar_url || "", (url) => {
+    setInputValue("profileAvatarUrl", url);
+    renderAvatarPreview("profileAvatarPreview", url, initials);
+  });
+  if (me) {
+    me.avatar_url = String(data.avatar_url || "");
+    renderTopbarUser();
+  }
   setInputValue("profileCompanyStructure", data.company_structure || "");
 
   const planSelect = document.getElementById("profilePlanSelect");
@@ -7305,6 +7467,11 @@ function openTeamMemberEditor(memberId) {
   setInputValue("teamModalPhone", String(row.phone || ""));
   setInputValue("teamModalNickname", String(row.nickname || ""));
   setInputValue("teamModalAvatar", String(row.avatar_url || ""));
+  renderAvatarPreview("teamAvatarPreview", String(row.avatar_url || ""), "--");
+  renderAvatarPicker("teamAvatarPicker", String(row.avatar_url || ""), (url) => {
+    setInputValue("teamModalAvatar", url);
+    renderAvatarPreview("teamAvatarPreview", url, "--");
+  });
   setInputValue("teamModalPassword", "");
   const canEditIdentity = !row.is_owner;
   const emailEl = document.getElementById("teamModalEmail");
@@ -7326,6 +7493,11 @@ function openTeamMemberCreator() {
   setInputValue("teamModalPhone", "");
   setInputValue("teamModalNickname", "");
   setInputValue("teamModalAvatar", "");
+  renderAvatarPreview("teamAvatarPreview", "", "--");
+  renderAvatarPicker("teamAvatarPicker", "", (url) => {
+    setInputValue("teamModalAvatar", url);
+    renderAvatarPreview("teamAvatarPreview", url, "--");
+  });
   setInputValue("teamModalPassword", "");
   const emailEl = document.getElementById("teamModalEmail");
   const passEl = document.getElementById("teamModalPassword");
@@ -8260,5 +8432,7 @@ window.closeProfileSectionModal = closeProfileSectionModal;
 window.closeTeamMemberEditor = closeTeamMemberEditor;
 window.saveTeamMemberEditor = saveTeamMemberEditor;
 window.deleteTeamMemberFromModal = deleteTeamMemberFromModal;
+window.uploadProfileAvatar = uploadProfileAvatar;
+window.uploadTeamAvatar = uploadTeamAvatar;
 window.toggleMobileNav = toggleMobileNav;
 window.closeMobileNav = closeMobileNav;
