@@ -1979,10 +1979,10 @@ async function ensureAuth() {
   if (enabledModules.has("social_hub")) {
     window.__socialHooksRequested = true;
     if (typeof window.socialSetBell === "function") window.socialSetBell(0);
-    if (typeof window.socialMaybeStartHooks === "function") {
-      window.socialMaybeStartHooks();
-    } else if (typeof window.socialStartGlobalHooks === "function") {
+    if (typeof window.socialStartGlobalHooks === "function") {
       try { window.socialStartGlobalHooks(); } catch (_) {}
+    } else if (typeof window.socialMaybeStartHooks === "function") {
+      window.socialMaybeStartHooks();
     }
   } else {
     window.__socialHooksRequested = false;
@@ -2005,7 +2005,7 @@ async function ensureAuth() {
     }
   }, 120);
   setTimeout(() => {
-    preloadModulesInBackground({ force: false });
+    preloadModulesInBackground({ force: true });
   }, 250);
 }
 
@@ -7019,6 +7019,12 @@ function renderProfileData(data) {
         `)
         .join("");
     }
+  }
+
+  const keysPanel = document.getElementById("profileKeysPanel");
+  if (keysPanel && me && !me.actor_is_owner) {
+    keysPanel.querySelectorAll("input").forEach((el) => { el.disabled = true; });
+    keysPanel.querySelectorAll("button").forEach((el) => { el.disabled = true; });
   }
 
   const companySummary = document.getElementById("profileCompanySummary");

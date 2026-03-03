@@ -3972,7 +3972,6 @@ def profile_state(user: User = Depends(get_current_user), db: Session = Depends(
     payload = _build_user_profile_payload(db, user, profile, account)
     if not _actor_is_owner(user):
         actor_email = _actor_email(user)
-        payload.credentials = []
         payload.team_members = [x for x in payload.team_members if str(x.email or "").strip().lower() == actor_email]
     db.commit()
     return payload
@@ -7747,6 +7746,10 @@ def _require_owner_actor(user: User) -> None:
         raise HTTPException(status_code=403, detail="Только владелец кабинета может выполнять это действие")
 
 
+def _actor_owner_member_id(user: User) -> int:
+    return int(getattr(user, "_owner_member_id", 0) or 0)
+
+
 def _owner_member_id_for_user(db: Session, user_id: int) -> int:
     row = db.scalar(
         select(TeamMember.id).where(
@@ -7758,21 +7761,23 @@ def _owner_member_id_for_user(db: Session, user_id: int) -> int:
 
 
 def _resolve_owner_member_id(db: Session, user: User) -> int:
-    actor_member_id = _actor_member_id(user)
-    if actor_member_id > 0 and not _actor_is_owner(user):
-        return actor_member_id
     owner_member_id = _owner_member_id_for_user(db, user.id)
     if owner_member_id > 0:
         return owner_member_id
-    return actor_member_id
+    return _actor_member_id(user)
 
 
 def _owned_by_actor_or_owner_filter(model: Any, user: User) -> Any:
     if _actor_is_owner(user):
         return True
     actor_id = _actor_member_id(user)
-    if actor_id <= 0:
+    owner_id = _actor_owner_member_id(user)
+    if actor_id <= 0 and owner_id <= 0:
         return False
+    if actor_id > 0 and owner_id > 0 and actor_id != owner_id:
+        return model.owner_member_id.in_([actor_id, owner_id]) | model.owner_member_id.is_(None)
+    if owner_id > 0:
+        return (model.owner_member_id == owner_id) | model.owner_member_id.is_(None)
     return model.owner_member_id == actor_id
 
 
@@ -7780,10 +7785,11 @@ def _enforce_record_owner_access(record: Any, user: User) -> None:
     if _actor_is_owner(user):
         return
     actor_id = _actor_member_id(user)
+    owner_id = _actor_owner_member_id(user)
     if actor_id <= 0:
         raise HTTPException(status_code=403, detail="Недостаточно прав")
     owner_member_id = int(getattr(record, "owner_member_id", 0) or 0)
-    if owner_member_id != actor_id:
+    if owner_member_id not in {actor_id, owner_id}:
         raise HTTPException(status_code=403, detail="Недостаточно прав для доступа к данным другого сотрудника")
 
 
