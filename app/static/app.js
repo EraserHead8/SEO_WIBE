@@ -2752,12 +2752,16 @@ async function loadWbReviews() {
       .catch((e) => {
         if (runToken !== reviewLoadToken) return;
         reviewLoadProgress.active = false;
+        const msg = String(e?.message || "").trim();
+        if (isMarketplaceKeyError(msg)) {
+          updateReviewLoadStatus(tr("Проверьте API-ключи WB/Ozon в разделе «Профиль».", "Check WB/Ozon API keys in Profile."));
+          return;
+        }
         updateReviewLoadStatus(tr("Не удалось загрузить полный список отзывов.", "Failed to load full reviews list."));
         if (!wbReviewRows.length) {
           setTableMessage("wbReviewsTable", 7, tr("Не удалось загрузить отзывы.", "Failed to load reviews."));
           if (raw) raw.textContent = tr("Ошибка загрузки отзывов.", "Reviews loading failed.");
         }
-        if (e?.message) alert(e.message);
       });
   };
 
@@ -2777,8 +2781,7 @@ async function loadWbReviews() {
     );
     setTableMessage("wbReviewsTable", 7, tr("Быстрый слой недоступен, выполняем расширенный запрос...", "Fast layer unavailable, running extended request..."));
     if (raw && fastMsg) raw.textContent = fastMsg;
-    const lowered = fastMsg.toLowerCase();
-    if (lowered && (lowered.includes("ключ") || lowered.includes("api key") || lowered.includes("401") || lowered.includes("403") || lowered.includes("client_id"))) {
+    if (isMarketplaceKeyError(fastMsg)) {
       reviewLoadProgress.active = false;
       updateReviewLoadStatus(tr("Проверьте API-ключи WB/Ozon в разделе «Профиль».", "Check WB/Ozon API keys in Profile."));
       return;
@@ -2792,7 +2795,6 @@ async function loadWbReviews() {
     updateReviewLoadStatus(tr("Ошибка отрисовки отзывов.", "Failed to render reviews."));
     setTableMessage("wbReviewsTable", 7, tr("Не удалось отобразить отзывы.", "Failed to render reviews."));
     if (raw) raw.textContent = tr("Ошибка отрисовки отзывов.", "Reviews rendering failed.");
-    if (e?.message) alert(e.message);
   });
   if (runToken !== reviewLoadToken) return;
   reviewLoadProgress.active = true;
@@ -3087,6 +3089,41 @@ function resolveFeedbackDateFilters(scope, fromId, toId) {
   return { dateFrom: fromVal, dateTo: toVal };
 }
 
+function isMarketplaceKeyError(message) {
+  const lowered = String(message || "").toLowerCase();
+  if (!lowered) return false;
+  return (
+    lowered.includes("ключ") ||
+    lowered.includes("api key") ||
+    lowered.includes("apikey") ||
+    lowered.includes("token") ||
+    lowered.includes("client_id") ||
+    lowered.includes("unauthorized") ||
+    lowered.includes("forbidden") ||
+    lowered.includes("401") ||
+    lowered.includes("403")
+  );
+}
+
+function formatReturnsWarnings(warnings = []) {
+  const out = [];
+  for (const raw of warnings) {
+    const text = String(raw || "").trim();
+    if (!text) continue;
+    const lowered = text.toLowerCase();
+    if (lowered.includes("endpoint unavailable") || lowered.includes("returns endpoint")) {
+      out.push(tr("API возвратов WB временно недоступен.", "WB returns API is temporarily unavailable."));
+      continue;
+    }
+    if (isMarketplaceKeyError(lowered)) {
+      out.push(tr("Проверьте API-ключи возвратов WB/Ozon.", "Check WB/Ozon returns API keys."));
+      continue;
+    }
+    out.push(tr("Возвраты загружены с предупреждениями.", "Returns loaded with warnings."));
+  }
+  return [...new Set(out)];
+}
+
 async function loadQuestionAiSettings() {
   const data = await requestJson("/api/wb/questions/ai-settings", { headers: authHeaders() }).catch(() => null);
   if (!data) return;
@@ -3260,12 +3297,16 @@ async function loadWbQuestions() {
       .catch((e) => {
         if (runToken !== questionLoadToken) return;
         questionLoadProgress.active = false;
+        const msg = String(e?.message || "").trim();
+        if (isMarketplaceKeyError(msg)) {
+          updateQuestionLoadStatus(tr("Проверьте API-ключи WB/Ozon в разделе «Профиль».", "Check WB/Ozon API keys in Profile."));
+          return;
+        }
         updateQuestionLoadStatus(tr("Не удалось загрузить полный список вопросов.", "Failed to load full questions list."));
         if (!wbQuestionRows.length) {
           setTableMessage("wbQuestionsTable", 6, tr("Не удалось загрузить вопросы.", "Failed to load questions."));
           if (raw) raw.textContent = tr("Ошибка загрузки вопросов.", "Questions loading failed.");
         }
-        if (e?.message) alert(e.message);
       });
   };
 
@@ -3284,8 +3325,7 @@ async function loadWbQuestions() {
     );
     setTableMessage("wbQuestionsTable", 6, tr("Быстрый слой недоступен, выполняем расширенный запрос...", "Fast layer unavailable, running extended request..."));
     if (raw && fastMsg) raw.textContent = fastMsg;
-    const lowered = fastMsg.toLowerCase();
-    if (lowered && (lowered.includes("ключ") || lowered.includes("api key") || lowered.includes("401") || lowered.includes("403") || lowered.includes("client_id"))) {
+    if (isMarketplaceKeyError(fastMsg)) {
       questionLoadProgress.active = false;
       updateQuestionLoadStatus(tr("Проверьте API-ключи WB/Ozon в разделе «Профиль».", "Check WB/Ozon API keys in Profile."));
       return;
@@ -3299,7 +3339,6 @@ async function loadWbQuestions() {
     updateQuestionLoadStatus(tr("Ошибка отрисовки вопросов.", "Failed to render questions."));
     setTableMessage("wbQuestionsTable", 6, tr("Не удалось отобразить вопросы.", "Failed to render questions."));
     if (raw) raw.textContent = tr("Ошибка отрисовки вопросов.", "Questions rendering failed.");
-    if (e?.message) alert(e.message);
   });
   if (runToken !== questionLoadToken) return;
   questionLoadProgress.active = true;
@@ -3639,10 +3678,15 @@ async function loadReturns() {
   const raw = document.getElementById("returnsRaw");
   if (statusEl) statusEl.textContent = tr("Загрузка возвратов...", "Loading returns...");
   setTableMessage("returnsTable", 6, tr("Загружаем возвраты...", "Loading returns..."));
+  if (raw) raw.textContent = "";
   const data = await requestJson(endpoint, { headers: authHeaders(), timeoutMs: 120000 }).catch((e) => {
+    const msg = String(e?.message || "").trim();
+    if (isMarketplaceKeyError(msg)) {
+      if (statusEl) statusEl.textContent = tr("Проверьте API-ключи возвратов WB/Ozon.", "Check WB/Ozon returns API keys.");
+      setTableMessage("returnsTable", 6, tr("Не удалось загрузить возвраты. Проверьте ключи.", "Failed to load returns. Check API keys."));
+      return null;
+    }
     if (statusEl) statusEl.textContent = tr("Ошибка загрузки возвратов.", "Failed to load returns.");
-    if (raw) raw.textContent = String(e?.message || "");
-    alert(e.message);
     return null;
   });
   if (!data) return;
@@ -3653,11 +3697,16 @@ async function loadReturns() {
   renderReturns();
   const warnings = Array.isArray(data.warnings) ? data.warnings.filter(Boolean) : [];
   if (statusEl) {
-    statusEl.textContent = warnings.length
-      ? `${tr("Возвраты загружены с предупреждениями", "Returns loaded with warnings")}: ${warnings.join(" | ")}`
-      : tr("Возвраты загружены", "Returns loaded");
+    if (warnings.length) {
+      const cleaned = formatReturnsWarnings(warnings);
+      statusEl.textContent = cleaned.length
+        ? cleaned.join(" • ")
+        : tr("Возвраты загружены с предупреждениями.", "Returns loaded with warnings.");
+    } else {
+      statusEl.textContent = tr("Возвраты загружены", "Returns loaded");
+    }
   }
-  if (raw) raw.textContent = JSON.stringify(data, null, 2);
+  if (raw) raw.textContent = "";
   markModuleLoaded("reviews");
 }
 

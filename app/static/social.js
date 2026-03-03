@@ -1270,11 +1270,17 @@ function socialRenderCalendar() {
   const shift = (firstDay.getDay() + 6) % 7;
   const days = lastDay.getDate();
   const tasksByDay = new Map();
+  const myTasksByDay = new Map();
+  const myActorKey = String(socialState.boot?.actor?.actor_key || "").trim();
   (socialState.tasks || []).forEach((task) => {
     if (!task.due_date) return;
     const key = String(task.due_date).slice(0, 10);
     if (!tasksByDay.has(key)) tasksByDay.set(key, []);
     tasksByDay.get(key).push(task);
+    if (myActorKey && String(task.assignee_key || "") === myActorKey) {
+      if (!myTasksByDay.has(key)) myTasksByDay.set(key, []);
+      myTasksByDay.get(key).push(task);
+    }
   });
   let html = `<div class="social-calendar-row head">${[tr("Пн", "Mon"), tr("Вт", "Tue"), tr("Ср", "Wed"), tr("Чт", "Thu"), tr("Пт", "Fri"), tr("Сб", "Sat"), tr("Вс", "Sun")].map((x) => `<span>${x}</span>`).join("")}</div><div class="social-calendar-cells">`;
   for (let i = 0; i < shift; i += 1) html += `<button class="social-day muted" disabled></button>`;
@@ -1282,11 +1288,14 @@ function socialRenderCalendar() {
     const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     const eventsCount = socialState.calendarEvents.filter((e) => String(e.start_at || "").slice(0, 10) === key).length;
     const tasksCount = (tasksByDay.get(key) || []).length;
+    const myTasksCount = (myTasksByDay.get(key) || []).length;
     const active = socialState.calendarSelectedDay === key ? "active" : "";
     const isToday = todayKey && key === todayKey ? "today" : "";
     const hasEvents = eventsCount > 0 ? "has-event" : "";
     const hasTasks = tasksCount > 0 ? "has-task" : "";
-    html += `<button class="social-day ${active} ${isToday} ${hasEvents} ${hasTasks}" type="button" onclick="socialShowDay('${key}')"><b>${day}</b><small>${eventsCount} ${tr("соб.", "ev.")} • ${tasksCount} ${tr("задач", "tasks")}</small></button>`;
+    const hasMyTasks = myTasksCount > 0 ? "has-my-task" : "";
+    const manyMyTasks = myTasksCount > 1 ? "my-task-many" : "";
+    html += `<button class="social-day ${active} ${isToday} ${hasEvents} ${hasTasks} ${hasMyTasks} ${manyMyTasks}" type="button" onclick="socialShowDay('${key}')"><b>${day}</b><small><span class="calendar-count calendar-events">${eventsCount} ${tr("соб.", "ev.")}</span><span class="calendar-sep">•</span><span class="calendar-count calendar-tasks ${myTasksCount ? "my-task" : ""}">${tasksCount} ${tr("задач", "tasks")}</span></small></button>`;
   }
   html += `</div>`;
   grid.innerHTML = html;
