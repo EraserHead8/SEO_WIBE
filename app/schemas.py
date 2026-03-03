@@ -30,6 +30,7 @@ class UserOut(BaseModel):
     actor_nick: str | None = None
     actor_is_owner: bool | None = None
     actor_member_id: int | None = None
+    avatar_url: str | None = None
 
 
 class AvatarUploadOut(BaseModel):

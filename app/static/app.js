@@ -2187,6 +2187,7 @@ async function uploadProfileAvatar() {
       me.avatar_url = String(data.url || "");
       renderTopbarUser();
     }
+    await loadProfile();
   } catch (e) {
     alert(e.message);
   }
@@ -2206,6 +2207,11 @@ async function uploadTeamAvatar() {
       setInputValue("teamModalAvatar", url);
       renderAvatarPreview("teamAvatarPreview", url, "--");
     });
+    const row = findTeamMemberById(activeTeamMemberId);
+    if (row) {
+      row.avatar_url = String(data.url || "");
+      renderTeamMembers();
+    }
   } catch (e) {
     alert(e.message);
   }
@@ -5354,18 +5360,18 @@ async function importProducts() {
 }
 
 async function reloadProducts() {
-  if (!confirm(tr("Очистить локальную базу товаров по выбранному маркетплейсу и загрузить заново?", "Clear local catalog for selected marketplace and reload?"))) return;
+  if (!confirm(tr("Обновить локальную базу товаров по выбранному маркетплейсу (добавит новые и обновит измененные)?", "Refresh local catalog for selected marketplace (add new and update changed)?"))) return;
   const payload = getImportPayload({ forceAll: true });
   const body = JSON.stringify(payload);
   const data = await withBusy(
     tr("Обновляем локальную базу товаров…", "Refreshing local catalog..."),
     () => tryRequestChain([
-      { url: "/api/products/reload", opts: { method: "POST", headers: authHeaders(), body, timeoutMs: 120000 } },
-      { url: "/api/products/refresh", opts: { method: "POST", headers: authHeaders(), body, timeoutMs: 120000 } },
-      { url: "/api/products/reset", opts: { method: "POST", headers: authHeaders(), body, timeoutMs: 120000 } },
-      { url: "/api/products/reimport", opts: { method: "POST", headers: authHeaders(), body, timeoutMs: 120000 } },
+      { url: "/api/products/reload", opts: { method: "POST", headers: authHeaders(), body, timeoutMs: 240000 } },
+      { url: "/api/products/refresh", opts: { method: "POST", headers: authHeaders(), body, timeoutMs: 240000 } },
+      { url: "/api/products/reset", opts: { method: "POST", headers: authHeaders(), body, timeoutMs: 240000 } },
+      { url: "/api/products/reimport", opts: { method: "POST", headers: authHeaders(), body, timeoutMs: 240000 } },
     ]),
-    tr("Сначала очищаем локальные данные, затем загружаем карточки заново.", "First local data is cleared, then products are loaded again.")
+    tr("Данные обновляются без удаления: добавим новые товары и обновим измененные карточки.", "Updates without deletion: new items added, changed ones updated.")
   ).catch((e) => {
     alert(e.message);
     return null;

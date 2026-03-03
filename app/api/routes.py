@@ -855,6 +855,13 @@ def logout(request: Request, user: User = Depends(get_current_user), db: Session
 @router.get("/auth/me", response_model=UserOut)
 def me(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     actor_key, actor_nick, actor_member_id = _social_actor_identity(db, user)
+    avatar_url = ""
+    if actor_key.startswith("m:") and actor_member_id:
+        member = db.get(TeamMember, int(actor_member_id))
+        avatar_url = str(member.avatar_url or "") if member else ""
+    else:
+        profile = db.scalar(select(UserProfile).where(UserProfile.user_id == user.id))
+        avatar_url = str(profile.avatar_url or "") if profile else ""
     _audit(
         db,
         user,
@@ -872,6 +879,7 @@ def me(request: Request, user: User = Depends(get_current_user), db: Session = D
     payload.actor_nick = actor_nick
     payload.actor_is_owner = bool(_actor_is_owner(user))
     payload.actor_member_id = int(actor_member_id or 0) if actor_member_id else None
+    payload.avatar_url = avatar_url or None
     return payload
 
 
@@ -2819,37 +2827,6 @@ def reload_products(payload: ProductReloadRequest, user: User = Depends(get_curr
     if len(missing_keys) == len(marketplaces):
         raise HTTPException(status_code=400, detail=f"Сначала сохраните API ключи: {', '.join(missing_keys)}")
 
-    existing = db.scalars(
-        select(Product).where(
-            Product.user_id == user.id,
-            Product.marketplace.in_(marketplaces),
-            _owned_by_actor_or_owner_filter(Product, user),
-        )
-    ).all()
-    if existing:
-        product_ids = [p.id for p in existing]
-        if product_ids:
-            old_jobs = db.scalars(
-                select(SeoJob).where(
-                    SeoJob.user_id == user.id,
-                    SeoJob.product_id.in_(product_ids),
-                    _owned_by_actor_or_owner_filter(SeoJob, user),
-                )
-            ).all()
-            old_snapshots = db.scalars(
-                select(PositionSnapshot).where(
-                    PositionSnapshot.user_id == user.id,
-                    PositionSnapshot.product_id.in_(product_ids),
-                )
-            ).all()
-            for job in old_jobs:
-                db.delete(job)
-            for snapshot in old_snapshots:
-                db.delete(snapshot)
-        for product in existing:
-            db.delete(product)
-        db.flush()
-
     owner_member_id = _resolve_owner_member_id(db, user)
     upserted: list[Product] = []
     for marketplace in marketplaces:
@@ -2880,7 +2857,7 @@ def reload_products(payload: ProductReloadRequest, user: User = Depends(get_curr
         db,
         user,
         action="products_reloaded",
-        details=f"count={len(upserted)};marketplaces={','.join(marketplaces)};import_all=1;missing={','.join(missing_keys)}",
+        details=f"count={len(upserted)};marketplaces={','.join(marketplaces)};import_all=1;mode=upsert;missing={','.join(missing_keys)}",
         module_code="products",
         entity_type="product",
     )
@@ -5550,6 +5527,39 @@ def _social_identity_by_key(db: Session, actor_key: str) -> tuple[int, int | Non
     raise HTTPException(status_code=400, detail="Некорректный actor_key")
 
 
+def _social_current_nick_by_key(db: Session, actor_key: str) -> str:
+    key = str(actor_key or "").strip().lower()
+    if not key:
+        return ""
+    if key.startswith("m:"):
+        member_id = _to_int_safe(key.split(":", 1)[1])
+        member = db.get(TeamMember, member_id) if member_id else None
+        if member and member.is_active:
+            return str((member.nickname or member.full_name or member.email).strip())
+        return ""
+    if key.startswith("u:"):
+        user_id = _to_int_safe(key.split(":", 1)[1])
+        owner = db.get(User, user_id) if user_id else None
+        if not owner:
+            return ""
+        owner_member = db.scalar(
+            select(TeamMember).where(
+                TeamMember.user_id == owner.id,
+                TeamMember.is_owner.is_(True),
+            ).order_by(TeamMember.id.asc())
+        )
+        nick = ""
+        if owner_member:
+            nick = str((owner_member.nickname or owner_member.full_name or "").strip())
+        if not nick:
+            profile = db.scalar(select(UserProfile).where(UserProfile.user_id == owner.id))
+            nick = str((profile.full_name if profile and profile.full_name else "") or "").strip()
+        if not nick:
+            nick = str(owner.email or "").split("@")[0]
+        return nick
+    return ""
+
+
 def _social_ensure_thread_member(
     db: Session,
     *,
@@ -5655,18 +5665,29 @@ def _social_thread_to_out(db: Session, actor_key: str, row: SocialChatThread, me
         .where(SocialChatThreadMember.thread_id == row.id)
         .order_by(SocialChatThreadMember.id.asc())
     ).all()
-    participants = [
-        {
-            "actor_key": str(x.actor_key or ""),
-            "nick": str(x.actor_nick or ""),
-            "is_me": str(x.actor_key or "") == actor_key,
-        }
-        for x in participants_rows
-    ]
+    participants = []
+    for x in participants_rows:
+        key = str(x.actor_key or "")
+        current_nick = _social_current_nick_by_key(db, key) or str(x.actor_nick or "")
+        if current_nick and current_nick != str(x.actor_nick or ""):
+            x.actor_nick = current_nick[:120]
+            x.updated_at = datetime.utcnow()
+        participants.append(
+            {
+                "actor_key": key,
+                "nick": current_nick,
+                "is_me": key == actor_key,
+            }
+        )
+    title = str(row.title or "")
+    if row.kind == "direct":
+        other = next((p for p in participants if not p["is_me"] and p["nick"]), None)
+        if other:
+            title = other["nick"]
     return SocialChatThreadOut(
         id=row.id,
         kind=row.kind or "",
-        title=row.title or "",
+        title=title or row.title or "",
         last_message=last_payload,
         unread=int(unread),
         participants=participants,
@@ -6091,7 +6112,7 @@ def social_chat_messages(
             id=int(row.id),
             thread_id=int(row.thread_id),
             sender_key=str(row.sender_key or ""),
-            sender_nick=str(row.sender_nick or ""),
+            sender_nick=_social_current_nick_by_key(db, str(row.sender_key or "")) or str(row.sender_nick or ""),
             text=str(row.text or ""),
             created_at=row.created_at.isoformat() if row.created_at else "",
             is_mine=str(row.sender_key or "") == actor_key,

@@ -968,17 +968,27 @@ def _fetch_wb_product_details(api_key: str, article: str, external_id: str = "")
         best = products[0]
     if not best:
         return {"photos": [], "attributes": {}, "raw": {}}
+    def _collect_photo_urls(value: Any) -> list[str]:
+        out: list[str] = []
+        if isinstance(value, str):
+            url = _normalize_photo_url(value)
+            if url:
+                out.append(url)
+        elif isinstance(value, dict):
+            for key in ("big", "c516x688", "tm", "x1", "x2", "url"):
+                if key in value and value[key]:
+                    out.extend(_collect_photo_urls(value[key]))
+        elif isinstance(value, list):
+            for item in value:
+                out.extend(_collect_photo_urls(item))
+        return out
+
     photos: list[str] = []
-    for photo in (best.get("photos") or []):
-        if isinstance(photo, dict):
-            for key in ("big", "c516x688", "tm"):
-                val = photo.get(key)
-                if val:
-                    photos.append(_normalize_photo_url(str(val)))
-                    break
-        elif isinstance(photo, str) and photo.strip():
-            photos.append(_normalize_photo_url(photo))
-    photos = [x for x in photos if x]
+    photos.extend(_collect_photo_urls(best.get("photos") or []))
+    if not photos:
+        for fallback_key in ("mediaFiles", "photoLinks", "images", "pics", "img"):
+            photos.extend(_collect_photo_urls(best.get(fallback_key)))
+    photos = [x for x in dict.fromkeys([p for p in photos if p])]
     attrs: dict[str, Any] = {
         "category_name": str(best.get("subjectName") or best.get("subject") or "").strip(),
         "brand": str(best.get("brand") or "").strip(),
@@ -1024,16 +1034,28 @@ def _fetch_ozon_product_details(api_key: str, article: str, external_id: str = "
     source = item.get("product_info") if isinstance(item, dict) else {}
     if not isinstance(source, dict):
         source = item if isinstance(item, dict) else {}
+    def _collect_photo_urls(value: Any) -> list[str]:
+        out: list[str] = []
+        if isinstance(value, str):
+            url = _normalize_photo_url(value)
+            if url:
+                out.append(url)
+        elif isinstance(value, dict):
+            for key in ("url", "image", "x1", "x2"):
+                if key in value and value[key]:
+                    out.extend(_collect_photo_urls(value[key]))
+        elif isinstance(value, list):
+            for item in value:
+                out.extend(_collect_photo_urls(item))
+        return out
+
     photos: list[str] = []
     primary = _extract_ozon_photo(source)
     if primary:
         photos.append(primary)
-    images = source.get("images")
-    if isinstance(images, list):
-        for img in images:
-            url = _normalize_photo_url(str(img or ""))
-            if url and url not in photos:
-                photos.append(url)
+    for key in ("images", "images360", "images_stream"):
+        photos.extend(_collect_photo_urls(source.get(key)))
+    photos = [x for x in dict.fromkeys([p for p in photos if p])]
     attrs: dict[str, Any] = {
         "category_name": _extract_ozon_category_name(source),
         "name": str(source.get("name") or "").strip(),
