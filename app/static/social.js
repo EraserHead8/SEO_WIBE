@@ -1143,7 +1143,9 @@ function socialOpenGroupAvatarModal() {
   const thread = socialGetCurrentThread();
   if (!thread || String(thread.kind || "") === "direct") return;
   const current = String(thread.avatar_url || "").trim();
-  const picks = typeof DEFAULT_AVATARS !== "undefined" ? DEFAULT_AVATARS : [];
+  const picks = typeof GROUP_AVATARS !== "undefined"
+    ? GROUP_AVATARS
+    : (typeof DEFAULT_AVATARS !== "undefined" ? DEFAULT_AVATARS : []);
   const pickerHtml = picks.map((url) => {
     const active = current && url === current ? "active" : "";
     return `<button type="button" class="avatar-chip ${active}" data-avatar-url="${escapeHtml(url)}"><img src="${escapeHtml(url)}" alt="avatar" /></button>`;

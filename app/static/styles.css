@@ -7390,3 +7390,161 @@ body[data-theme="light"] .nav-btn {
 body[data-theme="light"] .nav-btn:hover {
   background: color-mix(in oklab, var(--ds-surface-soft) 82%, #ffffff);
 }
+
+/* 2026-03 modern refresh v4: unified user/admin style + mobile spacing fix */
+:root {
+  --ui-card-radius: 18px;
+  --ui-card-shadow: 0 14px 34px rgba(18, 36, 73, 0.15);
+  --ui-soft-shadow: 0 8px 20px rgba(18, 36, 73, 0.1);
+}
+
+body[data-theme] {
+  background:
+    radial-gradient(90% 75% at 5% -10%, color-mix(in oklab, var(--ds-accent) 22%, transparent), transparent 62%),
+    radial-gradient(80% 70% at 110% -5%, color-mix(in oklab, var(--ds-accent-2) 20%, transparent), transparent 64%),
+    linear-gradient(145deg, var(--ds-bg), color-mix(in oklab, var(--ds-bg) 72%, #eaf2ff));
+}
+
+.app-bg {
+  opacity: 0.36;
+  mask-image: radial-gradient(circle at center, black 62%, transparent 100%);
+}
+
+.app-shell {
+  margin: 10px auto;
+  padding-bottom: 18px;
+}
+
+.sidebar {
+  border-radius: 22px;
+  border: 1px solid color-mix(in oklab, var(--ds-border) 85%, #ffffff);
+  box-shadow: var(--ui-card-shadow);
+  backdrop-filter: blur(8px);
+}
+
+.nav-btn {
+  border-radius: 12px;
+  border: 1px solid color-mix(in oklab, var(--ds-border) 82%, #ffffff);
+  background: color-mix(in oklab, var(--ds-surface) 92%, #ffffff);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.nav-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--ui-soft-shadow);
+}
+
+.nav-btn.active {
+  border-color: color-mix(in oklab, var(--ds-accent) 56%, var(--ds-border));
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--ds-accent) 22%, var(--ds-surface)),
+    color-mix(in oklab, var(--ds-accent-2) 20%, var(--ds-surface))
+  );
+}
+
+.workspace {
+  border-radius: 22px;
+  border: 1px solid color-mix(in oklab, var(--ds-border) 80%, #ffffff);
+  box-shadow: var(--ui-card-shadow);
+}
+
+.topbar {
+  border-radius: var(--ui-card-radius);
+  box-shadow: var(--ui-soft-shadow);
+}
+
+.topbar-avatar-btn {
+  border-radius: 999px;
+}
+
+.topbar-popover {
+  border-radius: 16px;
+}
+
+.topbar-popover .avatar {
+  border-radius: 50%;
+}
+
+.panel,
+.table-card,
+.help-card,
+.campaign-modal-card,
+.team-modal-card,
+.admin-user-profile-card {
+  border-radius: var(--ui-card-radius);
+  box-shadow: var(--ui-soft-shadow);
+}
+
+.chip-btn,
+.chip-select,
+button,
+.btn-secondary,
+.btn-danger {
+  border-radius: 12px;
+}
+
+.kpi {
+  border-radius: 14px;
+  box-shadow: var(--ui-soft-shadow);
+}
+
+.social-chat-layout,
+.social-note-row,
+.social-notes-editor,
+.social-task-col {
+  border-radius: 16px;
+}
+
+.profile-avatar-preview {
+  border-radius: 50%;
+  width: 116px;
+  height: 116px;
+  overflow: hidden;
+}
+
+.profile-avatar-preview img {
+  border-radius: 50%;
+}
+
+#adminPanelSection .admin-nav {
+  font-weight: 700;
+}
+
+#adminPanelSection .panel,
+#adminPanelSection .table-card {
+  background: color-mix(in oklab, var(--ds-surface) 94%, #ffffff);
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    margin: 0 auto !important;
+    padding-top: 0 !important;
+  }
+
+  #appSection.app-shell {
+    margin: 0 auto !important;
+    padding: 0 8px 14px !important;
+  }
+
+  #appSection .workspace {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+    min-height: auto !important;
+  }
+
+  #appSection .topbar {
+    margin-top: 0 !important;
+    margin-bottom: 8px !important;
+  }
+
+  #appSection .tab:not(.hidden) {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  .social-chat-layout {
+    min-height: 0 !important;
+    height: auto !important;
+  }
+}

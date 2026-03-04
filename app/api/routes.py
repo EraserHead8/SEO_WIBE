@@ -3966,6 +3966,11 @@ def profile_state(user: User = Depends(get_current_user), db: Session = Depends(
     if not _actor_is_owner(user):
         actor_email = _actor_email(user)
         payload.team_members = [x for x in payload.team_members if str(x.email or "").strip().lower() == actor_email]
+        actor_member = next((x for x in payload.team_members if str(x.email or "").strip().lower() == actor_email), None)
+        if actor_member:
+            payload.full_name = str(actor_member.full_name or actor_member.nickname or payload.full_name or "")
+            payload.phone = str(actor_member.phone or payload.phone or "")
+            payload.avatar_url = str(actor_member.avatar_url or payload.avatar_url or "")
     db.commit()
     return payload
 

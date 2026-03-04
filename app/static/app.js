@@ -1,7 +1,13 @@
 function sanitizeToken(raw) {
-  const value = String(raw || "").trim();
+  let value = String(raw || "").trim();
   if (!value || value === "null" || value === "undefined") return "";
-  if (!value.includes(".") || value.split(".").length < 3) return "";
+  if (value.toLowerCase().startsWith("bearer ")) {
+    value = value.slice(7).trim();
+  }
+  if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))) {
+    value = value.slice(1, -1).trim();
+  }
+  if (!value || !value.includes(".") || value.split(".").length < 3) return "";
   return value;
 }
 
@@ -49,6 +55,7 @@ if (token && !storedSessionToken && !storedLocalToken) {
 let suppressAlerts = false;
 let me = null;
 let authRetryCount = 0;
+let ensureAuthPromise = null;
 let selectedProducts = new Set();
 let selectedJobs = new Set();
 let currentProducts = [];
@@ -102,12 +109,14 @@ let activeTeamMemberId = 0;
 let teamModalMode = "edit";
 let profileAiState = null;
 let activeProfileSectionId = "";
+let pendingProfileActorFocus = false;
 const profileSectionNodes = new Map();
 let reviewPhotoItems = [];
 let reviewPhotoIndex = 0;
 let helpDocsRows = [];
 let helpAssistantHistory = [];
 const DEFAULT_AVATARS = Array.from({ length: 8 }, (_, i) => `/static/avatars/avatar-${String(i + 1).padStart(2, "0")}.svg`);
+const GROUP_AVATARS = Array.from({ length: 8 }, (_, i) => `/static/avatars/group-${String(i + 1).padStart(2, "0")}.svg`);
 let currentLang = (localStorage.getItem("ui_lang") || "ru").toLowerCase() === "en" ? "en" : "ru";
 let currentTheme = (localStorage.getItem("ui_theme") || "classic").toLowerCase();
 let sidebarCompact = localStorage.getItem("sidebar_compact") === "1";
@@ -155,8 +164,13 @@ function setToken(nextToken = "", persist = null) {
   forceCookieAuth = false;
   const useLocal = persist === null ? tokenStorage === "local" : Boolean(persist);
   tokenStorage = useLocal ? "local" : "session";
-  localStorage.setItem("token", token);
-  sessionStorage.setItem("token", token);
+  if (useLocal) {
+    localStorage.setItem("token", token);
+    sessionStorage.removeItem("token");
+  } else {
+    sessionStorage.setItem("token", token);
+    localStorage.removeItem("token");
+  }
   localStorage.setItem("remember_me", useLocal ? "1" : "0");
   localStorage.setItem("token_shadow", token);
 }
@@ -2042,119 +2056,135 @@ async function logout() {
   switchAuthMode("login");
 }
 
-async function ensureAuth(allowFallback = true) {
-  if (!token) {
-    const fallback = sanitizeToken(sessionStorage.getItem("token") || "")
-      || sanitizeToken(localStorage.getItem("token") || "")
-      || sanitizeToken(localStorage.getItem("token_shadow") || "");
-    if (fallback) setToken(fallback, true);
-  }
-  let authError = null;
-  let user = null;
-
-  const fetchMe = async (useAuthHeader) => {
-    let err = null;
-    const headers = useAuthHeader ? authHeadersStrict() : { "Content-Type": "application/json" };
-    const data = await requestJson("/api/auth/me", { headers }).catch((e) => {
-      err = e;
-      return null;
-    });
-    return { data, err };
+function readStoredToken() {
+  const fromSession = sanitizeToken(sessionStorage.getItem("token") || "");
+  const fromLocal = sanitizeToken(localStorage.getItem("token") || "");
+  const fromShadow = sanitizeToken(localStorage.getItem("token_shadow") || "");
+  return {
+    session: fromSession,
+    local: fromLocal,
+    shadow: fromShadow,
+    value: fromSession || fromLocal || fromShadow || "",
   };
+}
 
-  if (token) {
-    const authRes = await fetchMe(true);
-    if (authRes.data) {
-      user = authRes.data;
-      forceCookieAuth = false;
-    } else {
-      authError = authRes.err;
-    }
-  }
-  if (!user) {
-    const cookieRes = await fetchMe(false);
-    if (cookieRes.data) {
-      user = cookieRes.data;
-      forceCookieAuth = true;
-    } else if (!authError) {
-      authError = cookieRes.err;
-    }
-  }
+function scheduleEnsureAuth(delayMs = 1000, allowFallback = true) {
+  setTimeout(() => {
+    ensureAuth(allowFallback).catch(() => null);
+  }, Math.max(120, Number(delayMs) || 0));
+}
 
-  if (!user) {
-    const status = Number(authError?.status || 0);
-    if (status === 401 || status === 403) {
-      if (allowFallback && token) {
-        const stored = sanitizeToken(sessionStorage.getItem("token") || "")
-          || sanitizeToken(localStorage.getItem("token") || "")
-          || sanitizeToken(localStorage.getItem("token_shadow") || "");
-        if (stored && stored !== token) {
-          const persist = localStorage.getItem("remember_me") !== "0";
-          setToken(stored, persist);
-          setTimeout(() => ensureAuth(false).catch(() => null), 300);
+async function ensureAuth(allowFallback = true) {
+  if (ensureAuthPromise) return ensureAuthPromise;
+  ensureAuthPromise = (async () => {
+    if (!token) {
+      const stored = readStoredToken();
+      if (stored.value) {
+        const persist = stored.session ? false : (localStorage.getItem("remember_me") !== "0");
+        setToken(stored.value, persist);
+      }
+    }
+
+    let authError = null;
+    let user = null;
+
+    const fetchMe = async (useAuthHeader) => {
+      let err = null;
+      const headers = useAuthHeader ? authHeadersStrict() : { "Content-Type": "application/json" };
+      const data = await requestJson("/api/auth/me", { headers, timeoutMs: 15000 }).catch((e) => {
+        err = e;
+        return null;
+      });
+      return { data, err };
+    };
+
+    if (token) {
+      const authRes = await fetchMe(true);
+      if (authRes.data) {
+        user = authRes.data;
+        forceCookieAuth = false;
+      } else {
+        authError = authRes.err;
+      }
+    }
+    if (!user) {
+      const cookieRes = await fetchMe(false);
+      if (cookieRes.data) {
+        user = cookieRes.data;
+        forceCookieAuth = true;
+      } else if (!authError) {
+        authError = cookieRes.err;
+      }
+    }
+
+    if (!user) {
+      const status = Number(authError?.status || 0);
+      if (status === 401 || status === 403) {
+        authRetryCount += 1;
+        if (allowFallback && token) {
+          const stored = readStoredToken();
+          if (stored.value && stored.value !== token) {
+            const persist = stored.session ? false : (localStorage.getItem("remember_me") !== "0");
+            setToken(stored.value, persist);
+            scheduleEnsureAuth(350, false);
+            return false;
+          }
+        }
+        if (token && !isTokenExpired(token) && authRetryCount <= 4) {
+          scheduleEnsureAuth(700 + authRetryCount * 250, false);
           return false;
         }
-      }
-      authRetryCount += 1;
-      if (token && !isTokenExpired(token)) {
-        const delayMs = Math.min(2200, 600 + authRetryCount * 400);
-        setTimeout(() => ensureAuth(false).catch(() => null), delayMs);
+        if (token && isTokenExpired(token)) {
+          setToken("");
+        }
+        me = null;
+        renderTopbarUser();
+        document.getElementById("appSection")?.classList.add("hidden");
+        document.getElementById("authSection")?.classList.remove("hidden");
         return false;
       }
-      if (authRetryCount <= 2) {
-        setTimeout(() => ensureAuth(false).catch(() => null), 900);
+      if (authError && isNetworkError(authError)) {
+        scheduleEnsureAuth(1200, allowFallback);
         return false;
       }
-      if (token && isTokenExpired(token)) {
-        logout();
-        return false;
-      }
+      scheduleEnsureAuth(1300, allowFallback);
       return false;
     }
-    if (authError && isNetworkError(authError)) {
-      setTimeout(() => ensureAuth(allowFallback).catch(() => null), 1200);
-      return false;
-    }
-    setTimeout(() => {
-      ensureAuth(allowFallback).catch(() => null);
-    }, 1200);
-    return false;
-  }
-  const authSection = document.getElementById("authSection");
-  const appSection = document.getElementById("appSection");
-  if (authSection) authSection.classList.add("hidden");
-  if (appSection) appSection.classList.remove("hidden");
-  me = user;
-  authRetryCount = 0;
-  pruneLegacyUi();
-  ensureProfileTeamUi();
-  renderTopbarUser();
 
-  if (me.role !== "admin") {
-    const adminBtn = document.querySelector(".nav-btn[data-tab='admin']");
-    if (adminBtn) adminBtn.style.display = "none";
-  }
-  const prevAlerts = suppressAlerts;
-  suppressAlerts = true;
-  try {
-    const modulesOk = await loadCurrentModules();
-    if (!modulesOk) {
-      setTimeout(() => loadCurrentModules().catch(() => null), 1200);
-    }
-    await loadUiThemeSettings();
-    if (Boolean(uiThemeSettings.force_theme) || !uiThemeSettings.theme_choice_enabled) {
-      currentTheme = uiThemeSettings.default_theme || "classic";
-    }
-    applyUiThemeSettingsToSelect();
-    applyTheme(currentTheme);
-    applyUiLanguage();
-    applySidebarMode();
-    applyButtonTooltips();
-    const hasModules = modulesLoaded && enabledModules instanceof Set && enabledModules.size > 0;
-    const canSocial = !hasModules || enabledModules.has("social_hub");
-    const canSales = !hasModules || enabledModules.has("sales_stats");
+    const authSection = document.getElementById("authSection");
+    const appSection = document.getElementById("appSection");
+    if (authSection) authSection.classList.add("hidden");
+    if (appSection) appSection.classList.remove("hidden");
+    me = user;
+    authRetryCount = 0;
+    pruneLegacyUi();
+    ensureProfileTeamUi();
+    renderTopbarUser();
 
-    if (canSocial) {
+    if (me.role !== "admin") {
+      const adminBtn = document.querySelector(".nav-btn[data-tab='admin']");
+      if (adminBtn) adminBtn.style.display = "none";
+    }
+    const prevAlerts = suppressAlerts;
+    suppressAlerts = true;
+    try {
+      const modulesOk = await loadCurrentModules();
+      if (!modulesOk) {
+        scheduleEnsureAuth(1200, false);
+      }
+      await loadUiThemeSettings();
+      if (Boolean(uiThemeSettings.force_theme) || !uiThemeSettings.theme_choice_enabled) {
+        currentTheme = uiThemeSettings.default_theme || "classic";
+      }
+      applyUiThemeSettingsToSelect();
+      applyTheme(currentTheme);
+      applyUiLanguage();
+      applySidebarMode();
+      applyButtonTooltips();
+      const hasModules = modulesLoaded && enabledModules instanceof Set && enabledModules.size > 0;
+      const canSales = !hasModules || enabledModules.has("sales_stats");
+
+      // Keep social hooks alive globally, even before opening Social tab.
       window.__socialHooksRequested = true;
       if (typeof window.socialSetBell === "function") window.socialSetBell(0);
       if (typeof window.socialStartGlobalHooks === "function") {
@@ -2162,27 +2192,31 @@ async function ensureAuth(allowFallback = true) {
       } else if (typeof window.socialMaybeStartHooks === "function") {
         window.socialMaybeStartHooks();
       }
-    } else {
-      window.__socialHooksRequested = false;
-    }
-    if (canSales) {
-      await runModuleLoader("sales", loadSalesBundle, { force: true, maxAgeMs: 0 });
-    }
-    startModuleAutoRefresh();
-    try { window.dispatchEvent(new Event("seo-wibe-auth")); } catch (_) {}
-    showTab("sales", document.querySelector(".nav-btn[data-tab='sales']"));
-    setTimeout(() => {
-      if (currentTab === "sales") {
-        runModuleLoader("sales", loadSalesBundle, { force: true, maxAgeMs: 0 });
+
+      if (canSales) {
+        await runModuleLoader("sales", loadSalesBundle, { force: true, maxAgeMs: 0 });
       }
-    }, 120);
-    setTimeout(() => {
-      preloadModulesInBackground({ force: true });
-    }, 250);
-  } finally {
-    suppressAlerts = prevAlerts;
-  }
-  return true;
+      startModuleAutoRefresh();
+      try { window.dispatchEvent(new Event("seo-wibe-auth")); } catch (_) {}
+      showTab("sales", document.querySelector(".nav-btn[data-tab='sales']"));
+      setTimeout(() => {
+        if (currentTab === "sales") {
+          runModuleLoader("sales", loadSalesBundle, { force: true, maxAgeMs: 0 });
+        }
+      }, 120);
+      setTimeout(() => {
+        preloadModulesInBackground({ force: true });
+      }, 250);
+    } finally {
+      suppressAlerts = prevAlerts;
+    }
+    return true;
+  })()
+    .catch(() => false)
+    .finally(() => {
+      ensureAuthPromise = null;
+    });
+  return ensureAuthPromise;
 }
 
 function computeAvatarInitials(name, email) {
@@ -2257,6 +2291,12 @@ function toggleTopbarUserPopover() {
 function closeTopbarUserPopover() {
   const popover = document.getElementById("topbarUserPopover");
   if (popover) popover.classList.add("hidden");
+}
+
+function openMyProfileFromTopbar() {
+  pendingProfileActorFocus = true;
+  closeTopbarUserPopover();
+  showTab("profile", document.querySelector(".nav-btn[data-tab='profile']"));
 }
 
 function renderAvatarPreview(previewId, url, fallbackText = "--") {
@@ -7271,6 +7311,15 @@ function closeProfileSectionModal(evt) {
 }
 
 function renderProfileData(data) {
+  const actorMemberId = Number(me?.actor_member_id || 0);
+  const actorRow = Array.isArray(data?.team_members)
+    ? data.team_members.find((x) => Number(x.id || 0) === actorMemberId)
+    : null;
+  const actorName = String(actorRow?.full_name || actorRow?.nickname || me?.actor_nick || me?.email || "");
+  const actorAvatar = (!me?.actor_is_owner && actorRow)
+    ? String(actorRow.avatar_url || "").trim()
+    : String(data.avatar_url || "").trim();
+
   setInputValue("profileFullName", data.full_name || "");
   setInputValue("profilePositionTitle", data.position_title || "");
   setInputValue("profileCompanyName", data.company_name || "");
@@ -7281,10 +7330,10 @@ function renderProfileData(data) {
   setInputValue("profileTaxRate", data.tax_rate ?? 0);
   setInputValue("profilePhone", data.phone || "");
   setInputValue("profileTeamSize", data.team_size ?? 1);
-  setInputValue("profileAvatarUrl", data.avatar_url || "");
-  const initials = computeAvatarInitials(me?.actor_nick, me?.email);
-  renderAvatarPreview("profileAvatarPreview", data.avatar_url || "", initials);
-  renderAvatarPicker("profileAvatarPicker", data.avatar_url || "", (url) => {
+  setInputValue("profileAvatarUrl", actorAvatar || "");
+  const initials = computeAvatarInitials(actorName, me?.email);
+  renderAvatarPreview("profileAvatarPreview", actorAvatar || "", initials);
+  renderAvatarPicker("profileAvatarPicker", actorAvatar || "", (url) => {
     setInputValue("profileAvatarUrl", url);
     renderAvatarPreview("profileAvatarPreview", url, initials);
     if (me) {
@@ -7293,7 +7342,7 @@ function renderProfileData(data) {
     }
   });
   if (me) {
-    me.avatar_url = String(data.avatar_url || "");
+    me.avatar_url = String(actorAvatar || "");
     renderTopbarUser();
   }
   setInputValue("profileCompanyStructure", data.company_structure || "");
@@ -7893,6 +7942,15 @@ async function loadProfile() {
   renderProfileData(data);
   await loadProfileAi();
   markModuleLoaded("profile");
+  if (pendingProfileActorFocus) {
+    pendingProfileActorFocus = false;
+    const actorMemberId = Number(me?.actor_member_id || 0);
+    if (actorMemberId && findTeamMemberById(actorMemberId)) {
+      openTeamMemberEditor(actorMemberId);
+    } else {
+      openProfileSectionModal("company");
+    }
+  }
 }
 
 async function saveProfileData() {
@@ -8430,7 +8488,16 @@ initAuthRemember();
 applySidebarMode();
 applyButtonTooltips();
 initHoverTips();
+window.__socialHooksRequested = true;
 ensureAuth();
+
+window.addEventListener("focus", () => {
+  if (token || me) ensureAuth(false).catch(() => null);
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) return;
+  if (token || me) ensureAuth(false).catch(() => null);
+});
 
 ["loginEmail", "loginPassword"].forEach((id) => {
   const el = document.getElementById(id);
@@ -8589,6 +8656,7 @@ window.askHelpAssistant = askHelpAssistant;
 window.loadProfileAi = loadProfileAi;
 window.saveProfileAiSelection = saveProfileAiSelection;
 window.addProfileAiService = addProfileAiService;
+window.openMyProfileFromTopbar = openMyProfileFromTopbar;
 window.openProfileSectionModal = openProfileSectionModal;
 window.closeProfileSectionModal = closeProfileSectionModal;
 window.closeTeamMemberEditor = closeTeamMemberEditor;
