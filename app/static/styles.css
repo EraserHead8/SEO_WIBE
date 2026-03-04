@@ -6339,9 +6339,12 @@ body[data-theme="dark"] .landing-band .band-stats span {
 }
 
 .tg-msg-row.mine .tg-msg-bubble {
-  background: color-mix(in oklab, var(--tg-user-accent) 24%, var(--panel-bg) 76%);
-  border-left-color: color-mix(in oklab, var(--line) 80%, transparent);
+  background: linear-gradient(135deg,
+    color-mix(in oklab, var(--tg-user-accent) 28%, var(--panel-bg) 72%),
+    color-mix(in oklab, var(--tg-user-accent) 18%, var(--panel-bg) 82%));
+  border-left-color: color-mix(in oklab, var(--line) 70%, transparent);
   border-right: 3px solid color-mix(in oklab, var(--tg-user-accent) 70%, transparent);
+  box-shadow: 0 8px 18px rgba(6, 12, 24, 0.18);
 }
 
 .tg-msg-name {
@@ -6361,6 +6364,10 @@ body[data-theme="dark"] .landing-band .band-stats span {
   color: var(--text-muted);
   text-align: right;
   margin-top: 4px;
+}
+
+.tg-msg-row.mine .tg-msg-time {
+  color: color-mix(in oklab, var(--tg-user-accent) 55%, var(--text-muted));
 }
 
 .social-chat-compose {
@@ -7137,6 +7144,7 @@ body[data-theme="light"] .social-calc-eq {
 
   .social-chat-layout {
     height: auto;
+    min-height: 0;
   }
 
   .social-chat-layout .social-chat-main {

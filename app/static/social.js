@@ -1106,8 +1106,9 @@ function socialSetChatHeader(row) {
   if (sub) sub.textContent = subtitle;
   if (avatar) avatar.innerHTML = socialAvatarMarkup(display.avatarUrl, display.avatarLabel, "md");
   if (meta) {
-    if (lastSeen) {
-      meta.textContent = `${tr("Последний раз в сети", "Last seen")}: ${lastSeen}`;
+    if (row.kind === "direct") {
+      const label = lastSeen || tr("нет данных", "unknown");
+      meta.textContent = `${tr("Последний раз в сети", "Last seen")}: ${label}`;
       meta.classList.remove("hidden");
     } else {
       meta.textContent = "";

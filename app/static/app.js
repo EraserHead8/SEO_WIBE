@@ -5,6 +5,34 @@ function sanitizeToken(raw) {
   return value;
 }
 
+function decodeJwtPayload(tokenValue) {
+  try {
+    const tokenParts = String(tokenValue || "").split(".");
+    if (tokenParts.length < 2) return null;
+    const raw = tokenParts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = raw + "=".repeat((4 - (raw.length % 4)) % 4);
+    const json = atob(padded);
+    return JSON.parse(json);
+  } catch (_) {
+    return null;
+  }
+}
+
+function isTokenExpired(tokenValue, skewSec = 45) {
+  const payload = decodeJwtPayload(tokenValue);
+  if (!payload || !payload.exp) return false;
+  let expSec = 0;
+  if (typeof payload.exp === "number") {
+    expSec = payload.exp;
+  } else if (typeof payload.exp === "string") {
+    const parsed = Date.parse(payload.exp);
+    if (!Number.isNaN(parsed)) expSec = Math.floor(parsed / 1000);
+  }
+  if (!expSec) return false;
+  const nowSec = Math.floor(Date.now() / 1000);
+  return (expSec - Math.max(0, Number(skewSec) || 0)) <= nowSec;
+}
+
 const storedSessionToken = sanitizeToken(sessionStorage.getItem("token") || "");
 const storedLocalToken = sanitizeToken(localStorage.getItem("token") || "");
 const storedShadowToken = sanitizeToken(localStorage.getItem("token_shadow") || "");
@@ -995,6 +1023,9 @@ window.changeUiLang = changeUiLang;
 async function requestJson(url, opts = {}) {
   const timeoutMs = Number(opts.timeoutMs || 0);
   const fetchOpts = { credentials: "same-origin", ...opts };
+  if (fetchOpts.cache === undefined && String(url || "").startsWith("/api/")) {
+    fetchOpts.cache = "no-store";
+  }
   delete fetchOpts.timeoutMs;
 
   let controller = null;
@@ -1032,7 +1063,16 @@ async function requestJson(url, opts = {}) {
 
 function isNetworkError(err) {
   const msg = String(err?.message || "").toLowerCase();
-  return msg.includes("network error") || msg.includes("сетевая ошибка");
+  return msg.includes("network error")
+    || msg.includes("сетевая ошибка")
+    || msg.includes("failed to fetch")
+    || msg.includes("load failed")
+    || msg.includes("networkerror")
+    || msg.includes("timeout")
+    || msg.includes("timed out")
+    || msg.includes("time out")
+    || msg.includes("время ожидания")
+    || msg.includes("превышено время ожидания");
 }
 
 function delay(ms) {
@@ -1903,7 +1943,7 @@ async function register() {
   await ensureAuth();
 }
 
-async function retryAuthRequest(url, payload, attempts = 3) {
+async function retryAuthRequest(url, payload, attempts = 4) {
   let lastErr = null;
   for (let i = 0; i < attempts; i += 1) {
     const data = await requestJson(url, {
@@ -1925,7 +1965,7 @@ async function login() {
   const email = document.getElementById("loginEmail").value.trim();
   const password = document.getElementById("loginPassword").value;
   const remember = Boolean(document.getElementById("loginRemember")?.checked);
-  const { data, err } = await retryAuthRequest("/api/auth/login", { email, password });
+  const { data, err } = await retryAuthRequest("/api/auth/login", { email, password }, 4);
   if (!data) {
     if (err && isNetworkError(err)) {
       const ok = await ensureAuth().catch(() => false);
@@ -2022,20 +2062,23 @@ async function ensureAuth(allowFallback = true) {
     return { data, err };
   };
 
-  const cookieRes = await fetchMe(false);
-  if (cookieRes.data) {
-    user = cookieRes.data;
-    forceCookieAuth = true;
-  } else if (token) {
+  if (token) {
     const authRes = await fetchMe(true);
     if (authRes.data) {
       user = authRes.data;
       forceCookieAuth = false;
     } else {
-      authError = authRes.err || cookieRes.err;
+      authError = authRes.err;
     }
-  } else {
-    authError = cookieRes.err;
+  }
+  if (!user) {
+    const cookieRes = await fetchMe(false);
+    if (cookieRes.data) {
+      user = cookieRes.data;
+      forceCookieAuth = true;
+    } else if (!authError) {
+      authError = cookieRes.err;
+    }
   }
 
   if (!user) {
@@ -2053,11 +2096,16 @@ async function ensureAuth(allowFallback = true) {
         }
       }
       authRetryCount += 1;
-      if (authRetryCount <= 1) {
-        setTimeout(() => ensureAuth(false).catch(() => null), 800);
+      if (token && !isTokenExpired(token)) {
+        const delayMs = Math.min(2200, 600 + authRetryCount * 400);
+        setTimeout(() => ensureAuth(false).catch(() => null), delayMs);
         return false;
       }
-      if (token) {
+      if (authRetryCount <= 2) {
+        setTimeout(() => ensureAuth(false).catch(() => null), 900);
+        return false;
+      }
+      if (token && isTokenExpired(token)) {
         logout();
         return false;
       }
