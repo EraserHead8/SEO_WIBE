@@ -7,6 +7,9 @@ import hashlib
 import os
 import re
 import secrets
+import time
+import urllib.request
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -121,7 +124,9 @@ from app.schemas import (
     SocialChatDirectStartIn,
     SocialChatMessageIn,
     SocialChatMessageOut,
+    SocialChatThreadAvatarIn,
     SocialChatThreadOut,
+    SocialCurrencyRatesOut,
     SocialGameScoreIn,
     SocialGameScoreOut,
     SocialLeaderboardOut,
@@ -5716,6 +5721,7 @@ def _social_thread_to_out(db: Session, actor_key: str, row: SocialChatThread, me
                 "actor_key": key,
                 "nick": current_nick,
                 "avatar_url": str(avatar_url or ""),
+                "last_seen_at": x.updated_at.isoformat() if x.updated_at else "",
                 "is_me": key == actor_key,
             }
         )
@@ -5728,10 +5734,75 @@ def _social_thread_to_out(db: Session, actor_key: str, row: SocialChatThread, me
         id=row.id,
         kind=row.kind or "",
         title=title or row.title or "",
+        avatar_url=str(row.avatar_url or "") or None,
         last_message=last_payload,
         unread=int(unread),
         participants=participants,
     )
+
+
+_CBR_DAILY_URL = "https://www.cbr.ru/scripts/XML_daily.asp"
+_CBR_CODES = {"USD", "EUR", "CNY", "BYN", "TRY", "GBP", "UAH"}
+_CBR_CACHE_TTL = 60 * 60
+_CBR_CACHE: dict[str, Any] = {"stamp": 0.0, "payload": None}
+
+
+def _parse_cbr_number(raw: str) -> float:
+    safe = str(raw or "").strip().replace(",", ".")
+    try:
+        return float(safe)
+    except Exception:
+        return 0.0
+
+
+def _fetch_cbr_rates() -> dict[str, Any]:
+    with urllib.request.urlopen(_CBR_DAILY_URL, timeout=8) as resp:
+        data = resp.read()
+    root = ET.fromstring(data)
+    date_raw = str(root.attrib.get("Date", "")).strip()
+    date_iso = ""
+    if date_raw:
+        try:
+            date_iso = datetime.strptime(date_raw, "%d.%m.%Y").date().isoformat()
+        except Exception:
+            date_iso = date_raw
+    rates: dict[str, float] = {"RUB": 1.0}
+    for node in root.findall("Valute"):
+        code = str(node.findtext("CharCode", "") or "").strip().upper()
+        if not code or code not in _CBR_CODES:
+            continue
+        nominal = _parse_cbr_number(node.findtext("Nominal", "1"))
+        value = _parse_cbr_number(node.findtext("Value", "0"))
+        if nominal <= 0 or value <= 0:
+            continue
+        rates[code] = value / nominal
+    return {
+        "base": "RUB",
+        "date": date_iso or date_raw,
+        "updated_at": datetime.utcnow().isoformat(),
+        "source": "cbr",
+        "stale": False,
+        "rates": rates,
+    }
+
+
+def _get_cbr_rates() -> dict[str, Any]:
+    now = time.time()
+    cached = _CBR_CACHE.get("payload")
+    stamp = float(_CBR_CACHE.get("stamp") or 0.0)
+    if cached and (now - stamp) < _CBR_CACHE_TTL:
+        return cached
+    try:
+        payload = _fetch_cbr_rates()
+        _CBR_CACHE["payload"] = payload
+        _CBR_CACHE["stamp"] = now
+        return payload
+    except Exception:
+        if cached:
+            fallback = dict(cached)
+            fallback["stale"] = True
+            return fallback
+        raise
 
 
 def _social_push_notification(
@@ -5998,6 +6069,58 @@ def social_chat_threads(
     out.sort(key=lambda x: (x.unread, x.last_message.get("id", 0)), reverse=True)
     db.commit()
     return out
+
+
+@router.put("/social/chat/threads/{thread_id}/avatar", response_model=SocialChatThreadOut)
+def social_chat_thread_avatar(
+    thread_id: int,
+    payload: SocialChatThreadAvatarIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    thread = db.get(SocialChatThread, int(thread_id or 0))
+    if not thread:
+        raise HTTPException(status_code=404, detail="Чат не найден")
+    if thread.kind == "direct":
+        raise HTTPException(status_code=400, detail="Аватар доступен только для групповых чатов")
+    if thread.kind == "global" and user.role != "admin":
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+    if thread.kind == "company" and not _actor_is_owner(user) and user.role != "admin":
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+    actor_key, actor_nick, member_id = _social_actor_identity(db, user)
+    member_row = _social_ensure_thread_member(
+        db,
+        thread_id=thread.id,
+        actor_key=actor_key,
+        user_id=user.id,
+        member_id=member_id,
+        actor_nick=actor_nick,
+    )
+    safe_url = str(payload.avatar_url or "").strip()[:500]
+    thread.avatar_url = safe_url
+    thread.updated_at = datetime.utcnow()
+    _audit(
+        db,
+        user,
+        action="social_thread_avatar_updated",
+        details=json.dumps({"thread_id": int(thread.id), "avatar_url": safe_url}, ensure_ascii=False),
+        module_code="social_hub",
+        entity_type="social_thread",
+        entity_id=str(thread.id),
+    )
+    db.commit()
+    return _social_thread_to_out(db, actor_key, thread, member_row)
+
+
+@router.get("/social/currency/rates", response_model=SocialCurrencyRatesOut)
+def social_currency_rates(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    payload = _get_cbr_rates()
+    return SocialCurrencyRatesOut(**payload)
 
 
 @router.post("/social/chat/direct", response_model=SocialChatThreadOut)

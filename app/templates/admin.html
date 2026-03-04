@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260304d" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260304e" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -370,6 +370,12 @@
         <label><span>Телефон</span><input id="adminTeamModalPhone" placeholder="Телефон" /></label>
         <label><span>Ник</span><input id="adminTeamModalNickname" placeholder="Ник" /></label>
         <label><span>Ссылка на аватар</span><input id="adminTeamModalAvatar" placeholder="Avatar URL" /></label>
+        <div class="team-avatar-row">
+          <div id="adminTeamAvatarPreview" class="profile-avatar-preview">--</div>
+          <div class="team-avatar-controls">
+            <div id="adminTeamAvatarPicker" class="avatar-picker"></div>
+          </div>
+        </div>
       </div>
       <div class="team-modal-access">
         <span>Доступ к модулям</span>
@@ -479,6 +485,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script src="/static/admin.js?v=20260304c"></script>
+  <script src="/static/admin.js?v=20260304e"></script>
 </body>
 </html>

@@ -27,6 +27,7 @@ let adminTeamModalState = {
 
 const UI_THEMES = ["classic", "dark", "light", "moon", "newyear", "summer", "autumn", "winter", "spring", "japan", "greenland"];
 const BILLING_PLAN_CODES = ["starter", "pro", "business"];
+const ADMIN_DEFAULT_AVATARS = Array.from({ length: 8 }, (_, i) => `/static/avatars/avatar-${String(i + 1).padStart(2, "0")}.svg`);
 
 let adminLang = (localStorage.getItem("admin_ui_lang") || "ru").toLowerCase() === "en" ? "en" : "ru";
 let adminTheme = String(localStorage.getItem("admin_ui_theme") || "classic").toLowerCase();
@@ -360,6 +361,38 @@ function escapeHtml(value) {
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+}
+
+function renderAdminAvatarPreview(hostId, url, fallbackText = "--") {
+  const host = document.getElementById(hostId);
+  if (!host) return;
+  const safe = String(url || "").trim();
+  if (!safe) {
+    host.textContent = fallbackText;
+    return;
+  }
+  host.innerHTML = `<img src="${escapeHtml(safe)}" alt="avatar" class="avatar-img" />`;
+}
+
+function renderAdminAvatarPicker(hostId, currentUrl, onPick) {
+  const host = document.getElementById(hostId);
+  if (!host) return;
+  const selected = String(currentUrl || "").trim();
+  host.innerHTML = ADMIN_DEFAULT_AVATARS
+    .map((url) => {
+      const active = selected && url === selected ? "active" : "";
+      return `<button type="button" class="avatar-chip ${active}" data-avatar-url="${escapeHtml(url)}"><img src="${escapeHtml(url)}" alt="avatar" /></button>`;
+    })
+    .join("");
+  host.querySelectorAll("[data-avatar-url]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const url = String(btn.dataset.avatarUrl || "").trim();
+      if (typeof onPick === "function") onPick(url);
+      host.querySelectorAll(".avatar-chip").forEach((chip) => {
+        chip.classList.toggle("active", chip === btn);
+      });
+    });
+  });
 }
 
 function formatDateTime(raw) {
@@ -1083,7 +1116,6 @@ function renderAdminUserProfilePanel(payload, rowId) {
     ["tax_rate", aTr("Налоговая ставка, %", "Tax rate, %")],
     ["phone", aTr("Телефон", "Phone")],
     ["team_size", aTr("Размер команды", "Team size")],
-    ["avatar_url", aTr("Ссылка на аватар", "Avatar URL")],
   ];
 
   const credentialsHtml = credentials.length
@@ -1127,6 +1159,16 @@ function renderAdminUserProfilePanel(payload, rowId) {
       </div>
 
       <div class="admin-user-profile-grid">
+        <div class="team-avatar-row">
+          <div id="adminUserAvatarPreview" class="profile-avatar-preview">${avatarUrl ? "" : escapeHtml(initials)}</div>
+          <div class="team-avatar-controls">
+            <label class="admin-user-field">
+              <span>${aTr("Ссылка на аватар", "Avatar URL")}</span>
+              <input id="adminUserAvatarUrl" type="text" data-profile-field="avatar_url" value="${escapeHtml(avatarUrl)}" placeholder="https://..." />
+            </label>
+            <div id="adminUserAvatarPicker" class="avatar-picker"></div>
+          </div>
+        </div>
         ${profileFields
           .map(([key, label]) => {
             const value = profile[key] ?? "";
@@ -1209,6 +1251,17 @@ function renderAdminUserProfilePanel(payload, rowId) {
       </div>
     </div>
   `;
+
+  renderAdminAvatarPreview("adminUserAvatarPreview", avatarUrl, initials);
+  renderAdminAvatarPicker("adminUserAvatarPicker", avatarUrl, (url) => {
+    const input = document.getElementById("adminUserAvatarUrl");
+    if (input) input.value = url;
+    renderAdminAvatarPreview("adminUserAvatarPreview", url, initials);
+  });
+  const avatarInput = document.getElementById("adminUserAvatarUrl");
+  avatarInput?.addEventListener("input", () => {
+    renderAdminAvatarPreview("adminUserAvatarPreview", avatarInput.value, initials);
+  });
 
   const refreshProfile = async () => {
     await adminLoadUserProfileInto(payload.user_id, rowId, true);
@@ -1428,6 +1481,16 @@ function fillAdminTeamMemberModal() {
   if (phoneEl) phoneEl.value = String(member?.phone || "");
   if (nickEl) nickEl.value = String(member?.nickname || "");
   if (avatarEl) avatarEl.value = String(member?.avatar_url || "");
+  renderAdminAvatarPreview("adminTeamAvatarPreview", avatarEl?.value || "", "--");
+  renderAdminAvatarPicker("adminTeamAvatarPicker", avatarEl?.value || "", (url) => {
+    if (avatarEl) avatarEl.value = url;
+    renderAdminAvatarPreview("adminTeamAvatarPreview", url, "--");
+  });
+  if (avatarEl) {
+    avatarEl.oninput = () => {
+      renderAdminAvatarPreview("adminTeamAvatarPreview", avatarEl.value, "--");
+    };
+  }
 
   scopeEl.innerHTML = renderAdminTeamScopePicks(member?.access_scope || [], scopeKey, isOwner, "modal");
   modal.classList.remove("hidden");

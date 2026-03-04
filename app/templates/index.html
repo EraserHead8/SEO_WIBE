@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260304d" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260304e" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -989,7 +989,9 @@
                     <div id="socialChatHeadSubtitle" class="social-chat-head-subtitle hint">-</div>
                   </div>
                 </div>
+                <div id="socialChatHeadMeta" class="social-chat-head-meta hidden"></div>
                 <div class="social-chat-head-actions">
+                  <button id="socialChatAvatarBtn" class="btn-secondary hidden" type="button" onclick="socialOpenGroupAvatarModal()">Аватар</button>
                   <button class="btn-secondary" type="button" onclick="socialLoadThreads({ silent: true })">Обновить</button>
                 </div>
               </div>
@@ -1100,6 +1102,8 @@
                   </div>
                   <button class="btn-secondary" type="button" onclick="socialConvert()">Конвертировать</button>
                   <div id="socialConvResult" class="hint">-</div>
+                  <div id="socialConvRateMeta" class="hint">Курсы ЦБ: -</div>
+                  <div class="hint">Живые курсы валют через ЦБ с авто-обновлением.</div>
                 </section>
               </div>
             </div>
@@ -1321,7 +1325,7 @@
   <div id="hoverTip" class="hover-tip hidden"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script src="/static/app.js?v=20260304d"></script>
-  <script src="/static/social.js?v=20260304d"></script>
+  <script src="/static/app.js?v=20260304e"></script>
+  <script src="/static/social.js?v=20260304e"></script>
 </body>
 </html>

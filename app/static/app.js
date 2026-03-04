@@ -20,6 +20,7 @@ if (token && !storedSessionToken && !storedLocalToken) {
 }
 let suppressAlerts = false;
 let me = null;
+let authRetryCount = 0;
 let selectedProducts = new Set();
 let selectedJobs = new Set();
 let currentProducts = [];
@@ -187,7 +188,7 @@ function clearChartHost(host) {
 
 const authHeaders = () => {
   const headers = { "Content-Type": "application/json" };
-  if (token && !forceCookieAuth) headers["Authorization"] = `Bearer ${token}`;
+  if (token) headers["Authorization"] = `Bearer ${token}`;
   return headers;
 };
 
@@ -1926,6 +1927,10 @@ async function login() {
   const remember = Boolean(document.getElementById("loginRemember")?.checked);
   const { data, err } = await retryAuthRequest("/api/auth/login", { email, password });
   if (!data) {
+    if (err && isNetworkError(err)) {
+      const ok = await ensureAuth().catch(() => false);
+      if (ok) return;
+    }
     if (err) alert(err.message);
     return;
   }
@@ -1936,6 +1941,7 @@ async function login() {
 
 async function logout() {
   stopModuleAutoRefresh();
+  authRetryCount = 0;
   if (token) {
     await requestJson("/api/auth/logout", {
       method: "POST",
@@ -2043,29 +2049,35 @@ async function ensureAuth(allowFallback = true) {
           const persist = localStorage.getItem("remember_me") !== "0";
           setToken(stored, persist);
           setTimeout(() => ensureAuth(false).catch(() => null), 300);
-          return;
+          return false;
         }
+      }
+      authRetryCount += 1;
+      if (authRetryCount <= 1) {
+        setTimeout(() => ensureAuth(false).catch(() => null), 800);
+        return false;
       }
       if (token) {
         logout();
-        return;
+        return false;
       }
-      return;
+      return false;
     }
     if (authError && isNetworkError(authError)) {
       setTimeout(() => ensureAuth(allowFallback).catch(() => null), 1200);
-      return;
+      return false;
     }
     setTimeout(() => {
       ensureAuth(allowFallback).catch(() => null);
     }, 1200);
-    return;
+    return false;
   }
   const authSection = document.getElementById("authSection");
   const appSection = document.getElementById("appSection");
   if (authSection) authSection.classList.add("hidden");
   if (appSection) appSection.classList.remove("hidden");
   me = user;
+  authRetryCount = 0;
   pruneLegacyUi();
   ensureProfileTeamUi();
   renderTopbarUser();
@@ -2122,6 +2134,7 @@ async function ensureAuth(allowFallback = true) {
   } finally {
     suppressAlerts = prevAlerts;
   }
+  return true;
 }
 
 function computeAvatarInitials(name, email) {

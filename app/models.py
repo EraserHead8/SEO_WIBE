@@ -369,6 +369,7 @@ class SocialChatThread(Base):
     kind: Mapped[str] = mapped_column(String(20), index=True)  # global | company | direct
     owner_user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(255), default="")
+    avatar_url: Mapped[str] = mapped_column(String(500), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

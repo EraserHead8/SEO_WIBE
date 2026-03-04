@@ -694,13 +694,27 @@ class SocialChatMessageIn(BaseModel):
     text: str
 
 
+class SocialChatThreadAvatarIn(BaseModel):
+    avatar_url: str = ""
+
+
 class SocialChatThreadOut(BaseModel):
     id: int
     kind: str
     title: str
+    avatar_url: str | None = None
     last_message: dict[str, Any] = Field(default_factory=dict)
     unread: int = 0
     participants: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class SocialCurrencyRatesOut(BaseModel):
+    base: str = "RUB"
+    date: str | None = None
+    updated_at: str | None = None
+    source: str = "cbr"
+    stale: bool = False
+    rates: dict[str, float] = Field(default_factory=dict)
 
 
 class SocialChatMessageOut(BaseModel):

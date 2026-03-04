@@ -3700,6 +3700,13 @@ body[data-theme="light"] .hover-tip {
     margin: 0 auto;
   }
   #appSection .workspace {
+    padding-top: 8px;
+  }
+  .topbar {
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+  #appSection .workspace {
     min-height: auto;
   }
   #mainSidebar {
@@ -6007,6 +6014,11 @@ body[data-theme="dark"] .landing-band .band-stats span {
   max-width: 840px;
 }
 
+.social-avatar-editor {
+  display: grid;
+  gap: 12px;
+}
+
 .social-game-wrap canvas {
   width: min(100%, 420px);
   max-height: 70vh;
@@ -6236,6 +6248,17 @@ body[data-theme="dark"] .landing-band .band-stats span {
   font-size: 12px;
 }
 
+.social-chat-head-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-left: auto;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .social-chat-head-actions {
   display: flex;
   gap: 8px;
@@ -6281,6 +6304,7 @@ body[data-theme="dark"] .landing-band .band-stats span {
   align-items: flex-end;
   gap: 8px;
   max-width: 86%;
+  --tg-user-accent: var(--accent);
 }
 
 .tg-msg-row.mine {
@@ -6310,17 +6334,20 @@ body[data-theme="dark"] .landing-band .band-stats span {
   padding: 8px 10px 6px;
   background: var(--panel-bg);
   border: 1px solid color-mix(in oklab, var(--line) 80%, transparent);
+  border-left: 3px solid color-mix(in oklab, var(--tg-user-accent) 70%, transparent);
   box-shadow: 0 6px 14px rgba(6, 12, 24, 0.12);
 }
 
 .tg-msg-row.mine .tg-msg-bubble {
-  background: color-mix(in oklab, var(--accent) 20%, var(--panel-bg) 80%);
+  background: color-mix(in oklab, var(--tg-user-accent) 24%, var(--panel-bg) 76%);
+  border-left-color: color-mix(in oklab, var(--line) 80%, transparent);
+  border-right: 3px solid color-mix(in oklab, var(--tg-user-accent) 70%, transparent);
 }
 
 .tg-msg-name {
   font-size: 12px;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--tg-user-accent);
   margin-bottom: 2px;
 }
 
@@ -7097,6 +7124,15 @@ body[data-theme="light"] .social-calc-eq {
   .social-chat-layout,
   .social-notes-layout {
     grid-template-columns: 1fr;
+  }
+
+  .social-chat-head {
+    flex-wrap: wrap;
+  }
+
+  .social-chat-head-meta {
+    flex: 1 1 100%;
+    margin-left: 0;
   }
 
   .social-chat-layout {

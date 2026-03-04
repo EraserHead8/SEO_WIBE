@@ -42,14 +42,13 @@ def _ensure_owner_member(db: Session, user: User) -> TeamMember | None:
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 
-def _extract_bearer_token(request: Request) -> str:
+def _extract_tokens(request: Request) -> tuple[str, str]:
     auth_header = str(request.headers.get("authorization", "") or "")
+    header_token = ""
     if auth_header.lower().startswith("bearer "):
-        token = auth_header.split(" ", 1)[1].strip()
-        if token:
-            return token
+        header_token = auth_header.split(" ", 1)[1].strip()
     cookie_token = str(request.cookies.get("seo_wibe_token") or request.cookies.get("token") or "").strip()
-    return cookie_token
+    return header_token, cookie_token
 
 
 def _team_scope_from_member(member: TeamMember | None) -> list[str]:
@@ -74,15 +73,7 @@ def _team_scope_from_member(member: TeamMember | None) -> list[str]:
     return cleaned
 
 
-def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
-    token = _extract_bearer_token(request)
-    if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Невалидный токен")
-    subject = decode_access_token(token)
-    if not subject:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Невалидный токен")
-
-    subject_value = str(subject or "").strip()
+def _resolve_user_from_subject(db: Session, subject_value: str) -> User | None:
     actor_email = ""
     actor_member_id = 0
     owner_member_id = 0
@@ -94,7 +85,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
         user_id = int(subject_value.split(":", 1)[1] or 0)
         user = db.get(User, user_id)
         if not user:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Пользователь не найден")
+            return None
         actor_email = str(user.email or "").strip().lower()
         owner_member = _ensure_owner_member(db, user)
         if owner_member:
@@ -105,10 +96,10 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
         member_id = int(subject_value.split(":", 1)[1] or 0)
         member = db.get(TeamMember, member_id)
         if not member or not member.is_active:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Пользователь не найден")
+            return None
         user = db.get(User, member.user_id)
         if not user:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Пользователь не найден")
+            return None
         actor_email = str(member.email or "").strip().lower()
         actor_member_id = int(member.id or 0)
         actor_is_owner = bool(member.is_owner)
@@ -132,10 +123,10 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
                 .order_by(TeamMember.id.desc())
             )
             if not member:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Пользователь не найден")
+                return None
             user = db.get(User, member.user_id)
             if not user:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Пользователь не найден")
+                return None
             actor_email = str(member.email or subject_email).strip().lower()
             actor_member_id = int(member.id or 0)
             actor_is_owner = bool(member.is_owner)
@@ -150,6 +141,9 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
                 actor_scope = _team_scope_from_member(owner_member)
                 owner_member_id = int(owner_member.id or 0)
 
+    if not user:
+        return None
+
     # Runtime actor context is used by audit and permission filters.
     user._actor_email = actor_email
     user._actor_member_id = actor_member_id
@@ -157,6 +151,23 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     user._actor_member_scope = actor_scope
     user._owner_member_id = owner_member_id
     return user
+
+
+def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
+    header_token, cookie_token = _extract_tokens(request)
+    tokens: list[str] = []
+    if header_token:
+        tokens.append(header_token)
+    if cookie_token and cookie_token not in tokens:
+        tokens.append(cookie_token)
+    for token in tokens:
+        subject = decode_access_token(token)
+        if not subject:
+            continue
+        user = _resolve_user_from_subject(db, str(subject or "").strip())
+        if user:
+            return user
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Невалидный токен")
 
 
 def get_admin_user(user: User = Depends(get_current_user)) -> User:

@@ -112,6 +112,10 @@ def run_lightweight_migrations():
                 {"code": "social_hub"},
             )
 
+        chat_thread_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(social_chat_threads)"))}
+        if chat_thread_cols and "avatar_url" not in chat_thread_cols:
+            conn.execute(text("ALTER TABLE social_chat_threads ADD COLUMN avatar_url VARCHAR(500) DEFAULT ''"))
+
         settings_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(system_settings)"))}
         if settings_cols:
             default_ui = json.dumps(
