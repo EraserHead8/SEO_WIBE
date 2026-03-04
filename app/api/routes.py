@@ -772,7 +772,7 @@ def register(payload: RegisterRequest, request: Request, response: Response, db:
     db.commit()
 
     token = create_access_token(f"u:{user.id}")
-    response.set_cookie("seo_wibe_token", token, httponly=True, samesite="lax")
+    response.set_cookie("seo_wibe_token", token, httponly=True, samesite="lax", path="/")
     return TokenResponse(access_token=token)
 
 
@@ -794,7 +794,7 @@ def login(payload: LoginRequest, request: Request, response: Response, db: Sessi
         )
         db.commit()
         token = create_access_token(f"u:{user.id}")
-        response.set_cookie("seo_wibe_token", token, httponly=True, samesite="lax")
+        response.set_cookie("seo_wibe_token", token, httponly=True, samesite="lax", path="/")
         return TokenResponse(access_token=token)
 
     member = db.scalar(
@@ -824,7 +824,7 @@ def login(payload: LoginRequest, request: Request, response: Response, db: Sessi
             )
             db.commit()
             token = create_access_token(f"m:{member.id}")
-            response.set_cookie("seo_wibe_token", token, httponly=True, samesite="lax")
+            response.set_cookie("seo_wibe_token", token, httponly=True, samesite="lax", path="/")
             return TokenResponse(access_token=token)
     _audit(
         db,
@@ -855,7 +855,8 @@ def logout(request: Request, response: Response, user: User = Depends(get_curren
         request=request,
     )
     db.commit()
-    response.delete_cookie("seo_wibe_token")
+    response.delete_cookie("seo_wibe_token", path="/")
+    response.delete_cookie("seo_wibe_token", path="/api/auth")
     return MessageOut(message="Выход выполнен")
 
 

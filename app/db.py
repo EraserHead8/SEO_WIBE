@@ -58,6 +58,15 @@ def run_lightweight_migrations():
         if doc_cols and "owner_member_id" not in doc_cols:
             conn.execute(text("ALTER TABLE user_knowledge_docs ADD COLUMN owner_member_id INTEGER"))
 
+        claim_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(work_item_claims)"))}
+        if claim_cols:
+            if "owner_member_id" not in claim_cols:
+                conn.execute(text("ALTER TABLE work_item_claims ADD COLUMN owner_member_id INTEGER"))
+            if "created_at" not in claim_cols:
+                conn.execute(text("ALTER TABLE work_item_claims ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP"))
+            if "updated_at" not in claim_cols:
+                conn.execute(text("ALTER TABLE work_item_claims ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"))
+
         module_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(module_access)"))}
         if module_cols:
             for code in ("sales_stats", "user_profile"):

@@ -28,7 +28,7 @@ let socialState = {
 };
 
 function socialMaybeStartHooks() {
-  if (!token) return;
+  if (!token && !me) return;
   if (window.__socialHooksRequested) {
     try { socialStartGlobalHooks(); } catch (_) {}
   }
@@ -71,7 +71,7 @@ function socialSetBell(unread) {
 }
 
 async function socialPollNotifications() {
-  if (!token) return;
+  if (!token && !me) return;
   if (!(enabledModules instanceof Set) || !enabledModules.has("social_hub")) {
     socialSetBell(0);
     return;

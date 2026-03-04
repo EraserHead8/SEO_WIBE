@@ -181,10 +181,11 @@ function clearChartHost(host) {
   }
 }
 
-const authHeaders = () => ({
-  "Content-Type": "application/json",
-  "Authorization": `Bearer ${token}`,
-});
+const authHeaders = () => {
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  return headers;
+};
 
 const TAB_TITLES = {
   products: { ru: ["Товары", "Импорт, обновление и проверка позиций"], en: ["Products", "Import, refresh and ranking checks"] },
@@ -1967,18 +1968,16 @@ async function ensureAuth() {
       || sanitizeToken(localStorage.getItem("token_shadow") || "");
     if (fallback) setToken(fallback, true);
   }
-  if (!token) return;
-  document.getElementById("authSection").classList.add("hidden");
-  document.getElementById("appSection").classList.remove("hidden");
   let authError = null;
-  const user = await requestJson("/api/auth/me", { headers: authHeaders() }).catch((e) => {
+  const headers = token ? authHeaders() : { "Content-Type": "application/json" };
+  const user = await requestJson("/api/auth/me", { headers }).catch((e) => {
     authError = e;
     return null;
   });
   if (!user) {
     const status = Number(authError?.status || 0);
     const message = String(authError?.message || "").toLowerCase();
-    if (status === 401 || status === 403 || message.includes("токен") || message.includes("token")) {
+    if (token && (status === 401 || status === 403 || message.includes("токен") || message.includes("token"))) {
       const shadow = sanitizeToken(localStorage.getItem("token_shadow") || "");
       if (shadow && shadow !== token) {
         setToken(shadow, true);
@@ -1988,11 +1987,18 @@ async function ensureAuth() {
       logout();
       return;
     }
+    if (!token && (status === 401 || status === 403)) {
+      return;
+    }
     setTimeout(() => {
       ensureAuth().catch(() => null);
     }, 1200);
     return;
   }
+  const authSection = document.getElementById("authSection");
+  const appSection = document.getElementById("appSection");
+  if (authSection) authSection.classList.add("hidden");
+  if (appSection) appSection.classList.remove("hidden");
   me = user;
   pruneLegacyUi();
   ensureProfileTeamUi();

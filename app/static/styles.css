@@ -6928,6 +6928,70 @@ body[data-theme="light"] .social-calc-eq {
   --text-muted: var(--ds-muted);
 }
 
+body[data-theme] {
+  --text: var(--ds-text);
+  --muted: var(--ds-muted);
+  --line: var(--ds-border);
+  --panel: var(--ds-surface);
+  --panel-2: var(--ds-surface-2);
+  --surface-0: var(--ds-surface);
+  --surface-1: var(--ds-surface);
+  --surface-2: var(--ds-surface-2);
+  --surface-soft: var(--ds-surface-soft);
+  --surface-border: var(--ds-border);
+  --surface-border-strong: var(--ds-border-strong);
+  --surface-shadow: var(--ds-shadow);
+  --bg-1: var(--ds-bg);
+  --bg-2: var(--ds-bg-2);
+  --field-bg: var(--ds-surface);
+  --field-placeholder: color-mix(in oklab, var(--ds-muted) 70%, var(--ds-text));
+  --accent: var(--ds-accent);
+  --neon: var(--ds-accent-2);
+  --ok: var(--ds-ok);
+  --danger: var(--ds-danger);
+}
+
+#adminPanelSection {
+  --admin-strong-text: var(--ds-text);
+}
+
+#adminPanelSection .workspace .panel,
+#adminPanelSection .workspace .table-card {
+  background: var(--ds-surface);
+  border-color: var(--ds-border);
+  color: var(--ds-text);
+}
+
+#adminPanelSection .table-card table,
+#adminPanelSection .table-card th,
+#adminPanelSection .table-card td,
+#adminPanelSection .table-card tr,
+#adminPanelSection .panel h1,
+#adminPanelSection .panel h2,
+#adminPanelSection .panel h3,
+#adminPanelSection .panel h4,
+#adminPanelSection .table-card h1,
+#adminPanelSection .table-card h2,
+#adminPanelSection .table-card h3,
+#adminPanelSection .table-card h4,
+#adminPanelSection .admin-team-card-grid label,
+#adminPanelSection .admin-user-field,
+#adminPanelSection .admin-user-profile-head,
+#adminPanelSection .admin-ai-item .ai-title {
+  color: var(--ds-text);
+}
+
+#adminPanelSection .hint,
+#adminPanelSection .admin-user-field span,
+#adminPanelSection .admin-team-card-grid label > span {
+  color: var(--ds-muted);
+}
+
+#adminPanelSection table th {
+  background: var(--ds-surface-soft);
+  color: var(--ds-text);
+}
+
 .topbar-popover {
   background: var(--ds-surface);
   border-color: var(--ds-border);

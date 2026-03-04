@@ -38,9 +38,11 @@ async def refresh_access_token(request: Request, call_next):
     if not request.url.path.startswith("/api/"):
         return response
     auth_header = request.headers.get("authorization", "")
-    if not auth_header.lower().startswith("bearer "):
-        return response
-    token = auth_header.split(" ", 1)[1].strip()
+    token = ""
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header.split(" ", 1)[1].strip()
+    if not token:
+        token = str(request.cookies.get("seo_wibe_token") or request.cookies.get("token") or "").strip()
     if not token:
         return response
     payload = decode_access_token_payload(token)
