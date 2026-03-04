@@ -13,6 +13,7 @@ let tokenStorage = storedSessionToken
   ? "session"
   : (storedLocalToken || storedShadowToken ? "local" : "");
 let forceCookieAuth = false;
+let modulesLoaded = false;
 if (token && !storedSessionToken && !storedLocalToken) {
   localStorage.setItem("token", token);
   tokenStorage = "local";
@@ -187,6 +188,12 @@ function clearChartHost(host) {
 const authHeaders = () => {
   const headers = { "Content-Type": "application/json" };
   if (token && !forceCookieAuth) headers["Authorization"] = `Bearer ${token}`;
+  return headers;
+};
+
+const authHeadersStrict = () => {
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
   return headers;
 };
 
@@ -1689,7 +1696,7 @@ function applyModuleVisibility() {
 
 async function loadCurrentModules() {
   const rows = await requestJson("/api/modules/current", { headers: authHeaders() }).catch(() => null);
-  if (!rows) return;
+  if (!rows) return false;
   const active = new Set();
   if (Array.isArray(rows)) {
     for (const row of rows) {
@@ -1697,7 +1704,9 @@ async function loadCurrentModules() {
     }
   }
   enabledModules = active;
+  modulesLoaded = true;
   applyModuleVisibility();
+  return true;
 }
 
 async function loadUiThemeSettings() {
@@ -1743,8 +1752,8 @@ async function runModuleLoader(key, loader, { force = false, maxAgeMs = MODULE_C
     return;
   }
   const task = (async () => {
-    await loader();
-    markModuleLoaded(cacheKey);
+    const ok = await loader();
+    if (ok !== false) markModuleLoaded(cacheKey);
   })()
     .catch(() => null)
     .finally(() => moduleInflightState.delete(cacheKey));
@@ -1762,11 +1771,11 @@ async function loadProductsWorkspace() {
 
 async function preloadModulesInBackground({ force = false } = {}) {
   const queue = [
-    { key: "sales", load: async () => { await loadDashboard(); await loadSalesStats(); }, enabled: () => enabledModules.has("sales_stats") },
+    { key: "sales", load: loadSalesBundle, enabled: () => !modulesLoaded || enabledModules.has("sales_stats") },
     { key: "products", load: loadProductsWorkspace, enabled: () => true },
     { key: "reviews", load: loadReviewsWorkspace, enabled: () => enabledModules.has("wb_reviews_ai") || enabledModules.has("wb_questions_ai") || enabledModules.has("returns") },
     { key: "ads", load: loadAdsWorkspace, enabled: () => enabledModules.has("wb_ads") || enabledModules.has("wb_ads_analytics") || enabledModules.has("wb_ads_recommendations") },
-    { key: "social", load: () => (typeof loadSocialWorkspace === "function" ? loadSocialWorkspace() : Promise.resolve()), enabled: () => enabledModules.has("social_hub") },
+    { key: "social", load: () => (typeof loadSocialWorkspace === "function" ? loadSocialWorkspace() : Promise.resolve()), enabled: () => !modulesLoaded || enabledModules.has("social_hub") },
     { key: "profile", load: loadProfile, enabled: () => enabledModules.has("user_profile") },
     { key: "help", load: loadHelpWorkspace, enabled: () => enabledModules.has("help_center") || enabledModules.has("ai_assistant") },
   ];
@@ -1829,10 +1838,7 @@ function showTab(name, btn = null) {
 
   if (targetTab === "sales") {
     normalizeSalesLayout();
-    runModuleLoader("sales", async () => {
-      await loadDashboard();
-      await loadSalesStats();
-    });
+    runModuleLoader("sales", loadSalesBundle);
     setTimeout(() => {
       if (currentTab === "sales") renderSalesStats();
     }, 120);
@@ -1885,27 +1891,7 @@ function closeMobileNav(evt = null) {
 async function register() {
   const email = document.getElementById("regEmail").value.trim();
   const password = document.getElementById("regPassword").value;
-  let err = null;
-  let data = await requestJson("/api/auth/register", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  }).catch((e) => {
-    err = e;
-    return null;
-  });
-  if (!data && err && isNetworkError(err)) {
-    await delay(600);
-    err = null;
-    data = await requestJson("/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    }).catch((e) => {
-      err = e;
-      return null;
-    });
-  }
+  const { data, err } = await retryAuthRequest("/api/auth/register", { email, password });
   if (!data) {
     if (err) alert(err.message);
     return;
@@ -1916,31 +1902,29 @@ async function register() {
   await ensureAuth();
 }
 
+async function retryAuthRequest(url, payload, attempts = 3) {
+  let lastErr = null;
+  for (let i = 0; i < attempts; i += 1) {
+    const data = await requestJson(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).catch((e) => {
+      lastErr = e;
+      return null;
+    });
+    if (data) return { data, err: null };
+    if (!lastErr || !isNetworkError(lastErr)) break;
+    await delay(500 + i * 450);
+  }
+  return { data: null, err: lastErr };
+}
+
 async function login() {
   const email = document.getElementById("loginEmail").value.trim();
   const password = document.getElementById("loginPassword").value;
   const remember = Boolean(document.getElementById("loginRemember")?.checked);
-  let err = null;
-  let data = await requestJson("/api/auth/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  }).catch((e) => {
-    err = e;
-    return null;
-  });
-  if (!data && err && isNetworkError(err)) {
-    await delay(600);
-    err = null;
-    data = await requestJson("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    }).catch((e) => {
-      err = e;
-      return null;
-    });
-  }
+  const { data, err } = await retryAuthRequest("/api/auth/login", { email, password });
   if (!data) {
     if (err) alert(err.message);
     return;
@@ -1984,6 +1968,7 @@ async function logout() {
   salesCurrentLabel = "";
   moduleLoadState.clear();
   moduleInflightState.clear();
+  modulesLoaded = false;
   currentProductsSubtab = "catalog";
   currentReviewsSubtab = "reviews";
   currentAdsSubtab = "campaigns";
@@ -2019,31 +2004,56 @@ async function ensureAuth(allowFallback = true) {
     if (fallback) setToken(fallback, true);
   }
   let authError = null;
-  const useAuthHeader = token && !forceCookieAuth;
-  const headers = useAuthHeader ? authHeaders() : { "Content-Type": "application/json" };
-  const user = await requestJson("/api/auth/me", { headers }).catch((e) => {
-    authError = e;
-    return null;
-  });
+  let user = null;
+
+  const fetchMe = async (useAuthHeader) => {
+    let err = null;
+    const headers = useAuthHeader ? authHeadersStrict() : { "Content-Type": "application/json" };
+    const data = await requestJson("/api/auth/me", { headers }).catch((e) => {
+      err = e;
+      return null;
+    });
+    return { data, err };
+  };
+
+  const cookieRes = await fetchMe(false);
+  if (cookieRes.data) {
+    user = cookieRes.data;
+    forceCookieAuth = true;
+  } else if (token) {
+    const authRes = await fetchMe(true);
+    if (authRes.data) {
+      user = authRes.data;
+      forceCookieAuth = false;
+    } else {
+      authError = authRes.err || cookieRes.err;
+    }
+  } else {
+    authError = cookieRes.err;
+  }
+
   if (!user) {
     const status = Number(authError?.status || 0);
-    const message = String(authError?.message || "").toLowerCase();
-    if (allowFallback && token && useAuthHeader && (status === 401 || status === 403 || message.includes("токен") || message.includes("token"))) {
-      const shadow = sanitizeToken(localStorage.getItem("token_shadow") || "");
-      if (shadow && shadow !== token) {
-        setToken(shadow, true);
-        setTimeout(() => ensureAuth(false).catch(() => null), 400);
-        return;
-      }
-      forceCookieAuth = true;
-      setTimeout(() => ensureAuth(false).catch(() => null), 200);
-      return;
-    }
     if (status === 401 || status === 403) {
+      if (allowFallback && token) {
+        const stored = sanitizeToken(sessionStorage.getItem("token") || "")
+          || sanitizeToken(localStorage.getItem("token") || "")
+          || sanitizeToken(localStorage.getItem("token_shadow") || "");
+        if (stored && stored !== token) {
+          const persist = localStorage.getItem("remember_me") !== "0";
+          setToken(stored, persist);
+          setTimeout(() => ensureAuth(false).catch(() => null), 300);
+          return;
+        }
+      }
       if (token) {
         logout();
         return;
       }
+      return;
+    }
+    if (authError && isNetworkError(authError)) {
+      setTimeout(() => ensureAuth(allowFallback).catch(() => null), 1200);
       return;
     }
     setTimeout(() => {
@@ -2064,51 +2074,54 @@ async function ensureAuth(allowFallback = true) {
     const adminBtn = document.querySelector(".nav-btn[data-tab='admin']");
     if (adminBtn) adminBtn.style.display = "none";
   }
-  await loadCurrentModules();
-  await loadUiThemeSettings();
-  if (Boolean(uiThemeSettings.force_theme) || !uiThemeSettings.theme_choice_enabled) {
-    currentTheme = uiThemeSettings.default_theme || "classic";
-  }
-  applyUiThemeSettingsToSelect();
-  applyTheme(currentTheme);
-  applyUiLanguage();
-  applySidebarMode();
-  applyButtonTooltips();
-  const hasModules = enabledModules instanceof Set && enabledModules.size > 0;
-  const canSocial = !hasModules || enabledModules.has("social_hub");
-  const canSales = !hasModules || enabledModules.has("sales_stats");
+  const prevAlerts = suppressAlerts;
+  suppressAlerts = true;
+  try {
+    const modulesOk = await loadCurrentModules();
+    if (!modulesOk) {
+      setTimeout(() => loadCurrentModules().catch(() => null), 1200);
+    }
+    await loadUiThemeSettings();
+    if (Boolean(uiThemeSettings.force_theme) || !uiThemeSettings.theme_choice_enabled) {
+      currentTheme = uiThemeSettings.default_theme || "classic";
+    }
+    applyUiThemeSettingsToSelect();
+    applyTheme(currentTheme);
+    applyUiLanguage();
+    applySidebarMode();
+    applyButtonTooltips();
+    const hasModules = modulesLoaded && enabledModules instanceof Set && enabledModules.size > 0;
+    const canSocial = !hasModules || enabledModules.has("social_hub");
+    const canSales = !hasModules || enabledModules.has("sales_stats");
 
-  if (canSocial) {
-    window.__socialHooksRequested = true;
-    if (typeof window.socialSetBell === "function") window.socialSetBell(0);
-    if (typeof window.socialStartGlobalHooks === "function") {
-      try { window.socialStartGlobalHooks(); } catch (_) {}
-    } else if (typeof window.socialMaybeStartHooks === "function") {
-      window.socialMaybeStartHooks();
+    if (canSocial) {
+      window.__socialHooksRequested = true;
+      if (typeof window.socialSetBell === "function") window.socialSetBell(0);
+      if (typeof window.socialStartGlobalHooks === "function") {
+        try { window.socialStartGlobalHooks(); } catch (_) {}
+      } else if (typeof window.socialMaybeStartHooks === "function") {
+        window.socialMaybeStartHooks();
+      }
+    } else {
+      window.__socialHooksRequested = false;
     }
-  } else {
-    window.__socialHooksRequested = false;
-  }
-  if (canSales) {
-    await runModuleLoader("sales", async () => {
-      await loadDashboard();
-      await loadSalesStats();
-    }, { force: true, maxAgeMs: 0 });
-  }
-  startModuleAutoRefresh();
-  try { window.dispatchEvent(new Event("seo-wibe-auth")); } catch (_) {}
-  showTab("sales", document.querySelector(".nav-btn[data-tab='sales']"));
-  setTimeout(() => {
-    if (currentTab === "sales") {
-      runModuleLoader("sales", async () => {
-        await loadDashboard();
-        await loadSalesStats();
-      }, { force: true, maxAgeMs: 0 });
+    if (canSales) {
+      await runModuleLoader("sales", loadSalesBundle, { force: true, maxAgeMs: 0 });
     }
-  }, 120);
-  setTimeout(() => {
-    preloadModulesInBackground({ force: true });
-  }, 250);
+    startModuleAutoRefresh();
+    try { window.dispatchEvent(new Event("seo-wibe-auth")); } catch (_) {}
+    showTab("sales", document.querySelector(".nav-btn[data-tab='sales']"));
+    setTimeout(() => {
+      if (currentTab === "sales") {
+        runModuleLoader("sales", loadSalesBundle, { force: true, maxAgeMs: 0 });
+      }
+    }, 120);
+    setTimeout(() => {
+      preloadModulesInBackground({ force: true });
+    }, 250);
+  } finally {
+    suppressAlerts = prevAlerts;
+  }
 }
 
 function computeAvatarInitials(name, email) {
@@ -2138,6 +2151,7 @@ function renderTopbarUser() {
     : (isOwner ? tr("Владелец", "Owner") : tr("Сотрудник", "Member"));
   const initials = computeAvatarInitials(name, me.email);
   const avatarText = document.getElementById("topbarAvatarText");
+  const avatarName = document.getElementById("topbarAvatarName");
   const popAvatar = document.getElementById("topbarPopoverAvatar");
   const avatarImg = document.getElementById("topbarAvatarImg");
   const popAvatarImg = document.getElementById("topbarPopoverAvatarImg");
@@ -2146,6 +2160,7 @@ function renderTopbarUser() {
   const popRole = document.getElementById("topbarPopoverRole");
   const popEmail = document.getElementById("topbarPopoverEmail");
   if (avatarText) avatarText.textContent = initials;
+  if (avatarName) avatarName.textContent = name;
   if (popAvatarText) popAvatarText.textContent = initials;
   if (popAvatar) popAvatar.classList.toggle("has-avatar", Boolean(me.avatar_url));
   if (avatarImg) {
@@ -6315,7 +6330,7 @@ async function recheckDue() {
 
 async function loadDashboard() {
   const d = await requestJson("/api/dashboard", { headers: authHeaders() }).catch(() => null);
-  if (!d) return;
+  if (!d) return false;
 
   const stats = [
     [tr("Товаров", "Products"), d.total_products],
@@ -6340,6 +6355,13 @@ async function loadDashboard() {
 
   const points = await loadTrend({ days: 21 });
   renderTrendChart("dashboardTrendChart", "dashboardTrendMeta", points);
+  return true;
+}
+
+async function loadSalesBundle() {
+  const dashOk = await loadDashboard();
+  const salesOk = await loadSalesStats();
+  return dashOk !== false && salesOk !== false;
 }
 
 function initSalesPeriodDefaults() {
@@ -6912,7 +6934,7 @@ function renderSalesStats() {
 }
 
 async function loadSalesStats(retryAttempt = 0) {
-  if (!enabledModules.has("sales_stats")) {
+  if (modulesLoaded && !enabledModules.has("sales_stats")) {
     const meta = document.getElementById("salesStatsMeta");
     if (meta) meta.textContent = tr("Модуль статистики продаж отключен администратором.", "Sales statistics module is disabled by admin.");
     salesRows = [];
@@ -6921,7 +6943,7 @@ async function loadSalesStats(retryAttempt = 0) {
     salesLoadState = "idle";
     updateSalesLoadStatus();
     renderSalesStats();
-    return;
+    return false;
   }
   salesLoadToken += 1;
   const runToken = salesLoadToken;
@@ -7009,7 +7031,7 @@ async function loadSalesStats(retryAttempt = 0) {
     renderSalesStats();
     if (meta) meta.textContent = tr("Ошибка загрузки статистики. Проверьте API-ключи и период.", "Sales loading failed. Check API keys and period.");
     if (lastError) alert(lastError);
-    return;
+    return false;
   }
   if (runToken !== salesLoadToken) return;
 
@@ -7078,6 +7100,7 @@ async function loadSalesStats(retryAttempt = 0) {
   updateSalesLoadStatus();
   renderSalesStats();
   markModuleLoaded("sales");
+  return true;
 }
 
 async function loadBilling() {
@@ -7203,6 +7226,10 @@ function renderProfileData(data) {
   renderAvatarPicker("profileAvatarPicker", data.avatar_url || "", (url) => {
     setInputValue("profileAvatarUrl", url);
     renderAvatarPreview("profileAvatarPreview", url, initials);
+    if (me) {
+      me.avatar_url = String(url || "");
+      renderTopbarUser();
+    }
   });
   if (me) {
     me.avatar_url = String(data.avatar_url || "");

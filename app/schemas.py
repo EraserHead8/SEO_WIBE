@@ -708,6 +708,7 @@ class SocialChatMessageOut(BaseModel):
     thread_id: int
     sender_key: str
     sender_nick: str
+    sender_avatar: str | None = None
     text: str
     created_at: str
     is_mine: bool = False

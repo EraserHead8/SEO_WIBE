@@ -5568,6 +5568,34 @@ def _social_current_nick_by_key(db: Session, actor_key: str) -> str:
     return ""
 
 
+def _social_current_avatar_by_key(db: Session, actor_key: str) -> str:
+    key = str(actor_key or "").strip().lower()
+    if not key:
+        return ""
+    if key.startswith("m:"):
+        member_id = _to_int_safe(key.split(":", 1)[1])
+        member = db.get(TeamMember, member_id) if member_id else None
+        if member and member.is_active:
+            return str(member.avatar_url or "").strip()
+        return ""
+    if key.startswith("u:"):
+        user_id = _to_int_safe(key.split(":", 1)[1])
+        owner = db.get(User, user_id) if user_id else None
+        if not owner:
+            return ""
+        owner_member = db.scalar(
+            select(TeamMember).where(
+                TeamMember.user_id == owner.id,
+                TeamMember.is_owner.is_(True),
+            ).order_by(TeamMember.id.asc())
+        )
+        if owner_member and owner_member.avatar_url:
+            return str(owner_member.avatar_url or "").strip()
+        profile = db.scalar(select(UserProfile).where(UserProfile.user_id == owner.id))
+        return str(profile.avatar_url or "").strip() if profile else ""
+    return ""
+
+
 def _social_ensure_thread_member(
     db: Session,
     *,
@@ -5652,10 +5680,12 @@ def _social_thread_to_out(db: Session, actor_key: str, row: SocialChatThread, me
     last = _social_thread_last_message(db, row.id)
     last_payload: dict[str, Any] = {}
     if last:
+        last_avatar = _social_current_avatar_by_key(db, str(last.sender_key or ""))
         last_payload = {
             "id": int(last.id),
             "sender_key": str(last.sender_key or ""),
             "sender_nick": str(last.sender_nick or ""),
+            "sender_avatar": str(last_avatar or ""),
             "text": str(last.text or ""),
             "created_at": last.created_at.isoformat() if last.created_at else "",
         }
@@ -5677,6 +5707,7 @@ def _social_thread_to_out(db: Session, actor_key: str, row: SocialChatThread, me
     for x in participants_rows:
         key = str(x.actor_key or "")
         current_nick = _social_current_nick_by_key(db, key) or str(x.actor_nick or "")
+        avatar_url = _social_current_avatar_by_key(db, key)
         if current_nick and current_nick != str(x.actor_nick or ""):
             x.actor_nick = current_nick[:120]
             x.updated_at = datetime.utcnow()
@@ -5684,6 +5715,7 @@ def _social_thread_to_out(db: Session, actor_key: str, row: SocialChatThread, me
             {
                 "actor_key": key,
                 "nick": current_nick,
+                "avatar_url": str(avatar_url or ""),
                 "is_me": key == actor_key,
             }
         )
@@ -6058,6 +6090,7 @@ def social_chat_actor_directory(
             "actor_key": key,
             "nick": nick[:120],
             "company": company,
+            "avatar_url": str(row.avatar_url or ""),
             "is_owner": bool(row.is_owner),
         })
     for row in owners:
@@ -6082,6 +6115,7 @@ def social_chat_actor_directory(
             "actor_key": key,
             "nick": nick[:120],
             "company": str(row.email or "").strip().lower(),
+            "avatar_url": "",
             "is_owner": True,
         })
     return out[:500]
@@ -6121,6 +6155,7 @@ def social_chat_messages(
             thread_id=int(row.thread_id),
             sender_key=str(row.sender_key or ""),
             sender_nick=_social_current_nick_by_key(db, str(row.sender_key or "")) or str(row.sender_nick or ""),
+            sender_avatar=_social_current_avatar_by_key(db, str(row.sender_key or "")) or None,
             text=str(row.text or ""),
             created_at=row.created_at.isoformat() if row.created_at else "",
             is_mine=str(row.sender_key or "") == actor_key,
@@ -6211,6 +6246,7 @@ def social_chat_send_message(
         thread_id=int(message.thread_id),
         sender_key=actor_key,
         sender_nick=actor_nick,
+        sender_avatar=_social_current_avatar_by_key(db, actor_key) or None,
         text=str(message.text or ""),
         created_at=message.created_at.isoformat() if message.created_at else "",
         is_mine=True,
@@ -7947,6 +7983,8 @@ def _claim_or_validate_work_item(
     if row:
         if int(row.owner_member_id or 0) != actor_member_id:
             raise HTTPException(status_code=403, detail="Запись уже закреплена за другим сотрудником")
+        if not row.claimed_at:
+            row.claimed_at = datetime.utcnow()
         row.updated_at = datetime.utcnow()
         return
     row = WorkItemClaim(
@@ -7957,6 +7995,8 @@ def _claim_or_validate_work_item(
         item_external_id=item_id,
         owner_member_id=actor_member_id,
         claimed_at=datetime.utcnow(),
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
     )
     db.add(row)
 

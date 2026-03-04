@@ -360,7 +360,13 @@ def post_ozon_review_reply(api_key: str, review_id: str, text: str) -> tuple[boo
     return False, last_error
 
 
-def post_ozon_question_reply(api_key: str, question_id: str, text: str) -> tuple[bool, str]:
+def post_ozon_question_reply(
+    api_key: str,
+    question_id: str,
+    text: str,
+    *,
+    sku: int | None = None,
+) -> tuple[bool, str]:
     if not question_id.strip():
         return False, "Не указан ID вопроса"
     reply = " ".join(text.split())
@@ -376,12 +382,23 @@ def post_ozon_question_reply(api_key: str, question_id: str, text: str) -> tuple
     except Exception:
         int_id = None
 
+    def _maybe_with_sku(payload: dict[str, Any]) -> dict[str, Any]:
+        if sku is not None and int(sku or 0) > 0:
+            payload = dict(payload)
+            payload["sku"] = int(sku)
+        return payload
+
     payloads: list[dict[str, Any]] = [
-        {"question_id": raw_id, "text": reply},
-        {"id": raw_id, "text": reply},
+        _maybe_with_sku({"question_id": raw_id, "text": reply}),
+        _maybe_with_sku({"id": raw_id, "text": reply}),
     ]
     if int_id is not None:
-        payloads.extend([{"question_id": int_id, "text": reply}, {"id": int_id, "text": reply}])
+        payloads.extend(
+            [
+                _maybe_with_sku({"question_id": int_id, "text": reply}),
+                _maybe_with_sku({"id": int_id, "text": reply}),
+            ]
+        )
 
     endpoints = [
         "https://api-seller.ozon.ru/v1/question/answer/create",

@@ -7,10 +7,12 @@ let socialState = {
   chatThreads: [],
   chatActors: [],
   currentThreadId: 0,
+  currentThreadKind: "",
   chatMessages: [],
   chatOldestId: 0,
   chatHasMore: true,
   chatRefreshTimer: null,
+  chatSearch: "",
   actors: [],
   projects: [],
   tasks: [],
@@ -62,7 +64,7 @@ function socialSetBell(unread) {
   const btn = document.getElementById("socialBellBtn");
   const badge = document.getElementById("socialBellBadge");
   if (!btn || !badge) return;
-  const canUse = enabledModules instanceof Set && enabledModules.has("social_hub");
+  const canUse = !modulesLoaded || (enabledModules instanceof Set && enabledModules.has("social_hub"));
   btn.classList.toggle("hidden", !canUse);
   if (!canUse) return;
   const value = Math.max(0, Number(unread || 0));
@@ -72,7 +74,7 @@ function socialSetBell(unread) {
 
 async function socialPollNotifications() {
   if (!token && !me) return;
-  if (!(enabledModules instanceof Set) || !enabledModules.has("social_hub")) {
+  if (modulesLoaded && (!(enabledModules instanceof Set) || !enabledModules.has("social_hub"))) {
     socialSetBell(0);
     return;
   }
@@ -127,6 +129,7 @@ function resetSocialState() {
     chatThreads: [],
     chatActors: [],
     currentThreadId: 0,
+    currentThreadKind: "",
     chatMessages: [],
     chatOldestId: 0,
     chatHasMore: true,
@@ -143,6 +146,7 @@ function resetSocialState() {
     lastNotificationId: 0,
     unreadCount: 0,
     moduleLoaded: false,
+    chatSearch: "",
     toastsSeen: new Set(),
   };
   socialSetBell(0);
@@ -169,6 +173,7 @@ function switchSocialSubtab(tab, loadNow = true) {
     if (btn) btn.classList.toggle("active", key === safe);
   });
   if (!loadNow) return;
+  if (safe !== "chat") socialSetChatView(false);
   if (safe === "games") socialRenderGames();
   if (safe === "chat") {
     socialLoadThreads();
@@ -198,7 +203,7 @@ function switchSocialSubtab(tab, loadNow = true) {
 }
 
 async function loadSocialWorkspace() {
-  if (!(enabledModules instanceof Set) || !enabledModules.has("social_hub")) return;
+  if (modulesLoaded && (!(enabledModules instanceof Set) || !enabledModules.has("social_hub"))) return;
   const boot = await socialRequest("/api/social/bootstrap").catch((e) => {
     if (e?.message) alert(e.message);
     return null;
@@ -884,34 +889,162 @@ async function socialLoadThreads(opts = {}) {
   if (!Array.isArray(data)) return;
   socialState.chatThreads = data;
   socialRenderThreads();
-  if (!socialState.currentThreadId && data.length) {
-    socialSelectThread(Number(data[0].id || 0));
+  if (socialState.currentThreadId) {
+    const current = data.find((x) => Number(x.id) === Number(socialState.currentThreadId));
+    if (current) socialSetChatHeader(current);
   }
+  if (!socialState.currentThreadId && data.length) {
+    const isMobile = typeof window !== "undefined"
+      && window.matchMedia
+      && window.matchMedia("(max-width: 1024px)").matches;
+    if (!isMobile) {
+      socialSelectThread(Number(data[0].id || 0));
+    }
+  }
+}
+
+function socialFormatChatTime(iso) {
+  if (!iso) return "";
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return String(iso).slice(11, 16).replace("T", " ");
+  return dt.toLocaleTimeString(currentLang === "en" ? "en-GB" : "ru-RU", { hour: "2-digit", minute: "2-digit" });
+}
+
+function socialFormatChatDate(iso) {
+  if (!iso) return "";
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return String(iso).slice(0, 10);
+  const today = new Date();
+  const sameDay = dt.toDateString() === today.toDateString();
+  if (sameDay) return tr("Сегодня", "Today");
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (dt.toDateString() === yesterday.toDateString()) return tr("Вчера", "Yesterday");
+  return dt.toLocaleDateString(currentLang === "en" ? "en-GB" : "ru-RU", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function socialFormatThreadTime(iso) {
+  if (!iso) return "";
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return String(iso).slice(11, 16).replace("T", " ");
+  const now = new Date();
+  if (dt.toDateString() === now.toDateString()) {
+    return dt.toLocaleTimeString(currentLang === "en" ? "en-GB" : "ru-RU", { hour: "2-digit", minute: "2-digit" });
+  }
+  return dt.toLocaleDateString(currentLang === "en" ? "en-GB" : "ru-RU", { day: "2-digit", month: "2-digit" });
+}
+
+function socialAvatarMarkup(url, label, size = "sm") {
+  const safeUrl = String(url || "").trim();
+  const fallback = typeof computeAvatarInitials === "function"
+    ? computeAvatarInitials(label, "")
+    : String(label || "--").slice(0, 2).toUpperCase();
+  return `
+    <div class="tg-avatar tg-avatar-${size}">
+      ${safeUrl ? `<img src="${escapeHtml(safeUrl)}" alt="${escapeHtml(label || "avatar")}" />` : `<span>${escapeHtml(fallback)}</span>`}
+    </div>
+  `;
+}
+
+function socialThreadDisplay(thread) {
+  const participants = Array.isArray(thread?.participants) ? thread.participants : [];
+  const other = thread?.kind === "direct" ? participants.find((p) => !p.is_me) : null;
+  const title = String(thread?.title || thread?.kind || tr("Чат", "Chat"));
+  return {
+    title,
+    avatarLabel: other?.nick || title,
+    avatarUrl: other?.avatar_url || "",
+    participants,
+  };
+}
+
+function socialFilterThreads() {
+  socialState.chatSearch = String(document.getElementById("socialChatSearch")?.value || "").trim().toLowerCase();
+  socialRenderThreads();
+}
+
+function socialSetChatView(open) {
+  const layout = document.querySelector("#socialSubtabChat .social-chat-layout");
+  if (!layout) return;
+  layout.classList.toggle("chat-open", Boolean(open));
+}
+
+function socialCloseThread() {
+  socialState.currentThreadId = 0;
+  socialState.currentThreadKind = "";
+  const head = document.getElementById("socialChatHead");
+  const sub = document.getElementById("socialChatHeadSubtitle");
+  const avatar = document.getElementById("socialChatHeadAvatar");
+  const host = document.getElementById("socialChatMessages");
+  if (head) head.textContent = tr("Выберите чат", "Select chat");
+  if (sub) sub.textContent = "-";
+  if (avatar) avatar.innerHTML = socialAvatarMarkup("", "--", "md");
+  if (host) host.innerHTML = "";
+  socialRenderThreads();
+  socialSetChatView(false);
 }
 
 function socialRenderThreads() {
   const host = document.getElementById("socialChatThreads");
   if (!host) return;
-  host.innerHTML = socialState.chatThreads.map((thread) => {
+  const query = String(socialState.chatSearch || "").trim().toLowerCase();
+  const rows = query
+    ? socialState.chatThreads.filter((thread) => {
+      const participants = Array.isArray(thread?.participants) ? thread.participants : [];
+      const hay = `${thread?.title || ""} ${thread?.kind || ""} ${participants.map((p) => p?.nick || "").join(" ")}`.toLowerCase();
+      return hay.includes(query);
+    })
+    : socialState.chatThreads;
+  host.innerHTML = rows.map((thread) => {
     const unread = Number(thread.unread || 0);
     const lastText = String(thread.last_message?.text || "");
+    const lastTime = socialFormatThreadTime(thread.last_message?.created_at || "");
+    const display = socialThreadDisplay(thread);
     return `
       <button class="social-thread-item ${Number(thread.id) === socialState.currentThreadId ? "active" : ""}" type="button" onclick="socialSelectThread(${Number(thread.id || 0)})">
-        <div class="social-thread-title">${escapeHtml(thread.title || thread.kind || "chat")}${unread > 0 ? `<span class="social-thread-unread">${unread}</span>` : ""}</div>
-        <small>${escapeHtml(lastText || tr("Сообщений пока нет", "No messages yet"))}</small>
+        <div class="social-thread-avatar">${socialAvatarMarkup(display.avatarUrl, display.avatarLabel, "sm")}</div>
+        <div class="social-thread-body">
+          <div class="social-thread-row">
+            <div class="social-thread-title">${escapeHtml(display.title)}</div>
+            <div class="social-thread-time">${escapeHtml(lastTime)}</div>
+          </div>
+          <div class="social-thread-preview">${escapeHtml(lastText || tr("Сообщений пока нет", "No messages yet"))}</div>
+        </div>
+        ${unread > 0 ? `<span class="social-thread-unread">${unread > 99 ? "99+" : unread}</span>` : ""}
       </button>
     `;
   }).join("");
+}
+
+function socialSetChatHeader(row) {
+  const head = document.getElementById("socialChatHead");
+  const sub = document.getElementById("socialChatHeadSubtitle");
+  const avatar = document.getElementById("socialChatHeadAvatar");
+  if (!row) {
+    if (head) head.textContent = tr("Выберите чат", "Select chat");
+    if (sub) sub.textContent = "-";
+    if (avatar) avatar.innerHTML = socialAvatarMarkup("", "--", "md");
+    return;
+  }
+  const display = socialThreadDisplay(row);
+  const participants = display.participants || [];
+  const subtitle = row.kind === "direct"
+    ? tr("Личный чат", "Direct chat")
+    : `${tr("Группа", "Group")} • ${participants.length}`;
+  if (head) head.textContent = display.title;
+  if (sub) sub.textContent = subtitle;
+  if (avatar) avatar.innerHTML = socialAvatarMarkup(display.avatarUrl, display.avatarLabel, "md");
 }
 
 async function socialSelectThread(threadId) {
   const id = Number(threadId || 0);
   if (!id) return;
   socialState.currentThreadId = id;
-  const row = socialState.chatThreads.find((x) => Number(x.id) === id);
-  const head = document.getElementById("socialChatHead");
-  if (head) head.textContent = row?.title || tr("Чат", "Chat");
+  const row = socialState.chatThreads.find((x) => Number(x.id) === id) || null;
+  socialState.currentThreadKind = String(row?.kind || "");
+  socialSetChatHeader(row);
   socialRenderThreads();
+  socialSetChatView(true);
   await socialLoadMessages(id);
   await socialRequest(`/api/social/chat/read/${id}`, { method: "POST" }).catch(() => null);
   socialPollNotifications().catch(() => null);
@@ -942,14 +1075,45 @@ async function socialLoadMessages(threadId, opts = {}) {
   const loadMoreBtn = socialState.chatHasMore
     ? `<button class="btn-secondary social-chat-loadmore" type="button" onclick="socialLoadOlderMessages()">${tr("Загрузить раньше", "Load earlier")}</button>`
     : `<div class="hint">${tr("Начало чата", "Start of chat")}</div>`;
+  const isGroup = String(socialState.currentThreadKind || "") !== "direct";
+  let lastDate = "";
+  let lastSender = "";
+  let lastMine = false;
+  const messagesHtml = socialState.chatMessages.map((msg) => {
+    const dateKey = String(msg.created_at || "").slice(0, 10);
+    let dateBlock = "";
+    if (dateKey && dateKey !== lastDate) {
+      dateBlock = `<div class="tg-date-sep"><span>${escapeHtml(socialFormatChatDate(msg.created_at || ""))}</span></div>`;
+      lastDate = dateKey;
+      lastSender = "";
+      lastMine = false;
+    }
+    const senderKey = String(msg.sender_key || msg.sender_nick || "");
+    const sameSender = senderKey && senderKey === lastSender && lastMine === Boolean(msg.is_mine);
+    const compact = sameSender;
+    lastSender = senderKey;
+    lastMine = Boolean(msg.is_mine);
+    const showName = !msg.is_mine && isGroup && !compact;
+    const time = socialFormatChatTime(msg.created_at || "");
+    const avatar = !msg.is_mine && !compact
+      ? `<div class="tg-msg-avatar">${socialAvatarMarkup(msg.sender_avatar, msg.sender_nick || "-", "xs")}</div>`
+      : `<div class="tg-msg-avatar placeholder"></div>`;
+    const rowClass = `tg-msg-row ${msg.is_mine ? "mine" : "in"}${compact ? " compact" : ""}`;
+    return `
+      ${dateBlock}
+      <div class="${rowClass}">
+        ${msg.is_mine ? "" : avatar}
+        <div class="tg-msg-bubble">
+          ${showName ? `<div class="tg-msg-name">${escapeHtml(msg.sender_nick || "-")}</div>` : ""}
+          <div class="tg-msg-text">${escapeHtml(msg.text || "")}</div>
+          <div class="tg-msg-time">${escapeHtml(time)}</div>
+        </div>
+      </div>
+    `;
+  }).join("");
   host.innerHTML = `
     <div class="social-chat-load">${loadMoreBtn}</div>
-    ${socialState.chatMessages.map((msg) => `
-      <div class="social-msg ${msg.is_mine ? "mine" : ""}">
-        <div class="social-msg-head"><b>${escapeHtml(msg.sender_nick || "-")}</b><small>${escapeHtml((msg.created_at || "").slice(0, 16).replace("T", " "))}</small></div>
-        <div class="social-msg-text">${escapeHtml(msg.text || "")}</div>
-      </div>
-    `).join("")}
+    ${messagesHtml}
   `;
   if (beforeId) {
     const nextScroll = host.scrollHeight - prevScrollHeight + prevScrollTop;
@@ -1016,8 +1180,11 @@ async function socialLoadDirectActors(query) {
   const rows = socialState.chatActors;
   host.innerHTML = rows.map((row) => `
     <button class="social-direct-row" type="button" onclick="socialStartDirectChat('${escapeHtml(String(row.actor_key || ""))}')">
-      <b>${escapeHtml(row.nick || "-")}</b>
-      <small>${escapeHtml(row.company || "")}</small>
+      <div class="social-direct-avatar">${socialAvatarMarkup(row.avatar_url, row.nick || "-", "xs")}</div>
+      <div class="social-direct-info">
+        <b>${escapeHtml(row.nick || "-")}</b>
+        <small>${escapeHtml(row.company || "")}</small>
+      </div>
     </button>
   `).join("") || `<div class="hint">${tr("Никого не найдено", "No users found")}</div>`;
 }
@@ -1521,14 +1688,24 @@ function socialRenderConverterOptions() {
   const to = document.getElementById("socialConvTo");
   if (!from || !to) return;
   const packs = {
-    currency: ["RUB", "USD", "EUR", "CNY"],
+    currency: ["RUB", "USD", "EUR", "CNY", "BYN", "TRY", "GBP", "UAH"],
     length: ["mm", "cm", "m", "km", "inch", "ft"],
     weight: ["g", "kg", "t", "lb"],
     volume: ["ml", "l", "m3", "cm3"],
   };
+  const currencyLabels = {
+    RUB: tr("RUB (руб.)", "RUB"),
+    USD: "USD",
+    EUR: "EUR",
+    CNY: "CNY",
+    BYN: tr("BYN (бел. руб.)", "BYN (BYN)"),
+    TRY: tr("TRY (лира)", "TRY (Lira)"),
+    GBP: tr("GBP (фунт)", "GBP (Pound)"),
+    UAH: tr("UAH (гривна)", "UAH (Hryvnia)"),
+  };
   const options = packs[type] || packs.currency;
-  from.innerHTML = options.map((x) => `<option value="${x}">${x}</option>`).join("");
-  to.innerHTML = options.map((x) => `<option value="${x}">${x}</option>`).join("");
+  from.innerHTML = options.map((x) => `<option value="${x}">${escapeHtml(currencyLabels[x] || x)}</option>`).join("");
+  to.innerHTML = options.map((x) => `<option value="${x}">${escapeHtml(currencyLabels[x] || x)}</option>`).join("");
   if (options.length > 1) to.value = options[1];
 }
 
@@ -1544,7 +1721,16 @@ function socialConvert() {
     return;
   }
   const toBase = {
-    currency: { RUB: 1, USD: 91, EUR: 99, CNY: 12.5 },
+    currency: {
+      RUB: 1,
+      USD: 77.8009,
+      EUR: 90.7458,
+      CNY: 11.2488,
+      BYN: 26.9291,
+      TRY: 1.77099,
+      GBP: 103.4908,
+      UAH: 1.79039,
+    },
     length: { mm: 0.001, cm: 0.01, m: 1, km: 1000, inch: 0.0254, ft: 0.3048 },
     weight: { g: 0.001, kg: 1, t: 1000, lb: 0.45359237 },
     volume: { ml: 0.001, l: 1, m3: 1000, cm3: 0.001 },

@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260304c" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260304d" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -196,8 +196,11 @@
           </select>
           <div class="topbar-user-wrap">
             <button id="topbarAvatarBtn" class="chip-btn topbar-avatar-btn hidden" type="button" onclick="toggleTopbarUserPopover()">
-              <img id="topbarAvatarImg" class="avatar-img hidden" alt="avatar" />
-              <span id="topbarAvatarText">--</span>
+              <span class="topbar-avatar" id="topbarAvatarCircle">
+                <img id="topbarAvatarImg" class="avatar-img hidden" alt="avatar" />
+                <span id="topbarAvatarText" class="avatar-fallback">--</span>
+              </span>
+              <span id="topbarAvatarName" class="topbar-avatar-name">--</span>
             </button>
             <div id="topbarUserPopover" class="topbar-popover hidden">
               <div class="topbar-popover-head">
@@ -963,13 +966,33 @@
           <div class="panel social-chat-layout">
             <aside class="social-chat-sidebar">
               <div class="social-chat-sidebar-head">
-                <h3>Чаты</h3>
+                <div>
+                  <h3>Чаты</h3>
+                  <small class="hint">Личные и групповые</small>
+                </div>
                 <button class="btn-secondary" type="button" onclick="socialOpenDirectPicker()">Личный чат</button>
+              </div>
+              <div class="social-chat-search">
+                <input id="socialChatSearch" type="text" placeholder="Поиск" oninput="socialFilterThreads()" />
               </div>
               <div id="socialChatThreads" class="social-chat-threads"></div>
             </aside>
             <section class="social-chat-main">
-              <div id="socialChatHead" class="social-chat-head">Выберите чат</div>
+              <div class="social-chat-head">
+                <button class="social-chat-back" type="button" onclick="socialCloseThread()">←</button>
+                <div class="social-chat-head-main">
+                  <div id="socialChatHeadAvatar" class="social-chat-head-avatar">
+                    <div class="tg-avatar tg-avatar-md"><span>--</span></div>
+                  </div>
+                  <div class="social-chat-head-text">
+                    <div id="socialChatHead" class="social-chat-head-title">Выберите чат</div>
+                    <div id="socialChatHeadSubtitle" class="social-chat-head-subtitle hint">-</div>
+                  </div>
+                </div>
+                <div class="social-chat-head-actions">
+                  <button class="btn-secondary" type="button" onclick="socialLoadThreads({ silent: true })">Обновить</button>
+                </div>
+              </div>
               <div id="socialChatMessages" class="social-chat-messages"></div>
               <div class="social-chat-compose">
                 <div class="social-chat-input-wrap">
@@ -977,7 +1000,7 @@
                   <button id="socialEmojiBtn" class="btn-secondary social-emoji-btn" type="button" onclick="socialToggleEmojiPicker()" title="Эмодзи">😊</button>
                   <div id="socialEmojiPicker" class="social-emoji-picker hidden"></div>
                 </div>
-                <button type="button" onclick="socialSendMessage()">Отправить</button>
+                <button class="social-chat-send" type="button" onclick="socialSendMessage()">Отправить</button>
               </div>
             </section>
           </div>
@@ -1298,7 +1321,7 @@
   <div id="hoverTip" class="hover-tip hidden"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script src="/static/app.js?v=20260304c"></script>
-  <script src="/static/social.js?v=20260304c"></script>
+  <script src="/static/app.js?v=20260304d"></script>
+  <script src="/static/social.js?v=20260304d"></script>
 </body>
 </html>
