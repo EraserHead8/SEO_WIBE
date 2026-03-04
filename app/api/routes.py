@@ -7956,6 +7956,7 @@ def _claim_or_validate_work_item(
         item_type=item_type,
         item_external_id=item_id,
         owner_member_id=actor_member_id,
+        claimed_at=datetime.utcnow(),
     )
     db.add(row)
 

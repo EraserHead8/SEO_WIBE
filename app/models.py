@@ -335,6 +335,7 @@ class WorkItemClaim(Base):
     item_type: Mapped[str] = mapped_column(String(30), index=True)
     item_external_id: Mapped[str] = mapped_column(String(128), index=True)
     owner_member_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    claimed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

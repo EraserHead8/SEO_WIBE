@@ -62,10 +62,21 @@ def run_lightweight_migrations():
         if claim_cols:
             if "owner_member_id" not in claim_cols:
                 conn.execute(text("ALTER TABLE work_item_claims ADD COLUMN owner_member_id INTEGER"))
+            if "claimed_at" not in claim_cols:
+                conn.execute(text("ALTER TABLE work_item_claims ADD COLUMN claimed_at DATETIME DEFAULT CURRENT_TIMESTAMP"))
             if "created_at" not in claim_cols:
                 conn.execute(text("ALTER TABLE work_item_claims ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP"))
             if "updated_at" not in claim_cols:
                 conn.execute(text("ALTER TABLE work_item_claims ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"))
+            if "claimed_at" in claim_cols:
+                conn.execute(
+                    text(
+                        """
+                        UPDATE work_item_claims
+                        SET claimed_at = COALESCE(claimed_at, created_at, CURRENT_TIMESTAMP)
+                        """
+                    )
+                )
 
         module_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(module_access)"))}
         if module_cols:

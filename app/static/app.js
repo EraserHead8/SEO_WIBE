@@ -12,6 +12,7 @@ let token = storedSessionToken || storedLocalToken || storedShadowToken || "";
 let tokenStorage = storedSessionToken
   ? "session"
   : (storedLocalToken || storedShadowToken ? "local" : "");
+let forceCookieAuth = false;
 if (token && !storedSessionToken && !storedLocalToken) {
   localStorage.setItem("token", token);
   tokenStorage = "local";
@@ -115,11 +116,13 @@ function setToken(nextToken = "", persist = null) {
   token = String(nextToken || "");
   if (!token) {
     tokenStorage = "";
+    forceCookieAuth = false;
     localStorage.removeItem("token");
     localStorage.removeItem("token_shadow");
     sessionStorage.removeItem("token");
     return;
   }
+  forceCookieAuth = false;
   const useLocal = persist === null ? tokenStorage === "local" : Boolean(persist);
   tokenStorage = useLocal ? "local" : "session";
   localStorage.setItem("token", token);
@@ -183,7 +186,7 @@ function clearChartHost(host) {
 
 const authHeaders = () => {
   const headers = { "Content-Type": "application/json" };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (token && !forceCookieAuth) headers["Authorization"] = `Bearer ${token}`;
   return headers;
 };
 
@@ -1017,6 +1020,15 @@ async function requestJson(url, opts = {}) {
     throw err;
   }
   return data;
+}
+
+function isNetworkError(err) {
+  const msg = String(err?.message || "").toLowerCase();
+  return msg.includes("network error") || msg.includes("сетевая ошибка");
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
 }
 
 function setBusy(label = "", active = false, hint = "") {
@@ -1873,12 +1885,31 @@ function closeMobileNav(evt = null) {
 async function register() {
   const email = document.getElementById("regEmail").value.trim();
   const password = document.getElementById("regPassword").value;
-  const data = await requestJson("/api/auth/register", {
+  let err = null;
+  let data = await requestJson("/api/auth/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
-  }).catch((e) => alert(e.message));
-  if (!data) return;
+  }).catch((e) => {
+    err = e;
+    return null;
+  });
+  if (!data && err && isNetworkError(err)) {
+    await delay(600);
+    err = null;
+    data = await requestJson("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    }).catch((e) => {
+      err = e;
+      return null;
+    });
+  }
+  if (!data) {
+    if (err) alert(err.message);
+    return;
+  }
   const persist = localStorage.getItem("remember_me") !== "0";
   setToken(data.access_token, persist);
   localStorage.setItem("login_email", email);
@@ -1889,12 +1920,31 @@ async function login() {
   const email = document.getElementById("loginEmail").value.trim();
   const password = document.getElementById("loginPassword").value;
   const remember = Boolean(document.getElementById("loginRemember")?.checked);
-  const data = await requestJson("/api/auth/login", {
+  let err = null;
+  let data = await requestJson("/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
-  }).catch((e) => alert(e.message));
-  if (!data) return;
+  }).catch((e) => {
+    err = e;
+    return null;
+  });
+  if (!data && err && isNetworkError(err)) {
+    await delay(600);
+    err = null;
+    data = await requestJson("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    }).catch((e) => {
+      err = e;
+      return null;
+    });
+  }
+  if (!data) {
+    if (err) alert(err.message);
+    return;
+  }
   setToken(data.access_token, remember);
   localStorage.setItem("login_email", email);
   await ensureAuth();
@@ -1961,7 +2011,7 @@ async function logout() {
   switchAuthMode("login");
 }
 
-async function ensureAuth() {
+async function ensureAuth(allowFallback = true) {
   if (!token) {
     const fallback = sanitizeToken(sessionStorage.getItem("token") || "")
       || sanitizeToken(localStorage.getItem("token") || "")
@@ -1969,7 +2019,8 @@ async function ensureAuth() {
     if (fallback) setToken(fallback, true);
   }
   let authError = null;
-  const headers = token ? authHeaders() : { "Content-Type": "application/json" };
+  const useAuthHeader = token && !forceCookieAuth;
+  const headers = useAuthHeader ? authHeaders() : { "Content-Type": "application/json" };
   const user = await requestJson("/api/auth/me", { headers }).catch((e) => {
     authError = e;
     return null;
@@ -1977,21 +2028,26 @@ async function ensureAuth() {
   if (!user) {
     const status = Number(authError?.status || 0);
     const message = String(authError?.message || "").toLowerCase();
-    if (token && (status === 401 || status === 403 || message.includes("токен") || message.includes("token"))) {
+    if (allowFallback && token && useAuthHeader && (status === 401 || status === 403 || message.includes("токен") || message.includes("token"))) {
       const shadow = sanitizeToken(localStorage.getItem("token_shadow") || "");
       if (shadow && shadow !== token) {
         setToken(shadow, true);
-        setTimeout(() => ensureAuth().catch(() => null), 400);
+        setTimeout(() => ensureAuth(false).catch(() => null), 400);
         return;
       }
-      logout();
+      forceCookieAuth = true;
+      setTimeout(() => ensureAuth(false).catch(() => null), 200);
       return;
     }
-    if (!token && (status === 401 || status === 403)) {
+    if (status === 401 || status === 403) {
+      if (token) {
+        logout();
+        return;
+      }
       return;
     }
     setTimeout(() => {
-      ensureAuth().catch(() => null);
+      ensureAuth(allowFallback).catch(() => null);
     }, 1200);
     return;
   }
