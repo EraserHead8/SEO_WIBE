@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Request
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Request, Response
 from sqlalchemy import String, cast, delete, func, or_, select, text
 from sqlalchemy.orm import Session
 
@@ -722,7 +722,7 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
 
 
 @router.post("/auth/register", response_model=TokenResponse)
-def register(payload: RegisterRequest, request: Request, db: Session = Depends(get_db)):
+def register(payload: RegisterRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     email = payload.email.strip().lower()
     exists = db.scalar(select(User).where(User.email == email))
     if exists:
@@ -771,11 +771,13 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     )
     db.commit()
 
-    return TokenResponse(access_token=create_access_token(f"u:{user.id}"))
+    token = create_access_token(f"u:{user.id}")
+    response.set_cookie("seo_wibe_token", token, httponly=True, samesite="lax")
+    return TokenResponse(access_token=token)
 
 
 @router.post("/auth/login", response_model=TokenResponse)
-def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
+def login(payload: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     email = payload.email.strip().lower()
     user = db.scalar(select(User).where(User.email == email))
     if user and verify_password(payload.password, user.hashed_password):
@@ -791,7 +793,9 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
             request=request,
         )
         db.commit()
-        return TokenResponse(access_token=create_access_token(f"u:{user.id}"))
+        token = create_access_token(f"u:{user.id}")
+        response.set_cookie("seo_wibe_token", token, httponly=True, samesite="lax")
+        return TokenResponse(access_token=token)
 
     member = db.scalar(
         select(TeamMember)
@@ -819,7 +823,9 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
                 request=request,
             )
             db.commit()
-            return TokenResponse(access_token=create_access_token(f"m:{member.id}"))
+            token = create_access_token(f"m:{member.id}")
+            response.set_cookie("seo_wibe_token", token, httponly=True, samesite="lax")
+            return TokenResponse(access_token=token)
     _audit(
         db,
         None,
@@ -836,7 +842,7 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
 
 
 @router.post("/auth/logout", response_model=MessageOut)
-def logout(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def logout(request: Request, response: Response, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     _audit(
         db,
         user,
@@ -849,6 +855,7 @@ def logout(request: Request, user: User = Depends(get_current_user), db: Session
         request=request,
     )
     db.commit()
+    response.delete_cookie("seo_wibe_token")
     return MessageOut(message="Выход выполнен")
 
 

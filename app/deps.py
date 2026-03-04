@@ -1,6 +1,6 @@
 import json
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -42,6 +42,16 @@ def _ensure_owner_member(db: Session, user: User) -> TeamMember | None:
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 
+def _extract_bearer_token(request: Request) -> str:
+    auth_header = str(request.headers.get("authorization", "") or "")
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header.split(" ", 1)[1].strip()
+        if token:
+            return token
+    cookie_token = str(request.cookies.get("seo_wibe_token") or request.cookies.get("token") or "").strip()
+    return cookie_token
+
+
 def _team_scope_from_member(member: TeamMember | None) -> list[str]:
     if not member:
         return ["*"]
@@ -57,12 +67,17 @@ def _team_scope_from_member(member: TeamMember | None) -> list[str]:
     if not isinstance(parsed, list):
         return ["products", "sales_stats", "wb_reviews_ai", "wb_questions_ai", "returns", "social_hub"]
     cleaned = [str(x).strip().lower() for x in parsed if str(x).strip()]
+    if not cleaned:
+        return ["products", "sales_stats", "wb_reviews_ai", "wb_questions_ai", "returns", "social_hub"]
     if not member.is_owner and cleaned and all(x in {"products", "sales_stats"} for x in cleaned):
         return ["products", "sales_stats", "wb_reviews_ai", "wb_questions_ai", "returns", "social_hub"]
     return cleaned
 
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
+    token = _extract_bearer_token(request)
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Невалидный токен")
     subject = decode_access_token(token)
     if not subject:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Невалидный токен")

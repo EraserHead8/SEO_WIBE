@@ -3054,6 +3054,27 @@ pre {
   color: var(--text);
 }
 
+#adminPanelSection {
+  --admin-strong-text: color-mix(in oklab, var(--text) 88%, #ffffff);
+}
+
+#adminPanelSection .table-card,
+#adminPanelSection .table-card th,
+#adminPanelSection .table-card td,
+#adminPanelSection .table-card tr,
+#adminPanelSection .admin-user-profile-card,
+#adminPanelSection .admin-team-card,
+#adminPanelSection .admin-ai-item,
+#adminPanelSection .admin-audit-details {
+  color: var(--admin-strong-text);
+}
+
+#adminPanelSection .hint,
+#adminPanelSection .admin-user-field span,
+#adminPanelSection .admin-team-card-grid label > span {
+  color: color-mix(in oklab, var(--admin-strong-text) 70%, var(--text-muted));
+}
+
 .admin-ai-split {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -6617,6 +6638,10 @@ body[data-theme="dark"] .landing-band .band-stats span {
   border: 1px solid rgba(78, 108, 150, 0.35);
   box-shadow: 0 2px 8px rgba(10, 24, 52, 0.08);
   text-shadow: none;
+}
+
+#socialSubtabCalculator .social-calc-pad button {
+  color: #0b1f3b;
 }
 
 .social-calc-eq {

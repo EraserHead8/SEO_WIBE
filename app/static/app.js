@@ -982,7 +982,7 @@ window.changeUiLang = changeUiLang;
 
 async function requestJson(url, opts = {}) {
   const timeoutMs = Number(opts.timeoutMs || 0);
-  const fetchOpts = { ...opts };
+  const fetchOpts = { credentials: "same-origin", ...opts };
   delete fetchOpts.timeoutMs;
 
   let controller = null;
