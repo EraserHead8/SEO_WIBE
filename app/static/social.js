@@ -2038,6 +2038,7 @@ function socialRenderCurrentNote() {
   content.value = note?.content || "";
   const autosave = document.getElementById("socialNoteAutosave");
   if (autosave) autosave.textContent = note ? tr("Автосохранение включено", "Autosave enabled") : tr("Выберите заметку", "Select note");
+  socialRenderNoteFiles(note);
 }
 
 function socialSelectNote(noteId) {
@@ -2088,7 +2089,102 @@ async function socialSaveCurrentNote() {
   const idx = socialState.notes.findIndex((x) => Number(x.id) === noteId);
   if (idx >= 0) socialState.notes[idx] = saved;
   socialRenderNotesList();
+  socialRenderCurrentNote();
   if (autosave) autosave.textContent = tr("Сохранено", "Saved");
+}
+
+function socialFormatFileSize(sizeRaw) {
+  const size = Math.max(0, Number(sizeRaw || 0));
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+function socialRenderNoteFiles(note) {
+  const host = document.getElementById("socialNoteFiles");
+  const uploader = document.getElementById("socialNoteFileUpload");
+  if (!host) return;
+  if (!note) {
+    host.innerHTML = `<div class="hint">${tr("Файлы будут доступны после выбора заметки", "Files will appear after selecting a note")}</div>`;
+    if (uploader) uploader.disabled = true;
+    return;
+  }
+  if (uploader) uploader.disabled = false;
+  const files = Array.isArray(note.files) ? note.files : [];
+  host.innerHTML = files.length
+    ? files.map((file) => `
+      <div class="social-note-file-row">
+        <a href="${escapeHtml(file.url || "#")}" target="_blank" rel="noopener noreferrer">${escapeHtml(file.filename || "file")}</a>
+        <small>${escapeHtml(socialFormatFileSize(file.size_bytes || 0))}</small>
+        <button class="btn-secondary" type="button" onclick="socialDeleteNoteFile(${Number(file.id || 0)})">✕</button>
+      </div>
+    `).join("")
+    : `<div class="hint">${tr("Файлы пока не загружены", "No files uploaded yet")}</div>`;
+}
+
+function socialTriggerNoteFileDialog() {
+  const noteId = Number(socialState.currentNoteId || 0);
+  if (!noteId) {
+    alert(tr("Сначала выберите заметку", "Select a note first"));
+    return;
+  }
+  const input = document.getElementById("socialNoteFileUpload");
+  if (input) input.click();
+}
+
+async function socialUploadNoteFiles(fileList) {
+  const noteId = Number(socialState.currentNoteId || 0);
+  const autosave = document.getElementById("socialNoteAutosave");
+  const input = document.getElementById("socialNoteFileUpload");
+  const files = Array.from(fileList || []);
+  if (!noteId || !files.length) return;
+  if (autosave) autosave.textContent = tr("Загружаем файлы...", "Uploading files...");
+  try {
+    for (const file of files) {
+      const body = new FormData();
+      body.append("file", file);
+      const headers = {};
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const resp = await fetch(`/api/social/notes/${noteId}/files`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers,
+        body,
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        throw new Error(data?.detail || data?.message || tr("Ошибка загрузки файла", "File upload error"));
+      }
+    }
+    await socialLoadNotes();
+    socialState.currentNoteId = noteId;
+    socialRenderNotesList();
+    socialRenderCurrentNote();
+    if (autosave) autosave.textContent = tr("Файлы загружены", "Files uploaded");
+  } catch (e) {
+    if (autosave) autosave.textContent = String(e?.message || tr("Ошибка загрузки файла", "File upload error"));
+    alert(e?.message || tr("Ошибка загрузки файла", "File upload error"));
+  } finally {
+    if (input) input.value = "";
+  }
+}
+
+async function socialDeleteNoteFile(fileId) {
+  const id = Number(fileId || 0);
+  const noteId = Number(socialState.currentNoteId || 0);
+  if (!id || !noteId) return;
+  if (!confirm(tr("Удалить файл?", "Delete file?"))) return;
+  await socialRequest(`/api/social/notes/${noteId}/files/${id}`, {
+    method: "DELETE",
+  }).catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  await socialLoadNotes();
+  socialState.currentNoteId = noteId;
+  socialRenderNotesList();
+  socialRenderCurrentNote();
 }
 
 async function socialDeleteCurrentNote() {
@@ -2155,6 +2251,9 @@ window.socialSelectNote = socialSelectNote;
 window.socialScheduleNoteSave = socialScheduleNoteSave;
 window.socialDeleteCurrentNote = socialDeleteCurrentNote;
 window.socialDeleteNote = socialDeleteNote;
+window.socialTriggerNoteFileDialog = socialTriggerNoteFileDialog;
+window.socialUploadNoteFiles = socialUploadNoteFiles;
+window.socialDeleteNoteFile = socialDeleteNoteFile;
 window.socialStartGlobalHooks = socialStartGlobalHooks;
 window.socialStopGlobalHooks = socialStopGlobalHooks;
 window.resetSocialState = resetSocialState;

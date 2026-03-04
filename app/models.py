@@ -514,3 +514,24 @@ class SocialNote(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user: Mapped["User"] = relationship()
+    files: Mapped[list["SocialNoteFile"]] = relationship(
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class SocialNoteFile(Base):
+    __tablename__ = "social_note_files"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    note_id: Mapped[int] = mapped_column(Integer, ForeignKey("social_notes.id"), index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    actor_key: Mapped[str] = mapped_column(String(60), index=True)
+    filename: Mapped[str] = mapped_column(String(255), default="")
+    url: Mapped[str] = mapped_column(String(500), default="")
+    content_type: Mapped[str] = mapped_column(String(120), default="")
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    note: Mapped["SocialNote"] = relationship()
+    user: Mapped["User"] = relationship()

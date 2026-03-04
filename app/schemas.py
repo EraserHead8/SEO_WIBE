@@ -806,11 +806,21 @@ class SocialNoteIn(BaseModel):
     content: str = ""
 
 
+class SocialNoteFileOut(BaseModel):
+    id: int
+    filename: str
+    url: str
+    content_type: str = ""
+    size_bytes: int = 0
+    created_at: str
+
+
 class SocialNoteOut(BaseModel):
     id: int
     title: str
     content: str
     updated_at: str
+    files: list[SocialNoteFileOut] = Field(default_factory=list)
 
 
 class SocialNotificationOut(BaseModel):

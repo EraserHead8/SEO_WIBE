@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import math
+import mimetypes
 import hashlib
 import os
 import re
@@ -45,6 +46,7 @@ from app.models import (
     SocialChatThreadMember,
     SocialGameScore,
     SocialNote,
+    SocialNoteFile,
     SocialNotification,
     SocialTask,
     SocialTaskComment,
@@ -131,6 +133,7 @@ from app.schemas import (
     SocialGameScoreOut,
     SocialLeaderboardOut,
     SocialNoteIn,
+    SocialNoteFileOut,
     SocialNoteOut,
     SocialNotificationOut,
     SocialTaskCommentIn,
@@ -5686,6 +5689,26 @@ def _social_thread_last_message(db: Session, thread_id: int) -> SocialChatMessag
     )
 
 
+def _social_last_activity_map(db: Session, actor_keys: list[str]) -> dict[str, datetime]:
+    keys = [str(x or "").strip().lower() for x in actor_keys if str(x or "").strip()]
+    if not keys:
+        return {}
+    rows = db.execute(
+        select(
+            SocialChatMessage.sender_key,
+            func.max(SocialChatMessage.created_at).label("last_at"),
+        )
+        .where(SocialChatMessage.sender_key.in_(keys))
+        .group_by(SocialChatMessage.sender_key)
+    ).all()
+    out: dict[str, datetime] = {}
+    for sender_key, last_at in rows:
+        key = str(sender_key or "").strip().lower()
+        if key and isinstance(last_at, datetime):
+            out[key] = last_at
+    return out
+
+
 def _social_thread_to_out(db: Session, actor_key: str, row: SocialChatThread, member_row: SocialChatThreadMember) -> SocialChatThreadOut:
     last = _social_thread_last_message(db, row.id)
     last_payload: dict[str, Any] = {}
@@ -5713,6 +5736,8 @@ def _social_thread_to_out(db: Session, actor_key: str, row: SocialChatThread, me
         .where(SocialChatThreadMember.thread_id == row.id)
         .order_by(SocialChatThreadMember.id.asc())
     ).all()
+    participant_keys = [str(x.actor_key or "").strip().lower() for x in participants_rows if str(x.actor_key or "").strip()]
+    last_activity = _social_last_activity_map(db, participant_keys)
     participants = []
     for x in participants_rows:
         key = str(x.actor_key or "")
@@ -5720,13 +5745,13 @@ def _social_thread_to_out(db: Session, actor_key: str, row: SocialChatThread, me
         avatar_url = _social_current_avatar_by_key(db, key)
         if current_nick and current_nick != str(x.actor_nick or ""):
             x.actor_nick = current_nick[:120]
-            x.updated_at = datetime.utcnow()
+        last_seen = last_activity.get(key.strip().lower()) or x.updated_at
         participants.append(
             {
                 "actor_key": key,
                 "nick": current_nick,
                 "avatar_url": str(avatar_url or ""),
-                "last_seen_at": x.updated_at.isoformat() if x.updated_at else "",
+                "last_seen_at": last_seen.isoformat() if last_seen else "",
                 "is_me": key == actor_key,
             }
         )
@@ -6957,6 +6982,75 @@ def social_calendar_delete_event(
     return MessageOut(message="Событие удалено")
 
 
+def _social_note_storage_dir() -> Path:
+    static_root = Path(__file__).resolve().parent.parent / "static"
+    target_dir = static_root / "uploads" / "social_notes"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    return target_dir
+
+
+def _social_note_clean_filename(raw: str) -> str:
+    base = os.path.basename(str(raw or "").strip()) or "file"
+    safe = re.sub(r"[^\w.\-]+", "_", base, flags=re.UNICODE).strip("._")
+    if not safe:
+        return "file"
+    return safe[:180]
+
+
+def _social_note_guess_ext(filename: str, content_type: str) -> str:
+    ext = str(Path(filename or "").suffix or "").strip().lower()
+    if ext and len(ext) <= 10:
+        return ext
+    guessed = mimetypes.guess_extension(str(content_type or "").split(";", 1)[0].strip().lower()) or ""
+    if guessed == ".jpe":
+        guessed = ".jpg"
+    if guessed and len(guessed) <= 10:
+        return guessed
+    return ".bin"
+
+
+def _social_note_delete_disk_file(url: str) -> None:
+    safe = str(url or "").strip()
+    prefix = "/static/uploads/social_notes/"
+    if not safe.startswith(prefix):
+        return
+    filename = os.path.basename(safe)
+    if not filename:
+        return
+    path = _social_note_storage_dir() / filename
+    try:
+        if path.exists():
+            path.unlink()
+    except Exception:
+        pass
+
+
+def _social_note_file_to_out(row: SocialNoteFile) -> SocialNoteFileOut:
+    return SocialNoteFileOut(
+        id=int(row.id),
+        filename=str(row.filename or ""),
+        url=str(row.url or ""),
+        content_type=str(row.content_type or ""),
+        size_bytes=int(row.size_bytes or 0),
+        created_at=row.created_at.isoformat() if row.created_at else "",
+    )
+
+
+def _social_note_to_out(db: Session, row: SocialNote) -> SocialNoteOut:
+    file_rows = db.scalars(
+        select(SocialNoteFile)
+        .where(SocialNoteFile.note_id == row.id)
+        .order_by(SocialNoteFile.created_at.desc(), SocialNoteFile.id.desc())
+    ).all()
+    return SocialNoteOut(
+        id=int(row.id),
+        title=str(row.title or ""),
+        content=str(row.content or ""),
+        updated_at=row.updated_at.isoformat() if row.updated_at else "",
+        files=[_social_note_file_to_out(x) for x in file_rows],
+    )
+
+
 @router.get("/social/notes", response_model=list[SocialNoteOut])
 def social_notes_list(
     user: User = Depends(get_current_user),
@@ -6972,15 +7066,7 @@ def social_notes_list(
         )
         .order_by(SocialNote.updated_at.desc(), SocialNote.id.desc())
     ).all()
-    return [
-        SocialNoteOut(
-            id=int(row.id),
-            title=str(row.title or ""),
-            content=str(row.content or ""),
-            updated_at=row.updated_at.isoformat() if row.updated_at else "",
-        )
-        for row in rows
-    ]
+    return [_social_note_to_out(db, row) for row in rows]
 
 
 @router.post("/social/notes", response_model=SocialNoteOut)
@@ -7009,12 +7095,7 @@ def social_create_note(
         entity_id=str(row.id or ""),
     )
     db.commit()
-    return SocialNoteOut(
-        id=int(row.id),
-        title=str(row.title or ""),
-        content=str(row.content or ""),
-        updated_at=row.updated_at.isoformat() if row.updated_at else "",
-    )
+    return _social_note_to_out(db, row)
 
 
 @router.put("/social/notes/{note_id}", response_model=SocialNoteOut)
@@ -7041,12 +7122,105 @@ def social_update_note(
         entity_id=str(row.id or ""),
     )
     db.commit()
-    return SocialNoteOut(
-        id=int(row.id),
-        title=str(row.title or ""),
-        content=str(row.content or ""),
-        updated_at=row.updated_at.isoformat() if row.updated_at else "",
+    return _social_note_to_out(db, row)
+
+
+@router.post("/social/notes/{note_id}/files", response_model=SocialNoteFileOut)
+def social_note_upload_file(
+    note_id: int,
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, _, _ = _social_actor_identity(db, user)
+    row = db.get(SocialNote, note_id)
+    if not row or int(row.user_id) != int(user.id) or str(row.actor_key or "") != actor_key:
+        raise HTTPException(status_code=404, detail="Заметка не найдена")
+    if not file or not file.filename:
+        raise HTTPException(status_code=400, detail="Файл не выбран")
+    raw = file.file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Файл пустой")
+    max_size = 12 * 1024 * 1024
+    if len(raw) > max_size:
+        raise HTTPException(status_code=400, detail="Файл слишком большой (до 12 МБ)")
+    original_name = _social_note_clean_filename(file.filename or "file")
+    ext = _social_note_guess_ext(original_name, str(file.content_type or ""))
+    storage_name = f"note-{int(row.id)}-{secrets.token_hex(8)}{ext}"
+    path = _social_note_storage_dir() / storage_name
+    path.write_bytes(raw)
+    url = f"/static/uploads/social_notes/{storage_name}"
+    file_row = SocialNoteFile(
+        note_id=int(row.id),
+        user_id=user.id,
+        actor_key=actor_key,
+        filename=original_name[:255],
+        url=url[:500],
+        content_type=str(file.content_type or "application/octet-stream")[:120],
+        size_bytes=len(raw),
     )
+    db.add(file_row)
+    row.updated_at = datetime.utcnow()
+    _audit(
+        db,
+        user,
+        action="social_note_file_uploaded",
+        details=json.dumps(
+            {
+                "note_id": int(row.id or 0),
+                "file_name": str(file_row.filename or "")[:200],
+                "size": int(file_row.size_bytes or 0),
+            },
+            ensure_ascii=False,
+        ),
+        module_code="social_hub",
+        entity_type="note_file",
+        entity_id=str(row.id or ""),
+    )
+    db.commit()
+    return _social_note_file_to_out(file_row)
+
+
+@router.delete("/social/notes/{note_id}/files/{file_id}", response_model=MessageOut)
+def social_note_delete_file(
+    note_id: int,
+    file_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, _, _ = _social_actor_identity(db, user)
+    row = db.get(SocialNote, note_id)
+    if not row or int(row.user_id) != int(user.id) or str(row.actor_key or "") != actor_key:
+        raise HTTPException(status_code=404, detail="Заметка не найдена")
+    file_row = db.scalar(
+        select(SocialNoteFile).where(
+            SocialNoteFile.id == file_id,
+            SocialNoteFile.note_id == int(row.id),
+            SocialNoteFile.user_id == user.id,
+            SocialNoteFile.actor_key == actor_key,
+        )
+    )
+    if not file_row:
+        raise HTTPException(status_code=404, detail="Файл не найден")
+    _social_note_delete_disk_file(str(file_row.url or ""))
+    db.delete(file_row)
+    row.updated_at = datetime.utcnow()
+    _audit(
+        db,
+        user,
+        action="social_note_file_deleted",
+        details=json.dumps(
+            {"note_id": int(row.id or 0), "file_id": int(file_id or 0)},
+            ensure_ascii=False,
+        ),
+        module_code="social_hub",
+        entity_type="note_file",
+        entity_id=str(file_id or ""),
+    )
+    db.commit()
+    return MessageOut(message="Файл удален")
 
 
 @router.delete("/social/notes/{note_id}", response_model=MessageOut)
@@ -7060,6 +7234,16 @@ def social_delete_note(
     row = db.get(SocialNote, note_id)
     if not row or int(row.user_id) != int(user.id) or str(row.actor_key or "") != actor_key:
         raise HTTPException(status_code=404, detail="Заметка не найдена")
+    files = db.scalars(
+        select(SocialNoteFile).where(
+            SocialNoteFile.note_id == int(row.id),
+            SocialNoteFile.user_id == user.id,
+            SocialNoteFile.actor_key == actor_key,
+        )
+    ).all()
+    for file_row in files:
+        _social_note_delete_disk_file(str(file_row.url or ""))
+        db.delete(file_row)
     _audit(
         db,
         user,

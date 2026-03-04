@@ -55,6 +55,7 @@ if (token && !storedSessionToken && !storedLocalToken) {
 let suppressAlerts = false;
 let me = null;
 let authRetryCount = 0;
+let lastAuthSuccessAt = 0;
 let ensureAuthPromise = null;
 let selectedProducts = new Set();
 let selectedJobs = new Set();
@@ -1867,6 +1868,26 @@ function startModuleAutoRefresh() {
   }, MODULE_AUTO_REFRESH_MS);
 }
 
+function resolveInitialTab() {
+  if (!modulesLoaded || !(enabledModules instanceof Set) || enabledModules.size === 0) {
+    return "sales";
+  }
+  const has = (code) => enabledModules.has(code);
+  const checks = [
+    ["sales", has("sales_stats")],
+    ["products", true],
+    ["reviews", has("wb_reviews_ai") || has("wb_questions_ai") || has("returns")],
+    ["ads", has("wb_ads") || has("wb_ads_analytics") || has("wb_ads_recommendations")],
+    ["social", has("social_hub")],
+    ["profile", has("user_profile")],
+    ["help", has("help_center") || has("ai_assistant")],
+    ["billing", has("billing")],
+    ["admin", me && me.role === "admin"],
+  ];
+  const first = checks.find((x) => Boolean(x[1]));
+  return first ? String(first[0]) : "products";
+}
+
 function showTab(name, btn = null) {
   const mapped = normalizeLegacyTabName(name);
   if (mapped.productsSubtab) currentProductsSubtab = mapped.productsSubtab;
@@ -1924,6 +1945,23 @@ function showTab(name, btn = null) {
     applyModuleActionIcons();
     applyButtonTooltips();
   }, 0);
+}
+
+function openSocialChatFromBell() {
+  currentSocialSubtab = "chat";
+  const socialBtn = document.querySelector(".nav-btn[data-tab='social']");
+  showTab("social", socialBtn || null);
+  const trySwitch = () => {
+    if (typeof window.switchSocialSubtab !== "function") return false;
+    window.switchSocialSubtab("chat", true);
+    return true;
+  };
+  if (trySwitch()) return;
+  let tries = 0;
+  const timer = setInterval(() => {
+    tries += 1;
+    if (trySwitch() || tries >= 10) clearInterval(timer);
+  }, 120);
 }
 
 function toggleMobileNav() {
@@ -1996,6 +2034,7 @@ async function login() {
 async function logout() {
   stopModuleAutoRefresh();
   authRetryCount = 0;
+  lastAuthSuccessAt = 0;
   if (token) {
     await requestJson("/api/auth/logout", {
       method: "POST",
@@ -2130,7 +2169,12 @@ async function ensureAuth(allowFallback = true) {
             return false;
           }
         }
-        if (token && !isTokenExpired(token) && authRetryCount <= 4) {
+        const recentlyAuthenticated = lastAuthSuccessAt > 0 && (Date.now() - lastAuthSuccessAt) < (15 * 60 * 1000);
+        if (recentlyAuthenticated && authRetryCount <= 8) {
+          scheduleEnsureAuth(900 + authRetryCount * 260, false);
+          return false;
+        }
+        if (token && !isTokenExpired(token) && authRetryCount <= 8) {
           scheduleEnsureAuth(700 + authRetryCount * 250, false);
           return false;
         }
@@ -2157,6 +2201,7 @@ async function ensureAuth(allowFallback = true) {
     if (appSection) appSection.classList.remove("hidden");
     me = user;
     authRetryCount = 0;
+    lastAuthSuccessAt = Date.now();
     pruneLegacyUi();
     ensureProfileTeamUi();
     renderTopbarUser();
@@ -2198,9 +2243,10 @@ async function ensureAuth(allowFallback = true) {
       }
       startModuleAutoRefresh();
       try { window.dispatchEvent(new Event("seo-wibe-auth")); } catch (_) {}
-      showTab("sales", document.querySelector(".nav-btn[data-tab='sales']"));
+      const initialTab = resolveInitialTab();
+      showTab(initialTab, document.querySelector(`.nav-btn[data-tab='${initialTab}']`));
       setTimeout(() => {
-        if (currentTab === "sales") {
+        if (currentTab === "sales" && initialTab === "sales") {
           runModuleLoader("sales", loadSalesBundle, { force: true, maxAgeMs: 0 });
         }
       }, 120);

@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260305a" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260305c" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -173,7 +173,7 @@
         </div>
         <div class="topbar-controls">
           <button id="mobileNavToggle" class="chip-btn mobile-nav-toggle" type="button" onclick="toggleMobileNav()" aria-label="Навигация" aria-controls="mainSidebar" aria-expanded="false" aria-haspopup="true">☰</button>
-          <button id="socialBellBtn" class="chip-btn icon-bell-btn hidden" type="button" onclick="showTab('social', document.querySelector('.nav-btn[data-tab=social]'))" title="Уведомления">
+          <button id="socialBellBtn" class="chip-btn icon-bell-btn hidden" type="button" onclick="openSocialChatFromBell()" title="Уведомления">
             <span class="bell-emoji" aria-hidden="true">🔔</span>
             <span id="socialBellBadge" class="icon-bell-badge hidden">0</span>
           </button>
@@ -1118,6 +1118,11 @@
             <section class="social-notes-editor">
               <input id="socialNoteTitle" placeholder="Название заметки" oninput="socialScheduleNoteSave()" />
               <textarea id="socialNoteContent" rows="16" placeholder="Текст заметки..." oninput="socialScheduleNoteSave()"></textarea>
+              <div class="social-note-files-toolbar">
+                <input id="socialNoteFileUpload" type="file" multiple onchange="socialUploadNoteFiles(this.files)" />
+                <button class="btn-secondary" type="button" onclick="socialTriggerNoteFileDialog()">Прикрепить файлы</button>
+              </div>
+              <div id="socialNoteFiles" class="social-note-files"></div>
               <div class="actions">
                 <span id="socialNoteAutosave" class="hint">Автосохранение...</span>
               </div>
@@ -1324,7 +1329,7 @@
   <div id="hoverTip" class="hover-tip hidden"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script src="/static/app.js?v=20260305a"></script>
-  <script src="/static/social.js?v=20260305a"></script>
+  <script src="/static/app.js?v=20260305c"></script>
+  <script src="/static/social.js?v=20260305c"></script>
 </body>
 </html>
