@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260305g" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260305h" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -230,6 +230,36 @@
               </tbody>
             </table>
           </div>
+        </div>
+        <div class="panel">
+          <h3>Уведомления и звуки</h3>
+          <div class="grid-4">
+            <label class="check"><input id="adminNotifDesktopEnabled" type="checkbox" /> Desktop уведомления</label>
+            <label class="check"><input id="adminNotifChatEnabled" type="checkbox" /> Сообщения чата</label>
+            <label class="check"><input id="adminNotifTaskEnabled" type="checkbox" /> Напоминания задач</label>
+            <label class="check"><input id="adminNotifCalendarEnabled" type="checkbox" /> Напоминания календаря</label>
+          </div>
+          <div class="grid-2">
+            <label><span>Sound default URL</span><input id="adminNotifDefaultUrl" placeholder="/static/uploads/notification_sounds/..." /></label>
+            <label><span>Sound chat URL</span><input id="adminNotifChatUrl" placeholder="/static/uploads/notification_sounds/..." /></label>
+            <label><span>Sound task URL</span><input id="adminNotifTaskUrl" placeholder="/static/uploads/notification_sounds/..." /></label>
+            <label><span>Sound calendar URL</span><input id="adminNotifCalendarUrl" placeholder="/static/uploads/notification_sounds/..." /></label>
+          </div>
+          <div class="admin-sound-upload-grid">
+            <label><span>Default sound</span><input id="adminNotifUploadDefault" type="file" accept="audio/*" /></label>
+            <label><span>Chat sound</span><input id="adminNotifUploadChat" type="file" accept="audio/*" /></label>
+            <label><span>Task sound</span><input id="adminNotifUploadTask" type="file" accept="audio/*" /></label>
+            <label><span>Calendar sound</span><input id="adminNotifUploadCalendar" type="file" accept="audio/*" /></label>
+          </div>
+          <div class="actions">
+            <button type="button" onclick="adminUploadNotificationSound('default')">Загрузить default</button>
+            <button type="button" onclick="adminUploadNotificationSound('chat')">Загрузить chat</button>
+            <button type="button" onclick="adminUploadNotificationSound('task')">Загрузить task</button>
+            <button type="button" onclick="adminUploadNotificationSound('calendar')">Загрузить calendar</button>
+            <button class="btn-secondary" type="button" onclick="adminSaveNotificationSettings()">Сохранить настройки</button>
+            <button class="btn-secondary" type="button" onclick="adminLoadNotificationSettings()">Обновить</button>
+          </div>
+          <div id="adminNotifSettingsMeta" class="hint">-</div>
         </div>
       </section>
 

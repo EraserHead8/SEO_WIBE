@@ -531,6 +531,7 @@ class SalesStatsRowOut(BaseModel):
     marketplace: str
     orders: int
     units: int
+    buyouts: int = 0
     revenue: float
     returns: int = 0
     ad_spend: float = 0.0
@@ -542,18 +543,21 @@ class SalesStatsPointOut(BaseModel):
     bucket: str | None = None
     orders: int
     units: int
+    buyouts: int = 0
     revenue: float
     returns: int = 0
     ad_spend: float = 0.0
     penalties: float = 0.0
     wb_orders: int = 0
     wb_units: int = 0
+    wb_buyouts: int = 0
     wb_revenue: float = 0.0
     wb_returns: int = 0
     wb_ad_spend: float = 0.0
     wb_penalties: float = 0.0
     ozon_orders: int = 0
     ozon_units: int = 0
+    ozon_buyouts: int = 0
     ozon_revenue: float = 0.0
     ozon_returns: int = 0
     ozon_ad_spend: float = 0.0
@@ -692,6 +696,23 @@ class SocialChatDirectStartIn(BaseModel):
 
 class SocialChatMessageIn(BaseModel):
     text: str
+    reply_to_message_id: int | None = None
+
+
+class SocialChatReactionIn(BaseModel):
+    emoji: str
+
+
+class SocialChatGroupIn(BaseModel):
+    title: str
+    member_keys: list[str] = Field(default_factory=list)
+    avatar_url: str = ""
+
+
+class SocialChatGroupUpdateIn(BaseModel):
+    title: str | None = None
+    member_keys: list[str] | None = None
+    avatar_url: str | None = None
 
 
 class SocialChatThreadAvatarIn(BaseModel):
@@ -725,6 +746,9 @@ class SocialChatMessageOut(BaseModel):
     sender_avatar: str | None = None
     text: str
     created_at: str
+    reply_to: dict[str, Any] | None = None
+    attachments: list[dict[str, Any]] = Field(default_factory=list)
+    reactions: list[dict[str, Any]] = Field(default_factory=list)
     is_mine: bool = False
 
 
@@ -830,3 +854,25 @@ class SocialNotificationOut(BaseModel):
     body: str
     payload: dict[str, Any] = Field(default_factory=dict)
     created_at: str
+
+
+class NotificationSoundSettingsOut(BaseModel):
+    desktop_enabled: bool = True
+    chat_enabled: bool = True
+    task_enabled: bool = True
+    calendar_enabled: bool = True
+    default_sound_url: str = ""
+    chat_sound_url: str = ""
+    task_sound_url: str = ""
+    calendar_sound_url: str = ""
+
+
+class NotificationSoundSettingsIn(BaseModel):
+    desktop_enabled: bool = True
+    chat_enabled: bool = True
+    task_enabled: bool = True
+    calendar_enabled: bool = True
+    default_sound_url: str = ""
+    chat_sound_url: str = ""
+    task_sound_url: str = ""
+    calendar_sound_url: str = ""

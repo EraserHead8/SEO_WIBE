@@ -16,6 +16,8 @@ let adminAiGlobalState = null;
 let adminSelectedUserAiState = null;
 let adminServerMetrics = null;
 let adminServerHistory = [];
+let adminNotificationSettings = null;
+let adminServerAutoTimer = null;
 const adminUserProfileCache = new Map();
 let adminTeamModalState = {
   userId: 0,
@@ -478,6 +480,34 @@ async function adminRequest(url, opts = {}) {
   return data;
 }
 
+function stopAdminServerAutoRefresh() {
+  if (!adminServerAutoTimer) return;
+  clearInterval(adminServerAutoTimer);
+  adminServerAutoTimer = null;
+}
+
+function startAdminServerAutoRefresh() {
+  stopAdminServerAutoRefresh();
+  adminServerAutoTimer = setInterval(() => {
+    if (document.getElementById("adminTab-server")?.classList.contains("hidden")) return;
+    loadAdminServerMetrics({ silent: true }).catch(() => null);
+  }, 60 * 1000);
+}
+
+function normalizeAdminNotificationSettings(payload) {
+  const raw = payload && typeof payload === "object" ? payload : {};
+  return {
+    desktop_enabled: raw.desktop_enabled !== false,
+    chat_enabled: raw.chat_enabled !== false,
+    task_enabled: raw.task_enabled !== false,
+    calendar_enabled: raw.calendar_enabled !== false,
+    default_sound_url: String(raw.default_sound_url || "").trim(),
+    chat_sound_url: String(raw.chat_sound_url || "").trim(),
+    task_sound_url: String(raw.task_sound_url || "").trim(),
+    calendar_sound_url: String(raw.calendar_sound_url || "").trim(),
+  };
+}
+
 function setAdminVisible(loggedIn) {
   document.getElementById("adminAuthSection")?.classList.toggle("hidden", loggedIn);
   document.getElementById("adminPanelSection")?.classList.toggle("hidden", !loggedIn);
@@ -688,6 +718,7 @@ function applyAdminLanguage() {
   renderAdminAuditTable();
   renderAdminAuditPager();
   renderAdminAppearance();
+  renderAdminNotificationSettings();
   renderAdminAiTab();
   renderAdminServerMetrics();
 }
@@ -727,6 +758,16 @@ function showAdminTab(tab, btn = null) {
   }
   if (tab === "server" && !adminServerMetrics) {
     loadAdminServerMetrics().catch(() => null);
+  }
+  if (tab === "server") {
+    startAdminServerAutoRefresh();
+  } else {
+    stopAdminServerAutoRefresh();
+  }
+  if (tab === "appearance" && !adminNotificationSettings) {
+    adminLoadNotificationSettings().catch(() => null);
+  } else if (tab === "appearance") {
+    renderAdminNotificationSettings();
   }
   adminCloseMobileNav();
 }
@@ -784,6 +825,7 @@ async function adminLogin() {
 }
 
 async function adminLogout() {
+  stopAdminServerAutoRefresh();
   if (adminToken) {
     await adminRequest("/api/auth/logout", {
       method: "POST",
@@ -802,6 +844,7 @@ async function adminLogout() {
   adminAuditTotalPages = 0;
   adminAiGlobalState = null;
   adminSelectedUserAiState = null;
+  adminNotificationSettings = null;
   adminUserProfileCache.clear();
   localStorage.removeItem("admin_token");
   sessionStorage.removeItem("admin_token");
@@ -810,6 +853,7 @@ async function adminLogout() {
 
 async function ensureAdminAuth() {
   if (!adminToken) {
+    stopAdminServerAutoRefresh();
     setAdminVisible(false);
     applyAdminTheme(adminTheme);
     applyAdminLanguage();
@@ -817,6 +861,7 @@ async function ensureAdminAuth() {
   }
   const me = await adminRequest("/api/auth/me", { headers: adminHeaders() }).catch(() => null);
   if (!me || me.role !== "admin") {
+    stopAdminServerAutoRefresh();
     await adminLogout();
     alert(aTr("Доступ только для admin-пользователя", "Admin access only"));
     return;
@@ -830,7 +875,7 @@ async function ensureAdminAuth() {
 }
 
 async function loadAdminAll() {
-  const [stats, users, modules, allCreds, uiSettings, aiGlobal, serverMetrics] = await Promise.all([
+  const [stats, users, modules, allCreds, uiSettings, aiGlobal, serverMetrics, notifSettings] = await Promise.all([
     adminRequest("/api/admin/stats", { headers: adminHeaders() }).catch(() => null),
     adminRequest("/api/admin/users", { headers: adminHeaders() }).catch(() => null),
     adminRequest("/api/admin/modules", { headers: adminHeaders() }).catch(() => null),
@@ -838,6 +883,7 @@ async function loadAdminAll() {
     adminRequest("/api/admin/ui/settings", { headers: adminHeaders() }).catch(() => null),
     adminRequest("/api/admin/ai/global", { headers: adminHeaders() }).catch(() => null),
     adminRequest("/api/admin/server/metrics", { headers: adminHeaders() }).catch(() => null),
+    adminRequest("/api/admin/notification-settings", { headers: adminHeaders() }).catch(() => null),
   ]);
 
   const statsView = document.getElementById("adminStatsView");
@@ -854,6 +900,7 @@ async function loadAdminAll() {
   adminUiSettings = uiSettings && typeof uiSettings === "object" ? uiSettings : null;
   adminAiGlobalState = aiGlobal && typeof aiGlobal === "object" ? aiGlobal : null;
   adminServerMetrics = serverMetrics && typeof serverMetrics === "object" ? serverMetrics : null;
+  adminNotificationSettings = normalizeAdminNotificationSettings(notifSettings);
   adminSelectedUserAiState = null;
 
   renderAdminDashboard(stats, users || [], modules || []);
@@ -861,6 +908,7 @@ async function loadAdminAll() {
   renderAdminModulesTable();
   renderAdminCredentialsTable();
   renderAdminAppearance();
+  renderAdminNotificationSettings();
   renderAdminAiTab();
   renderAdminServerMetrics();
 }
@@ -2344,9 +2392,10 @@ function renderAdminServerMetrics() {
   ], { valueFormatter: (val) => formatAdminBytes(val) });
 }
 
-async function loadAdminServerMetrics() {
+async function loadAdminServerMetrics(opts = {}) {
+  const silent = Boolean(opts?.silent);
   const data = await adminRequest("/api/admin/server/metrics", { headers: adminHeaders() }).catch((e) => {
-    alert(e.message);
+    if (!silent) alert(e.message);
     return null;
   });
   if (!data) return;
@@ -2646,6 +2695,112 @@ async function adminAuditNextPage() {
   await loadAdminAudit();
 }
 
+function renderAdminNotificationSettings() {
+  const cfg = normalizeAdminNotificationSettings(adminNotificationSettings);
+  const desktopEl = document.getElementById("adminNotifDesktopEnabled");
+  const chatEl = document.getElementById("adminNotifChatEnabled");
+  const taskEl = document.getElementById("adminNotifTaskEnabled");
+  const calEl = document.getElementById("adminNotifCalendarEnabled");
+  const defaultEl = document.getElementById("adminNotifDefaultUrl");
+  const chatUrlEl = document.getElementById("adminNotifChatUrl");
+  const taskUrlEl = document.getElementById("adminNotifTaskUrl");
+  const calUrlEl = document.getElementById("adminNotifCalendarUrl");
+  const metaEl = document.getElementById("adminNotifSettingsMeta");
+  if (desktopEl) desktopEl.checked = Boolean(cfg.desktop_enabled);
+  if (chatEl) chatEl.checked = Boolean(cfg.chat_enabled);
+  if (taskEl) taskEl.checked = Boolean(cfg.task_enabled);
+  if (calEl) calEl.checked = Boolean(cfg.calendar_enabled);
+  if (defaultEl) defaultEl.value = cfg.default_sound_url;
+  if (chatUrlEl) chatUrlEl.value = cfg.chat_sound_url;
+  if (taskUrlEl) taskUrlEl.value = cfg.task_sound_url;
+  if (calUrlEl) calUrlEl.value = cfg.calendar_sound_url;
+  if (metaEl) {
+    const enabledCount = [cfg.chat_enabled, cfg.task_enabled, cfg.calendar_enabled].filter(Boolean).length;
+    metaEl.textContent = aTr(`Каналов со звуком: ${enabledCount} из 3`, `Enabled sound channels: ${enabledCount} of 3`);
+  }
+}
+
+async function adminLoadNotificationSettings() {
+  const data = await adminRequest("/api/admin/notification-settings", { headers: adminHeaders() }).catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  if (!data) return;
+  adminNotificationSettings = normalizeAdminNotificationSettings(data);
+  renderAdminNotificationSettings();
+}
+
+async function adminSaveNotificationSettings() {
+  const payload = normalizeAdminNotificationSettings({
+    desktop_enabled: Boolean(document.getElementById("adminNotifDesktopEnabled")?.checked),
+    chat_enabled: Boolean(document.getElementById("adminNotifChatEnabled")?.checked),
+    task_enabled: Boolean(document.getElementById("adminNotifTaskEnabled")?.checked),
+    calendar_enabled: Boolean(document.getElementById("adminNotifCalendarEnabled")?.checked),
+    default_sound_url: document.getElementById("adminNotifDefaultUrl")?.value || "",
+    chat_sound_url: document.getElementById("adminNotifChatUrl")?.value || "",
+    task_sound_url: document.getElementById("adminNotifTaskUrl")?.value || "",
+    calendar_sound_url: document.getElementById("adminNotifCalendarUrl")?.value || "",
+  });
+  const data = await adminRequest("/api/admin/notification-settings", {
+    method: "POST",
+    headers: adminHeaders(),
+    body: JSON.stringify(payload),
+  }).catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  if (!data) return;
+  adminNotificationSettings = normalizeAdminNotificationSettings(data);
+  renderAdminNotificationSettings();
+  const metaEl = document.getElementById("adminNotifSettingsMeta");
+  if (metaEl) metaEl.textContent = aTr("Настройки уведомлений сохранены.", "Notification settings saved.");
+}
+
+async function adminUploadNotificationSound(group) {
+  const key = String(group || "").trim().toLowerCase();
+  const inputId = {
+    default: "adminNotifUploadDefault",
+    chat: "adminNotifUploadChat",
+    task: "adminNotifUploadTask",
+    calendar: "adminNotifUploadCalendar",
+  }[key];
+  const input = inputId ? document.getElementById(inputId) : null;
+  const file = input?.files?.[0];
+  if (!file) {
+    alert(aTr("Сначала выберите аудио файл.", "Select an audio file first."));
+    return;
+  }
+  const form = new FormData();
+  form.append("group", key);
+  form.append("file", file);
+  const headers = { "Authorization": `Bearer ${adminToken}` };
+  const data = await adminRequest("/api/admin/notification-settings/upload", {
+    method: "POST",
+    headers,
+    body: form,
+  }).catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  if (!data) return;
+  const url = String(data.url || "").trim();
+  if (key === "default") {
+    const el = document.getElementById("adminNotifDefaultUrl");
+    if (el) el.value = url;
+  } else if (key === "chat") {
+    const el = document.getElementById("adminNotifChatUrl");
+    if (el) el.value = url;
+  } else if (key === "task") {
+    const el = document.getElementById("adminNotifTaskUrl");
+    if (el) el.value = url;
+  } else if (key === "calendar") {
+    const el = document.getElementById("adminNotifCalendarUrl");
+    if (el) el.value = url;
+  }
+  if (input) input.value = "";
+  await adminSaveNotificationSettings();
+}
+
 function renderAdminAppearance() {
   const summaryEl = document.getElementById("adminAppearanceSummary");
   const summaryTable = document.getElementById("adminAppearanceSummaryTable");
@@ -2768,6 +2923,9 @@ window.loadAdminAuditReset = loadAdminAuditReset;
 window.adminAuditPrevPage = adminAuditPrevPage;
 window.adminAuditNextPage = adminAuditNextPage;
 window.adminSaveUiSettings = adminSaveUiSettings;
+window.adminSaveNotificationSettings = adminSaveNotificationSettings;
+window.adminLoadNotificationSettings = adminLoadNotificationSettings;
+window.adminUploadNotificationSound = adminUploadNotificationSound;
 window.loadAdminServerMetrics = loadAdminServerMetrics;
 window.adminOpenAppearanceModal = adminOpenAppearanceModal;
 window.adminCloseAppearanceModal = adminCloseAppearanceModal;

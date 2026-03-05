@@ -12,11 +12,11 @@ import time
 import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Request, Response
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Request, Response
 from sqlalchemy import String, cast, delete, func, or_, select, text
 from sqlalchemy.orm import Session
 
@@ -124,8 +124,11 @@ from app.schemas import (
     SocialCalendarEventIn,
     SocialCalendarEventOut,
     SocialChatDirectStartIn,
+    SocialChatGroupIn,
+    SocialChatGroupUpdateIn,
     SocialChatMessageIn,
     SocialChatMessageOut,
+    SocialChatReactionIn,
     SocialChatThreadAvatarIn,
     SocialChatThreadOut,
     SocialCurrencyRatesOut,
@@ -142,6 +145,8 @@ from app.schemas import (
     SocialTaskProjectIn,
     SocialTaskProjectOut,
     SocialTaskUpdateIn,
+    NotificationSoundSettingsIn,
+    NotificationSoundSettingsOut,
     WbCampaignRatesIn,
     WbCampaignDetailOut,
     WbAdsActionIn,
@@ -3875,6 +3880,7 @@ def sales_stats(
             "totals": {
                 "orders": 0,
                 "units": 0,
+                "buyouts": 0,
                 "revenue": 0.0,
                 "returns": 0,
                 "ad_spend": 0.0,
@@ -3935,6 +3941,7 @@ def sales_stats(
             "metrics": {
                 "orders": _cmp("orders"),
                 "units": _cmp("units"),
+                "buyouts": _cmp("buyouts"),
                 "revenue": _cmp("revenue"),
                 "returns": _cmp("returns"),
                 "ad_spend": _cmp("ad_spend"),
@@ -3992,30 +3999,45 @@ def profile_state(user: User = Depends(get_current_user), db: Session = Depends(
 @router.put("/profile", response_model=UserProfileOut)
 def profile_update(payload: UserProfileUpdateIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     ensure_module_enabled(db, user, "user_profile")
-    _require_owner_actor(user)
     profile = _get_or_create_user_profile(db, user.id)
-
-    profile.full_name = payload.full_name.strip()[:255]
-    profile.company_name = payload.company_name.strip()[:255]
-    profile.city = payload.city.strip()[:120]
-    profile.legal_name = payload.legal_name.strip()[:255]
-    profile.legal_address = payload.legal_address.strip()[:255]
-    profile.tax_id = payload.tax_id.strip()[:40]
-    profile.tax_rate = max(0.0, min(float(payload.tax_rate or 0.0), 100.0))
-    profile.phone = payload.phone.strip()[:40]
-    profile.position_title = payload.position_title.strip()[:120]
-    profile.team_size = max(1, min(int(payload.team_size or 1), 100000))
-    profile.company_structure = payload.company_structure.strip()[:12000]
-    profile.avatar_url = payload.avatar_url.strip()[:500]
-
-    _audit(
-        db,
-        user,
-        action="profile_updated",
-        details=f"company={profile.company_name};city={profile.city};team={profile.team_size}",
-        module_code="user_profile",
-        entity_type="profile",
-    )
+    if _actor_is_owner(user):
+        profile.full_name = payload.full_name.strip()[:255]
+        profile.company_name = payload.company_name.strip()[:255]
+        profile.city = payload.city.strip()[:120]
+        profile.legal_name = payload.legal_name.strip()[:255]
+        profile.legal_address = payload.legal_address.strip()[:255]
+        profile.tax_id = payload.tax_id.strip()[:40]
+        profile.tax_rate = max(0.0, min(float(payload.tax_rate or 0.0), 100.0))
+        profile.phone = payload.phone.strip()[:40]
+        profile.position_title = payload.position_title.strip()[:120]
+        profile.team_size = max(1, min(int(payload.team_size or 1), 100000))
+        profile.company_structure = payload.company_structure.strip()[:12000]
+        profile.avatar_url = payload.avatar_url.strip()[:500]
+        _audit(
+            db,
+            user,
+            action="profile_updated",
+            details=f"company={profile.company_name};city={profile.city};team={profile.team_size}",
+            module_code="user_profile",
+            entity_type="profile",
+        )
+    else:
+        member_id = _actor_member_id(user)
+        row = db.get(TeamMember, member_id)
+        if not row or row.user_id != user.id or bool(row.is_owner):
+            raise HTTPException(status_code=403, detail="Недостаточно прав")
+        row.full_name = payload.full_name.strip()[:255]
+        row.phone = payload.phone.strip()[:40]
+        row.avatar_url = payload.avatar_url.strip()[:500]
+        _audit(
+            db,
+            user,
+            action="profile_member_updated",
+            details=f"member_id={row.id}",
+            module_code="user_profile",
+            entity_type="team_member",
+            entity_id=str(row.id),
+        )
     account = _get_or_create_billing_account(db, user.id)
     db.commit()
     return _build_user_profile_payload(db, user, profile, account)
@@ -4081,10 +4103,13 @@ def profile_team_avatar_upload(
     db: Session = Depends(get_db),
 ):
     ensure_module_enabled(db, user, "user_profile")
-    _require_owner_actor(user)
     row = db.get(TeamMember, member_id)
     if not row or row.user_id != user.id:
         raise HTTPException(status_code=404, detail="Сотрудник не найден")
+    if not _actor_is_owner(user):
+        actor_member_id = _actor_member_id(user)
+        if int(actor_member_id or 0) != int(member_id or 0):
+            raise HTTPException(status_code=403, detail="Недостаточно прав")
     url = _save_avatar_upload(file, user_id=user.id, prefix=f"member{member_id}")
     row.avatar_url = url
     _audit(
@@ -4256,10 +4281,28 @@ def profile_team_add(payload: TeamMemberIn, user: User = Depends(get_current_use
 @router.put("/profile/team/{member_id}", response_model=TeamMemberOut)
 def profile_team_update(member_id: int, payload: TeamMemberIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     ensure_module_enabled(db, user, "user_profile")
-    _require_owner_actor(user)
     row = db.get(TeamMember, member_id)
     if not row or row.user_id != user.id:
         raise HTTPException(status_code=404, detail="Сотрудник не найден")
+    if not _actor_is_owner(user):
+        actor_member_id = _actor_member_id(user)
+        if int(actor_member_id or 0) != int(member_id or 0):
+            raise HTTPException(status_code=403, detail="Недостаточно прав")
+        row.phone = payload.phone.strip()[:40]
+        row.full_name = payload.full_name.strip()[:255]
+        row.nickname = payload.nickname.strip()[:120]
+        row.avatar_url = payload.avatar_url.strip()[:500]
+        _audit(
+            db,
+            user,
+            action="profile_team_member_self_updated",
+            details=f"member_id={row.id}",
+            module_code="user_profile",
+            entity_type="team_member",
+            entity_id=str(row.id),
+        )
+        db.commit()
+        return _team_member_to_out(row)
     if row.is_owner:
         row.phone = payload.phone.strip()[:40]
         row.full_name = payload.full_name.strip()[:255]
@@ -5724,7 +5767,7 @@ def _social_last_activity_map(db: Session, actor_keys: list[str]) -> dict[str, d
     keys = [str(x or "").strip().lower() for x in actor_keys if str(x or "").strip()]
     if not keys:
         return {}
-    rows = db.execute(
+    exact_rows = db.execute(
         select(
             SocialChatMessage.sender_key,
             func.max(SocialChatMessage.created_at).label("last_at"),
@@ -5733,11 +5776,221 @@ def _social_last_activity_map(db: Session, actor_keys: list[str]) -> dict[str, d
         .group_by(SocialChatMessage.sender_key)
     ).all()
     out: dict[str, datetime] = {}
-    for sender_key, last_at in rows:
+    for sender_key, last_at in exact_rows:
         key = str(sender_key or "").strip().lower()
         if key and isinstance(last_at, datetime):
             out[key] = last_at
+    # Use sender_user_id fallback to avoid stale "last seen" when the same person wrote
+    # from another actor key (owner/member context).
+    user_ids: set[int] = set()
+    key_to_user_id: dict[str, int] = {}
+    for key in keys:
+        try:
+            uid, _, _ = _social_identity_by_key(db, key)
+        except Exception:
+            continue
+        if uid > 0:
+            key_to_user_id[key] = int(uid)
+            user_ids.add(int(uid))
+    if not user_ids:
+        return out
+    by_user_rows = db.execute(
+        select(
+            SocialChatMessage.sender_user_id,
+            func.max(SocialChatMessage.created_at).label("last_at"),
+        )
+        .where(SocialChatMessage.sender_user_id.in_(user_ids))
+        .group_by(SocialChatMessage.sender_user_id)
+    ).all()
+    by_user: dict[int, datetime] = {}
+    for uid, last_at in by_user_rows:
+        user_id = _to_int_safe(uid)
+        if user_id > 0 and isinstance(last_at, datetime):
+            by_user[user_id] = last_at
+    for key, uid in key_to_user_id.items():
+        dt = by_user.get(int(uid))
+        if isinstance(dt, datetime):
+            prev = out.get(key)
+            if not prev or dt > prev:
+                out[key] = dt
     return out
+
+
+def _to_utc_iso(dt: datetime | None) -> str:
+    if not isinstance(dt, datetime):
+        return ""
+    safe = dt
+    if safe.tzinfo is None:
+        safe = safe.replace(tzinfo=timezone.utc)
+    else:
+        safe = safe.astimezone(timezone.utc)
+    return safe.isoformat().replace("+00:00", "Z")
+
+
+def _social_parse_attachments(raw: str | None) -> list[dict[str, Any]]:
+    try:
+        data = json.loads(str(raw or "[]"))
+    except Exception:
+        return []
+    if not isinstance(data, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        url = str(item.get("url") or "").strip()[:500]
+        filename = str(item.get("filename") or "").strip()[:255]
+        if not url:
+            continue
+        out.append(
+            {
+                "url": url,
+                "filename": filename or "file",
+                "content_type": str(item.get("content_type") or "").strip()[:120],
+                "size_bytes": int(max(0, _to_int_safe(item.get("size_bytes")))),
+            }
+        )
+    return out
+
+
+def _social_parse_reactions(raw: str | None) -> dict[str, list[dict[str, str]]]:
+    try:
+        data = json.loads(str(raw or "{}"))
+    except Exception:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    out: dict[str, list[dict[str, str]]] = {}
+    for emoji_raw, actors_raw in data.items():
+        emoji = str(emoji_raw or "").strip()
+        if not emoji:
+            continue
+        actor_rows: list[dict[str, str]] = []
+        if isinstance(actors_raw, list):
+            for item in actors_raw:
+                if isinstance(item, dict):
+                    key = str(item.get("actor_key") or "").strip()[:60]
+                    nick = str(item.get("nick") or "").strip()[:120]
+                else:
+                    key = str(item or "").strip()[:60]
+                    nick = ""
+                if not key:
+                    continue
+                actor_rows.append({"actor_key": key, "nick": nick})
+        if actor_rows:
+            out[emoji] = actor_rows
+    return out
+
+
+def _social_message_to_out(db: Session, actor_key: str, row: SocialChatMessage) -> SocialChatMessageOut:
+    sender_key = str(row.sender_key or "")
+    sender_nick = _social_current_nick_by_key(db, sender_key) or str(row.sender_nick or "")
+    reply_payload: dict[str, Any] | None = None
+    reply_id = int(row.reply_to_message_id or 0)
+    if reply_id > 0:
+        reply_row = db.get(SocialChatMessage, reply_id)
+        if reply_row and int(reply_row.thread_id or 0) == int(row.thread_id or 0):
+            reply_sender_key = str(reply_row.sender_key or "")
+            reply_payload = {
+                "id": int(reply_row.id),
+                "sender_key": reply_sender_key,
+                "sender_nick": _social_current_nick_by_key(db, reply_sender_key) or str(reply_row.sender_nick or ""),
+                "text": str(reply_row.text or "")[:500],
+            }
+    parsed_reactions = _social_parse_reactions(getattr(row, "reactions_json", "") or "{}")
+    reactions: list[dict[str, Any]] = []
+    for emoji, actors in parsed_reactions.items():
+        actor_keys = [str(item.get("actor_key") or "") for item in actors if isinstance(item, dict)]
+        actor_nicks = [str(item.get("nick") or "").strip() for item in actors if isinstance(item, dict)]
+        reactions.append(
+            {
+                "emoji": emoji,
+                "count": len(actor_keys),
+                "my": actor_key in actor_keys,
+                "actors": [x for x in actor_nicks if x][:8],
+            }
+        )
+    return SocialChatMessageOut(
+        id=int(row.id),
+        thread_id=int(row.thread_id),
+        sender_key=sender_key,
+        sender_nick=sender_nick,
+        sender_avatar=_social_current_avatar_by_key(db, sender_key) or None,
+        text=str(row.text or ""),
+        created_at=_to_utc_iso(row.created_at),
+        reply_to=reply_payload,
+        attachments=_social_parse_attachments(getattr(row, "attachments_json", "") or "[]"),
+        reactions=reactions,
+        is_mine=sender_key == actor_key,
+    )
+
+
+def _social_company_allowed_actor_keys(db: Session, user_id: int) -> set[str]:
+    allowed = {f"u:{int(user_id)}"}
+    rows = db.scalars(
+        select(TeamMember).where(
+            TeamMember.user_id == int(user_id),
+            TeamMember.is_active.is_(True),
+        )
+    ).all()
+    for row in rows:
+        if bool(row.is_owner):
+            allowed.add(f"u:{int(user_id)}")
+        else:
+            allowed.add(f"m:{int(row.id)}")
+    return allowed
+
+
+def _social_clean_group_member_keys(
+    db: Session,
+    *,
+    user_id: int,
+    actor_key: str,
+    member_keys: list[str] | None,
+) -> list[str]:
+    allowed = _social_company_allowed_actor_keys(db, user_id)
+    source = member_keys or []
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw in source:
+        key = str(raw or "").strip().lower()
+        if not key or key in seen or key not in allowed:
+            continue
+        seen.add(key)
+        out.append(key)
+    me = str(actor_key or "").strip().lower()
+    if me and me not in seen:
+        out.insert(0, me)
+        seen.add(me)
+    owner_key = f"u:{int(user_id)}"
+    if owner_key not in seen:
+        out.insert(0, owner_key)
+    return out
+
+
+def _social_chat_storage_dir() -> Path:
+    static_root = Path(__file__).resolve().parent.parent / "static"
+    target_dir = static_root / "uploads" / "social_chat"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    return target_dir
+
+
+def _social_chat_clean_filename(raw: str) -> str:
+    base = os.path.basename(str(raw or "").strip()) or "file"
+    safe = re.sub(r"[^\w.\-]+", "_", base, flags=re.UNICODE).strip("._")
+    return (safe or "file")[:180]
+
+
+def _social_chat_guess_ext(filename: str, content_type: str) -> str:
+    ext = str(Path(filename or "").suffix or "").strip().lower()
+    if ext and len(ext) <= 10:
+        return ext
+    guessed = mimetypes.guess_extension(str(content_type or "").split(";", 1)[0].strip().lower()) or ""
+    if guessed == ".jpe":
+        guessed = ".jpg"
+    if guessed and len(guessed) <= 10:
+        return guessed
+    return ".bin"
 
 
 def _social_thread_to_out(db: Session, actor_key: str, row: SocialChatThread, member_row: SocialChatThreadMember) -> SocialChatThreadOut:
@@ -5751,7 +6004,7 @@ def _social_thread_to_out(db: Session, actor_key: str, row: SocialChatThread, me
             "sender_nick": str(last.sender_nick or ""),
             "sender_avatar": str(last_avatar or ""),
             "text": str(last.text or ""),
-            "created_at": last.created_at.isoformat() if last.created_at else "",
+            "created_at": _to_utc_iso(last.created_at),
         }
     unread = db.scalar(
         select(func.count())
@@ -5782,7 +6035,7 @@ def _social_thread_to_out(db: Session, actor_key: str, row: SocialChatThread, me
                 "actor_key": key,
                 "nick": current_nick,
                 "avatar_url": str(avatar_url or ""),
-                "last_seen_at": last_seen.isoformat() if last_seen else "",
+                "last_seen_at": _to_utc_iso(last_seen),
                 "is_me": key == actor_key,
             }
         )
@@ -5806,6 +6059,17 @@ _CBR_DAILY_URL = "https://www.cbr.ru/scripts/XML_daily.asp"
 _CBR_CODES = {"USD", "EUR", "CNY", "BYN", "TRY", "GBP", "UAH"}
 _CBR_CACHE_TTL = 60 * 60
 _CBR_CACHE: dict[str, Any] = {"stamp": 0.0, "payload": None}
+_NOTIFICATION_SOUND_SETTINGS_KEY = "notification_sound_settings"
+_DEFAULT_NOTIFICATION_SOUND_SETTINGS: dict[str, Any] = {
+    "desktop_enabled": True,
+    "chat_enabled": True,
+    "task_enabled": True,
+    "calendar_enabled": True,
+    "default_sound_url": "",
+    "chat_sound_url": "",
+    "task_sound_url": "",
+    "calendar_sound_url": "",
+}
 
 
 def _parse_cbr_number(raw: str) -> float:
@@ -5864,6 +6128,87 @@ def _get_cbr_rates() -> dict[str, Any]:
             fallback["stale"] = True
             return fallback
         raise
+
+
+def _sanitize_notification_sound_settings(raw: dict[str, Any] | None) -> dict[str, Any]:
+    source = raw or {}
+    return {
+        "desktop_enabled": bool(source.get("desktop_enabled", _DEFAULT_NOTIFICATION_SOUND_SETTINGS["desktop_enabled"])),
+        "chat_enabled": bool(source.get("chat_enabled", _DEFAULT_NOTIFICATION_SOUND_SETTINGS["chat_enabled"])),
+        "task_enabled": bool(source.get("task_enabled", _DEFAULT_NOTIFICATION_SOUND_SETTINGS["task_enabled"])),
+        "calendar_enabled": bool(source.get("calendar_enabled", _DEFAULT_NOTIFICATION_SOUND_SETTINGS["calendar_enabled"])),
+        "default_sound_url": str(source.get("default_sound_url") or "").strip()[:500],
+        "chat_sound_url": str(source.get("chat_sound_url") or "").strip()[:500],
+        "task_sound_url": str(source.get("task_sound_url") or "").strip()[:500],
+        "calendar_sound_url": str(source.get("calendar_sound_url") or "").strip()[:500],
+    }
+
+
+def _get_notification_sound_settings(db: Session) -> NotificationSoundSettingsOut:
+    raw = _get_system_setting(db, _NOTIFICATION_SOUND_SETTINGS_KEY)
+    if not raw:
+        safe_default = _sanitize_notification_sound_settings(_DEFAULT_NOTIFICATION_SOUND_SETTINGS)
+        _set_system_setting(db, _NOTIFICATION_SOUND_SETTINGS_KEY, json.dumps(safe_default, ensure_ascii=False))
+        db.commit()
+        return NotificationSoundSettingsOut(**safe_default)
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        parsed = {}
+    safe = _sanitize_notification_sound_settings(parsed if isinstance(parsed, dict) else {})
+    if json.dumps(safe, ensure_ascii=False) != json.dumps(parsed if isinstance(parsed, dict) else {}, ensure_ascii=False):
+        _set_system_setting(db, _NOTIFICATION_SOUND_SETTINGS_KEY, json.dumps(safe, ensure_ascii=False))
+        db.commit()
+    return NotificationSoundSettingsOut(**safe)
+
+
+def _social_emit_due_reminders(db: Session, *, user_id: int, actor_key: str, actor_nick: str) -> None:
+    now = datetime.utcnow()
+    soon = now + timedelta(minutes=15)
+    # Task reminders for upcoming deadlines assigned to current actor.
+    task_rows = db.scalars(
+        select(SocialTask).where(
+            SocialTask.user_id == int(user_id),
+            SocialTask.assignee_key == actor_key,
+            SocialTask.status != "done",
+            SocialTask.due_date.is_not(None),
+            SocialTask.due_date <= soon,
+            SocialTask.due_date >= (now - timedelta(minutes=30)),
+        )
+    ).all()
+    for row in task_rows:
+        due_iso = _to_utc_iso(row.due_date)[:16]
+        _social_push_notification(
+            db,
+            user_id=int(user_id),
+            recipient_key=actor_key,
+            kind="task_reminder",
+            dedupe_key=f"task_due:{int(row.id)}:{due_iso}:{actor_key}",
+            title="Напоминание о задаче",
+            body=f"{str(row.title or '')[:140]} • дедлайн {due_iso.replace('T', ' ')} UTC",
+            payload={"task_id": int(row.id), "kind": "task", "assignee": actor_nick},
+        )
+    # Calendar reminders for upcoming events.
+    event_rows = db.scalars(
+        select(SocialCalendarEvent).where(
+            SocialCalendarEvent.user_id == int(user_id),
+            SocialCalendarEvent.start_at <= soon,
+            SocialCalendarEvent.start_at >= (now - timedelta(minutes=30)),
+            or_(SocialCalendarEvent.is_public.is_(True), SocialCalendarEvent.actor_key == actor_key),
+        )
+    ).all()
+    for row in event_rows:
+        start_iso = _to_utc_iso(row.start_at)[:16]
+        _social_push_notification(
+            db,
+            user_id=int(user_id),
+            recipient_key=actor_key,
+            kind="calendar_reminder",
+            dedupe_key=f"calendar_due:{int(row.id)}:{start_iso}:{actor_key}",
+            title="Напоминание календаря",
+            body=f"{str(row.title or '')[:140]} • {start_iso.replace('T', ' ')} UTC",
+            payload={"event_id": int(row.id), "kind": "calendar"},
+        )
 
 
 def _social_push_notification(
@@ -6124,7 +6469,7 @@ def social_chat_threads(
         thread = db.get(SocialChatThread, member_row.thread_id)
         if not thread:
             continue
-        if thread.kind == "company" and int(thread.owner_user_id or 0) != int(user.id):
+        if thread.kind in {"company", "group"} and int(thread.owner_user_id or 0) != int(user.id):
             continue
         out.append(_social_thread_to_out(db, actor_key, thread, member_row))
     out.sort(key=lambda x: (x.unread, x.last_message.get("id", 0)), reverse=True)
@@ -6140,6 +6485,7 @@ def social_chat_thread_avatar(
     db: Session = Depends(get_db),
 ):
     ensure_module_enabled(db, user, "social_hub")
+    actor_key, actor_nick, member_id = _social_actor_identity(db, user)
     thread = db.get(SocialChatThread, int(thread_id or 0))
     if not thread:
         raise HTTPException(status_code=404, detail="Чат не найден")
@@ -6149,15 +6495,26 @@ def social_chat_thread_avatar(
         raise HTTPException(status_code=403, detail="Недостаточно прав")
     if thread.kind == "company" and not _actor_is_owner(user) and user.role != "admin":
         raise HTTPException(status_code=403, detail="Недостаточно прав")
-    actor_key, actor_nick, member_id = _social_actor_identity(db, user)
-    member_row = _social_ensure_thread_member(
-        db,
-        thread_id=thread.id,
-        actor_key=actor_key,
-        user_id=user.id,
-        member_id=member_id,
-        actor_nick=actor_nick,
-    )
+    if thread.kind == "group":
+        if int(thread.owner_user_id or 0) != int(user.id):
+            raise HTTPException(status_code=403, detail="Недостаточно прав")
+        member_row = db.scalar(
+            select(SocialChatThreadMember).where(
+                SocialChatThreadMember.thread_id == int(thread.id),
+                SocialChatThreadMember.actor_key == actor_key,
+            )
+        )
+        if not member_row:
+            raise HTTPException(status_code=403, detail="Нет доступа к группе")
+    else:
+        member_row = _social_ensure_thread_member(
+            db,
+            thread_id=thread.id,
+            actor_key=actor_key,
+            user_id=user.id,
+            member_id=member_id,
+            actor_nick=actor_nick,
+        )
     safe_url = str(payload.avatar_url or "").strip()[:500]
     thread.avatar_url = safe_url
     thread.updated_at = datetime.utcnow()
@@ -6230,6 +6587,177 @@ def social_start_direct_chat(
         user_id=peer_user_id,
         member_id=peer_member_id,
         actor_nick=peer_nick,
+    )
+    db.commit()
+    return _social_thread_to_out(db, actor_key, thread, me_member)
+
+
+def _social_sync_group_members(
+    db: Session,
+    *,
+    thread: SocialChatThread,
+    user_id: int,
+    actor_key: str,
+    actor_nick: str,
+    member_keys: list[str],
+) -> SocialChatThreadMember:
+    me_row: SocialChatThreadMember | None = None
+    keep_keys = set(member_keys)
+    existing_rows = db.scalars(
+        select(SocialChatThreadMember).where(SocialChatThreadMember.thread_id == int(thread.id))
+    ).all()
+    for key in member_keys:
+        uid, mid, nick = _social_identity_by_key(db, key)
+        if int(uid) != int(user_id):
+            continue
+        row = _social_ensure_thread_member(
+            db,
+            thread_id=int(thread.id),
+            actor_key=key,
+            user_id=int(uid),
+            member_id=int(mid) if mid else None,
+            actor_nick=(actor_nick if key == actor_key else nick),
+        )
+        if key == actor_key:
+            me_row = row
+    for row in existing_rows:
+        key = str(row.actor_key or "").strip().lower()
+        if key not in keep_keys:
+            db.delete(row)
+    if not me_row:
+        me_row = _social_ensure_thread_member(
+            db,
+            thread_id=int(thread.id),
+            actor_key=actor_key,
+            user_id=int(user_id),
+            member_id=_to_int_safe(actor_key.split(":", 1)[1]) if actor_key.startswith("m:") else None,
+            actor_nick=actor_nick,
+        )
+    thread.updated_at = datetime.utcnow()
+    return me_row
+
+
+@router.post("/social/chat/groups", response_model=SocialChatThreadOut)
+def social_create_group_chat(
+    payload: SocialChatGroupIn,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, actor_nick, _ = _social_actor_identity(db, user)
+    title = str(payload.title or "").strip()[:255]
+    if len(title) < 2:
+        raise HTTPException(status_code=400, detail="Укажите название группы")
+    member_keys = _social_clean_group_member_keys(
+        db,
+        user_id=int(user.id),
+        actor_key=actor_key,
+        member_keys=list(payload.member_keys or []),
+    )
+    if len(member_keys) < 2:
+        raise HTTPException(status_code=400, detail="Добавьте минимум двух участников")
+    thread = SocialChatThread(
+        kind="group",
+        owner_user_id=int(user.id),
+        title=title,
+        avatar_url=str(payload.avatar_url or "").strip()[:500],
+    )
+    db.add(thread)
+    db.flush()
+    me_row = _social_sync_group_members(
+        db,
+        thread=thread,
+        user_id=int(user.id),
+        actor_key=actor_key,
+        actor_nick=actor_nick,
+        member_keys=member_keys,
+    )
+    _audit(
+        db,
+        user,
+        action="social_group_chat_created",
+        details=json.dumps(
+            {"thread_id": int(thread.id), "title": title, "members": len(member_keys)},
+            ensure_ascii=False,
+        ),
+        module_code="social_hub",
+        entity_type="social_thread",
+        entity_id=str(thread.id),
+        request=request,
+    )
+    db.commit()
+    return _social_thread_to_out(db, actor_key, thread, me_row)
+
+
+@router.put("/social/chat/groups/{thread_id}", response_model=SocialChatThreadOut)
+def social_update_group_chat(
+    thread_id: int,
+    payload: SocialChatGroupUpdateIn,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, actor_nick, _ = _social_actor_identity(db, user)
+    thread = db.get(SocialChatThread, int(thread_id or 0))
+    if not thread or str(thread.kind or "") != "group" or int(thread.owner_user_id or 0) != int(user.id):
+        raise HTTPException(status_code=404, detail="Группа не найдена")
+    me_member = db.scalar(
+        select(SocialChatThreadMember).where(
+            SocialChatThreadMember.thread_id == int(thread.id),
+            SocialChatThreadMember.actor_key == actor_key,
+        )
+    )
+    if not me_member:
+        raise HTTPException(status_code=403, detail="Нет доступа к группе")
+    title = str(payload.title or "").strip()[:255] if payload.title is not None else str(thread.title or "")
+    if len(title) < 2:
+        raise HTTPException(status_code=400, detail="Укажите название группы")
+    thread.title = title
+    if payload.avatar_url is not None:
+        thread.avatar_url = str(payload.avatar_url or "").strip()[:500]
+    if payload.member_keys is not None:
+        member_keys = _social_clean_group_member_keys(
+            db,
+            user_id=int(user.id),
+            actor_key=actor_key,
+            member_keys=list(payload.member_keys or []),
+        )
+        if len(member_keys) < 2:
+            raise HTTPException(status_code=400, detail="В группе должно быть минимум два участника")
+        me_member = _social_sync_group_members(
+            db,
+            thread=thread,
+            user_id=int(user.id),
+            actor_key=actor_key,
+            actor_nick=actor_nick,
+            member_keys=member_keys,
+        )
+    thread.updated_at = datetime.utcnow()
+    _audit(
+        db,
+        user,
+        action="social_group_chat_updated",
+        details=json.dumps(
+            {
+                "thread_id": int(thread.id),
+                "title": str(thread.title or ""),
+                "members": int(
+                    db.scalar(
+                        select(func.count())
+                        .select_from(SocialChatThreadMember)
+                        .where(SocialChatThreadMember.thread_id == int(thread.id))
+                    )
+                    or 0
+                ),
+            },
+            ensure_ascii=False,
+        ),
+        module_code="social_hub",
+        entity_type="social_thread",
+        entity_id=str(thread.id),
+        request=request,
     )
     db.commit()
     return _social_thread_to_out(db, actor_key, thread, me_member)
@@ -6333,19 +6861,7 @@ def social_chat_messages(
         member_row.last_read_message_id = max(int(member_row.last_read_message_id or 0), int(rows[-1].id))
         member_row.updated_at = datetime.utcnow()
     db.commit()
-    return [
-        SocialChatMessageOut(
-            id=int(row.id),
-            thread_id=int(row.thread_id),
-            sender_key=str(row.sender_key or ""),
-            sender_nick=_social_current_nick_by_key(db, str(row.sender_key or "")) or str(row.sender_nick or ""),
-            sender_avatar=_social_current_avatar_by_key(db, str(row.sender_key or "")) or None,
-            text=str(row.text or ""),
-            created_at=row.created_at.isoformat() if row.created_at else "",
-            is_mine=str(row.sender_key or "") == actor_key,
-        )
-        for row in rows
-    ]
+    return [_social_message_to_out(db, actor_key, row) for row in rows]
 
 
 @router.post("/social/chat/messages/{thread_id}", response_model=SocialChatMessageOut)
@@ -6358,6 +6874,11 @@ def social_chat_send_message(
 ):
     ensure_module_enabled(db, user, "social_hub")
     actor_key, actor_nick, _ = _social_actor_identity(db, user)
+    thread = db.get(SocialChatThread, int(thread_id or 0))
+    if not thread:
+        raise HTTPException(status_code=404, detail="Чат не найден")
+    if str(thread.kind or "") in {"company", "group"} and int(thread.owner_user_id or 0) != int(user.id):
+        raise HTTPException(status_code=403, detail="Нет доступа к чату")
     member_row = db.scalar(
         select(SocialChatThreadMember).where(
             SocialChatThreadMember.thread_id == thread_id,
@@ -6377,16 +6898,12 @@ def social_chat_send_message(
         if cached_id > 0:
             cached_msg = db.get(SocialChatMessage, int(cached_id))
             if cached_msg and int(cached_msg.sender_user_id or 0) == int(user.id):
-                return SocialChatMessageOut(
-                    id=int(cached_msg.id),
-                    thread_id=int(cached_msg.thread_id),
-                    sender_key=actor_key,
-                    sender_nick=actor_nick,
-                    sender_avatar=_social_current_avatar_by_key(db, actor_key) or None,
-                    text=str(cached_msg.text or ""),
-                    created_at=cached_msg.created_at.isoformat() if cached_msg.created_at else "",
-                    is_mine=True,
-                )
+                return _social_message_to_out(db, actor_key, cached_msg)
+    reply_to_id = int(payload.reply_to_message_id or 0) if payload.reply_to_message_id else 0
+    if reply_to_id > 0:
+        reply_row = db.get(SocialChatMessage, reply_to_id)
+        if not reply_row or int(reply_row.thread_id or 0) != int(thread_id):
+            raise HTTPException(status_code=400, detail="Сообщение для ответа не найдено")
     message = SocialChatMessage(
         thread_id=thread_id,
         sender_user_id=user.id,
@@ -6394,12 +6911,13 @@ def social_chat_send_message(
         sender_key=actor_key,
         sender_nick=actor_nick[:120],
         text=text_msg[:5000],
+        reply_to_message_id=reply_to_id or None,
+        attachments_json="[]",
+        reactions_json="{}",
     )
     db.add(message)
     db.flush()
-    thread = db.get(SocialChatThread, thread_id)
-    if thread:
-        thread.updated_at = datetime.utcnow()
+    thread.updated_at = datetime.utcnow()
     member_row.last_read_message_id = int(message.id)
     member_row.updated_at = datetime.utcnow()
     recipients = db.scalars(
@@ -6445,16 +6963,194 @@ def social_chat_send_message(
     db.commit()
     if cache_key:
         _social_msg_cache_set(cache_key, int(message.id))
-    return SocialChatMessageOut(
-        id=int(message.id),
-        thread_id=int(message.thread_id),
-        sender_key=actor_key,
-        sender_nick=actor_nick,
-        sender_avatar=_social_current_avatar_by_key(db, actor_key) or None,
-        text=str(message.text or ""),
-        created_at=message.created_at.isoformat() if message.created_at else "",
-        is_mine=True,
+    return _social_message_to_out(db, actor_key, message)
+
+
+@router.post("/social/chat/messages/{thread_id}/files", response_model=SocialChatMessageOut)
+def social_chat_send_file(
+    thread_id: int,
+    request: Request,
+    file: UploadFile = File(...),
+    text: str = Form(""),
+    reply_to_message_id: int | None = Form(None),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, actor_nick, _ = _social_actor_identity(db, user)
+    thread = db.get(SocialChatThread, int(thread_id or 0))
+    if not thread:
+        raise HTTPException(status_code=404, detail="Чат не найден")
+    if str(thread.kind or "") in {"company", "group"} and int(thread.owner_user_id or 0) != int(user.id):
+        raise HTTPException(status_code=403, detail="Нет доступа к чату")
+    member_row = db.scalar(
+        select(SocialChatThreadMember).where(
+            SocialChatThreadMember.thread_id == int(thread_id),
+            SocialChatThreadMember.actor_key == actor_key,
+        )
     )
+    if not member_row:
+        raise HTTPException(status_code=403, detail="Нет доступа к чату")
+    if not file or not file.filename:
+        raise HTTPException(status_code=400, detail="Файл не выбран")
+    raw = file.file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Файл пустой")
+    max_size = 12 * 1024 * 1024
+    if len(raw) > max_size:
+        raise HTTPException(status_code=400, detail="Файл слишком большой (до 12 МБ)")
+    original_name = _social_chat_clean_filename(file.filename or "file")
+    ext = _social_chat_guess_ext(original_name, str(file.content_type or ""))
+    storage_name = f"chat-{int(thread_id)}-{secrets.token_hex(8)}{ext}"
+    path = _social_chat_storage_dir() / storage_name
+    path.write_bytes(raw)
+    url = f"/static/uploads/social_chat/{storage_name}"
+    reply_id = int(reply_to_message_id or 0) if reply_to_message_id else 0
+    if reply_id > 0:
+        reply_row = db.get(SocialChatMessage, reply_id)
+        if not reply_row or int(reply_row.thread_id or 0) != int(thread_id):
+            raise HTTPException(status_code=400, detail="Сообщение для ответа не найдено")
+    attachment = {
+        "url": url,
+        "filename": original_name[:255],
+        "content_type": str(file.content_type or "application/octet-stream")[:120],
+        "size_bytes": len(raw),
+    }
+    safe_text = str(text or "").strip()[:5000]
+    message = SocialChatMessage(
+        thread_id=int(thread_id),
+        sender_user_id=int(user.id),
+        sender_member_id=_actor_member_id(user) if not _actor_is_owner(user) else None,
+        sender_key=actor_key,
+        sender_nick=actor_nick[:120],
+        text=safe_text,
+        reply_to_message_id=reply_id or None,
+        attachments_json=json.dumps([attachment], ensure_ascii=False),
+        reactions_json="{}",
+    )
+    db.add(message)
+    db.flush()
+    thread.updated_at = datetime.utcnow()
+    member_row.last_read_message_id = int(message.id)
+    member_row.updated_at = datetime.utcnow()
+    recipients = db.scalars(
+        select(SocialChatThreadMember).where(
+            SocialChatThreadMember.thread_id == int(thread_id),
+            SocialChatThreadMember.actor_key != actor_key,
+        )
+    ).all()
+    thread_title = str(thread.title or "Чат").strip() or "Чат"
+    preview = safe_text or f"📎 {original_name}"
+    for rcpt in recipients:
+        _social_push_notification(
+            db,
+            user_id=int(rcpt.user_id or 0),
+            recipient_key=str(rcpt.actor_key or ""),
+            kind="chat_message",
+            dedupe_key=f"chat:{message.id}:{rcpt.actor_key}",
+            title=f"Новое сообщение: {thread_title}",
+            body=f"{actor_nick}: {preview[:180]}",
+            payload={
+                "thread_id": int(thread_id),
+                "message_id": int(message.id),
+                "sender_key": actor_key,
+                "sender_nick": actor_nick,
+            },
+        )
+    _audit(
+        db,
+        user,
+        action="social_chat_file_sent",
+        details=json.dumps(
+            {
+                "thread_id": int(thread_id),
+                "message_id": int(message.id),
+                "file_name": original_name[:180],
+                "size": len(raw),
+            },
+            ensure_ascii=False,
+        ),
+        module_code="social_hub",
+        entity_type="chat_message",
+        entity_id=str(message.id),
+        request=request,
+    )
+    db.commit()
+    return _social_message_to_out(db, actor_key, message)
+
+
+@router.post("/social/chat/messages/{thread_id}/{message_id}/reactions", response_model=SocialChatMessageOut)
+def social_chat_toggle_reaction(
+    thread_id: int,
+    message_id: int,
+    payload: SocialChatReactionIn,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, actor_nick, _ = _social_actor_identity(db, user)
+    member_row = db.scalar(
+        select(SocialChatThreadMember).where(
+            SocialChatThreadMember.thread_id == int(thread_id),
+            SocialChatThreadMember.actor_key == actor_key,
+        )
+    )
+    if not member_row:
+        raise HTTPException(status_code=403, detail="Нет доступа к чату")
+    message = db.get(SocialChatMessage, int(message_id or 0))
+    if not message or int(message.thread_id or 0) != int(thread_id):
+        raise HTTPException(status_code=404, detail="Сообщение не найдено")
+    emoji = str(payload.emoji or "").strip()
+    if not emoji or len(emoji) > 16:
+        raise HTTPException(status_code=400, detail="Некорректная реакция")
+    reactions = _social_parse_reactions(getattr(message, "reactions_json", "") or "{}")
+    rows = reactions.get(emoji, [])
+    exists_idx = next(
+        (idx for idx, item in enumerate(rows) if str(item.get("actor_key") or "") == actor_key),
+        -1,
+    )
+    if exists_idx >= 0:
+        rows.pop(exists_idx)
+    else:
+        rows.append({"actor_key": actor_key, "nick": actor_nick[:120]})
+    rows = rows[:100]
+    if rows:
+        reactions[emoji] = rows
+    else:
+        reactions.pop(emoji, None)
+    message.reactions_json = json.dumps(reactions, ensure_ascii=False)
+    if str(message.sender_key or "") != actor_key:
+        _social_push_notification(
+            db,
+            user_id=int(message.sender_user_id or user.id),
+            recipient_key=str(message.sender_key or ""),
+            kind="chat_reaction",
+            dedupe_key=f"chat_reaction:{int(message.id)}:{actor_key}:{emoji}:{1 if exists_idx < 0 else 0}",
+            title="Реакция на сообщение",
+            body=f"{actor_nick}: {emoji}",
+            payload={"thread_id": int(thread_id), "message_id": int(message.id), "emoji": emoji},
+        )
+    _audit(
+        db,
+        user,
+        action="social_chat_reaction_toggled",
+        details=json.dumps(
+            {
+                "thread_id": int(thread_id),
+                "message_id": int(message.id),
+                "emoji": emoji,
+                "active": 1 if exists_idx < 0 else 0,
+            },
+            ensure_ascii=False,
+        ),
+        module_code="social_hub",
+        entity_type="chat_message",
+        entity_id=str(message.id),
+        request=request,
+    )
+    db.commit()
+    return _social_message_to_out(db, actor_key, message)
 
 
 @router.post("/social/chat/read/{thread_id}", response_model=MessageOut)
@@ -7317,7 +8013,8 @@ def social_notifications(
     db: Session = Depends(get_db),
 ):
     ensure_module_enabled(db, user, "social_hub")
-    actor_key, _, _ = _social_actor_identity(db, user)
+    actor_key, actor_nick, _ = _social_actor_identity(db, user)
+    _social_emit_due_reminders(db, user_id=int(user.id), actor_key=actor_key, actor_nick=actor_nick)
     safe_limit = max(10, min(int(limit or 40), 200))
     query = select(SocialNotification).where(SocialNotification.recipient_key == actor_key)
     if int(since_id or 0) > 0:
@@ -7345,7 +8042,7 @@ def social_notifications(
                 title=str(row.title or ""),
                 body=str(row.body or ""),
                 payload=payload,
-                created_at=row.created_at.isoformat() if row.created_at else "",
+                created_at=_to_utc_iso(row.created_at),
             ).model_dump()
         )
     return {"unread": int(unread), "rows": data_rows}
@@ -7370,6 +8067,134 @@ def social_notifications_read_all(
     )
     db.commit()
     return MessageOut(message="Ок")
+
+
+def _notification_sound_storage_dir() -> Path:
+    static_root = Path(__file__).resolve().parent.parent / "static"
+    target_dir = static_root / "uploads" / "notification_sounds"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    return target_dir
+
+
+def _notification_sound_clean_filename(raw: str) -> str:
+    base = os.path.basename(str(raw or "").strip()) or "sound"
+    safe = re.sub(r"[^\w.\-]+", "_", base, flags=re.UNICODE).strip("._")
+    return (safe or "sound")[:180]
+
+
+def _notification_sound_guess_ext(filename: str, content_type: str) -> str:
+    ext = str(Path(filename or "").suffix or "").strip().lower()
+    allowed = {".mp3", ".wav", ".ogg", ".m4a", ".aac", ".webm", ".mp4"}
+    if ext in allowed:
+        return ext
+    guessed = mimetypes.guess_extension(str(content_type or "").split(";", 1)[0].strip().lower()) or ""
+    if guessed == ".jpe":
+        guessed = ".jpg"
+    if guessed in allowed:
+        return guessed
+    return ".mp3"
+
+
+@router.get("/social/notification-settings", response_model=NotificationSoundSettingsOut)
+def social_notification_settings(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    return _get_notification_sound_settings(db)
+
+
+@router.get("/admin/notification-settings", response_model=NotificationSoundSettingsOut)
+def admin_get_notification_settings(
+    _: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    return _get_notification_sound_settings(db)
+
+
+@router.post("/admin/notification-settings", response_model=NotificationSoundSettingsOut)
+def admin_save_notification_settings(
+    payload: NotificationSoundSettingsIn,
+    me: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    safe = _sanitize_notification_sound_settings(payload.model_dump())
+    _set_system_setting(db, _NOTIFICATION_SOUND_SETTINGS_KEY, json.dumps(safe, ensure_ascii=False))
+    _audit(
+        db,
+        me,
+        action="admin_notification_settings_updated",
+        details=json.dumps(
+            {
+                "desktop_enabled": bool(safe.get("desktop_enabled")),
+                "chat_enabled": bool(safe.get("chat_enabled")),
+                "task_enabled": bool(safe.get("task_enabled")),
+                "calendar_enabled": bool(safe.get("calendar_enabled")),
+            },
+            ensure_ascii=False,
+        ),
+        module_code="admin",
+        entity_type="notification_settings",
+        entity_id="global",
+    )
+    db.commit()
+    return NotificationSoundSettingsOut(**safe)
+
+
+@router.post("/admin/notification-settings/upload", response_model=AvatarUploadOut)
+def admin_upload_notification_sound(
+    group: str = Form(...),
+    file: UploadFile = File(...),
+    me: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    key = str(group or "").strip().lower()
+    map_key = {
+        "default": "default_sound_url",
+        "chat": "chat_sound_url",
+        "task": "task_sound_url",
+        "calendar": "calendar_sound_url",
+    }.get(key, "")
+    if not map_key:
+        raise HTTPException(status_code=400, detail="Некорректная группа звука")
+    if not file or not file.filename:
+        raise HTTPException(status_code=400, detail="Файл не выбран")
+    raw = file.file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Файл пустой")
+    max_size = 4 * 1024 * 1024
+    if len(raw) > max_size:
+        raise HTTPException(status_code=400, detail="Файл слишком большой (до 4 МБ)")
+    original = _notification_sound_clean_filename(file.filename or "sound")
+    ext = _notification_sound_guess_ext(original, str(file.content_type or ""))
+    if ext not in {".mp3", ".wav", ".ogg", ".m4a", ".aac", ".webm", ".mp4"}:
+        raise HTTPException(status_code=400, detail="Неподдерживаемый формат аудио")
+    storage_name = f"notif-{key}-{secrets.token_hex(6)}{ext}"
+    path = _notification_sound_storage_dir() / storage_name
+    path.write_bytes(raw)
+    url = f"/static/uploads/notification_sounds/{storage_name}"
+    current = _get_notification_sound_settings(db).model_dump()
+    current[map_key] = url
+    safe = _sanitize_notification_sound_settings(current)
+    _set_system_setting(db, _NOTIFICATION_SOUND_SETTINGS_KEY, json.dumps(safe, ensure_ascii=False))
+    _audit(
+        db,
+        me,
+        action="admin_notification_sound_uploaded",
+        details=json.dumps(
+            {
+                "group": key,
+                "url": url,
+                "size": len(raw),
+            },
+            ensure_ascii=False,
+        ),
+        module_code="admin",
+        entity_type="notification_sound",
+        entity_id=key,
+    )
+    db.commit()
+    return AvatarUploadOut(url=url)
 
 
 def upsert_products(

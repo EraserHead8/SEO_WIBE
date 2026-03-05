@@ -25,6 +25,9 @@ let socialState = {
   notificationsTimer: null,
   lastNotificationId: 0,
   unreadCount: 0,
+  notificationSettings: null,
+  userInteracted: false,
+  lastSoundAtByKind: {},
   moduleLoaded: false,
   toastsSeen: new Set(),
   currencyRates: null,
@@ -32,6 +35,12 @@ let socialState = {
   currencyRatesTimer: null,
   currencyRatesLoading: false,
   sendingMessage: false,
+  chatReplyTo: null,
+  chatContextMessageId: 0,
+  chatContextThreadId: 0,
+  chatContextX: 0,
+  chatContextY: 0,
+  keepEmojiOpenUntil: 0,
 };
 
 function socialMaybeStartHooks() {
@@ -42,13 +51,57 @@ function socialMaybeStartHooks() {
 }
 
 function socialRequest(url, opts = {}) {
+  const method = String(opts.method || "GET").trim().toUpperCase() || "GET";
+  const safeOpts = { ...opts };
+  if (method === "POST" && safeOpts.retryOnPost === undefined) {
+    safeOpts.retryOnPost = true;
+  }
+  if (safeOpts.maxRetries === undefined && (method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE")) {
+    safeOpts.maxRetries = 2;
+  }
+  if (safeOpts.timeoutMs === undefined && (method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE")) {
+    safeOpts.timeoutMs = 60000;
+  }
+  const headers = {
+    ...(safeOpts.headers || {}),
+    ...authHeaders(),
+  };
+  if (safeOpts.body instanceof FormData) {
+    delete headers["Content-Type"];
+    delete headers["content-type"];
+  }
   return requestJson(url, {
-    ...opts,
-    headers: {
-      ...(opts.headers || {}),
-      ...authHeaders(),
-    },
+    ...safeOpts,
+    headers,
   });
+}
+
+function socialParseDateSafe(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const rawNorm = raw.replace(" ", "T");
+  const hasExplicitTz = /(Z|[+\-]\d{2}:?\d{2})$/i.test(rawNorm);
+  const looksDateTime = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(rawNorm);
+  if (hasExplicitTz || !looksDateTime) {
+    const firstTry = new Date(raw);
+    if (!Number.isNaN(firstTry.getTime())) return firstTry;
+  }
+  let normalized = raw.replace(" ", "T");
+  const tzMatch = normalized.match(/(Z|[+\-]\d{2}:?\d{2})$/i);
+  let tzPart = "";
+  if (tzMatch) {
+    tzPart = tzMatch[1];
+    normalized = normalized.slice(0, -tzPart.length);
+  }
+  normalized = normalized.replace(/\.(\d{1,9})/, (_, frac) => `.${String(frac).slice(0, 3).padEnd(3, "0")}`);
+  if (!tzPart) {
+    tzPart = "Z";
+  } else if (/^[+\-]\d{4}$/.test(tzPart)) {
+    tzPart = `${tzPart.slice(0, 3)}:${tzPart.slice(3)}`;
+  }
+  const secondTry = new Date(`${normalized}${tzPart}`);
+  if (!Number.isNaN(secondTry.getTime())) return secondTry;
+  return null;
 }
 
 function socialShowToast(title, body) {
@@ -63,6 +116,154 @@ function socialShowToast(title, body) {
     item.classList.remove("show");
     setTimeout(() => item.remove(), 260);
   }, 2600);
+}
+
+function socialNotificationKindGroup(kind) {
+  const code = String(kind || "").trim().toLowerCase();
+  if (code === "chat_message" || code === "chat_reaction") return "chat";
+  if (code === "task_reminder") return "task";
+  if (code === "calendar_reminder") return "calendar";
+  return "default";
+}
+
+function socialNotificationSoundUrl(kindGroup) {
+  const cfg = socialState.notificationSettings || {};
+  const code = String(kindGroup || "default");
+  if (code === "chat") return String(cfg.chat_sound_url || cfg.default_sound_url || "").trim();
+  if (code === "task") return String(cfg.task_sound_url || cfg.default_sound_url || "").trim();
+  if (code === "calendar") return String(cfg.calendar_sound_url || cfg.default_sound_url || "").trim();
+  return String(cfg.default_sound_url || "").trim();
+}
+
+function socialPlayFallbackBeep(kindGroup = "default") {
+  if (!socialState.userInteracted) return;
+  const key = String(kindGroup || "default");
+  const now = Date.now();
+  const last = Number(socialState.lastSoundAtByKind[key] || 0);
+  if (now - last < 450) return;
+  socialState.lastSoundAtByKind[key] = now;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return;
+  try {
+    const ctx = new Ctx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.value = key === "chat" ? 880 : (key === "task" ? 740 : 660);
+    const t0 = ctx.currentTime;
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.16, t0 + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
+    osc.start(t0);
+    osc.stop(t0 + 0.23);
+    setTimeout(() => {
+      try { ctx.close(); } catch (_) {}
+    }, 300);
+  } catch (_) {}
+}
+
+function socialPlayNotificationSound(kindGroup = "default") {
+  const cfg = socialState.notificationSettings || {};
+  if (cfg.desktop_enabled === false) return;
+  if (kindGroup === "chat" && cfg.chat_enabled === false) return;
+  if (kindGroup === "task" && cfg.task_enabled === false) return;
+  if (kindGroup === "calendar" && cfg.calendar_enabled === false) return;
+  const soundUrl = socialNotificationSoundUrl(kindGroup);
+  if (!soundUrl) {
+    socialPlayFallbackBeep(kindGroup);
+    return;
+  }
+  if (!socialState.userInteracted) return;
+  const key = String(kindGroup || "default");
+  const now = Date.now();
+  const last = Number(socialState.lastSoundAtByKind[key] || 0);
+  if (now - last < 450) return;
+  socialState.lastSoundAtByKind[key] = now;
+  try {
+    const audio = new Audio(soundUrl);
+    audio.preload = "auto";
+    audio.volume = 0.9;
+    audio.play().catch(() => socialPlayFallbackBeep(kindGroup));
+  } catch (_) {
+    socialPlayFallbackBeep(kindGroup);
+  }
+}
+
+function socialCanDesktopNotify() {
+  return typeof Notification !== "undefined" && Notification.permission === "granted";
+}
+
+function socialRequestDesktopPermission() {
+  if (typeof Notification === "undefined") return;
+  if (!socialState.userInteracted) return;
+  if (Notification.permission !== "default") return;
+  Notification.requestPermission().catch(() => null);
+}
+
+function socialOpenNotificationTarget(row) {
+  if (!row || typeof row !== "object") return;
+  const kind = String(row.kind || "").trim().toLowerCase();
+  const payload = row.payload && typeof row.payload === "object" ? row.payload : {};
+  if (kind === "chat_message" || kind === "chat_reaction") {
+    if (typeof openSocialChatFromBell === "function") openSocialChatFromBell();
+    const threadId = Number(payload.thread_id || 0);
+    if (threadId && typeof socialSelectThread === "function") {
+      setTimeout(() => socialSelectThread(threadId), 180);
+    }
+    return;
+  }
+  if (kind === "task_reminder") {
+    currentSocialSubtab = "tasks";
+    const socialBtn = document.querySelector(".nav-btn[data-tab='social']");
+    if (typeof showTab === "function") showTab("social", socialBtn || null);
+    setTimeout(() => {
+      if (typeof switchSocialSubtab === "function") switchSocialSubtab("tasks", true);
+    }, 140);
+    return;
+  }
+  if (kind === "calendar_reminder") {
+    currentSocialSubtab = "calendar";
+    const socialBtn = document.querySelector(".nav-btn[data-tab='social']");
+    if (typeof showTab === "function") showTab("social", socialBtn || null);
+    setTimeout(() => {
+      if (typeof switchSocialSubtab === "function") switchSocialSubtab("calendar", true);
+    }, 140);
+  }
+}
+
+function socialNotifyDesktop(row) {
+  const cfg = socialState.notificationSettings || {};
+  if (cfg.desktop_enabled === false) return;
+  if (!socialCanDesktopNotify()) return;
+  const kindGroup = socialNotificationKindGroup(row.kind || "");
+  if (kindGroup === "chat" && cfg.chat_enabled === false) return;
+  if (kindGroup === "task" && cfg.task_enabled === false) return;
+  if (kindGroup === "calendar" && cfg.calendar_enabled === false) return;
+  const title = String(row.title || tr("Уведомление", "Notification")).trim();
+  const body = String(row.body || "").trim();
+  if (!title && !body) return;
+  try {
+    const n = new Notification(title || tr("Уведомление", "Notification"), {
+      body,
+      tag: `social-${String(row.kind || "event")}-${Number(row.id || 0) || Date.now()}`,
+      renotify: true,
+    });
+    n.onclick = () => {
+      try { window.focus(); } catch (_) {}
+      socialOpenNotificationTarget(row);
+      try { n.close(); } catch (_) {}
+    };
+  } catch (_) {}
+}
+
+async function socialLoadNotificationSettings(force = false) {
+  if (!force && socialState.notificationSettings) return socialState.notificationSettings;
+  const data = await socialRequest("/api/social/notification-settings").catch(() => null);
+  if (!data || typeof data !== "object") return socialState.notificationSettings;
+  socialState.notificationSettings = data;
+  return data;
 }
 
 function socialSetBell(unread) {
@@ -94,6 +295,14 @@ async function socialPollNotifications() {
     if (!id || socialState.toastsSeen.has(id)) continue;
     socialState.toastsSeen.add(id);
     socialShowToast(row.title || tr("Уведомление", "Notification"), row.body || "");
+    const kindGroup = socialNotificationKindGroup(row.kind || "");
+    socialPlayNotificationSound(kindGroup);
+    const shouldDesktopNotify = document.hidden
+      || currentTab !== "social"
+      || socialState.currentSubtab !== "chat";
+    if (shouldDesktopNotify) {
+      socialNotifyDesktop(row);
+    }
     if (String(row.kind || "") === "chat_message" && currentTab === "social" && socialState.currentSubtab === "chat") {
       const threadId = Number(row.payload?.thread_id || 0);
       if (threadId && threadId === socialState.currentThreadId) {
@@ -105,6 +314,8 @@ async function socialPollNotifications() {
 
 function socialStartGlobalHooks() {
   if (socialState.notificationsTimer) clearInterval(socialState.notificationsTimer);
+  socialLoadNotificationSettings().catch(() => null);
+  socialRequestDesktopPermission();
   socialSetBell(socialState.unreadCount || 0);
   socialState.notificationsTimer = setInterval(() => {
     socialPollNotifications().catch(() => null);
@@ -154,6 +365,9 @@ function resetSocialState() {
     notificationsTimer: null,
     lastNotificationId: 0,
     unreadCount: 0,
+    notificationSettings: null,
+    userInteracted: false,
+    lastSoundAtByKind: {},
     moduleLoaded: false,
     chatSearch: "",
     toastsSeen: new Set(),
@@ -162,6 +376,12 @@ function resetSocialState() {
     currencyRatesTimer: null,
     currencyRatesLoading: false,
     sendingMessage: false,
+    chatReplyTo: null,
+    chatContextMessageId: 0,
+    chatContextThreadId: 0,
+    chatContextX: 0,
+    chatContextY: 0,
+    keepEmojiOpenUntil: 0,
   };
   socialSetBell(0);
 }
@@ -882,6 +1102,12 @@ function socialRun2048() {
 }
 
 if (typeof window !== "undefined") {
+  const markInteraction = () => {
+    socialState.userInteracted = true;
+    socialRequestDesktopPermission();
+  };
+  window.addEventListener("pointerdown", markInteraction, { passive: true });
+  window.addEventListener("keydown", markInteraction, { passive: true });
   window.addEventListener("seo-wibe-auth", () => {
     socialMaybeStartHooks();
   });
@@ -893,17 +1119,31 @@ if (typeof window !== "undefined") {
     });
   }
   document.addEventListener("click", (e) => {
+    const menu = document.getElementById("socialChatContextMenu");
+    if (menu && !menu.classList.contains("hidden")) {
+      const target = e.target;
+      const inContext = target?.closest && target.closest("#socialChatContextMenu");
+      if (!inContext) socialCloseMessageContext();
+    }
     const picker = document.getElementById("socialEmojiPicker");
     const btn = document.getElementById("socialEmojiBtn");
     if (!picker || picker.classList.contains("hidden")) return;
+    if (Date.now() < Number(socialState.keepEmojiOpenUntil || 0)) return;
     const target = e.target;
-    if (picker.contains(target) || (btn && btn.contains(target))) return;
+    const inPicker = target?.closest && (
+      target.closest("#socialEmojiPicker")
+      || target.closest(".social-emoji-tab")
+      || target.closest(".social-emoji-item")
+    );
+    if (inPicker || (btn && btn.contains(target))) return;
     socialToggleEmojiPicker(false);
+    socialCloseMessageContext();
   });
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     const picker = document.getElementById("socialEmojiPicker");
     if (picker && !picker.classList.contains("hidden")) socialToggleEmojiPicker(false);
+    socialCloseMessageContext();
   });
 }
 
@@ -931,15 +1171,15 @@ async function socialLoadThreads(opts = {}) {
 
 function socialFormatChatTime(iso) {
   if (!iso) return "";
-  const dt = new Date(iso);
-  if (Number.isNaN(dt.getTime())) return String(iso).slice(11, 16).replace("T", " ");
+  const dt = socialParseDateSafe(iso);
+  if (!dt) return String(iso).slice(11, 16).replace("T", " ");
   return dt.toLocaleTimeString(currentLang === "en" ? "en-GB" : "ru-RU", { hour: "2-digit", minute: "2-digit" });
 }
 
 function socialFormatChatDate(iso) {
   if (!iso) return "";
-  const dt = new Date(iso);
-  if (Number.isNaN(dt.getTime())) return String(iso).slice(0, 10);
+  const dt = socialParseDateSafe(iso);
+  if (!dt) return String(iso).slice(0, 10);
   const today = new Date();
   const sameDay = dt.toDateString() === today.toDateString();
   if (sameDay) return tr("Сегодня", "Today");
@@ -951,8 +1191,8 @@ function socialFormatChatDate(iso) {
 
 function socialFormatThreadTime(iso) {
   if (!iso) return "";
-  const dt = new Date(iso);
-  if (Number.isNaN(dt.getTime())) return String(iso).slice(11, 16).replace("T", " ");
+  const dt = socialParseDateSafe(iso);
+  if (!dt) return String(iso).slice(11, 16).replace("T", " ");
   const now = new Date();
   if (dt.toDateString() === now.toDateString()) {
     return dt.toLocaleTimeString(currentLang === "en" ? "en-GB" : "ru-RU", { hour: "2-digit", minute: "2-digit" });
@@ -962,8 +1202,8 @@ function socialFormatThreadTime(iso) {
 
 function socialFormatLastSeen(iso) {
   if (!iso) return "";
-  const dt = new Date(iso);
-  if (Number.isNaN(dt.getTime())) return String(iso).slice(0, 16).replace("T", " ");
+  const dt = socialParseDateSafe(iso);
+  if (!dt) return String(iso).slice(0, 16).replace("T", " ");
   const now = new Date();
   const time = dt.toLocaleTimeString(currentLang === "en" ? "en-GB" : "ru-RU", { hour: "2-digit", minute: "2-digit" });
   if (dt.toDateString() === now.toDateString()) return `${tr("сегодня", "today")} ${time}`;
@@ -1038,6 +1278,9 @@ function socialSetChatView(open) {
 function socialCloseThread() {
   socialState.currentThreadId = 0;
   socialState.currentThreadKind = "";
+  socialState.chatMessages = [];
+  socialClearReply();
+  socialCloseMessageContext();
   const head = document.getElementById("socialChatHead");
   const sub = document.getElementById("socialChatHeadSubtitle");
   const avatar = document.getElementById("socialChatHeadAvatar");
@@ -1095,6 +1338,7 @@ function socialSetChatHeader(row) {
   const avatar = document.getElementById("socialChatHeadAvatar");
   const meta = document.getElementById("socialChatHeadMeta");
   const avatarBtn = document.getElementById("socialChatAvatarBtn");
+  const groupBtn = document.getElementById("socialChatGroupBtn");
   if (!row) {
     if (head) head.textContent = tr("Выберите чат", "Select chat");
     if (sub) sub.textContent = "-";
@@ -1104,6 +1348,7 @@ function socialSetChatHeader(row) {
       meta.classList.add("hidden");
     }
     if (avatarBtn) avatarBtn.classList.add("hidden");
+    if (groupBtn) groupBtn.classList.add("hidden");
     return;
   }
   const display = socialThreadDisplay(row);
@@ -1132,6 +1377,9 @@ function socialSetChatHeader(row) {
   if (avatarBtn) {
     avatarBtn.classList.toggle("hidden", String(row.kind || "") === "direct");
   }
+  if (groupBtn) {
+    groupBtn.classList.toggle("hidden", String(row.kind || "") !== "group");
+  }
 }
 
 async function socialSelectThread(threadId) {
@@ -1140,6 +1388,8 @@ async function socialSelectThread(threadId) {
   socialState.currentThreadId = id;
   const row = socialState.chatThreads.find((x) => Number(x.id) === id) || null;
   socialState.currentThreadKind = String(row?.kind || "");
+  socialClearReply();
+  socialCloseMessageContext();
   socialSetChatHeader(row);
   socialRenderThreads();
   socialSetChatView(true);
@@ -1151,6 +1401,155 @@ async function socialSelectThread(threadId) {
 function socialGetCurrentThread() {
   if (!socialState.currentThreadId) return null;
   return socialState.chatThreads.find((x) => Number(x.id) === Number(socialState.currentThreadId)) || null;
+}
+
+function socialSetReplyTo(message) {
+  if (!message || Number(message.id || 0) <= 0) return;
+  socialState.chatReplyTo = {
+    id: Number(message.id || 0),
+    sender_nick: String(message.sender_nick || ""),
+    text: String(message.text || ""),
+  };
+  socialRenderReplyBar();
+}
+
+function socialSetReplyById(messageId) {
+  const id = Number(messageId || 0);
+  if (!id) return;
+  const row = (socialState.chatMessages || []).find((x) => Number(x.id) === id);
+  if (!row) return;
+  socialSetReplyTo(row);
+}
+
+function socialClearReply() {
+  socialState.chatReplyTo = null;
+  socialRenderReplyBar();
+}
+
+function socialRenderReplyBar() {
+  const bar = document.getElementById("socialChatReplyBar");
+  if (!bar) return;
+  const row = socialState.chatReplyTo;
+  if (!row || Number(row.id || 0) <= 0) {
+    bar.classList.add("hidden");
+    bar.innerHTML = "";
+    return;
+  }
+  bar.classList.remove("hidden");
+  bar.innerHTML = `
+    <div class="social-chat-reply-content">
+      <small>${escapeHtml(tr("Ответ на сообщение", "Reply to message"))}</small>
+      <b>${escapeHtml(String(row.sender_nick || "-"))}</b>
+      <span>${escapeHtml(String(row.text || "").slice(0, 180))}</span>
+    </div>
+    <button type="button" class="btn-secondary" onclick="socialClearReply()">${tr("Отмена", "Cancel")}</button>
+  `;
+}
+
+function socialCloseMessageContext() {
+  socialState.chatContextMessageId = 0;
+  socialState.chatContextThreadId = 0;
+  const menu = document.getElementById("socialChatContextMenu");
+  if (!menu) return;
+  menu.classList.add("hidden");
+  menu.innerHTML = "";
+}
+
+function socialOpenMessageContext(messageId, event) {
+  const id = Number(messageId || 0);
+  if (!id) return;
+  const row = (socialState.chatMessages || []).find((x) => Number(x.id) === id);
+  if (!row) return;
+  const menu = document.getElementById("socialChatContextMenu");
+  if (!menu) return;
+  if (event?.preventDefault) event.preventDefault();
+  if (event?.stopPropagation) event.stopPropagation();
+  socialState.chatContextMessageId = id;
+  socialState.chatContextThreadId = Number(socialState.currentThreadId || 0);
+  const x = Number(event?.clientX || 0);
+  const y = Number(event?.clientY || 0);
+  socialState.chatContextX = x;
+  socialState.chatContextY = y;
+  const quick = ["👍", "🔥", "❤️", "😂", "🙏", "✅"];
+  menu.innerHTML = `
+    <button type="button" class="social-chat-context-btn" onclick="socialContextReply()">${tr("Ответить", "Reply")}</button>
+    <div class="social-chat-context-reactions">
+      ${quick.map((emoji) => `<button type="button" class="social-chat-context-emoji" onclick="socialContextReact('${escapeHtml(emoji)}')">${emoji}</button>`).join("")}
+    </div>
+  `;
+  menu.style.left = `${Math.max(8, x)}px`;
+  menu.style.top = `${Math.max(8, y)}px`;
+  menu.classList.remove("hidden");
+}
+
+function socialContextReply() {
+  const id = Number(socialState.chatContextMessageId || 0);
+  if (!id) return;
+  socialSetReplyById(id);
+  socialCloseMessageContext();
+}
+
+async function socialToggleReaction(messageId, emoji) {
+  const threadId = Number(socialState.currentThreadId || 0);
+  const id = Number(messageId || 0);
+  const code = String(emoji || "").trim();
+  if (!threadId || !id || !code) return;
+  const row = await socialRequest(`/api/social/chat/messages/${threadId}/${id}/reactions`, {
+    method: "POST",
+    body: JSON.stringify({ emoji: code }),
+    retryOnPost: true,
+    maxRetries: 1,
+  }).catch((e) => {
+    if (e?.message) alert(e.message);
+    return null;
+  });
+  if (!row) return;
+  const idx = (socialState.chatMessages || []).findIndex((x) => Number(x.id) === id);
+  if (idx >= 0) {
+    socialState.chatMessages[idx] = row;
+    socialLoadMessages(threadId, { silent: true });
+  } else {
+    socialLoadMessages(threadId, { silent: true });
+  }
+}
+
+function socialContextReact(emoji) {
+  const id = Number(socialState.chatContextMessageId || 0);
+  if (!id) return;
+  socialToggleReaction(id, emoji);
+  socialCloseMessageContext();
+}
+
+function socialMessageAttachmentsHtml(message) {
+  const rows = Array.isArray(message?.attachments) ? message.attachments : [];
+  if (!rows.length) return "";
+  const body = rows.map((item) => {
+    const url = String(item?.url || "").trim();
+    if (!url) return "";
+    const name = String(item?.filename || "file").trim() || "file";
+    const ctype = String(item?.content_type || "").toLowerCase();
+    const isImage = ctype.startsWith("image/") || /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(url);
+    if (isImage) {
+      return `<a class="tg-attach tg-attach-image" href="${escapeHtml(url)}" target="_blank" rel="noopener"><img src="${escapeHtml(url)}" alt="${escapeHtml(name)}" /></a>`;
+    }
+    return `<a class="tg-attach tg-attach-file" href="${escapeHtml(url)}" target="_blank" rel="noopener">📎 ${escapeHtml(name)}</a>`;
+  }).join("");
+  if (!body) return "";
+  return `<div class="tg-msg-attachments">${body}</div>`;
+}
+
+function socialMessageReactionsHtml(message) {
+  const rows = Array.isArray(message?.reactions) ? message.reactions : [];
+  if (!rows.length) return "";
+  const id = Number(message?.id || 0);
+  const buttons = rows.map((row) => {
+    const emoji = String(row?.emoji || "").trim();
+    if (!emoji) return "";
+    const count = Math.max(1, Number(row?.count || 1));
+    const active = row?.my ? "active" : "";
+    return `<button type="button" class="tg-reaction ${active}" onclick="socialToggleReaction(${id}, '${escapeHtml(emoji)}')">${emoji} ${count}</button>`;
+  }).join("");
+  return `<div class="tg-msg-reactions">${buttons}</div>`;
 }
 
 function socialOpenGroupAvatarModal() {
@@ -1292,13 +1691,26 @@ async function socialLoadMessages(threadId, opts = {}) {
       ? `<div class="tg-msg-avatar">${socialAvatarMarkup(msg.sender_avatar, msg.sender_nick || "-", "xs")}</div>`
       : `<div class="tg-msg-avatar placeholder"></div>`;
     const rowClass = `tg-msg-row ${msg.is_mine ? "mine" : "in"}${compact ? " compact" : ""}`;
+    const reply = msg.reply_to && Number(msg.reply_to.id || 0) > 0
+      ? `
+        <div class="tg-msg-reply" onclick="socialSetReplyById(${Number(msg.reply_to.id || 0)})">
+          <b>${escapeHtml(String(msg.reply_to.sender_nick || "-"))}</b>
+          <span>${escapeHtml(String(msg.reply_to.text || "").slice(0, 200))}</span>
+        </div>
+      `
+      : "";
+    const attachments = socialMessageAttachmentsHtml(msg);
+    const reactions = socialMessageReactionsHtml(msg);
     return `
       ${dateBlock}
       <div class="${rowClass}" ${accentStyle}>
         ${msg.is_mine ? "" : avatar}
-        <div class="tg-msg-bubble">
+        <div class="tg-msg-bubble" oncontextmenu="socialOpenMessageContext(${Number(msg.id || 0)}, event)" ondblclick="socialSetReplyById(${Number(msg.id || 0)})">
           ${showName ? `<div class="tg-msg-name">${escapeHtml(msg.sender_nick || "-")}</div>` : ""}
+          ${reply}
           <div class="tg-msg-text">${escapeHtml(msg.text || "")}</div>
+          ${attachments}
+          ${reactions}
           <div class="tg-msg-time">${escapeHtml(time)}</div>
         </div>
       </div>
@@ -1314,6 +1726,7 @@ async function socialLoadMessages(threadId, opts = {}) {
   } else if (atBottom) {
     host.scrollTop = host.scrollHeight;
   }
+  socialRenderReplyBar();
 }
 
 function socialLoadOlderMessages() {
@@ -1327,11 +1740,12 @@ async function socialSendMessage() {
   const input = document.getElementById("socialChatInput");
   if (!input) return;
   const text = String(input.value || "").trim();
+  const replyId = Number(socialState.chatReplyTo?.id || 0) || null;
   if (!text) return;
   socialState.sendingMessage = true;
   const sendMessageOnce = () => socialRequest(`/api/social/chat/messages/${threadId}`, {
     method: "POST",
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, reply_to_message_id: replyId }),
     retryOnPost: true,
     maxRetries: 1,
   });
@@ -1360,11 +1774,52 @@ async function socialSendMessage() {
     }
     if (!data) return;
     input.value = "";
+    socialClearReply();
     await socialLoadMessages(threadId, { silent: true });
     await socialLoadThreads({ silent: true });
   } finally {
     socialState.sendingMessage = false;
   }
+}
+
+function socialTriggerChatFileDialog() {
+  const input = document.getElementById("socialChatFileInput");
+  if (!input) return;
+  input.click();
+}
+
+async function socialUploadChatFiles(fileList) {
+  const threadId = Number(socialState.currentThreadId || 0);
+  const files = Array.from(fileList || []);
+  if (!threadId || !files.length) return;
+  const input = document.getElementById("socialChatFileInput");
+  const textInput = document.getElementById("socialChatInput");
+  const text = String(textInput?.value || "").trim();
+  const replyId = Number(socialState.chatReplyTo?.id || 0) || null;
+  if (textInput) textInput.value = "";
+  for (const file of files) {
+    const form = new FormData();
+    form.append("file", file);
+    if (text) form.append("text", text);
+    if (replyId) form.append("reply_to_message_id", String(replyId));
+    const row = await socialRequest(`/api/social/chat/messages/${threadId}/files`, {
+      method: "POST",
+      body: form,
+      retryOnPost: true,
+      maxRetries: 1,
+    }).catch((e) => {
+      alert(e?.message || tr("Ошибка загрузки файла", "File upload error"));
+      return null;
+    });
+    if (!row) {
+      await socialLoadMessages(threadId, { silent: true });
+      continue;
+    }
+  }
+  socialClearReply();
+  if (input) input.value = "";
+  await socialLoadMessages(threadId, { silent: true });
+  await socialLoadThreads({ silent: true });
 }
 
 async function socialOpenDirectPicker() {
@@ -1380,6 +1835,136 @@ async function socialOpenDirectPicker() {
     `
   );
   socialLoadDirectActors("");
+}
+
+function socialCompanyActors() {
+  const rows = Array.isArray(socialState.boot?.company_actors) ? socialState.boot.company_actors : [];
+  const myKey = String(socialState.boot?.actor?.actor_key || "");
+  const dedupe = new Set();
+  const out = [];
+  for (const row of rows) {
+    const actorKey = String(row?.actor_key || "").trim();
+    if (!actorKey || dedupe.has(actorKey)) continue;
+    dedupe.add(actorKey);
+    out.push({
+      actor_key: actorKey,
+      nick: String(row?.nick || actorKey).trim() || actorKey,
+      is_owner: Boolean(row?.is_owner),
+      is_me: actorKey === myKey,
+    });
+  }
+  if (!out.some((x) => x.is_me) && myKey) {
+    out.unshift({ actor_key: myKey, nick: String(socialState.boot?.actor?.nick || "Me"), is_owner: false, is_me: true });
+  }
+  return out;
+}
+
+function socialCurrentGroupThread() {
+  const thread = socialGetCurrentThread();
+  if (!thread || String(thread.kind || "") !== "group") return null;
+  return thread;
+}
+
+function socialOpenGroupEditor(editCurrent = false) {
+  const editing = Boolean(editCurrent);
+  const thread = editing ? socialCurrentGroupThread() : null;
+  if (editing && !thread) {
+    alert(tr("Сначала откройте групповой чат.", "Open a group chat first."));
+    return;
+  }
+  const actors = socialCompanyActors();
+  const initialMembers = thread && Array.isArray(thread.participants)
+    ? thread.participants.map((x) => String(x.actor_key || "").trim()).filter(Boolean)
+    : [String(socialState.boot?.actor?.actor_key || "")];
+  const checked = new Set(initialMembers);
+  const myKey = String(socialState.boot?.actor?.actor_key || "");
+  if (myKey) checked.add(myKey);
+  const avatarCurrent = String(thread?.avatar_url || "").trim();
+  const pickerHtml = (typeof GROUP_AVATARS !== "undefined" ? GROUP_AVATARS : [])
+    .map((url) => `<button type="button" class="avatar-chip ${url === avatarCurrent ? "active" : ""}" data-group-avatar="${escapeHtml(url)}"><img src="${escapeHtml(url)}" alt="avatar" /></button>`)
+    .join("");
+  const membersHtml = actors.map((row) => {
+    const actorKey = String(row.actor_key || "");
+    const isMe = actorKey === myKey;
+    const disabled = isMe ? "disabled" : "";
+    const forceChecked = checked.has(actorKey) || isMe;
+    return `
+      <label class="check">
+        <input type="checkbox" data-group-member="${escapeHtml(actorKey)}" ${forceChecked ? "checked" : ""} ${disabled} />
+        ${escapeHtml(row.nick || actorKey)}${isMe ? ` (${escapeHtml(tr("вы", "you"))})` : ""}
+      </label>
+    `;
+  }).join("");
+  socialOpenModal(
+    editing ? tr("Управление группой", "Manage group") : tr("Новая группа", "New group"),
+    `
+      <div class="social-group-editor">
+        <label>
+          <span>${tr("Название группы", "Group title")}</span>
+          <input id="socialGroupTitleInput" value="${escapeHtml(String(thread?.title || "").trim())}" placeholder="${escapeHtml(tr("Введите название", "Enter title"))}" />
+        </label>
+        <label>
+          <span>${tr("Аватар группы", "Group avatar")}</span>
+          <input id="socialGroupAvatarInput" value="${escapeHtml(avatarCurrent)}" placeholder="https://..." />
+          <div id="socialGroupAvatarPreset" class="avatar-picker">${pickerHtml}</div>
+        </label>
+        <div class="social-group-members">
+          <div class="hint">${tr("Участники (только сотрудники текущей компании)", "Members (current company only)")}</div>
+          <div class="social-group-members-list">${membersHtml}</div>
+        </div>
+        <div class="actions">
+          <button type="button" onclick="socialSaveGroupEditor(${editing ? Number(thread.id || 0) : 0})">${editing ? tr("Сохранить", "Save") : tr("Создать группу", "Create group")}</button>
+        </div>
+      </div>
+    `
+  );
+  document.querySelectorAll("[data-group-avatar]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const url = String(btn.getAttribute("data-group-avatar") || "").trim();
+      const input = document.getElementById("socialGroupAvatarInput");
+      if (input) input.value = url;
+      document.querySelectorAll("[data-group-avatar]").forEach((x) => {
+        x.classList.toggle("active", x === btn);
+      });
+    });
+  });
+}
+
+async function socialSaveGroupEditor(threadId = 0) {
+  const title = String(document.getElementById("socialGroupTitleInput")?.value || "").trim();
+  const avatar_url = String(document.getElementById("socialGroupAvatarInput")?.value || "").trim();
+  const member_keys = [...document.querySelectorAll("[data-group-member]")]
+    .filter((el) => el.checked)
+    .map((el) => String(el.getAttribute("data-group-member") || "").trim())
+    .filter(Boolean);
+  if (title.length < 2) {
+    alert(tr("Введите название группы.", "Enter group title."));
+    return;
+  }
+  if (member_keys.length < 2) {
+    alert(tr("Добавьте минимум двух участников.", "Add at least two members."));
+    return;
+  }
+  const isEdit = Number(threadId || 0) > 0;
+  const endpoint = isEdit
+    ? `/api/social/chat/groups/${Number(threadId || 0)}`
+    : "/api/social/chat/groups";
+  const method = isEdit ? "PUT" : "POST";
+  const row = await socialRequest(endpoint, {
+    method,
+    body: JSON.stringify({ title, avatar_url, member_keys }),
+    retryOnPost: true,
+    maxRetries: 1,
+  }).catch((e) => {
+    alert(e?.message || tr("Ошибка сохранения группы", "Failed to save group"));
+    return null;
+  });
+  if (!row) return;
+  socialCloseModal();
+  await socialLoadThreads({ silent: true });
+  if (Number(row.id || 0)) {
+    await socialSelectThread(Number(row.id || 0));
+  }
 }
 
 let socialDirectSearchTimer = null;
@@ -1769,6 +2354,7 @@ function socialToggleEmojiPicker(force = null) {
 
 function socialSwitchEmojiSet(key) {
   if (!SOCIAL_EMOJI_SETS[key]) return;
+  socialState.keepEmojiOpenUntil = Date.now() + 220;
   socialEmojiSetKey = key;
   const host = document.getElementById("socialEmojiPicker");
   if (!host) return;
@@ -2252,10 +2838,20 @@ window.socialGameControl = socialGameControl;
 window.socialCloseModal = socialCloseModal;
 window.socialGameRetry = socialGameRetry;
 window.socialOpenDirectPicker = socialOpenDirectPicker;
+window.socialOpenGroupEditor = socialOpenGroupEditor;
+window.socialSaveGroupEditor = socialSaveGroupEditor;
 window.socialFilterDirectActors = socialFilterDirectActors;
 window.socialStartDirectChat = socialStartDirectChat;
 window.socialSelectThread = socialSelectThread;
 window.socialSendMessage = socialSendMessage;
+window.socialTriggerChatFileDialog = socialTriggerChatFileDialog;
+window.socialUploadChatFiles = socialUploadChatFiles;
+window.socialSetReplyById = socialSetReplyById;
+window.socialClearReply = socialClearReply;
+window.socialOpenMessageContext = socialOpenMessageContext;
+window.socialContextReply = socialContextReply;
+window.socialContextReact = socialContextReact;
+window.socialToggleReaction = socialToggleReaction;
 window.socialLoadOlderMessages = socialLoadOlderMessages;
 window.socialOpenGroupAvatarModal = socialOpenGroupAvatarModal;
 window.socialOpenProjectModal = socialOpenProjectModal;

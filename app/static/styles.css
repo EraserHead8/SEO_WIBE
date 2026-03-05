@@ -6106,6 +6106,11 @@ body[data-theme="dark"] .landing-band .band-stats span {
   margin: 0;
 }
 
+.social-chat-head-buttons {
+  display: inline-flex;
+  gap: 6px;
+}
+
 .social-chat-search {
   padding: 8px 14px 12px;
   border-bottom: 1px solid var(--line);
@@ -6375,6 +6380,88 @@ body[data-theme="dark"] .landing-band .band-stats span {
   line-height: 1.35;
 }
 
+.tg-msg-reply {
+  border-left: 3px solid color-mix(in oklab, var(--tg-user-accent) 70%, transparent);
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--panel-bg) 82%, #ffffff);
+  padding: 5px 8px;
+  margin-bottom: 6px;
+  display: grid;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.tg-msg-reply b {
+  font-size: 11px;
+  color: var(--tg-user-accent);
+  line-height: 1.2;
+}
+
+.tg-msg-reply span {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tg-msg-attachments {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.tg-attach {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  text-decoration: none;
+  border: 1px solid color-mix(in oklab, var(--line) 82%, transparent);
+  border-radius: 10px;
+  padding: 5px 8px;
+  background: color-mix(in oklab, var(--panel-bg) 86%, #ffffff);
+}
+
+.tg-attach:hover {
+  border-color: color-mix(in oklab, var(--accent) 52%, var(--line));
+}
+
+.tg-attach-image {
+  padding: 4px;
+  max-width: min(260px, 60vw);
+  overflow: hidden;
+}
+
+.tg-attach-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+.tg-msg-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.tg-reaction {
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--line) 86%, transparent);
+  background: color-mix(in oklab, var(--panel-bg) 84%, #ffffff);
+  padding: 2px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.tg-reaction.active {
+  border-color: color-mix(in oklab, var(--accent) 58%, var(--line));
+  background: color-mix(in oklab, var(--accent) 18%, var(--panel-bg));
+}
+
 .tg-msg-time {
   font-size: 11px;
   color: var(--text-muted);
@@ -6396,10 +6483,44 @@ body[data-theme="dark"] .landing-band .band-stats span {
   background: color-mix(in oklab, var(--panel-bg) 88%, #ffffff);
 }
 
+.social-chat-reply {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid color-mix(in oklab, var(--line) 84%, transparent);
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: color-mix(in oklab, var(--panel-bg) 84%, #ffffff);
+}
+
+.social-chat-reply-content {
+  display: grid;
+  min-width: 0;
+}
+
+.social-chat-reply-content small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.social-chat-reply-content b {
+  font-size: 13px;
+}
+
+.social-chat-reply-content span {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .social-chat-input-wrap {
   position: relative;
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
   gap: 8px;
   align-items: end;
   background: var(--panel-bg);
@@ -6427,10 +6548,57 @@ body[data-theme="dark"] .landing-band .band-stats span {
   border-radius: 12px;
 }
 
+.social-attach-btn {
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  font-size: 17px;
+  border-radius: 12px;
+}
+
 .social-chat-send {
   border-radius: 14px;
   padding: 10px 16px;
   font-weight: 700;
+}
+
+.social-chat-context {
+  position: fixed;
+  z-index: 2200;
+  min-width: 188px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 12px 24px rgba(9, 19, 46, 0.25);
+  background: color-mix(in oklab, var(--panel-bg) 92%, #ffffff);
+  padding: 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.social-chat-context.hidden {
+  display: none;
+}
+
+.social-chat-context-btn {
+  width: 100%;
+  text-align: left;
+}
+
+.social-chat-context-reactions {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(28px, 1fr));
+  gap: 6px;
+}
+
+.social-chat-context-emoji {
+  min-width: 28px;
+  height: 30px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
 }
 
 .tg-avatar {
@@ -6553,6 +6721,33 @@ body[data-theme="dark"] .landing-band .band-stats span {
   display: grid;
   gap: 6px;
   margin-top: 10px;
+}
+
+.social-group-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.social-group-editor > label {
+  display: grid;
+  gap: 6px;
+}
+
+.social-group-members {
+  display: grid;
+  gap: 8px;
+}
+
+.social-group-members-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 6px 10px;
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px;
+  background: color-mix(in oklab, var(--panel-bg) 86%, #ffffff);
 }
 
 .social-direct-row {
@@ -7772,5 +7967,223 @@ button,
   #authSection .auth-main-box input,
   #authSection .auth-main-box button {
     width: 100%;
+  }
+}
+
+/* 2026-03 final fixes v5: admin contrast, notification panel layout, mobile top gap */
+.admin-sound-upload-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin: 8px 0 2px;
+}
+
+.admin-sound-upload-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+#adminPanelSection .kpi {
+  background: linear-gradient(
+    145deg,
+    color-mix(in oklab, var(--ds-accent) 48%, #0b1430),
+    color-mix(in oklab, var(--ds-accent-2) 36%, #132855)
+  );
+  border-color: color-mix(in oklab, var(--ds-accent-2) 42%, rgba(255, 255, 255, 0.18));
+}
+
+#adminPanelSection .kpi-head strong {
+  color: #f4fbff;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+}
+
+#adminPanelSection .kpi-head span {
+  color: rgba(236, 246, 255, 0.9);
+}
+
+#adminPanelSection .kpi-track {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+#adminPanelSection .kpi-track i {
+  background: linear-gradient(90deg, #7cf4ff, #7ea0ff);
+}
+
+#adminPanelSection .trend-meta {
+  color: color-mix(in oklab, var(--ds-text) 65%, var(--ds-muted));
+}
+
+#adminPanelSection .trend-meta b {
+  color: var(--ds-text);
+}
+
+#adminPanelSection .bar-item .meta {
+  color: var(--ds-text);
+}
+
+#adminPanelSection .bar-item .meta b {
+  color: color-mix(in oklab, var(--ds-text) 88%, var(--ds-accent));
+}
+
+#adminPanelSection #adminStatsView {
+  background: color-mix(in oklab, var(--ds-surface) 90%, #ffffff);
+  color: var(--ds-text);
+  border-color: color-mix(in oklab, var(--ds-border) 86%, #ffffff);
+}
+
+#adminPanelSection .admin-ai-item {
+  background: color-mix(in oklab, var(--ds-surface-2) 92%, #ffffff);
+  border-color: color-mix(in oklab, var(--ds-border-strong) 82%, #ffffff);
+  color: var(--ds-text);
+}
+
+#adminPanelSection .admin-ai-item .ai-title,
+#adminPanelSection .admin-ai-item .ai-meta {
+  color: var(--ds-text);
+}
+
+#adminPanelSection .admin-ai-item .ai-meta {
+  opacity: 0.84;
+}
+
+#adminPanelSection .admin-ai-item .drag-handle {
+  border-color: color-mix(in oklab, var(--ds-border-strong) 85%, #ffffff);
+  color: color-mix(in oklab, var(--ds-text) 82%, var(--ds-accent));
+}
+
+#adminPanelSection .admin-server-charts .panel {
+  background: color-mix(in oklab, var(--ds-surface) 94%, #ffffff);
+}
+
+#adminPanelSection .admin-server-charts .trend-chart {
+  border: 1px solid color-mix(in oklab, var(--ds-border) 82%, #ffffff);
+  border-radius: 10px;
+}
+
+#adminPanelSection #adminServerTable td {
+  color: var(--ds-text);
+}
+
+@media (max-width: 980px) {
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  #appSection.app-shell,
+  #adminPanelSection.app-shell {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 6px 10px !important;
+    max-width: 100% !important;
+    gap: 0 !important;
+  }
+
+  #appSection > .workspace,
+  #adminPanelSection > .workspace {
+    margin: 0 !important;
+    padding: 8px !important;
+    min-height: 0 !important;
+    align-content: start !important;
+  }
+
+  #appSection > .workspace > .topbar,
+  #adminPanelSection > .workspace > .topbar {
+    position: static !important;
+    top: auto !important;
+    margin: 0 0 8px !important;
+    transform: none !important;
+  }
+
+  #appSection > .workspace > .tab:not(.hidden),
+  #adminPanelSection > .workspace > .admin-tab:not(.hidden) {
+    margin: 0 !important;
+    padding-top: 0 !important;
+    align-content: start !important;
+  }
+}
+
+/* 2026-03 hotfix v6: auth width, admin contrast, mobile clipping */
+.sidebar-toggle {
+  display: none !important;
+}
+
+#authSection .auth-card.auth-hero {
+  grid-template-columns: minmax(0, 1.12fr) minmax(420px, 0.9fr);
+  align-items: stretch;
+}
+
+#authSection .auth-grid.single,
+#authSection .auth-main-box {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+#authSection .auth-main-box .remember-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0;
+}
+
+#authSection .auth-main-box .remember-row input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+#appSection > .workspace,
+#adminPanelSection > .workspace {
+  overflow: visible !important;
+}
+
+#appSection .table-card,
+#adminPanelSection .table-card {
+  overflow-x: auto;
+}
+
+#adminPanelSection .panel,
+#adminPanelSection .table-card,
+#adminPanelSection .admin-tab,
+#adminPanelSection .admin-user-profile-card,
+#adminPanelSection .team-modal-card {
+  color: var(--ds-text);
+  border-color: color-mix(in oklab, var(--ds-border) 84%, #ffffff);
+}
+
+#adminPanelSection .hint,
+#adminPanelSection small,
+#adminPanelSection .panel p,
+#adminPanelSection .panel li {
+  color: color-mix(in oklab, var(--ds-text) 80%, var(--ds-muted));
+}
+
+#adminPanelSection input,
+#adminPanelSection textarea,
+#adminPanelSection select {
+  color: var(--ds-text);
+  background: color-mix(in oklab, var(--ds-surface) 96%, #ffffff);
+  border-color: color-mix(in oklab, var(--ds-border-strong) 80%, #ffffff);
+}
+
+#adminPanelSection #adminServerTable td,
+#adminPanelSection #adminServerTable th,
+#adminPanelSection .admin-ai-item .ai-title,
+#adminPanelSection .admin-ai-item .ai-meta,
+#adminPanelSection .admin-ai-item .drag-handle,
+#adminPanelSection #adminStatsView {
+  color: var(--ds-text);
+}
+
+@media (max-width: 980px) {
+  #authSection .auth-card.auth-hero {
+    grid-template-columns: 1fr;
+    padding: 10px;
+  }
+
+  #authSection .auth-main-box {
+    padding: 10px;
   }
 }

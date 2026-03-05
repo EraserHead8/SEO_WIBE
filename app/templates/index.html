@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260305g" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260305h" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -152,7 +152,6 @@
         <h2 class="logo-mark"><img src="/static/favicon.svg?v=20260228c" alt="SEO WIBE" class="brand-logo" /><span class="logo-a">SEO</span> <span class="logo-b">WIBE</span></h2>
         <p>Seller OS</p>
       </div>
-      <button class="btn-secondary sidebar-toggle" type="button" onclick="toggleSidebarMode()">⇄</button>
       <nav class="side-nav">
         <button class="nav-btn" data-tab="sales" data-module="sales_stats" onclick="showTab('sales', this)">Статистика и дашборд</button>
         <button class="nav-btn" data-tab="products" onclick="showTab('products', this)">Товары</button>
@@ -375,6 +374,7 @@
           <div class="sales-chart-controls">
             <select id="salesMetricMode" onchange="renderSalesStats()">
               <option value="units">Штуки</option>
+              <option value="buyouts">Выкупы</option>
               <option value="revenue">Выручка</option>
               <option value="orders">Заказы</option>
               <option value="returns">Отказы</option>
@@ -410,7 +410,7 @@
         <div class="table-card">
           <table class="sales-table">
             <thead>
-              <tr><th>Дата</th><th>МП</th><th>Заказы</th><th>Шт.</th><th>Выручка</th><th>Отказы</th><th>Реклама</th><th>Штрафы</th></tr>
+              <tr><th>Дата</th><th>МП</th><th>Заказы</th><th>Шт.</th><th>Выкупы</th><th>Выручка</th><th>Отказы</th><th>Реклама</th><th>Штрафы</th></tr>
             </thead>
             <tbody id="salesTable"></tbody>
           </table>
@@ -788,8 +788,8 @@
                   <button class="btn-secondary" onclick="loadProfile()">Обновить профиль</button>
                 </div>
                 <div class="profile-avatar-actions">
-                  <input id="profileAvatarUpload" type="file" accept="image/*" />
-                  <button class="btn-secondary" type="button" onclick="uploadProfileAvatar()">Загрузить фото</button>
+                  <input id="profileAvatarUpload" type="file" accept="image/*" class="hidden" />
+                  <button id="profileAvatarUploadBtn" class="btn-secondary" type="button" onclick="triggerProfileAvatarUpload()">Загрузить фото</button>
                 </div>
                 <div class="avatar-picker" id="profileAvatarPicker"></div>
               </div>
@@ -974,7 +974,10 @@
                   <h3>Чаты</h3>
                   <small class="hint">Личные и групповые</small>
                 </div>
-                <button class="btn-secondary" type="button" onclick="socialOpenDirectPicker()">Личный чат</button>
+                <div class="social-chat-head-buttons">
+                  <button class="btn-secondary" type="button" onclick="socialOpenDirectPicker()">Личный чат</button>
+                  <button class="btn-secondary" type="button" onclick="socialOpenGroupEditor()">Группа</button>
+                </div>
               </div>
               <div class="social-chat-search">
                 <input id="socialChatSearch" type="text" placeholder="Поиск" oninput="socialFilterThreads()" />
@@ -995,16 +998,21 @@
                 </div>
                 <div id="socialChatHeadMeta" class="social-chat-head-meta hidden"></div>
                 <div class="social-chat-head-actions">
+                  <button id="socialChatGroupBtn" class="btn-secondary hidden" type="button" onclick="socialOpenGroupEditor(true)">Участники</button>
                   <button id="socialChatAvatarBtn" class="btn-secondary hidden" type="button" onclick="socialOpenGroupAvatarModal()">Аватар</button>
                   <button class="btn-secondary" type="button" onclick="socialLoadThreads({ silent: true })">Обновить</button>
                 </div>
               </div>
               <div id="socialChatMessages" class="social-chat-messages"></div>
+              <div id="socialChatContextMenu" class="social-chat-context hidden"></div>
               <div class="social-chat-compose">
+                <div id="socialChatReplyBar" class="social-chat-reply hidden"></div>
                 <div class="social-chat-input-wrap">
                   <textarea id="socialChatInput" rows="2" placeholder="Введите сообщение..."></textarea>
+                  <button id="socialAttachBtn" class="btn-secondary social-attach-btn" type="button" onclick="socialTriggerChatFileDialog()" title="Файл">📎</button>
                   <button id="socialEmojiBtn" class="btn-secondary social-emoji-btn" type="button" onclick="socialToggleEmojiPicker()" title="Эмодзи">😊</button>
                   <div id="socialEmojiPicker" class="social-emoji-picker hidden"></div>
+                  <input id="socialChatFileInput" type="file" multiple class="hidden" onchange="socialUploadChatFiles(this.files)" />
                 </div>
                 <button class="social-chat-send" type="button" onclick="socialSendMessage()">Отправить</button>
               </div>
@@ -1298,8 +1306,8 @@
           <div class="profile-avatar-preview" id="teamAvatarPreview">--</div>
           <div class="team-avatar-controls">
             <div class="profile-avatar-actions">
-              <input id="teamAvatarUpload" type="file" accept="image/*" />
-              <button class="btn-secondary" type="button" onclick="uploadTeamAvatar()">Загрузить фото</button>
+              <input id="teamAvatarUpload" type="file" accept="image/*" class="hidden" />
+              <button id="teamAvatarUploadBtn" class="btn-secondary" type="button" onclick="triggerTeamAvatarUpload()">Загрузить фото</button>
             </div>
             <div class="avatar-picker" id="teamAvatarPicker"></div>
           </div>
@@ -1333,7 +1341,7 @@
   <div id="hoverTip" class="hover-tip hidden"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script src="/static/app.js?v=20260305h"></script>
-  <script src="/static/social.js?v=20260305h"></script>
+  <script src="/static/app.js?v=20260305i"></script>
+  <script src="/static/social.js?v=20260305i"></script>
 </body>
 </html>

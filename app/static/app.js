@@ -733,6 +733,8 @@ function applyUiLanguage() {
   setText("#profileSectionsIntroLabel", isEn ? "Current user:" : "Текущий пользователь:");
   setText("#profileMainPanel .grid-3 button:nth-of-type(1)", isEn ? "Save Profile" : "Сохранить профиль");
   setText("#profileMainPanel .grid-3 button:nth-of-type(2)", isEn ? "Refresh Profile" : "Обновить профиль");
+  setText("#profileAvatarUploadBtn", isEn ? "Upload photo" : "Загрузить фото");
+  setText("#teamAvatarUploadBtn", isEn ? "Upload photo" : "Загрузить фото");
   setText("#profilePlanPanel h3", isEn ? "Plan" : "Тариф");
   setText("#profilePlanPanel .grid-4 button:nth-of-type(1)", isEn ? "Change Plan" : "Сменить тариф");
   setText("#profilePlanPanel .grid-4 button:nth-of-type(2)", isEn ? "Renew for 30 days" : "Продлить на 30 дней");
@@ -822,10 +824,11 @@ function applyUiLanguage() {
   setText("#sales thead th:nth-child(2)", isEn ? "Marketplace" : "МП");
   setText("#sales thead th:nth-child(3)", isEn ? "Orders" : "Заказы");
   setText("#sales thead th:nth-child(4)", isEn ? "Units" : "Шт.");
-  setText("#sales thead th:nth-child(5)", isEn ? "Revenue" : "Выручка");
-  setText("#sales thead th:nth-child(6)", isEn ? "Returns" : "Отказы");
-  setText("#sales thead th:nth-child(7)", isEn ? "Ads Spend" : "Реклама");
-  setText("#sales thead th:nth-child(8)", isEn ? "Penalties" : "Штрафы");
+  setText("#sales thead th:nth-child(5)", isEn ? "Buyouts" : "Выкупы");
+  setText("#sales thead th:nth-child(6)", isEn ? "Revenue" : "Выручка");
+  setText("#sales thead th:nth-child(7)", isEn ? "Returns" : "Отказы");
+  setText("#sales thead th:nth-child(8)", isEn ? "Ads Spend" : "Реклама");
+  setText("#sales thead th:nth-child(9)", isEn ? "Penalties" : "Штрафы");
   setText("#profileKeysPanel .cols-2 > div:nth-of-type(1) h3", "WB");
   setText("#profileKeysPanel .cols-2 > div:nth-of-type(2) h3", "Ozon");
   setTextAll("#profileKeysPanel .actions button:nth-of-type(1)", isEn ? "Save" : "Сохранить");
@@ -914,6 +917,7 @@ function applyUiLanguage() {
   ]);
   setOptions("#salesMetricMode", [
     isEn ? "Units" : "Штуки",
+    isEn ? "Buyouts" : "Выкупы",
     isEn ? "Revenue" : "Выручка",
     isEn ? "Orders" : "Заказы",
     isEn ? "Returns" : "Отказы",
@@ -2516,15 +2520,19 @@ async function uploadAvatarFile(inputId, endpoint) {
   form.append("file", file);
   const headers = {};
   if (token) headers.Authorization = `Bearer ${token}`;
-  const data = await requestJson(endpoint, {
-    method: "POST",
-    headers,
-    body: form,
-    timeoutMs: 60000,
-    retryOnPost: true,
-    maxRetries: 1,
-  });
-  return data;
+  try {
+    const data = await requestJson(endpoint, {
+      method: "POST",
+      headers,
+      body: form,
+      timeoutMs: 60000,
+      retryOnPost: true,
+      maxRetries: 1,
+    });
+    return data;
+  } finally {
+    if (input) input.value = "";
+  }
 }
 
 async function uploadProfileAvatar() {
@@ -2545,6 +2553,14 @@ async function uploadProfileAvatar() {
   } catch (e) {
     alert(e.message);
   }
+}
+
+function triggerProfileAvatarUpload() {
+  document.getElementById("profileAvatarUpload")?.click();
+}
+
+function triggerTeamAvatarUpload() {
+  document.getElementById("teamAvatarUpload")?.click();
 }
 
 async function uploadTeamAvatar() {
@@ -3555,7 +3571,7 @@ async function sendReviewReply(reviewId) {
     return null;
   });
   if (!data) return;
-  alert(data.message || tr("Ответ отправлен", "Reply sent"));
+  updateReviewLoadStatus(tr("Ответ отправлен.", "Reply sent."));
   await loadWbReviews();
 }
 
@@ -4120,7 +4136,7 @@ async function sendQuestionReply(questionId) {
     return null;
   });
   if (!data) return;
-  alert(data.message || tr("Ответ отправлен", "Reply sent"));
+  updateQuestionLoadStatus(tr("Ответ отправлен.", "Reply sent."));
   await loadWbQuestions();
 }
 
@@ -6732,6 +6748,7 @@ function renderSalesTotals() {
   const totals = {
     orders: salesRows.reduce((acc, row) => acc + Number(row.orders || 0), 0),
     units: salesRows.reduce((acc, row) => acc + Number(row.units || 0), 0),
+    buyouts: salesRows.reduce((acc, row) => acc + Number(row.buyouts || Math.max(0, Number(row.units || 0) - Number(row.returns || 0))), 0),
     revenue: salesRows.reduce((acc, row) => acc + Number(row.revenue || 0), 0),
     returns: salesRows.reduce((acc, row) => acc + Number(row.returns || 0), 0),
     ad_spend: salesRows.reduce((acc, row) => acc + Number(row.ad_spend || 0), 0),
@@ -6741,6 +6758,7 @@ function renderSalesTotals() {
   host.innerHTML = `
     <article class="sales-kpi"><span>${tr("Заказы", "Orders")}</span><strong>${formatInt(totals.orders)}</strong></article>
     <article class="sales-kpi"><span>${tr("Штуки", "Units")}</span><strong>${formatInt(totals.units)}</strong></article>
+    <article class="sales-kpi"><span>${tr("Выкупы", "Buyouts")}</span><strong>${formatInt(totals.buyouts)}</strong></article>
     <article class="sales-kpi"><span>${tr("Выручка", "Revenue")}</span><strong>${formatMoney(totals.revenue)}</strong></article>
     <article class="sales-kpi"><span>${tr("Отказы", "Returns")}</span><strong>${formatInt(totals.returns)}</strong></article>
     <article class="sales-kpi"><span>${tr("Реклама", "Ads Spend")}</span><strong>${formatMoney(totals.ad_spend)}</strong></article>
@@ -6767,18 +6785,21 @@ function renderSalesChart(points) {
       day: String(row?.date || "").trim() || String(row?.bucket || "").trim().slice(0, 10),
       orders: Number(row?.orders || 0),
       units: Number(row?.units || 0),
+      buyouts: Number(row?.buyouts || Math.max(0, Number(row?.units || 0) - Number(row?.returns || 0))),
       revenue: Number(row?.revenue || 0),
       returns: Number(row?.returns || 0),
       ad_spend: Number(row?.ad_spend || 0),
       penalties: Number(row?.penalties || 0),
       wb_orders: Number(row?.wb_orders || 0),
       wb_units: Number(row?.wb_units || 0),
+      wb_buyouts: Number(row?.wb_buyouts || Math.max(0, Number(row?.wb_units || 0) - Number(row?.wb_returns || 0))),
       wb_revenue: Number(row?.wb_revenue || 0),
       wb_returns: Number(row?.wb_returns || 0),
       wb_ad_spend: Number(row?.wb_ad_spend || 0),
       wb_penalties: Number(row?.wb_penalties || 0),
       ozon_orders: Number(row?.ozon_orders || 0),
       ozon_units: Number(row?.ozon_units || 0),
+      ozon_buyouts: Number(row?.ozon_buyouts || Math.max(0, Number(row?.ozon_units || 0) - Number(row?.ozon_returns || 0))),
       ozon_revenue: Number(row?.ozon_revenue || 0),
       ozon_returns: Number(row?.ozon_returns || 0),
       ozon_ad_spend: Number(row?.ozon_ad_spend || 0),
@@ -6804,13 +6825,14 @@ function renderSalesChart(points) {
   }
   const valueOf = (bucket, key) => {
     if (key === "orders") return Number(bucket.orders || 0);
+    if (key === "buyouts") return Number(bucket.buyouts || 0);
     if (key === "revenue") return Number(bucket.revenue || 0);
     if (key === "returns") return Number(bucket.returns || 0);
     if (key === "ad_spend") return Number(bucket.ad_spend || 0);
     if (key === "penalties") return Number(bucket.penalties || 0);
     return Number(bucket.units || 0);
   };
-  const countMetrics = new Set(["orders", "units", "returns"]);
+  const countMetrics = new Set(["orders", "units", "buyouts", "returns"]);
   const normalizeMetricValue = (value) => (
     countMetrics.has(metric) ? Math.round(Number(value || 0)) : Number(value || 0)
   );
@@ -6825,17 +6847,19 @@ function renderSalesChart(points) {
       const mp = String(row?.marketplace || "").trim().toLowerCase() === "ozon" ? "ozon" : "wb";
       const key = `${bucket}::${mp}`;
       const dayKey = `${day}::${mp}`;
-      const item = byBucket.get(key) || { orders: 0, units: 0, revenue: 0, returns: 0, ad_spend: 0, penalties: 0 };
+      const item = byBucket.get(key) || { orders: 0, units: 0, buyouts: 0, revenue: 0, returns: 0, ad_spend: 0, penalties: 0 };
       item.orders += Number(row?.orders || 0);
       item.units += Number(row?.units || 0);
+      item.buyouts += Number(row?.buyouts || Math.max(0, Number(row?.units || 0) - Number(row?.returns || 0)));
       item.revenue += Number(row?.revenue || 0);
       item.returns += Number(row?.returns || 0);
       item.ad_spend += Number(row?.ad_spend || 0);
       item.penalties += Number(row?.penalties || 0);
       byBucket.set(key, item);
-      const dayItem = byDay.get(dayKey) || { orders: 0, units: 0, revenue: 0, returns: 0, ad_spend: 0, penalties: 0 };
+      const dayItem = byDay.get(dayKey) || { orders: 0, units: 0, buyouts: 0, revenue: 0, returns: 0, ad_spend: 0, penalties: 0 };
       dayItem.orders += Number(row?.orders || 0);
       dayItem.units += Number(row?.units || 0);
+      dayItem.buyouts += Number(row?.buyouts || Math.max(0, Number(row?.units || 0) - Number(row?.returns || 0)));
       dayItem.revenue += Number(row?.revenue || 0);
       dayItem.returns += Number(row?.returns || 0);
       dayItem.ad_spend += Number(row?.ad_spend || 0);
@@ -6850,6 +6874,7 @@ function renderSalesChart(points) {
     const map = {
       orders: `${mp}_orders`,
       units: `${mp}_units`,
+      buyouts: `${mp}_buyouts`,
       revenue: `${mp}_revenue`,
       returns: `${mp}_returns`,
       ad_spend: `${mp}_ad_spend`,
@@ -6983,11 +7008,13 @@ function renderSalesChart(points) {
     ? tr("Выручка", "Revenue")
     : (metric === "orders"
       ? tr("Заказы", "Orders")
+      : (metric === "buyouts"
+        ? tr("Выкупы", "Buyouts")
       : (metric === "returns"
         ? tr("Отказы", "Returns")
         : (metric === "ad_spend"
           ? tr("Реклама", "Ads Spend")
-          : (metric === "penalties" ? tr("Штрафы", "Penalties") : tr("Штуки", "Units")))));
+          : (metric === "penalties" ? tr("Штрафы", "Penalties") : tr("Штуки", "Units"))))));
   const formatValue = (metric === "revenue" || metric === "ad_spend" || metric === "penalties") ? formatMoney : formatInt;
   const topSeries = series[0] || { values: [] };
   const topValues = Array.isArray(topSeries.values) ? topSeries.values : [];
@@ -7096,18 +7123,21 @@ function buildSalesChartFromRows(rows) {
       bucket: bucketKey,
       orders: 0,
       units: 0,
+      buyouts: 0,
       revenue: 0,
       returns: 0,
       ad_spend: 0,
       penalties: 0,
       wb_orders: 0,
       wb_units: 0,
+      wb_buyouts: 0,
       wb_revenue: 0,
       wb_returns: 0,
       wb_ad_spend: 0,
       wb_penalties: 0,
       ozon_orders: 0,
       ozon_units: 0,
+      ozon_buyouts: 0,
       ozon_revenue: 0,
       ozon_returns: 0,
       ozon_ad_spend: 0,
@@ -7116,6 +7146,7 @@ function buildSalesChartFromRows(rows) {
     const mp = String(row?.marketplace || "").trim().toLowerCase();
     bucket.orders += Number(row?.orders || 0);
     bucket.units += Number(row?.units || 0);
+    bucket.buyouts += Number(row?.buyouts || Math.max(0, Number(row?.units || 0) - Number(row?.returns || 0)));
     bucket.revenue += Number(row?.revenue || 0);
     bucket.returns += Number(row?.returns || 0);
     bucket.ad_spend += Number(row?.ad_spend || 0);
@@ -7123,6 +7154,7 @@ function buildSalesChartFromRows(rows) {
     if (mp === "wb" || mp === "ozon") {
       bucket[`${mp}_orders`] += Number(row?.orders || 0);
       bucket[`${mp}_units`] += Number(row?.units || 0);
+      bucket[`${mp}_buyouts`] += Number(row?.buyouts || Math.max(0, Number(row?.units || 0) - Number(row?.returns || 0)));
       bucket[`${mp}_revenue`] += Number(row?.revenue || 0);
       bucket[`${mp}_returns`] += Number(row?.returns || 0);
       bucket[`${mp}_ad_spend`] += Number(row?.ad_spend || 0);
@@ -7179,7 +7211,7 @@ function renderSalesStats() {
   tbody.innerHTML = "";
   if (!Array.isArray(salesRows) || !salesRows.length) {
     const trEl = document.createElement("tr");
-    trEl.innerHTML = `<td colspan="8">${tr("Нет продаж за период.", "No sales for selected period.")}</td>`;
+    trEl.innerHTML = `<td colspan="9">${tr("Нет продаж за период.", "No sales for selected period.")}</td>`;
     tbody.appendChild(trEl);
   } else {
     for (const row of salesRows) {
@@ -7189,6 +7221,7 @@ function renderSalesStats() {
         <td>${escapeHtml((row.marketplace || "-").toUpperCase())}</td>
         <td>${escapeHtml(formatInt(row.orders ?? 0))}</td>
         <td>${escapeHtml(formatInt(row.units ?? 0))}</td>
+        <td>${escapeHtml(formatInt(row.buyouts ?? Math.max(0, Number(row.units || 0) - Number(row.returns || 0))))}</td>
         <td>${escapeHtml(formatMoney(Number(row.revenue || 0)))}</td>
         <td>${escapeHtml(formatInt(row.returns ?? 0))}</td>
         <td>${escapeHtml(formatMoney(Number(row.ad_spend || 0)))}</td>
@@ -7353,8 +7386,8 @@ async function loadSalesStats(retryAttempt = 0) {
   }
   if (meta) {
     const totalTxt = tr(
-      `Заказы: ${formatInt(totals.orders || 0)}, шт.: ${formatInt(totals.units || 0)}, выручка: ${formatMoney(totals.revenue || 0)}, отказы: ${formatInt(totals.returns || 0)}, реклама: ${formatMoney(totals.ad_spend || 0)}, штрафы: ${formatMoney(totals.penalties || 0)}.`,
-      `Orders: ${formatInt(totals.orders || 0)}, units: ${formatInt(totals.units || 0)}, revenue: ${formatMoney(totals.revenue || 0)}, returns: ${formatInt(totals.returns || 0)}, ads: ${formatMoney(totals.ad_spend || 0)}, penalties: ${formatMoney(totals.penalties || 0)}.`
+      `Заказы: ${formatInt(totals.orders || 0)}, шт.: ${formatInt(totals.units || 0)}, выкупы: ${formatInt(totals.buyouts || 0)}, выручка: ${formatMoney(totals.revenue || 0)}, отказы: ${formatInt(totals.returns || 0)}, реклама: ${formatMoney(totals.ad_spend || 0)}, штрафы: ${formatMoney(totals.penalties || 0)}.`,
+      `Orders: ${formatInt(totals.orders || 0)}, units: ${formatInt(totals.units || 0)}, buyouts: ${formatInt(totals.buyouts || 0)}, revenue: ${formatMoney(totals.revenue || 0)}, returns: ${formatInt(totals.returns || 0)}, ads: ${formatMoney(totals.ad_spend || 0)}, penalties: ${formatMoney(totals.penalties || 0)}.`
     );
     const warnTxt = warnings.length ? ` ${warnings.join(" | ")}` : "";
     meta.textContent = `${totalTxt}${warnTxt}`;
@@ -7732,10 +7765,21 @@ function applyTeamModalHeader(mode, row = null) {
       ? tr("Владелец кабинета", "Workspace owner")
       : tr("Сотрудник кабинета", "Workspace employee");
   }
+  const isSelfEmployee = Boolean(
+    me
+    && !me.actor_is_owner
+    && Number(me.actor_member_id || 0) > 0
+    && Number(row.id || 0) === Number(me.actor_member_id || 0)
+  );
   if (metaEl) {
-    metaEl.textContent = `#${Number(row.id || 0)} • ${row.is_owner ? tr("Права владельца", "Owner permissions") : tr("Можно менять доступы и данные", "You can edit access and profile fields")}`;
+    const metaText = row.is_owner
+      ? tr("Права владельца", "Owner permissions")
+      : (isSelfEmployee
+        ? tr("Можно менять только свои ФИО, телефон, ник и фото.", "You can edit only your own name, phone, nickname and avatar.")
+        : tr("Можно менять доступы и данные", "You can edit access and profile fields"));
+    metaEl.textContent = `#${Number(row.id || 0)} • ${metaText}`;
   }
-  if (deleteBtn) deleteBtn.classList.toggle("hidden", Boolean(row.is_owner));
+  if (deleteBtn) deleteBtn.classList.toggle("hidden", Boolean(row.is_owner || isSelfEmployee));
 }
 
 function findTeamMemberById(memberId) {
@@ -7856,12 +7900,18 @@ function openTeamMemberEditor(memberId) {
     renderAvatarPreview("teamAvatarPreview", url, "--");
   });
   setInputValue("teamModalPassword", "");
-  const canEditIdentity = !row.is_owner;
+  const isSelfEmployee = Boolean(
+    me
+    && !me.actor_is_owner
+    && Number(me.actor_member_id || 0) > 0
+    && Number(row.id || 0) === Number(me.actor_member_id || 0)
+  );
+  const canEditIdentity = !row.is_owner && !isSelfEmployee;
   const emailEl = document.getElementById("teamModalEmail");
   const passEl = document.getElementById("teamModalPassword");
   if (emailEl) emailEl.disabled = !canEditIdentity;
   if (passEl) passEl.disabled = !canEditIdentity;
-  renderTeamModalAccessPicks(Array.isArray(row.access_scope) ? row.access_scope : [], row.is_owner);
+  renderTeamModalAccessPicks(Array.isArray(row.access_scope) ? row.access_scope : [], row.is_owner || isSelfEmployee);
   applyTeamModalHeader("edit", row);
   modal.classList.remove("hidden");
 }
@@ -8127,6 +8177,28 @@ async function loadProfile() {
 
 async function saveProfileData() {
   if (!enabledModules.has("user_profile")) return;
+  if (me && !me.actor_is_owner) {
+    const actorMemberId = Number(me.actor_member_id || 0);
+    const actorRow = findTeamMemberById(actorMemberId);
+    if (!actorMemberId || !actorRow) {
+      alert(tr("Профиль сотрудника не найден.", "Employee profile is not found."));
+      return;
+    }
+    const updated = await updateTeamMember(actorMemberId, {
+      email: String(actorRow.email || "").trim(),
+      password: "",
+      phone: String(document.getElementById("profilePhone")?.value || "").trim(),
+      full_name: String(document.getElementById("profileFullName")?.value || "").trim(),
+      nickname: String(actorRow.nickname || "").trim(),
+      avatar_url: String(document.getElementById("profileAvatarUrl")?.value || "").trim(),
+      access_scope: Array.isArray(actorRow.access_scope) ? actorRow.access_scope : [],
+    });
+    if (!updated) return;
+    invalidateModuleCache("profile");
+    await loadProfile();
+    alert(tr("Профиль сохранен", "Profile saved"));
+    return;
+  }
   const payload = {
     full_name: document.getElementById("profileFullName")?.value || "",
     position_title: document.getElementById("profilePositionTitle")?.value || "",
@@ -8691,6 +8763,20 @@ document.addEventListener("visibilitychange", () => {
   });
 });
 
+const profileAvatarUploadInput = document.getElementById("profileAvatarUpload");
+if (profileAvatarUploadInput) {
+  profileAvatarUploadInput.addEventListener("change", () => {
+    if (profileAvatarUploadInput.files?.length) uploadProfileAvatar();
+  });
+}
+
+const teamAvatarUploadInput = document.getElementById("teamAvatarUpload");
+if (teamAvatarUploadInput) {
+  teamAvatarUploadInput.addEventListener("change", () => {
+    if (teamAvatarUploadInput.files?.length) uploadTeamAvatar();
+  });
+}
+
 const keywordInput = document.getElementById("positionKeywords");
 if (keywordInput) {
   keywordInput.addEventListener("input", () => {
@@ -8834,7 +8920,9 @@ window.closeProfileSectionModal = closeProfileSectionModal;
 window.closeTeamMemberEditor = closeTeamMemberEditor;
 window.saveTeamMemberEditor = saveTeamMemberEditor;
 window.deleteTeamMemberFromModal = deleteTeamMemberFromModal;
+window.triggerProfileAvatarUpload = triggerProfileAvatarUpload;
 window.uploadProfileAvatar = uploadProfileAvatar;
+window.triggerTeamAvatarUpload = triggerTeamAvatarUpload;
 window.uploadTeamAvatar = uploadTeamAvatar;
 window.toggleMobileNav = toggleMobileNav;
 window.closeMobileNav = closeMobileNav;

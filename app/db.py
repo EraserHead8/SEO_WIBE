@@ -116,6 +116,15 @@ def run_lightweight_migrations():
         if chat_thread_cols and "avatar_url" not in chat_thread_cols:
             conn.execute(text("ALTER TABLE social_chat_threads ADD COLUMN avatar_url VARCHAR(500) DEFAULT ''"))
 
+        chat_message_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(social_chat_messages)"))}
+        if chat_message_cols:
+            if "reply_to_message_id" not in chat_message_cols:
+                conn.execute(text("ALTER TABLE social_chat_messages ADD COLUMN reply_to_message_id INTEGER"))
+            if "attachments_json" not in chat_message_cols:
+                conn.execute(text("ALTER TABLE social_chat_messages ADD COLUMN attachments_json TEXT DEFAULT '[]'"))
+            if "reactions_json" not in chat_message_cols:
+                conn.execute(text("ALTER TABLE social_chat_messages ADD COLUMN reactions_json TEXT DEFAULT '{}'"))
+
         settings_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(system_settings)"))}
         if settings_cols:
             default_ui = json.dumps(

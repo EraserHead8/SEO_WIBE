@@ -407,6 +407,9 @@ class SocialChatMessage(Base):
     sender_key: Mapped[str] = mapped_column(String(60), index=True)
     sender_nick: Mapped[str] = mapped_column(String(120), default="")
     text: Mapped[str] = mapped_column(Text, default="")
+    reply_to_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    attachments_json: Mapped[str] = mapped_column(Text, default="[]")
+    reactions_json: Mapped[str] = mapped_column(Text, default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
     thread: Mapped["SocialChatThread"] = relationship()

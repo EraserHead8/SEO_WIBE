@@ -80,6 +80,7 @@ def build_sales_report(
     totals = {
         "orders": int(sum(int(x.get("orders") or 0) for x in rows)),
         "units": int(sum(int(x.get("units") or 0) for x in rows)),
+        "buyouts": int(sum(int(x.get("buyouts") or 0) for x in rows)),
         "revenue": float(round(sum(float(x.get("revenue") or 0.0) for x in rows), 2)),
         "returns": int(sum(int(x.get("returns") or 0) for x in rows)),
         "ad_spend": float(round(sum(float(x.get("ad_spend") or 0.0) for x in rows), 2)),
@@ -189,6 +190,7 @@ def _fetch_wb_sales_rows(api_key: str, date_from: date, date_to: date) -> tuple[
                         "marketplace": "wb",
                         "orders": 0,
                         "units": 0,
+                        "buyouts": 0,
                         "revenue": 0.0,
                         "returns": units,
                         "ad_spend": 0.0,
@@ -203,6 +205,7 @@ def _fetch_wb_sales_rows(api_key: str, date_from: date, date_to: date) -> tuple[
                     "marketplace": "wb",
                     "orders": 1,
                     "units": units,
+                    "buyouts": units,
                     "revenue": safe_revenue,
                     "returns": 0,
                     "ad_spend": 0.0,
@@ -290,6 +293,7 @@ def _fetch_ozon_sales_rows(api_key: str, date_from: date, date_to: date) -> tupl
                 "marketplace": "ozon",
                 "orders": orders,
                 "units": units,
+                "buyouts": units,
                 "revenue": revenue,
                 "returns": 0,
                 "ad_spend": 0.0,
@@ -315,6 +319,7 @@ def _aggregate_rows(rows: list[dict[str, Any]], wb_ad_spend_by_day: dict[str, fl
                 "marketplace": marketplace,
                 "orders": 0,
                 "units": 0,
+                "buyouts": 0,
                 "revenue": 0.0,
                 "returns": 0,
                 "ad_spend": 0.0,
@@ -323,6 +328,7 @@ def _aggregate_rows(rows: list[dict[str, Any]], wb_ad_spend_by_day: dict[str, fl
         )
         row["orders"] += int(item.get("orders") or 0)
         row["units"] += int(item.get("units") or 0)
+        row["buyouts"] += int(item.get("buyouts") or max(0, int(item.get("units") or 0) - int(item.get("returns") or 0)))
         row["revenue"] = float(round(float(row["revenue"]) + float(item.get("revenue") or 0.0), 2))
         row["returns"] += int(item.get("returns") or 0)
         row["ad_spend"] = float(round(float(row["ad_spend"]) + float(item.get("ad_spend") or 0.0), 2))
@@ -414,10 +420,11 @@ def _build_chart_hour(
         if mp in {"wb", "ozon"}:
             _apply_metrics_to_bucket(bucket, item, prefix=f"{mp}_")
 
-    # Some sources return daily aggregates without hour timestamps.
-    # Spread them across 24 buckets to avoid a misleading left-side spike at 00:00.
+    # Some sources return only daily aggregates without hour timestamps.
+    # Do not spread such rows across all hours (looks fake). Put them into a
+    # single neutral bucket so totals stay correct and the chart remains honest.
     for item in daily_rows:
-        _spread_daily_item_across_hours(buckets, item)
+        _apply_daily_row_to_neutral_hour(buckets, item)
 
     return [buckets[x] for x in range(24)]
 
@@ -428,18 +435,21 @@ def _new_chart_bucket(day: str, bucket: str) -> dict[str, Any]:
         "bucket": bucket,
         "orders": 0,
         "units": 0,
+        "buyouts": 0,
         "revenue": 0.0,
         "returns": 0,
         "ad_spend": 0.0,
         "penalties": 0.0,
         "wb_orders": 0,
         "wb_units": 0,
+        "wb_buyouts": 0,
         "wb_revenue": 0.0,
         "wb_returns": 0,
         "wb_ad_spend": 0.0,
         "wb_penalties": 0.0,
         "ozon_orders": 0,
         "ozon_units": 0,
+        "ozon_buyouts": 0,
         "ozon_revenue": 0.0,
         "ozon_returns": 0,
         "ozon_ad_spend": 0.0,
@@ -450,6 +460,7 @@ def _new_chart_bucket(day: str, bucket: str) -> dict[str, Any]:
 def _apply_metrics_to_bucket(target: dict[str, Any], source: dict[str, Any], prefix: str = "") -> None:
     orders_key = f"{prefix}orders"
     units_key = f"{prefix}units"
+    buyouts_key = f"{prefix}buyouts"
     revenue_key = f"{prefix}revenue"
     returns_key = f"{prefix}returns"
     ad_spend_key = f"{prefix}ad_spend"
@@ -457,6 +468,7 @@ def _apply_metrics_to_bucket(target: dict[str, Any], source: dict[str, Any], pre
 
     target[orders_key] = int(target.get(orders_key) or 0) + int(source.get("orders") or 0)
     target[units_key] = int(target.get(units_key) or 0) + int(source.get("units") or 0)
+    target[buyouts_key] = int(target.get(buyouts_key) or 0) + int(source.get("buyouts") or max(0, int(source.get("units") or 0) - int(source.get("returns") or 0)))
     target[revenue_key] = float(round(float(target.get(revenue_key) or 0.0) + float(source.get("revenue") or 0.0), 2))
     target[returns_key] = int(target.get(returns_key) or 0) + int(source.get("returns") or 0)
     target[ad_spend_key] = float(round(float(target.get(ad_spend_key) or 0.0) + float(source.get("ad_spend") or 0.0), 2))
@@ -473,56 +485,23 @@ def _row_has_explicit_time(item: dict[str, Any]) -> bool:
     return "T" in text or (":" in text and " " in text)
 
 
-def _spread_daily_item_across_hours(buckets: dict[int, dict[str, Any]], item: dict[str, Any]) -> None:
-    int_parts = {
-        "orders": _split_int_24(int(item.get("orders") or 0)),
-        "units": _split_int_24(int(item.get("units") or 0)),
-        "returns": _split_int_24(int(item.get("returns") or 0)),
-    }
-    float_parts = {
-        "revenue": _split_float_24(float(item.get("revenue") or 0.0)),
-        "ad_spend": _split_float_24(float(item.get("ad_spend") or 0.0)),
-        "penalties": _split_float_24(float(item.get("penalties") or 0.0)),
+def _apply_daily_row_to_neutral_hour(buckets: dict[int, dict[str, Any]], item: dict[str, Any]) -> None:
+    bucket = buckets.get(12) or buckets.get(0)
+    if not bucket:
+        return
+    chunk = {
+        "orders": int(item.get("orders") or 0),
+        "units": int(item.get("units") or 0),
+        "buyouts": int(item.get("buyouts") or max(0, int(item.get("units") or 0) - int(item.get("returns") or 0))),
+        "revenue": float(item.get("revenue") or 0.0),
+        "returns": int(item.get("returns") or 0),
+        "ad_spend": float(item.get("ad_spend") or 0.0),
+        "penalties": float(item.get("penalties") or 0.0),
     }
     mp = str(item.get("marketplace") or "").strip().lower()
-
-    for hour in range(24):
-        bucket = buckets.get(hour)
-        if not bucket:
-            continue
-        chunk = {
-            "orders": int_parts["orders"][hour],
-            "units": int_parts["units"][hour],
-            "revenue": float_parts["revenue"][hour],
-            "returns": int_parts["returns"][hour],
-            "ad_spend": float_parts["ad_spend"][hour],
-            "penalties": float_parts["penalties"][hour],
-        }
-        _apply_metrics_to_bucket(bucket, chunk)
-        if mp in {"wb", "ozon"}:
-            _apply_metrics_to_bucket(bucket, chunk, prefix=f"{mp}_")
-
-
-def _split_int_24(value: int) -> list[int]:
-    base = int(value // 24)
-    remainder = int(value - (base * 24))
-    out = [base for _ in range(24)]
-    if remainder == 0:
-        return out
-    step = 1 if remainder > 0 else -1
-    for idx in range(abs(remainder)):
-        out[idx % 24] += step
-    return out
-
-
-def _split_float_24(value: float) -> list[float]:
-    if not math.isfinite(value):
-        return [0.0 for _ in range(24)]
-    base = round(value / 24.0, 2)
-    out = [base for _ in range(24)]
-    drift = round(value - (base * 24.0), 2)
-    out[-1] = round(out[-1] + drift, 2)
-    return out
+    _apply_metrics_to_bucket(bucket, chunk)
+    if mp in {"wb", "ozon"}:
+        _apply_metrics_to_bucket(bucket, chunk, prefix=f"{mp}_")
 
 
 def _row_to_hour_bucket(item: dict[str, Any], tzinfo: ZoneInfo) -> int:
@@ -685,6 +664,7 @@ def _fetch_wb_sales_rows_report_detail(api_key: str, date_from: date, date_to: d
                     "marketplace": "wb",
                     "orders": 0,
                     "units": 0,
+                    "buyouts": 0,
                     "revenue": 0.0,
                     "returns": units,
                     "ad_spend": 0.0,
@@ -699,6 +679,7 @@ def _fetch_wb_sales_rows_report_detail(api_key: str, date_from: date, date_to: d
                 "marketplace": "wb",
                 "orders": 1,
                 "units": units,
+                "buyouts": units,
                 "revenue": safe_revenue,
                 "returns": 0,
                 "ad_spend": 0.0,
