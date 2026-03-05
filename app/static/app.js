@@ -2230,8 +2230,6 @@ async function ensureAuth(allowFallback = true) {
       applyUiLanguage();
       applySidebarMode();
       applyButtonTooltips();
-      const hasModules = modulesLoaded && enabledModules instanceof Set && enabledModules.size > 0;
-      const canSales = !hasModules || enabledModules.has("sales_stats");
 
       // Keep social hooks alive globally, even before opening Social tab.
       window.__socialHooksRequested = true;
@@ -2242,9 +2240,6 @@ async function ensureAuth(allowFallback = true) {
         window.socialMaybeStartHooks();
       }
 
-      if (canSales) {
-        await runModuleLoader("sales", loadSalesBundle, { force: true, maxAgeMs: 0 });
-      }
       startModuleAutoRefresh();
       try { window.dispatchEvent(new Event("seo-wibe-auth")); } catch (_) {}
       const initialTab = resolveInitialTab();
