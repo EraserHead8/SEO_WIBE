@@ -517,6 +517,7 @@ class SocialNote(Base):
     files: Mapped[list["SocialNoteFile"]] = relationship(
         cascade="all, delete-orphan",
         passive_deletes=True,
+        back_populates="note",
     )
 
 
@@ -533,5 +534,5 @@ class SocialNoteFile(Base):
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    note: Mapped["SocialNote"] = relationship()
+    note: Mapped["SocialNote"] = relationship(back_populates="files")
     user: Mapped["User"] = relationship()

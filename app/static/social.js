@@ -2258,4 +2258,9 @@ window.socialStartGlobalHooks = socialStartGlobalHooks;
 window.socialStopGlobalHooks = socialStopGlobalHooks;
 window.resetSocialState = resetSocialState;
 
+window.addEventListener("seo-wibe-auth", () => {
+  socialMaybeStartHooks();
+  socialPollNotifications().catch(() => null);
+});
+
 socialMaybeStartHooks();

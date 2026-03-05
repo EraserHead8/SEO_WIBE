@@ -55,7 +55,7 @@ if (token && !storedSessionToken && !storedLocalToken) {
 let suppressAlerts = false;
 let me = null;
 let authRetryCount = 0;
-let lastAuthSuccessAt = 0;
+let lastAuthSuccessAt = Number(sessionStorage.getItem("last_auth_ok_at") || 0);
 let ensureAuthPromise = null;
 let selectedProducts = new Set();
 let selectedJobs = new Set();
@@ -636,16 +636,16 @@ function applyUiLanguage() {
   setText("#authRegisterSubmitBtn", lang === "en" ? "Create Account" : "Создать аккаунт");
   setText("#authToRegisterBtn", lang === "en" ? "No account? Sign up" : "Нет аккаунта? Регистрация");
   setText("#authToLoginBtn", lang === "en" ? "Already have account? Login" : "Уже есть аккаунт? Вход");
-  setText("#authLeadText", lang === "en" ? "Grow revenue on WB/Ozon with one operating system: products, ads, analytics, feedback and team control in a single workspace." : "Ускоряйте рост выручки на WB/Ozon в одной системе: товары, реклама, аналитика, обратная связь и управление командой в едином кабинете.");
-  setText("#authWhatTitle", lang === "en" ? "Business value" : "Бизнес-ценность");
-  setText("#authWhatItem1", lang === "en" ? "Transparent unit-economics: revenue, ad spend, penalties and margin by period." : "Прозрачная юнит-экономика: выручка, рекламные расходы, штрафы и маржа по периодам.");
-  setText("#authWhatItem2", lang === "en" ? "Faster catalog operations: bulk product updates, SEO workflows and ranking control." : "Более быстрые операции с каталогом: массовые обновления карточек, SEO-сценарии и контроль позиций.");
-  setText("#authWhatItem3", lang === "en" ? "Operational speedup for reviews/questions with AI templates and knowledge base." : "Ускорение обработки отзывов и вопросов через AI-шаблоны и базу знаний.");
-  setText("#authStartTitle", lang === "en" ? "Why teams choose SEO WIBE" : "Почему команды выбирают SEO WIBE");
-  setText("#authStartItem1", lang === "en" ? "Single control panel for owner, marketers and content managers." : "Единый контур управления для владельца, маркетолога и контент-менеджера.");
-  setText("#authStartItem2", lang === "en" ? "Role-based access model with employee-level audit trail." : "Ролевая модель доступа с аудитом действий по каждому сотруднику.");
-  setText("#authStartItem3", lang === "en" ? "Scales from one account to distributed teams and multiple brands." : "Масштабируется от одного кабинета до распределенной команды и нескольких брендов.");
-  setText("#authPitchNote", lang === "en" ? "Built for teams from 1 to 100+ employees with strict access control and measurable KPIs." : "Подходит для команд от 1 до 100+ сотрудников: строгие доступы, контроль KPI и предсказуемый операционный цикл.");
+  setText("#authLeadText", lang === "en" ? "Marketplace operations center for WB/Ozon: sales, catalog, ads, support and team workflows in one interface." : "Операционный центр продавца WB/Ozon: продажи, каталог, реклама, поддержка и командные процессы в одном интерфейсе.");
+  setText("#authWhatTitle", lang === "en" ? "What you get" : "Что дает сервис");
+  setText("#authWhatItem1", lang === "en" ? "One timeline for revenue, ad costs, returns and penalties." : "Одна лента для выручки, рекламных расходов, возвратов и штрафов.");
+  setText("#authWhatItem2", lang === "en" ? "Bulk card updates and SEO routines without manual chaos." : "Массовые обновления карточек и SEO-рутины без ручного хаоса.");
+  setText("#authWhatItem3", lang === "en" ? "AI-assisted review/question handling with predictable quality." : "AI-обработка отзывов и вопросов с предсказуемым качеством.");
+  setText("#authStartTitle", lang === "en" ? "How to start quickly" : "Как быстро стартовать");
+  setText("#authStartItem1", lang === "en" ? "Sign in as owner or create a new workspace." : "Войдите как владелец или создайте новый кабинет.");
+  setText("#authStartItem2", lang === "en" ? "Connect WB/Ozon API keys in Profile." : "Подключите API-ключи WB/Ozon в профиле.");
+  setText("#authStartItem3", lang === "en" ? "Open a module and run the first workflow." : "Откройте модуль и запустите первый рабочий сценарий.");
+  setText("#authPitchNote", lang === "en" ? "Designed for teams from solo operators to multi-role departments with strict access boundaries." : "Подходит как для соло-продавцов, так и для многоуровневых команд со строгими границами доступа.");
   setText("#landingCard1Title", lang === "en" ? "Revenue control center" : "Центр управления выручкой");
   setText("#landingCard1Text", lang === "en" ? "Monitor orders, units, returns, penalties and ad costs in one timeline and quickly find growth bottlenecks." : "Контролируйте заказы, штуки, возвраты, штрафы и рекламные расходы в одной ленте, чтобы быстро находить точки роста.");
   setText("#landingCard2Title", lang === "en" ? "Catalog performance" : "Эффективность каталога");
@@ -1008,7 +1008,9 @@ function applyUiLanguage() {
   updateSalesLoadStatus();
   syncProductsPagerControls();
   applyUiThemeSettingsToSelect();
-  renderTeamAccessOptions();
+  if (typeof renderTeamAccessOptions === "function") {
+    renderTeamAccessOptions();
+  }
   renderTeamMembers();
   if (profileAiState) renderProfileAiState(profileAiState);
   renderHelpAssistantHistory();
@@ -2035,6 +2037,7 @@ async function logout() {
   stopModuleAutoRefresh();
   authRetryCount = 0;
   lastAuthSuccessAt = 0;
+  sessionStorage.removeItem("last_auth_ok_at");
   if (token) {
     await requestJson("/api/auth/logout", {
       method: "POST",
@@ -2202,6 +2205,7 @@ async function ensureAuth(allowFallback = true) {
     me = user;
     authRetryCount = 0;
     lastAuthSuccessAt = Date.now();
+    sessionStorage.setItem("last_auth_ok_at", String(lastAuthSuccessAt));
     pruneLegacyUi();
     ensureProfileTeamUi();
     renderTopbarUser();
@@ -2342,7 +2346,9 @@ function closeTopbarUserPopover() {
 function openMyProfileFromTopbar() {
   pendingProfileActorFocus = true;
   closeTopbarUserPopover();
+  invalidateModuleCache("profile");
   showTab("profile", document.querySelector(".nav-btn[data-tab='profile']"));
+  runModuleLoader("profile", loadProfile, { force: true, maxAgeMs: 0 });
 }
 
 function renderAvatarPreview(previewId, url, fallbackText = "--") {

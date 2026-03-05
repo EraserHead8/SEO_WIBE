@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260305c" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260305e" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -21,13 +21,13 @@
           <img src="/static/favicon.svg?v=20260228c" alt="SEO WIBE" class="auth-toolbar-logo" />
           <div>
             <div class="auth-toolbar-title">SEO WIBE</div>
-            <div class="auth-toolbar-subtitle" id="authToolbarSubtitle">Marketplace Seller OS</div>
+            <div class="auth-toolbar-subtitle" id="authToolbarSubtitle">Сервис для маркетплейсов</div>
           </div>
         </div>
         <nav class="auth-toolbar-nav" aria-label="Landing navigation">
           <a href="#authSection">Платформа</a>
-          <a href="#appSection">Модули</a>
-          <a href="#authRegisterPane">Регистрация</a>
+          <a href="#landingModules">Модули</a>
+          <a href="#authSection" onclick="switchAuthMode('register'); return false;">Регистрация</a>
         </nav>
         <div class="auth-toolbar-controls">
           <button id="authToolbarLoginBtn" class="chip-btn active" type="button" onclick="switchAuthMode('login')">Вход</button>
@@ -41,26 +41,26 @@
       <div class="auth-card auth-hero">
         <div class="auth-pitch">
           <h1 class="logo-mark"><span class="logo-a">SEO</span> <span class="logo-b">WIBE</span></h1>
-          <p id="authLeadText" class="lead">Операционная система продавца на маркетплейсах: продажи, товары, реклама, отзывы, AI и команда в одном кабинете.</p>
+          <p id="authLeadText" class="lead">Операционный центр продавца WB/Ozon: продажи, каталог, реклама, поддержка и командные процессы в одном интерфейсе.</p>
           <div class="pitch-grid">
             <article>
-              <h4 id="authWhatTitle">Что делает</h4>
+              <h4 id="authWhatTitle">Что дает сервис</h4>
               <ul>
-                <li id="authWhatItem1">Собирает продажи, штрафы, рекламу и KPI по WB/Ozon.</li>
-                <li id="authWhatItem2">Управляет каталогом: импорт, обновление, SEO и позициями.</li>
-                <li id="authWhatItem3">Ускоряет работу с отзывами/вопросами через AI и базу знаний.</li>
+                <li id="authWhatItem1">Одна лента для выручки, рекламных расходов, возвратов и штрафов.</li>
+                <li id="authWhatItem2">Массовые обновления карточек и SEO-рутины без ручного хаоса.</li>
+                <li id="authWhatItem3">AI-обработка отзывов и вопросов с предсказуемым качеством.</li>
               </ul>
             </article>
             <article>
-              <h4 id="authStartTitle">Как начать</h4>
+              <h4 id="authStartTitle">Как быстро стартовать</h4>
               <ol>
-                <li id="authStartItem1">Войдите в кабинет (или зарегистрируйтесь).</li>
-                <li id="authStartItem2">Подключите API-ключи WB и Ozon в профиле.</li>
-                <li id="authStartItem3">Выберите модуль и запустите первый рабочий сценарий.</li>
+                <li id="authStartItem1">Войдите как владелец или создайте новый кабинет.</li>
+                <li id="authStartItem2">Подключите API-ключи WB/Ozon в профиле.</li>
+                <li id="authStartItem3">Откройте модуль и запустите первый рабочий сценарий.</li>
               </ol>
             </article>
           </div>
-          <div id="authPitchNote" class="pitch-note">Для команд от 1 до 100+ сотрудников, с разделением доступа и аудитом действий.</div>
+          <div id="authPitchNote" class="pitch-note">Подходит как для соло-продавцов, так и для многоуровневых команд со строгими границами доступа.</div>
           <div class="auth-proof">
             <div><b>WB + Ozon</b><span>единый контур данных</span></div>
             <div><b>AI+RAG</b><span>ответы и помощь в интерфейсе</span></div>
@@ -95,7 +95,7 @@
         </div>
       </div>
 
-      <section class="landing-grid">
+      <section id="landingModules" class="landing-grid">
         <article class="landing-card">
           <h3 id="landingCard1Title">Продажи и KPI</h3>
           <p id="landingCard1Text">Единая статистика по периодам: выручка, заказы, штрафы, расходы на рекламу и валовая прибыль.</p>
@@ -1329,7 +1329,7 @@
   <div id="hoverTip" class="hover-tip hidden"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script src="/static/app.js?v=20260305c"></script>
-  <script src="/static/social.js?v=20260305c"></script>
+  <script src="/static/app.js?v=20260305e"></script>
+  <script src="/static/social.js?v=20260305e"></script>
 </body>
 </html>
