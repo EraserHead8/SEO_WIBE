@@ -31,6 +31,7 @@ let socialState = {
   currencyRatesStamp: 0,
   currencyRatesTimer: null,
   currencyRatesLoading: false,
+  sendingMessage: false,
 };
 
 function socialMaybeStartHooks() {
@@ -160,6 +161,7 @@ function resetSocialState() {
     currencyRatesStamp: 0,
     currencyRatesTimer: null,
     currencyRatesLoading: false,
+    sendingMessage: false,
   };
   socialSetBell(0);
 }
@@ -1321,22 +1323,48 @@ function socialLoadOlderMessages() {
 
 async function socialSendMessage() {
   const threadId = Number(socialState.currentThreadId || 0);
-  if (!threadId) return;
+  if (!threadId || socialState.sendingMessage) return;
   const input = document.getElementById("socialChatInput");
   if (!input) return;
   const text = String(input.value || "").trim();
   if (!text) return;
-  const data = await socialRequest(`/api/social/chat/messages/${threadId}`, {
+  socialState.sendingMessage = true;
+  const sendMessageOnce = () => socialRequest(`/api/social/chat/messages/${threadId}`, {
     method: "POST",
     body: JSON.stringify({ text }),
-  }).catch((e) => {
-    alert(e.message);
-    return null;
+    retryOnPost: true,
+    maxRetries: 1,
   });
-  if (!data) return;
-  input.value = "";
-  await socialLoadMessages(threadId, { silent: true });
-  await socialLoadThreads({ silent: true });
+  const isMineByText = () => {
+    const needle = String(text || "").trim();
+    if (!needle) return false;
+    return (socialState.chatMessages || []).some((row) => {
+      if (!row || !row.is_mine) return false;
+      return String(row.text || "").trim() === needle;
+    });
+  };
+  try {
+    let data = await sendMessageOnce().catch((e) => e);
+    if (data instanceof Error) {
+      if (typeof isNetworkError === "function" && isNetworkError(data)) {
+        await delay(220);
+        await socialLoadMessages(threadId, { silent: true });
+        if (isMineByText()) {
+          input.value = "";
+          await socialLoadThreads({ silent: true });
+          return;
+        }
+      }
+      alert(data.message || tr("Ошибка отправки сообщения", "Failed to send message"));
+      return;
+    }
+    if (!data) return;
+    input.value = "";
+    await socialLoadMessages(threadId, { silent: true });
+    await socialLoadThreads({ silent: true });
+  } finally {
+    socialState.sendingMessage = false;
+  }
 }
 
 async function socialOpenDirectPicker() {
@@ -2158,16 +2186,14 @@ async function socialUploadNoteFiles(fileList) {
       body.append("file", file);
       const headers = {};
       if (token) headers.Authorization = `Bearer ${token}`;
-      const resp = await fetch(`/api/social/notes/${noteId}/files`, {
+      await requestJson(`/api/social/notes/${noteId}/files`, {
         method: "POST",
-        credentials: "same-origin",
         headers,
         body,
+        timeoutMs: 90000,
+        retryOnPost: true,
+        maxRetries: 1,
       });
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) {
-        throw new Error(data?.detail || data?.message || tr("Ошибка загрузки файла", "File upload error"));
-      }
     }
     await socialLoadNotes();
     socialState.currentNoteId = noteId;

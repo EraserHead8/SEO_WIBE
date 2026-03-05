@@ -5498,6 +5498,26 @@ SOCIAL_GAMES: dict[str, str] = {
     "2048": "2048",
 }
 
+_SOCIAL_MSG_REQUEST_CACHE: dict[str, tuple[int, float]] = {}
+_SOCIAL_MSG_REQUEST_CACHE_TTL_SEC = 15 * 60
+
+
+def _social_msg_cache_get(cache_key: str) -> int:
+    now_ts = time.time()
+    stale = [
+        key
+        for key, (_, ts) in _SOCIAL_MSG_REQUEST_CACHE.items()
+        if (now_ts - float(ts or 0.0)) > _SOCIAL_MSG_REQUEST_CACHE_TTL_SEC
+    ]
+    for key in stale:
+        _SOCIAL_MSG_REQUEST_CACHE.pop(key, None)
+    data = _SOCIAL_MSG_REQUEST_CACHE.get(cache_key)
+    return int(data[0] or 0) if data else 0
+
+
+def _social_msg_cache_set(cache_key: str, message_id: int) -> None:
+    _SOCIAL_MSG_REQUEST_CACHE[cache_key] = (int(message_id or 0), time.time())
+
 
 def _social_actor_key(user: User) -> str:
     member_id = _actor_member_id(user)
@@ -6349,6 +6369,24 @@ def social_chat_send_message(
     text_msg = str(payload.text or "").strip()
     if not text_msg:
         raise HTTPException(status_code=400, detail="Сообщение пустое")
+    request_id = str(request.headers.get("x-request-id") or "").strip()[:120]
+    cache_key = ""
+    if request_id:
+        cache_key = f"{int(user.id)}:{int(thread_id)}:{request_id}"
+        cached_id = _social_msg_cache_get(cache_key)
+        if cached_id > 0:
+            cached_msg = db.get(SocialChatMessage, int(cached_id))
+            if cached_msg and int(cached_msg.sender_user_id or 0) == int(user.id):
+                return SocialChatMessageOut(
+                    id=int(cached_msg.id),
+                    thread_id=int(cached_msg.thread_id),
+                    sender_key=actor_key,
+                    sender_nick=actor_nick,
+                    sender_avatar=_social_current_avatar_by_key(db, actor_key) or None,
+                    text=str(cached_msg.text or ""),
+                    created_at=cached_msg.created_at.isoformat() if cached_msg.created_at else "",
+                    is_mine=True,
+                )
     message = SocialChatMessage(
         thread_id=thread_id,
         sender_user_id=user.id,
@@ -6405,6 +6443,8 @@ def social_chat_send_message(
         request=request,
     )
     db.commit()
+    if cache_key:
+        _social_msg_cache_set(cache_key, int(message.id))
     return SocialChatMessageOut(
         id=int(message.id),
         thread_id=int(message.thread_id),

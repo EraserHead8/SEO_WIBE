@@ -1041,44 +1041,130 @@ function changeUiLang() {
 window.changeUiLang = changeUiLang;
 
 async function requestJson(url, opts = {}) {
-  const timeoutMs = Number(opts.timeoutMs || 0);
-  const fetchOpts = { credentials: "same-origin", ...opts };
-  if (fetchOpts.cache === undefined && String(url || "").startsWith("/api/")) {
-    fetchOpts.cache = "no-store";
+  const timeoutMs = Math.max(0, Number(opts.timeoutMs || 0));
+  const fetchOptsBase = { credentials: "same-origin", ...opts };
+  if (fetchOptsBase.cache === undefined && String(url || "").startsWith("/api/")) {
+    fetchOptsBase.cache = "no-store";
   }
-  delete fetchOpts.timeoutMs;
+  delete fetchOptsBase.timeoutMs;
+  delete fetchOptsBase.maxRetries;
+  delete fetchOptsBase.retryOnPost;
+  delete fetchOptsBase.retryStatuses;
+  delete fetchOptsBase.retryBaseDelayMs;
 
-  let controller = null;
-  let timer = null;
-  if (timeoutMs > 0) {
-    controller = new AbortController();
-    fetchOpts.signal = controller.signal;
-    timer = setTimeout(() => controller.abort(), timeoutMs);
-  }
+  const method = String(fetchOptsBase.method || "GET").trim().toUpperCase() || "GET";
+  const isIdempotentMethod = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "DELETE"].includes(method);
+  const allowRetry = isIdempotentMethod || Boolean(opts.retryOnPost);
+  const defaultRetries = allowRetry ? (method === "GET" || method === "HEAD" || method === "OPTIONS" ? 2 : 1) : 0;
+  const maxRetries = Math.max(0, Number.isFinite(Number(opts.maxRetries)) ? Number(opts.maxRetries) : defaultRetries);
+  const retryStatuses = new Set(
+    Array.isArray(opts.retryStatuses) && opts.retryStatuses.length
+      ? opts.retryStatuses.map((x) => Number(x)).filter((x) => Number.isFinite(x))
+      : [408, 425, 429, 500, 502, 503, 504]
+  );
+  const retryBaseDelayMs = Math.max(120, Number(opts.retryBaseDelayMs || 320));
 
-  let r;
-  try {
-    r = await fetch(url, fetchOpts);
-  } catch (e) {
-    if (e?.name === "AbortError") {
-      throw new Error(currentLang === "en" ? "Request timed out. Please retry." : "Превышено время ожидания. Повторите запрос.");
+  const copyHeaders = (raw) => {
+    if (!raw) return {};
+    if (raw instanceof Headers) {
+      const out = {};
+      raw.forEach((v, k) => { out[k] = v; });
+      return out;
     }
+    if (Array.isArray(raw)) {
+      const out = {};
+      for (const pair of raw) {
+        if (!Array.isArray(pair) || pair.length < 2) continue;
+        out[String(pair[0])] = String(pair[1]);
+      }
+      return out;
+    }
+    if (typeof raw === "object") return { ...raw };
+    return {};
+  };
+
+  const makeRequestId = () => {
+    try {
+      if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+    } catch (_) {}
+    return `req-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+  };
+
+  const headersTemplate = copyHeaders(fetchOptsBase.headers);
+  const requestId = method !== "GET" && method !== "HEAD" && method !== "OPTIONS" ? makeRequestId() : "";
+  if (requestId && !headersTemplate["X-Request-ID"] && !headersTemplate["x-request-id"]) {
+    headersTemplate["X-Request-ID"] = requestId;
+  }
+
+  let lastError = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    const fetchOpts = {
+      ...fetchOptsBase,
+      method,
+      headers: copyHeaders(headersTemplate),
+    };
+
+    let timer = null;
+    if (timeoutMs > 0) {
+      const controller = new AbortController();
+      fetchOpts.signal = controller.signal;
+      timer = setTimeout(() => controller.abort(), timeoutMs);
+    }
+
+    try {
+      const response = await fetch(url, fetchOpts);
+      const refreshed = response.headers.get("x-auth-refresh");
+      if (refreshed) {
+        setToken(refreshed, tokenStorage === "local");
+      }
+
+      const data = await response.json().catch(() => ({}));
+      if (response.ok) return data;
+
+      const err = new Error(data.detail || data.message || (currentLang === "en" ? "Request error" : "Ошибка запроса"));
+      err.status = response.status;
+      err.payload = data;
+      lastError = err;
+
+      if (attempt < maxRetries && allowRetry && retryStatuses.has(Number(response.status || 0))) {
+        const backoff = Math.round(retryBaseDelayMs * (2 ** attempt) + Math.random() * 180);
+        await delay(backoff);
+        continue;
+      }
+      throw err;
+    } catch (e) {
+      const isAbort = e?.name === "AbortError";
+      const msg = String(e?.message || "").toLowerCase();
+      const isFetchNetwork = isAbort
+        || msg.includes("failed to fetch")
+        || msg.includes("networkerror")
+        || msg.includes("load failed")
+        || msg.includes("network");
+      if (attempt < maxRetries && allowRetry && isFetchNetwork) {
+        lastError = e;
+        const backoff = Math.round(retryBaseDelayMs * (2 ** attempt) + Math.random() * 180);
+        await delay(backoff);
+        continue;
+      }
+      if (isAbort) {
+        throw new Error(currentLang === "en" ? "Request timed out. Please retry." : "Превышено время ожидания. Повторите запрос.");
+      }
+      if (isFetchNetwork) {
+        throw new Error(currentLang === "en" ? "Network error. Check connection and retry." : "Сетевая ошибка. Проверьте соединение и повторите.");
+      }
+      throw e;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  if (lastError?.name === "AbortError") {
+    throw new Error(currentLang === "en" ? "Request timed out. Please retry." : "Превышено время ожидания. Повторите запрос.");
+  }
+  if (isNetworkError(lastError)) {
     throw new Error(currentLang === "en" ? "Network error. Check connection and retry." : "Сетевая ошибка. Проверьте соединение и повторите.");
-  } finally {
-    if (timer) clearTimeout(timer);
   }
-  const refreshed = r.headers.get("x-auth-refresh");
-  if (refreshed) {
-    setToken(refreshed, tokenStorage === "local");
-  }
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) {
-    const err = new Error(data.detail || data.message || (currentLang === "en" ? "Request error" : "Ошибка запроса"));
-    err.status = r.status;
-    err.payload = data;
-    throw err;
-  }
-  return data;
+  throw lastError || new Error(currentLang === "en" ? "Request error" : "Ошибка запроса");
 }
 
 function isNetworkError(err) {
@@ -2428,15 +2514,16 @@ async function uploadAvatarFile(inputId, endpoint) {
   }
   const form = new FormData();
   form.append("file", file);
-  const response = await fetch(endpoint, {
+  const headers = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const data = await requestJson(endpoint, {
     method: "POST",
-    headers: { "Authorization": `Bearer ${token}` },
+    headers,
     body: form,
+    timeoutMs: 60000,
+    retryOnPost: true,
+    maxRetries: 1,
   });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.detail || data.message || tr("Ошибка загрузки файла.", "Upload failed."));
-  }
   return data;
 }
 
