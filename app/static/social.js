@@ -224,9 +224,21 @@ async function loadSocialWorkspace() {
   socialState.boot = boot;
   socialState.moduleLoaded = true;
   socialState.actors = Array.isArray(boot.company_actors) ? boot.company_actors : [];
+  socialBindChatInputEnter();
   socialRenderGames();
   switchSocialSubtab(currentSocialSubtab || socialState.currentSubtab || "games", true);
   socialStartGlobalHooks();
+}
+
+function socialBindChatInputEnter() {
+  const input = document.getElementById("socialChatInput");
+  if (!input || input.dataset.enterBind === "1") return;
+  input.dataset.enterBind = "1";
+  input.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey || e.isComposing) return;
+    e.preventDefault();
+    socialSendMessage();
+  });
 }
 
 function socialOpenModal(title, html) {

@@ -875,9 +875,20 @@ def me(request: Request, user: User = Depends(get_current_user), db: Session = D
     if actor_key.startswith("m:") and actor_member_id:
         member = db.get(TeamMember, int(actor_member_id))
         avatar_url = str(member.avatar_url or "") if member else ""
+        if not avatar_url:
+            profile = db.scalar(select(UserProfile).where(UserProfile.user_id == user.id))
+            avatar_url = str(profile.avatar_url or "") if profile else ""
     else:
         profile = db.scalar(select(UserProfile).where(UserProfile.user_id == user.id))
         avatar_url = str(profile.avatar_url or "") if profile else ""
+        if not avatar_url:
+            owner_member = db.scalar(
+                select(TeamMember).where(
+                    TeamMember.user_id == user.id,
+                    TeamMember.is_owner.is_(True),
+                ).order_by(TeamMember.id.asc())
+            )
+            avatar_url = str(owner_member.avatar_url or "") if owner_member else ""
     _audit(
         db,
         user,
@@ -7931,6 +7942,13 @@ def _build_admin_user_profile_payload(db: Session, target: User) -> AdminUserPro
 def _build_user_profile_payload(db: Session, user: User, profile: UserProfile, account: BillingAccount) -> UserProfileOut:
     _ensure_owner_team_member(db, user)
     creds = db.scalars(select(ApiCredential).where(ApiCredential.user_id == user.id).order_by(ApiCredential.id.desc())).all()
+    owner_member_avatar = db.scalar(
+        select(TeamMember.avatar_url).where(
+            TeamMember.user_id == user.id,
+            TeamMember.is_owner.is_(True),
+        ).order_by(TeamMember.id.asc())
+    ) or ""
+    effective_avatar_url = str(profile.avatar_url or "").strip() or str(owner_member_avatar or "").strip()
     plans = [
         {
             "code": code,
@@ -7953,7 +7971,7 @@ def _build_user_profile_payload(db: Session, user: User, profile: UserProfile, a
         position_title=profile.position_title,
         team_size=int(profile.team_size or 1),
         company_structure=profile.company_structure,
-        avatar_url=profile.avatar_url,
+        avatar_url=effective_avatar_url,
         plan_code=account.plan_code,
         plan_status=account.status,
         monthly_price=int(account.monthly_price or 0),

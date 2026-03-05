@@ -5735,6 +5735,22 @@ table th,
   border-top-color: color-mix(in oklab, var(--ds-accent) 38%, var(--ds-border));
 }
 
+.profile-sections-intro {
+  margin: 2px 0 10px;
+  display: grid;
+  gap: 2px;
+}
+
+.profile-sections-intro b {
+  font-size: 14px;
+  color: var(--ds-text);
+}
+
+.profile-sections-intro small {
+  color: var(--ds-muted);
+  font-size: 12px;
+}
+
 .profile-sections-list {
   display: grid;
   gap: 8px;
@@ -7237,7 +7253,7 @@ body[data-theme="light"] .social-calc-eq {
   }
   #appSection.app-shell {
     margin: 0 auto;
-    padding-top: 6px;
+    padding-top: 0;
   }
   .profile-avatar-grid {
     grid-template-columns: 1fr;

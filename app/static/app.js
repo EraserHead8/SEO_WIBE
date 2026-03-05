@@ -283,7 +283,7 @@ const NAV_BUTTON_ICONS = {
   sales: "/static/icons/nav-sales.svg",
   reviews: "/static/icons/nav-reviews.svg",
   ads: "/static/icons/nav-ads.svg",
-  social: "/static/icons/nav-help.svg",
+  social: "/static/icons/nav-social.svg",
   profile: "/static/icons/nav-profile.svg",
   help: "/static/icons/nav-help.svg",
 };
@@ -555,6 +555,7 @@ function applyModuleActionIcons() {
       || btn.classList.contains("icon-only-btn")
       || btn.classList.contains("icon-action-btn")
       || btn.classList.contains("chip-btn")
+      || btn.classList.contains("profile-section-row")
       || btn.classList.contains("help-chip-btn")
       || btn.classList.contains("help-filter-btn")
       || btn.classList.contains("help-open-btn")
@@ -728,6 +729,8 @@ function applyUiLanguage() {
   setText("#profileMenuAiMeta", isEn ? "AI source and custom providers" : "Источник AI и пользовательские сервисы");
   setText("#profileMenuTeamTitle", isEn ? "Employees" : "Сотрудники");
   setText("#profileMenuTeamMeta", isEn ? "Roles and module access" : "Доступы и роли команды");
+  setText("#profileSectionsIntroTitle", isEn ? "User profile settings" : "Настройки профиля пользователя");
+  setText("#profileSectionsIntroLabel", isEn ? "Current user:" : "Текущий пользователь:");
   setText("#profileMainPanel .grid-3 button:nth-of-type(1)", isEn ? "Save Profile" : "Сохранить профиль");
   setText("#profileMainPanel .grid-3 button:nth-of-type(2)", isEn ? "Refresh Profile" : "Обновить профиль");
   setText("#profilePlanPanel h3", isEn ? "Plan" : "Тариф");
@@ -2116,6 +2119,17 @@ function scheduleEnsureAuth(delayMs = 1000, allowFallback = true) {
   }, Math.max(120, Number(delayMs) || 0));
 }
 
+function resetViewportAfterAuth() {
+  try {
+    if ("scrollRestoration" in history) {
+      history.scrollRestoration = "manual";
+    }
+  } catch (_) {}
+  try { window.scrollTo(0, 0); } catch (_) {}
+  try { document.documentElement.scrollTop = 0; } catch (_) {}
+  try { document.body.scrollTop = 0; } catch (_) {}
+}
+
 async function ensureAuth(allowFallback = true) {
   if (ensureAuthPromise) return ensureAuthPromise;
   ensureAuthPromise = (async () => {
@@ -2200,8 +2214,10 @@ async function ensureAuth(allowFallback = true) {
 
     const authSection = document.getElementById("authSection");
     const appSection = document.getElementById("appSection");
+    const appWasHidden = Boolean(appSection?.classList.contains("hidden"));
     if (authSection) authSection.classList.add("hidden");
     if (appSection) appSection.classList.remove("hidden");
+    if (appWasHidden) resetViewportAfterAuth();
     me = user;
     authRetryCount = 0;
     lastAuthSuccessAt = Date.now();
@@ -2275,6 +2291,40 @@ function computeAvatarInitials(name, email) {
   return base.slice(0, 2).toUpperCase();
 }
 
+function setTopbarAvatarImage(imgNode, urlRaw, { wrapper = null, fallbackTextNode = null } = {}) {
+  if (!imgNode) return;
+  const safeUrl = String(urlRaw || "").trim();
+  const showFallback = () => {
+    imgNode.classList.add("hidden");
+    imgNode.removeAttribute("src");
+    if (wrapper) wrapper.classList.remove("has-avatar");
+    if (fallbackTextNode) fallbackTextNode.classList.remove("hidden");
+  };
+  if (!safeUrl) {
+    showFallback();
+    return;
+  }
+  if (wrapper) wrapper.classList.add("has-avatar");
+  if (fallbackTextNode) fallbackTextNode.classList.add("hidden");
+  imgNode.classList.remove("hidden");
+  imgNode.onerror = () => {
+    showFallback();
+    imgNode.onerror = null;
+  };
+  imgNode.onload = () => {
+    if (wrapper) wrapper.classList.add("has-avatar");
+    if (fallbackTextNode) fallbackTextNode.classList.add("hidden");
+    imgNode.classList.remove("hidden");
+  };
+  imgNode.src = safeUrl;
+}
+
+function renderProfileMenuIntro() {
+  const nickNode = document.getElementById("profileSectionsIntroNick");
+  if (!nickNode) return;
+  nickNode.textContent = String(me?.actor_nick || me?.email || "-");
+}
+
 function renderTopbarUser() {
   const btn = document.getElementById("topbarAvatarBtn");
   const popover = document.getElementById("topbarUserPopover");
@@ -2282,6 +2332,7 @@ function renderTopbarUser() {
   if (!me) {
     btn.classList.add("hidden");
     popover.classList.add("hidden");
+    renderProfileMenuIntro();
     return;
   }
   const name = String(me.actor_nick || me.email || "-");
@@ -2299,31 +2350,16 @@ function renderTopbarUser() {
   const popName = document.getElementById("topbarPopoverName");
   const popRole = document.getElementById("topbarPopoverRole");
   const popEmail = document.getElementById("topbarPopoverEmail");
+  const avatarUrl = String(me.avatar_url || "").trim();
   if (avatarText) avatarText.textContent = initials;
   if (avatarName) avatarName.textContent = name;
   if (popAvatarText) popAvatarText.textContent = initials;
-  if (popAvatar) popAvatar.classList.toggle("has-avatar", Boolean(me.avatar_url));
-  if (avatarImg) {
-    if (me.avatar_url) {
-      avatarImg.src = me.avatar_url;
-      avatarImg.classList.remove("hidden");
-    } else {
-      avatarImg.classList.add("hidden");
-      avatarImg.removeAttribute("src");
-    }
-  }
-  if (popAvatarImg) {
-    if (me.avatar_url) {
-      popAvatarImg.src = me.avatar_url;
-      popAvatarImg.classList.remove("hidden");
-    } else {
-      popAvatarImg.classList.add("hidden");
-      popAvatarImg.removeAttribute("src");
-    }
-  }
+  setTopbarAvatarImage(avatarImg, avatarUrl, { fallbackTextNode: avatarText });
+  setTopbarAvatarImage(popAvatarImg, avatarUrl, { wrapper: popAvatar, fallbackTextNode: popAvatarText });
   if (popName) popName.textContent = name;
   if (popRole) popRole.textContent = roleText;
   if (popEmail) popEmail.textContent = String(me.email || "-");
+  renderProfileMenuIntro();
   btn.classList.remove("hidden");
 }
 
@@ -7366,6 +7402,8 @@ function renderProfileData(data) {
   const actorAvatar = (!me?.actor_is_owner && actorRow)
     ? String(actorRow.avatar_url || "").trim()
     : String(data.avatar_url || "").trim();
+  const introNickNode = document.getElementById("profileSectionsIntroNick");
+  if (introNickNode) introNickNode.textContent = actorName || String(me?.actor_nick || me?.email || "-");
 
   setInputValue("profileFullName", data.full_name || "");
   setInputValue("profilePositionTitle", data.position_title || "");
