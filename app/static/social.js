@@ -120,9 +120,9 @@ function socialShowToast(title, body) {
 
 function socialNotificationKindGroup(kind) {
   const code = String(kind || "").trim().toLowerCase();
-  if (code === "chat_message" || code === "chat_reaction") return "chat";
-  if (code === "task_reminder") return "task";
-  if (code === "calendar_reminder") return "calendar";
+  if (code.startsWith("chat_")) return "chat";
+  if (code.startsWith("task_")) return "task";
+  if (code.startsWith("calendar_")) return "calendar";
   return "default";
 }
 
