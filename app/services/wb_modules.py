@@ -265,17 +265,27 @@ def post_wb_review_reply(api_key: str, feedback_id: str, text: str) -> tuple[boo
     # WB endpoints могут принимать и plain token, и Bearer token.
     for auth_value in (api_key.strip(), f"Bearer {api_key.strip()}"):
         headers = {"Authorization": auth_value, "Content-Type": "application/json"}
-        try:
-            with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
-                response = client.post(endpoint, headers=headers, json=payload)
-        except Exception:
-            continue
-        if response.status_code in {200, 204}:
-            return True, "Ответ отправлен"
-        if response.status_code in {401, 403}:
-            continue
-        body = _safe_response_text(response)
-        return False, f"WB API вернул {response.status_code}: {body}"
+        for attempt in range(3):
+            response = None
+            try:
+                with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
+                    response = client.post(endpoint, headers=headers, json=payload)
+            except Exception:
+                response = None
+            if response is None:
+                if attempt < 2:
+                    time.sleep(0.35 * (attempt + 1))
+                    continue
+                break
+            if response.status_code in {200, 204}:
+                return True, "Ответ отправлен"
+            if response.status_code in {401, 403}:
+                break
+            if response.status_code in {408, 425, 429, 500, 502, 503, 504} and attempt < 2:
+                time.sleep(0.45 * (attempt + 1))
+                continue
+            body = _safe_response_text(response)
+            return False, f"WB API вернул {response.status_code}: {body}"
     return False, "Не удалось авторизоваться в WB API"
 
 
@@ -298,18 +308,29 @@ def post_wb_question_reply(api_key: str, question_id: str, text: str) -> tuple[b
         for payload in payloads:
             for auth_value in (api_key.strip(), f"Bearer {api_key.strip()}"):
                 headers = {"Authorization": auth_value, "Content-Type": "application/json"}
-                try:
-                    with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
-                        response = client.post(endpoint, headers=headers, json=payload)
-                except Exception:
-                    continue
-                if response.status_code in {200, 204}:
-                    return True, "Ответ отправлен"
-                if response.status_code in {401, 403}:
-                    continue
-                body = _safe_response_text(response)
-                if body:
-                    last_error = f"WB API вернул {response.status_code}: {body}"
+                for attempt in range(3):
+                    response = None
+                    try:
+                        with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
+                            response = client.post(endpoint, headers=headers, json=payload)
+                    except Exception:
+                        response = None
+                    if response is None:
+                        if attempt < 2:
+                            time.sleep(0.35 * (attempt + 1))
+                            continue
+                        break
+                    if response.status_code in {200, 204}:
+                        return True, "Ответ отправлен"
+                    if response.status_code in {401, 403}:
+                        break
+                    if response.status_code in {408, 425, 429, 500, 502, 503, 504} and attempt < 2:
+                        time.sleep(0.45 * (attempt + 1))
+                        continue
+                    body = _safe_response_text(response)
+                    if body:
+                        last_error = f"WB API вернул {response.status_code}: {body}"
+                    break
     return False, last_error
 
 
@@ -349,14 +370,22 @@ def post_ozon_review_reply(api_key: str, review_id: str, text: str) -> tuple[boo
     last_error = "Не удалось отправить ответ в Ozon API"
     for endpoint in endpoints:
         for payload in payloads:
-            response = _request_ozon_response("POST", endpoint, api_key=api_key, payload=payload)
-            if response is None:
-                continue
-            if response.status_code < 400:
-                return True, "Ответ отправлен"
-            body = _safe_response_text(response)
-            if body:
-                last_error = f"Ozon API вернул {response.status_code}: {body}"
+            for attempt in range(3):
+                response = _request_ozon_response("POST", endpoint, api_key=api_key, payload=payload)
+                if response is None:
+                    if attempt < 2:
+                        time.sleep(0.35 * (attempt + 1))
+                        continue
+                    break
+                if response.status_code < 400:
+                    return True, "Ответ отправлен"
+                if response.status_code in {408, 425, 429, 500, 502, 503, 504} and attempt < 2:
+                    time.sleep(0.45 * (attempt + 1))
+                    continue
+                body = _safe_response_text(response)
+                if body:
+                    last_error = f"Ozon API вернул {response.status_code}: {body}"
+                break
     return False, last_error
 
 
@@ -408,14 +437,22 @@ def post_ozon_question_reply(
     last_error = "Не удалось отправить ответ в Ozon API"
     for endpoint in endpoints:
         for payload in payloads:
-            response = _request_ozon_response("POST", endpoint, api_key=api_key, payload=payload)
-            if response is None:
-                continue
-            if response.status_code < 400:
-                return True, "Ответ отправлен"
-            body = _safe_response_text(response)
-            if body:
-                last_error = f"Ozon API вернул {response.status_code}: {body}"
+            for attempt in range(3):
+                response = _request_ozon_response("POST", endpoint, api_key=api_key, payload=payload)
+                if response is None:
+                    if attempt < 2:
+                        time.sleep(0.35 * (attempt + 1))
+                        continue
+                    break
+                if response.status_code < 400:
+                    return True, "Ответ отправлен"
+                if response.status_code in {408, 425, 429, 500, 502, 503, 504} and attempt < 2:
+                    time.sleep(0.45 * (attempt + 1))
+                    continue
+                body = _safe_response_text(response)
+                if body:
+                    last_error = f"Ozon API вернул {response.status_code}: {body}"
+                break
     return False, last_error
 
 

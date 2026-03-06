@@ -41,7 +41,12 @@ let socialState = {
   chatContextX: 0,
   chatContextY: 0,
   keepEmojiOpenUntil: 0,
+  pollClientId: `poll-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`,
 };
+
+const SOCIAL_POLL_LEADER_KEY = "seo_wibe_social_poll_leader_v1";
+const SOCIAL_POLL_SHARED_STATE_KEY = "seo_wibe_social_poll_shared_v1";
+const SOCIAL_POLL_LEASE_MS = 22000;
 
 function socialMaybeStartHooks() {
   if (!token && !me) return;
@@ -278,10 +283,87 @@ function socialSetBell(unread) {
   badge.textContent = value > 99 ? "99+" : String(value);
 }
 
+function socialNowMs() {
+  return Date.now();
+}
+
+function socialReadPollLeader() {
+  try {
+    const raw = localStorage.getItem(SOCIAL_POLL_LEADER_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    const holder = String(parsed.holder || "").trim();
+    const expiresAt = Number(parsed.expires_at || 0);
+    if (!holder || !Number.isFinite(expiresAt) || expiresAt <= 0) return null;
+    return { holder, expiresAt };
+  } catch (_) {
+    return null;
+  }
+}
+
+function socialWritePollLeader(holder, expiresAt) {
+  try {
+    localStorage.setItem(
+      SOCIAL_POLL_LEADER_KEY,
+      JSON.stringify({ holder: String(holder || ""), expires_at: Number(expiresAt || 0) })
+    );
+  } catch (_) {}
+}
+
+function socialTryAcquirePollLeader() {
+  const now = socialNowMs();
+  const mine = String(socialState.pollClientId || "").trim();
+  if (!mine) return false;
+  const current = socialReadPollLeader();
+  if (!current || current.expiresAt <= now || current.holder === mine) {
+    socialWritePollLeader(mine, now + SOCIAL_POLL_LEASE_MS);
+    return true;
+  }
+  return false;
+}
+
+function socialReadSharedPollState() {
+  try {
+    const raw = localStorage.getItem(SOCIAL_POLL_SHARED_STATE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed;
+  } catch (_) {
+    return null;
+  }
+}
+
+function socialWriteSharedPollState(payload) {
+  try {
+    localStorage.setItem(SOCIAL_POLL_SHARED_STATE_KEY, JSON.stringify(payload || {}));
+  } catch (_) {}
+}
+
+function socialApplySharedPollState() {
+  const shared = socialReadSharedPollState();
+  if (!shared) return;
+  const unread = Number(shared.unread || 0);
+  const lastId = Number(shared.last_notification_id || 0);
+  if (Number.isFinite(unread) && unread >= 0) {
+    socialState.unreadCount = unread;
+    socialSetBell(unread);
+  }
+  if (Number.isFinite(lastId) && lastId > socialState.lastNotificationId) {
+    socialState.lastNotificationId = lastId;
+  }
+}
+
 async function socialPollNotifications() {
   if (!token && !me) return;
   if (modulesLoaded && (!(enabledModules instanceof Set) || !enabledModules.has("social_hub"))) {
     socialSetBell(0);
+    return;
+  }
+  const isLeader = socialTryAcquirePollLeader();
+  if (!isLeader) {
+    socialApplySharedPollState();
     return;
   }
   const data = await socialRequest(`/api/social/notifications?since_id=${socialState.lastNotificationId}&limit=60`).catch(() => null);
@@ -310,22 +392,47 @@ async function socialPollNotifications() {
       }
     }
   }
+  socialWriteSharedPollState({
+    unread: Number(socialState.unreadCount || 0),
+    last_notification_id: Number(socialState.lastNotificationId || 0),
+    stamp: socialNowMs(),
+  });
+}
+
+function socialNextPollDelayMs() {
+  if (document.hidden) return 22000;
+  if (currentTab === "social" && socialState.currentSubtab === "chat") return 7000;
+  return 11000;
+}
+
+function socialScheduleNotificationsPoll(immediate = false) {
+  if (socialState.notificationsTimer) {
+    clearTimeout(socialState.notificationsTimer);
+    socialState.notificationsTimer = null;
+  }
+  const delayMs = immediate ? 250 : socialNextPollDelayMs();
+  socialState.notificationsTimer = setTimeout(() => {
+    socialPollNotifications()
+      .catch(() => null)
+      .finally(() => socialScheduleNotificationsPoll(false));
+  }, Math.max(250, Number(delayMs || 0)));
 }
 
 function socialStartGlobalHooks() {
-  if (socialState.notificationsTimer) clearInterval(socialState.notificationsTimer);
+  if (socialState.notificationsTimer) {
+    clearTimeout(socialState.notificationsTimer);
+    socialState.notificationsTimer = null;
+  }
   socialLoadNotificationSettings().catch(() => null);
   socialRequestDesktopPermission();
+  socialApplySharedPollState();
   socialSetBell(socialState.unreadCount || 0);
-  socialState.notificationsTimer = setInterval(() => {
-    socialPollNotifications().catch(() => null);
-  }, 8000);
-  socialPollNotifications().catch(() => null);
+  socialScheduleNotificationsPoll(true);
 }
 
 function socialStopGlobalHooks() {
   if (socialState.notificationsTimer) {
-    clearInterval(socialState.notificationsTimer);
+    clearTimeout(socialState.notificationsTimer);
     socialState.notificationsTimer = null;
   }
   if (socialState.chatRefreshTimer) {
@@ -382,6 +489,7 @@ function resetSocialState() {
     chatContextX: 0,
     chatContextY: 0,
     keepEmojiOpenUntil: 0,
+    pollClientId: `poll-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`,
   };
   socialSetBell(0);
 }
@@ -413,11 +521,12 @@ function switchSocialSubtab(tab, loadNow = true) {
     socialLoadThreads();
     if (!socialState.chatRefreshTimer) {
       socialState.chatRefreshTimer = setInterval(() => {
+        if (document.hidden) return;
         if (currentTab === "social" && socialState.currentSubtab === "chat") {
           socialLoadThreads({ silent: true });
           if (socialState.currentThreadId) socialLoadMessages(socialState.currentThreadId, { silent: true });
         }
-      }, 5000);
+      }, 9000);
     }
   }
   if (safe === "tasks") {
@@ -1743,11 +1852,40 @@ async function socialSendMessage() {
   const replyId = Number(socialState.chatReplyTo?.id || 0) || null;
   if (!text) return;
   socialState.sendingMessage = true;
+  const localNow = new Date().toISOString();
+  const localId = -Math.max(1, Date.now());
+  const optimisticReply = replyId > 0
+    ? {
+        id: replyId,
+        sender_nick: String(socialState.chatReplyTo?.sender_nick || "-"),
+        text: String(socialState.chatReplyTo?.text || ""),
+      }
+    : null;
+  const optimisticRow = {
+    id: localId,
+    text,
+    is_mine: true,
+    sender_key: String(me?.actor_key || "me"),
+    sender_nick: String(me?.nick || me?.email || "Me"),
+    sender_avatar: String(me?.avatar_url || ""),
+    created_at: localNow,
+    updated_at: localNow,
+    attachments: [],
+    reactions: {},
+    reply_to: optimisticReply,
+  };
+  socialState.chatMessages = [...(socialState.chatMessages || []), optimisticRow];
+  socialRenderChatMessages();
+  input.value = "";
+  socialClearReply();
+
   const sendMessageOnce = () => socialRequest(`/api/social/chat/messages/${threadId}`, {
     method: "POST",
     body: JSON.stringify({ text, reply_to_message_id: replyId }),
     retryOnPost: true,
-    maxRetries: 1,
+    maxRetries: 2,
+    retryBaseDelayMs: 350,
+    timeoutMs: 45000,
   });
   const isMineByText = () => {
     const needle = String(text || "").trim();
@@ -1760,23 +1898,31 @@ async function socialSendMessage() {
   try {
     let data = await sendMessageOnce().catch((e) => e);
     if (data instanceof Error) {
+      socialState.chatMessages = (socialState.chatMessages || []).filter((row) => Number(row?.id || 0) !== localId);
+      socialRenderChatMessages();
       if (typeof isNetworkError === "function" && isNetworkError(data)) {
         await delay(220);
         await socialLoadMessages(threadId, { silent: true });
         if (isMineByText()) {
-          input.value = "";
-          await socialLoadThreads({ silent: true });
+          socialLoadThreads({ silent: true }).catch(() => null);
           return;
         }
       }
       alert(data.message || tr("Ошибка отправки сообщения", "Failed to send message"));
       return;
     }
-    if (!data) return;
-    input.value = "";
-    socialClearReply();
-    await socialLoadMessages(threadId, { silent: true });
-    await socialLoadThreads({ silent: true });
+    if (!data) {
+      socialState.chatMessages = (socialState.chatMessages || []).filter((row) => Number(row?.id || 0) !== localId);
+      socialRenderChatMessages();
+      return;
+    }
+    socialState.chatMessages = (socialState.chatMessages || []).map((row) => {
+      if (Number(row?.id || 0) !== localId) return row;
+      return data;
+    });
+    socialRenderChatMessages();
+    socialLoadMessages(threadId, { silent: true }).catch(() => null);
+    socialLoadThreads({ silent: true }).catch(() => null);
   } finally {
     socialState.sendingMessage = false;
   }
@@ -2895,6 +3041,12 @@ window.resetSocialState = resetSocialState;
 window.addEventListener("seo-wibe-auth", () => {
   socialMaybeStartHooks();
   socialPollNotifications().catch(() => null);
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) return;
+  socialApplySharedPollState();
+  socialScheduleNotificationsPoll(true);
 });
 
 socialMaybeStartHooks();

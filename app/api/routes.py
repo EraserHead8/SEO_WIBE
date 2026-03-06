@@ -242,6 +242,8 @@ PRODUCT_PAGE_SIZE_OPTIONS = (30, 50, 100, 200, 500, 1000)
 _SERVER_CPU_SNAPSHOT: tuple[int, int] | None = None
 _SERVER_NET_SNAPSHOT: tuple[int, int] | None = None
 _SERVER_NET_TS: float = 0.0
+_SOCIAL_REMINDER_THROTTLE_SEC = 60
+_SOCIAL_REMINDER_LAST_RUN: dict[str, float] = {}
 _MARKET_CACHE_TTL_SEC = {
     "sales_stats": 180,
     "wb_reviews_ai": 120,
@@ -6568,13 +6570,28 @@ def _get_notification_sound_settings(db: Session) -> NotificationSoundSettingsOu
 
 
 def _social_emit_due_reminders(db: Session, *, user_id: int, actor_key: str, actor_nick: str) -> None:
+    safe_user_id = int(user_id or 0)
+    safe_actor_key = str(actor_key or "").strip()
+    if safe_user_id <= 0 or not safe_actor_key:
+        return
+    now_ts = time.monotonic()
+    throttle_key = f"{safe_user_id}:{safe_actor_key}"
+    last_run = float(_SOCIAL_REMINDER_LAST_RUN.get(throttle_key) or 0.0)
+    if (now_ts - last_run) < float(_SOCIAL_REMINDER_THROTTLE_SEC):
+        return
+    _SOCIAL_REMINDER_LAST_RUN[throttle_key] = now_ts
+    if len(_SOCIAL_REMINDER_LAST_RUN) > 2500:
+        for key, stamp in list(_SOCIAL_REMINDER_LAST_RUN.items()):
+            if (now_ts - float(stamp or 0.0)) > (4 * _SOCIAL_REMINDER_THROTTLE_SEC):
+                _SOCIAL_REMINDER_LAST_RUN.pop(key, None)
+
     now = datetime.utcnow()
     soon = now + timedelta(minutes=15)
     # Task reminders for upcoming deadlines assigned to current actor.
     task_rows = db.scalars(
         select(SocialTask).where(
-            SocialTask.user_id == int(user_id),
-            SocialTask.assignee_key == actor_key,
+            SocialTask.user_id == safe_user_id,
+            SocialTask.assignee_key == safe_actor_key,
             SocialTask.status != "done",
             SocialTask.due_date.is_not(None),
             SocialTask.due_date <= soon,
@@ -6585,10 +6602,10 @@ def _social_emit_due_reminders(db: Session, *, user_id: int, actor_key: str, act
         due_iso = _to_utc_iso(row.due_date)[:16]
         _social_push_notification(
             db,
-            user_id=int(user_id),
-            recipient_key=actor_key,
+            user_id=safe_user_id,
+            recipient_key=safe_actor_key,
             kind="task_reminder",
-            dedupe_key=f"task_due:{int(row.id)}:{due_iso}:{actor_key}",
+            dedupe_key=f"task_due:{int(row.id)}:{due_iso}:{safe_actor_key}",
             title="Напоминание о задаче",
             body=f"{str(row.title or '')[:140]} • дедлайн {due_iso.replace('T', ' ')} UTC",
             payload={"task_id": int(row.id), "kind": "task", "assignee": actor_nick},
@@ -6596,20 +6613,20 @@ def _social_emit_due_reminders(db: Session, *, user_id: int, actor_key: str, act
     # Calendar reminders for upcoming events.
     event_rows = db.scalars(
         select(SocialCalendarEvent).where(
-            SocialCalendarEvent.user_id == int(user_id),
+            SocialCalendarEvent.user_id == safe_user_id,
             SocialCalendarEvent.start_at <= soon,
             SocialCalendarEvent.start_at >= (now - timedelta(minutes=30)),
-            or_(SocialCalendarEvent.is_public.is_(True), SocialCalendarEvent.actor_key == actor_key),
+            or_(SocialCalendarEvent.is_public.is_(True), SocialCalendarEvent.actor_key == safe_actor_key),
         )
     ).all()
     for row in event_rows:
         start_iso = _to_utc_iso(row.start_at)[:16]
         _social_push_notification(
             db,
-            user_id=int(user_id),
-            recipient_key=actor_key,
+            user_id=safe_user_id,
+            recipient_key=safe_actor_key,
             kind="calendar_reminder",
-            dedupe_key=f"calendar_due:{int(row.id)}:{start_iso}:{actor_key}",
+            dedupe_key=f"calendar_due:{int(row.id)}:{start_iso}:{safe_actor_key}",
             title="Напоминание календаря",
             body=f"{str(row.title or '')[:140]} • {start_iso.replace('T', ' ')} UTC",
             payload={"event_id": int(row.id), "kind": "calendar"},
@@ -6632,6 +6649,7 @@ def _social_push_notification(
         return
     existing = db.scalar(
         select(SocialNotification).where(
+            SocialNotification.user_id == int(user_id),
             SocialNotification.recipient_key == recipient_key,
             SocialNotification.kind == kind,
             SocialNotification.dedupe_key == key,
@@ -8421,7 +8439,10 @@ def social_notifications(
     actor_key, actor_nick, _ = _social_actor_identity(db, user)
     _social_emit_due_reminders(db, user_id=int(user.id), actor_key=actor_key, actor_nick=actor_nick)
     safe_limit = max(10, min(int(limit or 40), 200))
-    query = select(SocialNotification).where(SocialNotification.recipient_key == actor_key)
+    query = select(SocialNotification).where(
+        SocialNotification.user_id == int(user.id),
+        SocialNotification.recipient_key == actor_key,
+    )
     if int(since_id or 0) > 0:
         query = query.where(SocialNotification.id > int(since_id))
     rows = db.scalars(query.order_by(SocialNotification.id.desc()).limit(safe_limit)).all()
@@ -8429,6 +8450,7 @@ def social_notifications(
         select(func.count())
         .select_from(SocialNotification)
         .where(
+            SocialNotification.user_id == int(user.id),
             SocialNotification.recipient_key == actor_key,
             SocialNotification.is_read.is_(False),
         )
@@ -8465,10 +8487,10 @@ def social_notifications_read_all(
             """
             UPDATE social_notifications
             SET is_read = 1
-            WHERE recipient_key = :key AND is_read = 0
+            WHERE user_id = :user_id AND recipient_key = :key AND is_read = 0
             """
         ),
-        {"key": actor_key},
+        {"key": actor_key, "user_id": int(user.id)},
     )
     db.commit()
     return MessageOut(message="Ок")

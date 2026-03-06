@@ -48,6 +48,9 @@ let tokenStorage = storedSessionToken
   : (storedLocalToken || storedShadowToken ? "local" : "");
 let forceCookieAuth = false;
 let modulesLoaded = false;
+let lastModulesLoadAt = 0;
+let appUiBootstrapped = false;
+let lastUiSettingsLoadAt = 0;
 if (token && !storedSessionToken && !storedLocalToken) {
   localStorage.setItem("token", token);
   tokenStorage = "local";
@@ -1856,6 +1859,7 @@ async function loadCurrentModules() {
   }
   enabledModules = active;
   modulesLoaded = true;
+  lastModulesLoadAt = Date.now();
   applyModuleVisibility();
   return true;
 }
@@ -1874,6 +1878,7 @@ async function loadUiThemeSettings() {
     ? (localStorage.getItem("ui_theme") || currentTheme || uiThemeSettings.default_theme || "classic")
     : (uiThemeSettings.default_theme || "classic");
   applyTheme(desired);
+  lastUiSettingsLoadAt = Date.now();
 }
 
 function isModuleFresh(key, maxAgeMs = MODULE_CACHE_TTL_MS) {
@@ -1983,6 +1988,22 @@ function resolveInitialTab() {
   return first ? String(first[0]) : "products";
 }
 
+function isTabAvailable(tabCode) {
+  const code = String(tabCode || "").trim().toLowerCase();
+  if (!code) return false;
+  const has = (moduleCode) => !modulesLoaded || !(enabledModules instanceof Set) || enabledModules.has(moduleCode);
+  if (code === "sales") return has("sales_stats");
+  if (code === "products") return true;
+  if (code === "reviews") return has("wb_reviews_ai") || has("wb_questions_ai") || has("returns");
+  if (code === "ads") return has("wb_ads") || has("wb_ads_analytics") || has("wb_ads_recommendations");
+  if (code === "social") return has("social_hub");
+  if (code === "profile") return has("user_profile");
+  if (code === "help") return has("help_center") || has("ai_assistant");
+  if (code === "billing") return has("billing");
+  if (code === "admin") return Boolean(me && me.role === "admin");
+  return false;
+}
+
 function showTab(name, btn = null) {
   const mapped = normalizeLegacyTabName(name);
   if (mapped.productsSubtab) currentProductsSubtab = mapped.productsSubtab;
@@ -1990,6 +2011,14 @@ function showTab(name, btn = null) {
   if (mapped.adsSubtab) currentAdsSubtab = mapped.adsSubtab;
   const targetTab = mapped.tab;
   currentTab = targetTab;
+  try {
+    sessionStorage.setItem("seo_wibe_last_tab", String(targetTab || ""));
+    sessionStorage.setItem("seo_wibe_last_products_subtab", String(currentProductsSubtab || ""));
+    sessionStorage.setItem("seo_wibe_last_reviews_subtab", String(currentReviewsSubtab || ""));
+    sessionStorage.setItem("seo_wibe_last_ads_subtab", String(currentAdsSubtab || ""));
+    sessionStorage.setItem("seo_wibe_last_help_subtab", String(currentHelpSubtab || ""));
+    sessionStorage.setItem("seo_wibe_last_social_subtab", String(currentSocialSubtab || ""));
+  } catch (_) {}
   document.querySelectorAll(".tab").forEach((el) => el.classList.add("hidden"));
   const tab = document.getElementById(targetTab);
   if (!tab) return;
@@ -2169,6 +2198,9 @@ async function logout() {
   moduleLoadState.clear();
   moduleInflightState.clear();
   modulesLoaded = false;
+  lastModulesLoadAt = 0;
+  lastUiSettingsLoadAt = 0;
+  appUiBootstrapped = false;
   currentProductsSubtab = "catalog";
   currentReviewsSubtab = "reviews";
   currentAdsSubtab = "campaigns";
@@ -2325,14 +2357,22 @@ async function ensureAuth(allowFallback = true) {
       const adminBtn = document.querySelector(".nav-btn[data-tab='admin']");
       if (adminBtn) adminBtn.style.display = "none";
     }
+    const nowTs = Date.now();
+    const shouldRefreshModules = !modulesLoaded || (nowTs - Number(lastModulesLoadAt || 0)) > (5 * 60 * 1000);
+    const shouldRefreshUiSettings = !lastUiSettingsLoadAt || (nowTs - Number(lastUiSettingsLoadAt || 0)) > (5 * 60 * 1000);
+    const shouldRunFullBootstrap = appWasHidden || !appUiBootstrapped;
     const prevAlerts = suppressAlerts;
     suppressAlerts = true;
     try {
-      const modulesOk = await loadCurrentModules();
-      if (!modulesOk) {
-        scheduleEnsureAuth(1200, false);
+      if (shouldRefreshModules) {
+        const modulesOk = await loadCurrentModules();
+        if (!modulesOk) {
+          scheduleEnsureAuth(1200, false);
+        }
       }
-      await loadUiThemeSettings();
+      if (shouldRefreshUiSettings || shouldRunFullBootstrap) {
+        await loadUiThemeSettings();
+      }
       if (Boolean(uiThemeSettings.force_theme) || !uiThemeSettings.theme_choice_enabled) {
         currentTheme = uiThemeSettings.default_theme || "classic";
       }
@@ -2353,16 +2393,31 @@ async function ensureAuth(allowFallback = true) {
 
       startModuleAutoRefresh();
       try { window.dispatchEvent(new Event("seo-wibe-auth")); } catch (_) {}
-      const initialTab = resolveInitialTab();
-      showTab(initialTab, document.querySelector(`.nav-btn[data-tab='${initialTab}']`));
-      setTimeout(() => {
-        if (currentTab === "sales" && initialTab === "sales") {
-          runModuleLoader("sales", loadSalesBundle, { force: true, maxAgeMs: 0 });
-        }
-      }, 120);
-      setTimeout(() => {
-        preloadModulesInBackground({ force: true });
-      }, 250);
+      if (shouldRunFullBootstrap) {
+        const storedProductsSubtab = String(sessionStorage.getItem("seo_wibe_last_products_subtab") || "").trim();
+        if (storedProductsSubtab === "catalog" || storedProductsSubtab === "seo") currentProductsSubtab = storedProductsSubtab;
+        const storedReviewsSubtab = String(sessionStorage.getItem("seo_wibe_last_reviews_subtab") || "").trim();
+        if (["reviews", "questions", "returns"].includes(storedReviewsSubtab)) currentReviewsSubtab = storedReviewsSubtab;
+        const storedAdsSubtab = String(sessionStorage.getItem("seo_wibe_last_ads_subtab") || "").trim();
+        if (["campaigns", "analytics", "recommendations"].includes(storedAdsSubtab)) currentAdsSubtab = storedAdsSubtab;
+        const storedHelpSubtab = String(sessionStorage.getItem("seo_wibe_last_help_subtab") || "").trim();
+        if (["docs", "assistant"].includes(storedHelpSubtab)) currentHelpSubtab = storedHelpSubtab;
+        const storedSocialSubtab = String(sessionStorage.getItem("seo_wibe_last_social_subtab") || "").trim();
+        if (["games", "chat", "tasks", "calendar", "calculator", "notes"].includes(storedSocialSubtab)) currentSocialSubtab = storedSocialSubtab;
+        const storedRaw = String(sessionStorage.getItem("seo_wibe_last_tab") || "").trim();
+        const storedTab = normalizeLegacyTabName(storedRaw).tab;
+        const initialTab = isTabAvailable(storedTab) ? storedTab : resolveInitialTab();
+        showTab(initialTab, document.querySelector(`.nav-btn[data-tab='${initialTab}']`));
+        appUiBootstrapped = true;
+        setTimeout(() => {
+          if (currentTab === "sales" && initialTab === "sales") {
+            runModuleLoader("sales", loadSalesBundle, { force: true, maxAgeMs: 0 });
+          }
+        }, 120);
+        setTimeout(() => {
+          preloadModulesInBackground({ force: true });
+        }, 250);
+      }
     } finally {
       suppressAlerts = prevAlerts;
     }
@@ -3544,7 +3599,10 @@ async function generateReviewReply(reviewId) {
         reviewer_name: row.user || "",
         stars: Number.isFinite(Number(row.stars)) ? Number(row.stars) : null,
       }),
-      timeoutMs: 60000,
+      timeoutMs: 90000,
+      retryOnPost: true,
+      maxRetries: 2,
+      retryBaseDelayMs: 450,
     }),
     tr(`Генерация зависит от AI-конфигурации сервиса (${mpLabel}).`, `Generation depends on AI settings (${mpLabel}).`)
   ).catch((e) => {
@@ -3568,7 +3626,10 @@ async function sendReviewReply(reviewId) {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify({ id: String(reviewId || ""), text }),
-      timeoutMs: 60000,
+      timeoutMs: 90000,
+      retryOnPost: true,
+      maxRetries: 2,
+      retryBaseDelayMs: 450,
     }),
     tr("Ответ отправляется в карточку отзыва через API маркетплейса.", "Reply is sent to marketplace review card via API.")
   ).catch((e) => {
@@ -4086,7 +4147,10 @@ async function generateQuestionReply(questionId) {
         reviewer_name: row.user || "",
         stars: null,
       }),
-      timeoutMs: 60000,
+      timeoutMs: 90000,
+      retryOnPost: true,
+      maxRetries: 2,
+      retryBaseDelayMs: 450,
     }),
     tr(`Генерация зависит от AI-конфигурации сервиса (${mpLabel}).`, `Generation depends on AI settings (${mpLabel}).`)
   ).catch((e) => {
@@ -4133,7 +4197,10 @@ async function sendQuestionReply(questionId) {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify(payload),
-      timeoutMs: 60000,
+      timeoutMs: 90000,
+      retryOnPost: true,
+      maxRetries: 2,
+      retryBaseDelayMs: 450,
     }),
     tr("Ответ отправляется в карточку вопроса через API маркетплейса.", "Reply is sent to marketplace question card via API.")
   ).catch((e) => {
