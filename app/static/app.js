@@ -2967,6 +2967,11 @@ function normalizeReviewStatus(row) {
   return answered ? "answered" : "new";
 }
 
+function feedbackStatusPriority(row, resolveStatus) {
+  const status = typeof resolveStatus === "function" ? String(resolveStatus(row) || "") : "";
+  return status === "new" ? 0 : 1;
+}
+
 function closeReviewPhotoViewer() {
   const modal = document.getElementById("reviewPhotoModal");
   if (!modal) return;
@@ -3412,10 +3417,19 @@ async function renderWbReviews() {
     return true;
   });
   visibleRows.sort((a, b) => {
+    if (dateSort === "newest" && statusFilter === "all") {
+      const pa = feedbackStatusPriority(a, normalizeReviewStatus);
+      const pb = feedbackStatusPriority(b, normalizeReviewStatus);
+      if (pa !== pb) return pa - pb;
+    }
     const ta = parseReviewDate(a);
     const tb = parseReviewDate(b);
-    if (dateSort === "oldest") return ta - tb;
-    return tb - ta;
+    if (dateSort === "oldest") {
+      if (ta !== tb) return ta - tb;
+      return String(a?.id || "").localeCompare(String(b?.id || ""));
+    }
+    if (tb !== ta) return tb - ta;
+    return String(b?.id || "").localeCompare(String(a?.id || ""));
   });
 
   if (!visibleRows.length) {
@@ -3960,10 +3974,19 @@ async function renderWbQuestions() {
     return true;
   });
   visibleRows.sort((a, b) => {
+    if (dateSort === "newest" && statusFilter === "all") {
+      const pa = feedbackStatusPriority(a, normalizeQuestionStatus);
+      const pb = feedbackStatusPriority(b, normalizeQuestionStatus);
+      if (pa !== pb) return pa - pb;
+    }
     const ta = parseReviewDate(a);
     const tb = parseReviewDate(b);
-    if (dateSort === "oldest") return ta - tb;
-    return tb - ta;
+    if (dateSort === "oldest") {
+      if (ta !== tb) return ta - tb;
+      return String(a?.id || "").localeCompare(String(b?.id || ""));
+    }
+    if (tb !== ta) return tb - ta;
+    return String(b?.id || "").localeCompare(String(a?.id || ""));
   });
 
   if (!visibleRows.length) {
@@ -5945,9 +5968,10 @@ async function loadProducts() {
       <div class="product-row-actions">
         <button class="btn-secondary btn-row-action" type="button">${escapeHtml(tr("Посмотреть", "View"))}</button>
         <button class="btn-row-action" type="button">${escapeHtml(tr("Редактировать", "Edit"))}</button>
+        <button class="btn-danger btn-row-action" type="button">${escapeHtml(tr("Удалить локально", "Delete local"))}</button>
       </div>
     `;
-    const [viewBtn, editBtn] = tdActions.querySelectorAll("button");
+    const [viewBtn, editBtn, deleteBtn] = tdActions.querySelectorAll("button");
     if (viewBtn) {
       viewBtn.onclick = (e) => {
         e.stopPropagation();
@@ -5958,6 +5982,12 @@ async function loadProducts() {
       editBtn.onclick = (e) => {
         e.stopPropagation();
         openProductEditModal(p.id);
+      };
+    }
+    if (deleteBtn) {
+      deleteBtn.onclick = (e) => {
+        e.stopPropagation();
+        deleteLocalProduct(p.id);
       };
     }
 
@@ -6418,6 +6448,38 @@ async function saveProductEditModal() {
   await loadProducts();
   closeProductEditModal();
   alert(tr("Карточка товара обновлена.", "Product card updated."));
+}
+
+async function deleteLocalProduct(productId) {
+  const id = Number(productId || 0);
+  if (!id) return;
+  const row = currentProducts.find((x) => Number(x?.id || 0) === id) || null;
+  const label = String(row?.name || row?.article || `#${id}`);
+  const confirmText = tr(
+    `Удалить товар "${label}" только из локальной базы?`,
+    `Delete "${label}" from local database only?`
+  );
+  if (!confirm(confirmText)) return;
+
+  const deleted = await withBusy(
+    tr("Удаляем товар из локальной базы…", "Deleting product from local database..."),
+    () => requestJson(`/api/products/${id}/local`, {
+      method: "DELETE",
+      headers: authHeaders(),
+      timeoutMs: 90000,
+    }),
+    tr("Удаляется только локальная запись. На маркетплейсе товар не удаляется.", "Only local record is deleted. Marketplace item is untouched.")
+  ).catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  if (!deleted) return;
+
+  selectedProducts.delete(id);
+  if (Number(selectedProductId || 0) === id) selectedProductId = null;
+  invalidateModuleCache("products", "seo");
+  await loadProducts();
+  alert(tr("Товар удален из локальной базы.", "Product deleted from local database."));
 }
 
 function toggleProduct(id, checked) {

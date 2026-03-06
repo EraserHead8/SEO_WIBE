@@ -8312,3 +8312,92 @@ button,
     gap: 3px;
   }
 }
+
+/* 2026-03 compact topbar + readable sidebar labels on narrow screens */
+@media (max-width: 1200px) and (min-width: 981px) {
+  #appSection.app-shell {
+    grid-template-columns: minmax(220px, 248px) minmax(0, 1fr);
+    --sidebar-width: 240px;
+  }
+
+  #appSection #mainSidebar:not(.compact) {
+    padding: 12px 10px;
+    gap: 10px;
+  }
+
+  #appSection #mainSidebar:not(.compact) .brand p,
+  #appSection #mainSidebar:not(.compact) .nav-label {
+    display: block !important;
+  }
+
+  #appSection #mainSidebar:not(.compact) .nav-btn {
+    justify-content: flex-start !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  #appSection #mainSidebar:not(.compact) .btn-danger.full {
+    padding: 10px 10px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 980px) {
+  #appSection > .workspace > .topbar {
+    padding: 8px 10px;
+  }
+
+  #appSection .topbar-controls {
+    width: 100% !important;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    padding-bottom: 2px;
+  }
+
+  #appSection .topbar-controls .chip-select,
+  #appSection .topbar-controls .chip-btn {
+    width: auto !important;
+    flex: 0 0 auto;
+    min-height: 38px;
+    height: 38px;
+    border-radius: 10px;
+    padding: 0 10px;
+  }
+
+  #appSection .topbar-controls #uiLangSelect {
+    min-width: 62px;
+    max-width: 72px;
+  }
+
+  #appSection .topbar-controls #uiThemeSelect {
+    min-width: 100px;
+    max-width: 126px;
+  }
+
+  #appSection .topbar-controls .mobile-nav-toggle,
+  #appSection .topbar-controls .icon-bell-btn,
+  #appSection .topbar-controls .topbar-avatar-btn {
+    width: 40px;
+    min-width: 40px;
+    height: 38px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  #appSection .topbar-controls .topbar-avatar-btn {
+    border-radius: 10px;
+  }
+
+  #appSection .topbar-controls .topbar-avatar-btn .topbar-avatar-name {
+    display: none;
+  }
+
+  #appSection .topbar-controls .topbar-avatar-btn .topbar-avatar {
+    width: 30px;
+    height: 30px;
+  }
+}

@@ -3726,6 +3726,34 @@ def update_product(product_id: int, payload: ProductUpdateIn, user: User = Depen
     return product
 
 
+@router.delete("/products/{product_id}/local", response_model=MessageOut)
+def delete_product_local(product_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    product = db.scalar(
+        select(Product).where(
+            Product.id == product_id,
+            Product.user_id == user.id,
+            _owned_by_actor_or_owner_filter(Product, user),
+        )
+    )
+    if not product:
+        raise HTTPException(status_code=404, detail="Товар не найден")
+    marketplace = str(product.marketplace or "").strip().lower()
+    article = str(product.article or "").strip()
+    name = str(product.name or "").strip()
+    db.delete(product)
+    _audit(
+        db,
+        user,
+        action="product_local_deleted",
+        details=f"product_id={product_id};marketplace={marketplace};article={article};name={name[:255]};local_only=1",
+        module_code="products",
+        entity_type="product",
+        entity_id=str(product_id),
+    )
+    db.commit()
+    return MessageOut(message="Товар удален из локальной базы")
+
+
 @router.get("/products/{product_id}/keyword-suggestions", response_model=list[str])
 def product_keyword_suggestions(product_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     product = db.scalar(
@@ -6405,7 +6433,6 @@ def _social_last_activity_map(db: Session, actor_keys: list[str]) -> dict[str, d
             key_to_member_id[key] = int(member_id)
 
     member_ids = sorted({int(v) for v in key_to_member_id.values() if int(v) > 0})
-    member_email_by_id: dict[int, str] = {}
     if member_ids:
         member_rows = db.execute(
             select(
@@ -6424,25 +6451,17 @@ def _social_last_activity_map(db: Session, actor_keys: list[str]) -> dict[str, d
             dt = by_member.get(int(member_id))
             if isinstance(dt, datetime):
                 out[key] = dt
-        member_email_rows = db.execute(
-            select(TeamMember.id, TeamMember.email).where(TeamMember.id.in_(member_ids))
-        ).all()
-        for raw_member_id, raw_email in member_email_rows:
-            member_id = _to_int_safe(raw_member_id)
-            if member_id > 0:
-                member_email_by_id[member_id] = str(raw_email or "").strip().lower()
 
     email_to_keys: dict[str, list[str]] = {}
     for key in keys:
         if key in out:
             continue
-        email = ""
-        member_id = int(key_to_member_id.get(key) or 0)
-        if member_id > 0:
-            email = member_email_by_id.get(member_id, "")
-        if not email and key.startswith("u:"):
-            owner_user_id = int(owner_key_to_user_id.get(key) or 0)
-            email = owner_email_by_user.get(owner_user_id, "")
+        # For team members we intentionally avoid email fallback:
+        # different users can share one email and that corrupts "last seen".
+        if not key.startswith("u:"):
+            continue
+        owner_user_id = int(owner_key_to_user_id.get(key) or 0)
+        email = owner_email_by_user.get(owner_user_id, "")
         safe_email = str(email or "").strip().lower()
         if safe_email:
             email_to_keys.setdefault(safe_email, []).append(key)
