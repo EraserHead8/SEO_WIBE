@@ -282,6 +282,37 @@ class WbAdsCampaignSnapshot(Base):
     user: Mapped["User"] = relationship()
 
 
+class MarketplaceApiCache(Base):
+    __tablename__ = "marketplace_api_cache"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "module_code",
+            "marketplace",
+            "cache_key",
+            name="uq_marketplace_api_cache_key",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    module_code: Mapped[str] = mapped_column(String(80), index=True)
+    marketplace: Mapped[str] = mapped_column(String(30), index=True)
+    cache_key: Mapped[str] = mapped_column(String(120), index=True)
+    payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    payload_hash: Mapped[str] = mapped_column(String(64), default="")
+    hit_count: Mapped[int] = mapped_column(Integer, default=0)
+    refresh_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_error: Mapped[str] = mapped_column(String(500), default="")
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_hit_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped["User"] = relationship()
+
+
 class AiServiceAccount(Base):
     __tablename__ = "ai_service_accounts"
 

@@ -2349,6 +2349,7 @@ function renderAdminServerMetrics() {
   const memory = payload.memory || {};
   const disk = payload.disk || {};
   const network = payload.network || {};
+  const marketCache = payload.market_cache || {};
   const ts = formatDateTime(payload.timestamp || "");
   meta.textContent = `${aTr("Обновлено", "Updated")}: ${ts}`;
   uptime.textContent = `${aTr("Uptime", "Uptime")}: ${formatAdminDuration(payload.uptime_seconds || 0)}`;
@@ -2360,6 +2361,8 @@ function renderAdminServerMetrics() {
     [aTr("Диск /", "Disk /"), `${Number(disk.usage_percent || 0).toFixed(1)}%`],
     [aTr("RX скорость", "RX speed"), `${formatAdminBytes(network.rx_bytes_per_sec || 0)}/s`],
     [aTr("TX скорость", "TX speed"), `${formatAdminBytes(network.tx_bytes_per_sec || 0)}/s`],
+    [aTr("Кэш попадания", "Cache hits"), Number(marketCache.hits || 0).toLocaleString()],
+    [aTr("Сохранено API", "Saved API"), Number(marketCache.api_calls_saved || 0).toLocaleString()],
   ];
   kpis.innerHTML = blocks.map(([name, value]) => `
     <article class="kpi">
@@ -2374,6 +2377,9 @@ function renderAdminServerMetrics() {
     <tr><td>${escapeHtml(aTr("Swap занято", "Swap used"))}</td><td>${escapeHtml(`${formatAdminBytes(memory.swap_used_bytes || 0)} / ${formatAdminBytes(memory.swap_total_bytes || 0)}`)}</td></tr>
     <tr><td>${escapeHtml(aTr("Диск занято", "Disk used"))}</td><td>${escapeHtml(`${formatAdminBytes(disk.used_bytes || 0)} / ${formatAdminBytes(disk.total_bytes || 0)}`)}</td></tr>
     <tr><td>${escapeHtml(aTr("Сеть RX/TX всего", "Network RX/TX total"))}</td><td>${escapeHtml(`${formatAdminBytes(network.rx_bytes_total || 0)} / ${formatAdminBytes(network.tx_bytes_total || 0)}`)}</td></tr>
+    <tr><td>${escapeHtml(aTr("Кэш записей", "Cache entries"))}</td><td>${escapeHtml(Number(marketCache.entries || 0).toLocaleString())}</td></tr>
+    <tr><td>${escapeHtml(aTr("Кэш обновлений", "Cache refreshes"))}</td><td>${escapeHtml(Number(marketCache.refreshes || 0).toLocaleString())}</td></tr>
+    <tr><td>${escapeHtml(aTr("Кэш просрочено", "Cache expired"))}</td><td>${escapeHtml(Number(marketCache.expired || 0).toLocaleString())}</td></tr>
   `;
 
   const labels = adminServerHistory.map((row) => formatAdminTimeShort(row.ts));

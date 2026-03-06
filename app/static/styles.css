@@ -8106,7 +8106,39 @@ button,
 
 /* 2026-03 hotfix v6: auth width, admin contrast, mobile clipping */
 .sidebar-toggle {
-  display: none !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 980px) {
+  #appSection > .workspace {
+    display: block !important;
+  }
+
+  #appSection > .workspace > .tab:not(.hidden) {
+    display: block !important;
+  }
+
+  #appSection #mainSidebar {
+    position: fixed !important;
+    top: 10px !important;
+    left: 10px !important;
+    bottom: 10px !important;
+    transform: translateX(-120%) !important;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  #appSection.nav-open #mainSidebar {
+    transform: translateX(0) !important;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  #mainSidebar .sidebar-toggle {
+    display: none !important;
+  }
 }
 
 #authSection .auth-card.auth-hero {

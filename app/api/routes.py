@@ -167,6 +167,11 @@ from app.schemas import (
     UiSettingsOut,
 )
 from app.services.sales import build_sales_report
+from app.services.market_cache import (
+    build_market_cache_key,
+    get_market_cache_stats,
+    get_or_refresh_market_cache,
+)
 from app.services.ads_cache import (
     get_wb_snapshot_rows,
     is_wb_snapshot_stale,
@@ -237,6 +242,27 @@ PRODUCT_PAGE_SIZE_OPTIONS = (30, 50, 100, 200, 500, 1000)
 _SERVER_CPU_SNAPSHOT: tuple[int, int] | None = None
 _SERVER_NET_SNAPSHOT: tuple[int, int] | None = None
 _SERVER_NET_TS: float = 0.0
+_MARKET_CACHE_TTL_SEC = {
+    "sales_stats": 180,
+    "wb_reviews_ai": 120,
+    "wb_questions_ai": 120,
+    "returns": 180,
+    "wb_ads": 180,
+    "wb_ads_analytics": 180,
+    "wb_ads_recommendations": 180,
+}
+
+
+def _secret_revision(*values: str) -> str:
+    raw = "|".join(str(v or "").strip() for v in values)
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
+
+
+def _market_cache_ttl(module_code: str, *, fast_mode: bool = False) -> int:
+    base = int(_MARKET_CACHE_TTL_SEC.get(str(module_code or "").strip(), 120))
+    if fast_mode:
+        return max(45, int(base * 0.7))
+    return base
 
 BILLING_PLANS: dict[str, dict[str, Any]] = {
     "starter": {"title": "Starter", "price": 990, "limits": {"products": 500, "seo_jobs_month": 1500, "ai_replies_month": 800}},
@@ -1148,22 +1174,45 @@ def wb_reviews(
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
     if stars is not None and (stars < 1 or stars > 5):
         raise HTTPException(status_code=400, detail="stars должен быть от 1 до 5")
+    left = date_from.isoformat() if date_from else ""
+    right = date_to.isoformat() if date_to else ""
+    cache_key = build_market_cache_key(
+        {
+            "kind": "reviews",
+            "stars": int(stars or 0),
+            "date_from": left,
+            "date_to": right,
+            "fast": int(bool(fast)),
+            "key_rev": _secret_revision(wb_key),
+        }
+    )
 
-    if fast:
-        data = fetch_wb_reviews_fast(
+    def _load_reviews_payload() -> dict[str, Any]:
+        if fast:
+            return fetch_wb_reviews_fast(
+                wb_key,
+                stars=stars,
+                date_from=left or None,
+                date_to=right or None,
+            )
+        return fetch_wb_reviews(
             wb_key,
             stars=stars,
-            date_from=date_from.isoformat() if date_from else None,
-            date_to=date_to.isoformat() if date_to else None,
-        )
-    else:
-        data = fetch_wb_reviews(
-            wb_key,
-            stars=stars,
-            date_from=date_from.isoformat() if date_from else None,
-            date_to=date_to.isoformat() if date_to else None,
+            date_from=left or None,
+            date_to=right or None,
             max_pages=8,
         )
+
+    data, cache_meta = get_or_refresh_market_cache(
+        db,
+        user_id=int(user.id),
+        module_code="wb_reviews_ai",
+        marketplace="wb",
+        cache_key=cache_key,
+        ttl_sec=_market_cache_ttl("wb_reviews_ai", fast_mode=fast),
+        fetcher=_load_reviews_payload,
+        stale_if_error_sec=20 * 60,
+    )
     new_rows = _filter_claimed_feedback_rows(
         db,
         user,
@@ -1188,7 +1237,7 @@ def wb_reviews(
         db,
         user,
         action="wb_reviews_read",
-        details=f"new={len(new_rows)};answered={len(answered_rows)}",
+        details=f"new={len(new_rows)};answered={len(answered_rows)};source={cache_meta.get('source')};age={cache_meta.get('age_sec')}",
         module_code="wb_reviews_ai",
         entity_type="review",
     )
@@ -1302,14 +1351,38 @@ def ozon_reviews(
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для ozon")
     if stars is not None and (stars < 1 or stars > 5):
         raise HTTPException(status_code=400, detail="stars должен быть от 1 до 5")
+    left = date_from.isoformat() if date_from else ""
+    right = date_to.isoformat() if date_to else ""
+    cache_key = build_market_cache_key(
+        {
+            "kind": "reviews",
+            "stars": int(stars or 0),
+            "date_from": left,
+            "date_to": right,
+            "fast": int(bool(fast)),
+            "key_rev": _secret_revision(ozon_key),
+        }
+    )
 
-    data = fetch_ozon_reviews(
-        ozon_key,
-        stars=stars,
-        date_from=date_from.isoformat() if date_from else None,
-        date_to=date_to.isoformat() if date_to else None,
-        max_pages=1 if fast else 8,
-        enrich_products=not fast,
+    def _load_reviews_payload() -> dict[str, Any]:
+        return fetch_ozon_reviews(
+            ozon_key,
+            stars=stars,
+            date_from=left or None,
+            date_to=right or None,
+            max_pages=1 if fast else 8,
+            enrich_products=not fast,
+        )
+
+    data, cache_meta = get_or_refresh_market_cache(
+        db,
+        user_id=int(user.id),
+        module_code="wb_reviews_ai",
+        marketplace="ozon",
+        cache_key=cache_key,
+        ttl_sec=_market_cache_ttl("wb_reviews_ai", fast_mode=fast),
+        fetcher=_load_reviews_payload,
+        stale_if_error_sec=20 * 60,
     )
     new_rows = _filter_claimed_feedback_rows(
         db,
@@ -1335,7 +1408,7 @@ def ozon_reviews(
         db,
         user,
         action="ozon_reviews_read",
-        details=f"new={len(new_rows)};answered={len(answered_rows)}",
+        details=f"new={len(new_rows)};answered={len(answered_rows)};source={cache_meta.get('source')};age={cache_meta.get('age_sec')}",
         module_code="wb_reviews_ai",
         entity_type="review",
     )
@@ -1448,19 +1521,42 @@ def wb_questions(
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
-    if fast:
-        data = fetch_wb_questions_fast(
+    left = date_from.isoformat() if date_from else ""
+    right = date_to.isoformat() if date_to else ""
+    cache_key = build_market_cache_key(
+        {
+            "kind": "questions",
+            "date_from": left,
+            "date_to": right,
+            "fast": int(bool(fast)),
+            "key_rev": _secret_revision(wb_key),
+        }
+    )
+
+    def _load_questions_payload() -> dict[str, Any]:
+        if fast:
+            return fetch_wb_questions_fast(
+                wb_key,
+                date_from=left or None,
+                date_to=right or None,
+            )
+        return fetch_wb_questions(
             wb_key,
-            date_from=date_from.isoformat() if date_from else None,
-            date_to=date_to.isoformat() if date_to else None,
-        )
-    else:
-        data = fetch_wb_questions(
-            wb_key,
-            date_from=date_from.isoformat() if date_from else None,
-            date_to=date_to.isoformat() if date_to else None,
+            date_from=left or None,
+            date_to=right or None,
             max_pages=8,
         )
+
+    data, cache_meta = get_or_refresh_market_cache(
+        db,
+        user_id=int(user.id),
+        module_code="wb_questions_ai",
+        marketplace="wb",
+        cache_key=cache_key,
+        ttl_sec=_market_cache_ttl("wb_questions_ai", fast_mode=fast),
+        fetcher=_load_questions_payload,
+        stale_if_error_sec=20 * 60,
+    )
     new_rows = _filter_claimed_feedback_rows(
         db,
         user,
@@ -1485,7 +1581,7 @@ def wb_questions(
         db,
         user,
         action="wb_questions_read",
-        details=f"new={len(new_rows)};answered={len(answered_rows)}",
+        details=f"new={len(new_rows)};answered={len(answered_rows)};source={cache_meta.get('source')};age={cache_meta.get('age_sec')}",
         module_code="wb_questions_ai",
         entity_type="question",
     )
@@ -1604,12 +1700,36 @@ def ozon_questions(
     ozon_key = _get_active_marketplace_api_key(db, user.id, "ozon")
     if not ozon_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для ozon")
-    data = fetch_ozon_questions(
-        ozon_key,
-        date_from=date_from.isoformat() if date_from else None,
-        date_to=date_to.isoformat() if date_to else None,
-        max_pages=1 if fast else 8,
-        enrich_products=not fast,
+    left = date_from.isoformat() if date_from else ""
+    right = date_to.isoformat() if date_to else ""
+    cache_key = build_market_cache_key(
+        {
+            "kind": "questions",
+            "date_from": left,
+            "date_to": right,
+            "fast": int(bool(fast)),
+            "key_rev": _secret_revision(ozon_key),
+        }
+    )
+
+    def _load_questions_payload() -> dict[str, Any]:
+        return fetch_ozon_questions(
+            ozon_key,
+            date_from=left or None,
+            date_to=right or None,
+            max_pages=1 if fast else 8,
+            enrich_products=not fast,
+        )
+
+    data, cache_meta = get_or_refresh_market_cache(
+        db,
+        user_id=int(user.id),
+        module_code="wb_questions_ai",
+        marketplace="ozon",
+        cache_key=cache_key,
+        ttl_sec=_market_cache_ttl("wb_questions_ai", fast_mode=fast),
+        fetcher=_load_questions_payload,
+        stale_if_error_sec=20 * 60,
     )
     new_rows = _filter_claimed_feedback_rows(
         db,
@@ -1635,7 +1755,7 @@ def ozon_questions(
         db,
         user,
         action="ozon_questions_read",
-        details=f"new={len(new_rows)};answered={len(answered_rows)}",
+        details=f"new={len(new_rows)};answered={len(answered_rows)};source={cache_meta.get('source')};age={cache_meta.get('age_sec')}",
         module_code="wb_questions_ai",
         entity_type="question",
     )
@@ -1754,11 +1874,35 @@ def wb_returns_list(
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
-    payload = fetch_wb_returns(
-        wb_key,
-        status=status or None,
-        date_from=date_from.isoformat() if date_from else None,
-        date_to=date_to.isoformat() if date_to else None,
+    left = date_from.isoformat() if date_from else ""
+    right = date_to.isoformat() if date_to else ""
+    cache_key = build_market_cache_key(
+        {
+            "kind": "returns",
+            "status": str(status or "").strip().lower(),
+            "date_from": left,
+            "date_to": right,
+            "key_rev": _secret_revision(wb_key),
+        }
+    )
+
+    def _load_returns_payload() -> dict[str, Any]:
+        return fetch_wb_returns(
+            wb_key,
+            status=status or None,
+            date_from=left or None,
+            date_to=right or None,
+        )
+
+    payload, cache_meta = get_or_refresh_market_cache(
+        db,
+        user_id=int(user.id),
+        module_code="returns",
+        marketplace="wb",
+        cache_key=cache_key,
+        ttl_sec=_market_cache_ttl("returns"),
+        fetcher=_load_returns_payload,
+        stale_if_error_sec=30 * 60,
     )
     rows = _filter_claimed_feedback_rows(
         db,
@@ -1773,7 +1917,7 @@ def wb_returns_list(
         db,
         user,
         action="wb_returns_read",
-        details=f"rows={len(rows)};warnings={len(warnings)}",
+        details=f"rows={len(rows)};warnings={len(warnings)};source={cache_meta.get('source')};age={cache_meta.get('age_sec')}",
         module_code="returns",
         entity_type="return",
         status="ok" if not warnings else "partial",
@@ -1803,14 +1947,30 @@ def wb_returns_detail(return_id: str, user: User = Depends(get_current_user), db
         )
         if claim and int(claim.owner_member_id or 0) != _actor_member_id(user):
             raise HTTPException(status_code=403, detail="Запись закреплена за другим сотрудником")
-    row = fetch_wb_return_details(wb_key, rid)
+    cache_key = build_market_cache_key(
+        {
+            "kind": "return_detail",
+            "return_id": rid,
+            "key_rev": _secret_revision(wb_key),
+        }
+    )
+    row, cache_meta = get_or_refresh_market_cache(
+        db,
+        user_id=int(user.id),
+        module_code="returns",
+        marketplace="wb",
+        cache_key=cache_key,
+        ttl_sec=_market_cache_ttl("returns"),
+        fetcher=lambda: fetch_wb_return_details(wb_key, rid),
+        stale_if_error_sec=45 * 60,
+    )
     if not row:
         raise HTTPException(status_code=404, detail="Заявка на возврат не найдена")
     _audit(
         db,
         user,
         action="wb_return_detail_read",
-        details=f"id={rid}",
+        details=f"id={rid};source={cache_meta.get('source')}",
         module_code="returns",
         entity_type="return",
         entity_id=rid,
@@ -1865,11 +2025,35 @@ def ozon_returns_list(
     ozon_key = _get_active_marketplace_api_key(db, user.id, "ozon")
     if not ozon_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для ozon")
-    payload = fetch_ozon_returns(
-        ozon_key,
-        status=status or None,
-        date_from=date_from.isoformat() if date_from else None,
-        date_to=date_to.isoformat() if date_to else None,
+    left = date_from.isoformat() if date_from else ""
+    right = date_to.isoformat() if date_to else ""
+    cache_key = build_market_cache_key(
+        {
+            "kind": "returns",
+            "status": str(status or "").strip().lower(),
+            "date_from": left,
+            "date_to": right,
+            "key_rev": _secret_revision(ozon_key),
+        }
+    )
+
+    def _load_returns_payload() -> dict[str, Any]:
+        return fetch_ozon_returns(
+            ozon_key,
+            status=status or None,
+            date_from=left or None,
+            date_to=right or None,
+        )
+
+    payload, cache_meta = get_or_refresh_market_cache(
+        db,
+        user_id=int(user.id),
+        module_code="returns",
+        marketplace="ozon",
+        cache_key=cache_key,
+        ttl_sec=_market_cache_ttl("returns"),
+        fetcher=_load_returns_payload,
+        stale_if_error_sec=30 * 60,
     )
     rows = _filter_claimed_feedback_rows(
         db,
@@ -1884,7 +2068,7 @@ def ozon_returns_list(
         db,
         user,
         action="ozon_returns_read",
-        details=f"rows={len(rows)};warnings={len(warnings)}",
+        details=f"rows={len(rows)};warnings={len(warnings)};source={cache_meta.get('source')};age={cache_meta.get('age_sec')}",
         module_code="returns",
         entity_type="return",
         status="ok" if not warnings else "partial",
@@ -1914,14 +2098,30 @@ def ozon_returns_detail(return_id: str, user: User = Depends(get_current_user), 
         )
         if claim and int(claim.owner_member_id or 0) != _actor_member_id(user):
             raise HTTPException(status_code=403, detail="Запись закреплена за другим сотрудником")
-    row = fetch_ozon_return_details(ozon_key, rid)
+    cache_key = build_market_cache_key(
+        {
+            "kind": "return_detail",
+            "return_id": rid,
+            "key_rev": _secret_revision(ozon_key),
+        }
+    )
+    row, cache_meta = get_or_refresh_market_cache(
+        db,
+        user_id=int(user.id),
+        module_code="returns",
+        marketplace="ozon",
+        cache_key=cache_key,
+        ttl_sec=_market_cache_ttl("returns"),
+        fetcher=lambda: fetch_ozon_return_details(ozon_key, rid),
+        stale_if_error_sec=45 * 60,
+    )
     if not row:
         raise HTTPException(status_code=404, detail="Заявка на возврат не найдена")
     _audit(
         db,
         user,
         action="ozon_return_detail_read",
-        details=f"id={rid}",
+        details=f"id={rid};source={cache_meta.get('source')}",
         module_code="returns",
         entity_type="return",
         entity_id=rid,
@@ -2045,14 +2245,29 @@ def ozon_ads_campaigns(user: User = Depends(get_current_user), db: Session = Dep
     ozon_key = _get_active_marketplace_api_key(db, user.id, "ozon")
     if not ozon_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для ozon")
-    payload = fetch_ozon_ads_campaigns(ozon_key)
+    cache_key = build_market_cache_key(
+        {
+            "kind": "ozon_campaigns",
+            "key_rev": _secret_revision(ozon_key),
+        }
+    )
+    payload, cache_meta = get_or_refresh_market_cache(
+        db,
+        user_id=int(user.id),
+        module_code="wb_ads",
+        marketplace="ozon",
+        cache_key=cache_key,
+        ttl_sec=_market_cache_ttl("wb_ads"),
+        fetcher=lambda: fetch_ozon_ads_campaigns(ozon_key),
+        stale_if_error_sec=30 * 60,
+    )
     rows = list(payload.get("rows") or [])
     warnings = [str(x) for x in (payload.get("warnings") or [])]
     _audit(
         db,
         user,
         action="ozon_ads_campaigns_read",
-        details=f"count={len(rows)};warnings={len(warnings)}",
+        details=f"count={len(rows)};warnings={len(warnings)};source={cache_meta.get('source')};age={cache_meta.get('age_sec')}",
         module_code="wb_ads",
         entity_type="campaign",
         status="ok" if not warnings else "partial",
@@ -2073,11 +2288,35 @@ def ozon_ads_analytics(
     ozon_key = _get_active_marketplace_api_key(db, user.id, "ozon")
     if not ozon_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для ozon")
-    payload = fetch_ozon_ads_analytics(
-        ozon_key,
-        date_from=date_from.isoformat() if date_from else None,
-        date_to=date_to.isoformat() if date_to else None,
-        campaign_id=campaign_id,
+    left = date_from.isoformat() if date_from else ""
+    right = date_to.isoformat() if date_to else ""
+    cache_key = build_market_cache_key(
+        {
+            "kind": "ozon_ads_analytics",
+            "date_from": left,
+            "date_to": right,
+            "campaign_id": int(campaign_id or 0),
+            "key_rev": _secret_revision(ozon_key),
+        }
+    )
+
+    def _load_analytics_payload() -> dict[str, Any]:
+        return fetch_ozon_ads_analytics(
+            ozon_key,
+            date_from=left or None,
+            date_to=right or None,
+            campaign_id=campaign_id,
+        )
+
+    payload, cache_meta = get_or_refresh_market_cache(
+        db,
+        user_id=int(user.id),
+        module_code="wb_ads_analytics",
+        marketplace="ozon",
+        cache_key=cache_key,
+        ttl_sec=_market_cache_ttl("wb_ads_analytics"),
+        fetcher=_load_analytics_payload,
+        stale_if_error_sec=30 * 60,
     )
     rows = list(payload.get("rows") or [])
     warnings = [str(x) for x in (payload.get("warnings") or [])]
@@ -2090,7 +2329,7 @@ def ozon_ads_analytics(
         db,
         user,
         action="ozon_ads_analytics_read",
-        details=f"date_from={left};date_to={right};rows={len(rows)};warnings={len(warnings)}",
+        details=f"date_from={left};date_to={right};rows={len(rows)};warnings={len(warnings)};source={cache_meta.get('source')};age={cache_meta.get('age_sec')}",
         module_code="wb_ads_analytics",
         entity_type="campaign",
         status="ok" if not warnings else "partial",
@@ -2141,14 +2380,31 @@ def wb_ads_rates(payload: WbCampaignRatesIn, user: User = Depends(get_current_us
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
-    data = fetch_wb_campaign_rates(wb_key, payload.campaign_id, payload.campaign_type)
+    cache_key = build_market_cache_key(
+        {
+            "kind": "wb_campaign_rates",
+            "campaign_id": int(payload.campaign_id or 0),
+            "campaign_type": str(payload.campaign_type or "").strip().lower(),
+            "key_rev": _secret_revision(wb_key),
+        }
+    )
+    data, cache_meta = get_or_refresh_market_cache(
+        db,
+        user_id=int(user.id),
+        module_code="wb_ads",
+        marketplace="wb",
+        cache_key=cache_key,
+        ttl_sec=_market_cache_ttl("wb_ads"),
+        fetcher=lambda: fetch_wb_campaign_rates(wb_key, payload.campaign_id, payload.campaign_type),
+        stale_if_error_sec=30 * 60,
+    )
     if data is None:
         raise HTTPException(status_code=400, detail="Не удалось получить ставки по кампании")
     _audit(
         db,
         user,
         action="wb_ads_rates_read",
-        details=f"campaign_id={payload.campaign_id};type={payload.campaign_type}",
+        details=f"campaign_id={payload.campaign_id};type={payload.campaign_type};source={cache_meta.get('source')}",
         module_code="wb_ads",
         entity_type="campaign",
         entity_id=str(payload.campaign_id),
@@ -2165,13 +2421,28 @@ def wb_ads_campaign_details(campaign_id: int, user: User = Depends(get_current_u
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
     if campaign_id <= 0:
         raise HTTPException(status_code=400, detail="campaign_id должен быть > 0")
-
-    data = fetch_wb_campaign_details(wb_key, campaign_id=campaign_id)
+    cache_key = build_market_cache_key(
+        {
+            "kind": "wb_campaign_details",
+            "campaign_id": int(campaign_id),
+            "key_rev": _secret_revision(wb_key),
+        }
+    )
+    data, cache_meta = get_or_refresh_market_cache(
+        db,
+        user_id=int(user.id),
+        module_code="wb_ads",
+        marketplace="wb",
+        cache_key=cache_key,
+        ttl_sec=_market_cache_ttl("wb_ads"),
+        fetcher=lambda: fetch_wb_campaign_details(wb_key, campaign_id=campaign_id),
+        stale_if_error_sec=30 * 60,
+    )
     _audit(
         db,
         user,
         action="wb_ads_campaign_details_read",
-        details=f"campaign_id={campaign_id}",
+        details=f"campaign_id={campaign_id};source={cache_meta.get('source')}",
         module_code="wb_ads",
         entity_type="campaign",
         entity_id=str(campaign_id),
@@ -2186,14 +2457,29 @@ def wb_ads_balance(user: User = Depends(get_current_user), db: Session = Depends
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
-    data = fetch_wb_ads_balance(wb_key)
+    cache_key = build_market_cache_key(
+        {
+            "kind": "wb_ads_balance",
+            "key_rev": _secret_revision(wb_key),
+        }
+    )
+    data, cache_meta = get_or_refresh_market_cache(
+        db,
+        user_id=int(user.id),
+        module_code="wb_ads",
+        marketplace="wb",
+        cache_key=cache_key,
+        ttl_sec=max(90, _market_cache_ttl("wb_ads")),
+        fetcher=lambda: fetch_wb_ads_balance(wb_key),
+        stale_if_error_sec=30 * 60,
+    )
     if data is None:
         raise HTTPException(status_code=400, detail="Не удалось получить баланс WB Ads")
     _audit(
         db,
         user,
         action="wb_ads_balance_read",
-        details="ok=1",
+        details=f"ok=1;source={cache_meta.get('source')}",
         module_code="wb_ads",
         entity_type="balance",
     )
@@ -2238,11 +2524,27 @@ def wb_ads_analytics(
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
-
+    base_key = build_market_cache_key(
+        {
+            "kind": "wb_campaigns_base",
+            "key_rev": _secret_revision(wb_key),
+        }
+    )
     try:
-        rows = fetch_wb_campaigns(wb_key, enrich=False)
+        rows, base_cache_meta = get_or_refresh_market_cache(
+            db,
+            user_id=int(user.id),
+            module_code="wb_ads",
+            marketplace="wb",
+            cache_key=base_key,
+            ttl_sec=_market_cache_ttl("wb_ads"),
+            fetcher=lambda: fetch_wb_campaigns(wb_key, enrich=False),
+            stale_if_error_sec=30 * 60,
+        )
     except Exception:
         rows = []
+        base_cache_meta = {"source": "error", "age_sec": -1}
+    rows = list(rows or [])
     base_summary_map: dict[str, dict[str, Any]] = {}
     for row in rows:
         cid_text = _campaign_id_from_any(row)
@@ -2275,15 +2577,34 @@ def wb_ads_analytics(
             rows=[],
             totals={"views": 0.0, "clicks": 0.0, "orders": 0.0, "spent": 0.0, "ctr_avg": 0.0, "cr_avg": 0.0},
         )
+    stats_key = build_market_cache_key(
+        {
+            "kind": "wb_campaign_stats",
+            "ids": ids,
+            "date_from": date_from.isoformat() if date_from else "",
+            "date_to": date_to.isoformat() if date_to else "",
+            "key_rev": _secret_revision(wb_key),
+        }
+    )
     try:
-        stats = fetch_wb_campaign_stats_bulk(
-            wb_key,
-            ids,
-            date_from=date_from.isoformat() if date_from else None,
-            date_to=date_to.isoformat() if date_to else None,
+        stats, stats_cache_meta = get_or_refresh_market_cache(
+            db,
+            user_id=int(user.id),
+            module_code="wb_ads_analytics",
+            marketplace="wb",
+            cache_key=stats_key,
+            ttl_sec=_market_cache_ttl("wb_ads_analytics"),
+            fetcher=lambda: fetch_wb_campaign_stats_bulk(
+                wb_key,
+                ids,
+                date_from=date_from.isoformat() if date_from else None,
+                date_to=date_to.isoformat() if date_to else None,
+            ),
+            stale_if_error_sec=30 * 60,
         )
     except Exception:
         stats = {}
+        stats_cache_meta = {"source": "error", "age_sec": -1}
 
     out_rows: list[dict[str, Any]] = []
     for cid in ids:
@@ -2323,7 +2644,7 @@ def wb_ads_analytics(
         db,
         user,
         action="wb_ads_analytics_read",
-        details=f"date_from={left};date_to={right};campaigns={len(out_rows)}",
+        details=f"date_from={left};date_to={right};campaigns={len(out_rows)};base_source={base_cache_meta.get('source')};stats_source={stats_cache_meta.get('source')}",
         module_code="wb_ads_analytics",
         entity_type="campaign",
     )
@@ -2348,11 +2669,28 @@ def wb_ads_recommendations(
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
 
     base_error = ""
+    base_key = build_market_cache_key(
+        {
+            "kind": "wb_campaigns_base",
+            "key_rev": _secret_revision(wb_key),
+        }
+    )
     try:
-        base_rows = fetch_wb_campaigns(wb_key, enrich=False)
+        base_rows, base_cache_meta = get_or_refresh_market_cache(
+            db,
+            user_id=int(user.id),
+            module_code="wb_ads",
+            marketplace="wb",
+            cache_key=base_key,
+            ttl_sec=_market_cache_ttl("wb_ads"),
+            fetcher=lambda: fetch_wb_campaigns(wb_key, enrich=False),
+            stale_if_error_sec=30 * 60,
+        )
     except Exception as exc:
         base_rows = []
+        base_cache_meta = {"source": "error", "age_sec": -1}
         base_error = str(exc or "")
+    base_rows = list(base_rows or [])
     base_summary_map: dict[str, dict[str, Any]] = {}
     for row in base_rows:
         cid_text = _campaign_id_from_any(row)
@@ -2403,15 +2741,34 @@ def wb_ads_recommendations(
             meta=empty_meta,
         )
     stats_error = ""
+    stats_key = build_market_cache_key(
+        {
+            "kind": "wb_campaign_stats",
+            "ids": ids,
+            "date_from": date_from.isoformat() if date_from else "",
+            "date_to": date_to.isoformat() if date_to else "",
+            "key_rev": _secret_revision(wb_key),
+        }
+    )
     try:
-        stats = fetch_wb_campaign_stats_bulk(
-            wb_key,
-            ids,
-            date_from=date_from.isoformat() if date_from else None,
-            date_to=date_to.isoformat() if date_to else None,
+        stats, stats_cache_meta = get_or_refresh_market_cache(
+            db,
+            user_id=int(user.id),
+            module_code="wb_ads_recommendations",
+            marketplace="wb",
+            cache_key=stats_key,
+            ttl_sec=_market_cache_ttl("wb_ads_recommendations"),
+            fetcher=lambda: fetch_wb_campaign_stats_bulk(
+                wb_key,
+                ids,
+                date_from=date_from.isoformat() if date_from else None,
+                date_to=date_to.isoformat() if date_to else None,
+            ),
+            stale_if_error_sec=30 * 60,
         )
     except Exception as exc:
         stats = {}
+        stats_cache_meta = {"source": "error", "age_sec": -1}
         stats_error = str(exc or "")
 
     safe_min_spent = max(0.0, float(min_spent or 0.0))
@@ -2579,7 +2936,7 @@ def wb_ads_recommendations(
         db,
         user,
         action="wb_ads_recommendations_read",
-        details=f"date_from={left};date_to={right};rows={len(recommendations)};min_spent={safe_min_spent}",
+        details=f"date_from={left};date_to={right};rows={len(recommendations)};min_spent={safe_min_spent};base_source={base_cache_meta.get('source')};stats_source={stats_cache_meta.get('source')}",
         module_code="wb_ads_recommendations",
         entity_type="campaign",
     )
@@ -3863,17 +4220,42 @@ def sales_stats(
 
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     ozon_key = _get_active_marketplace_api_key(db, user.id, "ozon")
-    try:
-        payload = build_sales_report(
+    key_rev = _secret_revision(wb_key, ozon_key)
+    sales_cache_key = build_market_cache_key(
+        {
+            "marketplace": selected_market,
+            "date_from": left.isoformat(),
+            "date_to": right.isoformat(),
+            "granularity": gran,
+            "tz": tz_name,
+            "key_rev": key_rev,
+        }
+    )
+
+    def _load_sales_payload(period_from: date, period_to: date) -> dict[str, Any]:
+        return build_sales_report(
             marketplace=selected_market,
-            date_from=left,
-            date_to=right,
+            date_from=period_from,
+            date_to=period_to,
             wb_api_key=wb_key,
             ozon_api_key=ozon_key,
             granularity=gran,
             timezone=tz_name,
         )
+
+    try:
+        payload, sales_cache_meta = get_or_refresh_market_cache(
+            db,
+            user_id=int(user.id),
+            module_code="sales_stats",
+            marketplace=selected_market,
+            cache_key=sales_cache_key,
+            ttl_sec=_market_cache_ttl("sales_stats"),
+            fetcher=lambda: _load_sales_payload(left, right),
+            stale_if_error_sec=45 * 60,
+        )
     except Exception as exc:
+        sales_cache_meta = {"source": "error", "age_sec": -1}
         payload = {
             "rows": [],
             "chart": [],
@@ -3906,14 +4288,26 @@ def sales_stats(
         period_days = max(1, (right - left).days + 1)
         prev_to = left - timedelta(days=1)
         prev_from = prev_to - timedelta(days=period_days - 1)
-        prev_payload = build_sales_report(
+        prev_cache_key = build_market_cache_key(
+            {
+                "marketplace": selected_market,
+                "date_from": prev_from.isoformat(),
+                "date_to": prev_to.isoformat(),
+                "granularity": gran,
+                "tz": tz_name,
+                "key_rev": key_rev,
+                "comparison": 1,
+            }
+        )
+        prev_payload, prev_cache_meta = get_or_refresh_market_cache(
+            db,
+            user_id=int(user.id),
+            module_code="sales_stats",
             marketplace=selected_market,
-            date_from=prev_from,
-            date_to=prev_to,
-            wb_api_key=wb_key,
-            ozon_api_key=ozon_key,
-            granularity=gran,
-            timezone=tz_name,
+            cache_key=prev_cache_key,
+            ttl_sec=_market_cache_ttl("sales_stats"),
+            fetcher=lambda: _load_sales_payload(prev_from, prev_to),
+            stale_if_error_sec=45 * 60,
         )
         prev_totals = prev_payload.get("totals") if isinstance(prev_payload, dict) else {}
         prev_totals = prev_totals if isinstance(prev_totals, dict) else {}
@@ -3952,14 +4346,16 @@ def sales_stats(
     except Exception as exc:
         comparison = {}
         warnings.append(f"Сравнение с предыдущим периодом недоступно: {str(exc or '')[:140]}")
+        prev_cache_meta = {"source": "error"}
 
     report_granularity = str(payload.get("granularity") or ("hour" if gran == "hour" else "day"))
     report_tz = str(payload.get("timezone") or tz_name)
+    cache_stats = get_market_cache_stats(db, user_id=int(user.id), module_code="sales_stats")
     _audit(
         db,
         user,
         action="sales_stats_read",
-        details=f"market={selected_market};from={left.isoformat()};to={right.isoformat()};rows={len(rows)};granularity={report_granularity};tz={report_tz};comparison={1 if comparison else 0}",
+        details=f"market={selected_market};from={left.isoformat()};to={right.isoformat()};rows={len(rows)};granularity={report_granularity};tz={report_tz};comparison={1 if comparison else 0};source={sales_cache_meta.get('source')};prev_source={prev_cache_meta.get('source')};cache_entries={cache_stats.get('entries')};cache_hits={cache_stats.get('hits')};cache_refreshes={cache_stats.get('refreshes')}",
         module_code="sales_stats",
         entity_type="sales",
     )
@@ -4980,8 +5376,17 @@ def _collect_server_metrics() -> dict[str, Any]:
 
 
 @router.get("/admin/server/metrics", response_model=dict[str, Any])
-def admin_server_metrics(_: User = Depends(get_admin_user)):
-    return _collect_server_metrics()
+def admin_server_metrics(_: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    payload = _collect_server_metrics()
+    cache_stats = get_market_cache_stats(db)
+    payload["market_cache"] = {
+        "entries": int(cache_stats.get("entries") or 0),
+        "hits": int(cache_stats.get("hits") or 0),
+        "refreshes": int(cache_stats.get("refreshes") or 0),
+        "expired": int(cache_stats.get("expired") or 0),
+        "api_calls_saved": int(cache_stats.get("api_calls_saved") or 0),
+    }
+    return payload
 
 
 @router.post("/admin/users/password", response_model=MessageOut)

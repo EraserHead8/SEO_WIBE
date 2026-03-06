@@ -2023,6 +2023,11 @@ function showTab(name, btn = null) {
   if (targetTab === "help") runModuleLoader("help", loadHelpWorkspace, { maxAgeMs: MODULE_CACHE_TTL_MS });
   if (targetTab === "admin") loadAdmin();
   closeMobileNav();
+  if ((window.innerWidth || 0) <= 980) {
+    try { window.scrollTo(0, 0); } catch (_) {}
+    try { document.documentElement.scrollTop = 0; } catch (_) {}
+    try { document.body.scrollTop = 0; } catch (_) {}
+  }
   const activityMap = {
     sales: "sales_stats",
     products: currentProductsSubtab === "seo" ? "seo_generation" : "products",
