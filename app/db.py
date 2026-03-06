@@ -55,6 +55,8 @@ def run_lightweight_migrations():
             conn.execute(text("ALTER TABLE products ADD COLUMN photos_json TEXT DEFAULT '[]'"))
         if product_cols and "category_name" not in product_cols:
             conn.execute(text("ALTER TABLE products ADD COLUMN category_name VARCHAR(255) DEFAULT ''"))
+        if product_cols and "purchase_price" not in product_cols:
+            conn.execute(text("ALTER TABLE products ADD COLUMN purchase_price FLOAT DEFAULT 0"))
         if product_cols and "owner_member_id" not in product_cols:
             conn.execute(text("ALTER TABLE products ADD COLUMN owner_member_id INTEGER"))
 
@@ -114,6 +116,21 @@ def run_lightweight_migrations():
                     ),
                     {"code": code},
                 )
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO module_access (user_id, module_code, enabled, created_at)
+                    SELECT u.id, :code, 1, CURRENT_TIMESTAMP
+                    FROM users u
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM module_access m
+                        WHERE m.user_id = u.id AND m.module_code = :code
+                    )
+                    """
+                ),
+                {"code": "accounting"},
+            )
             conn.execute(
                 text(
                     """

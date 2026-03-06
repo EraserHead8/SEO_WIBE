@@ -4,6 +4,7 @@ DEFAULT_MODULES = [
     "competitor_insights",
     "auto_apply",
     "sales_stats",
+    "accounting",
     "user_profile",
     "wb_reviews_ai",
     "wb_questions_ai",

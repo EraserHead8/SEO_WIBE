@@ -628,6 +628,136 @@ class SalesStatsOut(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class AccountingExpenseIn(BaseModel):
+    marketplace: str = "all"
+    category: str
+    amount: float = 0.0
+    recurrence: str = "monthly"
+    start_date: str | None = None
+    end_date: str | None = None
+    note: str = ""
+    is_active: bool = True
+
+
+class AccountingExpenseOut(BaseModel):
+    id: int
+    marketplace: str
+    category: str
+    amount: float
+    recurrence: str
+    start_date: str | None = None
+    end_date: str | None = None
+    note: str
+    is_active: bool
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class AccountingSettingsIn(BaseModel):
+    vat_rate: float = 0.0
+    tax_rate: float = 0.0
+    additional_rate: float = 0.0
+    fixed_cost_per_month: float = 0.0
+
+
+class AccountingSettingsOut(BaseModel):
+    vat_rate: float = 0.0
+    tax_rate: float = 0.0
+    additional_rate: float = 0.0
+    fixed_cost_per_month: float = 0.0
+    updated_at: str | None = None
+
+
+class AccountingOverviewOut(BaseModel):
+    orders: int = 0
+    units: int = 0
+    buyouts: int = 0
+    returns: int = 0
+    revenue: float = 0.0
+    cogs: float = 0.0
+    gross_profit: float = 0.0
+    marketplace_expense: float = 0.0
+    operating_profit: float = 0.0
+    custom_expenses: float = 0.0
+    additional_cost: float = 0.0
+    vat_amount: float = 0.0
+    tax_amount: float = 0.0
+    net_profit: float = 0.0
+    margin: float = 0.0
+    commission: float = 0.0
+    logistics: float = 0.0
+    storage: float = 0.0
+    deductions: float = 0.0
+    acceptance: float = 0.0
+    penalties: float = 0.0
+    other_expense: float = 0.0
+    ad_spend: float = 0.0
+    settings: dict[str, float] = Field(default_factory=dict)
+    by_marketplace: dict[str, dict[str, float | int]] = Field(default_factory=dict)
+
+
+class AccountingChartPointOut(BaseModel):
+    date: str
+    bucket: str
+    revenue: float = 0.0
+    cogs: float = 0.0
+    marketplace_expense: float = 0.0
+    gross_profit: float = 0.0
+    operating_profit: float = 0.0
+    net_profit: float = 0.0
+
+
+class AccountingAnalysisRowOut(BaseModel):
+    marketplace: str
+    article: str
+    external_id: str = ""
+    name: str = ""
+    sold_units: int = 0
+    returns: int = 0
+    return_rate: float = 0.0
+    revenue: float = 0.0
+    purchase_price: float = 0.0
+    cogs: float = 0.0
+    commission: float = 0.0
+    logistics: float = 0.0
+    storage: float = 0.0
+    deductions: float = 0.0
+    acceptance: float = 0.0
+    penalties: float = 0.0
+    other_expense: float = 0.0
+    ad_spend: float = 0.0
+    marketplace_expense: float = 0.0
+    gross_profit: float = 0.0
+    operating_profit: float = 0.0
+    extra_expenses: float = 0.0
+    additional_cost: float = 0.0
+    tax: float = 0.0
+    vat: float = 0.0
+    net_profit: float = 0.0
+    margin: float = 0.0
+
+
+class AccountingDataOut(BaseModel):
+    marketplace: str
+    date_from: str
+    date_to: str
+    overview: AccountingOverviewOut
+    chart: list[AccountingChartPointOut] = Field(default_factory=list)
+    analysis_rows: list[AccountingAnalysisRowOut] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class AccountingExpenseListOut(BaseModel):
+    rows: list[AccountingExpenseOut] = Field(default_factory=list)
+
+
+class AccountingPurchasePriceImportOut(BaseModel):
+    updated: int = 0
+    skipped: int = 0
+    unmatched: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+
+
 class UserProfileUpdateIn(BaseModel):
     full_name: str = ""
     company_name: str = ""

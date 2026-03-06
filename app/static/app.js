@@ -116,6 +116,14 @@ let salesLoadProgress = { active: false, total: 0, loaded: 0 };
 let salesLoadState = "idle";
 let salesLoadToken = 0;
 let salesAutoLoadTimer = null;
+let accountingOverview = null;
+let accountingChartRows = [];
+let accountingAnalysisRows = [];
+let accountingWarnings = [];
+let accountingExpensesRows = [];
+let accountingSettingsState = null;
+let accountingLoadToken = 0;
+let accountingSortMode = "net_profit_desc";
 let teamMembers = [];
 let activeTeamMemberId = 0;
 let teamModalMode = "edit";
@@ -143,6 +151,7 @@ let currentTab = "sales";
 let currentProductsSubtab = "catalog";
 let currentReviewsSubtab = "reviews";
 let currentAdsSubtab = "campaigns";
+let currentAccountingSubtab = "overview";
 let currentHelpSubtab = "docs";
 let currentSocialSubtab = "games";
 const moduleLoadState = new Map();
@@ -256,6 +265,7 @@ const TAB_TITLES = {
   products: { ru: ["Товары", "Импорт, обновление и проверка позиций"], en: ["Products", "Import, refresh and ranking checks"] },
   sales: { ru: ["Статистика и дашборд", "Продажи, KPI и динамика в одном модуле"], en: ["Statistics & Dashboard", "Sales, KPIs and trends in one module"] },
   reviews: { ru: ["Отзывы/Вопросы", "Единый модуль обратной связи"], en: ["Reviews/Questions", "Unified customer feedback module"] },
+  accounting: { ru: ["Бухгалтерия", "Прибыль, расходы и экономика WB/Ozon"], en: ["Accounting", "Profit, costs, and WB/Ozon economics"] },
   ads: { ru: ["Реклама WB/Ozon", "Кампании, аналитика и рекомендации"], en: ["WB/Ozon Ads", "Campaigns, analytics and recommendations"] },
   social: { ru: ["Социальный", "Пауза, взаимодействие и командная работа"], en: ["Social Hub", "Break, communication and teamwork"] },
   profile: { ru: ["Профиль", "Профиль компании, доступы команды и интеграции"], en: ["Profile", "Company profile, team access and integrations"] },
@@ -277,6 +287,7 @@ const TEAM_ACCESS_MODULES = [
   "products",
   "seo_generation",
   "sales_stats",
+  "accounting",
   "wb_reviews_ai",
   "wb_questions_ai",
   "returns",
@@ -293,6 +304,7 @@ const NAV_BUTTON_ICONS = {
   products: "/static/icons/nav-products.svg",
   sales: "/static/icons/nav-sales.svg",
   reviews: "/static/icons/nav-reviews.svg",
+  accounting: "/static/icons/nav-accounting.svg",
   ads: "/static/icons/nav-ads.svg",
   social: "/static/icons/nav-social.svg",
   profile: "/static/icons/nav-profile.svg",
@@ -304,6 +316,7 @@ const UI_TEXT = {
     nav_products: "Товары",
     nav_sales: "Статистика и дашборд",
     nav_reviews: "Отзывы/Вопросы",
+    nav_accounting: "Бухгалтерия",
     nav_ads: "Реклама WB/Ozon",
     nav_social: "Социальный",
     nav_profile: "Профиль",
@@ -325,6 +338,7 @@ const UI_TEXT = {
     nav_products: "Products",
     nav_sales: "Statistics & Dashboard",
     nav_reviews: "Reviews/Questions",
+    nav_accounting: "Accounting",
     nav_ads: "WB/Ozon Ads",
     nav_social: "Social Hub",
     nav_profile: "Profile",
@@ -390,6 +404,7 @@ function moduleLabel(code) {
     products: tr("Товары", "Products"),
     seo_generation: tr("SEO задачи", "SEO Jobs"),
     sales_stats: tr("Статистика продаж", "Sales Statistics"),
+    accounting: tr("Бухгалтерия", "Accounting"),
     wb_reviews_ai: tr("Отзывы", "Reviews"),
     wb_questions_ai: tr("Вопросы", "Questions"),
     returns: tr("Возвраты", "Returns"),
@@ -627,6 +642,7 @@ function applyUiLanguage() {
   setText(".nav-btn[data-tab='products']", t("nav_products"));
   setText(".nav-btn[data-tab='sales']", t("nav_sales"));
   setText(".nav-btn[data-tab='reviews']", t("nav_reviews"));
+  setText(".nav-btn[data-tab='accounting']", t("nav_accounting"));
   setText(".nav-btn[data-tab='ads']", t("nav_ads"));
   setText(".nav-btn[data-tab='social']", t("nav_social"));
   setText(".nav-btn[data-tab='profile']", t("nav_profile"));
@@ -1036,6 +1052,9 @@ function applyUiLanguage() {
   if (profileAiState) renderProfileAiState(profileAiState);
   renderHelpAssistantHistory();
   renderHelpAssistantModuleOptions();
+  if (typeof applyAccountingUiLanguage === "function") {
+    applyAccountingUiLanguage();
+  }
   applyModuleActionIcons();
 }
 
@@ -1043,6 +1062,9 @@ function changeUiLang() {
   const raw = (document.getElementById("uiLangSelect")?.value || "ru").toLowerCase();
   currentLang = raw === "en" ? "en" : "ru";
   applyUiLanguage();
+  if (typeof applyAccountingUiLanguage === "function") {
+    applyAccountingUiLanguage();
+  }
   applyButtonTooltips();
   if (currentTab === "reviews") renderWbReviews();
   if (currentTab === "reviews") renderWbQuestions();
@@ -1052,6 +1074,7 @@ function changeUiLang() {
     renderAdsRecommendationsRows();
   }
   if (currentTab === "help") loadHelpWorkspace();
+  if (currentTab === "accounting" && typeof loadAccountingWorkspace === "function") loadAccountingWorkspace();
   if (currentTab === "sales") renderSalesStats();
   if (currentTab === "profile") loadProfile();
 }
@@ -1941,6 +1964,7 @@ async function preloadModulesInBackground({ force = false } = {}) {
     { key: "sales", load: loadSalesBundle, enabled: () => !modulesLoaded || enabledModules.has("sales_stats") },
     { key: "products", load: loadProductsWorkspace, enabled: () => true },
     { key: "reviews", load: loadReviewsWorkspace, enabled: () => enabledModules.has("wb_reviews_ai") || enabledModules.has("wb_questions_ai") || enabledModules.has("returns") },
+    { key: "accounting", load: loadAccountingWorkspace, enabled: () => enabledModules.has("accounting") },
     { key: "ads", load: loadAdsWorkspace, enabled: () => enabledModules.has("wb_ads") || enabledModules.has("wb_ads_analytics") || enabledModules.has("wb_ads_recommendations") },
     { key: "social", load: () => (typeof loadSocialWorkspace === "function" ? loadSocialWorkspace() : Promise.resolve()), enabled: () => !modulesLoaded || enabledModules.has("social_hub") },
     { key: "profile", load: loadProfile, enabled: () => enabledModules.has("user_profile") },
@@ -1988,6 +2012,7 @@ function resolveInitialTab() {
     ["sales", has("sales_stats")],
     ["products", true],
     ["reviews", has("wb_reviews_ai") || has("wb_questions_ai") || has("returns")],
+    ["accounting", has("accounting")],
     ["ads", has("wb_ads") || has("wb_ads_analytics") || has("wb_ads_recommendations")],
     ["social", has("social_hub")],
     ["profile", has("user_profile")],
@@ -2006,6 +2031,7 @@ function isTabAvailable(tabCode) {
   if (code === "sales") return has("sales_stats");
   if (code === "products") return true;
   if (code === "reviews") return has("wb_reviews_ai") || has("wb_questions_ai") || has("returns");
+  if (code === "accounting") return has("accounting");
   if (code === "ads") return has("wb_ads") || has("wb_ads_analytics") || has("wb_ads_recommendations");
   if (code === "social") return has("social_hub");
   if (code === "profile") return has("user_profile");
@@ -2027,6 +2053,7 @@ function showTab(name, btn = null) {
     sessionStorage.setItem("seo_wibe_last_products_subtab", String(currentProductsSubtab || ""));
     sessionStorage.setItem("seo_wibe_last_reviews_subtab", String(currentReviewsSubtab || ""));
     sessionStorage.setItem("seo_wibe_last_ads_subtab", String(currentAdsSubtab || ""));
+    sessionStorage.setItem("seo_wibe_last_accounting_subtab", String(currentAccountingSubtab || ""));
     sessionStorage.setItem("seo_wibe_last_help_subtab", String(currentHelpSubtab || ""));
     sessionStorage.setItem("seo_wibe_last_social_subtab", String(currentSocialSubtab || ""));
   } catch (_) {}
@@ -2056,6 +2083,7 @@ function showTab(name, btn = null) {
   }
   if (targetTab === "products") runModuleLoader("products", loadProductsWorkspace);
   if (targetTab === "reviews") runModuleLoader("reviews", loadReviewsWorkspace);
+  if (targetTab === "accounting") runModuleLoader("accounting", loadAccountingWorkspace);
   if (targetTab === "ads") runModuleLoader("ads", loadAdsWorkspace);
   if (targetTab === "social") runModuleLoader("social", () => (typeof loadSocialWorkspace === "function" ? loadSocialWorkspace() : Promise.resolve()));
   if (targetTab === "profile") runModuleLoader("profile", loadProfile);
@@ -2072,6 +2100,7 @@ function showTab(name, btn = null) {
     sales: "sales_stats",
     products: currentProductsSubtab === "seo" ? "seo_generation" : "products",
     reviews: currentReviewsSubtab === "questions" ? "wb_questions_ai" : (currentReviewsSubtab === "returns" ? "returns" : "wb_reviews_ai"),
+    accounting: "accounting",
     ads: currentAdsSubtab === "analytics" ? "wb_ads_analytics" : (currentAdsSubtab === "recommendations" ? "wb_ads_recommendations" : "wb_ads"),
     social: "social_hub",
     profile: "user_profile",
@@ -2411,6 +2440,8 @@ async function ensureAuth(allowFallback = true) {
         if (["reviews", "questions", "returns"].includes(storedReviewsSubtab)) currentReviewsSubtab = storedReviewsSubtab;
         const storedAdsSubtab = String(sessionStorage.getItem("seo_wibe_last_ads_subtab") || "").trim();
         if (["campaigns", "analytics", "recommendations"].includes(storedAdsSubtab)) currentAdsSubtab = storedAdsSubtab;
+        const storedAccountingSubtab = String(sessionStorage.getItem("seo_wibe_last_accounting_subtab") || "").trim();
+        if (["overview", "analysis", "expenses", "settings"].includes(storedAccountingSubtab)) currentAccountingSubtab = storedAccountingSubtab;
         const storedHelpSubtab = String(sessionStorage.getItem("seo_wibe_last_help_subtab") || "").trim();
         if (["docs", "assistant"].includes(storedHelpSubtab)) currentHelpSubtab = storedHelpSubtab;
         const storedSocialSubtab = String(sessionStorage.getItem("seo_wibe_last_social_subtab") || "").trim();
@@ -8847,7 +8878,7 @@ async function saveProfileKey(marketplace) {
     headers: authHeaders(),
     body: JSON.stringify({ marketplace, api_key }),
   }).catch((e) => alert(e.message));
-  invalidateModuleCache("profile", "products", "sales", "ads", "reviews");
+  invalidateModuleCache("profile", "products", "sales", "accounting", "ads", "reviews");
   if (input) input.value = "";
   await loadProfile();
 }
@@ -8878,7 +8909,7 @@ async function deleteProfileKey(marketplace) {
     return null;
   });
   if (data?.message) alert(data.message);
-  invalidateModuleCache("profile", "products", "sales", "ads", "reviews");
+  invalidateModuleCache("profile", "products", "sales", "accounting", "ads", "reviews");
   await loadProfile();
 }
 

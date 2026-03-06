@@ -8463,3 +8463,86 @@ button,
     white-space: nowrap;
   }
 }
+
+/* Accounting module */
+.accounting-kpis {
+  margin-bottom: 12px;
+}
+
+.accounting-kpis .sales-kpi strong,
+.accounting-market-kpis .sales-kpi strong {
+  font-size: 24px;
+}
+
+.accounting-kpis .sales-kpi:nth-child(6n + 1),
+.accounting-market-kpis .sales-kpi:nth-child(3n + 1) {
+  border-color: color-mix(in oklab, var(--accent) 45%, var(--line));
+}
+
+.accounting-quick-range {
+  margin-top: 10px;
+}
+
+.accounting-file-actions {
+  margin-top: 10px;
+  align-items: center;
+}
+
+.accounting-file-actions input[type="file"] {
+  min-height: 42px;
+}
+
+.accounting-analysis-wrap,
+.accounting-expenses-wrap {
+  overflow-x: auto;
+}
+
+.accounting-table,
+.accounting-expenses-table {
+  min-width: 1220px;
+}
+
+.accounting-table td,
+.accounting-expenses-table td {
+  vertical-align: top;
+}
+
+.accounting-row-loss {
+  background: color-mix(in oklab, #ff5b7f 12%, transparent);
+}
+
+.accounting-row-profit {
+  background: color-mix(in oklab, #20cf9c 9%, transparent);
+}
+
+#accountingExpensesTable .row-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+#accountingSettingsMeta,
+#accountingExpensesMeta,
+#accountingAnalysisMeta,
+#accountingWarnings {
+  margin-top: 8px;
+}
+
+@media (max-width: 1200px) and (min-width: 981px) {
+  #appSection.app-shell {
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr) !important;
+    gap: 12px !important;
+  }
+
+  #appSection.app-shell:not(.sidebar-compact) {
+    --sidebar-width: 240px;
+  }
+
+  #appSection #mainSidebar {
+    width: 100%;
+    min-width: 0;
+  }
+
+  #appSection > .workspace {
+    min-width: 0;
+  }
+}

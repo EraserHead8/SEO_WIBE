@@ -18,8 +18,15 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Request, Response
+from fastapi.responses import StreamingResponse
 from sqlalchemy import String, cast, delete, func, or_, select, text
 from sqlalchemy.orm import Session
+
+try:
+    from openpyxl import Workbook, load_workbook
+except Exception:  # pragma: no cover
+    Workbook = None
+    load_workbook = None
 
 from app.config import settings
 from app.auth import create_access_token, decode_access_token, get_password_hash, verify_password
@@ -31,6 +38,8 @@ from app.models import (
     AuditLog,
     BillingAccount,
     BillingEvent,
+    AccountingExpense,
+    AccountingSettings,
     ModuleAccess,
     PositionSnapshot,
     Product,
@@ -82,6 +91,13 @@ from app.schemas import (
     AuditLogPageOut,
     ApiCredentialIn,
     ApiCredentialOut,
+    AccountingDataOut,
+    AccountingExpenseIn,
+    AccountingExpenseListOut,
+    AccountingExpenseOut,
+    AccountingPurchasePriceImportOut,
+    AccountingSettingsIn,
+    AccountingSettingsOut,
     CurrentModuleOut,
     CredentialTestOut,
     DashboardOut,
@@ -168,6 +184,7 @@ from app.schemas import (
     UiSettingsIn,
     UiSettingsOut,
 )
+from app.services.accounting import build_accounting_payload
 from app.services.sales import build_sales_report
 from app.services.market_cache import (
     build_market_cache_key,
@@ -251,6 +268,7 @@ _SOCIAL_REMINDER_LAST_RUN: dict[str, float] = {}
 _MARKET_CACHE_TTL_SEC = {
     "dashboard": 60,
     "sales_stats": 180,
+    "accounting": 240,
     "wb_reviews_ai": 120,
     "wb_questions_ai": 120,
     "returns": 180,
@@ -463,6 +481,31 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
             "- Обновить: повторная загрузка статуса биллинга.\n"
             "- Блоки «Статус и лимиты» и «История»: текущие квоты и операции.\n\n"
             "Пример: если упираетесь в лимит AI-ответов, выберите plan pro и нажмите «Сменить тариф»."
+        ),
+    },
+    "accounting": {
+        "title": "Бухгалтерия",
+        "content": (
+            "Назначение: учет прибыли и расходов по WB/Ozon в одном модуле.\n\n"
+            "Подвкладки:\n"
+            "- Обзор: выручка, себестоимость, валовая/операционная/чистая прибыль, маржа, график динамики.\n"
+            "- Анализ: товарная таблица по SKU/артикулу (убыточные, лидеры прибыли, возвраты, расходы).\n"
+            "- Расходы: добавление/редактирование/удаление регулярных и разовых расходов.\n"
+            "- Настройки расчета: НДС, налог, дополнительные коэффициенты и фиксированные расходы.\n\n"
+            "Excel по закупочным ценам:\n"
+            "- Скачайте шаблон в «Настройках расчета».\n"
+            "- Заполните закупочные цены и загрузите файл обратно.\n"
+            "- Сервис провалидирует строки и покажет, что обновлено/что не сопоставилось.\n\n"
+            "Как считается прибыль:\n"
+            "- Берем данные продаж и финансовых операций WB/Ozon.\n"
+            "- Учитываем комиссии, логистику, хранение, удержания, штрафы, рекламу.\n"
+            "- Вычитаем себестоимость (закупочная цена * выкупленные штуки).\n"
+            "- Применяем пользовательские расходы, НДС/налоговые параметры.\n"
+            "- Получаем чистую прибыль и маржу.\n\n"
+            "Ограничения:\n"
+            "- Если маркетплейс не отдал товарные поля по части операций, строка попадет в агрегированный вид.\n"
+            "- Точность себестоимости зависит от заполненности закупочных цен.\n\n"
+            "Пример: загрузите закупочные цены через Excel, добавьте ежемесячные расходы (зарплата/упаковка), выберите «Месяц» и оцените чистую прибыль по WB и Ozon."
         ),
     },
     "sales_stats": {
@@ -706,6 +749,31 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
             "- Refresh.\n"
             "- Status/Limits and History blocks show current quota usage and billing events.\n\n"
             "Example: if AI limits are reached, switch to a higher plan, then refresh to verify new limits."
+        ),
+    },
+    "accounting": {
+        "title": "Accounting",
+        "content": (
+            "Purpose: marketplace profit accounting for WB/Ozon in one module.\n\n"
+            "Subtabs:\n"
+            "- Overview: revenue, COGS, gross/operating/net profit, margin, trend chart.\n"
+            "- Analysis: SKU/article table (loss makers, top profit rows, return-heavy rows, expense-heavy rows).\n"
+            "- Expenses: create/edit/delete recurring and one-time expenses.\n"
+            "- Calculation settings: VAT/tax/additional coefficients and fixed monthly cost.\n\n"
+            "Purchase price Excel flow:\n"
+            "- Download template in settings.\n"
+            "- Fill purchase prices and upload back.\n"
+            "- Validation reports updated/skipped/unmatched rows.\n\n"
+            "Profit model:\n"
+            "- Uses WB/Ozon sales + finance operations.\n"
+            "- Includes commissions, logistics, storage, deductions, penalties, ad spend.\n"
+            "- Subtracts COGS (purchase price * sold units).\n"
+            "- Applies custom expenses and tax/VAT parameters.\n"
+            "- Produces net profit and margin.\n\n"
+            "Limitations:\n"
+            "- If marketplace item dimensions are missing for some operations, those records are shown in aggregated form.\n"
+            "- COGS quality depends on purchase-price coverage.\n\n"
+            "Example: import purchase prices from Excel, add monthly salary/packaging expenses, switch to Month range, and compare net profit for WB vs Ozon."
         ),
     },
     "sales_stats": {
@@ -4734,6 +4802,386 @@ def sales_stats(
         totals=totals,
         comparison=comparison,
         warnings=[str(x) for x in warnings],
+    )
+
+
+@router.get("/accounting/settings", response_model=AccountingSettingsOut)
+def accounting_settings_get(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "accounting")
+    row = _get_or_create_accounting_settings(db, user)
+    db.commit()
+    return _accounting_settings_to_out(row)
+
+
+@router.put("/accounting/settings", response_model=AccountingSettingsOut)
+def accounting_settings_update(payload: AccountingSettingsIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "accounting")
+    _require_owner_actor(user)
+    row = _get_or_create_accounting_settings(db, user)
+    row.vat_rate = max(0.0, min(100.0, _to_money(payload.vat_rate)))
+    row.tax_rate = max(0.0, min(100.0, _to_money(payload.tax_rate)))
+    row.additional_rate = max(0.0, min(100.0, _to_money(payload.additional_rate)))
+    row.fixed_cost_per_month = max(0.0, _to_money(payload.fixed_cost_per_month))
+    _audit(
+        db,
+        user,
+        action="accounting_settings_updated",
+        details=(
+            f"vat={row.vat_rate};tax={row.tax_rate};additional={row.additional_rate};"
+            f"fixed={row.fixed_cost_per_month}"
+        ),
+        module_code="accounting",
+        entity_type="accounting_settings",
+        entity_id=str(row.id),
+    )
+    db.commit()
+    db.refresh(row)
+    return _accounting_settings_to_out(row)
+
+
+@router.get("/accounting/expenses", response_model=AccountingExpenseListOut)
+def accounting_expenses_get(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "accounting")
+    rows = db.scalars(
+        select(AccountingExpense)
+        .where(AccountingExpense.user_id == user.id)
+        .order_by(AccountingExpense.id.desc())
+    ).all()
+    db.commit()
+    return AccountingExpenseListOut(rows=[_accounting_expense_to_out(x) for x in rows])
+
+
+@router.post("/accounting/expenses", response_model=AccountingExpenseOut)
+def accounting_expense_create(payload: AccountingExpenseIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "accounting")
+    _require_owner_actor(user)
+    category = " ".join(str(payload.category or "").split()).strip()
+    if not category:
+        raise HTTPException(status_code=400, detail="Укажите категорию расхода")
+    amount = max(0.0, _to_money(payload.amount))
+    start_date = _parse_datetime_or_none(payload.start_date)
+    end_date = _parse_datetime_or_none(payload.end_date)
+    if start_date and end_date and start_date > end_date:
+        start_date, end_date = end_date, start_date
+    row = AccountingExpense(
+        user_id=user.id,
+        marketplace=_normalize_accounting_marketplace(payload.marketplace),
+        category=category[:120],
+        amount=amount,
+        recurrence=_normalize_expense_recurrence(payload.recurrence),
+        start_date=start_date,
+        end_date=end_date,
+        note=str(payload.note or "")[:1000],
+        is_active=bool(payload.is_active),
+    )
+    db.add(row)
+    db.flush()
+    _audit(
+        db,
+        user,
+        action="accounting_expense_created",
+        details=(
+            f"id={row.id};marketplace={row.marketplace};category={row.category};"
+            f"amount={row.amount};recurrence={row.recurrence};active={1 if row.is_active else 0}"
+        )[:2000],
+        module_code="accounting",
+        entity_type="accounting_expense",
+        entity_id=str(row.id),
+    )
+    db.commit()
+    db.refresh(row)
+    return _accounting_expense_to_out(row)
+
+
+@router.put("/accounting/expenses/{expense_id}", response_model=AccountingExpenseOut)
+def accounting_expense_update(
+    expense_id: int,
+    payload: AccountingExpenseIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "accounting")
+    _require_owner_actor(user)
+    row = db.scalar(select(AccountingExpense).where(AccountingExpense.id == expense_id, AccountingExpense.user_id == user.id))
+    if not row:
+        raise HTTPException(status_code=404, detail="Расход не найден")
+    category = " ".join(str(payload.category or "").split()).strip()
+    if not category:
+        raise HTTPException(status_code=400, detail="Укажите категорию расхода")
+    row.marketplace = _normalize_accounting_marketplace(payload.marketplace)
+    row.category = category[:120]
+    row.amount = max(0.0, _to_money(payload.amount))
+    row.recurrence = _normalize_expense_recurrence(payload.recurrence)
+    row.start_date = _parse_datetime_or_none(payload.start_date)
+    row.end_date = _parse_datetime_or_none(payload.end_date)
+    if row.start_date and row.end_date and row.start_date > row.end_date:
+        row.start_date, row.end_date = row.end_date, row.start_date
+    row.note = str(payload.note or "")[:1000]
+    row.is_active = bool(payload.is_active)
+    _audit(
+        db,
+        user,
+        action="accounting_expense_updated",
+        details=(
+            f"id={row.id};marketplace={row.marketplace};category={row.category};"
+            f"amount={row.amount};recurrence={row.recurrence};active={1 if row.is_active else 0}"
+        )[:2000],
+        module_code="accounting",
+        entity_type="accounting_expense",
+        entity_id=str(row.id),
+    )
+    db.commit()
+    db.refresh(row)
+    return _accounting_expense_to_out(row)
+
+
+@router.delete("/accounting/expenses/{expense_id}", response_model=MessageOut)
+def accounting_expense_delete(expense_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "accounting")
+    _require_owner_actor(user)
+    row = db.scalar(select(AccountingExpense).where(AccountingExpense.id == expense_id, AccountingExpense.user_id == user.id))
+    if not row:
+        raise HTTPException(status_code=404, detail="Расход не найден")
+    db.delete(row)
+    _audit(
+        db,
+        user,
+        action="accounting_expense_deleted",
+        details=f"id={expense_id};category={str(row.category or '')[:120]}",
+        module_code="accounting",
+        entity_type="accounting_expense",
+        entity_id=str(expense_id),
+    )
+    db.commit()
+    return MessageOut(message="Расход удален")
+
+
+@router.get("/accounting/data", response_model=AccountingDataOut)
+def accounting_data(
+    marketplace: str = "all",
+    date_from: date | None = None,
+    date_to: date | None = None,
+    granularity: str = "auto",
+    tz: str = "UTC",
+    q: str = "",
+    sort_by: str = "net_profit_desc",
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "accounting")
+    selected_market = _normalize_accounting_marketplace(marketplace)
+    right = date_to or date.today()
+    left = date_from or right
+    if left > right:
+        left, right = right, left
+    if (right - left).days > 365:
+        left = right - timedelta(days=365)
+    gran = str(granularity or "auto").strip().lower()
+    if gran not in {"auto", "hour", "day"}:
+        gran = "auto"
+    tz_name = str(tz or "UTC").strip() or "UTC"
+    try:
+        ZoneInfo(tz_name)
+    except Exception:
+        tz_name = "UTC"
+
+    wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
+    ozon_key = _get_active_marketplace_api_key(db, user.id, "ozon")
+    settings_row = _get_or_create_accounting_settings(db, user)
+    settings_payload = {
+        "vat_rate": float(round(settings_row.vat_rate or 0.0, 2)),
+        "tax_rate": float(round(settings_row.tax_rate or 0.0, 2)),
+        "additional_rate": float(round(settings_row.additional_rate or 0.0, 2)),
+        "fixed_cost_per_month": float(round(settings_row.fixed_cost_per_month or 0.0, 2)),
+    }
+    expense_rows = db.scalars(
+        select(AccountingExpense)
+        .where(AccountingExpense.user_id == user.id)
+        .order_by(AccountingExpense.id.asc())
+    ).all()
+    products_payload = _collect_product_cost_payload(db, user, selected_market)
+    data = build_accounting_payload(
+        marketplace=selected_market,
+        date_from=left,
+        date_to=right,
+        wb_api_key=wb_key,
+        ozon_api_key=ozon_key,
+        products=products_payload,
+        expenses=_collect_accounting_expense_payload(expense_rows),
+        settings=settings_payload,
+        granularity=gran,
+        tz_name=tz_name,
+        search=str(q or ""),
+        sort_by=str(sort_by or "net_profit_desc"),
+    )
+    rows = list(data.get("analysis_rows") or [])
+    if len(rows) > 2000:
+        rows = rows[:2000]
+        data.setdefault("warnings", []).append("Показаны первые 2000 строк анализа для ускорения интерфейса.")
+
+    _audit(
+        db,
+        user,
+        action="accounting_read",
+        details=(
+            f"market={selected_market};from={left.isoformat()};to={right.isoformat()};"
+            f"rows={len(rows)};granularity={gran};tz={tz_name};sort={sort_by};q_len={len(str(q or ''))}"
+        ),
+        module_code="accounting",
+        entity_type="accounting_report",
+    )
+    db.commit()
+    return AccountingDataOut(
+        marketplace=selected_market,
+        date_from=left.isoformat(),
+        date_to=right.isoformat(),
+        overview=data.get("overview") or {},
+        chart=data.get("chart") or [],
+        analysis_rows=rows,
+        warnings=[str(x) for x in (data.get("warnings") or []) if str(x).strip()],
+    )
+
+
+@router.get("/accounting/purchase-prices/template")
+def accounting_purchase_price_template(
+    marketplace: str = "all",
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "accounting")
+    selected_market = _normalize_accounting_marketplace(marketplace)
+    rows_src = _collect_product_cost_payload(db, user, selected_market)
+    rows: list[list[Any]] = [
+        ["marketplace", "article", "external_id", "name", "purchase_price"],
+    ]
+    for row in rows_src:
+        rows.append(
+            [
+                row.get("marketplace") or "",
+                row.get("article") or "",
+                row.get("external_id") or "",
+                row.get("name") or "",
+                row.get("purchase_price") or 0.0,
+            ]
+        )
+    raw, mime = _workbook_bytes_from_rows(rows)
+    ext = "xlsx" if "sheet" in mime else "csv"
+    filename = f"purchase_price_template_{selected_market}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.{ext}"
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    db.commit()
+    return StreamingResponse(io.BytesIO(raw), media_type=mime, headers=headers)
+
+
+@router.get("/accounting/purchase-prices/export")
+def accounting_purchase_price_export(
+    marketplace: str = "all",
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "accounting")
+    selected_market = _normalize_accounting_marketplace(marketplace)
+    rows_src = _collect_product_cost_payload(db, user, selected_market)
+    rows: list[list[Any]] = [
+        ["marketplace", "article", "external_id", "name", "purchase_price"],
+    ]
+    for row in rows_src:
+        rows.append(
+            [
+                row.get("marketplace") or "",
+                row.get("article") or "",
+                row.get("external_id") or "",
+                row.get("name") or "",
+                float(round(_to_money(row.get("purchase_price") or 0.0), 2)),
+            ]
+        )
+    raw, mime = _workbook_bytes_from_rows(rows)
+    ext = "xlsx" if "sheet" in mime else "csv"
+    filename = f"purchase_prices_export_{selected_market}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.{ext}"
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    db.commit()
+    return StreamingResponse(io.BytesIO(raw), media_type=mime, headers=headers)
+
+
+@router.post("/accounting/purchase-prices/import", response_model=AccountingPurchasePriceImportOut)
+def accounting_purchase_price_import(
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "accounting")
+    _require_owner_actor(user)
+    rows = _parse_purchase_price_upload(file)
+    if not rows:
+        raise HTTPException(status_code=400, detail="Файл пуст или не распознан. Используйте шаблон из модуля Бухгалтерия.")
+    updated = 0
+    skipped = 0
+    unmatched: list[str] = []
+    errors: list[str] = []
+    for item in rows:
+        row_no = int(_to_int(item.get("row_no") or 0))
+        market = _normalize_accounting_marketplace(item.get("marketplace") or "all")
+        article = str(item.get("article") or "").strip()
+        external_id = str(item.get("external_id") or "").strip()
+        price_raw = str(item.get("price_raw") or "").strip()
+        if not article and not external_id:
+            errors.append(f"Строка {row_no}: не указан article/external_id.")
+            continue
+        if not price_raw:
+            errors.append(f"Строка {row_no}: не указана закупочная цена.")
+            continue
+        if not re.fullmatch(r"-?\d+(?:[.,]\d+)?", price_raw):
+            errors.append(f"Строка {row_no}: некорректная цена '{price_raw}'.")
+            continue
+        price = max(0.0, _to_money(price_raw))
+        query = select(Product).where(
+            Product.user_id == user.id,
+            _owned_by_actor_or_owner_filter(Product, user),
+        )
+        if market in {"wb", "ozon"}:
+            query = query.where(Product.marketplace == market)
+        match_filters: list[Any] = []
+        if article:
+            match_filters.append(func.lower(func.coalesce(Product.article, "")) == article.lower())
+        if external_id:
+            normalized = external_id.lower()
+            match_filters.append(func.lower(func.coalesce(Product.external_id, "")) == normalized)
+            match_filters.append(func.lower(func.coalesce(Product.barcode, "")) == normalized)
+        if not match_filters:
+            errors.append(f"Строка {row_no}: не удалось собрать условия сопоставления.")
+            continue
+        matched = db.scalars(query.where(or_(*match_filters))).all()
+        if not matched:
+            unmatched.append(f"{market}:{article or external_id}")
+            continue
+        changed = 0
+        for product in matched:
+            old_value = float(round(product.purchase_price or 0.0, 2))
+            if abs(old_value - price) < 0.0001:
+                continue
+            product.purchase_price = price
+            changed += 1
+        if changed > 0:
+            updated += changed
+        else:
+            skipped += len(matched)
+
+    _audit(
+        db,
+        user,
+        action="accounting_purchase_price_imported",
+        details=(
+            f"updated={updated};skipped={skipped};unmatched={len(unmatched)};errors={len(errors)};"
+            f"filename={str(file.filename or '')[:120]}"
+        ),
+        module_code="accounting",
+        entity_type="product_purchase_price",
+    )
+    db.commit()
+    return AccountingPurchasePriceImportOut(
+        updated=updated,
+        skipped=skipped,
+        unmatched=unmatched[:200],
+        errors=errors[:200],
     )
 
 
@@ -9653,6 +10101,7 @@ def _safe_team_scope(values: list[str] | None) -> list[str]:
         "products",
         "seo_generation",
         "sales_stats",
+        "accounting",
         "wb_reviews_ai",
         "wb_questions_ai",
         "returns",
@@ -9673,7 +10122,7 @@ def _safe_team_scope(values: list[str] | None) -> list[str]:
         seen.add(code)
         out.append(code)
     if not out:
-        return ["products", "sales_stats", "wb_reviews_ai", "wb_questions_ai", "returns", "social_hub"]
+        return ["products", "sales_stats", "accounting", "wb_reviews_ai", "wb_questions_ai", "returns", "social_hub"]
     return out
 
 
@@ -9713,7 +10162,7 @@ def _validate_team_member_password(raw_password: str, *, required: bool) -> str:
 def _team_scope_from_row(row: TeamMember) -> list[str]:
     raw = str(row.access_scope or "").strip()
     if not raw:
-        return ["*"] if row.is_owner else ["products", "sales_stats", "wb_reviews_ai", "wb_questions_ai", "returns", "social_hub"]
+        return ["*"] if row.is_owner else ["products", "sales_stats", "accounting", "wb_reviews_ai", "wb_questions_ai", "returns", "social_hub"]
     try:
         parsed = json.loads(raw)
     except Exception:
@@ -9721,10 +10170,10 @@ def _team_scope_from_row(row: TeamMember) -> list[str]:
     if row.is_owner:
         return ["*"]
     if not isinstance(parsed, list):
-        return ["products", "sales_stats", "wb_reviews_ai", "wb_questions_ai", "returns", "social_hub"]
+        return ["products", "sales_stats", "accounting", "wb_reviews_ai", "wb_questions_ai", "returns", "social_hub"]
     cleaned = _safe_team_scope([str(x) for x in parsed])
-    if cleaned and all(x in {"products", "sales_stats"} for x in cleaned):
-        return ["products", "sales_stats", "wb_reviews_ai", "wb_questions_ai", "returns", "social_hub"]
+    if cleaned and all(x in {"products", "sales_stats", "accounting"} for x in cleaned):
+        return ["products", "sales_stats", "accounting", "wb_reviews_ai", "wb_questions_ai", "returns", "social_hub"]
     return cleaned
 
 
@@ -9949,6 +10398,248 @@ def _build_billing_payload(db: Session, user_id: int, account: BillingAccount) -
         modules=modules,
         history=history,
     )
+
+
+def _normalize_accounting_marketplace(value: str) -> str:
+    code = str(value or "all").strip().lower()
+    if code not in {"all", "wb", "ozon"}:
+        return "all"
+    return code
+
+
+def _normalize_expense_recurrence(value: str) -> str:
+    code = str(value or "monthly").strip().lower()
+    if code in {"one_time", "single"}:
+        return "once"
+    if code not in {"once", "daily", "weekly", "monthly", "quarterly", "yearly"}:
+        return "monthly"
+    return code
+
+
+def _parse_datetime_or_none(value: str | None) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(text)
+        if dt.tzinfo is not None:
+            return dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt
+    except Exception:
+        pass
+    for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(text[:10], fmt)
+        except Exception:
+            continue
+    return None
+
+
+def _to_iso_or_none(value: datetime | None) -> str | None:
+    if not value:
+        return None
+    try:
+        return value.replace(microsecond=0).isoformat()
+    except Exception:
+        return None
+
+
+def _to_money(value: Any) -> float:
+    try:
+        num = float(value)
+    except Exception:
+        try:
+            num = float(str(value).replace(",", ".").strip())
+        except Exception:
+            return 0.0
+    if not math.isfinite(num):
+        return 0.0
+    return float(round(num, 2))
+
+
+def _get_or_create_accounting_settings(db: Session, user: User) -> AccountingSettings:
+    row = db.scalar(select(AccountingSettings).where(AccountingSettings.user_id == user.id))
+    if row:
+        return row
+    profile = _get_or_create_user_profile(db, user.id)
+    inferred_tax = _to_money(profile.tax_rate or 0.0)
+    row = AccountingSettings(
+        user_id=user.id,
+        vat_rate=0.0,
+        tax_rate=inferred_tax,
+        additional_rate=0.0,
+        fixed_cost_per_month=0.0,
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def _accounting_settings_to_out(row: AccountingSettings) -> AccountingSettingsOut:
+    return AccountingSettingsOut(
+        vat_rate=float(round(row.vat_rate or 0.0, 2)),
+        tax_rate=float(round(row.tax_rate or 0.0, 2)),
+        additional_rate=float(round(row.additional_rate or 0.0, 2)),
+        fixed_cost_per_month=float(round(row.fixed_cost_per_month or 0.0, 2)),
+        updated_at=_to_iso_or_none(row.updated_at),
+    )
+
+
+def _accounting_expense_to_out(row: AccountingExpense) -> AccountingExpenseOut:
+    return AccountingExpenseOut(
+        id=int(row.id),
+        marketplace=_normalize_accounting_marketplace(row.marketplace),
+        category=str(row.category or ""),
+        amount=float(round(row.amount or 0.0, 2)),
+        recurrence=_normalize_expense_recurrence(row.recurrence),
+        start_date=_to_iso_or_none(row.start_date),
+        end_date=_to_iso_or_none(row.end_date),
+        note=str(row.note or ""),
+        is_active=bool(row.is_active),
+        created_at=_to_iso_or_none(row.created_at),
+        updated_at=_to_iso_or_none(row.updated_at),
+    )
+
+
+def _collect_accounting_expense_payload(rows: list[AccountingExpense]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        out.append(
+            {
+                "marketplace": _normalize_accounting_marketplace(row.marketplace),
+                "category": str(row.category or ""),
+                "amount": float(round(row.amount or 0.0, 2)),
+                "recurrence": _normalize_expense_recurrence(row.recurrence),
+                "start_date": _to_iso_or_none(row.start_date),
+                "end_date": _to_iso_or_none(row.end_date),
+                "note": str(row.note or ""),
+                "is_active": bool(row.is_active),
+            }
+        )
+    return out
+
+
+def _collect_product_cost_payload(db: Session, user: User, marketplace: str) -> list[dict[str, Any]]:
+    query = select(Product).where(
+        Product.user_id == user.id,
+        _owned_by_actor_or_owner_filter(Product, user),
+    )
+    market = _normalize_accounting_marketplace(marketplace)
+    if market in {"wb", "ozon"}:
+        query = query.where(Product.marketplace == market)
+    rows = db.scalars(query).all()
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        out.append(
+            {
+                "marketplace": str(row.marketplace or "").strip().lower(),
+                "article": str(row.article or ""),
+                "external_id": str(row.external_id or ""),
+                "barcode": str(row.barcode or ""),
+                "name": str(row.name or ""),
+                "purchase_price": float(round(row.purchase_price or 0.0, 2)),
+            }
+        )
+    return out
+
+
+def _workbook_bytes_from_rows(rows: list[list[Any]]) -> tuple[bytes, str]:
+    if Workbook is not None:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "purchase_prices"
+        for row in rows:
+            ws.append(list(row))
+        bio = io.BytesIO()
+        wb.save(bio)
+        return bio.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+    text_rows: list[str] = []
+    for row in rows:
+        cells = [str(cell if cell is not None else "") for cell in row]
+        escaped = ['"' + x.replace('"', '""') + '"' for x in cells]
+        text_rows.append(",".join(escaped))
+    raw = ("\n".join(text_rows)).encode("utf-8")
+    return raw, "text/csv; charset=utf-8"
+
+
+def _normalize_header(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    text = text.replace("ё", "е")
+    text = re.sub(r"[^a-zа-я0-9]+", "_", text)
+    text = re.sub(r"_+", "_", text).strip("_")
+    return text
+
+
+def _parse_purchase_price_upload(upload: UploadFile) -> list[dict[str, Any]]:
+    raw = upload.file.read() if upload and upload.file else b""
+    if not raw:
+        return []
+    filename = str(upload.filename or "").lower()
+    if (filename.endswith(".xlsx") or filename.endswith(".xlsm")) and load_workbook is not None:
+        wb = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+        ws = wb.active
+        rows_iter = ws.iter_rows(values_only=True)
+        try:
+            header = [str(x or "") for x in next(rows_iter)]
+        except StopIteration:
+            return []
+        idx = { _normalize_header(name): pos for pos, name in enumerate(header) }
+        return _extract_purchase_rows_from_iter(rows_iter, idx)
+
+    text = raw.decode("utf-8", errors="ignore")
+    lines = [line for line in text.splitlines() if line.strip()]
+    if not lines:
+        return []
+    header_cells = [cell.strip().strip('"') for cell in lines[0].split(",")]
+    idx = { _normalize_header(name): pos for pos, name in enumerate(header_cells) }
+    data_rows = [line.split(",") for line in lines[1:]]
+    return _extract_purchase_rows_from_iter(data_rows, idx)
+
+
+def _extract_purchase_rows_from_iter(rows_iter: Any, idx: dict[str, int]) -> list[dict[str, Any]]:
+    mp_idx = _first_index(idx, {"marketplace", "mp", "market", "маркетплеис", "маркетплейс"})
+    article_idx = _first_index(idx, {"article", "артикул", "sku", "offer_id", "vendor_code", "vendorcode"})
+    external_idx = _first_index(idx, {"external_id", "externalid", "nm_id", "nmid", "barcode", "штрихкод"})
+    price_idx = _first_index(idx, {"purchase_price", "purchaseprice", "закупочная_цена", "закупочная_стоимость", "цена_закупки", "cost", "cost_price"})
+    if price_idx < 0:
+        return []
+
+    out: list[dict[str, Any]] = []
+    row_no = 1
+    for raw_row in rows_iter:
+        row_no += 1
+        row = list(raw_row) if isinstance(raw_row, (list, tuple)) else []
+        def _cell(pos: int) -> str:
+            if pos < 0 or pos >= len(row):
+                return ""
+            return str(row[pos] if row[pos] is not None else "").strip()
+
+        marketplace = _normalize_accounting_marketplace(_cell(mp_idx) or "all")
+        article = _cell(article_idx)
+        external_id = _cell(external_idx)
+        price_raw = _cell(price_idx)
+        if not price_raw and not article and not external_id:
+            continue
+        out.append(
+            {
+                "row_no": row_no,
+                "marketplace": marketplace,
+                "article": article,
+                "external_id": external_id,
+                "price_raw": price_raw,
+            }
+        )
+    return out
+
+
+def _first_index(idx: dict[str, int], names: set[str]) -> int:
+    for name in names:
+        if name in idx:
+            return int(idx[name])
+    return -1
 
 
 def _sanitize_ai_prompt(text: str) -> str:

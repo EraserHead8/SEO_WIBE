@@ -25,6 +25,8 @@ class User(Base):
     team_members: Mapped[list["TeamMember"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     billing_account: Mapped["BillingAccount | None"] = relationship(back_populates="user", cascade="all, delete-orphan")
     billing_events: Mapped[list["BillingEvent"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    accounting_settings: Mapped["AccountingSettings | None"] = relationship(back_populates="user", cascade="all, delete-orphan")
+    accounting_expenses: Mapped[list["AccountingExpense"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 
 class ApiCredential(Base):
@@ -53,6 +55,7 @@ class Product(Base):
     photos_json: Mapped[str] = mapped_column(Text, default="[]")
     name: Mapped[str] = mapped_column(String(255))
     category_name: Mapped[str] = mapped_column(String(255), default="", index=True)
+    purchase_price: Mapped[float] = mapped_column(Float, default=0.0)
     current_description: Mapped[str] = mapped_column(Text, default="")
     target_keywords: Mapped[str] = mapped_column(Text, default="")
     last_position: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -256,6 +259,40 @@ class BillingEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     user: Mapped["User"] = relationship(back_populates="billing_events")
+
+
+class AccountingSettings(Base):
+    __tablename__ = "accounting_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, unique=True)
+    vat_rate: Mapped[float] = mapped_column(Float, default=0.0)
+    tax_rate: Mapped[float] = mapped_column(Float, default=0.0)
+    additional_rate: Mapped[float] = mapped_column(Float, default=0.0)
+    fixed_cost_per_month: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped["User"] = relationship(back_populates="accounting_settings")
+
+
+class AccountingExpense(Base):
+    __tablename__ = "accounting_expenses"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    marketplace: Mapped[str] = mapped_column(String(20), default="all", index=True)
+    category: Mapped[str] = mapped_column(String(120), default="")
+    amount: Mapped[float] = mapped_column(Float, default=0.0)
+    recurrence: Mapped[str] = mapped_column(String(20), default="monthly", index=True)
+    start_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    end_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    note: Mapped[str] = mapped_column(Text, default="")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped["User"] = relationship(back_populates="accounting_expenses")
 
 
 class SystemSetting(Base):

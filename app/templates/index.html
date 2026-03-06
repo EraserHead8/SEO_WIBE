@@ -157,6 +157,7 @@
         <button class="nav-btn" data-tab="sales" data-module="sales_stats" onclick="showTab('sales', this)">Статистика и дашборд</button>
         <button class="nav-btn" data-tab="products" onclick="showTab('products', this)">Товары</button>
         <button class="nav-btn" data-tab="reviews" data-module="wb_reviews_ai" onclick="showTab('reviews', this)">Отзывы/Вопросы</button>
+        <button class="nav-btn" data-tab="accounting" data-module="accounting" onclick="showTab('accounting', this)">Бухгалтерия</button>
         <button class="nav-btn" data-tab="ads" data-module="wb_ads" onclick="showTab('ads', this)">Реклама WB/Ozon</button>
         <button class="nav-btn" data-tab="social" data-module="social_hub" onclick="showTab('social', this)">Социальный</button>
         <button class="nav-btn" data-tab="profile" data-module="user_profile" onclick="showTab('profile', this)">Профиль</button>
@@ -419,6 +420,167 @@
             </thead>
             <tbody id="salesTable"></tbody>
           </table>
+        </div>
+      </section>
+
+      <section id="accounting" class="tab hidden">
+        <div class="panel">
+          <div class="module-subtabs">
+            <button class="chip-btn active" id="accountingSubtabOverviewBtn" type="button" onclick="switchAccountingSubtab('overview')">Обзор</button>
+            <button class="chip-btn" id="accountingSubtabAnalysisBtn" type="button" onclick="switchAccountingSubtab('analysis')">Анализ</button>
+            <button class="chip-btn" id="accountingSubtabExpensesBtn" type="button" onclick="switchAccountingSubtab('expenses')">Расходы</button>
+            <button class="chip-btn" id="accountingSubtabSettingsBtn" type="button" onclick="switchAccountingSubtab('settings')">Налоги и параметры</button>
+          </div>
+        </div>
+
+        <div id="accountingSubtabOverview">
+          <div class="panel">
+            <h3>Прибыль и обзор</h3>
+            <div class="grid-6">
+              <select id="accountingMarketplace" onchange="scheduleAccountingReload(120)">
+                <option value="all">Все маркетплейсы</option>
+                <option value="wb">WB</option>
+                <option value="ozon">Ozon</option>
+              </select>
+              <select id="accountingPeriod" onchange="onAccountingPeriodChanged()">
+                <option value="day">День</option>
+                <option value="week">Неделя</option>
+                <option value="month">Месяц</option>
+                <option value="quarter">Квартал</option>
+                <option value="year">Год</option>
+                <option value="custom">Произвольный период</option>
+              </select>
+              <input id="accountingDateFrom" type="date" onchange="onAccountingDateChanged()" />
+              <input id="accountingDateTo" type="date" onchange="onAccountingDateChanged()" />
+              <button class="btn-secondary" type="button" onclick="loadAccountingData(true)">Обновить данные</button>
+              <button class="btn-secondary" type="button" onclick="loadAccountingWorkspace()">Обновить все</button>
+            </div>
+            <div class="sales-quick-range accounting-quick-range">
+              <button class="chip-btn" data-accounting-range="day" type="button" onclick="setAccountingRange('day')">День</button>
+              <button class="chip-btn" data-accounting-range="week" type="button" onclick="setAccountingRange('week')">Неделя</button>
+              <button class="chip-btn" data-accounting-range="month" type="button" onclick="setAccountingRange('month')">Месяц</button>
+              <button class="chip-btn" data-accounting-range="quarter" type="button" onclick="setAccountingRange('quarter')">Квартал</button>
+              <button class="chip-btn" data-accounting-range="year" type="button" onclick="setAccountingRange('year')">Год</button>
+              <button class="chip-btn" data-accounting-range="custom" type="button" onclick="setAccountingRange('custom')">Период</button>
+            </div>
+            <div class="grid-4 accounting-file-actions">
+              <button class="btn-secondary" type="button" onclick="downloadAccountingTemplate()">Скачать шаблон Excel</button>
+              <button class="btn-secondary" type="button" onclick="downloadAccountingExport()">Экспорт цен</button>
+              <input id="accountingImportFile" type="file" accept=".xlsx,.xlsm,.csv" />
+              <button class="btn-secondary" type="button" onclick="importAccountingPurchasePrices()">Импорт закупочных цен</button>
+            </div>
+            <div id="accountingWarnings" class="hint load-status">-</div>
+          </div>
+
+          <div id="accountingOverviewCards" class="sales-kpis accounting-kpis"></div>
+
+          <div class="panel">
+            <h3>Сводка по маркетплейсам</h3>
+            <div id="accountingMarketCards" class="sales-kpis accounting-market-kpis"></div>
+          </div>
+
+          <div class="panel">
+            <h3>Динамика прибыли</h3>
+            <div id="accountingProfitChart" class="trend-chart mini"></div>
+            <div id="accountingOverviewMeta" class="trend-meta">-</div>
+          </div>
+        </div>
+
+        <div id="accountingSubtabAnalysis" class="hidden">
+          <div class="panel">
+            <h3>Товарная аналитика</h3>
+            <div class="grid-4">
+              <input id="accountingAnalysisSearch" placeholder="Поиск по SKU / артикулу / названию" oninput="scheduleAccountingReload(280)" />
+              <select id="accountingAnalysisSort" onchange="loadAccountingData()">
+                <option value="net_profit_desc">Чистая прибыль: больше → меньше</option>
+                <option value="net_profit_asc">Чистая прибыль: меньше → больше</option>
+                <option value="margin_desc">Маржа: больше → меньше</option>
+                <option value="margin_asc">Маржа: меньше → больше</option>
+                <option value="revenue_desc">Выручка: больше → меньше</option>
+                <option value="revenue_asc">Выручка: меньше → больше</option>
+                <option value="sold_units_desc">Штуки: больше → меньше</option>
+                <option value="sold_units_asc">Штуки: меньше → больше</option>
+                <option value="expense_desc">Расходы МП: больше → меньше</option>
+                <option value="expense_asc">Расходы МП: меньше → больше</option>
+                <option value="return_rate_desc">Возвраты %: больше → меньше</option>
+                <option value="return_rate_asc">Возвраты %: меньше → больше</option>
+              </select>
+              <button class="btn-secondary" type="button" onclick="loadAccountingData(true)">Обновить анализ</button>
+              <button class="btn-secondary" type="button" onclick="resetAccountingAnalysisFilters()">Сбросить фильтры</button>
+            </div>
+            <div id="accountingAnalysisMeta" class="hint">-</div>
+          </div>
+          <div class="table-card accounting-analysis-wrap">
+            <table class="sales-table accounting-table">
+              <thead>
+                <tr>
+                  <th>МП</th><th>Артикул</th><th>Товар</th><th>Шт.</th><th>Возвр. %</th><th>Выручка</th>
+                  <th>Себест.</th><th>Расходы МП</th><th>Опер. прибыль</th><th>Налоги</th><th>Чистая прибыль</th><th>Маржа</th>
+                </tr>
+              </thead>
+              <tbody id="accountingAnalysisTable"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="accountingSubtabExpenses" class="hidden">
+          <div class="panel">
+            <h3>Учет расходов</h3>
+            <input id="accountingExpenseId" type="hidden" />
+            <div class="grid-6">
+              <select id="accountingExpenseMarketplace">
+                <option value="all">Все МП</option>
+                <option value="wb">WB</option>
+                <option value="ozon">Ozon</option>
+              </select>
+              <input id="accountingExpenseCategory" placeholder="Категория (зарплата, упаковка, логистика...)" />
+              <input id="accountingExpenseAmount" type="number" step="0.01" min="0" placeholder="Сумма" />
+              <select id="accountingExpenseRecurrence">
+                <option value="once">Разово</option>
+                <option value="daily">Ежедневно</option>
+                <option value="weekly">Еженедельно</option>
+                <option value="monthly">Ежемесячно</option>
+                <option value="quarterly">Ежеквартально</option>
+                <option value="yearly">Ежегодно</option>
+              </select>
+              <input id="accountingExpenseStartDate" type="date" />
+              <input id="accountingExpenseEndDate" type="date" />
+            </div>
+            <div class="grid-2">
+              <label class="check"><input id="accountingExpenseActive" type="checkbox" checked /> Активен</label>
+              <textarea id="accountingExpenseNote" rows="2" placeholder="Комментарий (опционально)"></textarea>
+            </div>
+            <div class="actions">
+              <button type="button" onclick="saveAccountingExpense()">Сохранить расход</button>
+              <button class="btn-secondary" type="button" onclick="resetAccountingExpenseForm()">Сбросить форму</button>
+            </div>
+            <div id="accountingExpensesMeta" class="hint">-</div>
+          </div>
+          <div class="table-card accounting-expenses-wrap">
+            <table class="sales-table accounting-expenses-table">
+              <thead>
+                <tr><th>ID</th><th>МП</th><th>Категория</th><th>Сумма</th><th>Периодичность</th><th>Период</th><th>Статус</th><th>Комментарий</th><th></th></tr>
+              </thead>
+              <tbody id="accountingExpensesTable"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="accountingSubtabSettings" class="hidden">
+          <div class="panel">
+            <h3>Налоги и параметры расчета</h3>
+            <div class="grid-4">
+              <input id="accountingVatRate" type="number" step="0.01" min="0" max="100" placeholder="Ставка НДС, %" />
+              <input id="accountingTaxRate" type="number" step="0.01" min="0" max="100" placeholder="Налоговая ставка, %" />
+              <input id="accountingAdditionalRate" type="number" step="0.01" min="0" max="100" placeholder="Доп. расходы, %" />
+              <input id="accountingFixedCostPerMonth" type="number" step="0.01" min="0" placeholder="Фикс. расходы в месяц" />
+            </div>
+            <div class="actions">
+              <button type="button" onclick="saveAccountingSettings()">Сохранить параметры</button>
+              <button class="btn-secondary" type="button" onclick="loadAccountingSettings()">Обновить</button>
+            </div>
+            <div id="accountingSettingsMeta" class="hint">-</div>
+          </div>
         </div>
       </section>
 
@@ -1347,6 +1509,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
   <script src="/static/app.js?v=20260305i"></script>
+  <script src="/static/accounting.js?v=20260307a"></script>
   <script src="/static/social.js?v=20260305i"></script>
 </body>
 </html>
