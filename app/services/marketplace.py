@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 import re
 import time
@@ -36,6 +36,8 @@ class MarketplaceProduct:
     photo_url: str
     name: str
     description: str
+    category_name: str = ""
+    photos: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -86,6 +88,7 @@ def fetch_products_from_marketplace(marketplace: str, api_key: str, articles: li
                     f"{name}. Подходит для безопасного отвода дыма. "
                     "Усиленная сталь, стабильная тяга, монтаж без лишней сложности."
                 ),
+                photos=[f"https://picsum.photos/seed/{marketplace}-{i+1}/120/120"],
             )
         )
     return result
@@ -851,7 +854,9 @@ def _fetch_wb_products(
         name = str(card.get("title") or card.get("object") or "Товар")
         description = str(card.get("description") or "")
         barcode = _extract_wb_barcode(card)
-        photo_url = _extract_wb_photo(card)
+        photos = _extract_wb_photos(card)
+        photo_url = photos[0] if photos else _extract_wb_photo(card)
+        category_name = str(card.get("subjectName") or card.get("subject") or card.get("object") or "").strip()
         mapped.append(
             MarketplaceProduct(
                 article=article,
@@ -860,6 +865,8 @@ def _fetch_wb_products(
                 photo_url=photo_url,
                 name=name,
                 description=description,
+                category_name=category_name,
+                photos=photos,
             )
         )
 
@@ -915,7 +922,9 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
         name = str(source.get("name") or "Товар Ozon")
         description = str(source.get("description") or source.get("marketing_description") or "")
         barcode = _extract_ozon_barcode(source)
-        photo_url = _extract_ozon_photo(source)
+        photos = _extract_ozon_photos(source)
+        photo_url = photos[0] if photos else _extract_ozon_photo(source)
+        category_name = _extract_ozon_category_name(source)
         mapped.append(
             MarketplaceProduct(
                 article=article,
@@ -924,6 +933,8 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
                 photo_url=photo_url,
                 name=name,
                 description=description,
+                category_name=category_name,
+                photos=photos,
             )
         )
 
@@ -1239,17 +1250,33 @@ def _extract_wb_barcode(card: dict[str, Any]) -> str:
 
 
 def _extract_wb_photo(card: dict[str, Any]) -> str:
-    photos = card.get("photos") or []
+    photos = _extract_wb_photos(card)
     if photos:
-        first = photos[0]
-        if isinstance(first, dict):
-            for key in ("big", "c516x688", "tm"):
-                val = first.get(key)
-                if val:
-                    return _normalize_photo_url(str(val))
-        if isinstance(first, str):
-            return _normalize_photo_url(first)
+        return photos[0]
     return ""
+
+
+def _extract_wb_photos(card: dict[str, Any]) -> list[str]:
+    photos_raw = card.get("photos") or []
+    out: list[str] = []
+
+    def _collect(value: Any) -> None:
+        if isinstance(value, str):
+            normalized = _normalize_photo_url(value)
+            if normalized:
+                out.append(normalized)
+            return
+        if isinstance(value, dict):
+            for key in ("big", "c516x688", "tm", "x1", "x2", "url"):
+                if key in value and value[key]:
+                    _collect(value[key])
+            return
+        if isinstance(value, list):
+            for item in value:
+                _collect(item)
+
+    _collect(photos_raw)
+    return [x for x in dict.fromkeys([str(p).strip() for p in out if str(p).strip()])]
 
 
 def _extract_ozon_barcode(source: dict[str, Any]) -> str:
@@ -1265,13 +1292,34 @@ def _extract_ozon_barcode(source: dict[str, Any]) -> str:
 
 
 def _extract_ozon_photo(source: dict[str, Any]) -> str:
-    images = source.get("images")
-    if isinstance(images, list) and images:
-        return _normalize_photo_url(str(images[0]))
-    primary = source.get("primary_image")
-    if isinstance(primary, str):
-        return _normalize_photo_url(primary)
+    photos = _extract_ozon_photos(source)
+    if photos:
+        return photos[0]
     return ""
+
+
+def _extract_ozon_photos(source: dict[str, Any]) -> list[str]:
+    out: list[str] = []
+
+    def _collect(value: Any) -> None:
+        if isinstance(value, str):
+            normalized = _normalize_photo_url(value)
+            if normalized:
+                out.append(normalized)
+            return
+        if isinstance(value, dict):
+            for key in ("url", "image", "x1", "x2"):
+                if key in value and value[key]:
+                    _collect(value[key])
+            return
+        if isinstance(value, list):
+            for item in value:
+                _collect(item)
+
+    _collect(source.get("primary_image"))
+    for key in ("images", "images360", "images_stream", "photo_urls", "photos"):
+        _collect(source.get(key))
+    return [x for x in dict.fromkeys([str(p).strip() for p in out if str(p).strip()])]
 
 
 def _extract_ozon_category_name(source: dict[str, Any]) -> str:

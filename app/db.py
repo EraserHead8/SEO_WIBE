@@ -51,6 +51,8 @@ def run_lightweight_migrations():
             conn.execute(text("ALTER TABLE products ADD COLUMN barcode VARCHAR(64) DEFAULT ''"))
         if product_cols and "photo_url" not in product_cols:
             conn.execute(text("ALTER TABLE products ADD COLUMN photo_url VARCHAR(500) DEFAULT ''"))
+        if product_cols and "photos_json" not in product_cols:
+            conn.execute(text("ALTER TABLE products ADD COLUMN photos_json TEXT DEFAULT '[]'"))
         if product_cols and "category_name" not in product_cols:
             conn.execute(text("ALTER TABLE products ADD COLUMN category_name VARCHAR(255) DEFAULT ''"))
         if product_cols and "owner_member_id" not in product_cols:

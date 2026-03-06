@@ -3213,6 +3213,47 @@ def _resolve_product_marketplaces(value: str) -> list[str]:
     raise HTTPException(status_code=400, detail="marketplace должен быть wb, ozon или all")
 
 
+def _normalize_product_photo_url(value: str | None) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    if raw.startswith("//"):
+        return f"https:{raw}"
+    if raw.startswith("http://") or raw.startswith("https://"):
+        return raw
+    return f"https://{raw.lstrip('/')}"
+
+
+def _normalize_product_photo_list(values: Any) -> list[str]:
+    source: list[Any]
+    if isinstance(values, list):
+        source = values
+    elif values is None:
+        source = []
+    else:
+        source = [values]
+    out: list[str] = []
+    for item in source:
+        normalized = _normalize_product_photo_url(str(item or ""))
+        if normalized:
+            out.append(normalized)
+    return [x for x in dict.fromkeys(out)]
+
+
+def _product_photos_from_row(row: Product) -> list[str]:
+    raw = str(getattr(row, "photos_json", "") or "").strip()
+    if not raw:
+        return _normalize_product_photo_list([getattr(row, "photo_url", "")])
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        return _normalize_product_photo_list([getattr(row, "photo_url", "")])
+    photos = _normalize_product_photo_list(parsed if isinstance(parsed, list) else [parsed])
+    if not photos:
+        return _normalize_product_photo_list([getattr(row, "photo_url", "")])
+    return photos
+
+
 @router.post("/products/import", response_model=list[ProductOut])
 def import_products(payload: ImportProductsRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     marketplaces = _resolve_product_marketplaces(payload.marketplace)
@@ -3532,6 +3573,9 @@ def list_products(
         query.order_by(Product.id.desc()).offset(offset).limit(safe_page_size)
     ).all()
     for row in rows:
+        stored_photos = _product_photos_from_row(row)
+        if stored_photos and not row.photo_url:
+            row.photo_url = stored_photos[0]
         if not row.photo_url:
             row.photo_url = f"https://placehold.co/120x120/e8eefc/1b2a52?text={row.marketplace.upper()}%20{row.id}"
     return ProductPageOut(
@@ -3568,6 +3612,15 @@ def product_details(product_id: int, user: User = Depends(get_current_user), db:
         )
     else:
         warnings.append(f"API ключ {product.marketplace.upper()} не подключен.")
+    live_photos = _normalize_product_photo_list(details_payload.get("photos") if isinstance(details_payload, dict) else [])
+    stored_photos = _product_photos_from_row(product)
+    resolved_photos = _normalize_product_photo_list(live_photos + stored_photos + [product.photo_url])
+    if resolved_photos:
+        product.photo_url = resolved_photos[0][:500]
+        next_json = json.dumps(resolved_photos, ensure_ascii=False)
+        if str(product.photos_json or "") != next_json:
+            product.photos_json = next_json
+            db.flush()
     raw_payload = details_payload.get("raw") if isinstance(details_payload, dict) else {}
     if not isinstance(raw_payload, dict):
         raw_payload = {"value": str(raw_payload)[:5000]}
@@ -3603,7 +3656,7 @@ def product_details(product_id: int, user: User = Depends(get_current_user), db:
     db.commit()
     return ProductDetailOut(
         product=product,
-        photos=[str(x) for x in (details_payload.get("photos") or []) if str(x).strip()],
+        photos=resolved_photos,
         attributes={str(k): str(v) for k, v in attributes_payload.items()},
         raw=raw_payload,
         warnings=warnings,
@@ -3636,7 +3689,9 @@ def update_product(product_id: int, payload: ProductUpdateIn, user: User = Depen
     if payload.current_description is not None:
         product.current_description = next_description[:16000]
     if payload.photo_url is not None:
-        product.photo_url = next_photo[:500]
+        product.photo_url = _normalize_product_photo_url(next_photo)[:500]
+        photo_list = _normalize_product_photo_list([next_photo])
+        product.photos_json = json.dumps(photo_list, ensure_ascii=False) if photo_list else "[]"
     if payload.target_keywords is not None:
         product.target_keywords = next_keywords[:5000]
 
@@ -6298,52 +6353,118 @@ def _social_last_activity_map(db: Session, actor_keys: list[str]) -> dict[str, d
     keys = [str(x or "").strip().lower() for x in actor_keys if str(x or "").strip()]
     if not keys:
         return {}
-    exact_rows = db.execute(
-        select(
-            SocialChatMessage.sender_key,
-            func.max(SocialChatMessage.created_at).label("last_at"),
-        )
-        .where(SocialChatMessage.sender_key.in_(keys))
-        .group_by(SocialChatMessage.sender_key)
-    ).all()
     out: dict[str, datetime] = {}
-    for sender_key, last_at in exact_rows:
-        key = str(sender_key or "").strip().lower()
-        if key and isinstance(last_at, datetime):
-            out[key] = last_at
-    # Use sender_user_id fallback to avoid stale "last seen" when the same person wrote
-    # from another actor key (owner/member context).
-    user_ids: set[int] = set()
-    key_to_user_id: dict[str, int] = {}
+    key_to_member_id: dict[str, int] = {}
+    owner_key_to_user_id: dict[str, int] = {}
+    owner_user_ids: set[int] = set()
+
     for key in keys:
-        try:
-            uid, _, _ = _social_identity_by_key(db, key)
-        except Exception:
+        if key.startswith("m:"):
+            member_id = _to_int_safe(key.split(":", 1)[1])
+            if member_id > 0:
+                key_to_member_id[key] = int(member_id)
             continue
-        if uid > 0:
-            key_to_user_id[key] = int(uid)
-            user_ids.add(int(uid))
-    if not user_ids:
-        return out
-    by_user_rows = db.execute(
-        select(
-            SocialChatMessage.sender_user_id,
-            func.max(SocialChatMessage.created_at).label("last_at"),
-        )
-        .where(SocialChatMessage.sender_user_id.in_(user_ids))
-        .group_by(SocialChatMessage.sender_user_id)
-    ).all()
-    by_user: dict[int, datetime] = {}
-    for uid, last_at in by_user_rows:
-        user_id = _to_int_safe(uid)
-        if user_id > 0 and isinstance(last_at, datetime):
-            by_user[user_id] = last_at
-    for key, uid in key_to_user_id.items():
-        dt = by_user.get(int(uid))
-        if isinstance(dt, datetime):
-            prev = out.get(key)
-            if not prev or dt > prev:
+        if not key.startswith("u:"):
+            continue
+        user_id = _to_int_safe(key.split(":", 1)[1])
+        if user_id <= 0:
+            continue
+        owner_key_to_user_id[key] = int(user_id)
+        owner_user_ids.add(int(user_id))
+
+    owner_member_by_user: dict[int, int] = {}
+    owner_email_by_user: dict[int, str] = {}
+    if owner_user_ids:
+        owner_rows = db.execute(
+            select(TeamMember.user_id, TeamMember.id, TeamMember.email)
+            .where(
+                TeamMember.user_id.in_(list(owner_user_ids)),
+                TeamMember.is_owner.is_(True),
+                TeamMember.is_active.is_(True),
+            )
+            .order_by(TeamMember.user_id.asc(), TeamMember.id.asc())
+        ).all()
+        for raw_user_id, raw_member_id, raw_email in owner_rows:
+            user_id = _to_int_safe(raw_user_id)
+            member_id = _to_int_safe(raw_member_id)
+            if user_id <= 0 or member_id <= 0 or user_id in owner_member_by_user:
+                continue
+            owner_member_by_user[user_id] = member_id
+            owner_email_by_user[user_id] = str(raw_email or "").strip().lower()
+        missing_owner_users = [uid for uid in owner_user_ids if uid not in owner_email_by_user]
+        if missing_owner_users:
+            user_rows = db.execute(select(User.id, User.email).where(User.id.in_(missing_owner_users))).all()
+            for raw_user_id, raw_email in user_rows:
+                user_id = _to_int_safe(raw_user_id)
+                if user_id > 0 and user_id not in owner_email_by_user:
+                    owner_email_by_user[user_id] = str(raw_email or "").strip().lower()
+
+    for key, user_id in owner_key_to_user_id.items():
+        member_id = owner_member_by_user.get(int(user_id))
+        if member_id:
+            key_to_member_id[key] = int(member_id)
+
+    member_ids = sorted({int(v) for v in key_to_member_id.values() if int(v) > 0})
+    member_email_by_id: dict[int, str] = {}
+    if member_ids:
+        member_rows = db.execute(
+            select(
+                AuditLog.actor_member_id,
+                func.max(AuditLog.created_at).label("last_at"),
+            )
+            .where(AuditLog.actor_member_id.in_(member_ids))
+            .group_by(AuditLog.actor_member_id)
+        ).all()
+        by_member: dict[int, datetime] = {}
+        for raw_member_id, last_at in member_rows:
+            member_id = _to_int_safe(raw_member_id)
+            if member_id > 0 and isinstance(last_at, datetime):
+                by_member[member_id] = last_at
+        for key, member_id in key_to_member_id.items():
+            dt = by_member.get(int(member_id))
+            if isinstance(dt, datetime):
                 out[key] = dt
+        member_email_rows = db.execute(
+            select(TeamMember.id, TeamMember.email).where(TeamMember.id.in_(member_ids))
+        ).all()
+        for raw_member_id, raw_email in member_email_rows:
+            member_id = _to_int_safe(raw_member_id)
+            if member_id > 0:
+                member_email_by_id[member_id] = str(raw_email or "").strip().lower()
+
+    email_to_keys: dict[str, list[str]] = {}
+    for key in keys:
+        if key in out:
+            continue
+        email = ""
+        member_id = int(key_to_member_id.get(key) or 0)
+        if member_id > 0:
+            email = member_email_by_id.get(member_id, "")
+        if not email and key.startswith("u:"):
+            owner_user_id = int(owner_key_to_user_id.get(key) or 0)
+            email = owner_email_by_user.get(owner_user_id, "")
+        safe_email = str(email or "").strip().lower()
+        if safe_email:
+            email_to_keys.setdefault(safe_email, []).append(key)
+
+    if not email_to_keys:
+        return out
+    by_email_rows = db.execute(
+        select(
+            func.lower(AuditLog.actor_email).label("actor_email"),
+            func.max(AuditLog.created_at).label("last_at"),
+        )
+        .where(func.lower(AuditLog.actor_email).in_(list(email_to_keys.keys())))
+        .group_by(func.lower(AuditLog.actor_email))
+    ).all()
+    for actor_email, last_at in by_email_rows:
+        email = str(actor_email or "").strip().lower()
+        if not email or not isinstance(last_at, datetime):
+            continue
+        for key in email_to_keys.get(email, []):
+            prev = out.get(key)
+            if not prev or last_at > prev:
+                out[key] = last_at
     return out
 
 
@@ -8762,6 +8883,11 @@ def upsert_products(
     data = fetch_products_from_marketplace(marketplace, api_key, articles, import_all)
     upserted: list[Product] = []
     for item in data:
+        item_photos = _normalize_product_photo_list(getattr(item, "photos", []))
+        item_main_photo = _normalize_product_photo_url(getattr(item, "photo_url", ""))
+        if item_main_photo:
+            item_photos = [item_main_photo] + [x for x in item_photos if x != item_main_photo]
+        placeholder_photo = f"https://placehold.co/120x120/e8eefc/1b2a52?text={marketplace.upper()}"
         base_query = select(Product).where(
             Product.user_id == user_id,
             Product.marketplace == marketplace,
@@ -8781,7 +8907,8 @@ def upsert_products(
                 article=item.article,
                 external_id=item.external_id,
                 barcode=item.barcode,
-                photo_url=item.photo_url or f"https://placehold.co/120x120/e8eefc/1b2a52?text={marketplace.upper()}",
+                photo_url=(item_photos[0] if item_photos else placeholder_photo),
+                photos_json=json.dumps(item_photos or [placeholder_photo], ensure_ascii=False),
                 name=item.name,
                 category_name=item.category_name or "",
                 current_description=item.description,
@@ -8792,7 +8919,15 @@ def upsert_products(
             product.name = item.name
             product.external_id = item.external_id or product.external_id
             product.barcode = item.barcode
-            product.photo_url = item.photo_url or product.photo_url
+            if item_photos:
+                product.photo_url = item_photos[0]
+                product.photos_json = json.dumps(item_photos, ensure_ascii=False)
+            elif not str(product.photo_url or "").strip():
+                product.photo_url = placeholder_photo
+                if not str(product.photos_json or "").strip():
+                    product.photos_json = json.dumps([placeholder_photo], ensure_ascii=False)
+            elif not str(product.photos_json or "").strip():
+                product.photos_json = json.dumps(_normalize_product_photo_list([product.photo_url]), ensure_ascii=False)
             product.current_description = item.description
             if item.category_name:
                 product.category_name = item.category_name[:255]

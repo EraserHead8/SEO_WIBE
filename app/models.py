@@ -50,6 +50,7 @@ class Product(Base):
     external_id: Mapped[str] = mapped_column(String(120), default="", index=True)
     barcode: Mapped[str] = mapped_column(String(64), default="", index=True)
     photo_url: Mapped[str] = mapped_column(String(500), default="")
+    photos_json: Mapped[str] = mapped_column(Text, default="[]")
     name: Mapped[str] = mapped_column(String(255))
     category_name: Mapped[str] = mapped_column(String(255), default="", index=True)
     current_description: Mapped[str] = mapped_column(Text, default="")
