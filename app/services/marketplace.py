@@ -959,10 +959,14 @@ def _fetch_wb_product_details(api_key: str, article: str, external_id: str = "")
     products = _fetch_wb_products(api_key, [article] if article else [], True, limit=200, timeout_sec=8.0) or []
     norm_article = _normalize_code(article)
     norm_external = _normalize_code(external_id)
-    best: dict[str, Any] | None = None
+    best: MarketplaceProduct | dict[str, Any] | None = None
     for row in products:
-        vendor = _extract_wb_vendor_code(row)
-        nm_id = _extract_wb_nm_id(row)
+        if isinstance(row, MarketplaceProduct):
+            vendor = _normalize_code(str(row.article or ""))
+            nm_id = _normalize_code(str(row.external_id or ""))
+        else:
+            vendor = _extract_wb_vendor_code(row)
+            nm_id = _extract_wb_nm_id(row)
         if norm_external and nm_id and _codes_equal(norm_external, nm_id):
             best = row
             break
@@ -971,7 +975,10 @@ def _fetch_wb_product_details(api_key: str, article: str, external_id: str = "")
             break
     if best is None:
         for row in products:
-            name = _normalize_code(str(row.get("name") or row.get("title") or ""))
+            if isinstance(row, MarketplaceProduct):
+                name = _normalize_code(str(row.name or ""))
+            else:
+                name = _normalize_code(str(row.get("name") or row.get("title") or ""))
             if norm_article and norm_article in name:
                 best = row
                 break
@@ -979,6 +986,33 @@ def _fetch_wb_product_details(api_key: str, article: str, external_id: str = "")
         best = products[0]
     if not best:
         return {"photos": [], "attributes": {}, "raw": {}}
+
+    if isinstance(best, MarketplaceProduct):
+        photos_raw: list[str] = []
+        for raw in best.photos or []:
+            normalized = _normalize_photo_url(raw)
+            if normalized:
+                photos_raw.append(normalized)
+        photos = [x for x in dict.fromkeys(photos_raw)]
+        if not photos:
+            fallback = _normalize_photo_url(best.photo_url)
+            if fallback:
+                photos = [fallback]
+        attrs: dict[str, Any] = {
+            "category_name": str(best.category_name or "").strip(),
+            "vendor_code": str(best.article or "").strip(),
+            "nm_id": str(best.external_id or "").strip(),
+            "name": str(best.name or "").strip(),
+        }
+        raw = {
+            "vendorCode": str(best.article or "").strip(),
+            "id": str(best.external_id or "").strip(),
+            "name": str(best.name or "").strip(),
+            "subjectName": str(best.category_name or "").strip(),
+            "photos": photos,
+        }
+        return {"photos": photos, "attributes": attrs, "raw": raw}
+
     def _collect_photo_urls(value: Any) -> list[str]:
         out: list[str] = []
         if isinstance(value, str):
