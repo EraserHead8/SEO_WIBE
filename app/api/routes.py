@@ -172,6 +172,8 @@ from app.services.market_cache import (
     get_market_cache_stats,
     get_or_refresh_market_cache,
 )
+from app.services.task_queue import enqueue_task, queue_available, queue_depth, queue_enabled
+from app.telemetry import collect_perf_metrics
 from app.services.ads_cache import (
     get_wb_snapshot_rows,
     is_wb_snapshot_stale,
@@ -245,6 +247,7 @@ _SERVER_NET_TS: float = 0.0
 _SOCIAL_REMINDER_THROTTLE_SEC = 60
 _SOCIAL_REMINDER_LAST_RUN: dict[str, float] = {}
 _MARKET_CACHE_TTL_SEC = {
+    "dashboard": 60,
     "sales_stats": 180,
     "wb_reviews_ai": 120,
     "wb_questions_ai": 120,
@@ -265,6 +268,33 @@ def _market_cache_ttl(module_code: str, *, fast_mode: bool = False) -> int:
     if fast_mode:
         return max(45, int(base * 0.7))
     return base
+
+
+def _enqueue_sales_cache_warmup(
+    user_id: int,
+    *,
+    marketplace: str,
+    date_from: date,
+    date_to: date,
+    granularity: str,
+    tz_name: str,
+) -> dict[str, Any]:
+    return enqueue_task(
+        "warm_sales_cache",
+        {
+            "user_id": int(user_id),
+            "marketplace": str(marketplace or "all").strip().lower(),
+            "date_from": date_from.isoformat(),
+            "date_to": date_to.isoformat(),
+            "granularity": str(granularity or "auto").strip().lower(),
+            "tz": str(tz_name or "UTC").strip() or "UTC",
+        },
+        dedupe_key=(
+            f"warm_sales:{int(user_id)}:{str(marketplace or 'all').strip().lower()}:"
+            f"{date_from.isoformat()}:{date_to.isoformat()}:{str(granularity or 'auto').strip().lower()}:{str(tz_name or 'UTC').strip()}"
+        ),
+        dedupe_ttl_sec=90,
+    )
 
 BILLING_PLANS: dict[str, dict[str, Any]] = {
     "starter": {"title": "Starter", "price": 990, "limits": {"products": 500, "seo_jobs_month": 1500, "ai_replies_month": 800}},
@@ -2199,27 +2229,49 @@ def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depen
     rows = get_wb_snapshot_rows(db, user.id)
     source = "snapshot"
     stale = is_wb_snapshot_stale(db, user.id)
-    if not rows:
-        sync_wb_campaign_snapshots(db, user.id, wb_key)
-        rows = get_wb_snapshot_rows(db, user.id)
-        source = "sync-first"
-        stale = is_wb_snapshot_stale(db, user.id)
-    elif stale:
-        sync_wb_campaign_snapshots(db, user.id, wb_key)
-        rows = get_wb_snapshot_rows(db, user.id)
-        stale = is_wb_snapshot_stale(db, user.id)
-        source = "snapshot+refresh"
+    refresh_queued = False
+    if not rows or stale:
+        queue_result = enqueue_task(
+            "sync_wb_snapshots",
+            {"user_id": int(user.id)},
+            dedupe_key=f"wb_snapshots:{int(user.id)}",
+            dedupe_ttl_sec=120,
+        )
+        refresh_queued = bool(queue_result.get("queued"))
+        if not refresh_queued and not rows:
+            sync_wb_campaign_snapshots(db, user.id, wb_key)
+            rows = get_wb_snapshot_rows(db, user.id)
+            source = "sync-fallback"
+            stale = is_wb_snapshot_stale(db, user.id)
+        elif not rows:
+            source = "snapshot-empty"
+        else:
+            source = "snapshot+queue-refresh"
     ids = sorted({_to_int_safe(_campaign_id_from_any(row)) for row in rows if _to_int_safe(_campaign_id_from_any(row)) > 0})
     _audit(
         db,
         user,
         action="wb_ads_campaigns_read",
-        details=f"count={len(rows)};ids={len(ids)};source={source};stale={int(stale)}",
+        details=(
+            f"count={len(rows)};ids={len(ids)};source={source};stale={int(stale)};"
+            f"queue={int(refresh_queued)};queue_depth={queue_depth()}"
+        ),
         module_code="wb_ads",
         entity_type="campaign",
     )
     db.commit()
-    return WbCampaignsOut(campaigns=rows, stats={}, meta={"source": source, "stale": stale, "count": len(rows)})
+    return WbCampaignsOut(
+        campaigns=rows,
+        stats={},
+        meta={
+            "source": source,
+            "stale": stale,
+            "count": len(rows),
+            "refresh_queued": refresh_queued,
+            "queue_available": queue_available(),
+            "queue_depth": queue_depth(),
+        },
+    )
 
 
 @router.post("/wb/ads/campaigns/sync", response_model=dict[str, Any])
@@ -2228,7 +2280,16 @@ def wb_ads_campaigns_sync(user: User = Depends(get_current_user), db: Session = 
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
-    payload = sync_wb_campaign_snapshots(db, user.id, wb_key)
+    payload = enqueue_task(
+        "sync_wb_snapshots",
+        {"user_id": int(user.id)},
+        dedupe_key=f"wb_snapshots:{int(user.id)}",
+        dedupe_ttl_sec=120,
+    )
+    if not payload.get("queued") and not payload.get("ok"):
+        payload = sync_wb_campaign_snapshots(db, user.id, wb_key)
+    payload["queue_available"] = queue_available()
+    payload["queue_depth"] = queue_depth()
     _audit(
         db,
         user,
@@ -4107,42 +4168,77 @@ def recheck_seo(payload: SeoRecheckRequest, user: User = Depends(get_current_use
 
 @router.get("/dashboard", response_model=DashboardOut)
 def dashboard(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    total_products = db.scalar(
-        select(func.count()).select_from(Product).where(
-            Product.user_id == user.id,
-            _owned_by_actor_or_owner_filter(Product, user),
-        )
-    ) or 0
-    total_jobs = db.scalar(
-        select(func.count()).select_from(SeoJob).where(
-            SeoJob.user_id == user.id,
-            _owned_by_actor_or_owner_filter(SeoJob, user),
-        )
-    ) or 0
-    applied_jobs = db.scalar(
-        select(func.count()).select_from(SeoJob).where(
-            SeoJob.user_id == user.id,
-            SeoJob.status == "applied",
-            _owned_by_actor_or_owner_filter(SeoJob, user),
-        )
-    ) or 0
-    in_progress_jobs = db.scalar(
-        select(func.count()).select_from(SeoJob).where(
-            SeoJob.user_id == user.id,
-            SeoJob.status.in_(["in_progress", "generated"]),
-            _owned_by_actor_or_owner_filter(SeoJob, user),
-        )
-    ) or 0
-    top5_products = db.scalar(
-        select(func.count()).select_from(Product).where(
-            Product.user_id == user.id,
-            Product.last_position.is_not(None),
-            Product.last_position <= 5,
-            _owned_by_actor_or_owner_filter(Product, user),
-        )
-    ) or 0
+    actor_id = int(_actor_member_id(user) or 0)
+    actor_marker = f"member:{actor_id}" if actor_id > 0 and not _actor_is_owner(user) else "owner"
+    cache_key = build_market_cache_key(
+        {
+            "kind": "dashboard_aggregates",
+            "user_id": int(user.id),
+            "actor": actor_marker,
+        }
+    )
 
-    return DashboardOut(total_products=total_products, total_jobs=total_jobs, applied_jobs=applied_jobs, in_progress_jobs=in_progress_jobs, top5_products=top5_products)
+    def _load_dashboard_payload() -> dict[str, Any]:
+        total_products = db.scalar(
+            select(func.count()).select_from(Product).where(
+                Product.user_id == user.id,
+                _owned_by_actor_or_owner_filter(Product, user),
+            )
+        ) or 0
+        total_jobs = db.scalar(
+            select(func.count()).select_from(SeoJob).where(
+                SeoJob.user_id == user.id,
+                _owned_by_actor_or_owner_filter(SeoJob, user),
+            )
+        ) or 0
+        applied_jobs = db.scalar(
+            select(func.count()).select_from(SeoJob).where(
+                SeoJob.user_id == user.id,
+                SeoJob.status == "applied",
+                _owned_by_actor_or_owner_filter(SeoJob, user),
+            )
+        ) or 0
+        in_progress_jobs = db.scalar(
+            select(func.count()).select_from(SeoJob).where(
+                SeoJob.user_id == user.id,
+                SeoJob.status.in_(["in_progress", "generated"]),
+                _owned_by_actor_or_owner_filter(SeoJob, user),
+            )
+        ) or 0
+        top5_products = db.scalar(
+            select(func.count()).select_from(Product).where(
+                Product.user_id == user.id,
+                Product.last_position.is_not(None),
+                Product.last_position <= 5,
+                _owned_by_actor_or_owner_filter(Product, user),
+            )
+        ) or 0
+        return {
+            "total_products": int(total_products or 0),
+            "total_jobs": int(total_jobs or 0),
+            "applied_jobs": int(applied_jobs or 0),
+            "in_progress_jobs": int(in_progress_jobs or 0),
+            "top5_products": int(top5_products or 0),
+        }
+
+    payload, _cache_meta = get_or_refresh_market_cache(
+        db,
+        user_id=int(user.id),
+        module_code="dashboard",
+        marketplace="all",
+        cache_key=cache_key,
+        ttl_sec=max(30, min(120, _market_cache_ttl("dashboard"))),
+        fetcher=_load_dashboard_payload,
+        stale_if_error_sec=10 * 60,
+    )
+    safe_payload = payload if isinstance(payload, dict) else {}
+    return DashboardOut(
+        total_products=int(safe_payload.get("total_products") or 0),
+        total_jobs=int(safe_payload.get("total_jobs") or 0),
+        applied_jobs=int(safe_payload.get("applied_jobs") or 0),
+        in_progress_jobs=int(safe_payload.get("in_progress_jobs") or 0),
+        top5_products=int(safe_payload.get("top5_products") or 0),
+    )
 
 
 @router.get("/seo/trend", response_model=TrendOut)
@@ -4284,6 +4380,14 @@ def sales_stats(
     chart = chart if isinstance(chart, list) else []
     totals = totals if isinstance(totals, dict) else {}
     warnings = warnings if isinstance(warnings, list) else []
+    warm_result = _enqueue_sales_cache_warmup(
+        int(user.id),
+        marketplace=selected_market,
+        date_from=left,
+        date_to=right,
+        granularity=gran,
+        tz_name=tz_name,
+    )
     comparison: dict[str, Any] = {}
 
     try:
@@ -4345,6 +4449,14 @@ def sales_stats(
                 "gross_profit": _cmp("gross_profit"),
             },
         }
+        _enqueue_sales_cache_warmup(
+            int(user.id),
+            marketplace=selected_market,
+            date_from=prev_from,
+            date_to=prev_to,
+            granularity=gran,
+            tz_name=tz_name,
+        )
     except Exception as exc:
         comparison = {}
         warnings.append(f"Сравнение с предыдущим периодом недоступно: {str(exc or '')[:140]}")
@@ -4357,7 +4469,13 @@ def sales_stats(
         db,
         user,
         action="sales_stats_read",
-        details=f"market={selected_market};from={left.isoformat()};to={right.isoformat()};rows={len(rows)};granularity={report_granularity};tz={report_tz};comparison={1 if comparison else 0};source={sales_cache_meta.get('source')};prev_source={prev_cache_meta.get('source')};cache_entries={cache_stats.get('entries')};cache_hits={cache_stats.get('hits')};cache_refreshes={cache_stats.get('refreshes')}",
+        details=(
+            f"market={selected_market};from={left.isoformat()};to={right.isoformat()};rows={len(rows)};"
+            f"granularity={report_granularity};tz={report_tz};comparison={1 if comparison else 0};"
+            f"source={sales_cache_meta.get('source')};prev_source={prev_cache_meta.get('source')};"
+            f"cache_entries={cache_stats.get('entries')};cache_hits={cache_stats.get('hits')};"
+            f"cache_refreshes={cache_stats.get('refreshes')};warm_queued={int(bool(warm_result.get('queued')))}"
+        ),
         module_code="sales_stats",
         entity_type="sales",
     )
@@ -5387,6 +5505,12 @@ def admin_server_metrics(_: User = Depends(get_admin_user), db: Session = Depend
         "refreshes": int(cache_stats.get("refreshes") or 0),
         "expired": int(cache_stats.get("expired") or 0),
         "api_calls_saved": int(cache_stats.get("api_calls_saved") or 0),
+    }
+    payload["performance"] = collect_perf_metrics(window_sec=15 * 60)
+    payload["task_queue"] = {
+        "enabled": queue_enabled(),
+        "available": queue_available(),
+        "depth": queue_depth(),
     }
     return payload
 

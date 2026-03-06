@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date, datetime, timedelta
-import hashlib
 import random
 
 from sqlalchemy import delete, select
@@ -10,9 +9,7 @@ from sqlalchemy import delete, select
 from app.db import SessionLocal
 from app.models import ApiCredential, AuditLog, MarketplaceApiCache, ModuleAccess, Product, SeoJob, User, UserKeyword
 from app.services.marketplace import find_competitors, resolve_wb_external_id, update_product_description
-from app.services.ads_cache import sync_wb_campaign_snapshots_for_all_users
-from app.services.market_cache import build_market_cache_key, get_or_refresh_market_cache
-from app.services.sales import build_sales_report
+from app.services.task_queue import enqueue_task, queue_enabled
 from app.services.seo import (
     build_seo_description,
     discover_keywords,
@@ -20,13 +17,6 @@ from app.services.seo import (
     schedule_next_check,
     summarize_competitors,
 )
-from app.services.wb_modules import fetch_ozon_ads_campaigns, fetch_wb_campaigns
-
-
-_MARKET_CACHE_TTL_SEC = {
-    "sales_stats": 180,
-    "wb_ads": 180,
-}
 
 
 async def seo_recheck_loop():
@@ -150,9 +140,34 @@ def _safe_known_position(value: int | None) -> int:
 async def wb_ads_snapshot_sync_loop():
     while True:
         await asyncio.sleep(3600 + random.randint(60, 180))
+        if not queue_enabled():
+            continue
         db = SessionLocal()
         try:
-            sync_wb_campaign_snapshots_for_all_users(db)
+            user_ids = db.scalars(
+                select(ApiCredential.user_id)
+                .join(
+                    ModuleAccess,
+                    (ModuleAccess.user_id == ApiCredential.user_id) & (ModuleAccess.module_code == "wb_ads"),
+                )
+                .where(
+                    ApiCredential.marketplace == "wb",
+                    ApiCredential.active.is_(True),
+                    ModuleAccess.enabled.is_(True),
+                )
+            ).all()
+            dedupe: set[int] = set()
+            for uid in user_ids:
+                safe_uid = int(uid or 0)
+                if safe_uid <= 0 or safe_uid in dedupe:
+                    continue
+                dedupe.add(safe_uid)
+                enqueue_task(
+                    "sync_wb_snapshots",
+                    {"user_id": safe_uid},
+                    dedupe_key=f"wb_snapshots:{safe_uid}",
+                    dedupe_ttl_sec=8 * 60,
+                )
         except Exception:
             db.rollback()
         finally:
@@ -162,6 +177,8 @@ async def wb_ads_snapshot_sync_loop():
 async def marketplace_cache_warmup_loop():
     while True:
         await asyncio.sleep(95 + random.randint(10, 30))
+        if not queue_enabled():
+            continue
         db = SessionLocal()
         try:
             _warm_marketplace_cache_for_recent_users(db, user_limit=8, warm_budget=30)
@@ -206,7 +223,7 @@ def _warm_marketplace_cache_for_recent_users(db, *, user_limit: int, warm_budget
 
 
 def _warm_marketplace_cache_for_user(
-    db,
+    _db,
     *,
     user_id: int,
     wb_key: str,
@@ -218,7 +235,6 @@ def _warm_marketplace_cache_for_user(
         return 0
     today = date.today()
     tz_name = "Europe/Moscow"
-    key_rev = _secret_revision(wb_key, ozon_key)
     consumed = 0
 
     sales_markets: list[str] = []
@@ -232,76 +248,41 @@ def _warm_marketplace_cache_for_user(
     for selected_market in sales_markets:
         if consumed >= safe_budget:
             break
-        sales_cache_key = build_market_cache_key(
+        result = enqueue_task(
+            "warm_sales_cache",
             {
+                "user_id": int(user_id),
                 "marketplace": selected_market,
                 "date_from": today.isoformat(),
                 "date_to": today.isoformat(),
                 "granularity": "hour",
                 "tz": tz_name,
-                "key_rev": key_rev,
-            }
+            },
+            dedupe_key=f"warm_sales:{user_id}:{selected_market}:{today.isoformat()}:hour",
+            dedupe_ttl_sec=120,
         )
-        try:
-            get_or_refresh_market_cache(
-                db,
-                user_id=int(user_id),
-                module_code="sales_stats",
-                marketplace=selected_market,
-                cache_key=sales_cache_key,
-                ttl_sec=_market_cache_ttl("sales_stats"),
-                fetcher=lambda selected=selected_market: build_sales_report(
-                    marketplace=selected,
-                    date_from=today,
-                    date_to=today,
-                    wb_api_key=wb_key,
-                    ozon_api_key=ozon_key,
-                    granularity="hour",
-                    timezone=tz_name,
-                ),
-                stale_if_error_sec=45 * 60,
-            )
+        if result.get("queued"):
             consumed += 1
-        except Exception:
-            pass
 
     if wb_key and consumed < safe_budget:
-        wb_campaign_key = build_market_cache_key(
-            {"kind": "wb_campaigns_base", "key_rev": _secret_revision(wb_key)}
+        result = enqueue_task(
+            "warm_wb_campaigns",
+            {"user_id": int(user_id)},
+            dedupe_key=f"warm_wb_campaigns:{user_id}",
+            dedupe_ttl_sec=120,
         )
-        try:
-            get_or_refresh_market_cache(
-                db,
-                user_id=int(user_id),
-                module_code="wb_ads",
-                marketplace="wb",
-                cache_key=wb_campaign_key,
-                ttl_sec=_market_cache_ttl("wb_ads"),
-                fetcher=lambda: fetch_wb_campaigns(wb_key, enrich=False),
-                stale_if_error_sec=30 * 60,
-            )
+        if result.get("queued"):
             consumed += 1
-        except Exception:
-            pass
 
     if ozon_key and consumed < safe_budget:
-        ozon_campaign_key = build_market_cache_key(
-            {"kind": "ozon_campaigns", "key_rev": _secret_revision(ozon_key)}
+        result = enqueue_task(
+            "warm_ozon_campaigns",
+            {"user_id": int(user_id)},
+            dedupe_key=f"warm_ozon_campaigns:{user_id}",
+            dedupe_ttl_sec=120,
         )
-        try:
-            get_or_refresh_market_cache(
-                db,
-                user_id=int(user_id),
-                module_code="wb_ads",
-                marketplace="ozon",
-                cache_key=ozon_campaign_key,
-                ttl_sec=_market_cache_ttl("wb_ads"),
-                fetcher=lambda: fetch_ozon_ads_campaigns(ozon_key),
-                stale_if_error_sec=30 * 60,
-            )
+        if result.get("queued"):
             consumed += 1
-        except Exception:
-            pass
 
     return consumed
 
@@ -367,13 +348,3 @@ def _select_recent_market_users(db, *, limit: int) -> list[int]:
 def _cleanup_market_cache_rows(db, *, max_age_hours: int = 96) -> None:
     cutoff = datetime.utcnow() - timedelta(hours=max(24, int(max_age_hours or 96)))
     db.execute(delete(MarketplaceApiCache).where(MarketplaceApiCache.updated_at < cutoff))
-
-
-def _secret_revision(*values: str) -> str:
-    raw = "|".join(str(v or "").strip() for v in values)
-    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
-
-
-def _market_cache_ttl(module_code: str) -> int:
-    safe_module = str(module_code or "").strip()
-    return max(45, int(_MARKET_CACHE_TTL_SEC.get(safe_module, 120)))

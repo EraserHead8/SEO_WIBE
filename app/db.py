@@ -1,9 +1,11 @@
 import json
+import time
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from app.config import settings
+from app.telemetry import record_sql_timing
 
 
 class Base(DeclarativeBase):
@@ -13,6 +15,20 @@ class Base(DeclarativeBase):
 connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
 engine = create_engine(settings.database_url, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+@event.listens_for(engine, "before_cursor_execute")
+def _before_cursor_execute(_conn, _cursor, _statement, _parameters, context, _executemany):
+    context._seo_wibe_sql_started_at = time.perf_counter()
+
+
+@event.listens_for(engine, "after_cursor_execute")
+def _after_cursor_execute(_conn, _cursor, statement, _parameters, context, _executemany):
+    started = getattr(context, "_seo_wibe_sql_started_at", None)
+    if started is None:
+        return
+    duration_ms = (time.perf_counter() - float(started)) * 1000.0
+    record_sql_timing(str(statement or ""), duration_ms)
 
 
 def get_db():

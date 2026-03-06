@@ -2350,6 +2350,10 @@ function renderAdminServerMetrics() {
   const disk = payload.disk || {};
   const network = payload.network || {};
   const marketCache = payload.market_cache || {};
+  const perf = payload.performance || {};
+  const apiPerf = perf.api || {};
+  const sqlPerf = perf.sql || {};
+  const queue = payload.task_queue || {};
   const ts = formatDateTime(payload.timestamp || "");
   meta.textContent = `${aTr("Обновлено", "Updated")}: ${ts}`;
   uptime.textContent = `${aTr("Uptime", "Uptime")}: ${formatAdminDuration(payload.uptime_seconds || 0)}`;
@@ -2363,12 +2367,23 @@ function renderAdminServerMetrics() {
     [aTr("TX скорость", "TX speed"), `${formatAdminBytes(network.tx_bytes_per_sec || 0)}/s`],
     [aTr("Кэш попадания", "Cache hits"), Number(marketCache.hits || 0).toLocaleString()],
     [aTr("Сохранено API", "Saved API"), Number(marketCache.api_calls_saved || 0).toLocaleString()],
+    [aTr("API p95", "API p95"), `${Number(apiPerf.p95_ms || 0).toFixed(1)} ms`],
+    [aTr("API p99", "API p99"), `${Number(apiPerf.p99_ms || 0).toFixed(1)} ms`],
+    [aTr("SQL p95", "SQL p95"), `${Number(sqlPerf.p95_ms || 0).toFixed(1)} ms`],
+    [aTr("Очередь задач", "Task queue"), Number(queue.depth || 0).toLocaleString()],
   ];
   kpis.innerHTML = blocks.map(([name, value]) => `
     <article class="kpi">
       <div class="kpi-head"><strong>${escapeHtml(String(value || "-"))}</strong><span>${escapeHtml(String(name || "-"))}</span></div>
     </article>
   `).join("");
+
+  const topApiSlow = Array.isArray(apiPerf.top_slowest) && apiPerf.top_slowest.length
+    ? String(apiPerf.top_slowest[0]?.key || "-")
+    : "-";
+  const topSqlSlow = Array.isArray(sqlPerf.top_slowest) && sqlPerf.top_slowest.length
+    ? String(sqlPerf.top_slowest[0]?.key || "-")
+    : "-";
 
   table.innerHTML = `
     <tr><td>${escapeHtml(aTr("CPU ядра", "CPU cores"))}</td><td>${escapeHtml(String(cpu.cores || 1))}</td></tr>
@@ -2380,6 +2395,13 @@ function renderAdminServerMetrics() {
     <tr><td>${escapeHtml(aTr("Кэш записей", "Cache entries"))}</td><td>${escapeHtml(Number(marketCache.entries || 0).toLocaleString())}</td></tr>
     <tr><td>${escapeHtml(aTr("Кэш обновлений", "Cache refreshes"))}</td><td>${escapeHtml(Number(marketCache.refreshes || 0).toLocaleString())}</td></tr>
     <tr><td>${escapeHtml(aTr("Кэш просрочено", "Cache expired"))}</td><td>${escapeHtml(Number(marketCache.expired || 0).toLocaleString())}</td></tr>
+    <tr><td>${escapeHtml(aTr("API запросов (15м)", "API requests (15m)"))}</td><td>${escapeHtml(Number(apiPerf.count || 0).toLocaleString())}</td></tr>
+    <tr><td>${escapeHtml(aTr("SQL запросов (15м)", "SQL queries (15m)"))}</td><td>${escapeHtml(Number(sqlPerf.count || 0).toLocaleString())}</td></tr>
+    <tr><td>${escapeHtml(aTr("API p95 / p99 (мс)", "API p95 / p99 (ms)"))}</td><td>${escapeHtml(`${Number(apiPerf.p95_ms || 0).toFixed(1)} / ${Number(apiPerf.p99_ms || 0).toFixed(1)}`)}</td></tr>
+    <tr><td>${escapeHtml(aTr("SQL p95 / p99 (мс)", "SQL p95 / p99 (ms)"))}</td><td>${escapeHtml(`${Number(sqlPerf.p95_ms || 0).toFixed(1)} / ${Number(sqlPerf.p99_ms || 0).toFixed(1)}`)}</td></tr>
+    <tr><td>${escapeHtml(aTr("Медленный API", "Slow API"))}</td><td>${escapeHtml(topApiSlow)}</td></tr>
+    <tr><td>${escapeHtml(aTr("Медленный SQL", "Slow SQL"))}</td><td>${escapeHtml(topSqlSlow)}</td></tr>
+    <tr><td>${escapeHtml(aTr("Очередь Redis", "Redis queue"))}</td><td>${escapeHtml(`${queue.available ? "online" : "offline"} • depth=${Number(queue.depth || 0)}`)}</td></tr>
   `;
 
   const labels = adminServerHistory.map((row) => formatAdminTimeShort(row.ts));

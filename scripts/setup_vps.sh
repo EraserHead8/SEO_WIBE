@@ -9,7 +9,7 @@ APP_PORT="${APP_PORT:-8016}"
 export DEBIAN_FRONTEND=noninteractive
 
 apt-get update
-apt-get install -y git python3 python3-venv python3-pip nginx ufw curl
+apt-get install -y git python3 python3-venv python3-pip nginx ufw curl redis-server
 
 if ! id -u "${APP_USER}" >/dev/null 2>&1; then
   useradd --system --create-home --home-dir "/home/${APP_USER}" --shell /usr/sbin/nologin "${APP_USER}"
@@ -48,6 +48,26 @@ RestartSec=3
 [Install]
 WantedBy=multi-user.target
 SERVICE
+
+cat >/etc/systemd/system/seo_wibe_worker.service <<WORKER
+[Unit]
+Description=SEO WIBE background worker (Redis queue)
+After=network.target redis-server.service
+Wants=redis-server.service
+
+[Service]
+Type=simple
+User=${APP_USER}
+Group=${APP_USER}
+WorkingDirectory=${APP_DIR}
+Environment=PYTHONUNBUFFERED=1
+ExecStart=${APP_DIR}/.venv/bin/python -m app.worker
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+WORKER
 
 cat >/etc/systemd/system/seo_wibe-autodeploy.service <<AUTODEPLOYSVC
 [Unit]
@@ -98,6 +118,8 @@ ln -sf /etc/nginx/sites-available/seo_wibe /etc/nginx/sites-enabled/seo_wibe
 
 systemctl daemon-reload
 systemctl enable --now seo_wibe
+systemctl enable --now seo_wibe_worker
+systemctl enable --now redis-server
 systemctl enable --now nginx
 systemctl enable --now seo_wibe-autodeploy.timer
 nginx -t
@@ -109,7 +131,9 @@ ufw allow ${APP_PORT}/tcp || true
 ufw --force enable || true
 
 systemctl restart seo_wibe
+systemctl restart seo_wibe_worker
 systemctl status seo_wibe --no-pager -l || true
+systemctl status seo_wibe_worker --no-pager -l || true
 systemctl status seo_wibe-autodeploy.timer --no-pager -l || true
 
 curl -fsS --max-time 20 "http://127.0.0.1:${APP_PORT}/" >/dev/null

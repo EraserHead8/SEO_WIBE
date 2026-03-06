@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     secret_key: str = ""
     token_expire_minutes: int = 60 * 24 * 3
     database_url: str = "sqlite:///./seo_wibe.db"
+    redis_url: str = "redis://127.0.0.1:6379/0"
+    task_queue_enabled: bool = True
+    task_queue_name: str = "seo_wibe:tasks"
+    task_queue_dedupe_prefix: str = "seo_wibe:task_dedupe"
     admin_emails: str = "makc200690@gmail.com"
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"

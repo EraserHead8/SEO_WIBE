@@ -8219,3 +8219,96 @@ button,
     padding: 10px;
   }
 }
+
+/* 2026-03 mobile chat/calendar stabilization */
+@media (max-width: 980px) {
+  #appSection > .workspace > .topbar {
+    position: sticky !important;
+    top: 6px !important;
+    z-index: 220 !important;
+  }
+
+  #social > .panel:first-child {
+    position: sticky;
+    top: 74px;
+    z-index: 210;
+    background: color-mix(in oklab, var(--ds-surface) 94%, #ffffff);
+  }
+
+  #socialSubtabChat .social-chat-layout {
+    height: clamp(420px, calc(100dvh - 270px), 760px) !important;
+    min-height: 420px !important;
+  }
+
+  #socialSubtabChat .social-chat-layout.chat-open .social-chat-main {
+    display: grid !important;
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+
+  #socialSubtabChat .social-chat-main {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    min-height: 0;
+  }
+
+  #socialSubtabChat .social-chat-messages {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #socialSubtabChat .social-chat-compose {
+    position: sticky;
+    bottom: 0;
+    z-index: 6;
+  }
+
+  #socialSubtabCalendar .social-calendar-row.head span {
+    padding: 6px 2px;
+    font-size: 12px;
+  }
+
+  #socialSubtabCalendar .social-day {
+    min-height: 66px;
+    padding: 5px;
+    gap: 4px;
+  }
+
+  #socialSubtabCalendar .social-day b {
+    font-size: 12px;
+  }
+
+  #socialSubtabCalendar .social-day small {
+    font-size: 10px;
+    gap: 4px;
+  }
+
+  #socialSubtabCalendar .social-calendar-toolbar {
+    gap: 6px;
+  }
+
+  #socialSubtabCalendar .social-calendar-nav {
+    gap: 4px;
+  }
+
+  #socialSubtabCalendar .social-calendar-nav .btn-secondary,
+  #socialSubtabCalendar .social-calendar-toolbar > .btn-secondary,
+  #socialSubtabCalendar #socialCalendarMonth {
+    min-height: 36px;
+    padding: 6px 9px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 640px) {
+  #socialSubtabCalendar .social-day {
+    min-height: 58px;
+    padding: 4px;
+  }
+
+  #socialSubtabCalendar .social-day small {
+    font-size: 9px;
+    gap: 3px;
+  }
+}

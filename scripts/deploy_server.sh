@@ -46,6 +46,11 @@ if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files | grep -q '
   systemctl is-active --quiet seo_wibe
 fi
 
+if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files | grep -q '^seo_wibe_worker.service'; then
+  systemctl restart seo_wibe_worker
+  systemctl is-active --quiet seo_wibe_worker
+fi
+
 if systemctl list-unit-files | grep -q '^seo_wibe.service'; then
   curl -fsS --max-time 15 "http://127.0.0.1:8016/" >/dev/null
 fi

@@ -7,6 +7,7 @@ let socialState = {
   chatThreads: [],
   chatActors: [],
   currentThreadId: 0,
+  chatLastThreadId: 0,
   currentThreadKind: "",
   chatMessages: [],
   chatOldestId: 0,
@@ -456,6 +457,7 @@ function resetSocialState() {
     chatThreads: [],
     chatActors: [],
     currentThreadId: 0,
+    chatLastThreadId: 0,
     currentThreadKind: "",
     chatMessages: [],
     chatOldestId: 0,
@@ -1268,12 +1270,11 @@ async function socialLoadThreads(opts = {}) {
     const current = data.find((x) => Number(x.id) === Number(socialState.currentThreadId));
     if (current) socialSetChatHeader(current);
   }
-  if (!socialState.currentThreadId && data.length) {
-    const isMobile = typeof window !== "undefined"
-      && window.matchMedia
-      && window.matchMedia("(max-width: 1024px)").matches;
-    if (!isMobile) {
-      socialSelectThread(Number(data[0].id || 0));
+  if ((!socialState.currentThreadId || !data.some((x) => Number(x.id) === Number(socialState.currentThreadId))) && data.length) {
+    const lastPreferred = Number(socialState.chatLastThreadId || 0);
+    const preferred = data.find((x) => Number(x.id) === lastPreferred) || data[0];
+    if (preferred) {
+      socialSelectThread(Number(preferred.id || 0));
     }
   }
 }
@@ -1495,6 +1496,7 @@ async function socialSelectThread(threadId) {
   const id = Number(threadId || 0);
   if (!id) return;
   socialState.currentThreadId = id;
+  socialState.chatLastThreadId = id;
   const row = socialState.chatThreads.find((x) => Number(x.id) === id) || null;
   socialState.currentThreadKind = String(row?.kind || "");
   socialClearReply();
@@ -1502,7 +1504,7 @@ async function socialSelectThread(threadId) {
   socialSetChatHeader(row);
   socialRenderThreads();
   socialSetChatView(true);
-  await socialLoadMessages(id);
+  await socialLoadMessages(id, { forceBottom: true });
   await socialRequest(`/api/social/chat/read/${id}`, { method: "POST" }).catch(() => null);
   socialPollNotifications().catch(() => null);
 }
@@ -1749,28 +1751,16 @@ async function socialSaveGroupAvatar() {
   socialCloseModal();
 }
 
-async function socialLoadMessages(threadId, opts = {}) {
-  const id = Number(threadId || socialState.currentThreadId || 0);
-  if (!id) return;
-  const beforeId = Number(opts.beforeId || 0);
-  const limit = Number(opts.limit || 80);
+function socialRenderChatMessages(opts = {}) {
   const host = document.getElementById("socialChatMessages");
-  const prevScrollHeight = host ? host.scrollHeight : 0;
-  const prevScrollTop = host ? host.scrollTop : 0;
-  const atBottom = host ? (host.scrollHeight - host.scrollTop - host.clientHeight < 40) : true;
-  const rows = await socialRequest(`/api/social/chat/messages/${id}?limit=${limit}${beforeId ? `&before_id=${beforeId}` : ""}`).catch((e) => {
-    if (!opts.silent && e?.message) alert(e.message);
-    return null;
-  });
-  if (!Array.isArray(rows)) return;
-  if (beforeId) {
-    socialState.chatMessages = [...rows, ...(socialState.chatMessages || [])];
-  } else {
-    socialState.chatMessages = rows;
-  }
-  socialState.chatOldestId = socialState.chatMessages.length ? Number(socialState.chatMessages[0].id || 0) : 0;
-  socialState.chatHasMore = rows.length >= limit;
   if (!host) return;
+  const keepOffset = Boolean(opts.keepOffset);
+  const forceBottom = Boolean(opts.forceBottom);
+  const prevScrollHeight = Number(opts.prevScrollHeight || 0);
+  const prevScrollTop = Number(opts.prevScrollTop || 0);
+  const wasAtBottom = typeof opts.wasAtBottom === "boolean"
+    ? opts.wasAtBottom
+    : (host.scrollHeight - host.scrollTop - host.clientHeight < 40);
   const loadMoreBtn = socialState.chatHasMore
     ? `<button class="btn-secondary social-chat-loadmore" type="button" onclick="socialLoadOlderMessages()">${tr("Загрузить раньше", "Load earlier")}</button>`
     : `<div class="hint">${tr("Начало чата", "Start of chat")}</div>`;
@@ -1778,7 +1768,7 @@ async function socialLoadMessages(threadId, opts = {}) {
   let lastDate = "";
   let lastSender = "";
   let lastMine = false;
-  const messagesHtml = socialState.chatMessages.map((msg) => {
+  const messagesHtml = (socialState.chatMessages || []).map((msg) => {
     const dateKey = String(msg.created_at || "").slice(0, 10);
     let dateBlock = "";
     if (dateKey && dateKey !== lastDate) {
@@ -1829,13 +1819,43 @@ async function socialLoadMessages(threadId, opts = {}) {
     <div class="social-chat-load">${loadMoreBtn}</div>
     ${messagesHtml}
   `;
-  if (beforeId) {
+  if (keepOffset) {
     const nextScroll = host.scrollHeight - prevScrollHeight + prevScrollTop;
     host.scrollTop = Math.max(0, nextScroll);
-  } else if (atBottom) {
+  } else if (forceBottom || wasAtBottom) {
     host.scrollTop = host.scrollHeight;
   }
   socialRenderReplyBar();
+}
+
+async function socialLoadMessages(threadId, opts = {}) {
+  const id = Number(threadId || socialState.currentThreadId || 0);
+  if (!id) return;
+  const beforeId = Number(opts.beforeId || 0);
+  const limit = Number(opts.limit || 80);
+  const host = document.getElementById("socialChatMessages");
+  const prevScrollHeight = host ? host.scrollHeight : 0;
+  const prevScrollTop = host ? host.scrollTop : 0;
+  const atBottom = host ? (host.scrollHeight - host.scrollTop - host.clientHeight < 40) : true;
+  const rows = await socialRequest(`/api/social/chat/messages/${id}?limit=${limit}${beforeId ? `&before_id=${beforeId}` : ""}`).catch((e) => {
+    if (!opts.silent && e?.message) alert(e.message);
+    return null;
+  });
+  if (!Array.isArray(rows)) return;
+  if (beforeId) {
+    socialState.chatMessages = [...rows, ...(socialState.chatMessages || [])];
+  } else {
+    socialState.chatMessages = rows;
+  }
+  socialState.chatOldestId = socialState.chatMessages.length ? Number(socialState.chatMessages[0].id || 0) : 0;
+  socialState.chatHasMore = rows.length >= limit;
+  socialRenderChatMessages({
+    keepOffset: Boolean(beforeId),
+    prevScrollHeight,
+    prevScrollTop,
+    wasAtBottom: atBottom,
+    forceBottom: Boolean(opts.forceBottom),
+  });
 }
 
 function socialLoadOlderMessages() {
@@ -1874,11 +1894,6 @@ async function socialSendMessage() {
     reactions: {},
     reply_to: optimisticReply,
   };
-  socialState.chatMessages = [...(socialState.chatMessages || []), optimisticRow];
-  socialRenderChatMessages();
-  input.value = "";
-  socialClearReply();
-
   const sendMessageOnce = () => socialRequest(`/api/social/chat/messages/${threadId}`, {
     method: "POST",
     body: JSON.stringify({ text, reply_to_message_id: replyId }),
@@ -1896,13 +1911,17 @@ async function socialSendMessage() {
     });
   };
   try {
+    socialState.chatMessages = [...(socialState.chatMessages || []), optimisticRow];
+    socialRenderChatMessages({ forceBottom: true });
+    input.value = "";
+    socialClearReply();
     let data = await sendMessageOnce().catch((e) => e);
     if (data instanceof Error) {
       socialState.chatMessages = (socialState.chatMessages || []).filter((row) => Number(row?.id || 0) !== localId);
-      socialRenderChatMessages();
+      socialRenderChatMessages({ forceBottom: true });
       if (typeof isNetworkError === "function" && isNetworkError(data)) {
         await delay(220);
-        await socialLoadMessages(threadId, { silent: true });
+        await socialLoadMessages(threadId, { silent: true, forceBottom: true });
         if (isMineByText()) {
           socialLoadThreads({ silent: true }).catch(() => null);
           return;
@@ -1913,15 +1932,15 @@ async function socialSendMessage() {
     }
     if (!data) {
       socialState.chatMessages = (socialState.chatMessages || []).filter((row) => Number(row?.id || 0) !== localId);
-      socialRenderChatMessages();
+      socialRenderChatMessages({ forceBottom: true });
       return;
     }
     socialState.chatMessages = (socialState.chatMessages || []).map((row) => {
       if (Number(row?.id || 0) !== localId) return row;
       return data;
     });
-    socialRenderChatMessages();
-    socialLoadMessages(threadId, { silent: true }).catch(() => null);
+    socialRenderChatMessages({ forceBottom: true });
+    socialLoadMessages(threadId, { silent: true, forceBottom: true }).catch(() => null);
     socialLoadThreads({ silent: true }).catch(() => null);
   } finally {
     socialState.sendingMessage = false;
@@ -2394,6 +2413,9 @@ function socialRenderCalendar() {
   const lastDay = new Date(year, month + 1, 0);
   const shift = (firstDay.getDay() + 6) % 7;
   const days = lastDay.getDate();
+  const compactCalendar = typeof window !== "undefined"
+    && window.matchMedia
+    && window.matchMedia("(max-width: 980px)").matches;
   const tasksByDay = new Map();
   const myTasksByDay = new Map();
   const myActorKey = String(socialState.boot?.actor?.actor_key || "").trim();
@@ -2420,7 +2442,10 @@ function socialRenderCalendar() {
     const hasTasks = tasksCount > 0 ? "has-task" : "";
     const hasMyTasks = myTasksCount > 0 ? "has-my-task" : "";
     const manyMyTasks = myTasksCount > 1 ? "my-task-many" : "";
-    html += `<button class="social-day ${active} ${isToday} ${hasEvents} ${hasTasks} ${hasMyTasks} ${manyMyTasks}" type="button" onclick="socialShowDay('${key}')"><b>${day}</b><small><span class="calendar-count calendar-events">${eventsCount} ${tr("соб.", "ev.")}</span><span class="calendar-sep">•</span><span class="calendar-count calendar-tasks ${myTasksCount ? "my-task" : ""}">${tasksCount} ${tr("задач", "tasks")}</span></small></button>`;
+    const countsHtml = compactCalendar
+      ? `<small><span class="calendar-count calendar-events">${eventsCount}</span><span class="calendar-sep">•</span><span class="calendar-count calendar-tasks ${myTasksCount ? "my-task" : ""}">${tasksCount}</span></small>`
+      : `<small><span class="calendar-count calendar-events">${eventsCount} ${tr("соб.", "ev.")}</span><span class="calendar-sep">•</span><span class="calendar-count calendar-tasks ${myTasksCount ? "my-task" : ""}">${tasksCount} ${tr("задач", "tasks")}</span></small>`;
+    html += `<button class="social-day ${active} ${isToday} ${hasEvents} ${hasTasks} ${hasMyTasks} ${manyMyTasks}" type="button" onclick="socialShowDay('${key}')"><b>${day}</b>${countsHtml}</button>`;
   }
   html += `</div>`;
   grid.innerHTML = html;
