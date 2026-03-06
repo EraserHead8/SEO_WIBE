@@ -78,9 +78,17 @@ let enabledModules = new Set();
 let wbReviewRows = [];
 const wbReviewDrafts = new Map();
 let currentReviewMarketplace = "wb";
+const feedbackInFlight = {
+  reviewGenerate: new Set(),
+  reviewSend: new Set(),
+  questionGenerate: new Set(),
+  questionSend: new Set(),
+};
+let reviewBackgroundReloadTimer = null;
 let wbQuestionRows = [];
 const wbQuestionDrafts = new Map();
 let currentQuestionMarketplace = "wb";
+let questionBackgroundReloadTimer = null;
 let returnsRows = [];
 let currentReturnsMarketplace = "wb";
 let reviewLoadProgress = { active: false, total: 0, loaded: 0 };
@@ -2936,6 +2944,32 @@ function reviewDraftKey(marketplace, reviewId) {
   return `${marketplace}:${String(reviewId || "")}`;
 }
 
+function applyDraftToVisibleInputs(selector, id, text) {
+  const safeId = String(id || "");
+  if (!safeId) return;
+  const nodes = document.querySelectorAll(selector);
+  for (const node of nodes) {
+    if (String(node?.dataset?.itemId || "") !== safeId) continue;
+    if (typeof node.value === "string") node.value = String(text || "");
+  }
+}
+
+function scheduleBackgroundReviewsReload(delayMs = 1400) {
+  if (reviewBackgroundReloadTimer) clearTimeout(reviewBackgroundReloadTimer);
+  reviewBackgroundReloadTimer = setTimeout(() => {
+    reviewBackgroundReloadTimer = null;
+    loadWbReviews().catch(() => null);
+  }, Math.max(250, Number(delayMs || 0)));
+}
+
+function scheduleBackgroundQuestionsReload(delayMs = 1400) {
+  if (questionBackgroundReloadTimer) clearTimeout(questionBackgroundReloadTimer);
+  questionBackgroundReloadTimer = setTimeout(() => {
+    questionBackgroundReloadTimer = null;
+    loadWbQuestions().catch(() => null);
+  }, Math.max(250, Number(delayMs || 0)));
+}
+
 function parseDateValue(raw) {
   const value = String(raw || "").trim();
   if (!value) return 0;
@@ -3279,6 +3313,10 @@ function dedupeFeedbackRows(rows) {
 }
 
 async function loadWbReviews() {
+  if (reviewBackgroundReloadTimer) {
+    clearTimeout(reviewBackgroundReloadTimer);
+    reviewBackgroundReloadTimer = null;
+  }
   if (!enabledModules.has("wb_reviews_ai")) {
     setTableMessage("wbReviewsTable", 7, tr("Модуль отзывов отключен администратором.", "Reviews module is disabled by admin."));
     updateReviewLoadStatus(tr("Модуль отключен.", "Module is disabled."));
@@ -3538,6 +3576,7 @@ async function renderWbReviews() {
     const replyInput = document.createElement("textarea");
     replyInput.rows = 3;
     replyInput.className = "review-reply-input";
+    replyInput.dataset.itemId = reviewId;
     replyInput.placeholder = currentLang === "en" ? "Reply text to customer" : "Текст ответа клиенту";
     const draftKey = reviewDraftKey(currentReviewMarketplace, reviewId);
     replyInput.value = wbReviewDrafts.get(draftKey) ?? row?.answer ?? "";
@@ -3598,61 +3637,88 @@ async function renderWbReviews() {
 }
 
 async function generateReviewReply(reviewId) {
-  const row = wbReviewRows.find((x) => String(x?.id || "") === String(reviewId || ""));
+  const reviewIdText = String(reviewId || "").trim();
+  if (!reviewIdText) return;
+  if (feedbackInFlight.reviewGenerate.has(reviewIdText)) return;
+  const row = wbReviewRows.find((x) => String(x?.id || "") === reviewIdText);
   if (!row) return alert(tr("Отзыв не найден", "Review not found"));
   const endpoint = `${getReviewsEndpoint(currentReviewMarketplace)}/generate-reply`;
   const mpLabel = currentReviewMarketplace === "ozon" ? "Ozon" : "WB";
-  const data = await withBusy(
-    tr("Генерируем ответ…", "Generating reply..."),
-    () => requestJson(endpoint, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify({
-        review_text: row.text || "",
-        product_name: row.product || "",
-        reviewer_name: row.user || "",
-        stars: Number.isFinite(Number(row.stars)) ? Number(row.stars) : null,
+  feedbackInFlight.reviewGenerate.add(reviewIdText);
+  try {
+    const data = await withBusy(
+      tr("Генерируем ответ…", "Generating reply..."),
+      () => requestJson(endpoint, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          review_text: row.text || "",
+          product_name: row.product || "",
+          reviewer_name: row.user || "",
+          stars: Number.isFinite(Number(row.stars)) ? Number(row.stars) : null,
+        }),
+        timeoutMs: 120000,
+        retryOnPost: true,
+        maxRetries: 3,
+        retryBaseDelayMs: 420,
       }),
-      timeoutMs: 90000,
-      retryOnPost: true,
-      maxRetries: 2,
-      retryBaseDelayMs: 450,
-    }),
-    tr(`Генерация зависит от AI-конфигурации сервиса (${mpLabel}).`, `Generation depends on AI settings (${mpLabel}).`)
-  ).catch((e) => {
-    alert(e.message);
-    return null;
-  });
-  if (!data) return;
-  wbReviewDrafts.set(reviewDraftKey(currentReviewMarketplace, reviewId), data.reply || "");
-  renderWbReviews();
+      tr(`Генерация зависит от AI-конфигурации сервиса (${mpLabel}).`, `Generation depends on AI settings (${mpLabel}).`)
+    ).catch((e) => {
+      alert(e.message);
+      return null;
+    });
+    if (!data) return;
+    const replyText = String(data.reply || "");
+    wbReviewDrafts.set(reviewDraftKey(currentReviewMarketplace, reviewIdText), replyText);
+    applyDraftToVisibleInputs("#wbReviewsTable .review-reply-input", reviewIdText, replyText);
+    updateReviewLoadStatus(tr("Черновик ответа обновлен.", "Draft updated."));
+  } finally {
+    feedbackInFlight.reviewGenerate.delete(reviewIdText);
+  }
 }
 
 async function sendReviewReply(reviewId) {
-  const key = reviewDraftKey(currentReviewMarketplace, String(reviewId || ""));
+  const reviewIdText = String(reviewId || "").trim();
+  if (!reviewIdText) return;
+  if (feedbackInFlight.reviewSend.has(reviewIdText)) return;
+  const key = reviewDraftKey(currentReviewMarketplace, reviewIdText);
   const text = (wbReviewDrafts.get(key) || "").trim();
   if (!text) return alert(tr("Введите или сгенерируйте текст ответа", "Enter or generate reply text"));
   const endpoint = `${getReviewsEndpoint(currentReviewMarketplace)}/reply`;
   const mpLabel = currentReviewMarketplace === "ozon" ? "Ozon" : "WB";
-  const data = await withBusy(
-    tr(`Отправляем ответ в ${mpLabel}…`, `Sending reply to ${mpLabel}...`),
-    () => requestJson(endpoint, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify({ id: String(reviewId || ""), text }),
-      timeoutMs: 90000,
-      retryOnPost: true,
-      maxRetries: 2,
-      retryBaseDelayMs: 450,
-    }),
-    tr("Ответ отправляется в карточку отзыва через API маркетплейса.", "Reply is sent to marketplace review card via API.")
-  ).catch((e) => {
-    alert(e.message);
-    return null;
-  });
-  if (!data) return;
-  updateReviewLoadStatus(tr("Ответ отправлен.", "Reply sent."));
-  await loadWbReviews();
+  feedbackInFlight.reviewSend.add(reviewIdText);
+  try {
+    const data = await withBusy(
+      tr(`Отправляем ответ в ${mpLabel}…`, `Sending reply to ${mpLabel}...`),
+      () => requestJson(endpoint, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ id: reviewIdText, text }),
+        timeoutMs: 120000,
+        retryOnPost: true,
+        maxRetries: 3,
+        retryBaseDelayMs: 420,
+      }),
+      tr("Ответ отправляется в карточку отзыва через API маркетплейса.", "Reply is sent to marketplace review card via API.")
+    ).catch((e) => {
+      alert(e.message);
+      return null;
+    });
+    if (!data) return;
+    const row = wbReviewRows.find((x) => String(x?.id || "") === reviewIdText);
+    if (row) {
+      row.answer = text;
+      row.is_answered = true;
+      row._type = "answered";
+    }
+    wbReviewDrafts.set(key, text);
+    applyDraftToVisibleInputs("#wbReviewsTable .review-reply-input", reviewIdText, text);
+    updateReviewLoadStatus(tr("Ответ отправлен.", "Reply sent."));
+    renderWbReviews();
+    scheduleBackgroundReviewsReload(1800);
+  } finally {
+    feedbackInFlight.reviewSend.delete(reviewIdText);
+  }
 }
 
 async function loadQuestionsWorkspace() {
@@ -3840,6 +3906,10 @@ function normalizeQuestionStatus(row) {
 }
 
 async function loadWbQuestions() {
+  if (questionBackgroundReloadTimer) {
+    clearTimeout(questionBackgroundReloadTimer);
+    questionBackgroundReloadTimer = null;
+  }
   if (!enabledModules.has("wb_questions_ai")) {
     setTableMessage("wbQuestionsTable", 6, tr("Модуль вопросов отключен администратором.", "Questions module is disabled by admin."));
     updateQuestionLoadStatus(tr("Модуль отключен.", "Module is disabled."));
@@ -4095,6 +4165,7 @@ async function renderWbQuestions() {
     const replyInput = document.createElement("textarea");
     replyInput.rows = 3;
     replyInput.className = "review-reply-input";
+    replyInput.dataset.itemId = questionId;
     replyInput.placeholder = currentLang === "en" ? "Reply text to customer" : "Текст ответа клиенту";
     const draftKey = questionDraftKey(currentQuestionMarketplace, questionId);
     replyInput.value = wbQuestionDrafts.get(draftKey) ?? row?.answer ?? "";
@@ -4155,43 +4226,56 @@ async function renderWbQuestions() {
 }
 
 async function generateQuestionReply(questionId) {
-  const row = wbQuestionRows.find((x) => String(x?.id || "") === String(questionId || ""));
+  const questionIdText = String(questionId || "").trim();
+  if (!questionIdText) return;
+  if (feedbackInFlight.questionGenerate.has(questionIdText)) return;
+  const row = wbQuestionRows.find((x) => String(x?.id || "") === questionIdText);
   if (!row) return alert(tr("Вопрос не найден", "Question not found"));
   const endpoint = `${getQuestionsEndpoint(currentQuestionMarketplace)}/generate-reply`;
   const mpLabel = currentQuestionMarketplace === "ozon" ? "Ozon" : "WB";
-  const data = await withBusy(
-    tr("Генерируем ответ…", "Generating reply..."),
-    () => requestJson(endpoint, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify({
-        review_text: row.text || "",
-        product_name: row.product || "",
-        reviewer_name: row.user || "",
-        stars: null,
+  feedbackInFlight.questionGenerate.add(questionIdText);
+  try {
+    const data = await withBusy(
+      tr("Генерируем ответ…", "Generating reply..."),
+      () => requestJson(endpoint, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          review_text: row.text || "",
+          product_name: row.product || "",
+          reviewer_name: row.user || "",
+          stars: null,
+        }),
+        timeoutMs: 120000,
+        retryOnPost: true,
+        maxRetries: 3,
+        retryBaseDelayMs: 420,
       }),
-      timeoutMs: 90000,
-      retryOnPost: true,
-      maxRetries: 2,
-      retryBaseDelayMs: 450,
-    }),
-    tr(`Генерация зависит от AI-конфигурации сервиса (${mpLabel}).`, `Generation depends on AI settings (${mpLabel}).`)
-  ).catch((e) => {
-    alert(e.message);
-    return null;
-  });
-  if (!data) return;
-  wbQuestionDrafts.set(questionDraftKey(currentQuestionMarketplace, questionId), data.reply || "");
-  renderWbQuestions();
+      tr(`Генерация зависит от AI-конфигурации сервиса (${mpLabel}).`, `Generation depends on AI settings (${mpLabel}).`)
+    ).catch((e) => {
+      alert(e.message);
+      return null;
+    });
+    if (!data) return;
+    const replyText = String(data.reply || "");
+    wbQuestionDrafts.set(questionDraftKey(currentQuestionMarketplace, questionIdText), replyText);
+    applyDraftToVisibleInputs("#wbQuestionsTable .review-reply-input", questionIdText, replyText);
+    updateQuestionLoadStatus(tr("Черновик ответа обновлен.", "Draft updated."));
+  } finally {
+    feedbackInFlight.questionGenerate.delete(questionIdText);
+  }
 }
 
 async function sendQuestionReply(questionId) {
-  const row = wbQuestionRows.find((x) => String(x?.id || "") === String(questionId || ""));
+  const questionIdText = String(questionId || "").trim();
+  if (!questionIdText) return;
+  if (feedbackInFlight.questionSend.has(questionIdText)) return;
+  const row = wbQuestionRows.find((x) => String(x?.id || "") === questionIdText);
   if (!row) return alert(tr("Вопрос не найден", "Question not found"));
-  const key = questionDraftKey(currentQuestionMarketplace, String(questionId || ""));
+  const key = questionDraftKey(currentQuestionMarketplace, questionIdText);
   const text = (wbQuestionDrafts.get(key) || "").trim();
   if (!text) return alert(tr("Введите или сгенерируйте текст ответа", "Enter or generate reply text"));
-  const payload = { id: String(questionId || ""), text };
+  const payload = { id: questionIdText, text };
   if (currentQuestionMarketplace === "wb") {
     const state = String(row?.state || "").trim();
     if (state) payload.state = state;
@@ -4214,25 +4298,36 @@ async function sendQuestionReply(questionId) {
   }
   const endpoint = `${getQuestionsEndpoint(currentQuestionMarketplace)}/reply`;
   const mpLabel = currentQuestionMarketplace === "ozon" ? "Ozon" : "WB";
-  const data = await withBusy(
-    tr(`Отправляем ответ в ${mpLabel}…`, `Sending reply to ${mpLabel}...`),
-    () => requestJson(endpoint, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify(payload),
-      timeoutMs: 90000,
-      retryOnPost: true,
-      maxRetries: 2,
-      retryBaseDelayMs: 450,
-    }),
-    tr("Ответ отправляется в карточку вопроса через API маркетплейса.", "Reply is sent to marketplace question card via API.")
-  ).catch((e) => {
-    alert(e.message);
-    return null;
-  });
-  if (!data) return;
-  updateQuestionLoadStatus(tr("Ответ отправлен.", "Reply sent."));
-  await loadWbQuestions();
+  feedbackInFlight.questionSend.add(questionIdText);
+  try {
+    const data = await withBusy(
+      tr(`Отправляем ответ в ${mpLabel}…`, `Sending reply to ${mpLabel}...`),
+      () => requestJson(endpoint, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify(payload),
+        timeoutMs: 120000,
+        retryOnPost: true,
+        maxRetries: 3,
+        retryBaseDelayMs: 420,
+      }),
+      tr("Ответ отправляется в карточку вопроса через API маркетплейса.", "Reply is sent to marketplace question card via API.")
+    ).catch((e) => {
+      alert(e.message);
+      return null;
+    });
+    if (!data) return;
+    row.answer = text;
+    row.is_answered = true;
+    row._type = "answered";
+    wbQuestionDrafts.set(key, text);
+    applyDraftToVisibleInputs("#wbQuestionsTable .review-reply-input", questionIdText, text);
+    updateQuestionLoadStatus(tr("Ответ отправлен.", "Reply sent."));
+    renderWbQuestions();
+    scheduleBackgroundQuestionsReload(1800);
+  } finally {
+    feedbackInFlight.questionSend.delete(questionIdText);
+  }
 }
 
 function getReturnsMarketplace() {
@@ -4493,10 +4588,23 @@ function campaignHasContext(row) {
   return Boolean(name || status || type || budget);
 }
 
+function isPlaceholderCampaignName(name, campaignId = "") {
+  const text = String(name || "").trim();
+  if (!text) return true;
+  const low = text.toLowerCase();
+  if (/^(кампания|campaign)\s*\d+$/.test(low)) return true;
+  const cid = String(campaignId || "").trim().toLowerCase();
+  if (cid && (low === `кампания ${cid}` || low === `campaign ${cid}`)) return true;
+  return false;
+}
+
 function mergeCampaignSummaryIntoRow(row, summary) {
   if (!summary || typeof summary !== "object") return row;
   const next = { ...row };
-  if ((!next.name || next.name === "-") && summary.name) next.name = summary.name;
+  const currentId = getCampaignRowId(next) || String(summary.campaign_id || "");
+  if (summary.name && (isPlaceholderCampaignName(next.name, currentId) || String(next.name || "").trim() === "-")) {
+    next.name = summary.name;
+  }
   if ((!next.status || next.status === "-") && summary.status) next.status = summary.status;
   if ((!next.type || next.type === "-") && summary.type) next.type = summary.type;
   if ((!next.dailyBudget && (!next.budget || next.budget === "-")) && summary.budget) next.budget = summary.budget;
@@ -4522,10 +4630,13 @@ function updateWbAdsLoadStatus(message = "") {
     holder.textContent = "-";
     return;
   }
+  const doneTitle = failed > 0
+    ? tr("Догрузка завершена частично", "Campaign load completed partially")
+    : tr("Догрузка кампаний завершена", "Campaign load complete");
   holder.innerHTML = buildLoadStatusHtml({
     title: active
       ? tr("Догрузка кампаний", "Loading campaigns")
-      : tr("Догрузка кампаний завершена", "Campaign load complete"),
+      : doneTitle,
     loaded,
     total,
     active,
@@ -4562,13 +4673,28 @@ async function enrichWbCampaignRows(runToken) {
 
     if (!payload) {
       partialFallback = true;
-      wbAdsLoadProgress.loaded += chunk.length;
+      wbAdsLoadProgress.failed += chunk.length;
       updateWbAdsLoadStatus();
       continue;
     }
 
     const summaries = payload?.summaries && typeof payload.summaries === "object" ? payload.summaries : {};
     const stats = payload?.stats && typeof payload.stats === "object" ? payload.stats : {};
+    const meta = payload?.meta && typeof payload.meta === "object" ? payload.meta : {};
+    const missingIds = Array.isArray(meta?.missing_ids)
+      ? meta.missing_ids.map((x) => Number(x || 0)).filter((x) => Number.isFinite(x) && x > 0)
+      : [];
+    let chunkMissing = missingIds.length;
+    if (chunkMissing <= 0) {
+      chunkMissing = chunk.filter((cid) => {
+        const key = String(cid);
+        const hasSummary = Boolean(summaries[key] && typeof summaries[key] === "object");
+        const hasStats = Boolean(stats[key] && typeof stats[key] === "object");
+        return !hasSummary && !hasStats;
+      }).length;
+    }
+    const chunkResolved = Math.max(0, chunk.length - chunkMissing);
+    if (chunkMissing > 0) partialFallback = true;
     wbCampaignRows = wbCampaignRows.map((row) => {
       const cid = getCampaignRowId(row);
       if (!cid) return row;
@@ -4576,13 +4702,14 @@ async function enrichWbCampaignRows(runToken) {
       if (stats[cid] && typeof stats[cid] === "object") return { ...merged, ...stats[cid] };
       return merged;
     });
-    wbAdsLoadProgress.loaded += chunk.length;
+    wbAdsLoadProgress.loaded += chunkResolved;
+    wbAdsLoadProgress.failed += chunkMissing;
     updateWbAdsLoadStatus();
     renderWbCampaignRows();
   }
   if (runToken !== wbAdsLoadToken) return;
   wbAdsLoadProgress.active = false;
-  if (partialFallback) {
+  if (partialFallback || Number(wbAdsLoadProgress.failed || 0) > 0) {
     updateWbAdsLoadStatus(
       tr(
         "Кампании загружены частично: часть детальных полей временно недоступна.",
@@ -5741,6 +5868,18 @@ function syncCategoryFilterState() {
   return shouldResetToAll;
 }
 
+function syncSelectedProductsActions() {
+  const btn = document.getElementById("productsDeleteSelectedBtn");
+  if (!btn) return;
+  const count = selectedProducts.size;
+  btn.disabled = count <= 0;
+  const tip = count > 0
+    ? tr(`Удалить выбранные (${count}) из локальной базы`, `Delete selected (${count}) from local database`)
+    : tr("Удалить выбранные из локальной базы", "Delete selected from local database");
+  btn.dataset.tip = tip;
+  btn.setAttribute("aria-label", tip);
+}
+
 function syncProductsPagerControls() {
   const safePage = Math.max(1, Number(productPage || 1));
   const safeTotalPages = Math.max(0, Number(productTotalPages || 0));
@@ -5768,6 +5907,7 @@ function syncProductsPagerControls() {
     const btn = document.getElementById(id);
     if (btn) btn.disabled = totalItems <= 0 || safePage >= effectiveTotalPages;
   });
+  syncSelectedProductsActions();
 }
 
 function onProductsFilterChanged() {
@@ -5966,9 +6106,9 @@ async function loadProducts() {
     tdActions.className = "product-actions-cell";
     tdActions.innerHTML = `
       <div class="product-row-actions">
-        <button class="btn-secondary btn-row-action" type="button">${escapeHtml(tr("Посмотреть", "View"))}</button>
-        <button class="btn-row-action" type="button">${escapeHtml(tr("Редактировать", "Edit"))}</button>
-        <button class="btn-danger btn-row-action" type="button">${escapeHtml(tr("Удалить локально", "Delete local"))}</button>
+        <button class="btn-secondary btn-row-action btn-row-action-icon" type="button" data-tip="${escapeHtml(tr("Посмотреть", "View"))}" aria-label="${escapeHtml(tr("Посмотреть", "View"))}">&#128065;</button>
+        <button class="btn-row-action btn-row-action-icon" type="button" data-tip="${escapeHtml(tr("Редактировать", "Edit"))}" aria-label="${escapeHtml(tr("Редактировать", "Edit"))}">&#9998;</button>
+        <button class="btn-danger btn-row-action btn-row-action-icon" type="button" data-tip="${escapeHtml(tr("Удалить локально", "Delete local"))}" aria-label="${escapeHtml(tr("Удалить локально", "Delete local"))}">&#128465;</button>
       </div>
     `;
     const [viewBtn, editBtn, deleteBtn] = tdActions.querySelectorAll("button");
@@ -6482,13 +6622,52 @@ async function deleteLocalProduct(productId) {
   alert(tr("Товар удален из локальной базы.", "Product deleted from local database."));
 }
 
+async function deleteSelectedLocalProducts() {
+  const ids = [...selectedProducts]
+    .map((x) => Number(x || 0))
+    .filter((x) => Number.isFinite(x) && x > 0);
+  if (!ids.length) {
+    alert(tr("Выберите товары для удаления.", "Select products to delete."));
+    return;
+  }
+  const confirmText = tr(
+    `Удалить ${ids.length} выбранных товаров только из локальной базы?`,
+    `Delete ${ids.length} selected products from local database only?`
+  );
+  if (!confirm(confirmText)) return;
+  const payload = await withBusy(
+    tr("Удаляем выбранные товары из локальной базы…", "Deleting selected products from local database..."),
+    () => requestJson("/api/products/local/delete", {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ product_ids: ids }),
+      timeoutMs: 120000,
+      retryOnPost: true,
+      maxRetries: 1,
+    }),
+    tr("Удаляются только локальные записи. На маркетплейсе товары не удаляются.", "Only local records are removed. Marketplace items stay unchanged.")
+  ).catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  if (!payload) return;
+  selectedProducts.clear();
+  selectedProductId = null;
+  syncSelectedProductsActions();
+  invalidateModuleCache("products", "seo");
+  await loadProducts();
+  alert(String(payload?.message || tr("Выбранные товары удалены из локальной базы.", "Selected products were removed from local database.")));
+}
+
 function toggleProduct(id, checked) {
   if (checked) selectedProducts.add(id);
   else selectedProducts.delete(id);
+  syncSelectedProductsActions();
 }
 
 function selectAllProducts() {
   selectedProducts = new Set(currentProducts.map((x) => x.id));
+  syncSelectedProductsActions();
   loadProducts();
 }
 

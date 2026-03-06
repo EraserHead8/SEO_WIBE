@@ -97,6 +97,7 @@ from app.schemas import (
     PositionCheckOut,
     PositionCheckRequest,
     ProductDetailOut,
+    ProductBulkDeleteIn,
     ProductPageOut,
     ProductOut,
     ProductReloadRequest,
@@ -2415,27 +2416,80 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
 
     summaries: dict[str, dict[str, Any]] = {}
     stats: dict[str, dict[str, Any]] = {}
+    warnings: list[str] = []
     error_flags: list[str] = []
     try:
-        summaries = fetch_wb_campaign_summaries(wb_key, ids, fallback_limit=40)
+        summaries = fetch_wb_campaign_summaries(wb_key, ids, fallback_limit=120)
     except Exception:
         summaries = {}
         error_flags.append("summaries")
+        warnings.append("summary_fetch_failed")
     try:
         stats = fetch_wb_campaign_stats_bulk(wb_key, ids, date_from=None, date_to=None)
     except Exception:
         stats = {}
         error_flags.append("stats")
+        warnings.append("stats_fetch_failed")
+
+    # Some WB responses return partial stats in bulk mode. Retry unresolved IDs one-by-one.
+    unresolved_stats_ids = [
+        cid
+        for cid in ids
+        if not _campaign_stat_has_context(stats.get(str(cid)))
+    ]
+    if unresolved_stats_ids:
+        for cid in unresolved_stats_ids[:60]:
+            try:
+                one_map = fetch_wb_campaign_stats_bulk(wb_key, [int(cid)], date_from=None, date_to=None)
+            except Exception:
+                one_map = {}
+            one = one_map.get(str(cid)) if isinstance(one_map, dict) else None
+            if isinstance(one, dict) and one:
+                stats[str(cid)] = one
+
+    missing_ids: list[int] = []
+    missing_summary_ids: list[int] = []
+    missing_stats_ids: list[int] = []
+    for cid in ids:
+        key = str(cid)
+        summary_ok = _campaign_summary_has_context(summaries.get(key), cid)
+        stats_ok = _campaign_stat_has_context(stats.get(key))
+        if not summary_ok:
+            missing_summary_ids.append(cid)
+        if not stats_ok:
+            missing_stats_ids.append(cid)
+        if not summary_ok or not stats_ok:
+            missing_ids.append(cid)
+    resolved_count = max(0, len(ids) - len(missing_ids))
+    if missing_ids:
+        warnings.append("partial_data")
+
+    meta = {
+        "requested_count": len(ids),
+        "summary_count": len([x for x in ids if _campaign_summary_has_context(summaries.get(str(x)), x)]),
+        "stats_count": len([x for x in ids if _campaign_stat_has_context(stats.get(str(x)))]),
+        "resolved_count": resolved_count,
+        "missing_count": len(missing_ids),
+        "missing_ids": missing_ids[:160],
+        "missing_summary_ids": missing_summary_ids[:160],
+        "missing_stats_ids": missing_stats_ids[:160],
+        "warnings": warnings,
+        "errors": error_flags,
+    }
     _audit(
         db,
         user,
         action="wb_ads_campaigns_enrich",
-        details=f"ids={len(ids)};summaries={len(summaries)};stats={len(stats)};errors={','.join(error_flags) if error_flags else '-'}",
+        details=(
+            f"ids={len(ids)};resolved={resolved_count};missing={len(missing_ids)};"
+            f"summaries={meta.get('summary_count')};stats={meta.get('stats_count')};"
+            f"errors={','.join(error_flags) if error_flags else '-'};warnings={','.join(warnings) if warnings else '-'}"
+        ),
         module_code="wb_ads",
         entity_type="campaign",
     )
     db.commit()
-    return WbCampaignEnrichOut(summaries=summaries, stats=stats)
+    return WbCampaignEnrichOut(summaries=summaries, stats=stats, meta=meta)
 
 
 @router.post("/wb/ads/rates", response_model=WbCampaignRatesOut)
@@ -3795,6 +3849,50 @@ def delete_product_local(product_id: int, user: User = Depends(get_current_user)
     )
     db.commit()
     return MessageOut(message="Товар удален из локальной базы")
+
+
+@router.post("/products/local/delete", response_model=MessageOut)
+def delete_products_local_bulk(payload: ProductBulkDeleteIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ids = sorted({int(x) for x in (payload.product_ids or []) if int(x) > 0})
+    if not ids:
+        raise HTTPException(status_code=400, detail="Выберите товары для удаления")
+    rows = db.scalars(
+        select(Product).where(
+            Product.user_id == user.id,
+            Product.id.in_(ids),
+            _owned_by_actor_or_owner_filter(Product, user),
+        )
+    ).all()
+    if not rows:
+        raise HTTPException(status_code=404, detail="Товары не найдены")
+    deleted_ids: list[int] = []
+    for row in rows:
+        deleted_ids.append(int(row.id))
+        db.delete(row)
+    deleted_ids.sort()
+    deleted_count = len(deleted_ids)
+    requested_count = len(ids)
+    missing_count = max(0, requested_count - deleted_count)
+    _audit(
+        db,
+        user,
+        action="product_local_bulk_deleted",
+        details=(
+            f"requested={requested_count};deleted={deleted_count};missing={missing_count};"
+            f"ids={','.join(str(x) for x in deleted_ids[:120])}"
+        )[:2000],
+        module_code="products",
+        entity_type="product",
+        entity_id=f"bulk:{deleted_count}",
+    )
+    db.commit()
+    return MessageOut(
+        message=(
+            f"Удалено из локальной базы: {deleted_count}"
+            if missing_count <= 0
+            else f"Удалено из локальной базы: {deleted_count} (не найдено: {missing_count})"
+        )
+    )
 
 
 @router.get("/products/{product_id}/keyword-suggestions", response_model=list[str])
@@ -6234,6 +6332,34 @@ def _social_actor_key(user: User) -> str:
     return f"u:{int(user.id)}"
 
 
+def _social_canonical_actor_key(db: Session, actor_key: str) -> str:
+    key = str(actor_key or "").strip().lower()
+    if key.startswith("m:"):
+        member_id = _to_int_safe(key.split(":", 1)[1])
+        member = db.get(TeamMember, member_id) if member_id > 0 else None
+        if member and bool(member.is_owner):
+            return f"u:{int(member.user_id)}"
+    return key
+
+
+def _social_actor_alias_keys(db: Session, actor_key: str) -> list[str]:
+    canonical = _social_canonical_actor_key(db, actor_key)
+    out: set[str] = {canonical}
+    if canonical.startswith("u:"):
+        user_id = _to_int_safe(canonical.split(":", 1)[1])
+        if user_id > 0:
+            owner_member = db.scalar(
+                select(TeamMember.id).where(
+                    TeamMember.user_id == user_id,
+                    TeamMember.is_owner.is_(True),
+                    TeamMember.is_active.is_(True),
+                ).order_by(TeamMember.id.asc())
+            )
+            if owner_member:
+                out.add(f"m:{int(owner_member)}")
+    return sorted(x for x in out if x)
+
+
 def _social_actor_identity(db: Session, user: User) -> tuple[str, str, int | None]:
     actor_key = _social_actor_key(user)
     if actor_key.startswith("m:"):
@@ -7197,11 +7323,39 @@ def social_chat_threads(
         member_id=member_id,
         actor_nick=actor_nick,
     )
-    mine = db.scalars(
+    actor_aliases = _social_actor_alias_keys(db, actor_key)
+    mine_rows = db.scalars(
         select(SocialChatThreadMember)
-        .where(SocialChatThreadMember.actor_key == actor_key)
+        .where(SocialChatThreadMember.actor_key.in_(actor_aliases))
         .order_by(SocialChatThreadMember.updated_at.desc(), SocialChatThreadMember.id.desc())
     ).all()
+    # Migrate legacy owner alias memberships (m:<owner_member_id>) into canonical u:<user_id>.
+    by_thread: dict[int, SocialChatThreadMember] = {}
+    for row in mine_rows:
+        tid = int(row.thread_id or 0)
+        if tid <= 0:
+            continue
+        prev = by_thread.get(tid)
+        is_exact = str(row.actor_key or "").strip().lower() == actor_key
+        if prev is None or is_exact:
+            by_thread[tid] = row
+    mine: list[SocialChatThreadMember] = []
+    for tid, row in by_thread.items():
+        if str(row.actor_key or "").strip().lower() == actor_key:
+            mine.append(row)
+            continue
+        migrated = _social_ensure_thread_member(
+            db,
+            thread_id=int(tid),
+            actor_key=actor_key,
+            user_id=int(user.id),
+            member_id=member_id,
+            actor_nick=actor_nick,
+        )
+        if int(migrated.last_read_message_id or 0) < int(row.last_read_message_id or 0):
+            migrated.last_read_message_id = int(row.last_read_message_id or 0)
+        db.delete(row)
+        mine.append(migrated)
     out: list[SocialChatThreadOut] = []
     for member_row in mine:
         thread = db.get(SocialChatThread, member_row.thread_id)
@@ -7287,21 +7441,44 @@ def social_start_direct_chat(
 ):
     ensure_module_enabled(db, user, "social_hub")
     actor_key, actor_nick, actor_member_id = _social_actor_identity(db, user)
-    peer_key = str(payload.actor_key or "").strip().lower()
+    peer_key = _social_canonical_actor_key(db, str(payload.actor_key or "").strip().lower())
     if not peer_key or peer_key == actor_key:
         raise HTTPException(status_code=400, detail="Выберите собеседника")
     peer_user_id, peer_member_id, peer_nick = _social_identity_by_key(db, peer_key)
-    peer_thread_ids = select(SocialChatThreadMember.thread_id).where(SocialChatThreadMember.actor_key == peer_key)
+    actor_aliases = _social_actor_alias_keys(db, actor_key)
+    peer_aliases = _social_actor_alias_keys(db, peer_key)
+    peer_thread_ids = select(SocialChatThreadMember.thread_id).where(SocialChatThreadMember.actor_key.in_(peer_aliases))
+    actor_thread_ids = select(SocialChatThreadMember.thread_id).where(SocialChatThreadMember.actor_key.in_(actor_aliases))
     thread = db.scalar(
-        select(SocialChatThread)
-        .join(SocialChatThreadMember, SocialChatThreadMember.thread_id == SocialChatThread.id)
-        .where(
+        select(SocialChatThread).where(
             SocialChatThread.kind == "direct",
-            SocialChatThreadMember.actor_key == actor_key,
+            SocialChatThread.id.in_(actor_thread_ids),
             SocialChatThread.id.in_(peer_thread_ids),
         )
         .order_by(SocialChatThread.id.desc())
     )
+    if not thread:
+        thread = db.scalar(
+            select(SocialChatThread)
+            .join(SocialChatThreadMember, SocialChatThreadMember.thread_id == SocialChatThread.id)
+            .where(
+                SocialChatThread.kind == "direct",
+                SocialChatThreadMember.actor_key == actor_key,
+                SocialChatThread.id.in_(peer_thread_ids),
+            )
+            .order_by(SocialChatThread.id.desc())
+        )
+    if not thread:
+        thread = db.scalar(
+            select(SocialChatThread)
+            .join(SocialChatThreadMember, SocialChatThreadMember.thread_id == SocialChatThread.id)
+            .where(
+                SocialChatThread.kind == "direct",
+                SocialChatThreadMember.actor_key == peer_key,
+                SocialChatThread.id.in_(actor_thread_ids),
+            )
+            .order_by(SocialChatThread.id.desc())
+        )
     if not thread:
         thread = SocialChatThread(
             kind="direct",
@@ -7318,7 +7495,7 @@ def social_start_direct_chat(
         member_id=actor_member_id,
         actor_nick=actor_nick,
     )
-    _social_ensure_thread_member(
+    peer_member = _social_ensure_thread_member(
         db,
         thread_id=thread.id,
         actor_key=peer_key,
@@ -7326,6 +7503,30 @@ def social_start_direct_chat(
         member_id=peer_member_id,
         actor_nick=peer_nick,
     )
+    for alias in peer_aliases:
+        if alias != peer_key:
+            row = db.scalar(
+                select(SocialChatThreadMember).where(
+                    SocialChatThreadMember.thread_id == int(thread.id),
+                    SocialChatThreadMember.actor_key == alias,
+                )
+            )
+            if row:
+                if int(peer_member.last_read_message_id or 0) < int(row.last_read_message_id or 0):
+                    peer_member.last_read_message_id = int(row.last_read_message_id or 0)
+                db.delete(row)
+    for alias in actor_aliases:
+        if alias != actor_key:
+            row = db.scalar(
+                select(SocialChatThreadMember).where(
+                    SocialChatThreadMember.thread_id == int(thread.id),
+                    SocialChatThreadMember.actor_key == alias,
+                )
+            )
+            if row:
+                if int(me_member.last_read_message_id or 0) < int(row.last_read_message_id or 0):
+                    me_member.last_read_message_id = int(row.last_read_message_id or 0)
+                db.delete(row)
     db.commit()
     return _social_thread_to_out(db, actor_key, thread, me_member)
 
@@ -7522,7 +7723,8 @@ def social_chat_actor_directory(
             owner_has_member.add(int(row.user_id))
         if row.user_id != user.id and not allow_cross_company:
             continue
-        key = f"m:{int(row.id)}"
+        base_key = f"u:{int(row.user_id)}" if bool(row.is_owner) else f"m:{int(row.id)}"
+        key = _social_canonical_actor_key(db, base_key)
         nick = str((row.nickname or row.full_name or row.email).strip() or f"member-{row.id}")
         company = str((row.user.email if row.user else "") or "").strip().lower()
         if row.user_id != user.id:
@@ -7581,11 +7783,12 @@ def social_chat_messages(
 ):
     ensure_module_enabled(db, user, "social_hub")
     actor_key, _, _ = _social_actor_identity(db, user)
+    actor_aliases = _social_actor_alias_keys(db, actor_key)
     member_row = db.scalar(
         select(SocialChatThreadMember).where(
             SocialChatThreadMember.thread_id == thread_id,
-            SocialChatThreadMember.actor_key == actor_key,
-        )
+            SocialChatThreadMember.actor_key.in_(actor_aliases),
+        ).order_by(SocialChatThreadMember.id.asc())
     )
     if not member_row:
         raise HTTPException(status_code=403, detail="Нет доступа к чату")
@@ -7612,6 +7815,7 @@ def social_chat_send_message(
 ):
     ensure_module_enabled(db, user, "social_hub")
     actor_key, actor_nick, _ = _social_actor_identity(db, user)
+    actor_aliases = _social_actor_alias_keys(db, actor_key)
     thread = db.get(SocialChatThread, int(thread_id or 0))
     if not thread:
         raise HTTPException(status_code=404, detail="Чат не найден")
@@ -7620,8 +7824,8 @@ def social_chat_send_message(
     member_row = db.scalar(
         select(SocialChatThreadMember).where(
             SocialChatThreadMember.thread_id == thread_id,
-            SocialChatThreadMember.actor_key == actor_key,
-        )
+            SocialChatThreadMember.actor_key.in_(actor_aliases),
+        ).order_by(SocialChatThreadMember.id.asc())
     )
     if not member_row:
         raise HTTPException(status_code=403, detail="Нет доступа к чату")
@@ -7661,7 +7865,7 @@ def social_chat_send_message(
     recipients = db.scalars(
         select(SocialChatThreadMember).where(
             SocialChatThreadMember.thread_id == thread_id,
-            SocialChatThreadMember.actor_key != actor_key,
+            SocialChatThreadMember.actor_key.notin_(actor_aliases),
         )
     ).all()
     thread_title = str(thread.title if thread else "Чат").strip() or "Чат"
@@ -7716,6 +7920,7 @@ def social_chat_send_file(
 ):
     ensure_module_enabled(db, user, "social_hub")
     actor_key, actor_nick, _ = _social_actor_identity(db, user)
+    actor_aliases = _social_actor_alias_keys(db, actor_key)
     thread = db.get(SocialChatThread, int(thread_id or 0))
     if not thread:
         raise HTTPException(status_code=404, detail="Чат не найден")
@@ -7724,8 +7929,8 @@ def social_chat_send_file(
     member_row = db.scalar(
         select(SocialChatThreadMember).where(
             SocialChatThreadMember.thread_id == int(thread_id),
-            SocialChatThreadMember.actor_key == actor_key,
-        )
+            SocialChatThreadMember.actor_key.in_(actor_aliases),
+        ).order_by(SocialChatThreadMember.id.asc())
     )
     if not member_row:
         raise HTTPException(status_code=403, detail="Нет доступа к чату")
@@ -7774,7 +7979,7 @@ def social_chat_send_file(
     recipients = db.scalars(
         select(SocialChatThreadMember).where(
             SocialChatThreadMember.thread_id == int(thread_id),
-            SocialChatThreadMember.actor_key != actor_key,
+            SocialChatThreadMember.actor_key.notin_(actor_aliases),
         )
     ).all()
     thread_title = str(thread.title or "Чат").strip() or "Чат"
@@ -7828,11 +8033,12 @@ def social_chat_toggle_reaction(
 ):
     ensure_module_enabled(db, user, "social_hub")
     actor_key, actor_nick, _ = _social_actor_identity(db, user)
+    actor_aliases = _social_actor_alias_keys(db, actor_key)
     member_row = db.scalar(
         select(SocialChatThreadMember).where(
             SocialChatThreadMember.thread_id == int(thread_id),
-            SocialChatThreadMember.actor_key == actor_key,
-        )
+            SocialChatThreadMember.actor_key.in_(actor_aliases),
+        ).order_by(SocialChatThreadMember.id.asc())
     )
     if not member_row:
         raise HTTPException(status_code=403, detail="Нет доступа к чату")
@@ -7899,11 +8105,12 @@ def social_mark_chat_read(
 ):
     ensure_module_enabled(db, user, "social_hub")
     actor_key, _, _ = _social_actor_identity(db, user)
+    actor_aliases = _social_actor_alias_keys(db, actor_key)
     member_row = db.scalar(
         select(SocialChatThreadMember).where(
             SocialChatThreadMember.thread_id == thread_id,
-            SocialChatThreadMember.actor_key == actor_key,
-        )
+            SocialChatThreadMember.actor_key.in_(actor_aliases),
+        ).order_by(SocialChatThreadMember.id.asc())
     )
     if not member_row:
         raise HTTPException(status_code=403, detail="Нет доступа к чату")
@@ -7915,7 +8122,7 @@ def social_mark_chat_read(
     # Mark related chat notifications as read for this thread.
     notif_rows = db.scalars(
         select(SocialNotification).where(
-            SocialNotification.recipient_key == actor_key,
+            SocialNotification.recipient_key.in_(actor_aliases),
             SocialNotification.kind == "chat_message",
             SocialNotification.is_read.is_(False),
         )
@@ -9216,6 +9423,42 @@ def _campaign_summary_from_base_row(row: dict[str, Any], campaign_id: int) -> di
         "type": ctype,
         "budget": budget,
     }
+
+
+def _campaign_summary_has_context(summary: dict[str, Any] | None, campaign_id: int) -> bool:
+    if not isinstance(summary, dict):
+        return False
+    cid = int(campaign_id or 0)
+    name = str(summary.get("name") or "").strip()
+    if name:
+        low = name.lower()
+        if not re.fullmatch(r"(кампания|campaign)\s*\d+", low):
+            return True
+        if cid > 0 and low not in {f"кампания {cid}", f"campaign {cid}"}:
+            return True
+    status = str(summary.get("status") or "").strip()
+    ctype = str(summary.get("type") or "").strip()
+    budget = str(summary.get("budget") or "").strip()
+    if status and status not in {"-", "0"}:
+        return True
+    if ctype and ctype not in {"-", "0"}:
+        return True
+    if budget and budget not in {"-", "0", "0.0", "0,0"}:
+        return True
+    return False
+
+
+def _campaign_stat_has_context(stat: dict[str, Any] | None) -> bool:
+    if not isinstance(stat, dict):
+        return False
+    metric_keys = ("views", "clicks", "orders", "spent", "ctr", "cr", "cpc", "cpo")
+    for key in metric_keys:
+        if key not in stat:
+            continue
+        value = _to_float_safe(stat.get(key), float("nan"))
+        if math.isfinite(value):
+            return True
+    return False
 
 
 def _knowledge_tokens(text: str) -> list[str]:

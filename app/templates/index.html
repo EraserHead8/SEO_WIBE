@@ -229,12 +229,13 @@
         </div>
         <div id="productsSubtabCatalog">
         <div class="panel">
-          <div class="grid-5 products-controls">
+          <div class="grid-6 products-controls">
             <select id="importMarketplace" onchange="onProductsFilterChanged()"><option value="all">Все маркетплейсы</option><option value="wb">WB</option><option value="ozon">Ozon</option></select>
             <select id="productCategoryFilter" onchange="onProductsFilterChanged()"><option value="all">Все категории</option></select>
             <button id="productsImportBtn" class="icon-only-btn" type="button" data-tip="Импорт" onclick="importProducts()">&#8681;</button>
             <button id="productsReloadBtn" class="btn-secondary icon-only-btn" type="button" data-tip="Перезагрузить базу" onclick="reloadProducts()">&#10227;</button>
             <button id="productsSelectAllBtn" class="btn-secondary icon-only-btn" type="button" data-tip="Выбрать все" onclick="selectAllProducts()">&#9745;</button>
+            <button id="productsDeleteSelectedBtn" class="btn-danger icon-only-btn" type="button" data-tip="Удалить выбранные из локальной базы" onclick="deleteSelectedLocalProducts()" disabled>&#128465;</button>
           </div>
           <div class="grid-1">
             <input id="productFilter" placeholder="Фильтр: артикул/название" oninput="onProductsFilterChanged()" />

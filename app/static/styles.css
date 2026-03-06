@@ -1920,6 +1920,18 @@ tbody tr:hover {
   font-size: 12px;
 }
 
+.btn-row-action-icon {
+  width: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-size: 15px;
+}
+
 .kanban {
   margin-bottom: 12px;
   display: grid;
@@ -8318,6 +8330,11 @@ button,
   #appSection.app-shell {
     grid-template-columns: minmax(220px, 248px) minmax(0, 1fr);
     --sidebar-width: 240px;
+  }
+
+  #appSection.app-shell.sidebar-compact {
+    grid-template-columns: 82px minmax(0, 1fr);
+    --sidebar-width: 82px;
   }
 
   #appSection #mainSidebar:not(.compact) {

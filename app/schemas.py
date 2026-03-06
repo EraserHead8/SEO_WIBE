@@ -95,6 +95,10 @@ class ProductUpdateIn(BaseModel):
     target_keywords: str | None = None
 
 
+class ProductBulkDeleteIn(BaseModel):
+    product_ids: list[int] = Field(default_factory=list)
+
+
 class ProductDetailOut(BaseModel):
     product: ProductOut
     photos: list[str] = Field(default_factory=list)
@@ -374,6 +378,7 @@ class WbCampaignsOut(BaseModel):
 class WbCampaignEnrichOut(BaseModel):
     summaries: dict[str, dict[str, Any]] = Field(default_factory=dict)
     stats: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    meta: dict[str, Any] = Field(default_factory=dict)
 
 
 class WbCampaignRatesIn(BaseModel):
