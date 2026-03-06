@@ -8366,12 +8366,10 @@ button,
 
   #appSection .topbar-controls {
     width: 100% !important;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
+    overflow: visible;
     padding-bottom: 2px;
   }
 
@@ -8416,6 +8414,19 @@ button,
   #appSection .topbar-controls .topbar-avatar-btn .topbar-avatar {
     width: 30px;
     height: 30px;
+  }
+
+  #appSection .topbar-controls .topbar-user-wrap {
+    position: static;
+  }
+
+  #appSection .topbar-controls .topbar-user-wrap .topbar-popover {
+    position: fixed;
+    top: 74px;
+    right: 10px;
+    left: auto;
+    width: min(300px, calc(100vw - 20px));
+    z-index: 2600;
   }
 
   /* Products table: keep data readable on narrow screens with horizontal scroll. */

@@ -25,6 +25,9 @@ WB_ADS_MAX_CAMPAIGNS = 120
 WB_ADS_MAX_CAMPAIGNS_LONG_RANGE = 60
 WB_ADS_MAX_STATS_CHUNKS = 3
 _WB_AD_SPEND_CACHE: dict[tuple[str, str, str], tuple[float, float, list[str]]] = {}
+OZON_FINANCE_TIMEOUT = httpx.Timeout(connect=6.0, read=20.0, write=20.0, pool=20.0)
+OZON_FINANCE_PAGE_SIZE = 500
+OZON_FINANCE_MAX_PAGES = 8
 
 
 def build_sales_report(
@@ -48,6 +51,16 @@ def build_sales_report(
             wb_rows, wb_warn = _fetch_wb_sales_rows(wb_api_key.strip(), date_from=date_from, date_to=date_to)
             collected.extend(wb_rows)
             warnings.extend(wb_warn)
+            wb_orders_rows, wb_orders_warn = _fetch_wb_orders_rows(wb_api_key.strip(), date_from=date_from, date_to=date_to)
+            collected.extend(wb_orders_rows)
+            warnings.extend(wb_orders_warn)
+            wb_finance_rows, wb_finance_warn = _fetch_wb_financial_rows_report_detail(
+                wb_api_key.strip(),
+                date_from=date_from,
+                date_to=date_to,
+            )
+            collected.extend(wb_finance_rows)
+            warnings.extend(wb_finance_warn)
         else:
             warnings.append("WB ключ не подключен.")
 
@@ -56,7 +69,13 @@ def build_sales_report(
             ozon_rows, ozon_warn = _fetch_ozon_sales_rows(ozon_api_key.strip(), date_from=date_from, date_to=date_to)
             collected.extend(ozon_rows)
             warnings.extend(ozon_warn)
-            warnings.append("Ozon penalties недоступны по текущему API: используем 0.")
+            ozon_finance_rows, ozon_finance_warn = _fetch_ozon_finance_rows(
+                ozon_api_key.strip(),
+                date_from=date_from,
+                date_to=date_to,
+            )
+            collected.extend(ozon_finance_rows)
+            warnings.extend(ozon_finance_warn)
         else:
             warnings.append("Ozon ключ не подключен.")
 
@@ -77,16 +96,7 @@ def build_sales_report(
     rows = _aggregate_rows(collected, wb_ad_spend_by_day=wb_ad_spend_by_day)
     resolved_granularity = _resolve_granularity(granularity, date_from, date_to)
     chart = _build_chart(rows, source_rows=collected, granularity=resolved_granularity, date_from=date_from, date_to=date_to, timezone=timezone)
-    totals = {
-        "orders": int(sum(int(x.get("orders") or 0) for x in rows)),
-        "units": int(sum(int(x.get("units") or 0) for x in rows)),
-        "buyouts": int(sum(int(x.get("buyouts") or 0) for x in rows)),
-        "revenue": float(round(sum(float(x.get("revenue") or 0.0) for x in rows), 2)),
-        "returns": int(sum(int(x.get("returns") or 0) for x in rows)),
-        "ad_spend": float(round(sum(float(x.get("ad_spend") or 0.0) for x in rows), 2)),
-        "penalties": float(round(sum(float(x.get("penalties") or 0.0) for x in rows), 2)),
-        "days": len({str(x.get("date") or "") for x in rows}),
-    }
+    totals = _build_sales_totals(rows)
     totals["gross_profit"] = float(round(float(totals["revenue"]) - float(totals["ad_spend"]) - float(totals["penalties"]), 2))
     return {
         "rows": rows,
@@ -96,6 +106,43 @@ def build_sales_report(
         "granularity": resolved_granularity,
         "timezone": timezone,
     }
+
+
+def _build_sales_totals(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    metrics_int = ("orders", "units", "buyouts", "returns")
+    metrics_money = (
+        "order_amount",
+        "buyout_amount",
+        "revenue",
+        "ad_spend",
+        "penalties",
+        "income",
+        "expense",
+        "net",
+        "commission",
+        "logistics",
+        "storage",
+        "deductions",
+        "acceptance",
+        "other_expense",
+    )
+    totals: dict[str, Any] = {
+        "days": len({str(x.get("date") or "") for x in rows}),
+    }
+    for metric in metrics_int:
+        totals[metric] = int(sum(int(x.get(metric) or 0) for x in rows))
+    for metric in metrics_money:
+        totals[metric] = float(round(sum(float(x.get(metric) or 0.0) for x in rows), 2))
+
+    for mp in ("wb", "ozon"):
+        mp_rows = [x for x in rows if str(x.get("marketplace") or "").strip().lower() == mp]
+        for metric in metrics_int:
+            totals[f"{mp}_{metric}"] = int(sum(int(x.get(metric) or 0) for x in mp_rows))
+        for metric in metrics_money:
+            totals[f"{mp}_{metric}"] = float(round(sum(float(x.get(metric) or 0.0) for x in mp_rows), 2))
+        totals[f"{mp}_days"] = len({str(x.get("date") or "") for x in mp_rows})
+
+    return totals
 
 
 def _fetch_wb_sales_rows(api_key: str, date_from: date, date_to: date) -> tuple[list[dict[str, Any]], list[str]]:
@@ -191,10 +238,21 @@ def _fetch_wb_sales_rows(api_key: str, date_from: date, date_to: date) -> tuple[
                         "orders": 0,
                         "units": 0,
                         "buyouts": 0,
+                        "order_amount": 0.0,
+                        "buyout_amount": 0.0,
                         "revenue": 0.0,
                         "returns": units,
                         "ad_spend": 0.0,
-                        "penalties": safe_revenue,
+                        "penalties": 0.0,
+                        "income": 0.0,
+                        "expense": 0.0,
+                        "net": 0.0,
+                        "commission": 0.0,
+                        "logistics": 0.0,
+                        "storage": 0.0,
+                        "deductions": 0.0,
+                        "acceptance": 0.0,
+                        "other_expense": 0.0,
                     }
                 )
                 continue
@@ -203,13 +261,24 @@ def _fetch_wb_sales_rows(api_key: str, date_from: date, date_to: date) -> tuple[
                     "date": day.isoformat(),
                     "occurred_at": str(item.get("date") or item.get("saleDate") or item.get("lastChangeDate") or ""),
                     "marketplace": "wb",
-                    "orders": 1,
-                    "units": units,
+                    "orders": 0,
+                    "units": 0,
                     "buyouts": units,
+                    "order_amount": 0.0,
+                    "buyout_amount": safe_revenue,
                     "revenue": safe_revenue,
                     "returns": 0,
                     "ad_spend": 0.0,
                     "penalties": 0.0,
+                    "income": safe_revenue,
+                    "expense": 0.0,
+                    "net": safe_revenue,
+                    "commission": 0.0,
+                    "logistics": 0.0,
+                    "storage": 0.0,
+                    "deductions": 0.0,
+                    "acceptance": 0.0,
+                    "other_expense": 0.0,
                 }
             )
 
@@ -219,16 +288,6 @@ def _fetch_wb_sales_rows(api_key: str, date_from: date, date_to: date) -> tuple[
             if fallback_warning:
                 warnings.append(fallback_warning)
             rows = list(fallback_rows)
-
-    # WB sales endpoint can be rate-limited or return sparse data for short windows.
-    # If we still have no positive orders, use orders endpoint fallback.
-    has_orders = any(int(x.get("orders") or 0) > 0 for x in rows)
-    if not has_orders:
-        order_rows, order_warnings = _fetch_wb_orders_rows(api_key=api_key, date_from=date_from, date_to=date_to)
-        if order_rows:
-            rows = order_rows
-            warnings.append("WB sales: использован fallback API supplier/orders.")
-        warnings.extend(order_warnings)
 
     _WB_SALES_CACHE[cache_key] = (time.monotonic(), list(rows), list(warnings))
     return rows, warnings
@@ -303,10 +362,21 @@ def _fetch_ozon_sales_rows(api_key: str, date_from: date, date_to: date) -> tupl
                 "orders": orders,
                 "units": units,
                 "buyouts": units,
+                "order_amount": 0.0,
+                "buyout_amount": revenue,
                 "revenue": revenue,
                 "returns": 0,
                 "ad_spend": 0.0,
                 "penalties": 0.0,
+                "income": revenue,
+                "expense": 0.0,
+                "net": revenue,
+                "commission": 0.0,
+                "logistics": 0.0,
+                "storage": 0.0,
+                "deductions": 0.0,
+                "acceptance": 0.0,
+                "other_expense": 0.0,
             }
         )
     return rows, warnings
@@ -329,25 +399,65 @@ def _aggregate_rows(rows: list[dict[str, Any]], wb_ad_spend_by_day: dict[str, fl
                 "orders": 0,
                 "units": 0,
                 "buyouts": 0,
+                "order_amount": 0.0,
+                "buyout_amount": 0.0,
                 "revenue": 0.0,
                 "returns": 0,
                 "ad_spend": 0.0,
                 "penalties": 0.0,
+                "income": 0.0,
+                "expense": 0.0,
+                "net": 0.0,
+                "commission": 0.0,
+                "logistics": 0.0,
+                "storage": 0.0,
+                "deductions": 0.0,
+                "acceptance": 0.0,
+                "other_expense": 0.0,
             },
         )
         row["orders"] += int(item.get("orders") or 0)
         row["units"] += int(item.get("units") or 0)
         row["buyouts"] += int(item.get("buyouts") or max(0, int(item.get("units") or 0) - int(item.get("returns") or 0)))
+        row["order_amount"] = float(round(float(row["order_amount"]) + float(item.get("order_amount") or 0.0), 2))
+        row["buyout_amount"] = float(round(float(row["buyout_amount"]) + float(item.get("buyout_amount") or 0.0), 2))
         row["revenue"] = float(round(float(row["revenue"]) + float(item.get("revenue") or 0.0), 2))
         row["returns"] += int(item.get("returns") or 0)
         row["ad_spend"] = float(round(float(row["ad_spend"]) + float(item.get("ad_spend") or 0.0), 2))
         row["penalties"] = float(round(float(row["penalties"]) + float(item.get("penalties") or 0.0), 2))
+        row["income"] = float(round(float(row["income"]) + float(item.get("income") or 0.0), 2))
+        row["expense"] = float(round(float(row["expense"]) + float(item.get("expense") or 0.0), 2))
+        row["net"] = float(round(float(row["net"]) + float(item.get("net") or 0.0), 2))
+        row["commission"] = float(round(float(row["commission"]) + float(item.get("commission") or 0.0), 2))
+        row["logistics"] = float(round(float(row["logistics"]) + float(item.get("logistics") or 0.0), 2))
+        row["storage"] = float(round(float(row["storage"]) + float(item.get("storage") or 0.0), 2))
+        row["deductions"] = float(round(float(row["deductions"]) + float(item.get("deductions") or 0.0), 2))
+        row["acceptance"] = float(round(float(row["acceptance"]) + float(item.get("acceptance") or 0.0), 2))
+        row["other_expense"] = float(round(float(row["other_expense"]) + float(item.get("other_expense") or 0.0), 2))
     if ad_map:
         for row in bucket.values():
             if str(row.get("marketplace") or "").lower() != "wb":
                 continue
             day = str(row.get("date") or "").strip()
             row["ad_spend"] = float(round(float(row.get("ad_spend") or 0.0) + float(ad_map.get(day) or 0.0), 2))
+    for row in bucket.values():
+        income = float(row.get("income") or 0.0)
+        expense = float(row.get("expense") or 0.0)
+        if income <= 0 and float(row.get("revenue") or 0.0) > 0:
+            income = float(row.get("revenue") or 0.0)
+            row["income"] = float(round(income, 2))
+        if expense <= 0:
+            expense = (
+                float(row.get("commission") or 0.0)
+                + float(row.get("logistics") or 0.0)
+                + float(row.get("storage") or 0.0)
+                + float(row.get("deductions") or 0.0)
+                + float(row.get("acceptance") or 0.0)
+                + float(row.get("other_expense") or 0.0)
+                + float(row.get("penalties") or 0.0)
+            )
+            row["expense"] = float(round(expense, 2))
+        row["net"] = float(round(float(row.get("income") or 0.0) - float(row.get("expense") or 0.0), 2))
     out = list(bucket.values())
     out.sort(key=lambda x: (str(x.get("date") or ""), str(x.get("marketplace") or "")))
     return out
@@ -445,24 +555,57 @@ def _new_chart_bucket(day: str, bucket: str) -> dict[str, Any]:
         "orders": 0,
         "units": 0,
         "buyouts": 0,
+        "order_amount": 0.0,
+        "buyout_amount": 0.0,
         "revenue": 0.0,
         "returns": 0,
         "ad_spend": 0.0,
         "penalties": 0.0,
+        "income": 0.0,
+        "expense": 0.0,
+        "net": 0.0,
+        "commission": 0.0,
+        "logistics": 0.0,
+        "storage": 0.0,
+        "deductions": 0.0,
+        "acceptance": 0.0,
+        "other_expense": 0.0,
         "wb_orders": 0,
         "wb_units": 0,
         "wb_buyouts": 0,
+        "wb_order_amount": 0.0,
+        "wb_buyout_amount": 0.0,
         "wb_revenue": 0.0,
         "wb_returns": 0,
         "wb_ad_spend": 0.0,
         "wb_penalties": 0.0,
+        "wb_income": 0.0,
+        "wb_expense": 0.0,
+        "wb_net": 0.0,
+        "wb_commission": 0.0,
+        "wb_logistics": 0.0,
+        "wb_storage": 0.0,
+        "wb_deductions": 0.0,
+        "wb_acceptance": 0.0,
+        "wb_other_expense": 0.0,
         "ozon_orders": 0,
         "ozon_units": 0,
         "ozon_buyouts": 0,
+        "ozon_order_amount": 0.0,
+        "ozon_buyout_amount": 0.0,
         "ozon_revenue": 0.0,
         "ozon_returns": 0,
         "ozon_ad_spend": 0.0,
         "ozon_penalties": 0.0,
+        "ozon_income": 0.0,
+        "ozon_expense": 0.0,
+        "ozon_net": 0.0,
+        "ozon_commission": 0.0,
+        "ozon_logistics": 0.0,
+        "ozon_storage": 0.0,
+        "ozon_deductions": 0.0,
+        "ozon_acceptance": 0.0,
+        "ozon_other_expense": 0.0,
     }
 
 
@@ -470,18 +613,40 @@ def _apply_metrics_to_bucket(target: dict[str, Any], source: dict[str, Any], pre
     orders_key = f"{prefix}orders"
     units_key = f"{prefix}units"
     buyouts_key = f"{prefix}buyouts"
+    order_amount_key = f"{prefix}order_amount"
+    buyout_amount_key = f"{prefix}buyout_amount"
     revenue_key = f"{prefix}revenue"
     returns_key = f"{prefix}returns"
     ad_spend_key = f"{prefix}ad_spend"
     penalties_key = f"{prefix}penalties"
+    income_key = f"{prefix}income"
+    expense_key = f"{prefix}expense"
+    net_key = f"{prefix}net"
+    commission_key = f"{prefix}commission"
+    logistics_key = f"{prefix}logistics"
+    storage_key = f"{prefix}storage"
+    deductions_key = f"{prefix}deductions"
+    acceptance_key = f"{prefix}acceptance"
+    other_expense_key = f"{prefix}other_expense"
 
     target[orders_key] = int(target.get(orders_key) or 0) + int(source.get("orders") or 0)
     target[units_key] = int(target.get(units_key) or 0) + int(source.get("units") or 0)
     target[buyouts_key] = int(target.get(buyouts_key) or 0) + int(source.get("buyouts") or max(0, int(source.get("units") or 0) - int(source.get("returns") or 0)))
+    target[order_amount_key] = float(round(float(target.get(order_amount_key) or 0.0) + float(source.get("order_amount") or 0.0), 2))
+    target[buyout_amount_key] = float(round(float(target.get(buyout_amount_key) or 0.0) + float(source.get("buyout_amount") or 0.0), 2))
     target[revenue_key] = float(round(float(target.get(revenue_key) or 0.0) + float(source.get("revenue") or 0.0), 2))
     target[returns_key] = int(target.get(returns_key) or 0) + int(source.get("returns") or 0)
     target[ad_spend_key] = float(round(float(target.get(ad_spend_key) or 0.0) + float(source.get("ad_spend") or 0.0), 2))
     target[penalties_key] = float(round(float(target.get(penalties_key) or 0.0) + float(source.get("penalties") or 0.0), 2))
+    target[income_key] = float(round(float(target.get(income_key) or 0.0) + float(source.get("income") or 0.0), 2))
+    target[expense_key] = float(round(float(target.get(expense_key) or 0.0) + float(source.get("expense") or 0.0), 2))
+    target[net_key] = float(round(float(target.get(net_key) or 0.0) + float(source.get("net") or 0.0), 2))
+    target[commission_key] = float(round(float(target.get(commission_key) or 0.0) + float(source.get("commission") or 0.0), 2))
+    target[logistics_key] = float(round(float(target.get(logistics_key) or 0.0) + float(source.get("logistics") or 0.0), 2))
+    target[storage_key] = float(round(float(target.get(storage_key) or 0.0) + float(source.get("storage") or 0.0), 2))
+    target[deductions_key] = float(round(float(target.get(deductions_key) or 0.0) + float(source.get("deductions") or 0.0), 2))
+    target[acceptance_key] = float(round(float(target.get(acceptance_key) or 0.0) + float(source.get("acceptance") or 0.0), 2))
+    target[other_expense_key] = float(round(float(target.get(other_expense_key) or 0.0) + float(source.get("other_expense") or 0.0), 2))
 
 
 def _row_has_explicit_time(item: dict[str, Any]) -> bool:
@@ -502,10 +667,21 @@ def _apply_daily_row_to_neutral_hour(buckets: dict[int, dict[str, Any]], item: d
         "orders": int(item.get("orders") or 0),
         "units": int(item.get("units") or 0),
         "buyouts": int(item.get("buyouts") or max(0, int(item.get("units") or 0) - int(item.get("returns") or 0))),
+        "order_amount": float(item.get("order_amount") or 0.0),
+        "buyout_amount": float(item.get("buyout_amount") or 0.0),
         "revenue": float(item.get("revenue") or 0.0),
         "returns": int(item.get("returns") or 0),
         "ad_spend": float(item.get("ad_spend") or 0.0),
         "penalties": float(item.get("penalties") or 0.0),
+        "income": float(item.get("income") or 0.0),
+        "expense": float(item.get("expense") or 0.0),
+        "net": float(item.get("net") or 0.0),
+        "commission": float(item.get("commission") or 0.0),
+        "logistics": float(item.get("logistics") or 0.0),
+        "storage": float(item.get("storage") or 0.0),
+        "deductions": float(item.get("deductions") or 0.0),
+        "acceptance": float(item.get("acceptance") or 0.0),
+        "other_expense": float(item.get("other_expense") or 0.0),
     }
     mp = str(item.get("marketplace") or "").strip().lower()
     _apply_metrics_to_bucket(bucket, chunk)
@@ -595,14 +771,16 @@ def _campaign_id_from_any(row: Any) -> int:
     return 0
 
 
-def _fetch_wb_sales_rows_report_detail(api_key: str, date_from: date, date_to: date) -> tuple[list[dict[str, Any]], str]:
+def _fetch_wb_report_detail_source_rows(api_key: str, date_from: date, date_to: date) -> tuple[list[dict[str, Any]], str]:
     endpoint = "https://statistics-api.wildberries.ru/api/v5/supplier/reportDetailByPeriod"
     rrdid = 0
     source_rows: list[dict[str, Any]] = []
+    report_from = f"{date_from.isoformat()}T00:00:00+03:00"
+    report_to = (date_to + timedelta(days=1)).isoformat()
     for _ in range(WB_REPORT_DETAIL_MAX_PAGES):
         params = {
-            "dateFrom": date_from.isoformat(),
-            "dateTo": date_to.isoformat(),
+            "dateFrom": report_from,
+            "dateTo": report_to,
             "limit": WB_REPORT_DETAIL_LIMIT,
             "rrdid": rrdid,
         }
@@ -618,53 +796,70 @@ def _fetch_wb_sales_rows_report_detail(api_key: str, date_from: date, date_to: d
         if not next_rrdid or next_rrdid <= rrdid:
             break
         rrdid = next_rrdid
-
     if not source_rows:
         return [], ""
+    return source_rows, "ok"
+
+
+def _wb_report_detail_day(item: dict[str, Any]) -> date | None:
+    return _parse_any_date(
+        item.get("sale_dt")
+        or item.get("saleDt")
+        or item.get("order_dt")
+        or item.get("rr_dt")
+        or item.get("date")
+        or item.get("date_from")
+    )
+
+
+def _wb_report_detail_marker(item: dict[str, Any]) -> str:
+    return "|".join(
+        [
+            str(item.get("rrd_id") or item.get("rrdId") or ""),
+            str(item.get("rid") or ""),
+            str(item.get("srid") or ""),
+            str(item.get("sale_dt") or item.get("order_dt") or item.get("rr_dt") or ""),
+            str(item.get("nm_id") or item.get("nmId") or ""),
+            str(item.get("quantity") or ""),
+        ]
+    )
+
+
+def _wb_report_detail_sale_amount(item: dict[str, Any]) -> float:
+    raw = _to_float(
+        item.get("retail_amount")
+        or item.get("retail_price_withdisc_rub")
+        or item.get("ppvz_for_pay")
+        or item.get("forPay")
+        or 0.0
+    )
+    return abs(float(round(raw, 2)))
+
+
+def _fetch_wb_sales_rows_report_detail(api_key: str, date_from: date, date_to: date) -> tuple[list[dict[str, Any]], str]:
+    source_rows, status = _fetch_wb_report_detail_source_rows(api_key=api_key, date_from=date_from, date_to=date_to)
+    if not source_rows:
+        return [], status if status != "ok" else ""
 
     rows: list[dict[str, Any]] = []
     dedupe_keys: set[str] = set()
     for item in source_rows:
         if not isinstance(item, dict):
             continue
-        day = _parse_any_date(
-            item.get("sale_dt")
-            or item.get("saleDt")
-            or item.get("order_dt")
-            or item.get("rr_dt")
-            or item.get("date")
-            or item.get("date_from")
-        )
+        day = _wb_report_detail_day(item)
         if not day or day < date_from or day > date_to:
             continue
-        marker = "|".join(
-            [
-                str(item.get("rrd_id") or item.get("rrdId") or ""),
-                str(item.get("rid") or ""),
-                str(item.get("srid") or ""),
-                str(item.get("sale_dt") or item.get("order_dt") or item.get("rr_dt") or ""),
-                str(item.get("nm_id") or item.get("nmId") or ""),
-                str(item.get("quantity") or ""),
-            ]
-        )
+        marker = _wb_report_detail_marker(item)
         if marker in dedupe_keys:
             continue
         dedupe_keys.add(marker)
-
         units = int(round(abs(_to_float(item.get("quantity") or 0))))
         if units <= 0:
             units = 1
-        revenue = _to_float(
-            item.get("ppvz_for_pay")
-            or item.get("forPay")
-            or item.get("retail_amount")
-            or item.get("retail_price_withdisc_rub")
-            or 0.0
-        )
+        sale_amount = _wb_report_detail_sale_amount(item)
         return_amount = abs(float(round(_to_float(item.get("return_amount") or item.get("returnAmount") or 0.0), 2)))
         op_name = str(item.get("supplier_oper_name") or item.get("doc_type_name") or "").lower()
-        is_return = bool(return_amount > 0 or "возврат" in op_name or "return" in op_name or revenue < 0)
-        safe_revenue = abs(float(round(revenue, 2)))
+        is_return = bool(return_amount > 0 or "возврат" in op_name or "return" in op_name)
         if is_return:
             rows.append(
                 {
@@ -674,10 +869,21 @@ def _fetch_wb_sales_rows_report_detail(api_key: str, date_from: date, date_to: d
                     "orders": 0,
                     "units": 0,
                     "buyouts": 0,
+                    "order_amount": 0.0,
+                    "buyout_amount": 0.0,
                     "revenue": 0.0,
                     "returns": units,
                     "ad_spend": 0.0,
-                    "penalties": return_amount if return_amount > 0 else safe_revenue,
+                    "penalties": 0.0,
+                    "income": 0.0,
+                    "expense": 0.0,
+                    "net": 0.0,
+                    "commission": 0.0,
+                    "logistics": 0.0,
+                    "storage": 0.0,
+                    "deductions": 0.0,
+                    "acceptance": 0.0,
+                    "other_expense": 0.0,
                 }
             )
             continue
@@ -686,18 +892,109 @@ def _fetch_wb_sales_rows_report_detail(api_key: str, date_from: date, date_to: d
                 "date": day.isoformat(),
                 "occurred_at": str(item.get("sale_dt") or item.get("saleDt") or item.get("order_dt") or item.get("rr_dt") or ""),
                 "marketplace": "wb",
-                "orders": 1,
-                "units": units,
+                "orders": 0,
+                "units": 0,
                 "buyouts": units,
-                "revenue": safe_revenue,
+                "order_amount": 0.0,
+                "buyout_amount": sale_amount,
+                "revenue": sale_amount,
                 "returns": 0,
                 "ad_spend": 0.0,
                 "penalties": 0.0,
+                "income": sale_amount,
+                "expense": 0.0,
+                "net": sale_amount,
+                "commission": 0.0,
+                "logistics": 0.0,
+                "storage": 0.0,
+                "deductions": 0.0,
+                "acceptance": 0.0,
+                "other_expense": 0.0,
             }
         )
     if not rows:
         return [], ""
     return rows, "WB sales: использован fallback API reportDetailByPeriod."
+
+
+def _fetch_wb_financial_rows_report_detail(api_key: str, date_from: date, date_to: date) -> tuple[list[dict[str, Any]], list[str]]:
+    source_rows, status = _fetch_wb_report_detail_source_rows(api_key=api_key, date_from=date_from, date_to=date_to)
+    if not source_rows:
+        if status and status != "ok":
+            return [], [f"WB finance API недоступен ({status})."]
+        return [], ["WB finance API не вернул данные по расходам/приходам."]
+
+    rows: list[dict[str, Any]] = []
+    dedupe_keys: set[str] = set()
+    for item in source_rows:
+        if not isinstance(item, dict):
+            continue
+        day = _wb_report_detail_day(item)
+        if not day or day < date_from or day > date_to:
+            continue
+        marker = _wb_report_detail_marker(item)
+        if marker in dedupe_keys:
+            continue
+        dedupe_keys.add(marker)
+
+        occurred_at = str(item.get("sale_dt") or item.get("saleDt") or item.get("order_dt") or item.get("rr_dt") or "")
+        operation_name = str(item.get("supplier_oper_name") or item.get("doc_type_name") or "").strip().lower()
+        sale_amount = _wb_report_detail_sale_amount(item)
+        return_amount = abs(float(round(_to_float(item.get("return_amount") or item.get("returnAmount") or 0.0), 2)))
+        additional_payment = float(round(_to_float(item.get("additional_payment") or item.get("additionalPayment") or 0.0), 2))
+        commission = (
+            abs(_to_float(item.get("ppvz_sales_commission") or item.get("ppvzSalesCommission") or 0.0))
+            + abs(_to_float(item.get("ppvz_vw") or item.get("ppvzVw") or 0.0))
+            + abs(_to_float(item.get("ppvz_vw_nds") or item.get("ppvzVwNds") or 0.0))
+            + abs(_to_float(item.get("acquiring_fee") or item.get("acquiringFee") or 0.0))
+        )
+        logistics = (
+            abs(_to_float(item.get("delivery_rub") or item.get("deliveryRub") or 0.0))
+            + abs(_to_float(item.get("rebill_logistic_cost") or item.get("rebillLogisticCost") or 0.0))
+            + return_amount
+        )
+        storage = abs(_to_float(item.get("storage_fee") or item.get("storageFee") or 0.0))
+        deductions = abs(_to_float(item.get("deduction") or 0.0))
+        acceptance = abs(_to_float(item.get("acceptance") or 0.0))
+        penalties = abs(_to_float(item.get("penalty") or 0.0))
+        other_expense = max(0.0, -additional_payment)
+        income = 0.0
+        if sale_amount > 0 and "возврат" not in operation_name and "return" not in operation_name:
+            income += sale_amount
+        if additional_payment > 0:
+            income += additional_payment
+        expense = commission + logistics + storage + deductions + acceptance + penalties + other_expense
+        if income <= 0 and expense <= 0:
+            continue
+        rows.append(
+            {
+                "date": day.isoformat(),
+                "occurred_at": occurred_at,
+                "marketplace": "wb",
+                "orders": 0,
+                "units": 0,
+                "buyouts": 0,
+                "order_amount": 0.0,
+                "buyout_amount": 0.0,
+                "revenue": 0.0,
+                "returns": 0,
+                "ad_spend": 0.0,
+                "penalties": float(round(penalties, 2)),
+                "income": float(round(income, 2)),
+                "expense": float(round(expense, 2)),
+                "net": float(round(income - expense, 2)),
+                "commission": float(round(commission, 2)),
+                "logistics": float(round(logistics, 2)),
+                "storage": float(round(storage, 2)),
+                "deductions": float(round(deductions, 2)),
+                "acceptance": float(round(acceptance, 2)),
+                "other_expense": float(round(other_expense, 2)),
+            }
+        )
+
+    if not rows:
+        return [], ["WB finance: в детализации периода не найдено финансовых операций."]
+    return rows, []
 
 
 def _fetch_wb_orders_rows(api_key: str, date_from: date, date_to: date) -> tuple[list[dict[str, Any]], list[str]]:
@@ -775,10 +1072,21 @@ def _fetch_wb_orders_rows(api_key: str, date_from: date, date_to: date) -> tuple
                     "orders": 0,
                     "units": 0,
                     "buyouts": 0,
+                    "order_amount": 0.0,
+                    "buyout_amount": 0.0,
                     "revenue": 0.0,
                     "returns": units,
                     "ad_spend": 0.0,
-                    "penalties": safe_revenue,
+                    "penalties": 0.0,
+                    "income": 0.0,
+                    "expense": 0.0,
+                    "net": 0.0,
+                    "commission": 0.0,
+                    "logistics": 0.0,
+                    "storage": 0.0,
+                    "deductions": 0.0,
+                    "acceptance": 0.0,
+                    "other_expense": 0.0,
                 }
             )
             continue
@@ -789,16 +1097,149 @@ def _fetch_wb_orders_rows(api_key: str, date_from: date, date_to: date) -> tuple
                 "marketplace": "wb",
                 "orders": 1,
                 "units": units,
-                "buyouts": units,
-                "revenue": safe_revenue,
+                "buyouts": 0,
+                "order_amount": safe_revenue,
+                "buyout_amount": 0.0,
+                "revenue": 0.0,
                 "returns": 0,
                 "ad_spend": 0.0,
                 "penalties": 0.0,
+                "income": 0.0,
+                "expense": 0.0,
+                "net": 0.0,
+                "commission": 0.0,
+                "logistics": 0.0,
+                "storage": 0.0,
+                "deductions": 0.0,
+                "acceptance": 0.0,
+                "other_expense": 0.0,
             }
         )
     if not rows:
         return [], warnings
     return rows, warnings
+
+
+def _fetch_ozon_finance_rows(api_key: str, date_from: date, date_to: date) -> tuple[list[dict[str, Any]], list[str]]:
+    creds = _parse_ozon_credentials(api_key)
+    if not creds:
+        return [], ["Ozon ключ должен быть в формате client_id:api_key."]
+    client_id, token = creds
+    headers = {
+        "Client-Id": client_id,
+        "Api-Key": token,
+        "Content-Type": "application/json",
+    }
+    endpoint = "https://api-seller.ozon.ru/v3/finance/transaction/list"
+    rows: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    if date_from > date_to:
+        date_from, date_to = date_to, date_from
+    chunk_from = date_from
+    while chunk_from <= date_to:
+        chunk_to = min(date_to, chunk_from + timedelta(days=30))
+        page = 1
+        while page <= OZON_FINANCE_MAX_PAGES:
+            payload = {
+                "filter": {
+                    "date": {
+                        "from": f"{chunk_from.isoformat()}T00:00:00.000Z",
+                        "to": f"{chunk_to.isoformat()}T23:59:59.999Z",
+                    },
+                    "transaction_type": "all",
+                },
+                "page": page,
+                "page_size": OZON_FINANCE_PAGE_SIZE,
+            }
+            try:
+                with httpx.Client(timeout=OZON_FINANCE_TIMEOUT, follow_redirects=True) as client:
+                    response = client.post(endpoint, headers=headers, json=payload)
+            except Exception:
+                warnings.append("Ozon finance API недоступен.")
+                break
+            if response.status_code >= 400:
+                warnings.append(f"Ozon finance API error {response.status_code}.")
+                break
+            try:
+                data = response.json()
+            except Exception:
+                warnings.append("Ozon finance API вернул некорректный ответ.")
+                break
+            result = data.get("result") if isinstance(data, dict) else {}
+            operations = result.get("operations") if isinstance(result, dict) else []
+            if not isinstance(operations, list) or not operations:
+                break
+            for op in operations:
+                if not isinstance(op, dict):
+                    continue
+                day = _parse_any_date(op.get("operation_date") or op.get("operationDate") or op.get("date"))
+                if not day or day < date_from or day > date_to:
+                    continue
+                occurred_at = str(op.get("operation_date") or op.get("operationDate") or op.get("date") or "")
+                op_name = str(
+                    op.get("operation_type_name")
+                    or op.get("operationTypeName")
+                    or op.get("type_name")
+                    or op.get("type")
+                    or ""
+                ).strip().lower()
+                amount = float(round(_to_float(op.get("amount") or op.get("operation_amount") or 0.0), 2))
+                commission = abs(_to_float(op.get("sale_commission") or op.get("commission") or 0.0))
+                logistics = (
+                    abs(_to_float(op.get("delivery_charge") or 0.0))
+                    + abs(_to_float(op.get("return_delivery_charge") or 0.0))
+                )
+                storage = 0.0
+                deductions = 0.0
+                acceptance = 0.0
+                penalties = 0.0
+                if "хранен" in op_name or "storage" in op_name:
+                    storage = max(storage, abs(amount))
+                if "штраф" in op_name or "penalty" in op_name or "неустой" in op_name:
+                    penalties = max(penalties, abs(amount))
+                if "удерж" in op_name or "deduct" in op_name or "коррект" in op_name:
+                    deductions = max(deductions, abs(amount))
+                if "приемк" in op_name or "accept" in op_name:
+                    acceptance = max(acceptance, abs(amount))
+                income = max(0.0, amount)
+                expense = max(0.0, -amount)
+                components = float(commission + logistics + storage + deductions + acceptance + penalties)
+                other_expense = max(0.0, expense - components)
+                if income <= 0 and expense <= 0 and components <= 0:
+                    continue
+                rows.append(
+                    {
+                        "date": day.isoformat(),
+                        "occurred_at": occurred_at,
+                        "marketplace": "ozon",
+                        "orders": 0,
+                        "units": 0,
+                        "buyouts": 0,
+                        "order_amount": 0.0,
+                        "buyout_amount": 0.0,
+                        "revenue": 0.0,
+                        "returns": 0,
+                        "ad_spend": 0.0,
+                        "penalties": float(round(penalties, 2)),
+                        "income": float(round(income, 2)),
+                        "expense": float(round(expense, 2)),
+                        "net": float(round(income - expense, 2)),
+                        "commission": float(round(commission, 2)),
+                        "logistics": float(round(logistics, 2)),
+                        "storage": float(round(storage, 2)),
+                        "deductions": float(round(deductions, 2)),
+                        "acceptance": float(round(acceptance, 2)),
+                        "other_expense": float(round(other_expense, 2)),
+                    }
+                )
+            if len(operations) < OZON_FINANCE_PAGE_SIZE:
+                break
+            page += 1
+        chunk_from = chunk_to + timedelta(days=1)
+
+    if not rows and not warnings:
+        warnings.append("Ozon finance API не вернул финансовые операции за период.")
+    return rows, list(dict.fromkeys(warnings))
 
 
 def _request_wb_sales_payload(api_key: str, endpoint: str, params: dict[str, Any]) -> tuple[list[dict[str, Any]] | None, str]:

@@ -537,10 +537,21 @@ class SalesStatsRowOut(BaseModel):
     orders: int
     units: int
     buyouts: int = 0
+    order_amount: float = 0.0
+    buyout_amount: float = 0.0
     revenue: float
     returns: int = 0
     ad_spend: float = 0.0
     penalties: float = 0.0
+    income: float = 0.0
+    expense: float = 0.0
+    net: float = 0.0
+    commission: float = 0.0
+    logistics: float = 0.0
+    storage: float = 0.0
+    deductions: float = 0.0
+    acceptance: float = 0.0
+    other_expense: float = 0.0
 
 
 class SalesStatsPointOut(BaseModel):
@@ -549,24 +560,57 @@ class SalesStatsPointOut(BaseModel):
     orders: int
     units: int
     buyouts: int = 0
+    order_amount: float = 0.0
+    buyout_amount: float = 0.0
     revenue: float
     returns: int = 0
     ad_spend: float = 0.0
     penalties: float = 0.0
+    income: float = 0.0
+    expense: float = 0.0
+    net: float = 0.0
+    commission: float = 0.0
+    logistics: float = 0.0
+    storage: float = 0.0
+    deductions: float = 0.0
+    acceptance: float = 0.0
+    other_expense: float = 0.0
     wb_orders: int = 0
     wb_units: int = 0
     wb_buyouts: int = 0
+    wb_order_amount: float = 0.0
+    wb_buyout_amount: float = 0.0
     wb_revenue: float = 0.0
     wb_returns: int = 0
     wb_ad_spend: float = 0.0
     wb_penalties: float = 0.0
+    wb_income: float = 0.0
+    wb_expense: float = 0.0
+    wb_net: float = 0.0
+    wb_commission: float = 0.0
+    wb_logistics: float = 0.0
+    wb_storage: float = 0.0
+    wb_deductions: float = 0.0
+    wb_acceptance: float = 0.0
+    wb_other_expense: float = 0.0
     ozon_orders: int = 0
     ozon_units: int = 0
     ozon_buyouts: int = 0
+    ozon_order_amount: float = 0.0
+    ozon_buyout_amount: float = 0.0
     ozon_revenue: float = 0.0
     ozon_returns: int = 0
     ozon_ad_spend: float = 0.0
     ozon_penalties: float = 0.0
+    ozon_income: float = 0.0
+    ozon_expense: float = 0.0
+    ozon_net: float = 0.0
+    ozon_commission: float = 0.0
+    ozon_logistics: float = 0.0
+    ozon_storage: float = 0.0
+    ozon_deductions: float = 0.0
+    ozon_acceptance: float = 0.0
+    ozon_other_expense: float = 0.0
 
 
 class SalesStatsOut(BaseModel):

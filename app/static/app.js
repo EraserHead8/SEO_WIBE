@@ -930,6 +930,9 @@ function applyUiLanguage() {
     isEn ? "Units" : "Штуки",
     isEn ? "Buyouts" : "Выкупы",
     isEn ? "Revenue" : "Выручка",
+    isEn ? "Income" : "Приход",
+    isEn ? "Expense" : "Расход",
+    isEn ? "Net" : "Изменение баланса",
     isEn ? "Orders" : "Заказы",
     isEn ? "Returns" : "Отказы",
     isEn ? "Ads Spend" : "Реклама",
@@ -7062,21 +7065,53 @@ function renderSalesTotals() {
     orders: salesRows.reduce((acc, row) => acc + Number(row.orders || 0), 0),
     units: salesRows.reduce((acc, row) => acc + Number(row.units || 0), 0),
     buyouts: salesRows.reduce((acc, row) => acc + Number(row.buyouts || Math.max(0, Number(row.units || 0) - Number(row.returns || 0))), 0),
+    order_amount: salesRows.reduce((acc, row) => acc + Number(row.order_amount || 0), 0),
+    buyout_amount: salesRows.reduce((acc, row) => acc + Number(row.buyout_amount || 0), 0),
     revenue: salesRows.reduce((acc, row) => acc + Number(row.revenue || 0), 0),
     returns: salesRows.reduce((acc, row) => acc + Number(row.returns || 0), 0),
     ad_spend: salesRows.reduce((acc, row) => acc + Number(row.ad_spend || 0), 0),
     penalties: salesRows.reduce((acc, row) => acc + Number(row.penalties || 0), 0),
+    income: salesRows.reduce((acc, row) => acc + Number(row.income || 0), 0),
+    expense: salesRows.reduce((acc, row) => acc + Number(row.expense || 0), 0),
+    net: salesRows.reduce((acc, row) => acc + Number(row.net || 0), 0),
+    commission: salesRows.reduce((acc, row) => acc + Number(row.commission || 0), 0),
+    logistics: salesRows.reduce((acc, row) => acc + Number(row.logistics || 0), 0),
+    storage: salesRows.reduce((acc, row) => acc + Number(row.storage || 0), 0),
+    deductions: salesRows.reduce((acc, row) => acc + Number(row.deductions || 0), 0),
+    acceptance: salesRows.reduce((acc, row) => acc + Number(row.acceptance || 0), 0),
+    other_expense: salesRows.reduce((acc, row) => acc + Number(row.other_expense || 0), 0),
   };
   totals.gross_profit = Number(totals.revenue || 0) - Number(totals.ad_spend || 0) - Number(totals.penalties || 0);
+  const hasExpenseBreakdown = (
+    Math.abs(Number(totals.commission || 0))
+    + Math.abs(Number(totals.logistics || 0))
+    + Math.abs(Number(totals.storage || 0))
+    + Math.abs(Number(totals.deductions || 0))
+    + Math.abs(Number(totals.acceptance || 0))
+    + Math.abs(Number(totals.other_expense || 0))
+  ) > 0;
   host.innerHTML = `
     <article class="sales-kpi"><span>${tr("Заказы", "Orders")}</span><strong>${formatInt(totals.orders)}</strong></article>
     <article class="sales-kpi"><span>${tr("Штуки", "Units")}</span><strong>${formatInt(totals.units)}</strong></article>
     <article class="sales-kpi"><span>${tr("Выкупы", "Buyouts")}</span><strong>${formatInt(totals.buyouts)}</strong></article>
+    <article class="sales-kpi"><span>${tr("Сумма заказов", "Orders amount")}</span><strong>${formatMoney(totals.order_amount)}</strong></article>
+    <article class="sales-kpi"><span>${tr("Сумма выкупов", "Buyouts amount")}</span><strong>${formatMoney(totals.buyout_amount)}</strong></article>
     <article class="sales-kpi"><span>${tr("Выручка", "Revenue")}</span><strong>${formatMoney(totals.revenue)}</strong></article>
+    <article class="sales-kpi"><span>${tr("Приход", "Income")}</span><strong>${formatMoney(totals.income)}</strong></article>
+    <article class="sales-kpi"><span>${tr("Расход", "Expense")}</span><strong>${formatMoney(totals.expense)}</strong></article>
+    <article class="sales-kpi"><span>${tr("Изм. баланса", "Net change")}</span><strong>${formatMoney(totals.net)}</strong></article>
     <article class="sales-kpi"><span>${tr("Отказы", "Returns")}</span><strong>${formatInt(totals.returns)}</strong></article>
     <article class="sales-kpi"><span>${tr("Реклама", "Ads Spend")}</span><strong>${formatMoney(totals.ad_spend)}</strong></article>
     <article class="sales-kpi"><span>${tr("Штрафы", "Penalties")}</span><strong>${formatMoney(totals.penalties)}</strong></article>
     <article class="sales-kpi"><span>${tr("Валовая прибыль", "Gross Profit")}</span><strong>${formatMoney(totals.gross_profit)}</strong></article>
+    ${hasExpenseBreakdown ? `
+      <article class="sales-kpi"><span>${tr("Комиссия", "Commission")}</span><strong>${formatMoney(totals.commission)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Логистика", "Logistics")}</span><strong>${formatMoney(totals.logistics)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Хранение", "Storage")}</span><strong>${formatMoney(totals.storage)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Удержания", "Deductions")}</span><strong>${formatMoney(totals.deductions)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Приемка", "Acceptance")}</span><strong>${formatMoney(totals.acceptance)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Прочие расходы", "Other expense")}</span><strong>${formatMoney(totals.other_expense)}</strong></article>
+    ` : ""}
   `;
 }
 
@@ -7099,24 +7134,57 @@ function renderSalesChart(points) {
       orders: Number(row?.orders || 0),
       units: Number(row?.units || 0),
       buyouts: Number(row?.buyouts || Math.max(0, Number(row?.units || 0) - Number(row?.returns || 0))),
+      order_amount: Number(row?.order_amount || 0),
+      buyout_amount: Number(row?.buyout_amount || 0),
       revenue: Number(row?.revenue || 0),
       returns: Number(row?.returns || 0),
       ad_spend: Number(row?.ad_spend || 0),
       penalties: Number(row?.penalties || 0),
+      income: Number(row?.income || 0),
+      expense: Number(row?.expense || 0),
+      net: Number(row?.net || 0),
+      commission: Number(row?.commission || 0),
+      logistics: Number(row?.logistics || 0),
+      storage: Number(row?.storage || 0),
+      deductions: Number(row?.deductions || 0),
+      acceptance: Number(row?.acceptance || 0),
+      other_expense: Number(row?.other_expense || 0),
       wb_orders: Number(row?.wb_orders || 0),
       wb_units: Number(row?.wb_units || 0),
       wb_buyouts: Number(row?.wb_buyouts || Math.max(0, Number(row?.wb_units || 0) - Number(row?.wb_returns || 0))),
+      wb_order_amount: Number(row?.wb_order_amount || 0),
+      wb_buyout_amount: Number(row?.wb_buyout_amount || 0),
       wb_revenue: Number(row?.wb_revenue || 0),
       wb_returns: Number(row?.wb_returns || 0),
       wb_ad_spend: Number(row?.wb_ad_spend || 0),
       wb_penalties: Number(row?.wb_penalties || 0),
+      wb_income: Number(row?.wb_income || 0),
+      wb_expense: Number(row?.wb_expense || 0),
+      wb_net: Number(row?.wb_net || 0),
+      wb_commission: Number(row?.wb_commission || 0),
+      wb_logistics: Number(row?.wb_logistics || 0),
+      wb_storage: Number(row?.wb_storage || 0),
+      wb_deductions: Number(row?.wb_deductions || 0),
+      wb_acceptance: Number(row?.wb_acceptance || 0),
+      wb_other_expense: Number(row?.wb_other_expense || 0),
       ozon_orders: Number(row?.ozon_orders || 0),
       ozon_units: Number(row?.ozon_units || 0),
       ozon_buyouts: Number(row?.ozon_buyouts || Math.max(0, Number(row?.ozon_units || 0) - Number(row?.ozon_returns || 0))),
+      ozon_order_amount: Number(row?.ozon_order_amount || 0),
+      ozon_buyout_amount: Number(row?.ozon_buyout_amount || 0),
       ozon_revenue: Number(row?.ozon_revenue || 0),
       ozon_returns: Number(row?.ozon_returns || 0),
       ozon_ad_spend: Number(row?.ozon_ad_spend || 0),
       ozon_penalties: Number(row?.ozon_penalties || 0),
+      ozon_income: Number(row?.ozon_income || 0),
+      ozon_expense: Number(row?.ozon_expense || 0),
+      ozon_net: Number(row?.ozon_net || 0),
+      ozon_commission: Number(row?.ozon_commission || 0),
+      ozon_logistics: Number(row?.ozon_logistics || 0),
+      ozon_storage: Number(row?.ozon_storage || 0),
+      ozon_deductions: Number(row?.ozon_deductions || 0),
+      ozon_acceptance: Number(row?.ozon_acceptance || 0),
+      ozon_other_expense: Number(row?.ozon_other_expense || 0),
     }))
     .filter((row) => row.label);
   const chartPoints = normalizeChartPoints(points);
@@ -7139,7 +7207,18 @@ function renderSalesChart(points) {
   const valueOf = (bucket, key) => {
     if (key === "orders") return Number(bucket.orders || 0);
     if (key === "buyouts") return Number(bucket.buyouts || 0);
+    if (key === "order_amount") return Number(bucket.order_amount || 0);
+    if (key === "buyout_amount") return Number(bucket.buyout_amount || 0);
     if (key === "revenue") return Number(bucket.revenue || 0);
+    if (key === "income") return Number(bucket.income || 0);
+    if (key === "expense") return Number(bucket.expense || 0);
+    if (key === "net") return Number(bucket.net || 0);
+    if (key === "commission") return Number(bucket.commission || 0);
+    if (key === "logistics") return Number(bucket.logistics || 0);
+    if (key === "storage") return Number(bucket.storage || 0);
+    if (key === "deductions") return Number(bucket.deductions || 0);
+    if (key === "acceptance") return Number(bucket.acceptance || 0);
+    if (key === "other_expense") return Number(bucket.other_expense || 0);
     if (key === "returns") return Number(bucket.returns || 0);
     if (key === "ad_spend") return Number(bucket.ad_spend || 0);
     if (key === "penalties") return Number(bucket.penalties || 0);
@@ -7160,20 +7239,80 @@ function renderSalesChart(points) {
       const mp = String(row?.marketplace || "").trim().toLowerCase() === "ozon" ? "ozon" : "wb";
       const key = `${bucket}::${mp}`;
       const dayKey = `${day}::${mp}`;
-      const item = byBucket.get(key) || { orders: 0, units: 0, buyouts: 0, revenue: 0, returns: 0, ad_spend: 0, penalties: 0 };
+      const item = byBucket.get(key) || {
+        orders: 0,
+        units: 0,
+        buyouts: 0,
+        order_amount: 0,
+        buyout_amount: 0,
+        revenue: 0,
+        income: 0,
+        expense: 0,
+        net: 0,
+        commission: 0,
+        logistics: 0,
+        storage: 0,
+        deductions: 0,
+        acceptance: 0,
+        other_expense: 0,
+        returns: 0,
+        ad_spend: 0,
+        penalties: 0,
+      };
       item.orders += Number(row?.orders || 0);
       item.units += Number(row?.units || 0);
       item.buyouts += Number(row?.buyouts || Math.max(0, Number(row?.units || 0) - Number(row?.returns || 0)));
+      item.order_amount += Number(row?.order_amount || 0);
+      item.buyout_amount += Number(row?.buyout_amount || 0);
       item.revenue += Number(row?.revenue || 0);
+      item.income += Number(row?.income || 0);
+      item.expense += Number(row?.expense || 0);
+      item.net += Number(row?.net || 0);
+      item.commission += Number(row?.commission || 0);
+      item.logistics += Number(row?.logistics || 0);
+      item.storage += Number(row?.storage || 0);
+      item.deductions += Number(row?.deductions || 0);
+      item.acceptance += Number(row?.acceptance || 0);
+      item.other_expense += Number(row?.other_expense || 0);
       item.returns += Number(row?.returns || 0);
       item.ad_spend += Number(row?.ad_spend || 0);
       item.penalties += Number(row?.penalties || 0);
       byBucket.set(key, item);
-      const dayItem = byDay.get(dayKey) || { orders: 0, units: 0, buyouts: 0, revenue: 0, returns: 0, ad_spend: 0, penalties: 0 };
+      const dayItem = byDay.get(dayKey) || {
+        orders: 0,
+        units: 0,
+        buyouts: 0,
+        order_amount: 0,
+        buyout_amount: 0,
+        revenue: 0,
+        income: 0,
+        expense: 0,
+        net: 0,
+        commission: 0,
+        logistics: 0,
+        storage: 0,
+        deductions: 0,
+        acceptance: 0,
+        other_expense: 0,
+        returns: 0,
+        ad_spend: 0,
+        penalties: 0,
+      };
       dayItem.orders += Number(row?.orders || 0);
       dayItem.units += Number(row?.units || 0);
       dayItem.buyouts += Number(row?.buyouts || Math.max(0, Number(row?.units || 0) - Number(row?.returns || 0)));
+      dayItem.order_amount += Number(row?.order_amount || 0);
+      dayItem.buyout_amount += Number(row?.buyout_amount || 0);
       dayItem.revenue += Number(row?.revenue || 0);
+      dayItem.income += Number(row?.income || 0);
+      dayItem.expense += Number(row?.expense || 0);
+      dayItem.net += Number(row?.net || 0);
+      dayItem.commission += Number(row?.commission || 0);
+      dayItem.logistics += Number(row?.logistics || 0);
+      dayItem.storage += Number(row?.storage || 0);
+      dayItem.deductions += Number(row?.deductions || 0);
+      dayItem.acceptance += Number(row?.acceptance || 0);
+      dayItem.other_expense += Number(row?.other_expense || 0);
       dayItem.returns += Number(row?.returns || 0);
       dayItem.ad_spend += Number(row?.ad_spend || 0);
       dayItem.penalties += Number(row?.penalties || 0);
@@ -7188,7 +7327,18 @@ function renderSalesChart(points) {
       orders: `${mp}_orders`,
       units: `${mp}_units`,
       buyouts: `${mp}_buyouts`,
+      order_amount: `${mp}_order_amount`,
+      buyout_amount: `${mp}_buyout_amount`,
       revenue: `${mp}_revenue`,
+      income: `${mp}_income`,
+      expense: `${mp}_expense`,
+      net: `${mp}_net`,
+      commission: `${mp}_commission`,
+      logistics: `${mp}_logistics`,
+      storage: `${mp}_storage`,
+      deductions: `${mp}_deductions`,
+      acceptance: `${mp}_acceptance`,
+      other_expense: `${mp}_other_expense`,
       returns: `${mp}_returns`,
       ad_spend: `${mp}_ad_spend`,
       penalties: `${mp}_penalties`,
@@ -7317,18 +7467,44 @@ function renderSalesChart(points) {
     const points = item.values.map((v, pointIdx) => circleAt(v, pointIdx, item.color)).join("");
     return `${line}${points}`;
   }).join("");
-  const metricLabel = metric === "revenue"
-    ? tr("Выручка", "Revenue")
-    : (metric === "orders"
-      ? tr("Заказы", "Orders")
-      : (metric === "buyouts"
-        ? tr("Выкупы", "Buyouts")
-      : (metric === "returns"
-        ? tr("Отказы", "Returns")
-        : (metric === "ad_spend"
-          ? tr("Реклама", "Ads Spend")
-          : (metric === "penalties" ? tr("Штрафы", "Penalties") : tr("Штуки", "Units"))))));
-  const formatValue = (metric === "revenue" || metric === "ad_spend" || metric === "penalties") ? formatMoney : formatInt;
+  const metricLabels = {
+    units: tr("Штуки", "Units"),
+    orders: tr("Заказы", "Orders"),
+    buyouts: tr("Выкупы", "Buyouts"),
+    order_amount: tr("Сумма заказов", "Orders amount"),
+    buyout_amount: tr("Сумма выкупов", "Buyouts amount"),
+    revenue: tr("Выручка", "Revenue"),
+    income: tr("Приход", "Income"),
+    expense: tr("Расход", "Expense"),
+    net: tr("Изменение баланса", "Net change"),
+    returns: tr("Отказы", "Returns"),
+    ad_spend: tr("Реклама", "Ads Spend"),
+    penalties: tr("Штрафы", "Penalties"),
+    commission: tr("Комиссия", "Commission"),
+    logistics: tr("Логистика", "Logistics"),
+    storage: tr("Хранение", "Storage"),
+    deductions: tr("Удержания", "Deductions"),
+    acceptance: tr("Приемка", "Acceptance"),
+    other_expense: tr("Прочие расходы", "Other expense"),
+  };
+  const metricLabel = metricLabels[metric] || tr("Штуки", "Units");
+  const moneyMetrics = new Set([
+    "revenue",
+    "income",
+    "expense",
+    "net",
+    "order_amount",
+    "buyout_amount",
+    "ad_spend",
+    "penalties",
+    "commission",
+    "logistics",
+    "storage",
+    "deductions",
+    "acceptance",
+    "other_expense",
+  ]);
+  const formatValue = moneyMetrics.has(metric) ? formatMoney : formatInt;
   const topSeries = series[0] || { values: [] };
   const topValues = Array.isArray(topSeries.values) ? topSeries.values : [];
   const peak = topValues.length ? Math.max(...topValues) : 0;
@@ -7437,21 +7613,54 @@ function buildSalesChartFromRows(rows) {
       orders: 0,
       units: 0,
       buyouts: 0,
+      order_amount: 0,
+      buyout_amount: 0,
       revenue: 0,
+      income: 0,
+      expense: 0,
+      net: 0,
+      commission: 0,
+      logistics: 0,
+      storage: 0,
+      deductions: 0,
+      acceptance: 0,
+      other_expense: 0,
       returns: 0,
       ad_spend: 0,
       penalties: 0,
       wb_orders: 0,
       wb_units: 0,
       wb_buyouts: 0,
+      wb_order_amount: 0,
+      wb_buyout_amount: 0,
       wb_revenue: 0,
+      wb_income: 0,
+      wb_expense: 0,
+      wb_net: 0,
+      wb_commission: 0,
+      wb_logistics: 0,
+      wb_storage: 0,
+      wb_deductions: 0,
+      wb_acceptance: 0,
+      wb_other_expense: 0,
       wb_returns: 0,
       wb_ad_spend: 0,
       wb_penalties: 0,
       ozon_orders: 0,
       ozon_units: 0,
       ozon_buyouts: 0,
+      ozon_order_amount: 0,
+      ozon_buyout_amount: 0,
       ozon_revenue: 0,
+      ozon_income: 0,
+      ozon_expense: 0,
+      ozon_net: 0,
+      ozon_commission: 0,
+      ozon_logistics: 0,
+      ozon_storage: 0,
+      ozon_deductions: 0,
+      ozon_acceptance: 0,
+      ozon_other_expense: 0,
       ozon_returns: 0,
       ozon_ad_spend: 0,
       ozon_penalties: 0,
@@ -7460,7 +7669,18 @@ function buildSalesChartFromRows(rows) {
     bucket.orders += Number(row?.orders || 0);
     bucket.units += Number(row?.units || 0);
     bucket.buyouts += Number(row?.buyouts || Math.max(0, Number(row?.units || 0) - Number(row?.returns || 0)));
+    bucket.order_amount += Number(row?.order_amount || 0);
+    bucket.buyout_amount += Number(row?.buyout_amount || 0);
     bucket.revenue += Number(row?.revenue || 0);
+    bucket.income += Number(row?.income || 0);
+    bucket.expense += Number(row?.expense || 0);
+    bucket.net += Number(row?.net || 0);
+    bucket.commission += Number(row?.commission || 0);
+    bucket.logistics += Number(row?.logistics || 0);
+    bucket.storage += Number(row?.storage || 0);
+    bucket.deductions += Number(row?.deductions || 0);
+    bucket.acceptance += Number(row?.acceptance || 0);
+    bucket.other_expense += Number(row?.other_expense || 0);
     bucket.returns += Number(row?.returns || 0);
     bucket.ad_spend += Number(row?.ad_spend || 0);
     bucket.penalties += Number(row?.penalties || 0);
@@ -7468,7 +7688,18 @@ function buildSalesChartFromRows(rows) {
       bucket[`${mp}_orders`] += Number(row?.orders || 0);
       bucket[`${mp}_units`] += Number(row?.units || 0);
       bucket[`${mp}_buyouts`] += Number(row?.buyouts || Math.max(0, Number(row?.units || 0) - Number(row?.returns || 0)));
+      bucket[`${mp}_order_amount`] += Number(row?.order_amount || 0);
+      bucket[`${mp}_buyout_amount`] += Number(row?.buyout_amount || 0);
       bucket[`${mp}_revenue`] += Number(row?.revenue || 0);
+      bucket[`${mp}_income`] += Number(row?.income || 0);
+      bucket[`${mp}_expense`] += Number(row?.expense || 0);
+      bucket[`${mp}_net`] += Number(row?.net || 0);
+      bucket[`${mp}_commission`] += Number(row?.commission || 0);
+      bucket[`${mp}_logistics`] += Number(row?.logistics || 0);
+      bucket[`${mp}_storage`] += Number(row?.storage || 0);
+      bucket[`${mp}_deductions`] += Number(row?.deductions || 0);
+      bucket[`${mp}_acceptance`] += Number(row?.acceptance || 0);
+      bucket[`${mp}_other_expense`] += Number(row?.other_expense || 0);
       bucket[`${mp}_returns`] += Number(row?.returns || 0);
       bucket[`${mp}_ad_spend`] += Number(row?.ad_spend || 0);
       bucket[`${mp}_penalties`] += Number(row?.penalties || 0);
@@ -7688,11 +7919,23 @@ async function loadSalesStats(retryAttempt = 0) {
   }
   if (meta) {
     const totalTxt = tr(
-      `Заказы: ${formatInt(totals.orders || 0)}, шт.: ${formatInt(totals.units || 0)}, выкупы: ${formatInt(totals.buyouts || 0)}, выручка: ${formatMoney(totals.revenue || 0)}, отказы: ${formatInt(totals.returns || 0)}, реклама: ${formatMoney(totals.ad_spend || 0)}, штрафы: ${formatMoney(totals.penalties || 0)}.`,
-      `Orders: ${formatInt(totals.orders || 0)}, units: ${formatInt(totals.units || 0)}, buyouts: ${formatInt(totals.buyouts || 0)}, revenue: ${formatMoney(totals.revenue || 0)}, returns: ${formatInt(totals.returns || 0)}, ads: ${formatMoney(totals.ad_spend || 0)}, penalties: ${formatMoney(totals.penalties || 0)}.`
+      `Заказы: ${formatInt(totals.orders || 0)} (${formatMoney(totals.order_amount || 0)}), шт.: ${formatInt(totals.units || 0)}, выкупы: ${formatInt(totals.buyouts || 0)} (${formatMoney(totals.buyout_amount || 0)}), выручка: ${formatMoney(totals.revenue || 0)}, приход: ${formatMoney(totals.income || 0)}, расход: ${formatMoney(totals.expense || 0)}, баланс: ${formatMoney(totals.net || 0)}, отказы: ${formatInt(totals.returns || 0)}, реклама: ${formatMoney(totals.ad_spend || 0)}, штрафы: ${formatMoney(totals.penalties || 0)}.`,
+      `Orders: ${formatInt(totals.orders || 0)} (${formatMoney(totals.order_amount || 0)}), units: ${formatInt(totals.units || 0)}, buyouts: ${formatInt(totals.buyouts || 0)} (${formatMoney(totals.buyout_amount || 0)}), revenue: ${formatMoney(totals.revenue || 0)}, income: ${formatMoney(totals.income || 0)}, expense: ${formatMoney(totals.expense || 0)}, net: ${formatMoney(totals.net || 0)}, returns: ${formatInt(totals.returns || 0)}, ads: ${formatMoney(totals.ad_spend || 0)}, penalties: ${formatMoney(totals.penalties || 0)}.`
+    );
+    const wbTxt = tr(
+      `WB: заказы ${formatInt(totals.wb_orders || 0)} (${formatMoney(totals.wb_order_amount || 0)}), выкупы ${formatInt(totals.wb_buyouts || 0)} (${formatMoney(totals.wb_buyout_amount || 0)}), приход ${formatMoney(totals.wb_income || 0)}, расход ${formatMoney(totals.wb_expense || 0)}.`,
+      `WB: orders ${formatInt(totals.wb_orders || 0)} (${formatMoney(totals.wb_order_amount || 0)}), buyouts ${formatInt(totals.wb_buyouts || 0)} (${formatMoney(totals.wb_buyout_amount || 0)}), income ${formatMoney(totals.wb_income || 0)}, expense ${formatMoney(totals.wb_expense || 0)}.`
+    );
+    const ozTxt = tr(
+      `Ozon: заказы ${formatInt(totals.ozon_orders || 0)} (${formatMoney(totals.ozon_order_amount || 0)}), выкупы ${formatInt(totals.ozon_buyouts || 0)} (${formatMoney(totals.ozon_buyout_amount || 0)}), приход ${formatMoney(totals.ozon_income || 0)}, расход ${formatMoney(totals.ozon_expense || 0)}.`,
+      `Ozon: orders ${formatInt(totals.ozon_orders || 0)} (${formatMoney(totals.ozon_order_amount || 0)}), buyouts ${formatInt(totals.ozon_buyouts || 0)} (${formatMoney(totals.ozon_buyout_amount || 0)}), income ${formatMoney(totals.ozon_income || 0)}, expense ${formatMoney(totals.ozon_expense || 0)}.`
+    );
+    const expenseBreakdownTxt = tr(
+      `Детализация расходов: комиссия ${formatMoney(totals.commission || 0)}, логистика ${formatMoney(totals.logistics || 0)}, хранение ${formatMoney(totals.storage || 0)}, удержания ${formatMoney(totals.deductions || 0)}, приемка ${formatMoney(totals.acceptance || 0)}, прочие ${formatMoney(totals.other_expense || 0)}.`,
+      `Expense breakdown: commission ${formatMoney(totals.commission || 0)}, logistics ${formatMoney(totals.logistics || 0)}, storage ${formatMoney(totals.storage || 0)}, deductions ${formatMoney(totals.deductions || 0)}, acceptance ${formatMoney(totals.acceptance || 0)}, other ${formatMoney(totals.other_expense || 0)}.`
     );
     const warnTxt = warnings.length ? ` ${warnings.join(" | ")}` : "";
-    meta.textContent = `${totalTxt}${warnTxt}`;
+    meta.textContent = `${totalTxt} ${wbTxt} ${ozTxt} ${expenseBreakdownTxt}${warnTxt}`;
   }
   const progress = resolveSalesLoadProgress(market, salesRows, warnings);
   salesLoadProgress = { active: false, total: progress.total, loaded: progress.loaded };
