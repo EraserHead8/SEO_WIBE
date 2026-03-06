@@ -572,6 +572,8 @@ class SalesStatsOut(BaseModel):
     timezone: str = "UTC"
     rows: list[SalesStatsRowOut]
     chart: list[SalesStatsPointOut]
+    comparison_rows: list[SalesStatsRowOut] = Field(default_factory=list)
+    comparison_chart: list[SalesStatsPointOut] = Field(default_factory=list)
     totals: dict[str, float | int]
     comparison: dict[str, Any] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)

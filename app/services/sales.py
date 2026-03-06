@@ -218,8 +218,17 @@ def _fetch_wb_sales_rows(api_key: str, date_from: date, date_to: date) -> tuple[
         if fallback_rows:
             if fallback_warning:
                 warnings.append(fallback_warning)
-            _WB_SALES_CACHE[cache_key] = (time.monotonic(), list(fallback_rows), list(warnings))
-            return fallback_rows, warnings
+            rows = list(fallback_rows)
+
+    # WB sales endpoint can be rate-limited or return sparse data for short windows.
+    # If we still have no positive orders, use orders endpoint fallback.
+    has_orders = any(int(x.get("orders") or 0) > 0 for x in rows)
+    if not has_orders:
+        order_rows, order_warnings = _fetch_wb_orders_rows(api_key=api_key, date_from=date_from, date_to=date_to)
+        if order_rows:
+            rows = order_rows
+            warnings.append("WB sales: использован fallback API supplier/orders.")
+        warnings.extend(order_warnings)
 
     _WB_SALES_CACHE[cache_key] = (time.monotonic(), list(rows), list(warnings))
     return rows, warnings
@@ -691,6 +700,107 @@ def _fetch_wb_sales_rows_report_detail(api_key: str, date_from: date, date_to: d
     return rows, "WB sales: использован fallback API reportDetailByPeriod."
 
 
+def _fetch_wb_orders_rows(api_key: str, date_from: date, date_to: date) -> tuple[list[dict[str, Any]], list[str]]:
+    endpoint = "https://statistics-api.wildberries.ru/api/v1/supplier/orders"
+    cursor = date_from.isoformat()
+    warnings: list[str] = []
+    source_rows: list[dict[str, Any]] = []
+    seen_cursors: set[str] = set()
+    for page_idx in range(WB_SALES_MAX_PAGES):
+        params = {"dateFrom": cursor, "flag": 0}
+        payload, status = _request_wb_sales_payload(api_key=api_key, endpoint=endpoint, params=params)
+        if payload is None:
+            if status == "rate_limited":
+                warnings.append("WB orders API вернул 429, показана частичная статистика.")
+                break
+            if page_idx == 0:
+                return [], [status]
+            warnings.append("WB orders API недоступен, показана частичная статистика.")
+            break
+        if not payload:
+            break
+        source_rows.extend(payload)
+        if len(payload) < WB_SALES_CONTINUATION_THRESHOLD:
+            break
+        next_cursor = _extract_wb_sales_cursor(payload[-1])
+        if not next_cursor or next_cursor in seen_cursors:
+            break
+        seen_cursors.add(next_cursor)
+        cursor = next_cursor
+
+    rows: list[dict[str, Any]] = []
+    dedupe_keys: set[str] = set()
+    for item in source_rows:
+        if not isinstance(item, dict):
+            continue
+        day = _parse_any_date(
+            item.get("date")
+            or item.get("lastChangeDate")
+            or item.get("createdAt")
+            or item.get("orderDate")
+            or item.get("dateCreated")
+        )
+        if not day or day < date_from or day > date_to:
+            continue
+        key = _wb_order_row_key(item)
+        if key in dedupe_keys:
+            continue
+        dedupe_keys.add(key)
+        units_raw = _to_float(item.get("quantity") or item.get("quantityFull") or item.get("saleQty") or 0.0)
+        units = int(round(abs(units_raw)))
+        if units <= 0:
+            units = 1
+        revenue = _to_float(
+            item.get("totalPrice")
+            or item.get("priceWithDisc")
+            or item.get("finishedPrice")
+            or item.get("forPay")
+            or 0.0
+        )
+        status_text = str(item.get("status") or item.get("orderType") or item.get("supplier_oper_name") or "").lower()
+        is_cancel = bool(
+            _is_truthy(item.get("isCancel"))
+            or _is_truthy(item.get("is_cancel"))
+            or _is_truthy(item.get("cancel"))
+            or "cancel" in status_text
+            or "отмен" in status_text
+        )
+        safe_revenue = abs(float(round(revenue, 2)))
+        if is_cancel:
+            rows.append(
+                {
+                    "date": day.isoformat(),
+                    "occurred_at": str(item.get("date") or item.get("lastChangeDate") or item.get("createdAt") or ""),
+                    "marketplace": "wb",
+                    "orders": 0,
+                    "units": 0,
+                    "buyouts": 0,
+                    "revenue": 0.0,
+                    "returns": units,
+                    "ad_spend": 0.0,
+                    "penalties": safe_revenue,
+                }
+            )
+            continue
+        rows.append(
+            {
+                "date": day.isoformat(),
+                "occurred_at": str(item.get("date") or item.get("lastChangeDate") or item.get("createdAt") or ""),
+                "marketplace": "wb",
+                "orders": 1,
+                "units": units,
+                "buyouts": units,
+                "revenue": safe_revenue,
+                "returns": 0,
+                "ad_spend": 0.0,
+                "penalties": 0.0,
+            }
+        )
+    if not rows:
+        return [], warnings
+    return rows, warnings
+
+
 def _request_wb_sales_payload(api_key: str, endpoint: str, params: dict[str, Any]) -> tuple[list[dict[str, Any]] | None, str]:
     token = (api_key or "").strip()
     if not token:
@@ -741,6 +851,18 @@ def _wb_sale_row_key(item: dict[str, Any]) -> str:
             str(item.get("lastChangeDate") or ""),
             str(item.get("date") or ""),
             str(item.get("nmId") or ""),
+        ]
+    )
+
+
+def _wb_order_row_key(item: dict[str, Any]) -> str:
+    return "|".join(
+        [
+            str(item.get("srid") or ""),
+            str(item.get("rid") or item.get("odid") or item.get("gNumber") or ""),
+            str(item.get("lastChangeDate") or item.get("date") or item.get("createdAt") or ""),
+            str(item.get("nmId") or item.get("nm_id") or ""),
+            str(item.get("barcode") or ""),
         ]
     )
 

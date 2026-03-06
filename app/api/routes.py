@@ -9,6 +9,7 @@ import os
 import re
 import secrets
 import time
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -3224,6 +3225,38 @@ def _normalize_product_photo_url(value: str | None) -> str:
     return f"https://{raw.lstrip('/')}"
 
 
+def _product_photo_identity_key(value: str | None) -> str:
+    normalized = _normalize_product_photo_url(value)
+    if not normalized:
+        return ""
+    try:
+        parsed = urllib.parse.urlsplit(normalized)
+    except Exception:
+        return normalized.lower()
+    path = str(parsed.path or "")
+    path = re.sub(r"/(tm|small|preview|big|orig|x1|x2|c\d+x\d+)/", "/", path, flags=re.IGNORECASE)
+    path = re.sub(r"/+", "/", path).rstrip("/")
+    return f"{parsed.netloc.lower()}{path.lower()}"
+
+
+def _product_photo_quality(value: str | None) -> int:
+    low = str(value or "").lower()
+    score = 0
+    if "/orig/" in low or "/big/" in low:
+        score += 300
+    if re.search(r"/c\d+x\d+/", low):
+        score += 220
+    if "/x2/" in low:
+        score += 180
+    if "/x1/" in low:
+        score += 160
+    if "/tm/" in low or "/small/" in low or "/preview/" in low:
+        score += 80
+    if "?" not in low:
+        score += 5
+    return score
+
+
 def _normalize_product_photo_list(values: Any) -> list[str]:
     source: list[Any]
     if isinstance(values, list):
@@ -3232,12 +3265,22 @@ def _normalize_product_photo_list(values: Any) -> list[str]:
         source = []
     else:
         source = [values]
-    out: list[str] = []
+    order: list[str] = []
+    chosen: dict[str, tuple[str, int]] = {}
     for item in source:
         normalized = _normalize_product_photo_url(str(item or ""))
-        if normalized:
-            out.append(normalized)
-    return [x for x in dict.fromkeys(out)]
+        if not normalized:
+            continue
+        key = _product_photo_identity_key(normalized) or normalized.lower()
+        score = _product_photo_quality(normalized)
+        prev = chosen.get(key)
+        if prev is None:
+            chosen[key] = (normalized, score)
+            order.append(key)
+            continue
+        if score > prev[1]:
+            chosen[key] = (normalized, score)
+    return [chosen[key][0] for key in order if key in chosen]
 
 
 def _product_photos_from_row(row: Product) -> list[str]:
@@ -4472,6 +4515,8 @@ def sales_stats(
         tz_name=tz_name,
     )
     comparison: dict[str, Any] = {}
+    comparison_rows: list[dict[str, Any]] = []
+    comparison_chart: list[dict[str, Any]] = []
 
     try:
         period_days = max(1, (right - left).days + 1)
@@ -4500,6 +4545,10 @@ def sales_stats(
         )
         prev_totals = prev_payload.get("totals") if isinstance(prev_payload, dict) else {}
         prev_totals = prev_totals if isinstance(prev_totals, dict) else {}
+        prev_rows = prev_payload.get("rows") if isinstance(prev_payload, dict) else []
+        prev_chart = prev_payload.get("chart") if isinstance(prev_payload, dict) else []
+        comparison_rows = prev_rows if isinstance(prev_rows, list) else []
+        comparison_chart = prev_chart if isinstance(prev_chart, list) else []
 
         def _cmp(metric: str) -> dict[str, Any]:
             cur = float(totals.get(metric) or 0.0)
@@ -4571,6 +4620,8 @@ def sales_stats(
         timezone=report_tz,
         rows=rows,
         chart=chart,
+        comparison_rows=comparison_rows,
+        comparison_chart=comparison_chart,
         totals=totals,
         comparison=comparison,
         warnings=[str(x) for x in warnings],
@@ -8905,7 +8956,7 @@ def upsert_products(
         item_photos = _normalize_product_photo_list(getattr(item, "photos", []))
         item_main_photo = _normalize_product_photo_url(getattr(item, "photo_url", ""))
         if item_main_photo:
-            item_photos = [item_main_photo] + [x for x in item_photos if x != item_main_photo]
+            item_photos = _normalize_product_photo_list([item_main_photo] + item_photos)
         placeholder_photo = f"https://placehold.co/120x120/e8eefc/1b2a52?text={marketplace.upper()}"
         base_query = select(Product).where(
             Product.user_id == user_id,
@@ -8938,9 +8989,11 @@ def upsert_products(
             product.name = item.name
             product.external_id = item.external_id or product.external_id
             product.barcode = item.barcode
-            if item_photos:
-                product.photo_url = item_photos[0]
-                product.photos_json = json.dumps(item_photos, ensure_ascii=False)
+            stored_photos = _product_photos_from_row(product)
+            merged_photos = _normalize_product_photo_list(item_photos + stored_photos + [product.photo_url, item_main_photo])
+            if merged_photos:
+                product.photo_url = merged_photos[0]
+                product.photos_json = json.dumps(merged_photos, ensure_ascii=False)
             elif not str(product.photo_url or "").strip():
                 product.photo_url = placeholder_photo
                 if not str(product.photos_json or "").strip():

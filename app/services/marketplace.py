@@ -5,7 +5,7 @@ from datetime import date, timedelta
 import re
 import time
 from typing import Any
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlsplit
 try:
     import httpx
 except Exception:  # pragma: no cover
@@ -832,20 +832,45 @@ def _fetch_wb_products(
         return None
     endpoint = "https://content-api.wildberries.ru/content/v2/get/cards/list"
     headers = {"Authorization": api_key, "Content-Type": "application/json"}
-    payload: dict[str, Any] = {
-        "settings": {
-            "cursor": {"limit": min(limit, 100)},
-            "filter": {"withPhoto": -1},
-        }
-    }
-
+    page_limit = max(1, min(int(limit or 100), 100))
+    max_pages = 120 if import_all else 1
+    cards: list[dict[str, Any]] = []
+    cursor: dict[str, Any] = {}
+    seen_cursor: set[str] = set()
     with httpx.Client(timeout=timeout_sec) as client:
-        response = client.post(endpoint, headers=headers, json=payload)
-        if response.status_code >= 400:
-            return None
-        data = response.json()
+        for _ in range(max_pages):
+            payload: dict[str, Any] = {
+                "settings": {
+                    "cursor": {"limit": page_limit, **cursor},
+                    "filter": {"withPhoto": -1},
+                }
+            }
+            response = client.post(endpoint, headers=headers, json=payload)
+            if response.status_code >= 400:
+                if not cards:
+                    return None
+                break
+            data = response.json()
+            chunk = data.get("cards") or data.get("data", {}).get("cards") or []
+            if not isinstance(chunk, list) or not chunk:
+                break
+            cards.extend([row for row in chunk if isinstance(row, dict)])
+            if not import_all:
+                break
+            cursor_node = data.get("cursor") or data.get("data", {}).get("cursor") or {}
+            if not isinstance(cursor_node, dict):
+                break
+            next_cursor: dict[str, Any] = {}
+            for key in ("updatedAt", "nmID"):
+                value = cursor_node.get(key)
+                if value not in (None, ""):
+                    next_cursor[key] = value
+            marker = f"{next_cursor.get('updatedAt', '')}|{next_cursor.get('nmID', '')}"
+            if not next_cursor or marker in seen_cursor:
+                break
+            seen_cursor.add(marker)
+            cursor = next_cursor
 
-    cards = data.get("cards") or data.get("data", {}).get("cards") or []
     mapped: list[MarketplaceProduct] = []
     for card in cards:
         article = str(card.get("vendorCode") or card.get("nmID") or "")
@@ -893,25 +918,61 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
     }
     list_endpoint = "https://api-seller.ozon.ru/v3/product/list"
     info_endpoint = "https://api-seller.ozon.ru/v3/product/info/list"
-
+    list_limit = max(1, min(int(limit or 100), 100))
+    max_pages = 120 if import_all else 1
+    product_ids: list[int] = []
+    last_id = ""
     with httpx.Client(timeout=25.0) as client:
-        list_resp = client.post(
-            list_endpoint,
-            headers=headers,
-            json={"filter": {"visibility": "ALL"}, "last_id": "", "limit": min(limit, 100)},
-        )
-        if list_resp.status_code >= 400:
-            return None
-        list_data = list_resp.json().get("result", {})
-        items = list_data.get("items", [])
-        product_ids = [item.get("product_id") for item in items if item.get("product_id")]
+        for _ in range(max_pages):
+            list_resp = client.post(
+                list_endpoint,
+                headers=headers,
+                json={"filter": {"visibility": "ALL"}, "last_id": last_id, "limit": list_limit},
+            )
+            if list_resp.status_code >= 400:
+                if not product_ids:
+                    return None
+                break
+            list_data = list_resp.json().get("result", {})
+            items = list_data.get("items", [])
+            if not isinstance(items, list) or not items:
+                break
+            for item in items:
+                pid = item.get("product_id") if isinstance(item, dict) else None
+                if pid:
+                    try:
+                        product_ids.append(int(pid))
+                    except Exception:
+                        continue
+            if not import_all:
+                break
+            next_last_id = str(list_data.get("last_id") or "").strip()
+            if not next_last_id or next_last_id == last_id:
+                break
+            last_id = next_last_id
+
+        unique_ids: list[int] = []
+        seen_ids: set[int] = set()
+        for pid in product_ids:
+            if pid in seen_ids:
+                continue
+            seen_ids.add(pid)
+            unique_ids.append(pid)
+        product_ids = unique_ids
         if not product_ids:
             return []
 
-        info_resp = client.post(info_endpoint, headers=headers, json={"product_id": product_ids})
-        if info_resp.status_code >= 400:
-            return None
-        info_items = info_resp.json().get("result", {}).get("items", [])
+        info_items: list[dict[str, Any]] = []
+        for idx in range(0, len(product_ids), 1000):
+            chunk = product_ids[idx: idx + 1000]
+            info_resp = client.post(info_endpoint, headers=headers, json={"product_id": chunk})
+            if info_resp.status_code >= 400:
+                if not info_items and idx == 0:
+                    return None
+                continue
+            payload = info_resp.json().get("result", {}).get("items", [])
+            if isinstance(payload, list):
+                info_items.extend([row for row in payload if isinstance(row, dict)])
 
     mapped: list[MarketplaceProduct] = []
     for item in info_items:
@@ -1294,23 +1355,36 @@ def _extract_wb_photos(card: dict[str, Any]) -> list[str]:
     photos_raw = card.get("photos") or []
     out: list[str] = []
 
-    def _collect(value: Any) -> None:
+    def _pick_best(value: Any) -> str:
         if isinstance(value, str):
-            normalized = _normalize_photo_url(value)
-            if normalized:
-                out.append(normalized)
-            return
+            return _normalize_photo_url(value)
         if isinstance(value, dict):
-            for key in ("big", "c516x688", "tm", "x1", "x2", "url"):
-                if key in value and value[key]:
-                    _collect(value[key])
-            return
+            for key in ("big", "orig", "x2", "c516x688", "c246x328", "x1", "tm", "small", "url"):
+                picked = _pick_best(value.get(key))
+                if picked:
+                    return picked
+            for nested in value.values():
+                picked = _pick_best(nested)
+                if picked:
+                    return picked
+            return ""
         if isinstance(value, list):
             for item in value:
-                _collect(item)
+                picked = _pick_best(item)
+                if picked:
+                    return picked
+        return ""
 
-    _collect(photos_raw)
-    return [x for x in dict.fromkeys([str(p).strip() for p in out if str(p).strip()])]
+    if isinstance(photos_raw, list):
+        for item in photos_raw:
+            picked = _pick_best(item)
+            if picked:
+                out.append(picked)
+    else:
+        picked = _pick_best(photos_raw)
+        if picked:
+            out.append(picked)
+    return _dedupe_photo_urls(out)
 
 
 def _extract_ozon_barcode(source: dict[str, Any]) -> str:
@@ -1353,7 +1427,7 @@ def _extract_ozon_photos(source: dict[str, Any]) -> list[str]:
     _collect(source.get("primary_image"))
     for key in ("images", "images360", "images_stream", "photo_urls", "photos"):
         _collect(source.get(key))
-    return [x for x in dict.fromkeys([str(p).strip() for p in out if str(p).strip()])]
+    return _dedupe_photo_urls(out)
 
 
 def _extract_ozon_category_name(source: dict[str, Any]) -> str:
@@ -1382,6 +1456,58 @@ def _normalize_photo_url(value: str) -> str:
     if raw.startswith("http://") or raw.startswith("https://"):
         return raw
     return f"https://{raw.lstrip('/')}"
+
+
+def _photo_identity_key(value: str) -> str:
+    normalized = _normalize_photo_url(value)
+    if not normalized:
+        return ""
+    try:
+        parsed = urlsplit(normalized)
+    except Exception:
+        return normalized.lower()
+    path = str(parsed.path or "")
+    # WB/Ozon often return same image in tm/cXXX/big variants; collapse to one identity.
+    path = re.sub(r"/(tm|small|preview|big|orig|x1|x2|c\d+x\d+)/", "/", path, flags=re.IGNORECASE)
+    path = re.sub(r"/+", "/", path).rstrip("/")
+    return f"{parsed.netloc.lower()}{path.lower()}"
+
+
+def _photo_variant_score(value: str) -> int:
+    low = str(value or "").lower()
+    score = 0
+    if "/orig/" in low or "/big/" in low:
+        score += 300
+    if re.search(r"/c\d+x\d+/", low):
+        score += 220
+    if "/x2/" in low:
+        score += 180
+    if "/x1/" in low:
+        score += 160
+    if "/tm/" in low or "/small/" in low or "/preview/" in low:
+        score += 80
+    if "?" not in low:
+        score += 5
+    return score
+
+
+def _dedupe_photo_urls(values: list[str]) -> list[str]:
+    order: list[str] = []
+    chosen: dict[str, tuple[str, int]] = {}
+    for raw in values:
+        normalized = _normalize_photo_url(raw)
+        if not normalized:
+            continue
+        key = _photo_identity_key(normalized) or normalized.lower()
+        score = _photo_variant_score(normalized)
+        prev = chosen.get(key)
+        if prev is None:
+            chosen[key] = (normalized, score)
+            order.append(key)
+            continue
+        if score > prev[1]:
+            chosen[key] = (normalized, score)
+    return [chosen[key][0] for key in order if key in chosen]
 
 
 def _parse_ozon_credentials(api_key: str) -> tuple[str, str] | None:

@@ -7435,14 +7435,6 @@ async function loadSalesStats(retryAttempt = 0) {
 
   let data = null;
   let lastError = "";
-  const comparePromise = (compare_from && compare_to)
-    ? requestJson(`/api/sales/stats?${(() => {
-        const q = new URLSearchParams(qp);
-        q.set("date_from", compare_from);
-        q.set("date_to", compare_to);
-        return q.toString();
-      })()}`, { headers: authHeaders(), timeoutMs: 120000 }).catch(() => null)
-    : Promise.resolve(null);
   for (let attempt = 0; attempt < 2; attempt += 1) {
     data = await requestJson(`/api/sales/stats?${qp.toString()}`, {
       headers: authHeaders(),
@@ -7483,18 +7475,15 @@ async function loadSalesStats(retryAttempt = 0) {
   if (!salesChartRows.length && salesRows.length) {
     salesChartRows = buildSalesChartFromRows(salesRows);
   }
-  const compareData = await comparePromise;
-  if (compareData && runToken === salesLoadToken) {
-    const rawCompareRows = Array.isArray(compareData.rows) ? compareData.rows : [];
-    salesCompareRows = rawCompareRows.filter((row) => {
-      const mp = String(row?.marketplace || "").toLowerCase();
-      if (market === "all") return mp === "wb" || mp === "ozon";
-      return mp === market;
-    });
-    salesCompareChartRows = Array.isArray(compareData.chart) ? compareData.chart : [];
-    if (!salesCompareChartRows.length && salesCompareRows.length) {
-      salesCompareChartRows = buildSalesChartFromRows(salesCompareRows);
-    }
+  const rawCompareRows = Array.isArray(data.comparison_rows) ? data.comparison_rows : [];
+  salesCompareRows = rawCompareRows.filter((row) => {
+    const mp = String(row?.marketplace || "").toLowerCase();
+    if (market === "all") return mp === "wb" || mp === "ozon";
+    return mp === market;
+  });
+  salesCompareChartRows = Array.isArray(data.comparison_chart) ? data.comparison_chart : [];
+  if (!salesCompareChartRows.length && salesCompareRows.length) {
+    salesCompareChartRows = buildSalesChartFromRows(salesCompareRows);
   }
   const totals = data.totals || {};
   const warnings = Array.isArray(data.warnings) ? data.warnings.filter(Boolean) : [];

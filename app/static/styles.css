@@ -8400,4 +8400,38 @@ button,
     width: 30px;
     height: 30px;
   }
+
+  /* Products table: keep data readable on narrow screens with horizontal scroll. */
+  #products .products-catalog-wrap .table-card {
+    overflow-x: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #products .products-table {
+    min-width: 980px !important;
+    table-layout: auto;
+  }
+
+  #products .products-table th,
+  #products .products-table td {
+    overflow-wrap: normal;
+    word-break: normal;
+    white-space: normal;
+  }
+
+  #products .products-table th:nth-child(5),
+  #products .products-table td:nth-child(5),
+  #products .products-table th:nth-child(6),
+  #products .products-table td:nth-child(6),
+  #products .products-table th:nth-child(7),
+  #products .products-table td:nth-child(7) {
+    min-width: 180px;
+  }
+
+  #products .products-table th:nth-child(9),
+  #products .products-table td:nth-child(9) {
+    min-width: 92px;
+    white-space: nowrap;
+  }
 }
