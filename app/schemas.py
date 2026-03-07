@@ -475,6 +475,16 @@ class HelpReleaseOut(BaseModel):
     notes: str = ""
 
 
+class MobileApkLatestOut(BaseModel):
+    version: str
+    version_code: int = 0
+    released_at: str = ""
+    summary: str = ""
+    android_download_url: str = ""
+    android_download_name: str = ""
+    notes: str = ""
+
+
 class AiServiceIn(BaseModel):
     name: str = ""
     provider: str = "openai"

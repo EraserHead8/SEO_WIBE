@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <string name="app_name">SEO WIBE Mobile</string>
-  <string name="reload">Reload</string>
   <string name="base_url">http://176.32.34.232:8016/mobile?mobile_app=1</string>
+  <string name="update_title">Доступно обновление</string>
+  <string name="update_message">Доступна новая версия SEO WIBE Mobile: %1$s</string>
+  <string name="update_install">Установить</string>
+  <string name="update_later">Позже</string>
+  <string name="update_download_title">SEO WIBE update %1$s</string>
+  <string name="update_download_description">Загрузка APK для обновления</string>
+  <string name="update_download_started">Загрузка обновления начата</string>
+  <string name="update_download_failed">Не удалось скачать обновление</string>
+  <string name="update_install_failed">Не удалось открыть установщик APK</string>
+  <string name="update_allow_unknown_sources">Разрешите установку из этого источника в настройках Android</string>
 </resources>

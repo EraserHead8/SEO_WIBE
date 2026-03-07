@@ -273,15 +273,21 @@ async function socialLoadNotificationSettings(force = false) {
 }
 
 function socialSetBell(unread) {
-  const btn = document.getElementById("socialBellBtn");
-  const badge = document.getElementById("socialBellBadge");
-  if (!btn || !badge) return;
+  const topBtn = document.getElementById("socialBellBtn");
+  const topBadge = document.getElementById("socialBellBadge");
+  const drawerBtn = document.getElementById("mobileDrawerBellBtn");
+  const drawerBadge = document.getElementById("mobileDrawerBellBadge");
+  const buttons = [topBtn, drawerBtn].filter(Boolean);
+  const badges = [topBadge, drawerBadge].filter(Boolean);
+  if (!buttons.length || !badges.length) return;
   const canUse = !modulesLoaded || (enabledModules instanceof Set && enabledModules.has("social_hub"));
-  btn.classList.toggle("hidden", !canUse);
+  buttons.forEach((btn) => btn.classList.toggle("hidden", !canUse));
   if (!canUse) return;
   const value = Math.max(0, Number(unread || 0));
-  badge.classList.toggle("hidden", value <= 0);
-  badge.textContent = value > 99 ? "99+" : String(value);
+  badges.forEach((badge) => {
+    badge.classList.toggle("hidden", value <= 0);
+    badge.textContent = value > 99 ? "99+" : String(value);
+  });
 }
 
 function socialNowMs() {
@@ -479,6 +485,8 @@ function resetSocialState() {
     lastSoundAtByKind: {},
     moduleLoaded: false,
     chatSearch: "",
+    chatThreadsSignature: "",
+    chatMessagesSignatureByThread: {},
     toastsSeen: new Set(),
     currencyRates: null,
     currencyRatesStamp: 0,
@@ -614,7 +622,7 @@ function socialRenderGames() {
       <button class="social-game-card" type="button" ondblclick="socialOpenGameMenu('${escapeHtml(game.code)}')" onclick="socialOpenGameMenu('${escapeHtml(game.code)}')">
         <span class="social-game-icon" aria-hidden="true">${icon}</span>
         <span class="social-game-title">${escapeHtml(game.title || game.code)}</span>
-        <small>${tr("Двойной клик или клик для входа", "Double click or click to open")}</small>
+        <small>${tr("Нажмите для входа", "Tap to open")}</small>
       </button>
     `;
   }).join("");
@@ -712,6 +720,61 @@ function socialGameRetry() {
   if (typeof window.socialGameRetryCb === "function") window.socialGameRetryCb();
 }
 
+function socialGameCanvasSize(gameCode) {
+  const code = String(gameCode || "").toLowerCase();
+  const vw = Math.max(document.documentElement?.clientWidth || 0, window.innerWidth || 0);
+  const vh = Math.max(document.documentElement?.clientHeight || 0, window.innerHeight || 0);
+  const mobile = vw <= 900;
+  if (code === "tetris") {
+    const targetWidth = mobile ? Math.min(320, Math.max(220, vw - 72)) : 420;
+    const cell = Math.max(16, Math.floor(targetWidth / 10));
+    return { width: cell * 10, height: cell * 20 };
+  }
+  if (code === "2048") {
+    const side = mobile ? Math.min(360, Math.max(240, vw - 72)) : 420;
+    return { width: side, height: side };
+  }
+  const width = mobile ? Math.min(360, Math.max(240, vw - 72)) : 420;
+  const maxHeight = mobile ? Math.max(360, Math.min(620, vh - 300)) : 620;
+  return { width, height: Math.max(340, maxHeight) };
+}
+
+function socialGameControlsHtml(code) {
+  const safe = String(code || "").toLowerCase();
+  if (safe === "snake") {
+    return `
+      <div class="social-game-controls">
+        <button type="button" onclick="socialGameControl('up')">↑</button>
+        <button type="button" onclick="socialGameControl('left')">←</button>
+        <button type="button" onclick="socialGameControl('down')">↓</button>
+        <button type="button" onclick="socialGameControl('right')">→</button>
+      </div>
+    `;
+  }
+  if (safe === "2048") {
+    return `
+      <div class="social-game-controls">
+        <button type="button" onclick="socialGameControl('up')">↑</button>
+        <button type="button" onclick="socialGameControl('left')">←</button>
+        <button type="button" onclick="socialGameControl('down')">↓</button>
+        <button type="button" onclick="socialGameControl('right')">→</button>
+      </div>
+    `;
+  }
+  if (safe === "tetris") {
+    return `
+      <div class="social-game-controls">
+        <button type="button" onclick="socialGameControl('left')">←</button>
+        <button type="button" onclick="socialGameControl('right')">→</button>
+        <button type="button" onclick="socialGameControl('down')">↓</button>
+        <button type="button" onclick="socialGameControl('rotate')">${tr("Поворот", "Rotate")}</button>
+        <button type="button" onclick="socialGameControl('drop')">${tr("Сброс", "Drop")}</button>
+      </div>
+    `;
+  }
+  return "";
+}
+
 function socialStartGame(code) {
   const safe = String(code || "").toLowerCase();
   const title = safe === "snake"
@@ -722,23 +785,14 @@ function socialStartGame(code) {
     : (safe === "tetris"
       ? tr("Управление: ← →, ↓, ↑ поворот, пробел — быстрый сброс.", "Controls: ← →, ↓, ↑ rotate, Space hard drop.")
       : tr("Управление: стрелки. Совмещайте одинаковые плитки.", "Controls: arrows. Merge equal tiles."));
-  const controls = safe === "tetris"
-    ? `
-      <div class="social-game-controls">
-        <button type="button" onclick="socialGameControl('left')">←</button>
-        <button type="button" onclick="socialGameControl('right')">→</button>
-        <button type="button" onclick="socialGameControl('down')">↓</button>
-        <button type="button" onclick="socialGameControl('rotate')">${tr("Поворот", "Rotate")}</button>
-        <button type="button" onclick="socialGameControl('drop')">${tr("Сброс", "Drop")}</button>
-      </div>
-    `
-    : "";
+  const canvasSize = socialGameCanvasSize(safe);
+  const controls = socialGameControlsHtml(safe);
   socialOpenModal(
     title,
     `
       <div class="social-game-wrap">
         <div class="hint">${escapeHtml(hint)}</div>
-        <canvas id="socialGameCanvas" width="420" height="620"></canvas>
+        <canvas id="socialGameCanvas" width="${Number(canvasSize.width || 420)}" height="${Number(canvasSize.height || 620)}"></canvas>
         <div id="socialGameInfo" class="hint">${tr("Счет", "Score")}: 0</div>
         ${controls}
       </div>
@@ -755,6 +809,7 @@ function socialStartGame(code) {
 function socialGameControl(action) {
   const runner = socialState.activeGameRunner;
   if (!runner) return;
+  if (action === "up" && typeof runner.moveUp === "function") runner.moveUp();
   if (action === "left" && typeof runner.moveLeft === "function") runner.moveLeft();
   if (action === "right" && typeof runner.moveRight === "function") runner.moveRight();
   if (action === "down" && typeof runner.moveDown === "function") runner.moveDown();
@@ -778,6 +833,14 @@ function socialRunSnake() {
   let score = 0;
   let speed = 130;
   let timer = null;
+  let touchStartX = 0;
+  let touchStartY = 0;
+
+  function setDirection(next) {
+    if (!next || typeof next.x !== "number" || typeof next.y !== "number") return;
+    if (next.x === -dir.x && next.y === -dir.y) return;
+    nextDir = { x: next.x, y: next.y };
+  }
 
   function spawnFood() {
     while (true) {
@@ -809,6 +872,8 @@ function socialRunSnake() {
     running = false;
     if (timer) clearTimeout(timer);
     document.removeEventListener("keydown", onKey);
+    canvas.removeEventListener("touchstart", onTouchStart);
+    canvas.removeEventListener("touchend", onTouchEnd);
     socialStoreGameScore("snake", score).catch(() => null);
     if (gameOver) {
       socialOpenModal(tr("Змейка", "Snake"), socialGameOverlay(tr("Игра окончена", "Game over"), score, () => socialStartGame("snake")));
@@ -841,14 +906,36 @@ function socialRunSnake() {
       e.preventDefault();
       e.stopPropagation();
     }
-    if (k === "ArrowUp" && dir.y !== 1) nextDir = { x: 0, y: -1 };
-    if (k === "ArrowDown" && dir.y !== -1) nextDir = { x: 0, y: 1 };
-    if (k === "ArrowLeft" && dir.x !== 1) nextDir = { x: -1, y: 0 };
-    if (k === "ArrowRight" && dir.x !== -1) nextDir = { x: 1, y: 0 };
+    if (k === "ArrowUp") setDirection({ x: 0, y: -1 });
+    if (k === "ArrowDown") setDirection({ x: 0, y: 1 });
+    if (k === "ArrowLeft") setDirection({ x: -1, y: 0 });
+    if (k === "ArrowRight") setDirection({ x: 1, y: 0 });
     if (k === "Escape") stopGame(false);
   }
 
+  function onTouchStart(e) {
+    const touch = e.touches?.[0];
+    if (!touch) return;
+    touchStartX = touch.clientX;
+    touchStartY = touch.clientY;
+  }
+
+  function onTouchEnd(e) {
+    const touch = e.changedTouches?.[0];
+    if (!touch) return;
+    const dx = touch.clientX - touchStartX;
+    const dy = touch.clientY - touchStartY;
+    if (Math.abs(dx) < 24 && Math.abs(dy) < 24) return;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      setDirection(dx > 0 ? { x: 1, y: 0 } : { x: -1, y: 0 });
+    } else {
+      setDirection(dy > 0 ? { x: 0, y: 1 } : { x: 0, y: -1 });
+    }
+  }
+
   document.addEventListener("keydown", onKey);
+  canvas.addEventListener("touchstart", onTouchStart, { passive: true });
+  canvas.addEventListener("touchend", onTouchEnd, { passive: true });
   spawnFood();
   draw();
   timer = setTimeout(step, speed);
@@ -856,6 +943,18 @@ function socialRunSnake() {
   return {
     stop() {
       stopGame(false);
+    },
+    moveUp() {
+      setDirection({ x: 0, y: -1 });
+    },
+    moveLeft() {
+      setDirection({ x: -1, y: 0 });
+    },
+    moveRight() {
+      setDirection({ x: 1, y: 0 });
+    },
+    moveDown() {
+      setDirection({ x: 0, y: 1 });
     },
   };
 }
@@ -1080,6 +1179,8 @@ function socialRun2048() {
   let board = Array.from({ length: size }, () => Array(size).fill(0));
   let score = 0;
   let running = true;
+  let touchStartX = 0;
+  let touchStartY = 0;
 
   function spawnTile() {
     const empty = [];
@@ -1202,7 +1303,30 @@ function socialRun2048() {
     }
   }
 
+  function onTouchStart(e) {
+    const touch = e.touches?.[0];
+    if (!touch) return;
+    touchStartX = touch.clientX;
+    touchStartY = touch.clientY;
+  }
+
+  function onTouchEnd(e) {
+    if (!running) return;
+    const touch = e.changedTouches?.[0];
+    if (!touch) return;
+    const dx = touch.clientX - touchStartX;
+    const dy = touch.clientY - touchStartY;
+    if (Math.abs(dx) < 24 && Math.abs(dy) < 24) return;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      move(dx > 0 ? "right" : "left");
+    } else {
+      move(dy > 0 ? "down" : "up");
+    }
+  }
+
   document.addEventListener("keydown", onKey);
+  canvas.addEventListener("touchstart", onTouchStart, { passive: true });
+  canvas.addEventListener("touchend", onTouchEnd, { passive: true });
   spawnTile();
   spawnTile();
   draw();
@@ -1211,6 +1335,20 @@ function socialRun2048() {
     stop() {
       running = false;
       document.removeEventListener("keydown", onKey);
+      canvas.removeEventListener("touchstart", onTouchStart);
+      canvas.removeEventListener("touchend", onTouchEnd);
+    },
+    moveUp() {
+      if (running) move("up");
+    },
+    moveLeft() {
+      if (running) move("left");
+    },
+    moveRight() {
+      if (running) move("right");
+    },
+    moveDown() {
+      if (running) move("down");
     },
   };
 }
@@ -1262,18 +1400,38 @@ if (typeof window !== "undefined") {
 }
 
 async function socialLoadThreads(opts = {}) {
+  const signatureOf = (rows) => rows.map((thread) => {
+    const last = thread?.last_message || {};
+    return [
+      Number(thread?.id || 0),
+      Number(thread?.unread || 0),
+      Number(last?.id || 0),
+      String(last?.updated_at || last?.created_at || ""),
+      String(thread?.updated_at || ""),
+      String(thread?.title || ""),
+    ].join("|");
+  }).join(";");
   const data = await socialRequest("/api/social/chat/threads").catch((e) => {
     if (!opts.silent && e?.message) alert(e.message);
     return null;
   });
   if (!Array.isArray(data)) return;
+  const nextSig = signatureOf(data);
+  const prevSig = String(socialState.chatThreadsSignature || "");
+  const hadRows = Array.isArray(socialState.chatThreads) && socialState.chatThreads.length > 0;
+  const selectionMissing = Boolean(
+    socialState.currentThreadId
+    && !data.some((x) => Number(x.id) === Number(socialState.currentThreadId))
+  );
+  const shouldRender = !opts.silent || !hadRows || selectionMissing || nextSig !== prevSig;
   socialState.chatThreads = data;
-  socialRenderThreads();
+  socialState.chatThreadsSignature = nextSig;
+  if (shouldRender) socialRenderThreads();
   if (socialState.currentThreadId) {
     const current = data.find((x) => Number(x.id) === Number(socialState.currentThreadId));
     if (current) socialSetChatHeader(current);
   }
-  if ((!socialState.currentThreadId || !data.some((x) => Number(x.id) === Number(socialState.currentThreadId))) && data.length) {
+  if ((!socialState.currentThreadId || selectionMissing) && data.length) {
     const lastPreferred = Number(socialState.chatLastThreadId || 0);
     const preferred = data.find((x) => Number(x.id) === lastPreferred) || data[0];
     if (preferred) {
@@ -1392,6 +1550,8 @@ function socialCloseThread() {
   socialState.currentThreadId = 0;
   socialState.currentThreadKind = "";
   socialState.chatMessages = [];
+  socialState.chatOldestId = 0;
+  socialState.chatHasMore = true;
   socialClearReply();
   socialCloseMessageContext();
   const head = document.getElementById("socialChatHead");
@@ -1832,6 +1992,17 @@ function socialRenderChatMessages(opts = {}) {
 }
 
 async function socialLoadMessages(threadId, opts = {}) {
+  const signatureOf = (rows) => rows.map((row) => {
+    const reactions = Array.isArray(row?.reactions)
+      ? row.reactions.map((rx) => `${String(rx?.emoji || "")}:${Number(rx?.count || 0)}:${rx?.my ? 1 : 0}`).join(",")
+      : "";
+    return [
+      Number(row?.id || 0),
+      String(row?.updated_at || row?.created_at || ""),
+      String(row?.text || ""),
+      reactions,
+    ].join("|");
+  }).join(";");
   const id = Number(threadId || socialState.currentThreadId || 0);
   if (!id) return;
   const beforeId = Number(opts.beforeId || 0);
@@ -1845,13 +2016,20 @@ async function socialLoadMessages(threadId, opts = {}) {
     return null;
   });
   if (!Array.isArray(rows)) return;
+  const prevSig = String(socialState.chatMessagesSignatureByThread?.[id] || "");
+  const nextSig = signatureOf(rows);
+  const unchanged = !beforeId && opts.silent && nextSig === prevSig && !opts.forceBottom;
   if (beforeId) {
     socialState.chatMessages = [...rows, ...(socialState.chatMessages || [])];
   } else {
     socialState.chatMessages = rows;
   }
+  socialState.chatMessagesSignatureByThread[id] = beforeId
+    ? signatureOf(socialState.chatMessages || [])
+    : nextSig;
   socialState.chatOldestId = socialState.chatMessages.length ? Number(socialState.chatMessages[0].id || 0) : 0;
   socialState.chatHasMore = rows.length >= limit;
+  if (unchanged) return;
   socialRenderChatMessages({
     keepOffset: Boolean(beforeId),
     prevScrollHeight,

@@ -153,6 +153,49 @@
         <p>Seller OS</p>
       </div>
       <button class="btn-secondary sidebar-toggle" type="button" onclick="toggleSidebarMode()" title="Свернуть/развернуть меню">⇄</button>
+      <div id="mobileDrawerControls" class="mobile-drawer-controls hidden">
+        <div class="mobile-drawer-topline">
+          <button id="mobileDrawerBellBtn" class="chip-btn icon-bell-btn" type="button" onclick="openSocialChatFromBell(); closeMobileNav();" title="Уведомления">
+            <span class="bell-emoji" aria-hidden="true">🔔</span>
+            <span id="mobileDrawerBellBadge" class="icon-bell-badge hidden">0</span>
+          </button>
+          <select id="mobileDrawerLangSelect" class="chip-select" onchange="changeUiLangFromDrawer()">
+            <option value="ru">RU</option>
+            <option value="en">EN</option>
+          </select>
+          <select id="mobileDrawerThemeSelect" class="chip-select" onchange="changeThemeFromDrawer()">
+            <option value="classic">Классика</option>
+            <option value="dark">Темная</option>
+            <option value="light">Светлая</option>
+            <option value="moon">Луна</option>
+            <option value="newyear">Новогодняя</option>
+            <option value="summer">Лето</option>
+            <option value="autumn">Осень</option>
+            <option value="winter">Зима</option>
+            <option value="spring">Весна</option>
+            <option value="japan">Япония</option>
+            <option value="greenland">Гренландия</option>
+          </select>
+        </div>
+        <button id="mobileDrawerProfileBtn" class="chip-btn topbar-avatar-btn mobile-drawer-profile-btn hidden" type="button" onclick="openMyProfileFromTopbar(); closeMobileNav();">
+          <span class="topbar-avatar" id="mobileDrawerAvatarCircle">
+            <img id="mobileDrawerAvatarImg" class="avatar-img hidden" alt="avatar" />
+            <span id="mobileDrawerAvatarText" class="avatar-fallback">--</span>
+          </span>
+          <span id="mobileDrawerAvatarName" class="topbar-avatar-name">--</span>
+        </button>
+        <label id="mobileDrawerQuickNavLabel" class="mobile-drawer-quick-label" for="mobileDrawerQuickNav">Раздел</label>
+        <select id="mobileDrawerQuickNav" class="chip-select mobile-drawer-quick-nav" onchange="onMobileQuickNavChanged('mobileDrawerQuickNav')">
+          <option value="social_chat">Чат</option>
+          <option value="social_tasks">Задачи</option>
+          <option value="social_notes">Заметки</option>
+          <option value="social_calculator">Калькулятор</option>
+          <option value="social_calendar">Календарь</option>
+          <option value="reviews_reviews">Ответы на отзывы</option>
+          <option value="reviews_questions">Ответы на вопросы</option>
+          <option value="profile_main">Профиль</option>
+        </select>
+      </div>
       <nav class="side-nav">
         <button class="nav-btn" data-tab="sales" data-module="sales_stats" onclick="showTab('sales', this)">Статистика и дашборд</button>
         <button class="nav-btn" data-tab="products" onclick="showTab('products', this)">Товары</button>
@@ -178,7 +221,7 @@
             <span class="bell-emoji" aria-hidden="true">🔔</span>
             <span id="socialBellBadge" class="icon-bell-badge hidden">0</span>
           </button>
-          <select id="mobileQuickNav" class="chip-select mobile-quick-nav hidden" onchange="onMobileQuickNavChanged()">
+          <select id="mobileQuickNav" class="chip-select mobile-quick-nav hidden" onchange="onMobileQuickNavChanged('mobileQuickNav')">
             <option value="social_chat">Чат</option>
             <option value="social_tasks">Задачи</option>
             <option value="social_notes">Заметки</option>

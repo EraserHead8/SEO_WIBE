@@ -121,6 +121,7 @@ from app.schemas import (
     SalesStatsOut,
     HelpDocOut,
     HelpReleaseOut,
+    MobileApkLatestOut,
     KnowledgeDocOut,
     ReviewAiSettingsIn,
     ReviewAiSettingsOut,
@@ -832,7 +833,7 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
             "Usage:\n"
             "- Select module in the first dropdown.\n"
             "- Click Refresh Help.\n\n"
-            "- Downloads subtab: current version, differences from previous release, release history, and mobile app entry link.\n\n"
+            "- Downloads subtab: Android APK current version, differences from previous APK release, and APK history.\n\n"
             "Each section includes:\n"
             "- Module purpose and expected result.\n"
             "- Button/field reference.\n"
@@ -868,9 +869,32 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
 
 HELP_RELEASES: list[dict[str, Any]] = [
     {
-        "version": "0.3.0",
+        "version": "0.3.1",
+        "android_version_code": 2,
         "released_at": "2026-03-07",
         "current": True,
+        "summary": "Android APK: drawer-first интерфейс, оптимизация чата и мобильных игр, проверка обновлений в приложении.",
+        "diff_from_previous": [
+            "В APK убраны дублирующие верхние контролы: навигация и настройки теперь в burger-панели.",
+            "Чат оптимизирован: снижены лишние перерисовки при фоновом обновлении, уменьшено мерцание.",
+            "Игры адаптированы под телефон: динамический canvas, touch-контролы и свайпы.",
+            "Добавлен in-app update-check: при новой версии показывается «Установить / Позже».",
+        ],
+        "changes": [
+            "Help Center «Загрузки» теперь ведется только по Android APK версиям.",
+            "Сборка Android обновлена до versionCode=2 / versionName=1.1.0.",
+            "APK-обновление скачивается через DownloadManager и запускает системную установку.",
+        ],
+        "android_download_url": "/static/downloads/seo-wibe-mobile-latest.apk",
+        "android_download_name": "SEO WIBE Mobile Android (.apk)",
+        "app_entry_url": "/mobile",
+        "notes": "В приложении доступна проверка обновлений APK. При выборе «Установить» загрузка стартует автоматически, затем открывается системный установщик Android.",
+    },
+    {
+        "version": "0.3.0",
+        "android_version_code": 1,
+        "released_at": "2026-03-07",
+        "current": False,
         "summary": "Стабилизация рекламы/статистики, бухгалтерия на общей базе товаров и Android-приложение.",
         "diff_from_previous": [
             "Исправлена догрузка WB Ads: частичные ответы API больше не считаются фатальной ошибкой.",
@@ -890,6 +914,7 @@ HELP_RELEASES: list[dict[str, Any]] = [
     },
     {
         "version": "0.2.1",
+        "android_version_code": 1,
         "released_at": "2026-03-06",
         "current": False,
         "summary": "Модуль бухгалтерии (обзор, анализ, расходы, настройки, Excel импорт/экспорт закупочных цен).",
@@ -908,6 +933,7 @@ HELP_RELEASES: list[dict[str, Any]] = [
     },
     {
         "version": "0.2.0",
+        "android_version_code": 1,
         "released_at": "2026-03-05",
         "current": False,
         "summary": "Стабилизация модулей товаров, отзывов/вопросов, рекламы и чата.",
@@ -3362,17 +3388,40 @@ def get_help_releases(
         if is_en:
             # Lightweight EN localization for release cards without splitting data model.
             item["summary"] = {
+                "Android APK: drawer-first интерфейс, оптимизация чата и мобильных игр, проверка обновлений в приложении.": "Android APK: drawer-first UI, chat/mobile-game optimization, and in-app update checks.",
+                "Стабилизация рекламы/статистики, бухгалтерия на общей базе товаров и Android-приложение.": "Ads/stats stabilization, accounting on shared product base, and Android app.",
                 "Стабилизация рекламы/статистики, бухгалтерия на общей базе товаров и мобильный PWA-клиент.": "Ads/stats stabilization, accounting on shared product base, and mobile PWA client.",
                 "Модуль бухгалтерии (обзор, анализ, расходы, настройки, Excel импорт/экспорт закупочных цен).": "Accounting module (overview, analysis, expenses, settings, purchase-price Excel import/export).",
                 "Стабилизация модулей товаров, отзывов/вопросов, рекламы и чата.": "Stabilization for products, reviews/questions, ads, and chat modules.",
             }.get(str(item.get("summary") or ""), str(item.get("summary") or ""))
-            item["notes"] = (
-                "Android install: open link and choose 'Add to Home screen' in browser."
-                if str(item.get("notes") or "").strip()
-                else ""
-            )
+            item["notes"] = {
+                "В приложении доступна проверка обновлений APK. При выборе «Установить» загрузка стартует автоматически, затем открывается системный установщик Android.": "The app can check APK updates. Tap Install to start automatic download, then confirm installation in the Android system installer.",
+                "Установка на Android: скачайте .apk, откройте файл и подтвердите установку из неизвестного источника.": "Android install: download APK, open the file, and allow installation from unknown sources if required.",
+            }.get(str(item.get("notes") or ""), str(item.get("notes") or ""))
         out.append(HelpReleaseOut(**item))
     return out
+
+
+@router.get("/mobile/apk/latest", response_model=MobileApkLatestOut)
+def get_mobile_apk_latest(request: Request):
+    row = next((x for x in HELP_RELEASES if bool(x.get("current"))), None)
+    if row is None and HELP_RELEASES:
+        row = HELP_RELEASES[0]
+    if row is None:
+        raise HTTPException(status_code=404, detail="APK release data not found")
+    raw_url = str(row.get("android_download_url") or "").strip() or "/static/downloads/seo-wibe-mobile-latest.apk"
+    if raw_url.startswith("/"):
+        base = str(request.base_url).rstrip("/")
+        raw_url = f"{base}{raw_url}"
+    return MobileApkLatestOut(
+        version=str(row.get("version") or ""),
+        version_code=max(0, int(row.get("android_version_code") or 0)),
+        released_at=str(row.get("released_at") or ""),
+        summary=str(row.get("summary") or ""),
+        android_download_url=raw_url,
+        android_download_name=str(row.get("android_download_name") or "SEO WIBE Mobile Android (.apk)"),
+        notes=str(row.get("notes") or ""),
+    )
 
 
 @router.post("/help/assistant", response_model=AiAssistantOut)

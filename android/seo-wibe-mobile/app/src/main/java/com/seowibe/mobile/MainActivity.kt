@@ -1,11 +1,17 @@
 package com.seowibe.mobile
 
 import android.annotation.SuppressLint
+import android.app.DownloadManager
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.Settings
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.ValueCallback
@@ -14,45 +20,49 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.ArrayAdapter
-import android.widget.ImageButton
 import android.widget.ProgressBar
-import android.widget.Spinner
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
   private lateinit var webView: WebView
-  private lateinit var navSpinner: Spinner
   private lateinit var progressBar: ProgressBar
   private lateinit var filePickerLauncher: ActivityResultLauncher<Intent>
   private var filePathCallback: ValueCallback<Array<Uri>>? = null
-  private var initialRouteApplied = false
-  private var isSpinnerInit = true
+  private var apkDownloadId: Long = -1L
+  private var updateCheckStarted = false
+  private val updatePrefs by lazy { getSharedPreferences("seo_wibe_apk_updates", Context.MODE_PRIVATE) }
   private val allowedHosts by lazy {
     val host = Uri.parse(getString(R.string.base_url)).host?.lowercase(Locale.ROOT).orEmpty()
     setOf(host, "127.0.0.1", "localhost")
   }
 
-  private data class MobileRoute(
-    val title: String,
-    val script: String,
+  private data class ApkRelease(
+    val versionName: String,
+    val versionCode: Int,
+    val releasedAt: String,
+    val summary: String,
+    val notes: String,
+    val downloadUrl: String,
   )
 
-  private val routes by lazy {
-    listOf(
-      MobileRoute("Чат", "if(window.showTab){window.showTab('social');} if(window.switchSocialSubtab){window.switchSocialSubtab('chat');}"),
-      MobileRoute("Задачи", "if(window.showTab){window.showTab('social');} if(window.switchSocialSubtab){window.switchSocialSubtab('tasks');}"),
-      MobileRoute("Заметки", "if(window.showTab){window.showTab('social');} if(window.switchSocialSubtab){window.switchSocialSubtab('notes');}"),
-      MobileRoute("Калькулятор", "if(window.showTab){window.showTab('social');} if(window.switchSocialSubtab){window.switchSocialSubtab('calculator');}"),
-      MobileRoute("Календарь", "if(window.showTab){window.showTab('social');} if(window.switchSocialSubtab){window.switchSocialSubtab('calendar');}"),
-      MobileRoute("Ответы на отзывы", "if(window.showTab){window.showTab('reviews');} if(window.switchReviewsSubtab){window.switchReviewsSubtab('reviews');}"),
-      MobileRoute("Ответы на вопросы", "if(window.showTab){window.showTab('reviews');} if(window.switchReviewsSubtab){window.switchReviewsSubtab('questions');}"),
-      MobileRoute("Профиль", "if(window.showTab){window.showTab('profile');}")
-    )
+  private val downloadReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context?, intent: Intent?) {
+      if (intent?.action != DownloadManager.ACTION_DOWNLOAD_COMPLETE) return
+      val doneId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
+      if (doneId <= 0L) return
+      val activeId = updatePrefs.getLong(PREF_APK_DOWNLOAD_ID, -1L)
+      if (doneId != activeId) return
+      onApkDownloaded(doneId)
+    }
   }
 
   @SuppressLint("SetJavaScriptEnabled")
@@ -61,9 +71,8 @@ class MainActivity : AppCompatActivity() {
     setContentView(R.layout.activity_main)
 
     webView = findViewById(R.id.mainWebView)
-    navSpinner = findViewById(R.id.navSpinner)
     progressBar = findViewById(R.id.pageProgress)
-    val refreshButton: ImageButton = findViewById(R.id.refreshButton)
+    apkDownloadId = updatePrefs.getLong(PREF_APK_DOWNLOAD_ID, -1L)
 
     filePickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
       val callback = filePathCallback
@@ -86,16 +95,8 @@ class MainActivity : AppCompatActivity() {
       }
     }
 
-    setupSpinner()
     configureWebView()
-
-    refreshButton.setOnClickListener {
-      if (webView.url.isNullOrBlank()) {
-        webView.loadUrl(getString(R.string.base_url))
-      } else {
-        webView.reload()
-      }
-    }
+    registerDownloadReceiver()
 
     onBackPressedDispatcher.addCallback(
       this,
@@ -113,20 +114,14 @@ class MainActivity : AppCompatActivity() {
     webView.loadUrl(getString(R.string.base_url))
   }
 
-  private fun setupSpinner() {
-    val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, routes.map { it.title })
-    navSpinner.adapter = adapter
-    navSpinner.setSelection(0, false)
-    navSpinner.setOnItemSelectedListener(object : android.widget.AdapterView.OnItemSelectedListener {
-      override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
-        if (isSpinnerInit) {
-          isSpinnerInit = false
-          return
-        }
-        routes.getOrNull(position)?.let { runRouteScript(it.script) }
-      }
-      override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
-    })
+  private fun registerDownloadReceiver() {
+    val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      registerReceiver(downloadReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+    } else {
+      @Suppress("DEPRECATION")
+      registerReceiver(downloadReceiver, filter)
+    }
   }
 
   @SuppressLint("SetJavaScriptEnabled")
@@ -147,7 +142,7 @@ class MainActivity : AppCompatActivity() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       settings.safeBrowsingEnabled = true
     }
-    settings.userAgentString = settings.userAgentString + " SEO_WIBE_ANDROID_APP/1.0"
+    settings.userAgentString = settings.userAgentString + " SEO_WIBE_ANDROID_APP/1.1"
 
     webView.webViewClient = object : WebViewClient() {
       override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
@@ -171,10 +166,9 @@ class MainActivity : AppCompatActivity() {
 
       override fun onPageFinished(view: WebView?, url: String?) {
         super.onPageFinished(view, url)
-        if (!initialRouteApplied) {
-          initialRouteApplied = true
-          navSpinner.setSelection(0, false)
-          runRouteScript(routes.first().script)
+        if (!updateCheckStarted) {
+          updateCheckStarted = true
+          checkForApkUpdates()
         }
       }
     }
@@ -208,20 +202,192 @@ class MainActivity : AppCompatActivity() {
     }
   }
 
-  private fun runRouteScript(script: String) {
-    val wrapped = """
-      (function() {
-        var __go = function() {
-          try {
-            $script
-            if (window.closeMobileNav) { window.closeMobileNav(); }
-          } catch (e) {}
-        };
-        __go();
-        setTimeout(__go, 250);
-        setTimeout(__go, 900);
-      })();
-    """.trimIndent()
-    webView.evaluateJavascript(wrapped, null)
+  private fun checkForApkUpdates() {
+    Thread {
+      val release = fetchLatestApkRelease() ?: return@Thread
+      val isNew = isRemoteBuildNewer(release.versionCode, release.versionName)
+      if (!isNew) return@Thread
+      val deferredCode = updatePrefs.getInt(PREF_DEFERRED_CODE, -1)
+      val deferredName = updatePrefs.getString(PREF_DEFERRED_NAME, "") ?: ""
+      if (deferredCode == release.versionCode && deferredName == release.versionName) return@Thread
+      runOnUiThread {
+        if (isFinishing || isDestroyed) return@runOnUiThread
+        showUpdateDialog(release)
+      }
+    }.start()
+  }
+
+  private fun fetchLatestApkRelease(): ApkRelease? {
+    val endpoint = "${baseOrigin()}/api/mobile/apk/latest?ts=${System.currentTimeMillis()}"
+    var conn: HttpURLConnection? = null
+    return try {
+      conn = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+        requestMethod = "GET"
+        connectTimeout = 12000
+        readTimeout = 12000
+        setRequestProperty("Accept", "application/json")
+      }
+      val code = conn.responseCode
+      if (code !in 200..299) return null
+      val body = conn.inputStream.bufferedReader().use { it.readText() }
+      val json = JSONObject(body)
+      val versionName = json.optString("version", "").trim()
+      val versionCode = json.optInt("version_code", 0)
+      val downloadUrl = resolveDownloadUrl(json.optString("android_download_url", ""))
+      if (versionName.isBlank() || downloadUrl.isBlank()) return null
+      ApkRelease(
+        versionName = versionName,
+        versionCode = versionCode,
+        releasedAt = json.optString("released_at", "").trim(),
+        summary = json.optString("summary", "").trim(),
+        notes = json.optString("notes", "").trim(),
+        downloadUrl = downloadUrl,
+      )
+    } catch (_: Exception) {
+      null
+    } finally {
+      conn?.disconnect()
+    }
+  }
+
+  private fun showUpdateDialog(release: ApkRelease) {
+    val title = getString(R.string.update_title)
+    val details = buildString {
+      append(getString(R.string.update_message, release.versionName))
+      if (release.releasedAt.isNotBlank()) append("\n${release.releasedAt}")
+      if (release.summary.isNotBlank()) append("\n\n${release.summary}")
+      if (release.notes.isNotBlank()) append("\n\n${release.notes}")
+    }
+    AlertDialog.Builder(this)
+      .setTitle(title)
+      .setMessage(details)
+      .setCancelable(true)
+      .setNegativeButton(R.string.update_later) { _, _ ->
+        deferUpdate(release)
+      }
+      .setPositiveButton(R.string.update_install) { _, _ ->
+        updatePrefs.edit()
+          .remove(PREF_DEFERRED_CODE)
+          .remove(PREF_DEFERRED_NAME)
+          .apply()
+        enqueueApkDownload(release)
+      }
+      .show()
+  }
+
+  private fun deferUpdate(release: ApkRelease) {
+    updatePrefs.edit()
+      .putInt(PREF_DEFERRED_CODE, release.versionCode)
+      .putString(PREF_DEFERRED_NAME, release.versionName)
+      .apply()
+  }
+
+  private fun enqueueApkDownload(release: ApkRelease) {
+    val manager = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+    val fileName = "seo-wibe-mobile-${release.versionName.replace(Regex("[^0-9A-Za-z._-]"), "_")}.apk"
+    val request = DownloadManager.Request(Uri.parse(release.downloadUrl))
+      .setTitle(getString(R.string.update_download_title, release.versionName))
+      .setDescription(getString(R.string.update_download_description))
+      .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+      .setAllowedOverMetered(true)
+      .setAllowedOverRoaming(true)
+      .setMimeType("application/vnd.android.package-archive")
+      .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+
+    apkDownloadId = manager.enqueue(request)
+    updatePrefs.edit().putLong(PREF_APK_DOWNLOAD_ID, apkDownloadId).apply()
+    Toast.makeText(this, getString(R.string.update_download_started), Toast.LENGTH_SHORT).show()
+  }
+
+  private fun onApkDownloaded(downloadId: Long) {
+    updatePrefs.edit().remove(PREF_APK_DOWNLOAD_ID).apply()
+    apkDownloadId = -1L
+    val manager = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+    val query = DownloadManager.Query().setFilterById(downloadId)
+    manager.query(query).use { cursor ->
+      if (cursor == null || !cursor.moveToFirst()) return
+      val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+      if (status != DownloadManager.STATUS_SUCCESSFUL) {
+        Toast.makeText(this, getString(R.string.update_download_failed), Toast.LENGTH_LONG).show()
+        return
+      }
+    }
+    val uri = manager.getUriForDownloadedFile(downloadId)
+    if (uri == null) {
+      Toast.makeText(this, getString(R.string.update_download_failed), Toast.LENGTH_LONG).show()
+      return
+    }
+    promptInstallApk(uri)
+  }
+
+  private fun promptInstallApk(uri: Uri) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
+      Toast.makeText(this, getString(R.string.update_allow_unknown_sources), Toast.LENGTH_LONG).show()
+      val settingsIntent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+        data = Uri.parse("package:$packageName")
+      }
+      try {
+        startActivity(settingsIntent)
+      } catch (_: Exception) {
+      }
+      return
+    }
+    val installIntent = Intent(Intent.ACTION_VIEW).apply {
+      setDataAndType(uri, "application/vnd.android.package-archive")
+      addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    try {
+      startActivity(installIntent)
+    } catch (_: Exception) {
+      Toast.makeText(this, getString(R.string.update_install_failed), Toast.LENGTH_LONG).show()
+    }
+  }
+
+  private fun resolveDownloadUrl(raw: String): String {
+    val value = raw.trim()
+    if (value.isBlank()) return ""
+    return if (value.startsWith("http://") || value.startsWith("https://")) value else "${baseOrigin()}${if (value.startsWith("/")) value else "/$value"}"
+  }
+
+  private fun baseOrigin(): String {
+    val base = Uri.parse(getString(R.string.base_url))
+    val scheme = base.scheme ?: "http"
+    val host = base.host ?: return ""
+    val port = if (base.port > 0) ":${base.port}" else ""
+    return "$scheme://$host$port"
+  }
+
+  private fun isRemoteBuildNewer(remoteCode: Int, remoteName: String): Boolean {
+    if (remoteCode > 0 && remoteCode > BuildConfig.VERSION_CODE) return true
+    return compareVersionNames(remoteName, BuildConfig.VERSION_NAME) > 0
+  }
+
+  private fun compareVersionNames(a: String, b: String): Int {
+    val pa = a.split('.').mapNotNull { it.toIntOrNull() }
+    val pb = b.split('.').mapNotNull { it.toIntOrNull() }
+    val max = maxOf(pa.size, pb.size)
+    for (i in 0 until max) {
+      val av = pa.getOrNull(i) ?: 0
+      val bv = pb.getOrNull(i) ?: 0
+      if (av != bv) return av.compareTo(bv)
+    }
+    return 0
+  }
+
+  override fun onDestroy() {
+    super.onDestroy()
+    try {
+      unregisterReceiver(downloadReceiver)
+    } catch (_: Exception) {
+    }
+    filePathCallback?.onReceiveValue(null)
+    filePathCallback = null
+  }
+
+  companion object {
+    private const val PREF_DEFERRED_CODE = "deferred_update_code"
+    private const val PREF_DEFERRED_NAME = "deferred_update_name"
+    private const val PREF_APK_DOWNLOAD_ID = "apk_download_id"
   }
 }

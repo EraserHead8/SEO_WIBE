@@ -452,6 +452,11 @@ function applyTheme(theme) {
     if (sel.value !== nextTheme) sel.value = nextTheme;
     sel.disabled = forcedTheme;
   }
+  const drawerSel = document.getElementById("mobileDrawerThemeSelect");
+  if (drawerSel) {
+    if (drawerSel.value !== nextTheme) drawerSel.value = nextTheme;
+    drawerSel.disabled = forcedTheme;
+  }
 }
 
 function changeTheme() {
@@ -464,16 +469,38 @@ window.changeTheme = changeTheme;
 
 function applyUiThemeSettingsToSelect() {
   const sel = document.getElementById("uiThemeSelect");
-  if (!sel) return;
+  const drawerSel = document.getElementById("mobileDrawerThemeSelect");
+  if (!sel && !drawerSel) return;
+  const targets = [sel, drawerSel].filter(Boolean);
   const allowed = Array.isArray(uiThemeSettings.allowed_themes) && uiThemeSettings.allowed_themes.length
     ? uiThemeSettings.allowed_themes
     : ["classic", "dark", "light", "moon", "newyear", "summer", "autumn", "winter", "spring", "japan", "greenland"];
   const allowedSet = new Set(allowed.map((x) => String(x || "").toLowerCase()));
-  [...sel.options].forEach((opt) => {
-    opt.hidden = !allowedSet.has(String(opt.value || "").toLowerCase());
-    opt.disabled = !allowedSet.has(String(opt.value || "").toLowerCase());
+  targets.forEach((node) => {
+    [...node.options].forEach((opt) => {
+      opt.hidden = !allowedSet.has(String(opt.value || "").toLowerCase());
+      opt.disabled = !allowedSet.has(String(opt.value || "").toLowerCase());
+    });
+    node.disabled = Boolean(uiThemeSettings.force_theme) || !uiThemeSettings.theme_choice_enabled;
   });
-  sel.disabled = Boolean(uiThemeSettings.force_theme) || !uiThemeSettings.theme_choice_enabled;
+}
+
+function syncMobileDrawerSelectors() {
+  const langSel = document.getElementById("uiLangSelect");
+  const drawerLangSel = document.getElementById("mobileDrawerLangSelect");
+  if (langSel && drawerLangSel) {
+    drawerLangSel.innerHTML = langSel.innerHTML;
+    drawerLangSel.value = langSel.value;
+  }
+  const themeSel = document.getElementById("uiThemeSelect");
+  const drawerThemeSel = document.getElementById("mobileDrawerThemeSelect");
+  if (themeSel && drawerThemeSel) {
+    drawerThemeSel.innerHTML = themeSel.innerHTML;
+    if ([...drawerThemeSel.options].some((opt) => opt.value === themeSel.value)) {
+      drawerThemeSel.value = themeSel.value;
+    }
+    drawerThemeSel.disabled = themeSel.disabled;
+  }
 }
 
 function toolbarIconSvg(name) {
@@ -627,6 +654,8 @@ function applyUiLanguage() {
   document.documentElement.setAttribute("lang", lang);
   const langSelect = document.getElementById("uiLangSelect");
   if (langSelect && langSelect.value !== lang) langSelect.value = lang;
+  const drawerLangSelect = document.getElementById("mobileDrawerLangSelect");
+  if (drawerLangSelect && drawerLangSelect.value !== lang) drawerLangSelect.value = lang;
   const authLangSelect = document.getElementById("authLangSelect");
   if (authLangSelect && authLangSelect.value !== lang) authLangSelect.value = lang;
 
@@ -794,13 +823,14 @@ function applyUiLanguage() {
   setText("#helpSubtabDocs .grid-2 button", isEn ? "Refresh Help" : "Обновить справку");
   setText("#helpSubtabAssistant .panel h3", isEn ? "AI assistant (any question)" : "AI помощник (любой вопрос)");
   setText("#helpSubtabAssistant .grid-3 button", isEn ? "Ask" : "Спросить");
-  setText("#helpSubtabDownloads .panel h3", isEn ? "Downloads and versions" : "Загрузки и версии");
+  setText("#helpSubtabDownloads .panel h3", isEn ? "Android APK versions" : "Android APK версии");
   setText("#teamModalSaveBtn", isEn ? "Save" : "Сохранить");
   setText("#teamModalDeleteBtn", isEn ? "Delete" : "Удалить");
   setText("#teamMemberEditModal .actions .btn-secondary", isEn ? "Cancel" : "Отмена");
   setText("#helpSubtabDocsBtn", isEn ? "Help" : "Справка");
   setText("#helpSubtabAssistantBtn", isEn ? "AI assistant" : "AI помощник");
   setText("#helpSubtabDownloadsBtn", isEn ? "Downloads" : "Загрузки");
+  setText("#mobileDrawerQuickNavLabel", isEn ? "Section" : "Раздел");
   setText("#reviewsSubtabReviewsBtn", isEn ? "Reviews" : "Отзывы");
   setText("#reviewsSubtabQuestionsBtn", isEn ? "Questions" : "Вопросы");
   setText("#reviewsSubtabReturnsBtn", isEn ? "Returns" : "Возвраты");
@@ -1056,6 +1086,7 @@ function applyUiLanguage() {
       if (opt) opt.textContent = label;
     }
   }
+  syncMobileDrawerSelectors();
 
   const helpModule = document.getElementById("helpModuleSelect");
   if (helpModule) delete helpModule.dataset.ready;
@@ -1106,7 +1137,25 @@ function changeUiLang() {
   if (currentTab === "profile") loadProfile();
 }
 
+function changeUiLangFromDrawer() {
+  const drawer = document.getElementById("mobileDrawerLangSelect");
+  const top = document.getElementById("uiLangSelect");
+  if (drawer && top) top.value = drawer.value;
+  changeUiLang();
+}
+
+function changeThemeFromDrawer() {
+  if (Boolean(uiThemeSettings.force_theme) || !uiThemeSettings.theme_choice_enabled) return;
+  const drawer = document.getElementById("mobileDrawerThemeSelect");
+  const top = document.getElementById("uiThemeSelect");
+  if (!drawer || !top) return;
+  top.value = drawer.value || "classic";
+  changeTheme();
+}
+
 window.changeUiLang = changeUiLang;
+window.changeUiLangFromDrawer = changeUiLangFromDrawer;
+window.changeThemeFromDrawer = changeThemeFromDrawer;
 
 async function requestJson(url, opts = {}) {
   const timeoutMs = Math.max(0, Number(opts.timeoutMs || 0));
@@ -2148,6 +2197,7 @@ function openSocialChatFromBell() {
   currentSocialSubtab = "chat";
   const socialBtn = document.querySelector(".nav-btn[data-tab='social']");
   showTab("social", socialBtn || null);
+  closeMobileNav();
   const trySwitch = () => {
     if (typeof window.switchSocialSubtab !== "function") return false;
     window.switchSocialSubtab("chat", true);
@@ -2178,6 +2228,12 @@ function closeMobileNav(evt = null) {
   if (btn) btn.setAttribute("aria-expanded", "false");
 }
 
+function getMobileQuickNavSelects() {
+  return ["mobileQuickNav", "mobileDrawerQuickNav"]
+    .map((id) => document.getElementById(id))
+    .filter(Boolean);
+}
+
 function getMobileQuickNavOptions() {
   const isEn = currentLang === "en";
   return [
@@ -2194,22 +2250,21 @@ function getMobileQuickNavOptions() {
 
 function refreshMobileQuickNavOptions() {
   if (!mobileClientMode) return;
-  const select = document.getElementById("mobileQuickNav");
-  if (!select) return;
-  const previous = String(select.value || "").trim();
   const options = getMobileQuickNavOptions();
-  select.innerHTML = options
-    .map((row) => `<option value="${escapeHtml(row.value)}">${escapeHtml(row.label)}</option>`)
-    .join("");
-  if ([...select.options].some((opt) => opt.value === previous)) {
-    select.value = previous;
-  }
+  const values = getMobileQuickNavSelects().map((node) => String(node.value || "").trim());
+  getMobileQuickNavSelects().forEach((select, idx) => {
+    const previous = values[idx] || "";
+    select.innerHTML = options
+      .map((row) => `<option value="${escapeHtml(row.value)}">${escapeHtml(row.label)}</option>`)
+      .join("");
+    if ([...select.options].some((opt) => opt.value === previous)) {
+      select.value = previous;
+    }
+  });
 }
 
 function syncMobileQuickNavSelection() {
   if (!mobileClientMode) return;
-  const select = document.getElementById("mobileQuickNav");
-  if (!select) return;
   let value = "";
   if (currentTab === "social") {
     const sub = ["chat", "tasks", "notes", "calculator", "calendar"].includes(String(currentSocialSubtab || ""))
@@ -2221,16 +2276,26 @@ function syncMobileQuickNavSelection() {
   } else if (currentTab === "profile") {
     value = "profile_main";
   }
-  if (value && [...select.options].some((opt) => opt.value === value)) {
-    select.value = value;
-  }
+  if (!value) return;
+  getMobileQuickNavSelects().forEach((select) => {
+    if ([...select.options].some((opt) => opt.value === value)) {
+      select.value = value;
+    }
+  });
 }
 
-function onMobileQuickNavChanged() {
+function onMobileQuickNavChanged(sourceId = "mobileQuickNav") {
   if (!mobileClientMode) return;
-  const select = document.getElementById("mobileQuickNav");
+  const select = typeof sourceId === "string"
+    ? document.getElementById(sourceId)
+    : (sourceId?.target || document.getElementById("mobileQuickNav"));
   const value = String(select?.value || "").trim();
   if (!value) return;
+  getMobileQuickNavSelects().forEach((node) => {
+    if (node !== select && [...node.options].some((opt) => opt.value === value)) {
+      node.value = value;
+    }
+  });
   if (value.startsWith("social_")) {
     const sub = value.replace(/^social_/, "") || "chat";
     showTab("social", document.querySelector(".nav-btn[data-tab='social']"));
@@ -2242,25 +2307,30 @@ function onMobileQuickNavChanged() {
     if (!runSwitch()) {
       setTimeout(runSwitch, 160);
     }
+    closeMobileNav();
     return;
   }
   if (value.startsWith("reviews_")) {
     const sub = value.endsWith("_questions") ? "questions" : "reviews";
     showTab("reviews", document.querySelector(".nav-btn[data-tab='reviews']"));
     switchReviewsSubtab(sub, true);
+    closeMobileNav();
     return;
   }
   if (value === "profile_main") {
     showTab("profile", document.querySelector(".nav-btn[data-tab='profile']"));
+    closeMobileNav();
   }
 }
 
 function setupMobileClientMode() {
   if (!mobileClientMode) return;
   document.body.classList.add("mobile-client-mode");
+  const drawer = document.getElementById("mobileDrawerControls");
+  if (drawer) drawer.classList.remove("hidden");
   const select = document.getElementById("mobileQuickNav");
-  if (!select) return;
-  select.classList.remove("hidden");
+  if (select) select.classList.remove("hidden");
+  syncMobileDrawerSelectors();
   refreshMobileQuickNavOptions();
   syncMobileQuickNavSelection();
 }
@@ -2640,14 +2710,36 @@ function renderProfileMenuIntro() {
   nickNode.textContent = String(me?.actor_nick || me?.email || "-");
 }
 
+function renderMobileDrawerUser() {
+  const btn = document.getElementById("mobileDrawerProfileBtn");
+  if (!btn) return;
+  if (!me) {
+    btn.classList.add("hidden");
+    return;
+  }
+  const name = String(me.actor_nick || me.email || "-");
+  const initials = computeAvatarInitials(name, me.email);
+  const avatarText = document.getElementById("mobileDrawerAvatarText");
+  const avatarName = document.getElementById("mobileDrawerAvatarName");
+  const avatarImg = document.getElementById("mobileDrawerAvatarImg");
+  if (avatarText) avatarText.textContent = initials;
+  if (avatarName) avatarName.textContent = name;
+  setTopbarAvatarImage(avatarImg, String(me.avatar_url || "").trim(), { fallbackTextNode: avatarText });
+  btn.classList.remove("hidden");
+}
+
 function renderTopbarUser() {
   const btn = document.getElementById("topbarAvatarBtn");
   const popover = document.getElementById("topbarUserPopover");
-  if (!btn || !popover) return;
+  if (!btn || !popover) {
+    renderMobileDrawerUser();
+    return;
+  }
   if (!me) {
     btn.classList.add("hidden");
     popover.classList.add("hidden");
     renderProfileMenuIntro();
+    renderMobileDrawerUser();
     return;
   }
   const name = String(me.actor_nick || me.email || "-");
@@ -2676,6 +2768,7 @@ function renderTopbarUser() {
   if (popEmail) popEmail.textContent = String(me.email || "-");
   renderProfileMenuIntro();
   btn.classList.remove("hidden");
+  renderMobileDrawerUser();
 }
 
 function toggleTopbarUserPopover() {
@@ -9331,11 +9424,10 @@ async function loadHelpReleases() {
   }
   const currentRow = rows.find((x) => Boolean(x?.current)) || rows[0];
   const currentVersion = escapeHtml(String(currentRow?.version || "-"));
+  const currentCode = Number(currentRow?.android_version_code || 0);
   const releaseDate = escapeHtml(String(currentRow?.released_at || "-"));
   const currentSummary = escapeHtml(String(currentRow?.summary || ""));
-  const appEntryUrl = String(currentRow?.app_entry_url || "/mobile");
-  const downloadUrl = String(currentRow?.android_download_url || appEntryUrl || "/mobile");
-  const isApkDownload = /\.apk(?:$|\?)/i.test(downloadUrl);
+  const downloadUrl = String(currentRow?.android_download_url || "/static/downloads/seo-wibe-mobile-latest.apk");
   const downloadName = escapeHtml(String(currentRow?.android_download_name || "SEO WIBE Mobile"));
   const diffItems = Array.isArray(currentRow?.diff_from_previous)
     ? currentRow.diff_from_previous.filter(Boolean).map((line) => `<li>${escapeHtml(String(line))}</li>`).join("")
@@ -9346,20 +9438,18 @@ async function loadHelpReleases() {
       <header class="help-card-head">
         <div>
           <h4>${lang === "en" ? "Current version" : "Текущая версия"} ${currentVersion}</h4>
-          <small>${releaseDate}</small>
+          <small>${releaseDate}${currentCode > 0 ? ` • code ${currentCode}` : ""}</small>
         </div>
         <div class="help-card-actions">
           <a class="btn-secondary help-open-btn" href="${escapeHtml(downloadUrl)}" target="_blank" rel="noopener noreferrer">
-            ${isApkDownload
-    ? (lang === "en" ? "Download Android APK" : "Скачать Android APK")
-    : (lang === "en" ? "Open mobile app" : "Открыть мобильное приложение")}
+            ${lang === "en" ? "Download Android APK" : "Скачать Android APK"}
           </a>
         </div>
       </header>
       <div class="help-card-body">
         <section class="help-callout main"><strong>${currentSummary || "-"}</strong></section>
         <section class="help-block">
-          <h5>${lang === "en" ? "Android client" : "Android клиент"}</h5>
+          <h5>${lang === "en" ? "Android APK" : "Android APK"}</h5>
           <p>${downloadName}</p>
           ${notesText ? `<p>${notesText}</p>` : ""}
         </section>
@@ -9370,6 +9460,7 @@ async function loadHelpReleases() {
 
   const cards = rows.map((row) => {
     const version = escapeHtml(String(row?.version || "-"));
+    const versionCode = Number(row?.android_version_code || 0);
     const date = escapeHtml(String(row?.released_at || "-"));
     const summary = escapeHtml(String(row?.summary || ""));
     const changes = Array.isArray(row?.changes)
@@ -9380,7 +9471,7 @@ async function loadHelpReleases() {
         <header class="help-card-head">
           <div>
             <h4>${version}</h4>
-            <small>${date}</small>
+            <small>${date}${versionCode > 0 ? ` • code ${versionCode}` : ""}</small>
           </div>
         </header>
         <div class="help-card-body">
@@ -9394,8 +9485,8 @@ async function loadHelpReleases() {
   listHost.innerHTML = `
     <div class="help-header">
       <div class="help-header-title">
-        <h4>${lang === "en" ? "Version history" : "История версий"}</h4>
-        <p>${lang === "en" ? "Latest and previous builds with short release notes." : "Текущие и прошлые сборки с кратким описанием изменений."}</p>
+        <h4>${lang === "en" ? "APK version history" : "История APK версий"}</h4>
+        <p>${lang === "en" ? "Only Android APK releases with short release notes." : "Здесь отображаются только Android APK версии и краткие примечания к релизу."}</p>
       </div>
     </div>
     <div class="help-card-list">${cards}</div>
