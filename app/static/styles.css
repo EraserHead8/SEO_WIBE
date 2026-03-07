@@ -6391,6 +6391,14 @@ body[data-theme="dark"] .landing-band .band-stats span {
     color-mix(in oklab, var(--panel-bg) 92%, #ffffff);
 }
 
+.social-chat-loading {
+  margin: auto;
+  padding: 10px 14px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--panel-bg) 84%, #ffffff);
+}
+
 .social-chat-load {
   display: flex;
   justify-content: center;

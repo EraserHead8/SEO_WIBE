@@ -34,9 +34,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import org.json.JSONObject
@@ -52,8 +50,10 @@ class MainActivity : AppCompatActivity() {
   private var filePathCallback: ValueCallback<Array<Uri>>? = null
   private var apkDownloadId: Long = -1L
   private var updateCheckStarted = false
+  private var pendingOpenSocial = false
+  private var pendingOpenThreadId = 0
   private val updatePrefs by lazy { getSharedPreferences(PREF_UPDATES, Context.MODE_PRIVATE) }
-  private val authPrefs by lazy { getSharedPreferences(PREF_AUTH, Context.MODE_PRIVATE) }
+  private val authPrefs by lazy { getSharedPreferences(BackgroundNotifyWorker.PREF_AUTH, Context.MODE_PRIVATE) }
   private val allowedHosts by lazy {
     val host = Uri.parse(getString(R.string.base_url)).host?.lowercase(Locale.ROOT).orEmpty()
     setOf(host, "127.0.0.1", "localhost")
@@ -73,7 +73,6 @@ class MainActivity : AppCompatActivity() {
     fun updateAuth(token: String?, lang: String?) {
       persistAuthSnapshot(token = token, lang = lang)
       syncCookieSnapshot()
-      scheduleBackgroundNotifications(runNow = true)
     }
   }
 
@@ -122,6 +121,7 @@ class MainActivity : AppCompatActivity() {
     registerDownloadReceiver()
     requestNotificationPermissionIfNeeded()
     scheduleBackgroundNotifications(runNow = true)
+    handleLaunchIntent(intent)
 
     onBackPressedDispatcher.addCallback(
       this,
@@ -143,6 +143,12 @@ class MainActivity : AppCompatActivity() {
     super.onResume()
     syncCookieSnapshot()
     scheduleBackgroundNotifications(runNow = true)
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    handleLaunchIntent(intent)
   }
 
   private fun registerDownloadReceiver() {
@@ -177,16 +183,7 @@ class MainActivity : AppCompatActivity() {
       periodic,
     )
     if (runNow) {
-      val immediate = OneTimeWorkRequestBuilder<BackgroundNotifyWorker>()
-        .setConstraints(constraints)
-        .setInitialDelay(20, TimeUnit.SECONDS)
-        .addTag(WORK_BG_NOTIF_IMMEDIATE)
-        .build()
-      manager.enqueueUniqueWork(
-        WORK_BG_NOTIF_IMMEDIATE,
-        ExistingWorkPolicy.REPLACE,
-        immediate,
-      )
+      BackgroundNotifyWorker.enqueueSoon(applicationContext, 12)
     }
   }
 
@@ -236,6 +233,7 @@ class MainActivity : AppCompatActivity() {
         injectAuthBridgeScript()
         syncCookieSnapshot()
         scheduleBackgroundNotifications(runNow = true)
+        openSocialFromNotificationIfNeeded()
         if (!updateCheckStarted) {
           updateCheckStarted = true
           checkForApkUpdates()
@@ -305,13 +303,54 @@ class MainActivity : AppCompatActivity() {
     }
   }
 
+  private fun handleLaunchIntent(intent: Intent?) {
+    if (intent == null) return
+    val openSocial = intent.getBooleanExtra("open_social", false)
+    val threadId = intent.getIntExtra("open_social_thread_id", 0)
+    if (!openSocial && threadId <= 0) return
+    pendingOpenSocial = true
+    pendingOpenThreadId = if (threadId > 0) threadId else 0
+    if (::webView.isInitialized && !webView.url.isNullOrBlank()) {
+      openSocialFromNotificationIfNeeded()
+    }
+  }
+
+  private fun openSocialFromNotificationIfNeeded() {
+    if (!pendingOpenSocial) return
+    val threadId = pendingOpenThreadId
+    val js = """
+      (function() {
+        try {
+          var socialBtn = document.querySelector(".nav-btn[data-tab='social']");
+          if (typeof window.showTab === "function") {
+            window.showTab("social", socialBtn || null);
+          }
+          if (typeof window.switchSocialSubtab === "function") {
+            window.switchSocialSubtab("chat");
+          }
+          var targetId = ${threadId.coerceAtLeast(0)};
+          if (targetId > 0 && typeof window.socialSelectThread === "function") {
+            window.setTimeout(function() { window.socialSelectThread(targetId); }, 220);
+          }
+        } catch (e) {}
+      })();
+    """.trimIndent()
+    try {
+      webView.evaluateJavascript(js, null)
+    } catch (_: Exception) {
+      return
+    }
+    pendingOpenSocial = false
+    pendingOpenThreadId = 0
+  }
+
   private fun persistAuthSnapshot(token: String?, lang: String?) {
     val cleanedToken = (token ?: "").trim().trim('"')
     val cleanedLang = (lang ?: "").trim().trim('"')
     authPrefs.edit()
-      .putString(PREF_AUTH_TOKEN, cleanedToken)
+      .putString(BackgroundNotifyWorker.PREF_AUTH_TOKEN, cleanedToken)
       .putString(PREF_AUTH_LANG, if (cleanedLang.isBlank()) "ru" else cleanedLang)
-      .putString(PREF_AUTH_BASE_ORIGIN, baseOrigin())
+      .putString(BackgroundNotifyWorker.PREF_AUTH_BASE_ORIGIN, baseOrigin())
       .apply()
   }
 
@@ -319,8 +358,8 @@ class MainActivity : AppCompatActivity() {
     try {
       val cookie = CookieManager.getInstance().getCookie(getString(R.string.base_url)) ?: ""
       authPrefs.edit()
-        .putString(PREF_AUTH_COOKIE, cookie)
-        .putString(PREF_AUTH_BASE_ORIGIN, baseOrigin())
+        .putString(BackgroundNotifyWorker.PREF_AUTH_COOKIE, cookie)
+        .putString(BackgroundNotifyWorker.PREF_AUTH_BASE_ORIGIN, baseOrigin())
         .apply()
     } catch (_: Exception) {
     }
@@ -512,15 +551,10 @@ class MainActivity : AppCompatActivity() {
   companion object {
     private const val REQ_NOTIFICATIONS = 1201
     private const val PREF_UPDATES = "seo_wibe_apk_updates"
-    private const val PREF_AUTH = "seo_wibe_mobile_auth"
     private const val PREF_DEFERRED_CODE = "deferred_update_code"
     private const val PREF_DEFERRED_NAME = "deferred_update_name"
     private const val PREF_APK_DOWNLOAD_ID = "apk_download_id"
-    private const val PREF_AUTH_TOKEN = "auth_token"
-    private const val PREF_AUTH_COOKIE = "auth_cookie"
     private const val PREF_AUTH_LANG = "auth_lang"
-    private const val PREF_AUTH_BASE_ORIGIN = "base_origin"
     private const val WORK_BG_NOTIF_PERIODIC = "seo_wibe_bg_notif_periodic"
-    private const val WORK_BG_NOTIF_IMMEDIATE = "seo_wibe_bg_notif_immediate"
   }
 }

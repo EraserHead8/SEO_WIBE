@@ -6,12 +6,18 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
-import android.content.pm.PackageManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.app.RemoteInput
 import androidx.core.content.ContextCompat
+import androidx.work.Constraints
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import androidx.work.Worker
 import androidx.work.WorkerParameters
 import org.json.JSONArray
@@ -19,6 +25,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 class BackgroundNotifyWorker(
   appContext: Context,
@@ -26,28 +33,27 @@ class BackgroundNotifyWorker(
 ) : Worker(appContext, params) {
 
   override fun doWork(): Result {
-    return try {
+    var result: Result
+    try {
       ensureNotificationChannel()
-      val prefs = applicationContext.getSharedPreferences(PREF_AUTH, Context.MODE_PRIVATE)
-      val token = (prefs.getString(PREF_AUTH_TOKEN, "") ?: "").trim()
-      val cookie = (prefs.getString(PREF_AUTH_COOKIE, "") ?: "").trim()
-      val baseOrigin = (prefs.getString(PREF_AUTH_BASE_ORIGIN, "") ?: "").trim().ifBlank {
-        inferBaseOrigin()
-      }
-      if (baseOrigin.isBlank() || (token.isBlank() && cookie.isBlank())) {
+      val auth = readAuthSnapshot()
+      if (auth.baseOrigin.isBlank() || (auth.token.isBlank() && auth.cookie.isBlank())) {
+        refreshBadgeSummary(0)
         return Result.success()
       }
 
+      val prefs = applicationContext.getSharedPreferences(PREF_AUTH, Context.MODE_PRIVATE)
       val lastId = prefs.getLong(PREF_LAST_NOTIFIED_ID, 0L)
-      val endpoint = "$baseOrigin/api/social/notifications?since_id=$lastId&limit=80"
-      val payload = fetchJson(endpoint, token, cookie) ?: return Result.retry()
+      val endpoint = "${auth.baseOrigin}/api/social/notifications?since_id=$lastId&limit=80"
+      val payload = fetchJson(endpoint, auth) ?: return Result.retry()
+      val unreadTotal = payload.optInt("unread", 0).coerceAtLeast(0)
       val rows = payload.optJSONArray("rows") ?: JSONArray()
-      if (rows.length() <= 0) return Result.success()
-
       val maxSeenId = maxNotificationId(rows)
+
       if (lastId <= 0L) {
         // First sync anchors on latest notification to avoid flooding old history.
-        prefs.edit().putLong(PREF_LAST_NOTIFIED_ID, maxSeenId).apply()
+        if (maxSeenId > 0L) prefs.edit().putLong(PREF_LAST_NOTIFIED_ID, maxSeenId).apply()
+        refreshBadgeSummary(unreadTotal)
         return Result.success()
       }
 
@@ -56,19 +62,39 @@ class BackgroundNotifyWorker(
         val row = rows.optJSONObject(i) ?: continue
         val id = row.optLong("id", 0L)
         if (id <= lastId) continue
-        postNotification(row, id)
+        postNotification(row, id, unreadTotal)
         if (id > newestId) newestId = id
       }
       if (newestId > lastId) {
         prefs.edit().putLong(PREF_LAST_NOTIFIED_ID, newestId).apply()
       }
-      Result.success()
+      refreshBadgeSummary(unreadTotal)
+      result = Result.success()
     } catch (_: Exception) {
-      Result.retry()
+      result = Result.retry()
+    } finally {
+      enqueueSoon(applicationContext, 120)
     }
+    return result
   }
 
-  private fun fetchJson(endpoint: String, token: String, cookie: String): JSONObject? {
+  private data class AuthSnapshot(
+    val token: String,
+    val cookie: String,
+    val baseOrigin: String,
+  )
+
+  private fun readAuthSnapshot(): AuthSnapshot {
+    val prefs = applicationContext.getSharedPreferences(PREF_AUTH, Context.MODE_PRIVATE)
+    val token = (prefs.getString(PREF_AUTH_TOKEN, "") ?: "").trim()
+    val cookie = (prefs.getString(PREF_AUTH_COOKIE, "") ?: "").trim()
+    val baseOrigin = (prefs.getString(PREF_AUTH_BASE_ORIGIN, "") ?: "").trim().ifBlank {
+      inferBaseOrigin()
+    }
+    return AuthSnapshot(token = token, cookie = cookie, baseOrigin = baseOrigin)
+  }
+
+  private fun fetchJson(endpoint: String, auth: AuthSnapshot): JSONObject? {
     var conn: HttpURLConnection? = null
     return try {
       conn = (URL(endpoint).openConnection() as HttpURLConnection).apply {
@@ -76,8 +102,8 @@ class BackgroundNotifyWorker(
         connectTimeout = 12000
         readTimeout = 12000
         setRequestProperty("Accept", "application/json")
-        if (token.isNotBlank()) setRequestProperty("Authorization", "Bearer $token")
-        if (cookie.isNotBlank()) setRequestProperty("Cookie", cookie)
+        if (auth.token.isNotBlank()) setRequestProperty("Authorization", "Bearer ${auth.token}")
+        if (auth.cookie.isNotBlank()) setRequestProperty("Cookie", auth.cookie)
       }
       val code = conn.responseCode
       if (code == 401 || code == 403) return JSONObject()
@@ -101,7 +127,7 @@ class BackgroundNotifyWorker(
     return maxId
   }
 
-  private fun postNotification(row: JSONObject, id: Long) {
+  private fun postNotification(row: JSONObject, id: Long, unreadCount: Int) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
       val granted = ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
       if (!granted) return
@@ -109,27 +135,30 @@ class BackgroundNotifyWorker(
     val titleRaw = row.optString("title", "").trim()
     val bodyRaw = row.optString("body", "").trim()
     val kind = row.optString("kind", "").trim().lowercase(Locale.ROOT)
+    val payload = row.optJSONObject("payload") ?: JSONObject()
+    val threadId = payload.optInt("thread_id", 0)
     val title = if (titleRaw.isNotBlank()) titleRaw else kindFallbackTitle(kind)
     val body = if (bodyRaw.isNotBlank()) bodyRaw else "SEO WIBE"
 
-    val intent = Intent(applicationContext, MainActivity::class.java).apply {
+    val openIntent = Intent(applicationContext, MainActivity::class.java).apply {
       flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
       data = Uri.parse("seo-wibe://notification/$id")
       putExtra("open_social", true)
+      if (threadId > 0) putExtra("open_social_thread_id", threadId)
     }
-    val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+    val openFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     } else {
       PendingIntent.FLAG_UPDATE_CURRENT
     }
-    val pendingIntent = PendingIntent.getActivity(
+    val openPendingIntent = PendingIntent.getActivity(
       applicationContext,
-      id.toInt(),
-      intent,
-      pendingIntentFlags,
+      requestCodeFrom(id, 101),
+      openIntent,
+      openFlags,
     )
 
-    val notification = NotificationCompat.Builder(applicationContext, CHANNEL_SOCIAL)
+    val builder = NotificationCompat.Builder(applicationContext, CHANNEL_SOCIAL)
       .setSmallIcon(android.R.drawable.stat_notify_chat)
       .setContentTitle(title)
       .setContentText(body)
@@ -137,10 +166,89 @@ class BackgroundNotifyWorker(
       .setAutoCancel(true)
       .setPriority(NotificationCompat.PRIORITY_HIGH)
       .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-      .setContentIntent(pendingIntent)
+      .setContentIntent(openPendingIntent)
+      .setGroup(NOTIFICATION_GROUP_SOCIAL)
+      .setNumber(unreadCount.coerceAtLeast(0))
+      .setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
+
+    if ((kind.contains("chat") || kind.contains("message")) && threadId > 0) {
+      val replyIntent = Intent(applicationContext, NotificationReplyReceiver::class.java).apply {
+        action = ACTION_REPLY_CHAT
+        putExtra(EXTRA_THREAD_ID, threadId)
+        putExtra(EXTRA_NOTIFICATION_ID, requestCodeFrom(id, 11))
+      }
+      val replyFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+      } else {
+        PendingIntent.FLAG_UPDATE_CURRENT
+      }
+      val replyPendingIntent = PendingIntent.getBroadcast(
+        applicationContext,
+        requestCodeFrom(id, 202),
+        replyIntent,
+        replyFlags,
+      )
+      val remoteInput = RemoteInput.Builder(KEY_TEXT_REPLY)
+        .setLabel("Ответить")
+        .build()
+      val replyAction = NotificationCompat.Action.Builder(
+        android.R.drawable.ic_menu_send,
+        "Ответить",
+        replyPendingIntent,
+      )
+        .addRemoteInput(remoteInput)
+        .setAllowGeneratedReplies(true)
+        .build()
+      builder.addAction(replyAction)
+    }
+
+    NotificationManagerCompat.from(applicationContext).notify(requestCodeFrom(id, 11), builder.build())
+  }
+
+  private fun refreshBadgeSummary(unreadCount: Int) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      val granted = ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+      if (!granted) return
+    }
+    val manager = NotificationManagerCompat.from(applicationContext)
+    val safeUnread = unreadCount.coerceAtLeast(0)
+    if (safeUnread <= 0) {
+      manager.cancel(NOTIFICATION_ID_SUMMARY)
+      return
+    }
+
+    val openIntent = Intent(applicationContext, MainActivity::class.java).apply {
+      flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+      putExtra("open_social", true)
+    }
+    val openFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    } else {
+      PendingIntent.FLAG_UPDATE_CURRENT
+    }
+    val openPendingIntent = PendingIntent.getActivity(
+      applicationContext,
+      9091,
+      openIntent,
+      openFlags,
+    )
+
+    val summary = NotificationCompat.Builder(applicationContext, CHANNEL_SOCIAL)
+      .setSmallIcon(android.R.drawable.stat_notify_chat)
+      .setContentTitle("SEO WIBE")
+      .setContentText("Новых уведомлений: $safeUnread")
+      .setAutoCancel(true)
+      .setOnlyAlertOnce(true)
+      .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+      .setCategory(NotificationCompat.CATEGORY_STATUS)
+      .setGroup(NOTIFICATION_GROUP_SOCIAL)
+      .setGroupSummary(true)
+      .setNumber(safeUnread)
+      .setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
+      .setContentIntent(openPendingIntent)
       .build()
 
-    NotificationManagerCompat.from(applicationContext).notify(id.toInt(), notification)
+    manager.notify(NOTIFICATION_ID_SUMMARY, summary)
   }
 
   private fun kindFallbackTitle(kind: String): String {
@@ -163,8 +271,10 @@ class BackgroundNotifyWorker(
       NotificationManager.IMPORTANCE_HIGH,
     ).apply {
       description = "Сообщения чата, задачи и напоминания"
+      setShowBadge(true)
       enableLights(true)
       enableVibration(true)
+      lockscreenVisibility = NotificationCompat.VISIBILITY_PRIVATE
     }
     manager.createNotificationChannel(channel)
   }
@@ -177,12 +287,42 @@ class BackgroundNotifyWorker(
     return "$scheme://$host$port"
   }
 
+  private fun requestCodeFrom(id: Long, salt: Int): Int {
+    val base = (id and 0x7FFFFFFF).toInt()
+    return base xor salt
+  }
+
   companion object {
-    private const val PREF_AUTH = "seo_wibe_mobile_auth"
-    private const val PREF_AUTH_TOKEN = "auth_token"
-    private const val PREF_AUTH_COOKIE = "auth_cookie"
-    private const val PREF_AUTH_BASE_ORIGIN = "base_origin"
+    const val PREF_AUTH = "seo_wibe_mobile_auth"
+    const val PREF_AUTH_TOKEN = "auth_token"
+    const val PREF_AUTH_COOKIE = "auth_cookie"
+    const val PREF_AUTH_BASE_ORIGIN = "base_origin"
     private const val PREF_LAST_NOTIFIED_ID = "last_notified_id"
-    private const val CHANNEL_SOCIAL = "seo_wibe_social_notifications"
+    const val CHANNEL_SOCIAL = "seo_wibe_social_notifications"
+
+    const val ACTION_REPLY_CHAT = "com.seowibe.mobile.ACTION_REPLY_CHAT"
+    const val EXTRA_THREAD_ID = "extra_thread_id"
+    const val EXTRA_NOTIFICATION_ID = "extra_notification_id"
+    const val KEY_TEXT_REPLY = "key_text_reply"
+
+    private const val WORK_BG_NOTIF_LOOP = "seo_wibe_bg_notif_loop"
+    private const val NOTIFICATION_GROUP_SOCIAL = "seo_wibe_group_social"
+    private const val NOTIFICATION_ID_SUMMARY = 9001
+
+    fun enqueueSoon(context: Context, delaySeconds: Long = 20L) {
+      val constraints = Constraints.Builder()
+        .setRequiredNetworkType(NetworkType.CONNECTED)
+        .build()
+      val request = OneTimeWorkRequestBuilder<BackgroundNotifyWorker>()
+        .setConstraints(constraints)
+        .setInitialDelay(delaySeconds.coerceAtLeast(5), TimeUnit.SECONDS)
+        .addTag(WORK_BG_NOTIF_LOOP)
+        .build()
+      WorkManager.getInstance(context).enqueueUniqueWork(
+        WORK_BG_NOTIF_LOOP,
+        ExistingWorkPolicy.REPLACE,
+        request,
+      )
+    }
   }
 }

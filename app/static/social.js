@@ -14,6 +14,11 @@ let socialState = {
   chatHasMore: true,
   chatRefreshTimer: null,
   chatSearch: "",
+  chatThreadsSignature: "",
+  chatMessagesSignatureByThread: {},
+  chatMessagesInflightByThread: {},
+  chatMessagesRequestSeqByThread: {},
+  loadingMessagesThreadId: 0,
   actors: [],
   projects: [],
   tasks: [],
@@ -487,6 +492,8 @@ function resetSocialState() {
     chatSearch: "",
     chatThreadsSignature: "",
     chatMessagesSignatureByThread: {},
+    chatMessagesInflightByThread: {},
+    chatMessagesRequestSeqByThread: {},
     toastsSeen: new Set(),
     currencyRates: null,
     currencyRatesStamp: 0,
@@ -532,16 +539,18 @@ function switchSocialSubtab(tab, loadNow = true) {
   if (safe !== "chat") socialSetChatView(false);
   if (safe === "games") socialRenderGames();
   if (safe === "chat") {
-    socialLoadThreads({ ensureCurrentMessages: true });
+    socialLoadThreads({ ensureCurrentMessages: true }).catch(() => null);
     if (socialState.currentThreadId) {
-      socialLoadMessages(socialState.currentThreadId, { silent: true }).catch(() => null);
+      socialLoadMessages(socialState.currentThreadId, { silent: true, bypassUnchanged: true }).catch(() => null);
     }
     if (!socialState.chatRefreshTimer) {
       socialState.chatRefreshTimer = setInterval(() => {
         if (document.hidden) return;
         if (currentTab === "social" && socialState.currentSubtab === "chat") {
-          socialLoadThreads({ silent: true, ensureCurrentMessages: true });
-          if (socialState.currentThreadId) socialLoadMessages(socialState.currentThreadId, { silent: true });
+          socialLoadThreads({ silent: true, ensureCurrentMessages: true }).catch(() => null);
+          if (socialState.currentThreadId) {
+            socialLoadMessages(socialState.currentThreadId, { silent: true }).catch(() => null);
+          }
         }
       }, 12000);
     }
@@ -1411,7 +1420,6 @@ async function socialLoadThreads(opts = {}) {
       Number(thread?.unread || 0),
       Number(last?.id || 0),
       String(last?.updated_at || last?.created_at || ""),
-      String(thread?.updated_at || ""),
       String(thread?.title || ""),
     ].join("|");
   }).join(";");
@@ -1436,13 +1444,16 @@ async function socialLoadThreads(opts = {}) {
     if (current) socialSetChatHeader(current);
   }
   if (socialState.currentThreadId && opts.ensureCurrentMessages) {
-    socialLoadMessages(Number(socialState.currentThreadId), { silent: true }).catch(() => null);
+    await socialLoadMessages(
+      Number(socialState.currentThreadId),
+      { silent: true, bypassUnchanged: true }
+    ).catch(() => null);
   }
   if ((!socialState.currentThreadId || selectionMissing) && data.length) {
     const lastPreferred = Number(socialState.chatLastThreadId || 0);
     const preferred = data.find((x) => Number(x.id) === lastPreferred) || data[0];
     if (preferred) {
-      socialSelectThread(Number(preferred.id || 0));
+      await socialSelectThread(Number(preferred.id || 0), { bypassUnchanged: true });
     }
   }
 }
@@ -1662,7 +1673,7 @@ function socialSetChatHeader(row) {
   }
 }
 
-async function socialSelectThread(threadId) {
+async function socialSelectThread(threadId, opts = {}) {
   const id = Number(threadId || 0);
   if (!id) return;
   socialState.currentThreadId = id;
@@ -1674,7 +1685,14 @@ async function socialSelectThread(threadId) {
   socialSetChatHeader(row);
   socialRenderThreads();
   socialSetChatView(true);
-  await socialLoadMessages(id, { forceBottom: true });
+  const host = document.getElementById("socialChatMessages");
+  if (host && Number(socialState.currentThreadId || 0) === id) {
+    host.innerHTML = `<div class="hint social-chat-loading">${tr("Загрузка сообщений…", "Loading messages…")}</div>`;
+  }
+  await socialLoadMessages(id, {
+    forceBottom: true,
+    bypassUnchanged: Boolean(opts.bypassUnchanged),
+  });
   await socialRequest(`/api/social/chat/read/${id}`, { method: "POST" }).catch(() => null);
   socialPollNotifications().catch(() => null);
 }
@@ -2012,10 +2030,25 @@ async function socialLoadMessages(threadId, opts = {}) {
   }).join(";");
   const id = Number(threadId || socialState.currentThreadId || 0);
   if (!id) return;
-  if (Boolean(opts.silent) && Number(socialState.loadingMessagesThreadId || 0) === id) return;
-  socialState.loadingMessagesThreadId = id;
-  try {
   const beforeId = Number(opts.beforeId || 0);
+  if (!beforeId) {
+    const inflight = socialState.chatMessagesInflightByThread?.[id];
+    if (inflight) {
+      await inflight.catch(() => null);
+      if (opts.forceBottom) {
+        const host = document.getElementById("socialChatMessages");
+        if (host) host.scrollTop = host.scrollHeight;
+      }
+      return;
+    }
+  }
+  const requestSeq = !beforeId
+    ? (Number(socialState.chatMessagesRequestSeqByThread?.[id] || 0) + 1)
+    : 0;
+  if (!beforeId) socialState.chatMessagesRequestSeqByThread[id] = requestSeq;
+  socialState.loadingMessagesThreadId = id;
+  const runLoad = async () => {
+  try {
   const limit = Number(opts.limit || 80);
   const host = document.getElementById("socialChatMessages");
   const prevScrollHeight = host ? host.scrollHeight : 0;
@@ -2027,9 +2060,15 @@ async function socialLoadMessages(threadId, opts = {}) {
     return null;
   });
   if (!Array.isArray(rows)) return;
+  if (!beforeId && Number(socialState.chatMessagesRequestSeqByThread?.[id] || 0) !== requestSeq) return;
   const prevSig = String(socialState.chatMessagesSignatureByThread?.[id] || "");
   const nextSig = signatureOf(rows);
-  const unchanged = !beforeId && opts.silent && nextSig === prevSig && !opts.forceBottom && hasRenderedMessages;
+  const unchanged = !beforeId
+    && opts.silent
+    && !opts.bypassUnchanged
+    && nextSig === prevSig
+    && !opts.forceBottom
+    && hasRenderedMessages;
   if (beforeId) {
     socialState.chatMessages = [...rows, ...(socialState.chatMessages || [])];
   } else {
@@ -2049,6 +2088,17 @@ async function socialLoadMessages(threadId, opts = {}) {
     forceBottom: Boolean(opts.forceBottom),
   });
   } finally {
+    // keep existing finally semantics inside wrapper
+  }
+  };
+  const runPromise = runLoad();
+  if (!beforeId) socialState.chatMessagesInflightByThread[id] = runPromise;
+  try {
+    await runPromise;
+  } finally {
+    if (!beforeId && socialState.chatMessagesInflightByThread?.[id] === runPromise) {
+      delete socialState.chatMessagesInflightByThread[id];
+    }
     if (Number(socialState.loadingMessagesThreadId || 0) === id) {
       socialState.loadingMessagesThreadId = 0;
     }
@@ -3259,11 +3309,6 @@ window.socialDeleteNoteFile = socialDeleteNoteFile;
 window.socialStartGlobalHooks = socialStartGlobalHooks;
 window.socialStopGlobalHooks = socialStopGlobalHooks;
 window.resetSocialState = resetSocialState;
-
-window.addEventListener("seo-wibe-auth", () => {
-  socialMaybeStartHooks();
-  socialPollNotifications().catch(() => null);
-});
 
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) return;
