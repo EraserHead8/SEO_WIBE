@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 .venv/
 .env
+.secret_key
 seo_wibe.db
 127.0.0.1
 .DS_Store

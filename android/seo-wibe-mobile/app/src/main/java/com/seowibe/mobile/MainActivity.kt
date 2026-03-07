@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.webkit.CookieManager
@@ -21,6 +22,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
   private lateinit var webView: WebView
@@ -30,6 +32,10 @@ class MainActivity : AppCompatActivity() {
   private var filePathCallback: ValueCallback<Array<Uri>>? = null
   private var initialRouteApplied = false
   private var isSpinnerInit = true
+  private val allowedHosts by lazy {
+    val host = Uri.parse(getString(R.string.base_url)).host?.lowercase(Locale.ROOT).orEmpty()
+    setOf(host, "127.0.0.1", "localhost")
+  }
 
   private data class MobileRoute(
     val title: String,
@@ -133,16 +139,29 @@ class MainActivity : AppCompatActivity() {
     settings.javaScriptEnabled = true
     settings.domStorageEnabled = true
     settings.databaseEnabled = true
-    settings.allowFileAccess = true
+    settings.allowFileAccess = false
     settings.allowContentAccess = true
     settings.loadsImagesAutomatically = true
     settings.mediaPlaybackRequiresUserGesture = false
     settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      settings.safeBrowsingEnabled = true
+    }
     settings.userAgentString = settings.userAgentString + " SEO_WIBE_ANDROID_APP/1.0"
 
     webView.webViewClient = object : WebViewClient() {
       override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-        return false
+        val uri = request?.url ?: return false
+        val host = uri.host?.lowercase(Locale.ROOT).orEmpty()
+        if (host.isNotBlank() && allowedHosts.contains(host)) {
+          return false
+        }
+        return try {
+          startActivity(Intent(Intent.ACTION_VIEW, uri))
+          true
+        } catch (_: Exception) {
+          false
+        }
       }
 
       override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
