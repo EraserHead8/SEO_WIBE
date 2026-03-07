@@ -871,22 +871,22 @@ HELP_RELEASES: list[dict[str, Any]] = [
         "version": "0.3.0",
         "released_at": "2026-03-07",
         "current": True,
-        "summary": "Стабилизация рекламы/статистики, бухгалтерия на общей базе товаров и мобильный PWA-клиент.",
+        "summary": "Стабилизация рекламы/статистики, бухгалтерия на общей базе товаров и Android-приложение.",
         "diff_from_previous": [
             "Исправлена догрузка WB Ads: частичные ответы API больше не считаются фатальной ошибкой.",
             "Статистика продаж переработана: компактный верх KPI и вынесенные вниз дополнительные метрики.",
             "Снижен риск двойного учета WB/Ozon доходов в продажах и финансах.",
-            "Добавлен мобильный режим /mobile: чат по умолчанию, быстрый переключатель разделов, профиль, язык и уведомления.",
+            "Добавлено Android-приложение: чат по умолчанию, быстрый переключатель разделов, профиль, язык и уведомления.",
         ],
         "changes": [
             "WB/Ozon sales: улучшена дедупликация, пересчитаны отмены/возвраты и финпотоки.",
-            "Help Center: добавлен раздел «Загрузки» с историей версий и ссылкой на мобильный клиент.",
+            "Help Center: добавлен раздел «Загрузки» с историей версий и ссылкой на Android APK.",
             "Бухгалтерия использует единую базу товаров (Product) и закупочных цен без дублирующего хранилища.",
         ],
-        "android_download_url": "/mobile",
-        "android_download_name": "SEO WIBE Mobile (PWA)",
+        "android_download_url": "/static/downloads/seo-wibe-mobile-latest.apk",
+        "android_download_name": "SEO WIBE Mobile Android (.apk)",
         "app_entry_url": "/mobile",
-        "notes": "Установка на Android: откройте ссылку, затем «Добавить на главный экран» в браузере.",
+        "notes": "Установка на Android: скачайте .apk, откройте файл и подтвердите установку из неизвестного источника.",
     },
     {
         "version": "0.2.1",
@@ -901,8 +901,8 @@ HELP_RELEASES: list[dict[str, Any]] = [
             "Табличный анализ прибыльности по SKU/артикулу.",
             "Экспорт и импорт закупочных цен через Excel/CSV.",
         ],
-        "android_download_url": "/mobile",
-        "android_download_name": "SEO WIBE Mobile (PWA)",
+        "android_download_url": "/static/downloads/seo-wibe-mobile-latest.apk",
+        "android_download_name": "SEO WIBE Mobile Android (.apk)",
         "app_entry_url": "/mobile",
         "notes": "",
     },
@@ -919,8 +919,8 @@ HELP_RELEASES: list[dict[str, Any]] = [
             "Исправлены мобильные UI-регрессии и обработка direct-чатов.",
             "Улучшены статусы загрузки рекламных кампаний.",
         ],
-        "android_download_url": "/mobile",
-        "android_download_name": "SEO WIBE Mobile (PWA)",
+        "android_download_url": "/static/downloads/seo-wibe-mobile-latest.apk",
+        "android_download_name": "SEO WIBE Mobile Android (.apk)",
         "app_entry_url": "/mobile",
         "notes": "",
     },
@@ -2601,6 +2601,21 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
             partial_summary_ids.append(cid)
         elif not stats_ok:
             partial_stats_ids.append(cid)
+    summary_count = len([x for x in ids if _campaign_summary_has_context(summaries.get(str(x)), x)])
+    stats_count = len([x for x in ids if _campaign_stat_has_context(stats.get(str(x)))])
+    temporary_unavailable = False
+    if ids and not error_flags:
+        # WB Ads API can return empty/placeholder payloads during short-lived rate-limit windows.
+        # If no campaign has usable context in summaries/stats, treat as temporary partial state.
+        if summary_count <= 0 and stats_count <= 0:
+            temporary_unavailable = True
+            missing_ids = []
+            hard_missing_ids = []
+            missing_summary_ids = list(ids)
+            missing_stats_ids = list(ids)
+            partial_summary_ids = list(ids)
+            partial_stats_ids = list(ids)
+            warnings.append("temporary_unavailable")
     resolved_count = max(0, len(ids) - len(hard_missing_ids))
     if hard_missing_ids:
         warnings.append("partial_data")
@@ -2611,8 +2626,8 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
 
     meta = {
         "requested_count": len(ids),
-        "summary_count": len([x for x in ids if _campaign_summary_has_context(summaries.get(str(x)), x)]),
-        "stats_count": len([x for x in ids if _campaign_stat_has_context(stats.get(str(x)))]),
+        "summary_count": summary_count,
+        "stats_count": stats_count,
         "resolved_count": resolved_count,
         "missing_count": len(hard_missing_ids),
         "missing_ids": hard_missing_ids[:160],
@@ -2623,6 +2638,7 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
         "partial_stats_ids": partial_stats_ids[:160],
         "missing_summary_ids": missing_summary_ids[:160],
         "missing_stats_ids": missing_stats_ids[:160],
+        "temporary_unavailable": temporary_unavailable,
         "warnings": warnings,
         "errors": error_flags,
     }

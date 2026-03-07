@@ -109,6 +109,18 @@ function scheduleAccountingReload(delayMs = 260) {
 function ensureAccountingDefaults() {
   const marketEl = document.getElementById("accountingMarketplace");
   if (marketEl && !marketEl.value) marketEl.value = "all";
+  const templateMarketEl = document.getElementById("accountingTemplateMarketplace");
+  if (templateMarketEl) {
+    const stored = String(localStorage.getItem("accounting_template_marketplace") || "").trim().toLowerCase();
+    if (["all", "wb", "ozon"].includes(stored)) templateMarketEl.value = stored;
+    if (!templateMarketEl.dataset.bound) {
+      templateMarketEl.dataset.bound = "1";
+      templateMarketEl.addEventListener("change", () => {
+        const selected = String(templateMarketEl.value || "all").trim().toLowerCase();
+        localStorage.setItem("accounting_template_marketplace", ["all", "wb", "ozon"].includes(selected) ? selected : "all");
+      });
+    }
+  }
 
   const sortEl = document.getElementById("accountingAnalysisSort");
   if (sortEl && !sortEl.value) sortEl.value = accountingSortMode || "net_profit_desc";
@@ -137,17 +149,52 @@ function accountingSetMeta(id, message) {
   if (el) el.textContent = String(message || "-");
 }
 
+function normalizeAccountingWarning(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return "";
+  const low = text.toLowerCase();
+  if (low.includes("429") && low.includes("wb")) {
+    return tr(
+      "WB API временно ограничил запросы (429). Показана доступная часть данных.",
+      "WB API rate-limited requests (429). Showing available partial data."
+    );
+  }
+  if (low.includes("429") && low.includes("ozon")) {
+    return tr(
+      "Ozon API временно ограничил запросы (429). Показана доступная часть данных.",
+      "Ozon API rate-limited requests (429). Showing available partial data."
+    );
+  }
+  if (low.includes("bad_json") && low.includes("wb")) {
+    return tr(
+      "WB API вернул нестабильный ответ. Использована частичная статистика.",
+      "WB API returned malformed data. Partial statistics were used."
+    );
+  }
+  if (low.includes("ads api недоступен")) {
+    return tr(
+      "Рекламные расходы временно недоступны в API. Остальные показатели рассчитаны.",
+      "Ads costs are temporarily unavailable from API. Other metrics are calculated."
+    );
+  }
+  if (low.includes("ключ") || low.includes("unauthorized")) {
+    return tr("Проверьте API-ключи WB/Ozon в профиле.", "Check WB/Ozon API keys in profile.");
+  }
+  return text;
+}
+
 function renderAccountingWarnings() {
   const warningEl = document.getElementById("accountingWarnings");
   if (!warningEl) return;
-  const lines = Array.isArray(accountingWarnings)
-    ? accountingWarnings.map((x) => String(x || "").trim()).filter(Boolean)
-    : [];
+  const rawLines = Array.isArray(accountingWarnings) ? accountingWarnings : [];
+  const lines = [...new Set(rawLines.map((x) => normalizeAccountingWarning(x)).filter(Boolean))];
   if (!lines.length) {
     warningEl.textContent = tr("Данные бухгалтерии загружены.", "Accounting data loaded.");
     return;
   }
-  warningEl.textContent = lines.join(" | ");
+  const visible = lines.slice(0, 3);
+  const tail = lines.length > 3 ? tr(`(+ еще ${lines.length - 3})`, `(+ ${lines.length - 3} more)`) : "";
+  warningEl.textContent = [...visible, tail].filter(Boolean).join(" | ");
 }
 
 function renderAccountingOverview() {
@@ -681,8 +728,17 @@ function accountingBuildDownloadFilename(response, fallback) {
   return fallback;
 }
 
-async function accountingDownload(path, fallbackName) {
-  const marketplace = String(document.getElementById("accountingMarketplace")?.value || "all").trim().toLowerCase() || "all";
+function getAccountingTemplateMarketplace() {
+  const picker = document.getElementById("accountingTemplateMarketplace");
+  const selected = String(picker?.value || "").trim().toLowerCase();
+  if (["all", "wb", "ozon"].includes(selected)) return selected;
+  const market = String(document.getElementById("accountingMarketplace")?.value || "all").trim().toLowerCase();
+  return ["all", "wb", "ozon"].includes(market) ? market : "all";
+}
+
+async function accountingDownload(path, fallbackName, marketplaceOverride = "") {
+  const selected = String(marketplaceOverride || "").trim().toLowerCase();
+  const marketplace = ["all", "wb", "ozon"].includes(selected) ? selected : getAccountingTemplateMarketplace();
   const headers = {};
   if (typeof token === "string" && token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(`${path}?marketplace=${encodeURIComponent(marketplace)}`, {
@@ -718,11 +774,15 @@ async function accountingDownload(path, fallbackName) {
 }
 
 async function downloadAccountingTemplate() {
-  await accountingDownload("/api/accounting/purchase-prices/template", "purchase_price_template.xlsx");
+  const selectedMarket = getAccountingTemplateMarketplace();
+  localStorage.setItem("accounting_template_marketplace", selectedMarket);
+  await accountingDownload("/api/accounting/purchase-prices/template", "purchase_price_template.xlsx", selectedMarket);
 }
 
 async function downloadAccountingExport() {
-  await accountingDownload("/api/accounting/purchase-prices/export", "purchase_prices_export.xlsx");
+  const selectedMarket = getAccountingTemplateMarketplace();
+  localStorage.setItem("accounting_template_marketplace", selectedMarket);
+  await accountingDownload("/api/accounting/purchase-prices/export", "purchase_prices_export.xlsx", selectedMarket);
 }
 
 async function importAccountingPurchasePrices() {
@@ -785,6 +845,16 @@ function applyAccountingUiLanguage() {
   setText("#accountingSubtabOverview .panel h3", isEn ? "Profit overview" : "Прибыль и обзор");
   setText("#accountingSubtabOverview .grid-6 button:nth-of-type(1)", isEn ? "Refresh data" : "Обновить данные");
   setText("#accountingSubtabOverview .grid-6 button:nth-of-type(2)", isEn ? "Reload all" : "Обновить все");
+  const templateMarketSel = document.getElementById("accountingTemplateMarketplace");
+  if (templateMarketSel) {
+    const prev = String(templateMarketSel.value || localStorage.getItem("accounting_template_marketplace") || "all").toLowerCase();
+    templateMarketSel.innerHTML = `
+      <option value="all">${isEn ? "Template: WB + Ozon" : "Шаблон: WB + Ozon"}</option>
+      <option value="wb">${isEn ? "Template: WB only" : "Шаблон: только WB"}</option>
+      <option value="ozon">${isEn ? "Template: Ozon only" : "Шаблон: только Ozon"}</option>
+    `;
+    templateMarketSel.value = ["all", "wb", "ozon"].includes(prev) ? prev : "all";
+  }
   setText("#accountingSubtabOverview .accounting-file-actions button:nth-of-type(1)", isEn ? "Download Excel template" : "Скачать шаблон Excel");
   setText("#accountingSubtabOverview .accounting-file-actions button:nth-of-type(2)", isEn ? "Export prices" : "Экспорт цен");
   setText("#accountingSubtabOverview .accounting-file-actions button:nth-of-type(3)", isEn ? "Import purchase prices" : "Импорт закупочных цен");
@@ -818,6 +888,11 @@ function applyAccountingUiLanguage() {
   setText("#accountingSubtabExpenses .actions button:nth-of-type(1)", isEn ? "Save expense" : "Сохранить расход");
   setText("#accountingSubtabExpenses .actions button:nth-of-type(2)", isEn ? "Reset form" : "Сбросить форму");
   setText("#accountingSubtabSettings .panel h3", isEn ? "Taxes and calculation settings" : "Налоги и параметры расчета");
+  setText("#accountingSubtabSettings .accounting-settings-grid .field-label:nth-of-type(1) > span", isEn ? "VAT rate, %" : "Ставка НДС, %");
+  setText("#accountingSubtabSettings .accounting-settings-grid .field-label:nth-of-type(2) > span", isEn ? "Profit/USN tax rate, %" : "Налог на прибыль/УСН, %");
+  setText("#accountingSubtabSettings .accounting-settings-grid .field-label:nth-of-type(3) > span", isEn ? "Additional costs from revenue, %" : "Доп. расходы от выручки, %");
+  setText("#accountingSubtabSettings .accounting-settings-grid .field-label:nth-of-type(4) > span", isEn ? "Fixed monthly costs, ₽" : "Фикс. расходы в месяц, ₽");
+  setText("#accountingSubtabSettings .panel > .hint", isEn ? "VAT and tax are applied to final period profit. Leave 0 for unused settings." : "НДС и налог применяются к итоговой прибыли по выбранному периоду. Если параметр не используется — оставьте 0.");
   setText("#accountingSubtabSettings .actions button:nth-of-type(1)", isEn ? "Save settings" : "Сохранить параметры");
   setText("#accountingSubtabSettings .actions button:nth-of-type(2)", isEn ? "Refresh" : "Обновить");
 }

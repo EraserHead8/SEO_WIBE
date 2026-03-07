@@ -5,3 +5,9 @@ __pycache__/
 seo_wibe.db
 127.0.0.1
 .DS_Store
+android-sdk/
+android/seo-wibe-mobile/.gradle/
+android/seo-wibe-mobile/.gradle-home/
+android/seo-wibe-mobile/.idea/
+android/seo-wibe-mobile/build/
+android/seo-wibe-mobile/app/build/

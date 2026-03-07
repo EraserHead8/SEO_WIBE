@@ -1047,11 +1047,11 @@ body[data-theme="light"] .review-type-pill {
 .cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
 #products .grid-6 {
-  grid-template-columns: 112px minmax(180px, 1fr) minmax(150px, auto) repeat(3, 48px);
+  grid-template-columns: 112px minmax(180px, 1fr) minmax(150px, auto) repeat(4, 48px);
 }
 
 #products .products-controls {
-  grid-template-columns: 112px minmax(180px, 1fr) repeat(3, 48px);
+  grid-template-columns: 112px minmax(180px, 1fr) repeat(4, 48px);
   align-items: end;
 }
 
@@ -1059,6 +1059,11 @@ body[data-theme="light"] .review-type-pill {
   opacity: 0.65;
   filter: saturate(0.85);
   cursor: not-allowed;
+}
+
+#products .products-bulk-delete.is-soft-hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 
 #products .grid-4 {
@@ -5899,6 +5904,15 @@ body[data-theme="dark"] .landing-band .band-stats span {
   color: var(--ds-text);
 }
 
+#salesTrendMeta .trend-series-item {
+  color: var(--series-color, color-mix(in oklab, var(--ds-text) 74%, var(--ds-muted)));
+  font-weight: 700;
+}
+
+#salesTrendMeta .trend-series-item b {
+  color: inherit;
+}
+
 .logo-a {
   color: var(--ds-text);
   text-shadow: 0 1px 8px color-mix(in oklab, var(--ds-text) 40%, transparent);
@@ -8500,10 +8514,31 @@ button,
 .accounting-file-actions {
   margin-top: 10px;
   align-items: center;
+  grid-template-columns: minmax(170px, 0.95fr) minmax(180px, 1fr) minmax(160px, 0.9fr) minmax(180px, 1fr) minmax(180px, 1fr);
 }
 
 .accounting-file-actions input[type="file"] {
   min-height: 42px;
+}
+
+.accounting-settings-grid .field-label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.accounting-settings-grid .field-label > span {
+  font-size: 12px;
+  color: color-mix(in oklab, var(--fg) 68%, var(--muted));
+}
+
+.feedback-prompt-wrap {
+  margin-top: 8px;
+}
+
+.feedback-prompt-wrap textarea {
+  width: 100%;
+  min-height: 102px;
 }
 
 .accounting-analysis-wrap,
@@ -8539,6 +8574,12 @@ button,
 #accountingAnalysisMeta,
 #accountingWarnings {
   margin-top: 8px;
+}
+
+@media (max-width: 1180px) {
+  .accounting-file-actions {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 1200px) and (min-width: 981px) {

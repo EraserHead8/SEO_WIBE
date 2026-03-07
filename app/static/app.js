@@ -89,6 +89,10 @@ let wbQuestionRows = [];
 const wbQuestionDrafts = new Map();
 let currentQuestionMarketplace = "wb";
 let questionBackgroundReloadTimer = null;
+const feedbackPromptVisibility = {
+  review: localStorage.getItem("review_prompt_visible") === "1",
+  question: localStorage.getItem("question_prompt_visible") === "1",
+};
 let returnsRows = [];
 let currentReturnsMarketplace = "wb";
 let reviewLoadProgress = { active: false, total: 0, loaded: 0 };
@@ -956,6 +960,11 @@ function applyUiLanguage() {
     "WB",
     "Ozon",
   ]);
+  setOptions("#accountingTemplateMarketplace", [
+    isEn ? "Template: WB + Ozon" : "Шаблон: WB + Ozon",
+    isEn ? "Template: WB only" : "Шаблон: только WB",
+    isEn ? "Template: Ozon only" : "Шаблон: только Ozon",
+  ]);
   setOptions("#salesMetricMode", [
     isEn ? "Units" : "Штуки",
     isEn ? "Buyouts" : "Выкупы",
@@ -1023,6 +1032,8 @@ function applyUiLanguage() {
       applyTeamModalHeader("edit", findTeamMemberById(activeTeamMemberId));
     }
   }
+  applyFeedbackPromptVisibility("review");
+  applyFeedbackPromptVisibility("question");
   switchAuthMode(authMode);
 
   const themeSel = document.getElementById("uiThemeSelect");
@@ -3063,6 +3074,38 @@ async function loadReviewsWorkspace() {
   } else if (next === "returns" && hasReturns) {
     await loadReturns();
   }
+  applyFeedbackPromptVisibility("review");
+  applyFeedbackPromptVisibility("question");
+}
+
+function applyFeedbackPromptVisibility(kind) {
+  const key = String(kind || "").trim().toLowerCase();
+  if (!["review", "question"].includes(key)) return;
+  const visible = Boolean(feedbackPromptVisibility[key]);
+  const wrapId = key === "review" ? "reviewPromptWrap" : "questionPromptWrap";
+  const btnId = key === "review" ? "reviewPromptToggleBtn" : "questionPromptToggleBtn";
+  const wrap = document.getElementById(wrapId);
+  const btn = document.getElementById(btnId);
+  if (wrap) wrap.classList.toggle("hidden", !visible);
+  if (btn) {
+    btn.textContent = visible
+      ? tr("Скрыть промпт обучения", "Hide training prompt")
+      : tr("Показать промпт обучения", "Show training prompt");
+    btn.setAttribute(
+      "aria-label",
+      visible
+        ? tr("Скрыть промпт обучения", "Hide training prompt")
+        : tr("Показать промпт обучения", "Show training prompt")
+    );
+  }
+}
+
+function toggleFeedbackPrompt(kind) {
+  const key = String(kind || "").trim().toLowerCase();
+  if (!["review", "question"].includes(key)) return;
+  feedbackPromptVisibility[key] = !Boolean(feedbackPromptVisibility[key]);
+  localStorage.setItem(`${key}_prompt_visible`, feedbackPromptVisibility[key] ? "1" : "0");
+  applyFeedbackPromptVisibility(key);
 }
 
 async function loadReviewAiSettings() {
@@ -3072,6 +3115,7 @@ async function loadReviewAiSettings() {
   const modeInput = document.getElementById("reviewAiMode");
   if (promptInput) promptInput.value = data.prompt || "";
   if (modeInput) modeInput.value = data.reply_mode || "manual";
+  applyFeedbackPromptVisibility("review");
 }
 
 async function saveReviewAiSettings() {
@@ -3969,6 +4013,7 @@ async function loadQuestionAiSettings() {
   const modeInput = document.getElementById("questionAiMode");
   if (promptInput) promptInput.value = data.prompt || "";
   if (modeInput) modeInput.value = data.reply_mode || "manual";
+  applyFeedbackPromptVisibility("question");
 }
 
 async function saveQuestionAiSettings() {
@@ -4822,6 +4867,7 @@ async function enrichWbCampaignRows(runToken) {
   let partialFallback = false;
   let partialStatsMissingTotal = 0;
   let partialSummaryMissingTotal = 0;
+  let temporaryUnavailableChunks = 0;
   for (let i = 0; i < pending.length; i += batchSize) {
     if (runToken !== wbAdsLoadToken) return;
     const chunk = pending.slice(i, i + batchSize);
@@ -4853,10 +4899,18 @@ async function enrichWbCampaignRows(runToken) {
     const partialSummaryIds = Array.isArray(meta?.partial_summary_ids)
       ? meta.partial_summary_ids.map((x) => Number(x || 0)).filter((x) => Number.isFinite(x) && x > 0)
       : [];
+    const temporaryUnavailable = Boolean(meta?.temporary_unavailable);
     partialStatsMissingTotal += partialStatsIds.length;
     partialSummaryMissingTotal += partialSummaryIds.length;
     const hasMissingMeta = Array.isArray(meta?.hard_missing_ids) || Array.isArray(meta?.missing_ids);
     let chunkMissing = hardMissingIds.length;
+    if (temporaryUnavailable) {
+      temporaryUnavailableChunks += 1;
+      partialFallback = true;
+      if (!partialStatsIds.length) partialStatsMissingTotal += chunk.length;
+      if (!partialSummaryIds.length) partialSummaryMissingTotal += chunk.length;
+      chunkMissing = 0;
+    }
     if (!hasMissingMeta && chunkMissing <= 0) {
       chunkMissing = chunk.filter((cid) => {
         const key = String(cid);
@@ -4886,7 +4940,13 @@ async function enrichWbCampaignRows(runToken) {
       "Кампании загружены частично: часть детальных полей временно недоступна.",
       "Campaigns loaded partially: some detailed fields are temporarily unavailable."
     );
-    if (partialStatsMissingTotal > 0 && Number(wbAdsLoadProgress.failed || 0) <= 0) {
+    if (temporaryUnavailableChunks > 0) {
+      msg = tr(
+        "WB Ads API временно ограничил детализацию. Кампании загружены, но часть полей пока недоступна.",
+        "WB Ads API temporarily limited details. Campaigns are loaded, but some fields are not available yet."
+      );
+    }
+    if (temporaryUnavailableChunks <= 0 && partialStatsMissingTotal > 0 && Number(wbAdsLoadProgress.failed || 0) <= 0) {
       msg = tr(
         `Кампании загружены. Для ${formatInt(partialStatsMissingTotal)} кампаний статистика за период пока не вернулась API.`,
         `Campaigns loaded. Period stats are not returned yet for ${formatInt(partialStatsMissingTotal)} campaigns.`
@@ -6052,6 +6112,7 @@ function syncSelectedProductsActions() {
   if (!btn) return;
   const count = selectedProducts.size;
   btn.disabled = count <= 0;
+  btn.classList.toggle("is-soft-hidden", count <= 0);
   const tip = count > 0
     ? tr(`Удалить выбранные (${count}) из локальной базы`, `Delete selected (${count}) from local database`)
     : tr("Удалить выбранные из локальной базы", "Delete selected from local database");
@@ -7706,6 +7767,12 @@ function renderSalesChart(points) {
     "other_expense",
   ]);
   const formatValue = moneyMetrics.has(metric) ? formatMoney : formatInt;
+  const seriesSummaryHtml = series
+    .map((item) => {
+      const total = item.values.reduce((acc, val) => acc + Number(val || 0), 0);
+      return `<span class="trend-series-item" style="--series-color:${item.color}">${escapeHtml(item.label)} <b>${escapeHtml(formatValue(total))}</b></span>`;
+    })
+    .join(" • ");
   const topSeries = series[0] || { values: [] };
   const topValues = Array.isArray(topSeries.values) ? topSeries.values : [];
   const peak = topValues.length ? Math.max(...topValues) : 0;
@@ -7779,7 +7846,7 @@ function renderSalesChart(points) {
         }, 90);
       });
       meta.innerHTML = `
-        <span>${metricLabel}: <b>${series.map((item) => `${item.label} ${formatValue(item.values.reduce((a, b) => a + Number(b || 0), 0))}`).join(" • ")}</b></span>
+        <span>${metricLabel}: ${seriesSummaryHtml}</span>
         <span>${tr("Пик", "Peak")}: <b>${formatValue(peak)}</b></span>
         <span>${tr("Мин", "Min")}: <b>${formatValue(low)}</b></span>
       `;
@@ -7795,7 +7862,7 @@ function renderSalesChart(points) {
   }
 
   meta.innerHTML = `
-    <span>${metricLabel}: <b>${series.map((item) => `${item.label} ${formatValue(item.values.reduce((a, b) => a + Number(b || 0), 0))}`).join(" • ")}</b></span>
+    <span>${metricLabel}: ${seriesSummaryHtml}</span>
     <span>${tr("Пик", "Peak")}: <b>${formatValue(peak)}</b></span>
     <span>${tr("Мин", "Min")}: <b>${formatValue(low)}</b></span>
   `;
@@ -9268,6 +9335,7 @@ async function loadHelpReleases() {
   const currentSummary = escapeHtml(String(currentRow?.summary || ""));
   const appEntryUrl = String(currentRow?.app_entry_url || "/mobile");
   const downloadUrl = String(currentRow?.android_download_url || appEntryUrl || "/mobile");
+  const isApkDownload = /\.apk(?:$|\?)/i.test(downloadUrl);
   const downloadName = escapeHtml(String(currentRow?.android_download_name || "SEO WIBE Mobile"));
   const diffItems = Array.isArray(currentRow?.diff_from_previous)
     ? currentRow.diff_from_previous.filter(Boolean).map((line) => `<li>${escapeHtml(String(line))}</li>`).join("")
@@ -9282,7 +9350,9 @@ async function loadHelpReleases() {
         </div>
         <div class="help-card-actions">
           <a class="btn-secondary help-open-btn" href="${escapeHtml(downloadUrl)}" target="_blank" rel="noopener noreferrer">
-            ${lang === "en" ? "Open mobile app" : "Открыть мобильное приложение"}
+            ${isApkDownload
+    ? (lang === "en" ? "Download Android APK" : "Скачать Android APK")
+    : (lang === "en" ? "Open mobile app" : "Открыть мобильное приложение")}
           </a>
         </div>
       </header>
@@ -9790,6 +9860,7 @@ window.triggerProfileAvatarUpload = triggerProfileAvatarUpload;
 window.uploadProfileAvatar = uploadProfileAvatar;
 window.triggerTeamAvatarUpload = triggerTeamAvatarUpload;
 window.uploadTeamAvatar = uploadTeamAvatar;
+window.toggleFeedbackPrompt = toggleFeedbackPrompt;
 window.toggleMobileNav = toggleMobileNav;
 window.closeMobileNav = closeMobileNav;
 window.onMobileQuickNavChanged = onMobileQuickNavChanged;

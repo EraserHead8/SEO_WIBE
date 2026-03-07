@@ -94,11 +94,12 @@ def build_accounting_payload(
         overview=overview,
         adjustments=adjustments,
     )
+    normalized_warnings = _normalize_accounting_warnings(warnings)
     return {
         "overview": overview,
         "analysis_rows": rows,
         "chart": chart,
-        "warnings": list(dict.fromkeys(str(x) for x in warnings if str(x).strip())),
+        "warnings": normalized_warnings,
     }
 
 
@@ -125,7 +126,10 @@ def _fetch_wb_product_finance_rows(
         payload, status = _request_wb_list(api_key=api_key, endpoint=endpoint, params=params)
         if payload is None:
             if status:
-                warnings.append(f"WB accounting API недоступен ({status}).")
+                if str(status) == "429":
+                    warnings.append("WB accounting API временно ограничил запросы (429).")
+                else:
+                    warnings.append(f"WB accounting API недоступен ({status}).")
             break
         if not payload:
             break
@@ -180,32 +184,56 @@ def _fetch_wb_product_finance_rows(
                 round(
                     _to_float(
                         item.get("retail_amount")
+                        or item.get("retailAmount")
                         or item.get("retail_price_withdisc_rub")
+                        or item.get("retailPriceWithDiscRub")
+                        or item.get("sale_amount")
+                        or item.get("saleAmount")
                         or item.get("ppvz_for_pay")
+                        or item.get("ppvzForPay")
                         or item.get("forPay")
+                        or item.get("for_pay")
                         or 0.0
                     ),
                     2,
                 )
             )
         )
-        return_amount = abs(float(round(_to_float(item.get("return_amount") or item.get("returnAmount") or 0.0), 2)))
+        return_amount = abs(
+            float(
+                round(
+                    _to_float(
+                        item.get("return_amount")
+                        or item.get("returnAmount")
+                        or item.get("return_sum")
+                        or item.get("returnSum")
+                        or 0.0
+                    ),
+                    2,
+                )
+            )
+        )
         additional_payment = float(round(_to_float(item.get("additional_payment") or item.get("additionalPayment") or 0.0), 2))
         commission = (
             abs(_to_float(item.get("ppvz_sales_commission") or item.get("ppvzSalesCommission") or 0.0))
             + abs(_to_float(item.get("ppvz_vw") or item.get("ppvzVw") or 0.0))
             + abs(_to_float(item.get("ppvz_vw_nds") or item.get("ppvzVwNds") or 0.0))
             + abs(_to_float(item.get("acquiring_fee") or item.get("acquiringFee") or 0.0))
+            + abs(_to_float(item.get("commission") or item.get("commission_amount") or item.get("commissionAmount") or 0.0))
         )
         logistics = (
             abs(_to_float(item.get("delivery_rub") or item.get("deliveryRub") or 0.0))
+            + abs(_to_float(item.get("delivery_amount") or item.get("deliveryAmount") or 0.0))
             + abs(_to_float(item.get("rebill_logistic_cost") or item.get("rebillLogisticCost") or 0.0))
             + return_amount
         )
-        storage = abs(_to_float(item.get("storage_fee") or item.get("storageFee") or 0.0))
-        deductions = abs(_to_float(item.get("deduction") or 0.0))
-        acceptance = abs(_to_float(item.get("acceptance") or 0.0))
-        penalties = abs(_to_float(item.get("penalty") or 0.0))
+        storage = abs(_to_float(item.get("storage_fee") or item.get("storageFee") or item.get("storage") or 0.0))
+        deductions = (
+            abs(_to_float(item.get("deduction") or 0.0))
+            + abs(_to_float(item.get("holding") or item.get("holds") or 0.0))
+        )
+        acceptance = abs(_to_float(item.get("acceptance") or item.get("acceptance_payment") or item.get("acceptancePayment") or 0.0))
+        penalties = abs(_to_float(item.get("penalty") or item.get("fine") or item.get("fines") or 0.0))
         other_expense = max(0.0, -additional_payment)
         is_return = bool(return_amount > 0 or "возврат" in op_name or "return" in op_name)
         sold_units = 0 if is_return else quantity
@@ -283,7 +311,10 @@ def _fetch_ozon_product_finance_rows(
                 warnings.append("Ozon accounting API недоступен.")
                 break
             if response.status_code >= 400:
-                warnings.append(f"Ozon accounting API error {response.status_code}.")
+                if int(response.status_code) == 429:
+                    warnings.append("Ozon accounting API временно ограничил запросы (429).")
+                else:
+                    warnings.append(f"Ozon accounting API error {response.status_code}.")
                 break
             try:
                 data = response.json()
@@ -308,8 +339,19 @@ def _fetch_ozon_product_finance_rows(
                     or ""
                 ).strip().lower()
                 amount = float(round(_to_float(op.get("amount") or op.get("operation_amount") or 0.0), 2))
-                commission = abs(_to_float(op.get("sale_commission") or op.get("commission") or 0.0))
-                logistics = abs(_to_float(op.get("delivery_charge") or 0.0)) + abs(_to_float(op.get("return_delivery_charge") or 0.0))
+                commission = abs(
+                    _to_float(
+                        op.get("sale_commission")
+                        or op.get("commission")
+                        or op.get("commission_amount")
+                        or op.get("services_commission")
+                        or 0.0
+                    )
+                )
+                logistics = (
+                    abs(_to_float(op.get("delivery_charge") or op.get("delivery_amount") or op.get("delivery_service") or 0.0))
+                    + abs(_to_float(op.get("return_delivery_charge") or op.get("return_delivery_amount") or 0.0))
+                )
                 storage = 0.0
                 deductions = 0.0
                 acceptance = 0.0
@@ -620,17 +662,23 @@ def _apply_profit_math(
 ) -> list[dict[str, Any]]:
     if not rows:
         return []
+    def _component_total(metric: str) -> float:
+        total_from_sales = float(_to_float(sales_totals.get(metric) or 0.0))
+        if abs(total_from_sales) > 0.0001:
+            return total_from_sales
+        return float(round(sum(float(row.get(metric) or 0.0) for row in rows), 2))
+
     total_revenue = float(round(sum(float(row.get("revenue") or 0.0) for row in rows), 2))
     marketplace_expense_total = float(
         round(
-            float(sales_totals.get("commission") or 0.0)
-            + float(sales_totals.get("logistics") or 0.0)
-            + float(sales_totals.get("storage") or 0.0)
-            + float(sales_totals.get("deductions") or 0.0)
-            + float(sales_totals.get("acceptance") or 0.0)
-            + float(sales_totals.get("other_expense") or 0.0)
-            + float(sales_totals.get("penalties") or 0.0)
-            + float(sales_totals.get("ad_spend") or 0.0),
+            _component_total("commission")
+            + _component_total("logistics")
+            + _component_total("storage")
+            + _component_total("deductions")
+            + _component_total("acceptance")
+            + _component_total("other_expense")
+            + _component_total("penalties")
+            + _component_total("ad_spend"),
             2,
         )
     )
@@ -670,18 +718,40 @@ def _build_overview_payload(
     adjustments: dict[str, float],
     settings: dict[str, Any],
 ) -> dict[str, Any]:
+    def _component_total(metric: str) -> float:
+        total_from_sales = float(round(_to_float(sales_totals.get(metric) or 0.0), 2))
+        if abs(total_from_sales) > 0.0001:
+            return total_from_sales
+        return float(round(sum(float(row.get(metric) or 0.0) for row in rows), 2))
+
+    def _component_total_by_market(metric: str, mp: str) -> float:
+        key = f"{mp}_{metric}"
+        total_from_sales = float(round(_to_float(sales_totals.get(key) or 0.0), 2))
+        if abs(total_from_sales) > 0.0001:
+            return total_from_sales
+        return float(
+            round(
+                sum(
+                    float(row.get(metric) or 0.0)
+                    for row in rows
+                    if str(row.get("marketplace") or "").strip().lower() == mp
+                ),
+                2,
+            )
+        )
+
     revenue = float(round(_to_float(sales_totals.get("revenue") or 0.0), 2))
     cogs = float(round(sum(float(row.get("cogs") or 0.0) for row in rows), 2))
     marketplace_expense = float(
         round(
-            _to_float(sales_totals.get("commission") or 0.0)
-            + _to_float(sales_totals.get("logistics") or 0.0)
-            + _to_float(sales_totals.get("storage") or 0.0)
-            + _to_float(sales_totals.get("deductions") or 0.0)
-            + _to_float(sales_totals.get("acceptance") or 0.0)
-            + _to_float(sales_totals.get("other_expense") or 0.0)
-            + _to_float(sales_totals.get("penalties") or 0.0)
-            + _to_float(sales_totals.get("ad_spend") or 0.0),
+            _component_total("commission")
+            + _component_total("logistics")
+            + _component_total("storage")
+            + _component_total("deductions")
+            + _component_total("acceptance")
+            + _component_total("other_expense")
+            + _component_total("penalties")
+            + _component_total("ad_spend"),
             2,
         )
     )
@@ -701,14 +771,14 @@ def _build_overview_payload(
         cogs_mp = float(round(sum(float(row.get("cogs") or 0.0) for row in rows if str(row.get("marketplace") or "") == code), 2))
         market_exp_mp = float(
             round(
-                _to_float(sales_totals.get(f"{code}_commission") or 0.0)
-                + _to_float(sales_totals.get(f"{code}_logistics") or 0.0)
-                + _to_float(sales_totals.get(f"{code}_storage") or 0.0)
-                + _to_float(sales_totals.get(f"{code}_deductions") or 0.0)
-                + _to_float(sales_totals.get(f"{code}_acceptance") or 0.0)
-                + _to_float(sales_totals.get(f"{code}_other_expense") or 0.0)
-                + _to_float(sales_totals.get(f"{code}_penalties") or 0.0)
-                + _to_float(sales_totals.get(f"{code}_ad_spend") or 0.0),
+                _component_total_by_market("commission", code)
+                + _component_total_by_market("logistics", code)
+                + _component_total_by_market("storage", code)
+                + _component_total_by_market("deductions", code)
+                + _component_total_by_market("acceptance", code)
+                + _component_total_by_market("other_expense", code)
+                + _component_total_by_market("penalties", code)
+                + _component_total_by_market("ad_spend", code),
                 2,
             )
         )
@@ -744,14 +814,14 @@ def _build_overview_payload(
         "tax_amount": tax_amount,
         "net_profit": net_profit,
         "margin": margin,
-        "commission": float(round(_to_float(sales_totals.get("commission") or 0.0), 2)),
-        "logistics": float(round(_to_float(sales_totals.get("logistics") or 0.0), 2)),
-        "storage": float(round(_to_float(sales_totals.get("storage") or 0.0), 2)),
-        "deductions": float(round(_to_float(sales_totals.get("deductions") or 0.0), 2)),
-        "acceptance": float(round(_to_float(sales_totals.get("acceptance") or 0.0), 2)),
-        "penalties": float(round(_to_float(sales_totals.get("penalties") or 0.0), 2)),
-        "other_expense": float(round(_to_float(sales_totals.get("other_expense") or 0.0), 2)),
-        "ad_spend": float(round(_to_float(sales_totals.get("ad_spend") or 0.0), 2)),
+        "commission": float(round(_component_total("commission"), 2)),
+        "logistics": float(round(_component_total("logistics"), 2)),
+        "storage": float(round(_component_total("storage"), 2)),
+        "deductions": float(round(_component_total("deductions"), 2)),
+        "acceptance": float(round(_component_total("acceptance"), 2)),
+        "penalties": float(round(_component_total("penalties"), 2)),
+        "other_expense": float(round(_component_total("other_expense"), 2)),
+        "ad_spend": float(round(_component_total("ad_spend"), 2)),
         "settings": {
             "vat_rate": float(round(_to_float(settings.get("vat_rate") or 0.0), 2)),
             "tax_rate": float(round(_to_float(settings.get("tax_rate") or 0.0), 2)),
@@ -855,6 +925,33 @@ def _filter_and_sort_rows(rows: list[dict[str, Any]], *, search: str, sort_by: s
         reverse=desc,
     )
     return out
+
+
+def _normalize_accounting_warnings(warnings: list[Any]) -> list[str]:
+    out: list[str] = []
+    for raw in warnings or []:
+        text = str(raw or "").strip()
+        if not text:
+            continue
+        low = text.lower()
+        if "429" in low and "wb" in low:
+            out.append("WB API ограничил запросы (429), показана доступная часть данных.")
+            continue
+        if "429" in low and "ozon" in low:
+            out.append("Ozon API ограничил запросы (429), показана доступная часть данных.")
+            continue
+        if "bad_json" in low and "wb" in low:
+            out.append("WB API вернул нестабильный ответ, применена частичная статистика.")
+            continue
+        if "api недоступен" in low or "api unavailable" in low:
+            out.append(text)
+            continue
+        if "ключ" in low or "unauthorized" in low:
+            out.append("Проверьте корректность API-ключей WB/Ozon.")
+            continue
+        out.append(text)
+    # Stable order without duplicates.
+    return list(dict.fromkeys(out))
 
 
 def _expense_amount_for_period(*, row: dict[str, Any], date_from: date, date_to: date) -> float:

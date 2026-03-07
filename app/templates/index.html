@@ -246,7 +246,7 @@
             <button id="productsImportBtn" class="icon-only-btn" type="button" data-tip="Импорт" onclick="importProducts()">&#8681;</button>
             <button id="productsReloadBtn" class="btn-secondary icon-only-btn" type="button" data-tip="Перезагрузить базу" onclick="reloadProducts()">&#10227;</button>
             <button id="productsSelectAllBtn" class="btn-secondary icon-only-btn" type="button" data-tip="Выбрать все" onclick="selectAllProducts()">&#9745;</button>
-            <button id="productsDeleteSelectedBtn" class="btn-danger icon-only-btn" type="button" data-tip="Удалить выбранные из локальной базы" onclick="deleteSelectedLocalProducts()" disabled>&#128465;</button>
+            <button id="productsDeleteSelectedBtn" class="btn-danger icon-only-btn products-bulk-delete is-soft-hidden" type="button" data-tip="Удалить выбранные из локальной базы" onclick="deleteSelectedLocalProducts()" disabled>&#128465;</button>
           </div>
           <div class="grid-1">
             <input id="productFilter" placeholder="Фильтр: артикул/название" oninput="onProductsFilterChanged()" />
@@ -477,7 +477,12 @@
               <button class="chip-btn" data-accounting-range="year" type="button" onclick="setAccountingRange('year')">Год</button>
               <button class="chip-btn" data-accounting-range="custom" type="button" onclick="setAccountingRange('custom')">Период</button>
             </div>
-            <div class="grid-4 accounting-file-actions">
+            <div class="grid-5 accounting-file-actions">
+              <select id="accountingTemplateMarketplace">
+                <option value="all">Шаблон: WB + Ozon</option>
+                <option value="wb">Шаблон: только WB</option>
+                <option value="ozon">Шаблон: только Ozon</option>
+              </select>
               <button class="btn-secondary" type="button" onclick="downloadAccountingTemplate()">Скачать шаблон Excel</button>
               <button class="btn-secondary" type="button" onclick="downloadAccountingExport()">Экспорт цен</button>
               <input id="accountingImportFile" type="file" accept=".xlsx,.xlsm,.csv" />
@@ -560,8 +565,10 @@
               <input id="accountingExpenseStartDate" type="date" />
               <input id="accountingExpenseEndDate" type="date" />
             </div>
-            <div class="grid-2">
+            <div class="grid-1">
               <label class="check"><input id="accountingExpenseActive" type="checkbox" checked /> Активен</label>
+            </div>
+            <div class="grid-1">
               <textarea id="accountingExpenseNote" rows="2" placeholder="Комментарий (опционально)"></textarea>
             </div>
             <div class="actions">
@@ -583,16 +590,29 @@
         <div id="accountingSubtabSettings" class="hidden">
           <div class="panel">
             <h3>Налоги и параметры расчета</h3>
-            <div class="grid-4">
-              <input id="accountingVatRate" type="number" step="0.01" min="0" max="100" placeholder="Ставка НДС, %" />
-              <input id="accountingTaxRate" type="number" step="0.01" min="0" max="100" placeholder="Налоговая ставка, %" />
-              <input id="accountingAdditionalRate" type="number" step="0.01" min="0" max="100" placeholder="Доп. расходы, %" />
-              <input id="accountingFixedCostPerMonth" type="number" step="0.01" min="0" placeholder="Фикс. расходы в месяц" />
+            <div class="grid-4 accounting-settings-grid">
+              <label class="field-label">
+                <span>Ставка НДС, %</span>
+                <input id="accountingVatRate" type="number" step="0.01" min="0" max="100" placeholder="Например: 20" />
+              </label>
+              <label class="field-label">
+                <span>Налог на прибыль/УСН, %</span>
+                <input id="accountingTaxRate" type="number" step="0.01" min="0" max="100" placeholder="Например: 6 или 15" />
+              </label>
+              <label class="field-label">
+                <span>Доп. расходы от выручки, %</span>
+                <input id="accountingAdditionalRate" type="number" step="0.01" min="0" max="100" placeholder="Если не нужно — 0" />
+              </label>
+              <label class="field-label">
+                <span>Фикс. расходы в месяц, ₽</span>
+                <input id="accountingFixedCostPerMonth" type="number" step="0.01" min="0" placeholder="Аренда, сервисы, связь и т.д." />
+              </label>
             </div>
             <div class="actions">
               <button type="button" onclick="saveAccountingSettings()">Сохранить параметры</button>
               <button class="btn-secondary" type="button" onclick="loadAccountingSettings()">Обновить</button>
             </div>
+            <p class="hint">НДС и налог применяются к итоговой прибыли по выбранному периоду. Если параметр не используется — оставьте 0.</p>
             <div id="accountingSettingsMeta" class="hint">-</div>
           </div>
         </div>
@@ -643,8 +663,11 @@
           </div>
           <div class="grid-2">
             <button onclick="saveReviewAiSettings()">Сохранить AI-настройки</button>
+            <button id="reviewPromptToggleBtn" class="btn-secondary" type="button" onclick="toggleFeedbackPrompt('review')">Показать промпт обучения</button>
           </div>
-          <textarea id="reviewAiPrompt" rows="3" placeholder="Промпт для генерации ответов (опционально)"></textarea>
+          <div id="reviewPromptWrap" class="feedback-prompt-wrap hidden">
+            <textarea id="reviewAiPrompt" rows="3" placeholder="Промпт для генерации ответов (опционально)"></textarea>
+          </div>
           <p class="hint">Кнопка «Сгенерировать» формирует ответ по тексту отзыва, «Отправить/Обновить» публикует ответ в маркетплейс.</p>
           <div id="reviewLoadStatus" class="hint load-status">-</div>
         </div>
@@ -688,8 +711,11 @@
           </div>
           <div class="grid-2">
             <button onclick="saveQuestionAiSettings()">Сохранить AI-настройки</button>
+            <button id="questionPromptToggleBtn" class="btn-secondary" type="button" onclick="toggleFeedbackPrompt('question')">Показать промпт обучения</button>
           </div>
-          <textarea id="questionAiPrompt" rows="3" placeholder="Промпт для генерации ответов на вопросы (опционально)"></textarea>
+          <div id="questionPromptWrap" class="feedback-prompt-wrap hidden">
+            <textarea id="questionAiPrompt" rows="3" placeholder="Промпт для генерации ответов на вопросы (опционально)"></textarea>
+          </div>
           <div class="grid-4 ads-toolbar-main">
             <input id="aiDocUploadInput" type="file" accept=".pdf,.txt,.md,.csv,.tsv,.json,.xml,.yml,.yaml,text/plain,application/pdf" />
             <button class="btn-secondary" onclick="uploadAiDoc()">Загрузить в базу знаний</button>

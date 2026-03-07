@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="app_name">SEO WIBE Mobile</string>
+  <string name="reload">Reload</string>
+  <string name="base_url">http://176.32.34.232:8016/mobile?mobile_app=1</string>
+</resources>
