@@ -939,7 +939,6 @@ def _fetch_wb_financial_rows_report_detail(api_key: str, date_from: date, date_t
 
         occurred_at = str(item.get("sale_dt") or item.get("saleDt") or item.get("order_dt") or item.get("rr_dt") or "")
         operation_name = str(item.get("supplier_oper_name") or item.get("doc_type_name") or "").strip().lower()
-        sale_amount = _wb_report_detail_sale_amount(item)
         return_amount = abs(float(round(_to_float(item.get("return_amount") or item.get("returnAmount") or 0.0), 2)))
         additional_payment = float(round(_to_float(item.get("additional_payment") or item.get("additionalPayment") or 0.0), 2))
         commission = (
@@ -958,11 +957,9 @@ def _fetch_wb_financial_rows_report_detail(api_key: str, date_from: date, date_t
         acceptance = abs(_to_float(item.get("acceptance") or 0.0))
         penalties = abs(_to_float(item.get("penalty") or 0.0))
         other_expense = max(0.0, -additional_payment)
-        income = 0.0
-        if sale_amount > 0 and "возврат" not in operation_name and "return" not in operation_name:
-            income += sale_amount
-        if additional_payment > 0:
-            income += additional_payment
+        # Sales revenue is already counted from WB sales API/fallback rows.
+        # Here we keep only non-sales positive adjustments to avoid double counting.
+        income = max(0.0, additional_payment)
         expense = commission + logistics + storage + deductions + acceptance + penalties + other_expense
         if income <= 0 and expense <= 0:
             continue
@@ -1064,31 +1061,8 @@ def _fetch_wb_orders_rows(api_key: str, date_from: date, date_to: date) -> tuple
         )
         safe_revenue = abs(float(round(revenue, 2)))
         if is_cancel:
-            rows.append(
-                {
-                    "date": day.isoformat(),
-                    "occurred_at": str(item.get("date") or item.get("lastChangeDate") or item.get("createdAt") or ""),
-                    "marketplace": "wb",
-                    "orders": 0,
-                    "units": 0,
-                    "buyouts": 0,
-                    "order_amount": 0.0,
-                    "buyout_amount": 0.0,
-                    "revenue": 0.0,
-                    "returns": units,
-                    "ad_spend": 0.0,
-                    "penalties": 0.0,
-                    "income": 0.0,
-                    "expense": 0.0,
-                    "net": 0.0,
-                    "commission": 0.0,
-                    "logistics": 0.0,
-                    "storage": 0.0,
-                    "deductions": 0.0,
-                    "acceptance": 0.0,
-                    "other_expense": 0.0,
-                }
-            )
+            # Canceled orders should not inflate returns here:
+            # real returns are already reflected in sales/finance streams.
             continue
         rows.append(
             {
@@ -1201,7 +1175,15 @@ def _fetch_ozon_finance_rows(api_key: str, date_from: date, date_to: date) -> tu
                     deductions = max(deductions, abs(amount))
                 if "приемк" in op_name or "accept" in op_name:
                     acceptance = max(acceptance, abs(amount))
-                income = max(0.0, amount)
+                is_sale_income_op = bool(
+                    "продаж" in op_name
+                    or "реализац" in op_name
+                    or "sale" in op_name
+                    or "realization" in op_name
+                )
+                # Ozon sales revenue is already provided by analytics endpoint.
+                # Keep positive finance income only for non-sales adjustments.
+                income = 0.0 if is_sale_income_op else max(0.0, amount)
                 expense = max(0.0, -amount)
                 components = float(commission + logistics + storage + deductions + acceptance + penalties)
                 other_expense = max(0.0, expense - components)
@@ -1285,27 +1267,32 @@ def _extract_wb_sales_cursor(item: dict[str, Any]) -> str:
 
 
 def _wb_sale_row_key(item: dict[str, Any]) -> str:
-    return "|".join(
-        [
-            str(item.get("srid") or ""),
-            str(item.get("saleID") or item.get("saleId") or ""),
-            str(item.get("lastChangeDate") or ""),
-            str(item.get("date") or ""),
-            str(item.get("nmId") or ""),
-        ]
-    )
+    sale_id = str(item.get("saleID") or item.get("saleId") or "").strip()
+    srid = str(item.get("srid") or "").strip()
+    rid = str(item.get("rid") or item.get("odid") or "").strip()
+    nm_id = str(item.get("nmId") or item.get("nm_id") or "").strip()
+    barcode = str(item.get("barcode") or "").strip()
+    day = str(item.get("date") or item.get("saleDate") or "").strip()[:10]
+    qty = str(item.get("quantity") or item.get("saleQty") or item.get("quantityFull") or "").strip()
+    pay = str(item.get("forPay") or item.get("finishedPrice") or item.get("priceWithDisc") or "").strip()
+    primary = sale_id or srid or rid
+    if primary:
+        return "|".join([primary, srid, sale_id, rid, nm_id, barcode, day, qty, pay])
+    return "|".join([srid, sale_id, rid, nm_id, barcode, day, qty, pay])
 
 
 def _wb_order_row_key(item: dict[str, Any]) -> str:
-    return "|".join(
-        [
-            str(item.get("srid") or ""),
-            str(item.get("rid") or item.get("odid") or item.get("gNumber") or ""),
-            str(item.get("lastChangeDate") or item.get("date") or item.get("createdAt") or ""),
-            str(item.get("nmId") or item.get("nm_id") or ""),
-            str(item.get("barcode") or ""),
-        ]
-    )
+    order_id = str(item.get("rid") or item.get("odid") or item.get("gNumber") or "").strip()
+    srid = str(item.get("srid") or "").strip()
+    nm_id = str(item.get("nmId") or item.get("nm_id") or "").strip()
+    barcode = str(item.get("barcode") or "").strip()
+    article = str(item.get("supplierArticle") or item.get("supplier_article") or "").strip()
+    qty = str(item.get("quantity") or item.get("quantityFull") or "").strip()
+    price = str(item.get("totalPrice") or item.get("priceWithDisc") or item.get("finishedPrice") or "").strip()
+    created = str(item.get("date") or item.get("createdAt") or item.get("orderDate") or "").strip()[:10]
+    if order_id or srid:
+        return "|".join([order_id, srid, nm_id, barcode, article, qty, price])
+    return "|".join([nm_id, barcode, article, qty, price, created])
 
 
 def _iter_days(left: date, right: date) -> list[date]:

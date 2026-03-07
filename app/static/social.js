@@ -502,6 +502,9 @@ function switchSocialSubtab(tab, loadNow = true) {
     : "games";
   socialState.currentSubtab = safe;
   currentSocialSubtab = safe;
+  if (typeof window.syncMobileQuickNavSelection === "function") {
+    try { window.syncMobileQuickNavSelection(); } catch (_) {}
+  }
   const mapping = {
     games: "socialSubtabGames",
     chat: "socialSubtabChat",

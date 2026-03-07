@@ -106,6 +106,11 @@ def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
+@app.get("/mobile", response_class=HTMLResponse)
+def mobile_index(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+
 @app.get("/admin", response_class=HTMLResponse)
 def admin_page(request: Request):
     return templates.TemplateResponse("admin.html", {"request": request})

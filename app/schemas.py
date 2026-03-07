@@ -462,6 +462,19 @@ class HelpDocOut(BaseModel):
     content: str
 
 
+class HelpReleaseOut(BaseModel):
+    version: str
+    released_at: str
+    current: bool = False
+    summary: str = ""
+    diff_from_previous: list[str] = Field(default_factory=list)
+    changes: list[str] = Field(default_factory=list)
+    android_download_url: str = ""
+    android_download_name: str = ""
+    app_entry_url: str = ""
+    notes: str = ""
+
+
 class AiServiceIn(BaseModel):
     name: str = ""
     provider: str = "openai"

@@ -15,5 +15,19 @@
   ],
   "theme_color": "#0d1d49",
   "background_color": "#07122d",
-  "display": "standalone"
+  "display": "standalone",
+  "start_url": "/mobile",
+  "scope": "/",
+  "shortcuts": [
+    {
+      "name": "Чат",
+      "short_name": "Чат",
+      "url": "/mobile?mobile_app=1#chat"
+    },
+    {
+      "name": "Задачи",
+      "short_name": "Задачи",
+      "url": "/mobile?mobile_app=1#tasks"
+    }
+  ]
 }

@@ -178,6 +178,16 @@
             <span class="bell-emoji" aria-hidden="true">🔔</span>
             <span id="socialBellBadge" class="icon-bell-badge hidden">0</span>
           </button>
+          <select id="mobileQuickNav" class="chip-select mobile-quick-nav hidden" onchange="onMobileQuickNavChanged()">
+            <option value="social_chat">Чат</option>
+            <option value="social_tasks">Задачи</option>
+            <option value="social_notes">Заметки</option>
+            <option value="social_calculator">Калькулятор</option>
+            <option value="social_calendar">Календарь</option>
+            <option value="reviews_reviews">Ответы на отзывы</option>
+            <option value="reviews_questions">Ответы на вопросы</option>
+            <option value="profile_main">Профиль</option>
+          </select>
           <select id="uiLangSelect" class="chip-select" onchange="changeUiLang()">
             <option value="ru">RU</option>
             <option value="en">EN</option>
@@ -395,6 +405,10 @@
           <div id="salesLoadStatus" class="hint load-status">-</div>
           <div id="salesTrendChart" class="trend-chart mini"></div>
           <div id="salesTrendMeta" class="trend-meta"></div>
+          <div id="salesExtraWrap" class="sales-extra-wrap">
+            <div id="salesExtraHint" class="hint">Дополнительные метрики</div>
+            <div id="salesTotalsExtra" class="sales-kpis sales-kpis-extra"></div>
+          </div>
         </div>
         <div class="kpis" id="stats"></div>
         <div class="panel trend-panel">
@@ -1091,6 +1105,7 @@
           <div class="module-subtabs">
             <button class="chip-btn active" id="helpSubtabDocsBtn" type="button" onclick="switchHelpSubtab('docs')">Справка</button>
             <button class="chip-btn" id="helpSubtabAssistantBtn" type="button" onclick="switchHelpSubtab('assistant')">AI помощник</button>
+            <button class="chip-btn" id="helpSubtabDownloadsBtn" type="button" onclick="switchHelpSubtab('downloads')">Загрузки</button>
           </div>
         </div>
         <div id="helpSubtabDocs">
@@ -1113,6 +1128,13 @@
             </div>
             <div id="helpAssistantHint" class="hint">-</div>
             <div id="helpAssistantHistory" class="help-rich">-</div>
+          </div>
+        </div>
+        <div id="helpSubtabDownloads" class="hidden">
+          <div class="panel">
+            <h3>Загрузки и версии</h3>
+            <div id="helpDownloadsCurrent" class="help-rich">-</div>
+            <div id="helpDownloadsList" class="help-rich">-</div>
           </div>
         </div>
       </section>

@@ -110,6 +110,8 @@ let salesRows = [];
 let salesChartRows = [];
 let salesCompareRows = [];
 let salesCompareChartRows = [];
+let salesTotalsData = {};
+let salesComparisonData = {};
 let salesCompareLabel = "";
 let salesCurrentLabel = "";
 let salesLoadProgress = { active: false, total: 0, loaded: 0 };
@@ -134,11 +136,20 @@ const profileSectionNodes = new Map();
 let reviewPhotoItems = [];
 let reviewPhotoIndex = 0;
 let helpDocsRows = [];
+let helpReleaseRows = [];
 let helpAssistantHistory = [];
 const DEFAULT_AVATARS = Array.from({ length: 8 }, (_, i) => `/static/avatars/avatar-${String(i + 1).padStart(2, "0")}.svg`);
 const GROUP_AVATARS = Array.from({ length: 8 }, (_, i) => `/static/avatars/group-${String(i + 1).padStart(2, "0")}.svg`);
 let currentLang = (localStorage.getItem("ui_lang") || "ru").toLowerCase() === "en" ? "en" : "ru";
 let currentTheme = (localStorage.getItem("ui_theme") || "classic").toLowerCase();
+const mobileClientMode = (() => {
+  try {
+    const url = new URL(window.location.href);
+    return window.location.pathname === "/mobile" || url.searchParams.get("mobile_app") === "1";
+  } catch (_) {
+    return String(window.location.pathname || "").trim() === "/mobile";
+  }
+})();
 let sidebarCompact = localStorage.getItem("sidebar_compact") === "1";
 let authMode = "login";
 let uiThemeSettings = {
@@ -733,6 +744,7 @@ function applyUiLanguage() {
   setText("#sales [data-sales-range='quarter']", isEn ? "Quarter" : "Квартал");
   setText("#sales [data-sales-range='halfyear']", isEn ? "6 months" : "6 месяцев");
   setText("#sales [data-sales-range='year']", isEn ? "Year" : "Год");
+  setText("#salesExtraHint", isEn ? "Additional metrics" : "Дополнительные метрики");
   setText("#reviews .panel h3", isEn ? "Reviews WB/Ozon" : "Отзывы WB/Ozon");
   setText("#reviewsSubtabQuestions .panel h3", isEn ? "Questions & Replies WB/Ozon" : "Вопросы и ответы WB/Ozon");
   setText("#ads .panel h3", isEn ? "WB Ad Campaigns" : "Рекламные кампании WB");
@@ -778,11 +790,13 @@ function applyUiLanguage() {
   setText("#helpSubtabDocs .grid-2 button", isEn ? "Refresh Help" : "Обновить справку");
   setText("#helpSubtabAssistant .panel h3", isEn ? "AI assistant (any question)" : "AI помощник (любой вопрос)");
   setText("#helpSubtabAssistant .grid-3 button", isEn ? "Ask" : "Спросить");
+  setText("#helpSubtabDownloads .panel h3", isEn ? "Downloads and versions" : "Загрузки и версии");
   setText("#teamModalSaveBtn", isEn ? "Save" : "Сохранить");
   setText("#teamModalDeleteBtn", isEn ? "Delete" : "Удалить");
   setText("#teamMemberEditModal .actions .btn-secondary", isEn ? "Cancel" : "Отмена");
   setText("#helpSubtabDocsBtn", isEn ? "Help" : "Справка");
   setText("#helpSubtabAssistantBtn", isEn ? "AI assistant" : "AI помощник");
+  setText("#helpSubtabDownloadsBtn", isEn ? "Downloads" : "Загрузки");
   setText("#reviewsSubtabReviewsBtn", isEn ? "Reviews" : "Отзывы");
   setText("#reviewsSubtabQuestionsBtn", isEn ? "Questions" : "Вопросы");
   setText("#reviewsSubtabReturnsBtn", isEn ? "Returns" : "Возвраты");
@@ -1055,6 +1069,8 @@ function applyUiLanguage() {
   if (typeof applyAccountingUiLanguage === "function") {
     applyAccountingUiLanguage();
   }
+  refreshMobileQuickNavOptions();
+  syncMobileQuickNavSelection();
   applyModuleActionIcons();
 }
 
@@ -2090,6 +2106,7 @@ function showTab(name, btn = null) {
   if (targetTab === "billing") runModuleLoader("billing", loadBilling);
   if (targetTab === "help") runModuleLoader("help", loadHelpWorkspace, { maxAgeMs: MODULE_CACHE_TTL_MS });
   if (targetTab === "admin") loadAdmin();
+  syncMobileQuickNavSelection();
   closeMobileNav();
   if ((window.innerWidth || 0) <= 980) {
     try { window.scrollTo(0, 0); } catch (_) {}
@@ -2148,6 +2165,93 @@ function closeMobileNav(evt = null) {
   shell.classList.remove("nav-open");
   const btn = document.getElementById("mobileNavToggle");
   if (btn) btn.setAttribute("aria-expanded", "false");
+}
+
+function getMobileQuickNavOptions() {
+  const isEn = currentLang === "en";
+  return [
+    { value: "social_chat", label: isEn ? "Chat" : "Чат" },
+    { value: "social_tasks", label: isEn ? "Tasks" : "Задачи" },
+    { value: "social_notes", label: isEn ? "Notes" : "Заметки" },
+    { value: "social_calculator", label: isEn ? "Calculator" : "Калькулятор" },
+    { value: "social_calendar", label: isEn ? "Calendar" : "Календарь" },
+    { value: "reviews_reviews", label: isEn ? "Review replies" : "Ответы на отзывы" },
+    { value: "reviews_questions", label: isEn ? "Question replies" : "Ответы на вопросы" },
+    { value: "profile_main", label: isEn ? "Profile" : "Профиль" },
+  ];
+}
+
+function refreshMobileQuickNavOptions() {
+  if (!mobileClientMode) return;
+  const select = document.getElementById("mobileQuickNav");
+  if (!select) return;
+  const previous = String(select.value || "").trim();
+  const options = getMobileQuickNavOptions();
+  select.innerHTML = options
+    .map((row) => `<option value="${escapeHtml(row.value)}">${escapeHtml(row.label)}</option>`)
+    .join("");
+  if ([...select.options].some((opt) => opt.value === previous)) {
+    select.value = previous;
+  }
+}
+
+function syncMobileQuickNavSelection() {
+  if (!mobileClientMode) return;
+  const select = document.getElementById("mobileQuickNav");
+  if (!select) return;
+  let value = "";
+  if (currentTab === "social") {
+    const sub = ["chat", "tasks", "notes", "calculator", "calendar"].includes(String(currentSocialSubtab || ""))
+      ? String(currentSocialSubtab)
+      : "chat";
+    value = `social_${sub}`;
+  } else if (currentTab === "reviews") {
+    value = currentReviewsSubtab === "questions" ? "reviews_questions" : "reviews_reviews";
+  } else if (currentTab === "profile") {
+    value = "profile_main";
+  }
+  if (value && [...select.options].some((opt) => opt.value === value)) {
+    select.value = value;
+  }
+}
+
+function onMobileQuickNavChanged() {
+  if (!mobileClientMode) return;
+  const select = document.getElementById("mobileQuickNav");
+  const value = String(select?.value || "").trim();
+  if (!value) return;
+  if (value.startsWith("social_")) {
+    const sub = value.replace(/^social_/, "") || "chat";
+    showTab("social", document.querySelector(".nav-btn[data-tab='social']"));
+    const runSwitch = () => {
+      if (typeof window.switchSocialSubtab !== "function") return false;
+      window.switchSocialSubtab(sub, true);
+      return true;
+    };
+    if (!runSwitch()) {
+      setTimeout(runSwitch, 160);
+    }
+    return;
+  }
+  if (value.startsWith("reviews_")) {
+    const sub = value.endsWith("_questions") ? "questions" : "reviews";
+    showTab("reviews", document.querySelector(".nav-btn[data-tab='reviews']"));
+    switchReviewsSubtab(sub, true);
+    return;
+  }
+  if (value === "profile_main") {
+    showTab("profile", document.querySelector(".nav-btn[data-tab='profile']"));
+  }
+}
+
+function setupMobileClientMode() {
+  if (!mobileClientMode) return;
+  document.body.classList.add("mobile-client-mode");
+  const select = document.getElementById("mobileQuickNav");
+  if (!select) return;
+  select.classList.remove("hidden");
+  refreshMobileQuickNavOptions();
+  syncMobileQuickNavSelection();
 }
 
 async function register() {
@@ -2233,6 +2337,8 @@ async function logout() {
   salesChartRows = [];
   salesCompareRows = [];
   salesCompareChartRows = [];
+  salesTotalsData = {};
+  salesComparisonData = {};
   salesCompareLabel = "";
   salesCurrentLabel = "";
   moduleLoadState.clear();
@@ -2443,12 +2549,18 @@ async function ensureAuth(allowFallback = true) {
         const storedAccountingSubtab = String(sessionStorage.getItem("seo_wibe_last_accounting_subtab") || "").trim();
         if (["overview", "analysis", "expenses", "settings"].includes(storedAccountingSubtab)) currentAccountingSubtab = storedAccountingSubtab;
         const storedHelpSubtab = String(sessionStorage.getItem("seo_wibe_last_help_subtab") || "").trim();
-        if (["docs", "assistant"].includes(storedHelpSubtab)) currentHelpSubtab = storedHelpSubtab;
+        if (["docs", "assistant", "downloads"].includes(storedHelpSubtab)) currentHelpSubtab = storedHelpSubtab;
         const storedSocialSubtab = String(sessionStorage.getItem("seo_wibe_last_social_subtab") || "").trim();
         if (["games", "chat", "tasks", "calendar", "calculator", "notes"].includes(storedSocialSubtab)) currentSocialSubtab = storedSocialSubtab;
         const storedRaw = String(sessionStorage.getItem("seo_wibe_last_tab") || "").trim();
         const storedTab = normalizeLegacyTabName(storedRaw).tab;
-        const initialTab = isTabAvailable(storedTab) ? storedTab : resolveInitialTab();
+        let initialTab = isTabAvailable(storedTab) ? storedTab : resolveInitialTab();
+        if (mobileClientMode) {
+          currentSocialSubtab = "chat";
+          if (isTabAvailable("social")) initialTab = "social";
+          else if (isTabAvailable("reviews")) initialTab = "reviews";
+          else if (isTabAvailable("profile")) initialTab = "profile";
+        }
         showTab(initialTab, document.querySelector(`.nav-btn[data-tab='${initialTab}']`));
         appUiBootstrapped = true;
         setTimeout(() => {
@@ -2791,6 +2903,7 @@ function switchReviewsSubtab(tab, preload = true) {
   document.getElementById("reviewsSubtabReviewsBtn")?.classList.toggle("active", showReviews);
   document.getElementById("reviewsSubtabQuestionsBtn")?.classList.toggle("active", showQuestions);
   document.getElementById("reviewsSubtabReturnsBtn")?.classList.toggle("active", showReturns);
+  syncMobileQuickNavSelection();
   if (!preload) return;
   if (showReviews) {
     trackUiActivity("ui_subtab_opened", "wb_reviews_ai", "subtab=reviews", { cooldownMs: 15000 });
@@ -2865,26 +2978,34 @@ function syncHelpSubtabAccess() {
   const canAssistant = enabledModules.has("ai_assistant");
   const docsBtn = document.getElementById("helpSubtabDocsBtn");
   const aiBtn = document.getElementById("helpSubtabAssistantBtn");
+  const downloadsBtn = document.getElementById("helpSubtabDownloadsBtn");
   if (docsBtn) docsBtn.classList.toggle("hidden", !canDocs);
   if (aiBtn) aiBtn.classList.toggle("hidden", !canAssistant);
+  if (downloadsBtn) downloadsBtn.classList.toggle("hidden", !canDocs);
   if (!canDocs && canAssistant) currentHelpSubtab = "assistant";
-  if (!canAssistant && canDocs) currentHelpSubtab = "docs";
+  if (!canAssistant && canDocs && currentHelpSubtab === "assistant") currentHelpSubtab = "docs";
   if (!canDocs && !canAssistant) currentHelpSubtab = "docs";
+  if (canDocs && !["docs", "assistant", "downloads"].includes(String(currentHelpSubtab || ""))) {
+    currentHelpSubtab = "docs";
+  }
 }
 
 function switchHelpSubtab(tab, preload = true) {
   const canDocs = enabledModules.has("help_center");
   const canAssistant = enabledModules.has("ai_assistant");
-  let next = tab === "assistant" ? "assistant" : "docs";
+  let next = ["assistant", "downloads", "docs"].includes(String(tab || "")) ? String(tab) : "docs";
   if (next === "assistant" && !canAssistant && canDocs) next = "docs";
-  if (next === "docs" && !canDocs && canAssistant) next = "assistant";
+  if ((next === "docs" || next === "downloads") && !canDocs && canAssistant) next = "assistant";
   currentHelpSubtab = next;
   const showDocs = next === "docs" && canDocs;
   const showAssistant = next === "assistant" && canAssistant;
+  const showDownloads = next === "downloads" && canDocs;
   document.getElementById("helpSubtabDocs")?.classList.toggle("hidden", !showDocs);
   document.getElementById("helpSubtabAssistant")?.classList.toggle("hidden", !showAssistant);
+  document.getElementById("helpSubtabDownloads")?.classList.toggle("hidden", !showDownloads);
   document.getElementById("helpSubtabDocsBtn")?.classList.toggle("active", showDocs);
   document.getElementById("helpSubtabAssistantBtn")?.classList.toggle("active", showAssistant);
+  document.getElementById("helpSubtabDownloadsBtn")?.classList.toggle("active", showDownloads);
   if (!preload) return;
   if (showDocs) {
     trackUiActivity("ui_subtab_opened", "help_center", "subtab=docs", { cooldownMs: 15000 });
@@ -2893,6 +3014,9 @@ function switchHelpSubtab(tab, preload = true) {
     trackUiActivity("ui_subtab_opened", "ai_assistant", "subtab=assistant", { cooldownMs: 15000 });
     renderHelpAssistantHistory();
     renderHelpAssistantModuleOptions();
+  } else if (showDownloads) {
+    trackUiActivity("ui_subtab_opened", "help_center", "subtab=downloads", { cooldownMs: 15000 });
+    loadHelpReleases();
   }
 }
 
@@ -2912,10 +3036,11 @@ async function loadHelpWorkspace() {
   if (!canDocs && !canAssistant) return;
   syncHelpSubtabAccess();
   if (!canDocs && canAssistant) currentHelpSubtab = "assistant";
-  await loadHelpDocs();
+  if (canDocs) await loadHelpDocs();
+  if (canDocs) await loadHelpReleases();
   renderHelpAssistantHistory();
   renderHelpAssistantModuleOptions();
-  switchHelpSubtab(currentHelpSubtab || (canAssistant ? "assistant" : "docs"), false);
+  switchHelpSubtab(currentHelpSubtab || (canDocs ? "docs" : "assistant"), false);
 }
 
 async function loadReviewsWorkspace() {
@@ -4695,6 +4820,8 @@ async function enrichWbCampaignRows(runToken) {
 
   const batchSize = 12;
   let partialFallback = false;
+  let partialStatsMissingTotal = 0;
+  let partialSummaryMissingTotal = 0;
   for (let i = 0; i < pending.length; i += batchSize) {
     if (runToken !== wbAdsLoadToken) return;
     const chunk = pending.slice(i, i + batchSize);
@@ -4715,11 +4842,22 @@ async function enrichWbCampaignRows(runToken) {
     const summaries = payload?.summaries && typeof payload.summaries === "object" ? payload.summaries : {};
     const stats = payload?.stats && typeof payload.stats === "object" ? payload.stats : {};
     const meta = payload?.meta && typeof payload.meta === "object" ? payload.meta : {};
-    const missingIds = Array.isArray(meta?.missing_ids)
-      ? meta.missing_ids.map((x) => Number(x || 0)).filter((x) => Number.isFinite(x) && x > 0)
+    const hardMissingIds = Array.isArray(meta?.hard_missing_ids)
+      ? meta.hard_missing_ids.map((x) => Number(x || 0)).filter((x) => Number.isFinite(x) && x > 0)
+      : (Array.isArray(meta?.missing_ids)
+        ? meta.missing_ids.map((x) => Number(x || 0)).filter((x) => Number.isFinite(x) && x > 0)
+        : []);
+    const partialStatsIds = Array.isArray(meta?.partial_stats_ids)
+      ? meta.partial_stats_ids.map((x) => Number(x || 0)).filter((x) => Number.isFinite(x) && x > 0)
       : [];
-    let chunkMissing = missingIds.length;
-    if (chunkMissing <= 0) {
+    const partialSummaryIds = Array.isArray(meta?.partial_summary_ids)
+      ? meta.partial_summary_ids.map((x) => Number(x || 0)).filter((x) => Number.isFinite(x) && x > 0)
+      : [];
+    partialStatsMissingTotal += partialStatsIds.length;
+    partialSummaryMissingTotal += partialSummaryIds.length;
+    const hasMissingMeta = Array.isArray(meta?.hard_missing_ids) || Array.isArray(meta?.missing_ids);
+    let chunkMissing = hardMissingIds.length;
+    if (!hasMissingMeta && chunkMissing <= 0) {
       chunkMissing = chunk.filter((cid) => {
         const key = String(cid);
         const hasSummary = Boolean(summaries[key] && typeof summaries[key] === "object");
@@ -4744,12 +4882,19 @@ async function enrichWbCampaignRows(runToken) {
   if (runToken !== wbAdsLoadToken) return;
   wbAdsLoadProgress.active = false;
   if (partialFallback || Number(wbAdsLoadProgress.failed || 0) > 0) {
-    updateWbAdsLoadStatus(
-      tr(
-        "Кампании загружены частично: часть детальных полей временно недоступна.",
-        "Campaigns loaded partially: some detailed fields are temporarily unavailable."
-      )
+    let msg = tr(
+      "Кампании загружены частично: часть детальных полей временно недоступна.",
+      "Campaigns loaded partially: some detailed fields are temporarily unavailable."
     );
+    if (partialStatsMissingTotal > 0 && Number(wbAdsLoadProgress.failed || 0) <= 0) {
+      msg = tr(
+        `Кампании загружены. Для ${formatInt(partialStatsMissingTotal)} кампаний статистика за период пока не вернулась API.`,
+        `Campaigns loaded. Period stats are not returned yet for ${formatInt(partialStatsMissingTotal)} campaigns.`
+      );
+    } else if (partialStatsMissingTotal > 0 || partialSummaryMissingTotal > 0) {
+      msg += ` ${tr("Неполные поля", "Incomplete fields")}: ${formatInt(partialStatsMissingTotal + partialSummaryMissingTotal)}.`;
+    }
+    updateWbAdsLoadStatus(msg);
   } else {
     updateWbAdsLoadStatus();
   }
@@ -7091,8 +7236,10 @@ function formatMoney(value) {
 
 function renderSalesTotals() {
   const host = document.getElementById("salesTotalsCards");
+  const extraHost = document.getElementById("salesTotalsExtra");
+  const extraWrap = document.getElementById("salesExtraWrap");
   if (!host) return;
-  const totals = {
+  const fallbackTotals = {
     orders: salesRows.reduce((acc, row) => acc + Number(row.orders || 0), 0),
     units: salesRows.reduce((acc, row) => acc + Number(row.units || 0), 0),
     buyouts: salesRows.reduce((acc, row) => acc + Number(row.buyouts || Math.max(0, Number(row.units || 0) - Number(row.returns || 0))), 0),
@@ -7112,38 +7259,61 @@ function renderSalesTotals() {
     acceptance: salesRows.reduce((acc, row) => acc + Number(row.acceptance || 0), 0),
     other_expense: salesRows.reduce((acc, row) => acc + Number(row.other_expense || 0), 0),
   };
+  const totals = { ...fallbackTotals };
+  const source = (salesTotalsData && typeof salesTotalsData === "object") ? salesTotalsData : {};
+  const syncKeys = [
+    "orders",
+    "units",
+    "buyouts",
+    "order_amount",
+    "buyout_amount",
+    "revenue",
+    "returns",
+    "ad_spend",
+    "penalties",
+    "income",
+    "expense",
+    "net",
+    "commission",
+    "logistics",
+    "storage",
+    "deductions",
+    "acceptance",
+    "other_expense",
+  ];
+  for (const key of syncKeys) {
+    const value = Number(source?.[key]);
+    if (Number.isFinite(value)) totals[key] = value;
+  }
   totals.gross_profit = Number(totals.revenue || 0) - Number(totals.ad_spend || 0) - Number(totals.penalties || 0);
-  const hasExpenseBreakdown = (
-    Math.abs(Number(totals.commission || 0))
-    + Math.abs(Number(totals.logistics || 0))
-    + Math.abs(Number(totals.storage || 0))
-    + Math.abs(Number(totals.deductions || 0))
-    + Math.abs(Number(totals.acceptance || 0))
-    + Math.abs(Number(totals.other_expense || 0))
-  ) > 0;
   host.innerHTML = `
     <article class="sales-kpi"><span>${tr("Заказы", "Orders")}</span><strong>${formatInt(totals.orders)}</strong></article>
     <article class="sales-kpi"><span>${tr("Штуки", "Units")}</span><strong>${formatInt(totals.units)}</strong></article>
     <article class="sales-kpi"><span>${tr("Выкупы", "Buyouts")}</span><strong>${formatInt(totals.buyouts)}</strong></article>
-    <article class="sales-kpi"><span>${tr("Сумма заказов", "Orders amount")}</span><strong>${formatMoney(totals.order_amount)}</strong></article>
-    <article class="sales-kpi"><span>${tr("Сумма выкупов", "Buyouts amount")}</span><strong>${formatMoney(totals.buyout_amount)}</strong></article>
     <article class="sales-kpi"><span>${tr("Выручка", "Revenue")}</span><strong>${formatMoney(totals.revenue)}</strong></article>
-    <article class="sales-kpi"><span>${tr("Приход", "Income")}</span><strong>${formatMoney(totals.income)}</strong></article>
-    <article class="sales-kpi"><span>${tr("Расход", "Expense")}</span><strong>${formatMoney(totals.expense)}</strong></article>
-    <article class="sales-kpi"><span>${tr("Изм. баланса", "Net change")}</span><strong>${formatMoney(totals.net)}</strong></article>
     <article class="sales-kpi"><span>${tr("Отказы", "Returns")}</span><strong>${formatInt(totals.returns)}</strong></article>
-    <article class="sales-kpi"><span>${tr("Реклама", "Ads Spend")}</span><strong>${formatMoney(totals.ad_spend)}</strong></article>
-    <article class="sales-kpi"><span>${tr("Штрафы", "Penalties")}</span><strong>${formatMoney(totals.penalties)}</strong></article>
+    <article class="sales-kpi"><span>${tr("Реклама", "Ads spend")}</span><strong>${formatMoney(totals.ad_spend)}</strong></article>
     <article class="sales-kpi"><span>${tr("Валовая прибыль", "Gross Profit")}</span><strong>${formatMoney(totals.gross_profit)}</strong></article>
-    ${hasExpenseBreakdown ? `
+  `;
+  if (extraHost) {
+    extraHost.innerHTML = `
+      <article class="sales-kpi"><span>${tr("Сумма заказов", "Orders amount")}</span><strong>${formatMoney(totals.order_amount)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Сумма выкупов", "Buyouts amount")}</span><strong>${formatMoney(totals.buyout_amount)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Приход", "Income")}</span><strong>${formatMoney(totals.income)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Расход", "Expense")}</span><strong>${formatMoney(totals.expense)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Изм. баланса", "Net change")}</span><strong>${formatMoney(totals.net)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Штрафы", "Penalties")}</span><strong>${formatMoney(totals.penalties)}</strong></article>
       <article class="sales-kpi"><span>${tr("Комиссия", "Commission")}</span><strong>${formatMoney(totals.commission)}</strong></article>
       <article class="sales-kpi"><span>${tr("Логистика", "Logistics")}</span><strong>${formatMoney(totals.logistics)}</strong></article>
       <article class="sales-kpi"><span>${tr("Хранение", "Storage")}</span><strong>${formatMoney(totals.storage)}</strong></article>
       <article class="sales-kpi"><span>${tr("Удержания", "Deductions")}</span><strong>${formatMoney(totals.deductions)}</strong></article>
       <article class="sales-kpi"><span>${tr("Приемка", "Acceptance")}</span><strong>${formatMoney(totals.acceptance)}</strong></article>
       <article class="sales-kpi"><span>${tr("Прочие расходы", "Other expense")}</span><strong>${formatMoney(totals.other_expense)}</strong></article>
-    ` : ""}
-  `;
+    `;
+  }
+  if (extraWrap) {
+    extraWrap.classList.toggle("hidden", !Object.keys(totals).length);
+  }
 }
 
 function renderSalesChart(points) {
@@ -7818,6 +7988,10 @@ async function loadSalesStats(retryAttempt = 0) {
     if (meta) meta.textContent = tr("Модуль статистики продаж отключен администратором.", "Sales statistics module is disabled by admin.");
     salesRows = [];
     salesChartRows = [];
+    salesCompareRows = [];
+    salesCompareChartRows = [];
+    salesTotalsData = {};
+    salesComparisonData = {};
     salesLoadProgress = { active: false, total: 0, loaded: 0 };
     salesLoadState = "idle";
     updateSalesLoadStatus();
@@ -7869,6 +8043,8 @@ async function loadSalesStats(retryAttempt = 0) {
   salesChartRows = [];
   salesCompareRows = [];
   salesCompareChartRows = [];
+  salesTotalsData = {};
+  salesComparisonData = {};
   renderSalesStats();
   salesLoadState = "loading";
   salesLoadProgress = { active: true, total: market === "all" ? 2 : 1, loaded: 0 };
@@ -7896,6 +8072,8 @@ async function loadSalesStats(retryAttempt = 0) {
     salesChartRows = [];
     salesCompareRows = [];
     salesCompareChartRows = [];
+    salesTotalsData = {};
+    salesComparisonData = {};
     salesLoadState = "error";
     salesLoadProgress = { active: false, total: market === "all" ? 2 : 1, loaded: 0 };
     updateSalesLoadStatus();
@@ -7927,6 +8105,9 @@ async function loadSalesStats(retryAttempt = 0) {
     salesCompareChartRows = buildSalesChartFromRows(salesCompareRows);
   }
   const totals = data.totals || {};
+  const comparison = data.comparison && typeof data.comparison === "object" ? data.comparison : {};
+  salesTotalsData = totals && typeof totals === "object" ? totals : {};
+  salesComparisonData = comparison;
   const warnings = Array.isArray(data.warnings) ? data.warnings.filter(Boolean) : [];
   const hasWb429 = warnings.some((x) => String(x || "").includes("429"));
   if (hasWb429 && (market === "wb" || market === "all") && retryAttempt < 1) {
@@ -7950,23 +8131,30 @@ async function loadSalesStats(retryAttempt = 0) {
   }
   if (meta) {
     const totalTxt = tr(
-      `Заказы: ${formatInt(totals.orders || 0)} (${formatMoney(totals.order_amount || 0)}), шт.: ${formatInt(totals.units || 0)}, выкупы: ${formatInt(totals.buyouts || 0)} (${formatMoney(totals.buyout_amount || 0)}), выручка: ${formatMoney(totals.revenue || 0)}, приход: ${formatMoney(totals.income || 0)}, расход: ${formatMoney(totals.expense || 0)}, баланс: ${formatMoney(totals.net || 0)}, отказы: ${formatInt(totals.returns || 0)}, реклама: ${formatMoney(totals.ad_spend || 0)}, штрафы: ${formatMoney(totals.penalties || 0)}.`,
-      `Orders: ${formatInt(totals.orders || 0)} (${formatMoney(totals.order_amount || 0)}), units: ${formatInt(totals.units || 0)}, buyouts: ${formatInt(totals.buyouts || 0)} (${formatMoney(totals.buyout_amount || 0)}), revenue: ${formatMoney(totals.revenue || 0)}, income: ${formatMoney(totals.income || 0)}, expense: ${formatMoney(totals.expense || 0)}, net: ${formatMoney(totals.net || 0)}, returns: ${formatInt(totals.returns || 0)}, ads: ${formatMoney(totals.ad_spend || 0)}, penalties: ${formatMoney(totals.penalties || 0)}.`
+      `Заказы ${formatInt(totals.orders || 0)} • Штуки ${formatInt(totals.units || 0)} • Выкупы ${formatInt(totals.buyouts || 0)} • Выручка ${formatMoney(totals.revenue || 0)} • Отказы ${formatInt(totals.returns || 0)}`,
+      `Orders ${formatInt(totals.orders || 0)} • Units ${formatInt(totals.units || 0)} • Buyouts ${formatInt(totals.buyouts || 0)} • Revenue ${formatMoney(totals.revenue || 0)} • Returns ${formatInt(totals.returns || 0)}`
     );
-    const wbTxt = tr(
-      `WB: заказы ${formatInt(totals.wb_orders || 0)} (${formatMoney(totals.wb_order_amount || 0)}), выкупы ${formatInt(totals.wb_buyouts || 0)} (${formatMoney(totals.wb_buyout_amount || 0)}), приход ${formatMoney(totals.wb_income || 0)}, расход ${formatMoney(totals.wb_expense || 0)}.`,
-      `WB: orders ${formatInt(totals.wb_orders || 0)} (${formatMoney(totals.wb_order_amount || 0)}), buyouts ${formatInt(totals.wb_buyouts || 0)} (${formatMoney(totals.wb_buyout_amount || 0)}), income ${formatMoney(totals.wb_income || 0)}, expense ${formatMoney(totals.wb_expense || 0)}.`
-    );
-    const ozTxt = tr(
-      `Ozon: заказы ${formatInt(totals.ozon_orders || 0)} (${formatMoney(totals.ozon_order_amount || 0)}), выкупы ${formatInt(totals.ozon_buyouts || 0)} (${formatMoney(totals.ozon_buyout_amount || 0)}), приход ${formatMoney(totals.ozon_income || 0)}, расход ${formatMoney(totals.ozon_expense || 0)}.`,
-      `Ozon: orders ${formatInt(totals.ozon_orders || 0)} (${formatMoney(totals.ozon_order_amount || 0)}), buyouts ${formatInt(totals.ozon_buyouts || 0)} (${formatMoney(totals.ozon_buyout_amount || 0)}), income ${formatMoney(totals.ozon_income || 0)}, expense ${formatMoney(totals.ozon_expense || 0)}.`
-    );
-    const expenseBreakdownTxt = tr(
-      `Детализация расходов: комиссия ${formatMoney(totals.commission || 0)}, логистика ${formatMoney(totals.logistics || 0)}, хранение ${formatMoney(totals.storage || 0)}, удержания ${formatMoney(totals.deductions || 0)}, приемка ${formatMoney(totals.acceptance || 0)}, прочие ${formatMoney(totals.other_expense || 0)}.`,
-      `Expense breakdown: commission ${formatMoney(totals.commission || 0)}, logistics ${formatMoney(totals.logistics || 0)}, storage ${formatMoney(totals.storage || 0)}, deductions ${formatMoney(totals.deductions || 0)}, acceptance ${formatMoney(totals.acceptance || 0)}, other ${formatMoney(totals.other_expense || 0)}.`
-    );
-    const warnTxt = warnings.length ? ` ${warnings.join(" | ")}` : "";
-    meta.textContent = `${totalTxt} ${wbTxt} ${ozTxt} ${expenseBreakdownTxt}${warnTxt}`;
+    const byMarketText = market === "all"
+      ? tr(
+        `WB: ${formatInt(totals.wb_orders || 0)} / ${formatMoney(totals.wb_revenue || 0)} • Ozon: ${formatInt(totals.ozon_orders || 0)} / ${formatMoney(totals.ozon_revenue || 0)}`,
+        `WB: ${formatInt(totals.wb_orders || 0)} / ${formatMoney(totals.wb_revenue || 0)} • Ozon: ${formatInt(totals.ozon_orders || 0)} / ${formatMoney(totals.ozon_revenue || 0)}`
+      )
+      : "";
+    let compareText = "";
+    if (Number(comparison?.period_days || 0) === 1 && comparison?.metrics) {
+      const unitsCurrent = Number(comparison.metrics?.units?.current || 0);
+      const unitsPrev = Number(comparison.metrics?.units?.previous || 0);
+      const revenueCurrent = Number(comparison.metrics?.revenue?.current || 0);
+      const revenuePrev = Number(comparison.metrics?.revenue?.previous || 0);
+      compareText = tr(
+        `Сегодня/вчера: штуки ${formatInt(unitsCurrent)} / ${formatInt(unitsPrev)}, выручка ${formatMoney(revenueCurrent)} / ${formatMoney(revenuePrev)}`,
+        `Today/yesterday: units ${formatInt(unitsCurrent)} / ${formatInt(unitsPrev)}, revenue ${formatMoney(revenueCurrent)} / ${formatMoney(revenuePrev)}`
+      );
+    }
+    const warnText = warnings.length
+      ? tr(`Предупреждений: ${warnings.length}.`, `Warnings: ${warnings.length}.`)
+      : "";
+    meta.textContent = [totalTxt, byMarketText, compareText, warnText].filter(Boolean).join(" • ");
   }
   const progress = resolveSalesLoadProgress(market, salesRows, warnings);
   salesLoadProgress = { active: false, total: progress.total, loaded: progress.loaded };
@@ -8921,6 +9109,7 @@ async function loadHelpDocs() {
   const lang = (currentLang || "ru").trim().toLowerCase();
   if (!canDocs) {
     helpDocsRows = [];
+    helpReleaseRows = [];
     const select = document.getElementById("helpModuleSelect");
     if (select) {
       select.innerHTML = `<option value="">${lang === "en" ? "Help module is disabled" : "Модуль справки отключен"}</option>`;
@@ -8934,6 +9123,16 @@ async function loadHelpDocs() {
           : "Документация отключена для вашего доступа."
       }</div>`;
     }
+    const downloadsCurrent = document.getElementById("helpDownloadsCurrent");
+    const downloadsList = document.getElementById("helpDownloadsList");
+    if (downloadsCurrent) {
+      downloadsCurrent.innerHTML = `<div class="help-empty">${
+        lang === "en"
+          ? "Downloads are unavailable for your access."
+          : "Раздел загрузок недоступен для вашего доступа."
+      }</div>`;
+    }
+    if (downloadsList) downloadsList.innerHTML = "";
     renderHelpAssistantModuleOptions();
     markModuleLoaded("help");
     return;
@@ -9041,6 +9240,96 @@ async function loadHelpDocs() {
   `;
   renderHelpAssistantModuleOptions();
   markModuleLoaded("help");
+}
+
+async function loadHelpReleases() {
+  if (!enabledModules.has("help_center")) return;
+  const lang = (currentLang || "ru").trim().toLowerCase() === "en" ? "en" : "ru";
+  const currentHost = document.getElementById("helpDownloadsCurrent");
+  const listHost = document.getElementById("helpDownloadsList");
+  if (!currentHost || !listHost) return;
+  const qp = new URLSearchParams();
+  qp.set("lang", lang);
+  const data = await requestJson(`/api/help/releases?${qp.toString()}`, { headers: authHeaders() }).catch((e) => {
+    currentHost.innerHTML = `<div class="help-callout warn"><strong>${escapeHtml(String(e?.message || "Error"))}</strong></div>`;
+    return null;
+  });
+  if (!data) return;
+  const rows = Array.isArray(data) ? data : [];
+  helpReleaseRows = rows;
+  if (!rows.length) {
+    currentHost.innerHTML = `<div class="help-empty">${lang === "en" ? "No release data yet." : "Данные релизов пока отсутствуют."}</div>`;
+    listHost.innerHTML = "";
+    return;
+  }
+  const currentRow = rows.find((x) => Boolean(x?.current)) || rows[0];
+  const currentVersion = escapeHtml(String(currentRow?.version || "-"));
+  const releaseDate = escapeHtml(String(currentRow?.released_at || "-"));
+  const currentSummary = escapeHtml(String(currentRow?.summary || ""));
+  const appEntryUrl = String(currentRow?.app_entry_url || "/mobile");
+  const downloadUrl = String(currentRow?.android_download_url || appEntryUrl || "/mobile");
+  const downloadName = escapeHtml(String(currentRow?.android_download_name || "SEO WIBE Mobile"));
+  const diffItems = Array.isArray(currentRow?.diff_from_previous)
+    ? currentRow.diff_from_previous.filter(Boolean).map((line) => `<li>${escapeHtml(String(line))}</li>`).join("")
+    : "";
+  const notesText = escapeHtml(String(currentRow?.notes || ""));
+  currentHost.innerHTML = `
+    <article class="help-card selected">
+      <header class="help-card-head">
+        <div>
+          <h4>${lang === "en" ? "Current version" : "Текущая версия"} ${currentVersion}</h4>
+          <small>${releaseDate}</small>
+        </div>
+        <div class="help-card-actions">
+          <a class="btn-secondary help-open-btn" href="${escapeHtml(downloadUrl)}" target="_blank" rel="noopener noreferrer">
+            ${lang === "en" ? "Open mobile app" : "Открыть мобильное приложение"}
+          </a>
+        </div>
+      </header>
+      <div class="help-card-body">
+        <section class="help-callout main"><strong>${currentSummary || "-"}</strong></section>
+        <section class="help-block">
+          <h5>${lang === "en" ? "Android client" : "Android клиент"}</h5>
+          <p>${downloadName}</p>
+          ${notesText ? `<p>${notesText}</p>` : ""}
+        </section>
+        ${diffItems ? `<section class="help-block"><h5>${lang === "en" ? "Difference from previous version" : "Отличия от прошлой версии"}</h5><ul>${diffItems}</ul></section>` : ""}
+      </div>
+    </article>
+  `;
+
+  const cards = rows.map((row) => {
+    const version = escapeHtml(String(row?.version || "-"));
+    const date = escapeHtml(String(row?.released_at || "-"));
+    const summary = escapeHtml(String(row?.summary || ""));
+    const changes = Array.isArray(row?.changes)
+      ? row.changes.filter(Boolean).map((line) => `<li>${escapeHtml(String(line))}</li>`).join("")
+      : "";
+    return `
+      <article class="help-card ${row?.current ? "selected" : ""}">
+        <header class="help-card-head">
+          <div>
+            <h4>${version}</h4>
+            <small>${date}</small>
+          </div>
+        </header>
+        <div class="help-card-body">
+          <section class="help-block"><p>${summary || "-"}</p></section>
+          ${changes ? `<section class="help-block"><ul>${changes}</ul></section>` : ""}
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  listHost.innerHTML = `
+    <div class="help-header">
+      <div class="help-header-title">
+        <h4>${lang === "en" ? "Version history" : "История версий"}</h4>
+        <p>${lang === "en" ? "Latest and previous builds with short release notes." : "Текущие и прошлые сборки с кратким описанием изменений."}</p>
+      </div>
+    </div>
+    <div class="help-card-list">${cards}</div>
+  `;
 }
 
 function formatHelpContent(text, lang = "ru") {
@@ -9307,6 +9596,7 @@ switchAuthMode("login");
 initAuthRemember();
 applySidebarMode();
 applyButtonTooltips();
+setupMobileClientMode();
 initHoverTips();
 window.__socialHooksRequested = true;
 ensureAuth();
@@ -9502,3 +9792,5 @@ window.triggerTeamAvatarUpload = triggerTeamAvatarUpload;
 window.uploadTeamAvatar = uploadTeamAvatar;
 window.toggleMobileNav = toggleMobileNav;
 window.closeMobileNav = closeMobileNav;
+window.onMobileQuickNavChanged = onMobileQuickNavChanged;
+window.syncMobileQuickNavSelection = syncMobileQuickNavSelection;

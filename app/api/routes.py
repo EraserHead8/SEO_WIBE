@@ -120,6 +120,7 @@ from app.schemas import (
     ProductUpdateIn,
     SalesStatsOut,
     HelpDocOut,
+    HelpReleaseOut,
     KnowledgeDocOut,
     ReviewAiSettingsIn,
     ReviewAiSettingsOut,
@@ -498,6 +499,7 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
             "- Сервис провалидирует строки и покажет, что обновлено/что не сопоставилось.\n\n"
             "Как считается прибыль:\n"
             "- Берем данные продаж и финансовых операций WB/Ozon.\n"
+            "- Закупочные цены берутся из общей таблицы товаров (Product), без отдельного дублирующего каталога.\n"
             "- Учитываем комиссии, логистику, хранение, удержания, штрафы, рекламу.\n"
             "- Вычитаем себестоимость (закупочная цена * выкупленные штуки).\n"
             "- Применяем пользовательские расходы, НДС/налоговые параметры.\n"
@@ -560,6 +562,7 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
             "Как пользоваться:\n"
             "- Выберите модуль в первом списке.\n"
             "- Нажмите «Обновить справку» для перезагрузки содержимого.\n\n"
+            "- Подвкладка «Загрузки»: текущая версия, отличия от предыдущей, история релизов и ссылка на мобильный клиент.\n\n"
             "Что есть в каждом разделе:\n"
             "- Назначение модуля и ожидаемый результат.\n"
             "- Расшифровка кнопок, полей и переключателей.\n"
@@ -766,6 +769,7 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
             "- Validation reports updated/skipped/unmatched rows.\n\n"
             "Profit model:\n"
             "- Uses WB/Ozon sales + finance operations.\n"
+            "- Purchase prices are mapped from the shared Products table (no duplicate catalog for accounting).\n"
             "- Includes commissions, logistics, storage, deductions, penalties, ad spend.\n"
             "- Subtracts COGS (purchase price * sold units).\n"
             "- Applies custom expenses and tax/VAT parameters.\n"
@@ -828,6 +832,7 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
             "Usage:\n"
             "- Select module in the first dropdown.\n"
             "- Click Refresh Help.\n\n"
+            "- Downloads subtab: current version, differences from previous release, release history, and mobile app entry link.\n\n"
             "Each section includes:\n"
             "- Module purpose and expected result.\n"
             "- Button/field reference.\n"
@@ -860,6 +865,66 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
         ),
     },
 }
+
+HELP_RELEASES: list[dict[str, Any]] = [
+    {
+        "version": "0.3.0",
+        "released_at": "2026-03-07",
+        "current": True,
+        "summary": "Стабилизация рекламы/статистики, бухгалтерия на общей базе товаров и мобильный PWA-клиент.",
+        "diff_from_previous": [
+            "Исправлена догрузка WB Ads: частичные ответы API больше не считаются фатальной ошибкой.",
+            "Статистика продаж переработана: компактный верх KPI и вынесенные вниз дополнительные метрики.",
+            "Снижен риск двойного учета WB/Ozon доходов в продажах и финансах.",
+            "Добавлен мобильный режим /mobile: чат по умолчанию, быстрый переключатель разделов, профиль, язык и уведомления.",
+        ],
+        "changes": [
+            "WB/Ozon sales: улучшена дедупликация, пересчитаны отмены/возвраты и финпотоки.",
+            "Help Center: добавлен раздел «Загрузки» с историей версий и ссылкой на мобильный клиент.",
+            "Бухгалтерия использует единую базу товаров (Product) и закупочных цен без дублирующего хранилища.",
+        ],
+        "android_download_url": "/mobile",
+        "android_download_name": "SEO WIBE Mobile (PWA)",
+        "app_entry_url": "/mobile",
+        "notes": "Установка на Android: откройте ссылку, затем «Добавить на главный экран» в браузере.",
+    },
+    {
+        "version": "0.2.1",
+        "released_at": "2026-03-06",
+        "current": False,
+        "summary": "Модуль бухгалтерии (обзор, анализ, расходы, настройки, Excel импорт/экспорт закупочных цен).",
+        "diff_from_previous": [
+            "Добавлен полноценный модуль бухгалтерии в модульную систему и права доступа.",
+            "Реализованы расчетные параметры НДС/налогов и пользовательских расходов.",
+        ],
+        "changes": [
+            "Табличный анализ прибыльности по SKU/артикулу.",
+            "Экспорт и импорт закупочных цен через Excel/CSV.",
+        ],
+        "android_download_url": "/mobile",
+        "android_download_name": "SEO WIBE Mobile (PWA)",
+        "app_entry_url": "/mobile",
+        "notes": "",
+    },
+    {
+        "version": "0.2.0",
+        "released_at": "2026-03-05",
+        "current": False,
+        "summary": "Стабилизация модулей товаров, отзывов/вопросов, рекламы и чата.",
+        "diff_from_previous": [
+            "Добавлены bulk-операции в товарах и улучшения в рекламном enrich.",
+            "Ускорены сценарии генерации и отправки ответов.",
+        ],
+        "changes": [
+            "Исправлены мобильные UI-регрессии и обработка direct-чатов.",
+            "Улучшены статусы загрузки рекламных кампаний.",
+        ],
+        "android_download_url": "/mobile",
+        "android_download_name": "SEO WIBE Mobile (PWA)",
+        "app_entry_url": "/mobile",
+        "notes": "",
+    },
+]
 
 
 @router.post("/auth/register", response_model=TokenResponse)
@@ -2518,6 +2583,9 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
     missing_ids: list[int] = []
     missing_summary_ids: list[int] = []
     missing_stats_ids: list[int] = []
+    hard_missing_ids: list[int] = []
+    partial_summary_ids: list[int] = []
+    partial_stats_ids: list[int] = []
     for cid in ids:
         key = str(cid)
         summary_ok = _campaign_summary_has_context(summaries.get(key), cid)
@@ -2526,19 +2594,33 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
             missing_summary_ids.append(cid)
         if not stats_ok:
             missing_stats_ids.append(cid)
-        if not summary_ok or not stats_ok:
+        if not summary_ok and not stats_ok:
+            hard_missing_ids.append(cid)
             missing_ids.append(cid)
-    resolved_count = max(0, len(ids) - len(missing_ids))
-    if missing_ids:
+        elif not summary_ok:
+            partial_summary_ids.append(cid)
+        elif not stats_ok:
+            partial_stats_ids.append(cid)
+    resolved_count = max(0, len(ids) - len(hard_missing_ids))
+    if hard_missing_ids:
         warnings.append("partial_data")
+    if partial_summary_ids:
+        warnings.append("summary_partial")
+    if partial_stats_ids:
+        warnings.append("stats_partial")
 
     meta = {
         "requested_count": len(ids),
         "summary_count": len([x for x in ids if _campaign_summary_has_context(summaries.get(str(x)), x)]),
         "stats_count": len([x for x in ids if _campaign_stat_has_context(stats.get(str(x)))]),
         "resolved_count": resolved_count,
-        "missing_count": len(missing_ids),
-        "missing_ids": missing_ids[:160],
+        "missing_count": len(hard_missing_ids),
+        "missing_ids": hard_missing_ids[:160],
+        "hard_missing_ids": hard_missing_ids[:160],
+        "partial_summary_count": len(partial_summary_ids),
+        "partial_summary_ids": partial_summary_ids[:160],
+        "partial_stats_count": len(partial_stats_ids),
+        "partial_stats_ids": partial_stats_ids[:160],
         "missing_summary_ids": missing_summary_ids[:160],
         "missing_stats_ids": missing_stats_ids[:160],
         "warnings": warnings,
@@ -2549,7 +2631,7 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
         user,
         action="wb_ads_campaigns_enrich",
         details=(
-            f"ids={len(ids)};resolved={resolved_count};missing={len(missing_ids)};"
+            f"ids={len(ids)};resolved={resolved_count};missing={len(hard_missing_ids)};"
             f"summaries={meta.get('summary_count')};stats={meta.get('stats_count')};"
             f"errors={','.join(error_flags) if error_flags else '-'};warnings={','.join(warnings) if warnings else '-'}"
         ),
@@ -3248,6 +3330,33 @@ def get_help_docs(
             continue
         items.append(HelpDocOut(module_code=code, title=payload["title"], content=payload["content"]))
     return items
+
+
+@router.get("/help/releases", response_model=list[HelpReleaseOut])
+def get_help_releases(
+    lang: str = "ru",
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "help_center")
+    is_en = (lang or "").strip().lower() == "en"
+    out: list[HelpReleaseOut] = []
+    for row in HELP_RELEASES:
+        item = dict(row)
+        if is_en:
+            # Lightweight EN localization for release cards without splitting data model.
+            item["summary"] = {
+                "Стабилизация рекламы/статистики, бухгалтерия на общей базе товаров и мобильный PWA-клиент.": "Ads/stats stabilization, accounting on shared product base, and mobile PWA client.",
+                "Модуль бухгалтерии (обзор, анализ, расходы, настройки, Excel импорт/экспорт закупочных цен).": "Accounting module (overview, analysis, expenses, settings, purchase-price Excel import/export).",
+                "Стабилизация модулей товаров, отзывов/вопросов, рекламы и чата.": "Stabilization for products, reviews/questions, ads, and chat modules.",
+            }.get(str(item.get("summary") or ""), str(item.get("summary") or ""))
+            item["notes"] = (
+                "Android install: open link and choose 'Add to Home screen' in browser."
+                if str(item.get("notes") or "").strip()
+                else ""
+            )
+        out.append(HelpReleaseOut(**item))
+    return out
 
 
 @router.post("/help/assistant", response_model=AiAssistantOut)
