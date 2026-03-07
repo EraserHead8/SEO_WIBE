@@ -617,7 +617,7 @@ async function saveAccountingExpense() {
   accountingSetMeta("accountingExpensesMeta", id > 0 ? tr("Расход обновлен.", "Expense updated.") : tr("Расход добавлен.", "Expense created."));
 }
 
-async function loadAccountingData(forceBusy = false) {
+async function loadAccountingData(forceBusy = false, retryAttempt = 0) {
   if (modulesLoaded && enabledModules instanceof Set && !enabledModules.has("accounting")) {
     accountingSetMeta("accountingWarnings", tr("Модуль бухгалтерии отключен администратором.", "Accounting module is disabled by admin."));
     return false;
@@ -667,6 +667,21 @@ async function loadAccountingData(forceBusy = false) {
   accountingChartRows = Array.isArray(data.chart) ? data.chart : [];
   accountingAnalysisRows = Array.isArray(data.analysis_rows) ? data.analysis_rows : [];
   accountingWarnings = Array.isArray(data.warnings) ? data.warnings : [];
+  const hasWb429 = accountingWarnings.some((x) => {
+    const low = String(x || "").toLowerCase();
+    return low.includes("429") && low.includes("wb");
+  });
+  if (hasWb429 && (marketplace === "all" || marketplace === "wb") && retryAttempt < 1) {
+    accountingSetMeta(
+      "accountingWarnings",
+      tr(
+        "WB API ограничил запросы (429). Повторяем загрузку автоматически...",
+        "WB API rate-limited requests (429). Retrying automatically..."
+      )
+    );
+    await delay(1800 + retryAttempt * 800);
+    return loadAccountingData(forceBusy, retryAttempt + 1);
+  }
 
   renderAccountingWarnings();
   renderAccountingOverview();

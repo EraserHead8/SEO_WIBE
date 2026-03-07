@@ -1,11 +1,13 @@
 package com.seowibe.mobile
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
@@ -14,6 +16,7 @@ import android.os.Environment
 import android.provider.Settings
 import android.view.View
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -27,10 +30,20 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
   private lateinit var webView: WebView
@@ -39,7 +52,8 @@ class MainActivity : AppCompatActivity() {
   private var filePathCallback: ValueCallback<Array<Uri>>? = null
   private var apkDownloadId: Long = -1L
   private var updateCheckStarted = false
-  private val updatePrefs by lazy { getSharedPreferences("seo_wibe_apk_updates", Context.MODE_PRIVATE) }
+  private val updatePrefs by lazy { getSharedPreferences(PREF_UPDATES, Context.MODE_PRIVATE) }
+  private val authPrefs by lazy { getSharedPreferences(PREF_AUTH, Context.MODE_PRIVATE) }
   private val allowedHosts by lazy {
     val host = Uri.parse(getString(R.string.base_url)).host?.lowercase(Locale.ROOT).orEmpty()
     setOf(host, "127.0.0.1", "localhost")
@@ -53,6 +67,15 @@ class MainActivity : AppCompatActivity() {
     val notes: String,
     val downloadUrl: String,
   )
+
+  private inner class SeoWibeJsBridge {
+    @JavascriptInterface
+    fun updateAuth(token: String?, lang: String?) {
+      persistAuthSnapshot(token = token, lang = lang)
+      syncCookieSnapshot()
+      scheduleBackgroundNotifications(runNow = true)
+    }
+  }
 
   private val downloadReceiver = object : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
@@ -97,6 +120,8 @@ class MainActivity : AppCompatActivity() {
 
     configureWebView()
     registerDownloadReceiver()
+    requestNotificationPermissionIfNeeded()
+    scheduleBackgroundNotifications(runNow = true)
 
     onBackPressedDispatcher.addCallback(
       this,
@@ -114,6 +139,12 @@ class MainActivity : AppCompatActivity() {
     webView.loadUrl(getString(R.string.base_url))
   }
 
+  override fun onResume() {
+    super.onResume()
+    syncCookieSnapshot()
+    scheduleBackgroundNotifications(runNow = true)
+  }
+
   private fun registerDownloadReceiver() {
     val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -121,6 +152,41 @@ class MainActivity : AppCompatActivity() {
     } else {
       @Suppress("DEPRECATION")
       registerReceiver(downloadReceiver, filter)
+    }
+  }
+
+  private fun requestNotificationPermissionIfNeeded() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+    val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    if (granted) return
+    ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQ_NOTIFICATIONS)
+  }
+
+  private fun scheduleBackgroundNotifications(runNow: Boolean = false) {
+    val constraints = Constraints.Builder()
+      .setRequiredNetworkType(NetworkType.CONNECTED)
+      .build()
+    val manager = WorkManager.getInstance(applicationContext)
+    val periodic = PeriodicWorkRequestBuilder<BackgroundNotifyWorker>(15, TimeUnit.MINUTES)
+      .setConstraints(constraints)
+      .addTag(WORK_BG_NOTIF_PERIODIC)
+      .build()
+    manager.enqueueUniquePeriodicWork(
+      WORK_BG_NOTIF_PERIODIC,
+      ExistingPeriodicWorkPolicy.UPDATE,
+      periodic,
+    )
+    if (runNow) {
+      val immediate = OneTimeWorkRequestBuilder<BackgroundNotifyWorker>()
+        .setConstraints(constraints)
+        .setInitialDelay(20, TimeUnit.SECONDS)
+        .addTag(WORK_BG_NOTIF_IMMEDIATE)
+        .build()
+      manager.enqueueUniqueWork(
+        WORK_BG_NOTIF_IMMEDIATE,
+        ExistingWorkPolicy.REPLACE,
+        immediate,
+      )
     }
   }
 
@@ -142,7 +208,8 @@ class MainActivity : AppCompatActivity() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       settings.safeBrowsingEnabled = true
     }
-    settings.userAgentString = settings.userAgentString + " SEO_WIBE_ANDROID_APP/1.1"
+    settings.userAgentString = settings.userAgentString + " SEO_WIBE_ANDROID_APP/1.2"
+    webView.addJavascriptInterface(SeoWibeJsBridge(), "SeoWibeApp")
 
     webView.webViewClient = object : WebViewClient() {
       override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
@@ -166,6 +233,9 @@ class MainActivity : AppCompatActivity() {
 
       override fun onPageFinished(view: WebView?, url: String?) {
         super.onPageFinished(view, url)
+        injectAuthBridgeScript()
+        syncCookieSnapshot()
+        scheduleBackgroundNotifications(runNow = true)
         if (!updateCheckStarted) {
           updateCheckStarted = true
           checkForApkUpdates()
@@ -199,6 +269,60 @@ class MainActivity : AppCompatActivity() {
           false
         }
       }
+    }
+  }
+
+  private fun injectAuthBridgeScript() {
+    val js = """
+      (function() {
+        try {
+          function push() {
+            try {
+              var token = localStorage.getItem('token') || sessionStorage.getItem('token') || localStorage.getItem('token_shadow') || '';
+              var lang = localStorage.getItem('ui_lang') || 'ru';
+              if (window.SeoWibeApp && typeof window.SeoWibeApp.updateAuth === 'function') {
+                window.SeoWibeApp.updateAuth(String(token || ''), String(lang || 'ru'));
+              }
+            } catch (e) {}
+          }
+          if (!window.__seoWibeAndroidBridgeInstalled) {
+            window.__seoWibeAndroidBridgeInstalled = true;
+            window.__seoWibePushAuthSnapshot = push;
+            push();
+            window.setInterval(push, 12000);
+            document.addEventListener('visibilitychange', push, { passive: true });
+          } else if (window.__seoWibePushAuthSnapshot) {
+            window.__seoWibePushAuthSnapshot();
+          } else {
+            push();
+          }
+        } catch (e) {}
+      })();
+    """.trimIndent()
+    try {
+      webView.evaluateJavascript(js, null)
+    } catch (_: Exception) {
+    }
+  }
+
+  private fun persistAuthSnapshot(token: String?, lang: String?) {
+    val cleanedToken = (token ?: "").trim().trim('"')
+    val cleanedLang = (lang ?: "").trim().trim('"')
+    authPrefs.edit()
+      .putString(PREF_AUTH_TOKEN, cleanedToken)
+      .putString(PREF_AUTH_LANG, if (cleanedLang.isBlank()) "ru" else cleanedLang)
+      .putString(PREF_AUTH_BASE_ORIGIN, baseOrigin())
+      .apply()
+  }
+
+  private fun syncCookieSnapshot() {
+    try {
+      val cookie = CookieManager.getInstance().getCookie(getString(R.string.base_url)) ?: ""
+      authPrefs.edit()
+        .putString(PREF_AUTH_COOKIE, cookie)
+        .putString(PREF_AUTH_BASE_ORIGIN, baseOrigin())
+        .apply()
+    } catch (_: Exception) {
     }
   }
 
@@ -386,8 +510,17 @@ class MainActivity : AppCompatActivity() {
   }
 
   companion object {
+    private const val REQ_NOTIFICATIONS = 1201
+    private const val PREF_UPDATES = "seo_wibe_apk_updates"
+    private const val PREF_AUTH = "seo_wibe_mobile_auth"
     private const val PREF_DEFERRED_CODE = "deferred_update_code"
     private const val PREF_DEFERRED_NAME = "deferred_update_name"
     private const val PREF_APK_DOWNLOAD_ID = "apk_download_id"
+    private const val PREF_AUTH_TOKEN = "auth_token"
+    private const val PREF_AUTH_COOKIE = "auth_cookie"
+    private const val PREF_AUTH_LANG = "auth_lang"
+    private const val PREF_AUTH_BASE_ORIGIN = "base_origin"
+    private const val WORK_BG_NOTIF_PERIODIC = "seo_wibe_bg_notif_periodic"
+    private const val WORK_BG_NOTIF_IMMEDIATE = "seo_wibe_bg_notif_immediate"
   }
 }

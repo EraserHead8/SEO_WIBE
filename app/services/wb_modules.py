@@ -1439,9 +1439,18 @@ def _campaign_detail_requests(campaign_id: int) -> list[dict[str, Any]]:
 
 
 def _merge_campaign_summary(base: dict[str, Any], extra: dict[str, Any]) -> dict[str, Any]:
+    def _is_placeholder_name(value: Any) -> bool:
+        text = str(value or "").strip().lower()
+        if not text or text == "-":
+            return True
+        return text.startswith("кампания ") or text.startswith("campaign ")
+
     merged = dict(base)
     for key, value in extra.items():
         if value in (None, "", "-", [], {}):
+            continue
+        if key == "name" and _is_placeholder_name(merged.get("name")) and not _is_placeholder_name(value):
+            merged[key] = value
             continue
         if key not in merged or merged.get(key) in (None, "", "-", [], {}):
             merged[key] = value
@@ -1476,15 +1485,27 @@ def _extract_campaign_summary(data: dict[str, Any] | list[dict[str, Any]], campa
     timestamps = target_row.get("timestamps") if isinstance(target_row.get("timestamps"), dict) else {}
     finance = target_row.get("finance") if isinstance(target_row.get("finance"), dict) else {}
 
-    name = _pick_first_str(
-        target_row.get("name"),
-        target_row.get("campaignName"),
-        target_row.get("campaign_name"),
-        settings.get("name"),
-        settings.get("title"),
-        target_row.get("subject"),
-        target_row.get("title"),
-    )
+    name_candidates = [
+        _pick_first_str(target_row.get("name")),
+        _pick_first_str(target_row.get("campaignName")),
+        _pick_first_str(target_row.get("campaign_name")),
+        _pick_first_str(settings.get("name")),
+        _pick_first_str(settings.get("title")),
+        _pick_first_str(target_row.get("subject")),
+        _pick_first_str(target_row.get("title")),
+    ]
+    name = ""
+    for candidate in name_candidates:
+        text = str(candidate or "").strip()
+        if not text:
+            continue
+        low = text.lower()
+        if low.startswith("кампания ") or low.startswith("campaign "):
+            if not name:
+                name = text
+            continue
+        name = text
+        break
     status = _pick_first_str(
         target_row.get("status"),
         target_row.get("state"),
@@ -2521,7 +2542,10 @@ def _summary_needs_enrichment(summary: dict[str, Any], campaign_id: int) -> bool
     if not isinstance(summary, dict):
         return True
     name = _pick_first_str(summary.get("name"))
-    if not name or name == f"Кампания {campaign_id}":
+    low_name = str(name or "").strip().lower()
+    if not name or low_name in {f"кампания {campaign_id}", f"campaign {campaign_id}"}:
+        return True
+    if low_name.startswith("кампания ") or low_name.startswith("campaign "):
         return True
     if _pick_first_str(summary.get("status")) in {"", "-"}:
         return True
@@ -2533,11 +2557,21 @@ def _merge_detail_rows(base: dict[str, Any] | None, incoming: dict[str, Any] | N
         return dict(incoming or {})
     if not isinstance(incoming, dict):
         return dict(base)
+    def _is_placeholder_name(value: Any) -> bool:
+        text = str(value or "").strip().lower()
+        if not text or text == "-":
+            return True
+        return text.startswith("кампания ") or text.startswith("campaign ")
+
     merged = dict(base)
     for key, value in incoming.items():
         if value in (None, "", [], {}, "-"):
             continue
         prev = merged.get(key)
+        if key in {"name", "campaignName", "campaign_name", "title", "subject"}:
+            if _is_placeholder_name(prev) and not _is_placeholder_name(value):
+                merged[key] = value
+                continue
         if prev in (None, "", [], {}, "-"):
             merged[key] = value
             continue

@@ -154,6 +154,14 @@ const mobileClientMode = (() => {
     return String(window.location.pathname || "").trim() === "/mobile";
   }
 })();
+const mobileApkMode = (() => {
+  try {
+    const url = new URL(window.location.href);
+    return url.searchParams.get("mobile_app") === "1";
+  } catch (_) {
+    return false;
+  }
+})();
 let sidebarCompact = localStorage.getItem("sidebar_compact") === "1";
 let authMode = "login";
 let uiThemeSettings = {
@@ -2237,6 +2245,7 @@ function getMobileQuickNavSelects() {
 function getMobileQuickNavOptions() {
   const isEn = currentLang === "en";
   return [
+    { value: "social_games", label: isEn ? "Games" : "Игры" },
     { value: "social_chat", label: isEn ? "Chat" : "Чат" },
     { value: "social_tasks", label: isEn ? "Tasks" : "Задачи" },
     { value: "social_notes", label: isEn ? "Notes" : "Заметки" },
@@ -2246,6 +2255,41 @@ function getMobileQuickNavOptions() {
     { value: "reviews_questions", label: isEn ? "Question replies" : "Ответы на вопросы" },
     { value: "profile_main", label: isEn ? "Profile" : "Профиль" },
   ];
+}
+
+function getCurrentMobileQuickValue() {
+  if (currentTab === "social") {
+    const sub = ["games", "chat", "tasks", "notes", "calculator", "calendar"].includes(String(currentSocialSubtab || ""))
+      ? String(currentSocialSubtab)
+      : "chat";
+    return `social_${sub}`;
+  }
+  if (currentTab === "reviews") {
+    return currentReviewsSubtab === "questions" ? "reviews_questions" : "reviews_reviews";
+  }
+  if (currentTab === "profile") {
+    return "profile_main";
+  }
+  return "";
+}
+
+function renderMobileQuickList() {
+  if (!mobileClientMode) return;
+  const host = document.getElementById("mobileDrawerQuickList");
+  if (!host) return;
+  const options = getMobileQuickNavOptions();
+  const active = getCurrentMobileQuickValue();
+  host.innerHTML = options.map((row) => {
+    const cls = row.value === active ? "chip-btn mobile-drawer-nav-item active" : "chip-btn mobile-drawer-nav-item";
+    return `<button type="button" class="${cls}" data-mobile-quick-value="${escapeHtml(row.value)}">${escapeHtml(row.label)}</button>`;
+  }).join("");
+  host.querySelectorAll("[data-mobile-quick-value]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const value = String(btn.getAttribute("data-mobile-quick-value") || "").trim();
+      if (!value) return;
+      openMobileQuickNavValue(value);
+    });
+  });
 }
 
 function refreshMobileQuickNavOptions() {
@@ -2261,38 +2305,26 @@ function refreshMobileQuickNavOptions() {
       select.value = previous;
     }
   });
+  renderMobileQuickList();
 }
 
 function syncMobileQuickNavSelection() {
   if (!mobileClientMode) return;
-  let value = "";
-  if (currentTab === "social") {
-    const sub = ["chat", "tasks", "notes", "calculator", "calendar"].includes(String(currentSocialSubtab || ""))
-      ? String(currentSocialSubtab)
-      : "chat";
-    value = `social_${sub}`;
-  } else if (currentTab === "reviews") {
-    value = currentReviewsSubtab === "questions" ? "reviews_questions" : "reviews_reviews";
-  } else if (currentTab === "profile") {
-    value = "profile_main";
-  }
+  const value = getCurrentMobileQuickValue();
   if (!value) return;
   getMobileQuickNavSelects().forEach((select) => {
     if ([...select.options].some((opt) => opt.value === value)) {
       select.value = value;
     }
   });
+  renderMobileQuickList();
 }
 
-function onMobileQuickNavChanged(sourceId = "mobileQuickNav") {
-  if (!mobileClientMode) return;
-  const select = typeof sourceId === "string"
-    ? document.getElementById(sourceId)
-    : (sourceId?.target || document.getElementById("mobileQuickNav"));
-  const value = String(select?.value || "").trim();
+function openMobileQuickNavValue(valueRaw) {
+  const value = String(valueRaw || "").trim();
   if (!value) return;
   getMobileQuickNavSelects().forEach((node) => {
-    if (node !== select && [...node.options].some((opt) => opt.value === value)) {
+    if ([...node.options].some((opt) => opt.value === value)) {
       node.value = value;
     }
   });
@@ -2304,9 +2336,7 @@ function onMobileQuickNavChanged(sourceId = "mobileQuickNav") {
       window.switchSocialSubtab(sub, true);
       return true;
     };
-    if (!runSwitch()) {
-      setTimeout(runSwitch, 160);
-    }
+    if (!runSwitch()) setTimeout(runSwitch, 160);
     closeMobileNav();
     return;
   }
@@ -2323,13 +2353,29 @@ function onMobileQuickNavChanged(sourceId = "mobileQuickNav") {
   }
 }
 
+function onMobileQuickNavChanged(sourceId = "mobileQuickNav") {
+  if (!mobileClientMode) return;
+  const select = typeof sourceId === "string"
+    ? document.getElementById(sourceId)
+    : (sourceId?.target || document.getElementById("mobileQuickNav"));
+  const value = String(select?.value || "").trim();
+  if (!value) return;
+  getMobileQuickNavSelects().forEach((node) => {
+    if (node !== select && [...node.options].some((opt) => opt.value === value)) {
+      node.value = value;
+    }
+  });
+  openMobileQuickNavValue(value);
+}
+
 function setupMobileClientMode() {
   if (!mobileClientMode) return;
   document.body.classList.add("mobile-client-mode");
+  if (mobileApkMode) document.body.classList.add("mobile-apk-mode");
   const drawer = document.getElementById("mobileDrawerControls");
   if (drawer) drawer.classList.remove("hidden");
   const select = document.getElementById("mobileQuickNav");
-  if (select) select.classList.remove("hidden");
+  if (select && !mobileApkMode) select.classList.remove("hidden");
   syncMobileDrawerSelectors();
   refreshMobileQuickNavOptions();
   syncMobileQuickNavSelection();
@@ -3527,7 +3573,19 @@ function normalizeFeedbackRow(rawRow, rowType, idx, marketplace) {
     barcode: normalizeFeedbackText(rawRow.barcode || ""),
     text: normalizeFeedbackText(rawRow.text || ""),
     answer: normalizeFeedbackText(rawRow.answer || ""),
-    user: normalizeFeedbackText(rawRow.user || ""),
+    user: normalizeFeedbackText(
+      rawRow.user
+      ?? rawRow.userName
+      ?? rawRow.username
+      ?? rawRow.customerName
+      ?? rawRow.customer_name
+      ?? rawRow.author
+      ?? rawRow.authorName
+      ?? rawRow.author_name
+      ?? rawRow.buyer_name
+      ?? rawRow.buyerName
+      ?? ""
+    ),
     photos: normalizeFeedbackPhotos(rawRow.photos),
   };
 }

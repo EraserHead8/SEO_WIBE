@@ -6042,6 +6042,18 @@ body[data-theme="dark"] .landing-band .band-stats span {
   width: 100%;
 }
 
+.mobile-drawer-quick-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.mobile-drawer-nav-item {
+  width: 100%;
+  justify-content: flex-start;
+  min-height: 44px;
+}
+
 .social-toast-host {
   position: fixed;
   top: 18px;
@@ -8723,6 +8735,28 @@ body.mobile-client-mode #social > .panel:first-child {
   display: none !important;
 }
 
+body.mobile-apk-mode #appSection .topbar {
+  background: linear-gradient(125deg, rgba(17, 192, 190, 0.22), rgba(27, 152, 206, 0.2));
+  border-color: rgba(49, 201, 198, 0.4);
+  padding: 10px 12px;
+  min-height: 56px;
+}
+
+body.mobile-apk-mode #appSection .topbar-title {
+  display: none !important;
+}
+
+body.mobile-apk-mode #appSection .topbar-controls {
+  width: 100% !important;
+  justify-content: flex-end;
+}
+
+body.mobile-apk-mode #appSection .mobile-quick-nav,
+body.mobile-apk-mode #mobileDrawerQuickNavLabel,
+body.mobile-apk-mode #mobileDrawerQuickNav {
+  display: none !important;
+}
+
 @media (max-width: 980px) {
   body.mobile-client-mode #appSection > .workspace > .topbar {
     position: sticky !important;
@@ -8741,5 +8775,13 @@ body.mobile-client-mode #social > .panel:first-child {
 
   body.mobile-client-mode .social-games-grid {
     grid-template-columns: 1fr;
+  }
+
+  body.mobile-apk-mode #appSection {
+    padding: 0 6px 12px;
+  }
+
+  body.mobile-apk-mode #appSection .workspace {
+    padding: 8px;
   }
 }

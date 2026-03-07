@@ -186,6 +186,7 @@
         </button>
         <label id="mobileDrawerQuickNavLabel" class="mobile-drawer-quick-label" for="mobileDrawerQuickNav">Раздел</label>
         <select id="mobileDrawerQuickNav" class="chip-select mobile-drawer-quick-nav" onchange="onMobileQuickNavChanged('mobileDrawerQuickNav')">
+          <option value="social_games">Игры</option>
           <option value="social_chat">Чат</option>
           <option value="social_tasks">Задачи</option>
           <option value="social_notes">Заметки</option>
@@ -195,6 +196,7 @@
           <option value="reviews_questions">Ответы на вопросы</option>
           <option value="profile_main">Профиль</option>
         </select>
+        <div id="mobileDrawerQuickList" class="mobile-drawer-quick-list"></div>
       </div>
       <nav class="side-nav">
         <button class="nav-btn" data-tab="sales" data-module="sales_stats" onclick="showTab('sales', this)">Статистика и дашборд</button>
@@ -222,6 +224,7 @@
             <span id="socialBellBadge" class="icon-bell-badge hidden">0</span>
           </button>
           <select id="mobileQuickNav" class="chip-select mobile-quick-nav hidden" onchange="onMobileQuickNavChanged('mobileQuickNav')">
+            <option value="social_games">Игры</option>
             <option value="social_chat">Чат</option>
             <option value="social_tasks">Задачи</option>
             <option value="social_notes">Заметки</option>

@@ -869,26 +869,28 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
 
 HELP_RELEASES: list[dict[str, Any]] = [
     {
-        "version": "0.3.1",
-        "android_version_code": 2,
+        "version": "0.3.2",
+        "android_version_code": 3,
         "released_at": "2026-03-07",
         "current": True,
-        "summary": "Android APK: drawer-first интерфейс, оптимизация чата и мобильных игр, проверка обновлений в приложении.",
+        "summary": "Android APK: обновленный drawer-only интерфейс, фоновый polling уведомлений и стабильная загрузка чатов/рекламы/бухгалтерии.",
         "diff_from_previous": [
-            "В APK убраны дублирующие верхние контролы: навигация и настройки теперь в burger-панели.",
-            "Чат оптимизирован: снижены лишние перерисовки при фоновом обновлении, уменьшено мерцание.",
-            "Игры адаптированы под телефон: динамический canvas, touch-контролы и свайпы.",
-            "Добавлен in-app update-check: при новой версии показывается «Установить / Позже».",
+            "В APK оставлен компактный верх: только burger-кнопка, язык/тема/профиль и переключение модулей вынесены в боковую панель.",
+            "Добавлены игры в мобильное меню APK и сохранен старт в чате по умолчанию.",
+            "Чат стабилизирован: сообщения подгружаются сразу при открытии и снижен риск визуального мерцания.",
+            "Фоновый Android worker отправляет системные уведомления по новым событиям, даже когда приложение свернуто.",
         ],
         "changes": [
-            "Help Center «Загрузки» теперь ведется только по Android APK версиям.",
-            "Сборка Android обновлена до versionCode=2 / versionName=1.1.0.",
+            "Launcher APK обновлен: иконка и название приложения «SEO WIBE».",
+            "Сборка Android обновлена до versionCode=3 / versionName=1.2.0.",
             "APK-обновление скачивается через DownloadManager и запускает системную установку.",
+            "Исправлена подгрузка имен авторов в отзывах/вопросах по дополнительным alias-полям API.",
+            "Улучшено автодозаполнение данных WB Ads: placeholder-имена кампаний заменяются реальными при доступной детализации.",
         ],
         "android_download_url": "/static/downloads/seo-wibe-mobile-latest.apk",
-        "android_download_name": "SEO WIBE Mobile Android (.apk)",
+        "android_download_name": "SEO WIBE Android (.apk)",
         "app_entry_url": "/mobile",
-        "notes": "В приложении доступна проверка обновлений APK. При выборе «Установить» загрузка стартует автоматически, затем открывается системный установщик Android.",
+        "notes": "APK проверяет обновления при запуске и предлагает «Установить / Позже». После загрузки открывается системный установщик Android.",
     },
     {
         "version": "0.3.0",
@@ -3388,6 +3390,7 @@ def get_help_releases(
         if is_en:
             # Lightweight EN localization for release cards without splitting data model.
             item["summary"] = {
+                "Android APK: обновленный drawer-only интерфейс, фоновый polling уведомлений и стабильная загрузка чатов/рекламы/бухгалтерии.": "Android APK: updated drawer-only UI, background notification polling, and stable loading for chat/ads/accounting.",
                 "Android APK: drawer-first интерфейс, оптимизация чата и мобильных игр, проверка обновлений в приложении.": "Android APK: drawer-first UI, chat/mobile-game optimization, and in-app update checks.",
                 "Стабилизация рекламы/статистики, бухгалтерия на общей базе товаров и Android-приложение.": "Ads/stats stabilization, accounting on shared product base, and Android app.",
                 "Стабилизация рекламы/статистики, бухгалтерия на общей базе товаров и мобильный PWA-клиент.": "Ads/stats stabilization, accounting on shared product base, and mobile PWA client.",
@@ -3395,6 +3398,7 @@ def get_help_releases(
                 "Стабилизация модулей товаров, отзывов/вопросов, рекламы и чата.": "Stabilization for products, reviews/questions, ads, and chat modules.",
             }.get(str(item.get("summary") or ""), str(item.get("summary") or ""))
             item["notes"] = {
+                "APK проверяет обновления при запуске и предлагает «Установить / Позже». После загрузки открывается системный установщик Android.": "APK checks for updates at startup and shows Install/Later. After download, Android system installer is opened.",
                 "В приложении доступна проверка обновлений APK. При выборе «Установить» загрузка стартует автоматически, затем открывается системный установщик Android.": "The app can check APK updates. Tap Install to start automatic download, then confirm installation in the Android system installer.",
                 "Установка на Android: скачайте .apk, откройте файл и подтвердите установку из неизвестного источника.": "Android install: download APK, open the file, and allow installation from unknown sources if required.",
             }.get(str(item.get("notes") or ""), str(item.get("notes") or ""))
