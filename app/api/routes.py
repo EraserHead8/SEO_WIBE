@@ -5050,7 +5050,7 @@ def sales_stats(
             ttl_sec=_market_cache_ttl("sales_stats"),
             fetcher=lambda: _load_sales_payload(left, right),
             stale_if_error_sec=45 * 60,
-            prefer_stale_sec=20 * 60,
+            prefer_stale_sec=2 * 60 * 60,
         )
     except Exception as exc:
         sales_cache_meta = {"source": "error", "age_sec": -1}
@@ -5137,7 +5137,7 @@ def sales_stats(
             ttl_sec=_market_cache_ttl("sales_stats"),
             fetcher=lambda: _load_sales_payload(prev_from, prev_to),
             stale_if_error_sec=45 * 60,
-            prefer_stale_sec=20 * 60,
+            prefer_stale_sec=2 * 60 * 60,
         )
         prev_totals = prev_payload.get("totals") if isinstance(prev_payload, dict) else {}
         prev_totals = prev_totals if isinstance(prev_totals, dict) else {}
@@ -5501,7 +5501,7 @@ def accounting_data(
             sort_by=str(sort_by or "net_profit_desc"),
         ),
         stale_if_error_sec=6 * 60 * 60,
-        prefer_stale_sec=20 * 60,
+        prefer_stale_sec=2 * 60 * 60,
     )
     warnings_now = [str(x or "") for x in (data.get("warnings") if isinstance(data, dict) else [])]
     has_upstream_warning = _warnings_indicate_upstream_failure(warnings_now)
