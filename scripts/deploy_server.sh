@@ -5,21 +5,26 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT_DIR}"
 APP_USER="${APP_USER:-seo}"
 FORCE_DEPLOY="${FORCE_DEPLOY:-0}"
+export HOME="${HOME:-/root}"
 
-git config --global --add safe.directory "${ROOT_DIR}" || true
+git_safe() {
+  git -c safe.directory="${ROOT_DIR}" "$@"
+}
 
-CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD || echo main)"
+git config --system --add safe.directory "${ROOT_DIR}" >/dev/null 2>&1 || true
+
+CURRENT_BRANCH="$(git_safe rev-parse --abbrev-ref HEAD || echo main)"
 if [[ "${CURRENT_BRANCH}" != "main" ]]; then
-  git checkout main
+  git_safe checkout main
 fi
 
-git fetch origin main
-LOCAL_SHA="$(git rev-parse HEAD)"
-REMOTE_SHA="$(git rev-parse origin/main)"
+git_safe fetch origin main
+LOCAL_SHA="$(git_safe rev-parse HEAD)"
+REMOTE_SHA="$(git_safe rev-parse origin/main)"
 CHANGED="0"
 
 if [[ "${LOCAL_SHA}" != "${REMOTE_SHA}" ]]; then
-  git reset --hard origin/main
+  git_safe reset --hard origin/main
   CHANGED="1"
 fi
 

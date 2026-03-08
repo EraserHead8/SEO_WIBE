@@ -204,30 +204,37 @@ function renderAccountingOverview() {
   const o = accountingOverview && typeof accountingOverview === "object" ? accountingOverview : {};
 
   const cards = [
-    [tr("Заказы", "Orders"), formatInt(o.orders || 0)],
-    [tr("Штуки", "Units"), formatInt(o.units || 0)],
-    [tr("Выкупы", "Buyouts"), formatInt(o.buyouts || 0)],
-    [tr("Возвраты", "Returns"), formatInt(o.returns || 0)],
-    [tr("Выручка", "Revenue"), formatMoney(o.revenue || 0)],
-    [tr("Себестоимость", "COGS"), formatMoney(o.cogs || 0)],
-    [tr("Валовая прибыль", "Gross profit"), formatMoney(o.gross_profit || 0)],
-    [tr("Расходы МП", "Marketplace expense"), formatMoney(o.marketplace_expense || 0)],
-    [tr("Операционная прибыль", "Operating profit"), formatMoney(o.operating_profit || 0)],
-    [tr("Доп. расходы", "Custom expenses"), formatMoney(o.custom_expenses || 0)],
-    [tr("Налоги", "Taxes"), formatMoney((o.tax_amount || 0) + (o.vat_amount || 0))],
-    [tr("Чистая прибыль", "Net profit"), formatMoney(o.net_profit || 0)],
-    [tr("Маржа", "Margin"), `${accountingFormatPercent(o.margin || 0)}%`],
-    [tr("Комиссии", "Commission"), formatMoney(o.commission || 0)],
-    [tr("Логистика", "Logistics"), formatMoney(o.logistics || 0)],
-    [tr("Хранение", "Storage"), formatMoney(o.storage || 0)],
-    [tr("Удержания", "Deductions"), formatMoney(o.deductions || 0)],
-    [tr("Приемка", "Acceptance"), formatMoney(o.acceptance || 0)],
-    [tr("Штрафы", "Penalties"), formatMoney(o.penalties || 0)],
-    [tr("Реклама", "Ads"), formatMoney(o.ad_spend || 0)],
+    { label: tr("Заказы", "Orders"), value: formatInt(o.orders || 0), tone: "neutral" },
+    { label: tr("Штуки", "Units"), value: formatInt(o.units || 0), tone: "neutral" },
+    { label: tr("Выкупы", "Buyouts"), value: formatInt(o.buyouts || 0), tone: "neutral" },
+    { label: tr("Возвраты", "Returns"), value: formatInt(o.returns || 0), tone: "neutral" },
+    { label: tr("Выручка", "Revenue"), value: formatMoney(o.revenue || 0), tone: "positive" },
+    { label: tr("Себестоимость", "COGS"), value: formatMoney(o.cogs || 0), tone: "negative" },
+    { label: tr("Валовая прибыль", "Gross profit"), value: formatMoney(o.gross_profit || 0), tone: "positive" },
+    { label: tr("Расходы МП", "Marketplace expense"), value: formatMoney(o.marketplace_expense || 0), tone: "negative" },
+    { label: tr("Операционная прибыль", "Operating profit"), value: formatMoney(o.operating_profit || 0), tone: "positive" },
+    { label: tr("Доп. расходы", "Custom expenses"), value: formatMoney(o.custom_expenses || 0), tone: "negative" },
+    { label: tr("Налоги", "Taxes"), value: formatMoney((o.tax_amount || 0) + (o.vat_amount || 0)), tone: "negative" },
+    { label: tr("Чистая прибыль", "Net profit"), value: formatMoney(o.net_profit || 0), tone: "net" },
+    { label: tr("Маржа", "Margin"), value: `${accountingFormatPercent(o.margin || 0)}%`, tone: "positive" },
+    { label: tr("Комиссии", "Commission"), value: formatMoney(o.commission || 0), tone: "negative" },
+    { label: tr("Логистика", "Logistics"), value: formatMoney(o.logistics || 0), tone: "negative" },
+    { label: tr("Хранение", "Storage"), value: formatMoney(o.storage || 0), tone: "negative" },
+    { label: tr("Удержания", "Deductions"), value: formatMoney(o.deductions || 0), tone: "negative" },
+    { label: tr("Приемка", "Acceptance"), value: formatMoney(o.acceptance || 0), tone: "negative" },
+    { label: tr("Штрафы", "Penalties"), value: formatMoney(o.penalties || 0), tone: "negative" },
+    { label: tr("Реклама", "Ads"), value: formatMoney(o.ad_spend || 0), tone: "negative" },
   ];
 
   cardsEl.innerHTML = cards
-    .map(([label, value]) => `<article class="sales-kpi"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></article>`)
+    .map((item) => {
+      const toneClass = item.tone === "positive"
+        ? "accounting-kpi-positive"
+        : (item.tone === "negative"
+          ? "accounting-kpi-negative"
+          : (item.tone === "net" ? "accounting-kpi-net" : ""));
+      return `<article class="sales-kpi ${toneClass}"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(String(item.value))}</strong></article>`;
+    })
     .join("");
 
   const byMarket = (o.by_marketplace && typeof o.by_marketplace === "object") ? o.by_marketplace : {};
@@ -242,7 +249,7 @@ function renderAccountingOverview() {
       const row = byMarket[key] || {};
       const title = key === "all" ? tr("Все маркетплейсы", "All marketplaces") : key.toUpperCase();
       return `
-        <article class="sales-kpi">
+        <article class="sales-kpi ${Number(row.net_profit || 0) >= 0 ? "accounting-kpi-positive" : "accounting-kpi-negative"}">
           <span>${escapeHtml(title)}</span>
           <strong>${escapeHtml(formatMoney(row.net_profit || 0))}</strong>
           <small>${escapeHtml(tr("Выручка", "Revenue"))}: ${escapeHtml(formatMoney(row.revenue || 0))}</small>

@@ -92,7 +92,9 @@ class ProductUpdateIn(BaseModel):
     category_name: str | None = None
     current_description: str | None = None
     photo_url: str | None = None
+    photos_order: list[str] | None = None
     target_keywords: str | None = None
+    purchase_price: float | None = None
 
 
 class ProductBulkDeleteIn(BaseModel):

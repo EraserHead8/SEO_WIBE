@@ -25,12 +25,30 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 @app.middleware("http")
-async def disable_static_cache(request: Request, call_next):
+async def apply_static_cache_headers(request: Request, call_next):
     response = await call_next(request)
     if request.url.path.startswith("/static/"):
-        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-        response.headers["Pragma"] = "no-cache"
-        response.headers["Expires"] = "0"
+        path = request.url.path.lower()
+        ext = Path(path).suffix.lower()
+        versioned = bool(request.query_params.get("v"))
+        image_exts = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".avif"}
+        font_exts = {".woff", ".woff2", ".ttf", ".otf"}
+        if path.startswith("/static/uploads/"):
+            # Upload URLs are generated with unique names, so browser cache is safe and reduces flicker.
+            cache_control = "public, max-age=900, stale-while-revalidate=60"
+        elif versioned:
+            cache_control = "public, max-age=604800, immutable"
+        elif ext in image_exts or ext in font_exts:
+            cache_control = "public, max-age=86400, must-revalidate"
+        elif ext in {".js", ".css"}:
+            cache_control = "public, max-age=900, must-revalidate"
+        else:
+            cache_control = "public, max-age=3600, must-revalidate"
+        response.headers["Cache-Control"] = cache_control
+        if "Pragma" in response.headers:
+            del response.headers["Pragma"]
+        if "Expires" in response.headers:
+            del response.headers["Expires"]
     return response
 
 

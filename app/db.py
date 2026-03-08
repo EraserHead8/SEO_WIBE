@@ -12,14 +12,42 @@ class Base(DeclarativeBase):
     pass
 
 
-connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
-engine = create_engine(settings.database_url, connect_args=connect_args)
+is_sqlite = settings.database_url.startswith("sqlite")
+connect_args = {"check_same_thread": False, "timeout": 30} if is_sqlite else {}
+engine_kwargs = {
+    "pool_pre_ping": True,
+}
+if is_sqlite:
+    # Under concurrent web polling + worker jobs the default SQLAlchemy QueuePool
+    # (size=5, overflow=10) is too small and causes 30s timeouts.
+    engine_kwargs.update(
+        {
+            "pool_size": 20,
+            "max_overflow": 40,
+            "pool_timeout": 90,
+            "pool_recycle": 1800,
+        }
+    )
+engine = create_engine(settings.database_url, connect_args=connect_args, **engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 @event.listens_for(engine, "before_cursor_execute")
 def _before_cursor_execute(_conn, _cursor, _statement, _parameters, context, _executemany):
     context._seo_wibe_sql_started_at = time.perf_counter()
+
+
+@event.listens_for(engine, "connect")
+def _on_connect(dbapi_connection, _connection_record):
+    if not is_sqlite:
+        return
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA busy_timeout=30000")
+    finally:
+        cursor.close()
 
 
 @event.listens_for(engine, "after_cursor_execute")
@@ -211,6 +239,32 @@ def run_lightweight_migrations():
         ai_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(ai_service_accounts)"))}
         if ai_cols and "priority" not in ai_cols:
             conn.execute(text("ALTER TABLE ai_service_accounts ADD COLUMN priority INTEGER DEFAULT 1000"))
+
+        # Hot-path indexes for chat + ads snapshot reads under mobile/web polling.
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_social_chat_messages_thread_id_id "
+                "ON social_chat_messages(thread_id, id DESC)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_social_chat_thread_members_thread_actor "
+                "ON social_chat_thread_members(thread_id, actor_key)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_social_chat_thread_members_actor_thread "
+                "ON social_chat_thread_members(actor_key, thread_id)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_wb_ads_snapshots_user_deleted_campaign "
+                "ON wb_ads_campaign_snapshots(user_id, is_deleted, campaign_id DESC)"
+            )
+        )
 
 
 def ensure_admin_emails():

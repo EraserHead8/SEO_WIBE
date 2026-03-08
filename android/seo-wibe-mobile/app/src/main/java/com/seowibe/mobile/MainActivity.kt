@@ -52,6 +52,7 @@ class MainActivity : AppCompatActivity() {
   private var updateCheckStarted = false
   private var pendingOpenSocial = false
   private var pendingOpenThreadId = 0
+  private var lastBackPressedAtMs = 0L
   private val updatePrefs by lazy { getSharedPreferences(PREF_UPDATES, Context.MODE_PRIVATE) }
   private val authPrefs by lazy { getSharedPreferences(BackgroundNotifyWorker.PREF_AUTH, Context.MODE_PRIVATE) }
   private val allowedHosts by lazy {
@@ -127,11 +128,7 @@ class MainActivity : AppCompatActivity() {
       this,
       object : OnBackPressedCallback(true) {
         override fun handleOnBackPressed() {
-          if (webView.canGoBack()) {
-            webView.goBack()
-          } else {
-            finish()
-          }
+          tryHandleAppBackPress()
         }
       }
     )
@@ -200,8 +197,12 @@ class MainActivity : AppCompatActivity() {
     settings.allowFileAccess = false
     settings.allowContentAccess = true
     settings.loadsImagesAutomatically = true
+    settings.cacheMode = WebSettings.LOAD_DEFAULT
     settings.mediaPlaybackRequiresUserGesture = false
     settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      settings.offscreenPreRaster = true
+    }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       settings.safeBrowsingEnabled = true
     }
@@ -342,6 +343,68 @@ class MainActivity : AppCompatActivity() {
     }
     pendingOpenSocial = false
     pendingOpenThreadId = 0
+  }
+
+  private fun tryHandleAppBackPress() {
+    if (tryHandleJsBack()) return
+    if (webView.canGoBack()) {
+      webView.goBack()
+      return
+    }
+    val now = System.currentTimeMillis()
+    if (now - lastBackPressedAtMs < 1800L) {
+      finish()
+      return
+    }
+    lastBackPressedAtMs = now
+    Toast.makeText(this, "Нажмите назад еще раз, чтобы выйти", Toast.LENGTH_SHORT).show()
+  }
+
+  private fun tryHandleJsBack(): Boolean {
+    val js = """
+      (function() {
+        try {
+          if (typeof window.handleMobileBackPress === "function") {
+            return window.handleMobileBackPress() === true;
+          }
+          if (window.socialState && window.socialState.currentSubtab === "chat" && Number(window.socialState.currentThreadId || 0) > 0) {
+            if (typeof window.socialCloseThread === "function") {
+              window.socialCloseThread({keepAutoSelect:false});
+              return true;
+            }
+          }
+          if (typeof window.showTab === "function" && typeof window.currentTab !== "undefined") {
+            if (String(window.currentTab || "") !== "sales") {
+              var salesBtn = document.querySelector(".nav-btn[data-tab='sales']");
+              window.showTab("sales", salesBtn || null);
+              return true;
+            }
+          }
+        } catch (e) {}
+        return false;
+      })();
+    """.trimIndent()
+    return try {
+      webView.evaluateJavascript(js) { result ->
+        val handled = (result ?: "").contains("true")
+        if (!handled) {
+          if (webView.canGoBack()) {
+            webView.goBack()
+            return@evaluateJavascript
+          }
+          val now = System.currentTimeMillis()
+          if (now - lastBackPressedAtMs < 1800L) {
+            finish()
+          } else {
+            lastBackPressedAtMs = now
+            Toast.makeText(this, "Нажмите назад еще раз, чтобы выйти", Toast.LENGTH_SHORT).show()
+          }
+        }
+      }
+      true
+    } catch (_: Exception) {
+      false
+    }
   }
 
   private fun persistAuthSnapshot(token: String?, lang: String?) {

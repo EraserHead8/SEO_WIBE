@@ -152,6 +152,35 @@ def update_product_description(marketplace: str, api_key: str, article: str, des
     return False
 
 
+def update_product_photos_order(
+    marketplace: str,
+    api_key: str,
+    article: str,
+    external_id: str,
+    photos: list[str],
+) -> tuple[bool, str]:
+    """
+    Best-effort reorder of product media on marketplace.
+    Returns tuple: (ok, reason) to keep UI transparent on API limitations.
+    """
+    try:
+        normalized = _dedupe_photo_urls(list(photos or []))
+        if not normalized:
+            return False, "empty_photos"
+        if not httpx:
+            return False, "http_client_unavailable"
+        safe_market = str(marketplace or "").strip().lower()
+        if safe_market == "wb":
+            ok = _update_wb_photos_order(api_key, article, external_id, normalized)
+            return (ok, "ok" if ok else "wb_api_rejected")
+        if safe_market == "ozon":
+            ok = _update_ozon_photos_order(api_key, article, external_id, normalized)
+            return (ok, "ok" if ok else "ozon_api_rejected")
+    except Exception as exc:
+        return False, str(exc)[:180]
+    return False, "unsupported_marketplace"
+
+
 def get_live_search_position(
     marketplace: str,
     article: str,
@@ -1333,6 +1362,105 @@ def _update_ozon_description(api_key: str, article: str, description: str) -> bo
     with httpx.Client(timeout=20.0) as client:
         response = client.post(endpoint, headers=headers, json=payload)
     return response.status_code < 400
+
+
+def _update_wb_photos_order(api_key: str, article: str, external_id: str, photos: list[str]) -> bool:
+    token = str(api_key or "").strip()
+    vendor_code = str(article or "").strip()
+    if not token or not vendor_code or not photos:
+        return False
+    headers = {"Authorization": token, "Content-Type": "application/json"}
+    nm_id = 0
+    try:
+        nm_id = int(str(external_id or "").strip())
+    except Exception:
+        nm_id = 0
+    payloads: list[dict[str, Any]] = []
+    card_base: dict[str, Any] = {"vendorCode": vendor_code}
+    if nm_id > 0:
+        card_base["nmID"] = nm_id
+    payloads.append({"cards": [{**card_base, "mediaFiles": photos}]})
+    payloads.append({"cards": [{**card_base, "photos": photos}]})
+    payloads.append({"cards": [{**card_base, "photos": [{"big": url} for url in photos]}]})
+    endpoints = [
+        "https://content-api.wildberries.ru/content/v2/cards/update",
+        "https://suppliers-api.wildberries.ru/content/v2/cards/update",
+    ]
+    with httpx.Client(timeout=25.0, follow_redirects=True) as client:
+        for endpoint in endpoints:
+            for payload in payloads:
+                try:
+                    response = client.post(endpoint, headers=headers, json=payload)
+                except Exception:
+                    continue
+                if _marketplace_response_ok(response):
+                    return True
+                if response.status_code in {401, 403}:
+                    return False
+    return False
+
+
+def _update_ozon_photos_order(api_key: str, article: str, external_id: str, photos: list[str]) -> bool:
+    creds = _parse_ozon_credentials(api_key)
+    offer_id = str(article or "").strip()
+    if not creds or not offer_id or not photos:
+        return False
+    client_id, token = creds
+    headers = {
+        "Client-Id": client_id,
+        "Api-Key": token,
+        "Content-Type": "application/json",
+    }
+    product_id = 0
+    try:
+        product_id = int(str(external_id or "").strip())
+    except Exception:
+        product_id = 0
+    payloads: list[dict[str, Any]] = []
+    items_base: dict[str, Any] = {"offer_id": offer_id, "images": photos}
+    if product_id > 0:
+        items_base["product_id"] = product_id
+    payloads.append({"items": [items_base]})
+    payloads.append({"items": [{**items_base, "primary_image": photos[0]}]})
+    endpoints = [
+        "https://api-seller.ozon.ru/v2/product/import",
+        "https://api-seller.ozon.ru/v3/product/import",
+    ]
+    with httpx.Client(timeout=25.0, follow_redirects=True) as client:
+        for endpoint in endpoints:
+            for payload in payloads:
+                try:
+                    response = client.post(endpoint, headers=headers, json=payload)
+                except Exception:
+                    continue
+                if _marketplace_response_ok(response):
+                    return True
+                if response.status_code in {401, 403}:
+                    return False
+    return False
+
+
+def _marketplace_response_ok(response: httpx.Response) -> bool:
+    if response.status_code >= 400:
+        return False
+    try:
+        payload = response.json()
+    except Exception:
+        return True
+    if isinstance(payload, dict):
+        has_error_field = (
+            payload.get("error")
+            or payload.get("errors")
+            or payload.get("errorText")
+            or payload.get("error_message")
+        )
+        if has_error_field:
+            return False
+        result = payload.get("result")
+        if isinstance(result, dict):
+            if result.get("error") or result.get("errors"):
+                return False
+    return True
 
 
 def _extract_wb_barcode(card: dict[str, Any]) -> str:

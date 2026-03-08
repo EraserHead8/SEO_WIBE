@@ -209,6 +209,7 @@ from app.services.marketplace import (
     resolve_wb_external_id,
     test_marketplace_credentials,
     update_product_description,
+    update_product_photos_order,
 )
 from app.services.modules import DEFAULT_MODULES
 from app.services.seo import (
@@ -909,10 +910,34 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
 
 HELP_RELEASES: list[dict[str, Any]] = [
     {
+        "version": "0.3.8",
+        "android_version_code": 9,
+        "released_at": "2026-03-08",
+        "current": True,
+        "summary": "Стабилизация сервера, ускорение рекламы/кэшей, online-статусы и обновленный Android APK 1.5.3.",
+        "diff_from_previous": [
+            "Исправлена нестабильность автодеплоя на сервере (safe.directory + HOME для systemd unit).",
+            "WB Ads: догрузка summary/статов расширена и вынесена в прогрев кэша/снапшотов.",
+            "Чаты: «последний раз в сети» и «сейчас онлайн» считают активность по actor/member корректно.",
+            "Android: доработана back-навигация (внутренняя история + двойной back для выхода).",
+        ],
+        "changes": [
+            "Сборка Android обновлена до versionCode=9 / versionName=1.5.3.",
+            "Снижен визуальный flicker аватаров/иконок за счет стабильного рендера и cache-control для статики.",
+            "Релиз включает цветовые улучшения бухгалтерии/отзывов и мобильную компоновку графика статистики.",
+            "Проверка обновлений APK остается через /api/mobile/apk/latest на сервере 5.129.207.106:8016.",
+            "Сохранены push-уведомления, бейджи и быстрый ответ из шторки Android.",
+        ],
+        "android_download_url": "/static/downloads/seo-wibe-mobile-latest.apk",
+        "android_download_name": "SEO WIBE Android (.apk)",
+        "app_entry_url": "/mobile",
+        "notes": "APK 1.5.3 проверяет обновления при запуске и предлагает «Установить / Позже». После загрузки открывается системный установщик Android.",
+    },
+    {
         "version": "0.3.7",
         "android_version_code": 8,
         "released_at": "2026-03-08",
-        "current": True,
+        "current": False,
         "summary": "Android APK: чат переработан в Telegram-подобный mobile layout, исправлен возврат из диалога, календарь стартует по умолчанию.",
         "diff_from_previous": [
             "APK Chat UI: добавлен компактный верхний блок (back + имя/тип диалога), убрана лишняя кнопка refresh, чат занимает больше полезной высоты.",
@@ -2459,7 +2484,7 @@ def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depen
         if not _campaign_summary_has_context(summary, cid):
             placeholder_ids.append(cid)
     if placeholder_ids:
-        preview_ids = sorted(set(placeholder_ids))[:40]
+        preview_ids = sorted(set(placeholder_ids))[:500]
         placeholder_key = build_market_cache_key(
             {
                 "kind": "wb_campaigns_placeholder_summaries",
@@ -2475,7 +2500,11 @@ def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depen
                 marketplace="wb",
                 cache_key=placeholder_key,
                 ttl_sec=max(120, _market_cache_ttl("wb_ads")),
-                fetcher=lambda: fetch_wb_campaign_summaries(wb_key, preview_ids, fallback_limit=40),
+                fetcher=lambda: fetch_wb_campaign_summaries(
+                    wb_key,
+                    preview_ids,
+                    fallback_limit=max(160, min(1200, len(preview_ids))),
+                ),
                 stale_if_error_sec=60 * 60,
             )
         except Exception:
@@ -2689,7 +2718,7 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
         if not _campaign_stat_has_context(stats.get(str(cid)))
     ]
     if unresolved_stats_ids:
-        for cid in unresolved_stats_ids[:12]:
+        for cid in unresolved_stats_ids[:40]:
             try:
                 one_map = fetch_wb_campaign_stats_bulk(wb_key, [int(cid)], date_from=None, date_to=None)
             except Exception:
@@ -3480,6 +3509,7 @@ def get_help_releases(
         if is_en:
             # Lightweight EN localization for release cards without splitting data model.
             item["summary"] = {
+                "Стабилизация сервера, ускорение рекламы/кэшей, online-статусы и обновленный Android APK 1.5.3.": "Server stabilization, faster ads/cache loading, online-status fixes, and refreshed Android APK 1.5.3.",
                 "Android APK: исправлена загрузка истории чатов, снижено мерцание интерфейса, добавлены бейджи и быстрый ответ из шторки.": "Android APK: fixed chat history preload, reduced UI flicker, and added badges plus quick reply from notification shade.",
                 "Android APK: обновленный drawer-only интерфейс, фоновый polling уведомлений и стабильная загрузка чатов/рекламы/бухгалтерии.": "Android APK: updated drawer-only UI, background notification polling, and stable loading for chat/ads/accounting.",
                 "Android APK: drawer-first интерфейс, оптимизация чата и мобильных игр, проверка обновлений в приложении.": "Android APK: drawer-first UI, chat/mobile-game optimization, and in-app update checks.",
@@ -3489,6 +3519,7 @@ def get_help_releases(
                 "Стабилизация модулей товаров, отзывов/вопросов, рекламы и чата.": "Stabilization for products, reviews/questions, ads, and chat modules.",
             }.get(str(item.get("summary") or ""), str(item.get("summary") or ""))
             item["notes"] = {
+                "APK 1.5.3 проверяет обновления при запуске и предлагает «Установить / Позже». После загрузки открывается системный установщик Android.": "APK 1.5.3 checks for updates at startup and shows Install/Later. After download, Android system installer is opened.",
                 "APK проверяет обновления при запуске и предлагает «Установить / Позже». После загрузки открывается системный установщик Android. Уведомления в шторке поддерживают быстрый ответ.": "APK checks for updates at startup and shows Install/Later. After download, Android system installer is opened. Notification shade supports inline quick reply.",
                 "APK проверяет обновления при запуске и предлагает «Установить / Позже». После загрузки открывается системный установщик Android.": "APK checks for updates at startup and shows Install/Later. After download, Android system installer is opened.",
                 "В приложении доступна проверка обновлений APK. При выборе «Установить» загрузка стартует автоматически, затем открывается системный установщик Android.": "The app can check APK updates. Tap Install to start automatic download, then confirm installation in the Android system installer.",
@@ -4115,6 +4146,12 @@ def update_product(product_id: int, payload: ProductUpdateIn, user: User = Depen
     next_description = str(payload.current_description or "").strip()
     next_photo = str(payload.photo_url or "").strip()
     next_keywords = str(payload.target_keywords or "").strip()
+    next_purchase_price = max(0.0, round(_to_money(payload.purchase_price), 2)) if payload.purchase_price is not None else None
+    next_photos_order = (
+        _normalize_product_photo_list(payload.photos_order or [])
+        if payload.photos_order is not None
+        else None
+    )
     if next_name:
         product.name = next_name[:255]
     if payload.barcode is not None:
@@ -4123,10 +4160,20 @@ def update_product(product_id: int, payload: ProductUpdateIn, user: User = Depen
         product.category_name = next_category[:255]
     if payload.current_description is not None:
         product.current_description = next_description[:16000]
+    if next_purchase_price is not None:
+        product.purchase_price = next_purchase_price
     if payload.photo_url is not None:
-        product.photo_url = _normalize_product_photo_url(next_photo)[:500]
-        photo_list = _normalize_product_photo_list([next_photo])
-        product.photos_json = json.dumps(photo_list, ensure_ascii=False) if photo_list else "[]"
+        normalized_photo = _normalize_product_photo_url(next_photo)
+        product.photo_url = normalized_photo[:500]
+        if next_photos_order is None:
+            photo_list = _normalize_product_photo_list([next_photo])
+            product.photos_json = json.dumps(photo_list, ensure_ascii=False) if photo_list else "[]"
+    if next_photos_order is not None:
+        product.photos_json = json.dumps(next_photos_order, ensure_ascii=False) if next_photos_order else "[]"
+        if next_photos_order:
+            product.photo_url = str(next_photos_order[0])[:500]
+        elif payload.photo_url is None:
+            product.photo_url = ""
     if payload.target_keywords is not None:
         product.target_keywords = next_keywords[:5000]
 
@@ -4138,15 +4185,31 @@ def update_product(product_id: int, payload: ProductUpdateIn, user: User = Depen
         f"category={'1' if bool(payload.category_name is not None) else '0'}",
         f"description={'1' if bool(payload.current_description is not None) else '0'}",
         f"photo={'1' if bool(payload.photo_url is not None) else '0'}",
+        f"photos_order={'1' if payload.photos_order is not None else '0'}",
         f"keywords={'1' if bool(payload.target_keywords is not None) else '0'}",
+        f"purchase_price={'1' if payload.purchase_price is not None else '0'}",
     ]
+    api_key = _get_active_marketplace_api_key(db, user.id, product.marketplace)
     if payload.current_description is not None:
-        api_key = _get_active_marketplace_api_key(db, user.id, product.marketplace)
         if api_key:
             ok = update_product_description(product.marketplace, api_key, product.article, product.current_description)
             details.append(f"remote_update={'ok' if ok else 'failed'}")
         else:
             details.append("remote_update=skipped_no_key")
+    if payload.photos_order is not None:
+        if api_key and next_photos_order:
+            photos_ok, photos_status = update_product_photos_order(
+                product.marketplace,
+                api_key,
+                product.article,
+                product.external_id,
+                next_photos_order,
+            )
+            details.append(f"remote_photo_order={'ok' if photos_ok else photos_status}")
+        elif not api_key:
+            details.append("remote_photo_order=skipped_no_key")
+        else:
+            details.append("remote_photo_order=empty")
     _audit(
         db,
         user,
@@ -7445,6 +7508,33 @@ def _social_last_activity_map(db: Session, actor_keys: list[str]) -> dict[str, d
             if isinstance(dt, datetime):
                 out[key] = dt
 
+    if owner_user_ids:
+        user_ids = sorted({int(v) for v in owner_user_ids if int(v) > 0})
+        user_rows = db.execute(
+            select(
+                AuditLog.user_id,
+                func.max(AuditLog.created_at).label("last_at"),
+            )
+            .where(
+                AuditLog.user_id.in_(user_ids),
+                AuditLog.user_id.is_not(None),
+                AuditLog.actor_is_owner.is_(True),
+            )
+            .group_by(AuditLog.user_id)
+        ).all()
+        by_user: dict[int, datetime] = {}
+        for raw_user_id, last_at in user_rows:
+            user_id = _to_int_safe(raw_user_id)
+            if user_id > 0 and isinstance(last_at, datetime):
+                by_user[user_id] = last_at
+        for key, user_id in owner_key_to_user_id.items():
+            dt = by_user.get(int(user_id))
+            if not isinstance(dt, datetime):
+                continue
+            prev = out.get(key)
+            if not prev or dt > prev:
+                out[key] = dt
+
     email_to_keys: dict[str, list[str]] = {}
     for key in keys:
         if key in out:
@@ -7478,6 +7568,78 @@ def _social_last_activity_map(db: Session, actor_keys: list[str]) -> dict[str, d
             if not prev or last_at > prev:
                 out[key] = last_at
     return out
+
+
+_SOCIAL_ONLINE_WINDOW_SEC = 120
+
+
+def _social_is_online(last_seen: datetime | None) -> bool:
+    if not isinstance(last_seen, datetime):
+        return False
+    safe_seen = last_seen
+    if safe_seen.tzinfo is not None:
+        safe_seen = safe_seen.astimezone(timezone.utc).replace(tzinfo=None)
+    delta = (datetime.utcnow() - safe_seen).total_seconds()
+    return 0 <= float(delta or 0.0) <= float(_SOCIAL_ONLINE_WINDOW_SEC)
+
+
+def _social_public_profile_by_key(db: Session, actor_key: str) -> dict[str, Any]:
+    key = _social_canonical_actor_key(db, actor_key)
+    payload: dict[str, Any] = {
+        "actor_key": key,
+        "nick": _social_current_nick_by_key(db, key) or key,
+        "full_name": "",
+        "email": "",
+        "company_name": "",
+        "city": "",
+        "position_title": "",
+        "avatar_url": _social_current_avatar_by_key(db, key) or "",
+        "is_owner": False,
+        "user_id": 0,
+        "member_id": 0,
+    }
+    if key.startswith("m:"):
+        member_id = _to_int_safe(key.split(":", 1)[1])
+        member = db.get(TeamMember, member_id) if member_id else None
+        if not member:
+            return payload
+        profile = db.scalar(select(UserProfile).where(UserProfile.user_id == int(member.user_id)))
+        payload.update(
+            {
+                "full_name": str(member.full_name or "").strip(),
+                "email": str(member.email or "").strip().lower(),
+                "company_name": str(profile.company_name or "").strip() if profile else "",
+                "city": str(profile.city or "").strip() if profile else "",
+                "position_title": str(profile.position_title or "").strip() if profile else "",
+                "is_owner": bool(member.is_owner),
+                "user_id": int(member.user_id or 0),
+                "member_id": int(member.id or 0),
+            }
+        )
+        return payload
+    if key.startswith("u:"):
+        user_id = _to_int_safe(key.split(":", 1)[1])
+        owner = db.get(User, user_id) if user_id else None
+        owner_member = db.scalar(
+            select(TeamMember).where(
+                TeamMember.user_id == int(user_id or 0),
+                TeamMember.is_owner.is_(True),
+            ).order_by(TeamMember.id.asc())
+        ) if user_id else None
+        profile = db.scalar(select(UserProfile).where(UserProfile.user_id == int(user_id or 0))) if user_id else None
+        payload.update(
+            {
+                "full_name": str((owner_member.full_name if owner_member else "") or (profile.full_name if profile else "") or "").strip(),
+                "email": str((owner.email if owner else "") or "").strip().lower(),
+                "company_name": str(profile.company_name or "").strip() if profile else "",
+                "city": str(profile.city or "").strip() if profile else "",
+                "position_title": str(profile.position_title or "").strip() if profile else "",
+                "is_owner": True,
+                "user_id": int(user_id or 0),
+                "member_id": int(owner_member.id or 0) if owner_member else 0,
+            }
+        )
+    return payload
 
 
 def _to_utc_iso(dt: datetime | None) -> str:
@@ -7693,13 +7855,15 @@ def _social_thread_to_out(db: Session, actor_key: str, row: SocialChatThread, me
         avatar_url = _social_current_avatar_by_key(db, key)
         if current_nick and current_nick != str(x.actor_nick or ""):
             x.actor_nick = current_nick[:120]
-        last_seen = last_activity.get(key.strip().lower()) or x.updated_at
+        last_seen = last_activity.get(key.strip().lower())
+        is_online = _social_is_online(last_seen)
         participants.append(
             {
                 "actor_key": key,
                 "nick": current_nick,
                 "avatar_url": str(avatar_url or ""),
                 "last_seen_at": _to_utc_iso(last_seen),
+                "is_online": bool(is_online),
                 "is_me": key == actor_key,
             }
         )
@@ -8183,6 +8347,49 @@ def social_chat_threads(
     out.sort(key=lambda x: (x.unread, x.last_message.get("id", 0)), reverse=True)
     db.commit()
     return out
+
+
+@router.get("/social/chat/participant/profile", response_model=dict[str, Any])
+def social_chat_participant_profile(
+    thread_id: int,
+    actor_key: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    safe_thread_id = int(thread_id or 0)
+    safe_actor_key = _social_canonical_actor_key(db, str(actor_key or "").strip().lower())
+    if safe_thread_id <= 0 or not safe_actor_key:
+        raise HTTPException(status_code=400, detail="Некорректные параметры")
+    viewer_key, _, _ = _social_actor_identity(db, user)
+    viewer_aliases = _social_actor_alias_keys(db, viewer_key)
+    has_access = db.scalar(
+        select(SocialChatThreadMember.id).where(
+            SocialChatThreadMember.thread_id == safe_thread_id,
+            SocialChatThreadMember.actor_key.in_(viewer_aliases),
+        )
+    )
+    if not has_access:
+        raise HTTPException(status_code=403, detail="Нет доступа к чату")
+    target_aliases = _social_actor_alias_keys(db, safe_actor_key)
+    target_row = db.scalar(
+        select(SocialChatThreadMember).where(
+            SocialChatThreadMember.thread_id == safe_thread_id,
+            SocialChatThreadMember.actor_key.in_(target_aliases),
+        )
+    )
+    if not target_row:
+        raise HTTPException(status_code=404, detail="Участник не найден")
+
+    target_key = _social_canonical_actor_key(db, str(target_row.actor_key or "").strip().lower())
+    profile_payload = _social_public_profile_by_key(db, target_key)
+    activity_map = _social_last_activity_map(db, [target_key])
+    last_seen = activity_map.get(target_key)
+    profile_payload["last_seen_at"] = _to_utc_iso(last_seen)
+    profile_payload["is_online"] = bool(_social_is_online(last_seen))
+    profile_payload["can_edit"] = False
+    profile_payload["is_me"] = target_key == viewer_key
+    return profile_payload
 
 
 @router.put("/social/chat/threads/{thread_id}/avatar", response_model=SocialChatThreadOut)

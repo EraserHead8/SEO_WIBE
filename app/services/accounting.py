@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 import math
+import time
 from typing import Any
 
 import httpx
@@ -1005,28 +1006,86 @@ def _request_wb_list(*, api_key: str, endpoint: str, params: dict[str, Any]) -> 
         return None, "ключ не задан"
     for auth_value in (token, f"Bearer {token}"):
         headers = {"Authorization": auth_value}
-        response = None
-        try:
-            with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
-                response = client.get(endpoint, headers=headers, params=params)
-        except Exception:
+        for attempt in range(5):
             response = None
-        if response is None:
-            continue
-        if response.status_code in {401, 403}:
-            continue
-        if response.status_code == 429:
-            return None, "429"
-        if response.status_code >= 400:
-            return None, f"{response.status_code}"
-        try:
-            payload = response.json()
-        except Exception:
-            return None, "bad_json"
-        if isinstance(payload, list):
-            return payload, "ok"
-        return None, "bad_format"
+            try:
+                with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
+                    response = client.get(endpoint, headers=headers, params=params)
+            except Exception:
+                response = None
+            if response is None:
+                if attempt < 4:
+                    time.sleep(0.35 * (attempt + 1))
+                continue
+            if response.status_code in {401, 403}:
+                break
+            if response.status_code == 429:
+                if attempt < 4:
+                    time.sleep(_wb_retry_after_sec(response, attempt))
+                    continue
+                return None, "429"
+            if response.status_code >= 400:
+                return None, f"{response.status_code}"
+            try:
+                payload = response.json()
+            except Exception:
+                if attempt < 4:
+                    time.sleep(0.35 * (attempt + 1))
+                    continue
+                return None, "bad_json"
+            dict_rows = _extract_list_payload(payload)
+            if dict_rows is not None:
+                return dict_rows, "ok"
+            if attempt < 4:
+                time.sleep(0.25 * (attempt + 1))
+                continue
+            return None, "bad_format"
     return None, "unauthorized"
+
+
+def _extract_list_payload(payload: Any) -> list[dict[str, Any]] | None:
+    if isinstance(payload, list):
+        return [x for x in payload if isinstance(x, dict)]
+    if not isinstance(payload, dict):
+        return None
+    for key in ("data", "rows", "items", "result", "list"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            return [x for x in value if isinstance(x, dict)]
+        if isinstance(value, dict):
+            for nested_key in ("data", "rows", "items", "list"):
+                nested_value = value.get(nested_key)
+                if isinstance(nested_value, list):
+                    return [x for x in nested_value if isinstance(x, dict)]
+    return None
+
+
+def _wb_retry_after_sec(response: httpx.Response, attempt: int) -> float:
+    # WB can return retry hints in either Retry-After or X-Ratelimit headers.
+    headers = response.headers
+    raw_values = (
+        headers.get("Retry-After"),
+        headers.get("X-Ratelimit-Retry"),
+        headers.get("X-RateLimit-Retry"),
+        headers.get("X-Ratelimit-Reset"),
+        headers.get("X-RateLimit-Reset"),
+    )
+    for raw in raw_values:
+        if raw is None:
+            continue
+        text = str(raw).strip()
+        if not text:
+            continue
+        try:
+            value = float(text)
+        except Exception:
+            continue
+        if not math.isfinite(value):
+            continue
+        if value <= 0:
+            continue
+        return max(0.8, min(45.0, value))
+    return min(14.0, 0.85 * (attempt + 1))
 
 
 def _parse_ozon_credentials(api_key: str) -> tuple[str, str] | None:

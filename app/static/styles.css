@@ -727,6 +727,7 @@ body[data-theme="light"] .review-type-pill {
 
 .app-shell.sidebar-compact {
   --sidebar-width: 82px;
+  grid-template-columns: 82px minmax(0, 1fr);
 }
 
 .sidebar.compact .brand p,
@@ -5462,6 +5463,50 @@ body[data-theme="dark"] tbody tr:hover td {
   font-weight: 700;
 }
 
+#reviews .feedback-meta-badge.feedback-market-wb,
+#reviewsSubtabQuestions .feedback-meta-badge.feedback-market-wb {
+  background: color-mix(in oklab, #7a4dff 30%, #ffffff);
+  border-color: color-mix(in oklab, #7a4dff 48%, var(--ds-border));
+  color: color-mix(in oklab, #1b0d4f 74%, #ffffff);
+}
+
+#reviews .feedback-meta-badge.feedback-market-ozon,
+#reviewsSubtabQuestions .feedback-meta-badge.feedback-market-ozon {
+  background: color-mix(in oklab, #2ec5ff 26%, #ffffff);
+  border-color: color-mix(in oklab, #2ec5ff 44%, var(--ds-border));
+  color: color-mix(in oklab, #08386a 72%, #ffffff);
+}
+
+#reviews .feedback-meta-badge.feedback-rating-5,
+#reviewsSubtabQuestions .feedback-meta-badge.feedback-rating-5 {
+  background: color-mix(in oklab, #22c55e 24%, #ffffff);
+  color: #116534;
+}
+
+#reviews .feedback-meta-badge.feedback-rating-4,
+#reviewsSubtabQuestions .feedback-meta-badge.feedback-rating-4 {
+  background: color-mix(in oklab, #84cc16 30%, #ffffff);
+  color: #3f6212;
+}
+
+#reviews .feedback-meta-badge.feedback-rating-3,
+#reviewsSubtabQuestions .feedback-meta-badge.feedback-rating-3 {
+  background: color-mix(in oklab, #facc15 36%, #ffffff);
+  color: #854d0e;
+}
+
+#reviews .feedback-meta-badge.feedback-rating-2,
+#reviewsSubtabQuestions .feedback-meta-badge.feedback-rating-2 {
+  background: color-mix(in oklab, #fb923c 34%, #ffffff);
+  color: #9a3412;
+}
+
+#reviews .feedback-meta-badge.feedback-rating-1,
+#reviewsSubtabQuestions .feedback-meta-badge.feedback-rating-1 {
+  background: color-mix(in oklab, #ef4444 28%, #ffffff);
+  color: #991b1b;
+}
+
 #reviews .feedback-product-line,
 #reviewsSubtabQuestions .feedback-product-line,
 #reviews .feedback-text-line,
@@ -5479,6 +5524,11 @@ body[data-theme="dark"] tbody tr:hover td {
   line-height: 1.52;
   font-size: 14px;
   max-height: 280px;
+}
+
+#reviews .cell-main-text.feedback-customer-text,
+#reviewsSubtabQuestions .cell-main-text.feedback-customer-text {
+  font-weight: 700;
 }
 
 #reviews .review-reply-input,
@@ -6411,6 +6461,16 @@ body[data-theme="dark"] .landing-band .band-stats span {
   text-overflow: ellipsis;
 }
 
+.social-chat-head-title.is-clickable,
+.social-chat-head-subtitle.is-clickable {
+  cursor: pointer;
+}
+
+.social-chat-head-title.is-clickable:hover,
+.social-chat-head-subtitle.is-clickable:hover {
+  color: color-mix(in oklab, var(--accent) 66%, var(--text));
+}
+
 .social-chat-head-subtitle {
   font-size: 12px;
 }
@@ -6424,6 +6484,11 @@ body[data-theme="dark"] .landing-band .band-stats span {
   max-width: 260px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.social-chat-head-meta.online-now {
+  color: color-mix(in oklab, #16c784 74%, var(--text));
+  font-weight: 700;
 }
 
 .social-chat-head-actions {
@@ -6527,6 +6592,106 @@ body[data-theme="dark"] .landing-band .band-stats span {
   font-weight: 700;
   color: var(--tg-user-accent);
   margin-bottom: 2px;
+}
+
+.social-participant-list {
+  display: grid;
+  gap: 8px;
+}
+
+.social-participant-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--panel-bg) 90%, #ffffff);
+  padding: 8px 10px;
+}
+
+.social-participant-avatar {
+  display: grid;
+  place-items: center;
+}
+
+.social-participant-main {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.social-participant-main b {
+  font-size: 14px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.social-participant-main small {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.social-participant-open {
+  font-size: 18px;
+  color: var(--text-muted);
+}
+
+.social-profile-view {
+  display: grid;
+  gap: 12px;
+}
+
+.social-profile-head {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.social-profile-head-text {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.social-profile-head-text h4 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.social-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.social-profile-grid > div {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--panel-bg) 88%, #ffffff);
+  padding: 8px 10px;
+  display: grid;
+  gap: 3px;
+}
+
+.social-profile-grid > div > span {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.social-profile-grid > div > b {
+  font-size: 13px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
 .tg-msg-text {
@@ -6768,9 +6933,12 @@ body[data-theme="dark"] .landing-band .band-stats span {
 }
 
 .tg-avatar img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  opacity: 1;
+  transition: opacity 0.14s linear;
 }
 
 .tg-avatar .tg-avatar-fallback {
@@ -6779,6 +6947,14 @@ body[data-theme="dark"] .landing-band .band-stats span {
 
 .tg-avatar.has-image .tg-avatar-fallback {
   display: none;
+}
+
+.tg-avatar.has-image.is-pending img {
+  opacity: 0;
+}
+
+.tg-avatar.has-image.is-pending .tg-avatar-fallback {
+  display: inline;
 }
 
 .tg-avatar-xs {
@@ -8641,6 +8817,27 @@ button,
   font-size: 24px;
 }
 
+.accounting-kpi-positive strong {
+  color: color-mix(in oklab, #17b26a 74%, var(--ds-text));
+}
+
+.accounting-kpi-negative strong {
+  color: color-mix(in oklab, #e5484d 76%, var(--ds-text));
+}
+
+.accounting-kpi-net {
+  border-color: color-mix(in oklab, #1da7ff 44%, var(--ds-border)) !important;
+  background: linear-gradient(
+    145deg,
+    color-mix(in oklab, #1da7ff 18%, var(--ds-surface-soft)),
+    color-mix(in oklab, #26d0ce 16%, var(--ds-surface-soft))
+  ) !important;
+}
+
+.accounting-kpi-net strong {
+  color: color-mix(in oklab, #0a4aa4 80%, #ffffff);
+}
+
 .accounting-kpis .sales-kpi:nth-child(6n + 1),
 .accounting-market-kpis .sales-kpi:nth-child(3n + 1) {
   border-color: color-mix(in oklab, var(--accent) 45%, var(--line));
@@ -8941,4 +9138,22 @@ body.mobile-apk-mode #appSection .topbar-controls #mobileChatCompactHead:not(.hi
   #authSection .auth-card.auth-hero {
     grid-template-columns: 1fr !important;
   }
+}
+
+/* 2026-03-08: APK stats layout + chat/profile polish */
+body.mobile-apk-mode #sales > .panel:first-of-type {
+  display: flex;
+  flex-direction: column;
+}
+
+body.mobile-apk-mode #sales > .panel:first-of-type #salesTrendChart,
+body.mobile-apk-mode #sales > .panel:first-of-type #salesTrendMeta {
+  order: 1;
+}
+
+body.mobile-apk-mode #sales > .panel:first-of-type #salesTotalsCards,
+body.mobile-apk-mode #sales > .panel:first-of-type #salesStatsMeta,
+body.mobile-apk-mode #sales > .panel:first-of-type #salesLoadStatus,
+body.mobile-apk-mode #sales > .panel:first-of-type #salesExtraWrap {
+  order: 2;
 }

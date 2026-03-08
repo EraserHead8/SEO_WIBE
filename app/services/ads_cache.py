@@ -10,7 +10,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import ApiCredential, ModuleAccess, User, WbAdsCampaignSnapshot
-from app.services.wb_modules import fetch_wb_campaigns
+from app.services.wb_modules import (
+    fetch_wb_campaign_stats_bulk,
+    fetch_wb_campaign_summaries,
+    fetch_wb_campaigns,
+)
 
 
 WB_ADS_SNAPSHOT_TTL_SEC = 55 * 60
@@ -56,12 +60,15 @@ def sync_wb_campaign_snapshots(db: Session, user_id: int, wb_api_key: str) -> di
 
     fetched = fetch_wb_campaigns(
         wb_api_key.strip(),
-        enrich=True,
-        fast_mode=False,
-        max_attempts=8,
+        enrich=False,
+        fast_mode=True,
+        max_attempts=6,
     )
     if not isinstance(fetched, list):
         fetched = []
+    if fetched:
+        fetched = _hydrate_campaign_rows_with_summaries(wb_api_key.strip(), fetched)
+        fetched = _hydrate_campaign_rows_with_stats(wb_api_key.strip(), fetched)
     seen_ids: set[int] = set()
     ts = datetime.utcnow()
     changed = 0
@@ -124,6 +131,94 @@ def sync_wb_campaign_snapshots(db: Session, user_id: int, wb_api_key: str) -> di
         "changed": changed,
         "synced_at": ts.isoformat(),
     }
+
+
+def _hydrate_campaign_rows_with_summaries(wb_api_key: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    ids = sorted({_campaign_id_from_row(row) for row in rows if _campaign_id_from_row(row) > 0})
+    if not ids:
+        return rows
+    fallback_cap = max(120, min(1200, len(ids)))
+    try:
+        summary_map = fetch_wb_campaign_summaries(wb_api_key, ids, fallback_limit=fallback_cap)
+    except Exception:
+        summary_map = {}
+    if not isinstance(summary_map, dict) or not summary_map:
+        return rows
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        cid = _campaign_id_from_row(row)
+        summary = summary_map.get(str(cid)) if cid > 0 else None
+        if not isinstance(summary, dict):
+            out.append(row)
+            continue
+        next_row = dict(row)
+        name = str(next_row.get("name") or "").strip()
+        status = str(next_row.get("status") or "").strip()
+        ctype = str(next_row.get("type") or "").strip()
+        budget = str(next_row.get("budget") or "").strip()
+        summary_name = str(summary.get("name") or "").strip()
+        summary_status = str(summary.get("status") or "").strip()
+        summary_type = str(summary.get("type") or "").strip()
+        summary_budget = str(summary.get("budget") or "").strip()
+        if (not name or _is_placeholder_name(name, cid)) and summary_name:
+            next_row["name"] = summary_name
+        if (not status or status in {"-", "—"}) and summary_status:
+            next_row["status"] = summary_status
+        if (not ctype or ctype in {"-", "—"}) and summary_type:
+            next_row["type"] = summary_type
+        if (not budget or budget in {"-", "—"}) and summary_budget:
+            next_row["budget"] = summary_budget
+        out.append(next_row)
+    return out
+
+
+def _hydrate_campaign_rows_with_stats(wb_api_key: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    ids = sorted({_campaign_id_from_row(row) for row in rows if _campaign_id_from_row(row) > 0})
+    if not ids:
+        return rows
+    try:
+        stats_map = fetch_wb_campaign_stats_bulk(wb_api_key, ids, date_from=None, date_to=None)
+    except Exception:
+        stats_map = {}
+    if not isinstance(stats_map, dict):
+        stats_map = {}
+    unresolved_ids = [cid for cid in ids if not isinstance(stats_map.get(str(cid)), dict)]
+    if unresolved_ids:
+        for cid in unresolved_ids[:40]:
+            try:
+                one_map = fetch_wb_campaign_stats_bulk(wb_api_key, [cid], date_from=None, date_to=None)
+            except Exception:
+                one_map = {}
+            one_stat = one_map.get(str(cid)) if isinstance(one_map, dict) else None
+            if isinstance(one_stat, dict):
+                stats_map[str(cid)] = one_stat
+    if not stats_map:
+        return rows
+    metric_keys = ("views", "clicks", "orders", "spent", "ctr", "cr", "cpc", "cpo", "add_to_cart")
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        cid = _campaign_id_from_row(row)
+        stat = stats_map.get(str(cid)) if cid > 0 else None
+        if not isinstance(stat, dict) or not stat:
+            out.append(row)
+            continue
+        next_row = dict(row)
+        for key in metric_keys:
+            if key in stat:
+                next_row[key] = stat.get(key)
+        out.append(next_row)
+    return out
+
+
+def _is_placeholder_name(value: str, campaign_id: int) -> bool:
+    text = str(value or "").strip().lower()
+    if not text:
+        return True
+    if text.startswith("кампания ") or text.startswith("campaign "):
+        if campaign_id <= 0:
+            return True
+        return text in {f"кампания {campaign_id}", f"campaign {campaign_id}"}
+    return False
 
 
 def sync_wb_campaign_snapshots_for_all_users(db: Session) -> dict[str, int]:

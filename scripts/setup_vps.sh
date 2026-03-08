@@ -44,6 +44,7 @@ Environment=PYTHONUNBUFFERED=1
 ExecStart=${APP_DIR}/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port ${APP_PORT}
 Restart=always
 RestartSec=3
+TimeoutStopSec=20
 
 [Install]
 WantedBy=multi-user.target
@@ -64,6 +65,7 @@ Environment=PYTHONUNBUFFERED=1
 ExecStart=${APP_DIR}/.venv/bin/python -m app.worker
 Restart=always
 RestartSec=3
+TimeoutStopSec=20
 
 [Install]
 WantedBy=multi-user.target
@@ -78,6 +80,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory=${APP_DIR}
+Environment=HOME=/root
 ExecStart=${APP_DIR}/scripts/deploy_server.sh
 AUTODEPLOYSVC
 

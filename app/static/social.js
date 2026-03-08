@@ -15,9 +15,11 @@ let socialState = {
   chatRefreshTimer: null,
   chatSearch: "",
   chatThreadsSignature: "",
+  chatHeaderSignature: "",
   chatMessagesSignatureByThread: {},
   chatMessagesInflightByThread: {},
   chatMessagesRequestSeqByThread: {},
+  chatManualClosedUntil: 0,
   loadingMessagesThreadId: 0,
   actors: [],
   projects: [],
@@ -508,9 +510,11 @@ function resetSocialState() {
     moduleLoaded: false,
     chatSearch: "",
     chatThreadsSignature: "",
+    chatHeaderSignature: "",
     chatMessagesSignatureByThread: {},
     chatMessagesInflightByThread: {},
     chatMessagesRequestSeqByThread: {},
+    chatManualClosedUntil: 0,
     toastsSeen: new Set(),
     currencyRates: null,
     currencyRatesStamp: 0,
@@ -1477,14 +1481,48 @@ async function socialLoadThreads(opts = {}) {
     const lastId = Number(last?.id || 0);
     return Boolean(kind || title || participants.length || lastText || lastSender || lastId > 0);
   };
+  const mergeThreadRow = (nextRow, prevRow) => {
+    const next = (nextRow && typeof nextRow === "object") ? nextRow : {};
+    const prev = (prevRow && typeof prevRow === "object") ? prevRow : {};
+    const merged = { ...prev, ...next };
+    const nextLast = (next.last_message && typeof next.last_message === "object") ? next.last_message : null;
+    const prevLast = (prev.last_message && typeof prev.last_message === "object") ? prev.last_message : null;
+    if (nextLast || prevLast) {
+      merged.last_message = { ...(prevLast || {}), ...(nextLast || {}) };
+      const mergedText = String(merged.last_message?.text || "").trim();
+      if (!mergedText && prevLast && String(prevLast.text || "").trim()) {
+        merged.last_message.text = String(prevLast.text || "");
+      }
+    }
+    const nextParticipants = Array.isArray(next.participants) ? next.participants : [];
+    const prevParticipants = Array.isArray(prev.participants) ? prev.participants : [];
+    if (!nextParticipants.length && prevParticipants.length) {
+      merged.participants = prevParticipants;
+    }
+    const title = String(merged.title || "").trim();
+    const prevTitle = String(prev.title || "").trim();
+    if (!title && prevTitle) merged.title = prevTitle;
+    const avatar = String(merged.avatar_url || "").trim();
+    const prevAvatar = String(prev.avatar_url || "").trim();
+    if (!avatar && prevAvatar) merged.avatar_url = prevAvatar;
+    return merged;
+  };
   const signatureOf = (rows) => rows.map((thread) => {
     const last = thread?.last_message || {};
+    const participants = Array.isArray(thread?.participants) ? thread.participants : [];
+    const peersSig = participants
+      .map((p) => `${String(p?.actor_key || "")}:${String(p?.nick || "")}:${String(p?.avatar_url || "")}`)
+      .join(",");
     return [
       Number(thread?.id || 0),
       Number(thread?.unread || 0),
       Number(last?.id || 0),
-      String(last?.updated_at || last?.created_at || ""),
+      String(last?.text || ""),
+      String(last?.sender_key || ""),
+      String(thread?.kind || ""),
       String(thread?.title || ""),
+      String(thread?.avatar_url || ""),
+      peersSig,
     ].join("|");
   }).join(";");
   const data = await socialRequest("/api/social/chat/threads").catch((e) => {
@@ -1492,9 +1530,15 @@ async function socialLoadThreads(opts = {}) {
     return null;
   });
   if (!Array.isArray(data)) return;
+  const prevMap = new Map(
+    (Array.isArray(socialState.chatThreads) ? socialState.chatThreads : [])
+      .map((row) => [Number(row?.id || 0), row])
+      .filter((item) => Number(item[0] || 0) > 0)
+  );
   const rows = data
     .filter((row) => row && typeof row === "object")
     .filter((row) => Number(row.id || 0) > 0)
+    .map((row) => mergeThreadRow(row, prevMap.get(Number(row.id || 0))))
     .filter((row) => hasThreadContent(row));
   const nextSig = signatureOf(rows);
   const prevSig = String(socialState.chatThreadsSignature || "");
@@ -1520,7 +1564,8 @@ async function socialLoadThreads(opts = {}) {
   const allowAutoSelect = !socialIsMobileClientShell()
     || socialState.mobileThreadAutoSelectEnabled
     || Boolean(opts.forceAutoSelect);
-  if ((!socialState.currentThreadId || selectionMissing) && rows.length && allowAutoSelect) {
+  const autoSelectBlockedByManualClose = Date.now() < Number(socialState.chatManualClosedUntil || 0);
+  if ((!socialState.currentThreadId || selectionMissing) && rows.length && allowAutoSelect && !autoSelectBlockedByManualClose) {
     const lastPreferred = Number(socialState.chatLastThreadId || 0);
     const preferred = rows.find((x) => Number(x.id) === lastPreferred) || rows[0];
     if (preferred) {
@@ -1573,6 +1618,14 @@ function socialFormatLastSeen(iso) {
   return `${dt.toLocaleDateString(currentLang === "en" ? "en-GB" : "ru-RU", { day: "2-digit", month: "short" })} ${time}`;
 }
 
+function socialIsParticipantOnline(participant) {
+  if (!participant || typeof participant !== "object") return false;
+  if (participant.is_online === true) return true;
+  const dt = socialParseDateSafe(participant.last_seen_at || "");
+  if (!dt) return false;
+  return (Date.now() - dt.getTime()) <= (2 * 60 * 1000);
+}
+
 const TG_USER_COLORS = [
   "#6C9BFF",
   "#FF8E72",
@@ -1605,9 +1658,9 @@ function socialAvatarMarkup(url, label, size = "sm", eager = false) {
     : String(label || "--").slice(0, 2).toUpperCase();
   const loading = eager ? "eager" : "lazy";
   return `
-    <div class="tg-avatar tg-avatar-${size}${safeUrl ? " loading" : " no-image"}">
+    <div class="tg-avatar tg-avatar-${size}${safeUrl ? " has-image is-pending" : " no-image"}">
       ${safeUrl
-        ? `<img src="${escapeHtml(safeUrl)}" alt="${escapeHtml(label || "avatar")}" loading="${loading}" decoding="async" referrerpolicy="no-referrer" onload="this.parentElement&&this.parentElement.classList.add('has-image');this.parentElement&&this.parentElement.classList.remove('loading');" onerror="this.remove();this.parentElement&&this.parentElement.classList.add('no-image');this.parentElement&&this.parentElement.classList.remove('loading');" />`
+        ? `<img src="${escapeHtml(safeUrl)}" alt="${escapeHtml(label || "avatar")}" loading="${loading}" decoding="async" referrerpolicy="no-referrer" draggable="false" onload="this.parentElement&&this.parentElement.classList.remove('is-pending');" onerror="this.remove();this.parentElement&&this.parentElement.classList.remove('has-image');this.parentElement&&this.parentElement.classList.remove('is-pending');this.parentElement&&this.parentElement.classList.add('no-image');" />`
         : ""}
       <span class="tg-avatar-fallback">${escapeHtml(fallback)}</span>
     </div>
@@ -1687,6 +1740,7 @@ function socialCloseThread(opts = {}) {
   socialState.currentThreadId = 0;
   socialState.currentThreadKind = "";
   socialState.mobileThreadAutoSelectEnabled = Boolean(opts.keepAutoSelect) || !socialIsMobileClientShell();
+  socialState.chatManualClosedUntil = Boolean(opts.keepAutoSelect) ? 0 : (Date.now() + 30000);
   socialState.chatMessages = [];
   socialState.chatOldestId = 0;
   socialState.chatHasMore = true;
@@ -1723,13 +1777,42 @@ function socialRenderThreads() {
       return hay.includes(query);
     })
     : socialState.chatThreads;
-  host.innerHTML = rows.map((thread) => {
+  const existing = new Map();
+  host.querySelectorAll(".social-thread-item[data-thread-id]").forEach((node) => {
+    const id = Number(node.getAttribute("data-thread-id") || 0);
+    if (id > 0) existing.set(id, node);
+  });
+  const usedIds = new Set();
+  let cursor = host.firstElementChild;
+  for (const thread of rows) {
+    const threadId = Number(thread.id || 0);
+    if (!threadId) continue;
     const unread = Number(thread.unread || 0);
     const lastText = String(thread.last_message?.text || "");
     const lastTime = socialFormatThreadTime(thread.last_message?.created_at || "");
     const display = socialThreadDisplay(thread);
-    return `
-      <button class="social-thread-item ${Number(thread.id) === socialState.currentThreadId ? "active" : ""}" type="button" onclick="socialSelectThread(${Number(thread.id || 0)})">
+    const active = threadId === Number(socialState.currentThreadId || 0);
+    const rowSig = [
+      threadId,
+      active ? 1 : 0,
+      unread,
+      String(lastText || ""),
+      String(lastTime || ""),
+      String(display.title || ""),
+      String(display.avatarLabel || ""),
+      String(display.avatarUrl || ""),
+    ].join("|");
+    let node = existing.get(threadId);
+    if (!node) {
+      node = document.createElement("button");
+      node.type = "button";
+      node.className = "social-thread-item";
+      node.setAttribute("data-thread-id", String(threadId));
+      node.addEventListener("click", () => socialSelectThread(threadId));
+    }
+    if (String(node.getAttribute("data-row-sig") || "") !== rowSig) {
+      node.classList.toggle("active", active);
+      node.innerHTML = `
         <div class="social-thread-avatar">${socialAvatarMarkup(display.avatarUrl, display.avatarLabel, "sm")}</div>
         <div class="social-thread-body">
           <div class="social-thread-row">
@@ -1739,12 +1822,30 @@ function socialRenderThreads() {
           <div class="social-thread-preview">${escapeHtml(lastText || tr("Сообщений пока нет", "No messages yet"))}</div>
         </div>
         ${unread > 0 ? `<span class="social-thread-unread">${unread > 99 ? "99+" : unread}</span>` : ""}
-      </button>
-    `;
-  }).join("");
+      `;
+      node.setAttribute("data-row-sig", rowSig);
+    } else if (node.classList.contains("active") !== active) {
+      node.classList.toggle("active", active);
+    }
+    usedIds.add(threadId);
+    if (node !== cursor) {
+      host.insertBefore(node, cursor);
+    } else {
+      cursor = cursor?.nextElementSibling || null;
+    }
+  }
+  existing.forEach((node, id) => {
+    if (!usedIds.has(id)) node.remove();
+  });
+  while (cursor) {
+    const next = cursor.nextElementSibling;
+    cursor.remove();
+    cursor = next;
+  }
 }
 
-function socialSetChatHeader(row) {
+function socialSetChatHeader(row, opts = {}) {
+  const force = Boolean(opts.force);
   const head = document.getElementById("socialChatHead");
   const sub = document.getElementById("socialChatHeadSubtitle");
   const avatar = document.getElementById("socialChatHeadAvatar");
@@ -1752,6 +1853,7 @@ function socialSetChatHeader(row) {
   const avatarBtn = document.getElementById("socialChatAvatarBtn");
   const groupBtn = document.getElementById("socialChatGroupBtn");
   if (!row) {
+    socialState.chatHeaderSignature = "";
     if (head) head.textContent = tr("Выберите чат", "Select chat");
     if (sub) sub.textContent = "-";
     if (avatar) avatar.innerHTML = socialAvatarMarkup("", "--", "md");
@@ -1769,21 +1871,50 @@ function socialSetChatHeader(row) {
   const subtitle = row.kind === "direct"
     ? tr("Личный чат", "Direct chat")
     : `${tr("Группа", "Group")} • ${participants.length}`;
-  let lastSeen = "";
+  let lastSeenLabel = "";
+  let onlineNow = false;
   if (row.kind === "direct") {
     const other = participants.find((p) => !p.is_me);
-    lastSeen = socialFormatLastSeen(other?.last_seen_at || "");
+    onlineNow = socialIsParticipantOnline(other);
+    lastSeenLabel = onlineNow
+      ? tr("сейчас онлайн", "online now")
+      : socialFormatLastSeen(other?.last_seen_at || "");
   }
+  const headerSig = [
+    Number(row?.id || 0),
+    String(display.title || ""),
+    String(display.avatarUrl || ""),
+    String(subtitle || ""),
+    String(lastSeenLabel || ""),
+    String(onlineNow ? "1" : "0"),
+    String(row?.kind || ""),
+    Number(participants.length || 0),
+  ].join("|");
+  if (!force && headerSig && String(socialState.chatHeaderSignature || "") === headerSig) {
+    socialSyncMobileChatChrome(row);
+    return;
+  }
+  socialState.chatHeaderSignature = headerSig;
   if (head) head.textContent = display.title;
   if (sub) sub.textContent = subtitle;
   if (avatar) avatar.innerHTML = socialAvatarMarkup(display.avatarUrl, display.avatarLabel, "md", true);
+  if (head) {
+    head.classList.toggle("is-clickable", true);
+    head.onclick = () => socialOpenCurrentParticipantProfile();
+  }
+  if (sub) {
+    sub.classList.toggle("is-clickable", true);
+    sub.onclick = () => socialOpenCurrentParticipantProfile();
+  }
   if (meta) {
     if (row.kind === "direct") {
-      const label = lastSeen || tr("нет данных", "unknown");
+      const label = lastSeenLabel || tr("нет данных", "unknown");
       meta.textContent = `${tr("Последний раз в сети", "Last seen")}: ${label}`;
+      meta.classList.toggle("online-now", onlineNow);
       meta.classList.remove("hidden");
     } else {
       meta.textContent = "";
+      meta.classList.remove("online-now");
       meta.classList.add("hidden");
     }
   }
@@ -1796,11 +1927,123 @@ function socialSetChatHeader(row) {
   socialSyncMobileChatChrome(row);
 }
 
+function socialCurrentDirectPeer(thread = null) {
+  const row = thread || socialGetCurrentThread();
+  if (!row || String(row.kind || "") !== "direct") return null;
+  const participants = Array.isArray(row.participants) ? row.participants : [];
+  return participants.find((p) => !p.is_me) || null;
+}
+
+function socialOpenCurrentParticipantProfile() {
+  const row = socialGetCurrentThread();
+  if (!row) return;
+  if (String(row.kind || "") === "group") {
+    socialOpenGroupParticipants();
+    return;
+  }
+  const peer = socialCurrentDirectPeer(row);
+  if (!peer || !peer.actor_key) return;
+  socialOpenParticipantProfile(peer.actor_key, Number(row.id || 0));
+}
+
+function socialOpenGroupParticipants() {
+  const row = socialGetCurrentThread();
+  if (!row || String(row.kind || "") !== "group") return;
+  const threadId = Number(row.id || 0);
+  const participants = Array.isArray(row.participants) ? row.participants : [];
+  const listHtml = participants.map((p) => {
+    const actorKey = String(p?.actor_key || "").trim();
+    const nick = String(p?.nick || actorKey || "-").trim() || "-";
+    const online = socialIsParticipantOnline(p);
+    const state = online
+      ? tr("сейчас онлайн", "online now")
+      : (socialFormatLastSeen(p?.last_seen_at || "") || tr("нет данных", "unknown"));
+    return `
+      <button type="button" class="social-participant-row" data-social-profile-actor="${escapeHtml(actorKey)}">
+        <span class="social-participant-avatar">${socialAvatarMarkup(p?.avatar_url || "", nick, "xs")}</span>
+        <span class="social-participant-main">
+          <b>${escapeHtml(nick)}</b>
+          <small>${escapeHtml(state)}</small>
+        </span>
+        <span class="social-participant-open">&#8250;</span>
+      </button>
+    `;
+  }).join("");
+  socialOpenModal(
+    tr("Участники группы", "Group participants"),
+    `
+      <div class="social-participant-list">
+        ${listHtml || `<div class="hint">${escapeHtml(tr("Список участников пуст.", "No participants yet."))}</div>`}
+      </div>
+    `
+  );
+  document.querySelectorAll("[data-social-profile-actor]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const actorKey = String(btn.getAttribute("data-social-profile-actor") || "").trim();
+      if (!actorKey) return;
+      socialOpenParticipantProfile(actorKey, threadId);
+    });
+  });
+}
+
+async function socialOpenParticipantProfile(actorKey, threadId = 0) {
+  const safeActorKey = String(actorKey || "").trim();
+  const safeThreadId = Number(threadId || socialState.currentThreadId || 0);
+  if (!safeActorKey || !safeThreadId) return;
+  const profile = await socialRequest(
+    `/api/social/chat/participant/profile?thread_id=${safeThreadId}&actor_key=${encodeURIComponent(safeActorKey)}`
+  ).catch((e) => {
+    alert(e?.message || tr("Не удалось открыть профиль", "Failed to open profile"));
+    return null;
+  });
+  if (!profile || typeof profile !== "object") return;
+  const nick = String(profile.nick || safeActorKey || "-").trim() || "-";
+  const email = String(profile.email || "").trim();
+  const company = String(profile.company_name || "").trim();
+  const city = String(profile.city || "").trim();
+  const position = String(profile.position_title || "").trim();
+  const fullName = String(profile.full_name || "").trim();
+  const isOwner = Boolean(profile.is_owner);
+  const online = Boolean(profile.is_online);
+  const lastSeen = online
+    ? tr("сейчас онлайн", "online now")
+    : (socialFormatLastSeen(String(profile.last_seen_at || "")) || tr("нет данных", "unknown"));
+  socialOpenModal(
+    tr("Профиль участника", "Participant profile"),
+    `
+      <div class="social-profile-view">
+        <div class="social-profile-head">
+          ${socialAvatarMarkup(String(profile.avatar_url || ""), nick, "md", true)}
+          <div class="social-profile-head-text">
+            <h4>${escapeHtml(nick)}</h4>
+            <div class="hint">${escapeHtml(isOwner ? tr("Владелец", "Owner") : tr("Сотрудник", "Employee"))}</div>
+          </div>
+        </div>
+        <div class="social-profile-grid">
+          <div><span>${escapeHtml(tr("Полное имя", "Full name"))}</span><b>${escapeHtml(fullName || "-")}</b></div>
+          <div><span>${escapeHtml(tr("Email", "Email"))}</span><b>${escapeHtml(email || "-")}</b></div>
+          <div><span>${escapeHtml(tr("Компания", "Company"))}</span><b>${escapeHtml(company || "-")}</b></div>
+          <div><span>${escapeHtml(tr("Город", "City"))}</span><b>${escapeHtml(city || "-")}</b></div>
+          <div><span>${escapeHtml(tr("Должность", "Position"))}</span><b>${escapeHtml(position || "-")}</b></div>
+          <div><span>${escapeHtml(tr("Статус", "Status"))}</span><b>${escapeHtml(lastSeen)}</b></div>
+        </div>
+      </div>
+    `
+  );
+}
+
 async function socialSelectThread(threadId, opts = {}) {
   const id = Number(threadId || 0);
   if (!id) return;
+  const sameThread = Number(socialState.currentThreadId || 0) === id;
+  if (sameThread && !opts.bypassUnchanged && !opts.forceReload) {
+    socialSetChatView(true);
+    socialSyncMobileChatChrome();
+    return;
+  }
   socialState.currentThreadId = id;
   socialState.chatLastThreadId = id;
+  socialState.chatManualClosedUntil = 0;
   socialState.mobileThreadAutoSelectEnabled = true;
   const row = socialState.chatThreads.find((x) => Number(x.id) === id) || null;
   socialState.currentThreadKind = String(row?.kind || "");
@@ -1810,7 +2053,7 @@ async function socialSelectThread(threadId, opts = {}) {
   socialRenderThreads();
   socialSetChatView(true);
   const host = document.getElementById("socialChatMessages");
-  if (host && Number(socialState.currentThreadId || 0) === id) {
+  if (host && Number(socialState.currentThreadId || 0) === id && !socialHasRenderedMessages(host)) {
     host.innerHTML = `<div class="hint social-chat-loading">${tr("Загрузка сообщений…", "Loading messages…")}</div>`;
   }
   await socialLoadMessages(id, {
@@ -2144,11 +2387,18 @@ async function socialLoadMessages(threadId, opts = {}) {
     const reactions = Array.isArray(row?.reactions)
       ? row.reactions.map((rx) => `${String(rx?.emoji || "")}:${Number(rx?.count || 0)}:${rx?.my ? 1 : 0}`).join(",")
       : "";
+    const attachments = Array.isArray(row?.attachments)
+      ? row.attachments.map((att) => `${String(att?.name || "")}:${String(att?.url || "")}:${String(att?.content_type || "")}`).join(",")
+      : "";
     return [
       Number(row?.id || 0),
-      String(row?.updated_at || row?.created_at || ""),
+      String(row?.created_at || ""),
+      String(row?.sender_key || ""),
+      String(row?.sender_avatar || ""),
+      Number(row?.reply_to_id || 0),
       String(row?.text || ""),
       reactions,
+      attachments,
     ].join("|");
   }).join(";");
   const id = Number(threadId || socialState.currentThreadId || 0);
@@ -3406,6 +3656,9 @@ window.socialCloseModal = socialCloseModal;
 window.socialGameRetry = socialGameRetry;
 window.socialOpenDirectPicker = socialOpenDirectPicker;
 window.socialOpenGroupEditor = socialOpenGroupEditor;
+window.socialOpenGroupParticipants = socialOpenGroupParticipants;
+window.socialOpenCurrentParticipantProfile = socialOpenCurrentParticipantProfile;
+window.socialOpenParticipantProfile = socialOpenParticipantProfile;
 window.socialSaveGroupEditor = socialSaveGroupEditor;
 window.socialFilterDirectActors = socialFilterDirectActors;
 window.socialStartDirectChat = socialStartDirectChat;

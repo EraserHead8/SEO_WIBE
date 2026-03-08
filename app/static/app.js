@@ -570,8 +570,11 @@ function applyNavIcons() {
     const iconSrc = NAV_BUTTON_ICONS[tabCode] || "";
     const labelNode = btn.querySelector(".nav-label");
     const label = String((labelNode?.textContent || btn.textContent || "")).trim();
+    const currentIcon = String(btn.querySelector(".nav-icon img")?.getAttribute("src") || "");
+    const currentLabel = String(btn.querySelector(".nav-label")?.textContent || "").trim();
+    if (currentIcon === iconSrc && currentLabel === label) return;
     const iconHtml = iconSrc
-      ? `<span class="nav-icon" aria-hidden="true"><img src="${iconSrc}" alt="" loading="lazy" /></span>`
+      ? `<span class="nav-icon" aria-hidden="true"><img src="${iconSrc}" alt="" loading="eager" decoding="async" /></span>`
       : `<span class="nav-icon" aria-hidden="true">•</span>`;
     btn.innerHTML = `${iconHtml}<span class="nav-label">${escapeHtml(label)}</span>`;
   });
@@ -3884,13 +3887,17 @@ async function renderWbReviews() {
     if (stars > 0) {
       const starBadge = document.createElement("span");
       starBadge.className = "feedback-meta-badge";
+      const ratingVal = Math.max(1, Math.min(5, Number(stars || 0)));
+      starBadge.classList.add(`feedback-rating-${ratingVal}`);
       starBadge.textContent = `★ ${stars}`;
       starBadge.dataset.tip = tr("Оценка покупателя", "Customer rating");
       meta.appendChild(starBadge);
     }
     const mpBadge = document.createElement("span");
     mpBadge.className = "feedback-meta-badge";
-    mpBadge.textContent = (currentReviewMarketplace || "wb").toUpperCase();
+    const reviewMp = (currentReviewMarketplace || "wb").trim().toLowerCase() === "ozon" ? "ozon" : "wb";
+    mpBadge.classList.add(`feedback-market-${reviewMp}`);
+    mpBadge.textContent = reviewMp.toUpperCase();
     meta.appendChild(mpBadge);
     head.appendChild(meta);
     if (row?.user) {
@@ -3914,6 +3921,7 @@ async function renderWbReviews() {
     textBlock.appendChild(textTitle);
     const body = document.createElement("div");
     body.className = "cell-main-text";
+    body.classList.add("feedback-customer-text");
     body.textContent = row?.text || "-";
     textBlock.appendChild(body);
     card.appendChild(textBlock);
@@ -4472,7 +4480,9 @@ async function renderWbQuestions() {
     meta.appendChild(dateBadge);
     const mpBadge = document.createElement("span");
     mpBadge.className = "feedback-meta-badge";
-    mpBadge.textContent = (currentQuestionMarketplace || "wb").toUpperCase();
+    const questionMp = (currentQuestionMarketplace || "wb").trim().toLowerCase() === "ozon" ? "ozon" : "wb";
+    mpBadge.classList.add(`feedback-market-${questionMp}`);
+    mpBadge.textContent = questionMp.toUpperCase();
     meta.appendChild(mpBadge);
     const stateLabel = String(row?.state || "").trim();
     if (stateLabel) {
@@ -4504,6 +4514,7 @@ async function renderWbQuestions() {
     textBlock.appendChild(textTitle);
     const body = document.createElement("div");
     body.className = "cell-main-text";
+    body.classList.add("feedback-customer-text");
     body.textContent = row?.text || "-";
     textBlock.appendChild(body);
     card.appendChild(textBlock);
@@ -5063,6 +5074,7 @@ async function enrichWbCampaignRows(runToken) {
   let partialStatsMissingTotal = 0;
   let partialSummaryMissingTotal = 0;
   let temporaryUnavailableChunks = 0;
+  let hardTransportErrors = 0;
   for (let i = 0; i < pending.length; i += batchSize) {
     if (runToken !== wbAdsLoadToken) return;
     const chunk = pending.slice(i, i + batchSize);
@@ -5075,7 +5087,8 @@ async function enrichWbCampaignRows(runToken) {
 
     if (!payload) {
       partialFallback = true;
-      wbAdsLoadProgress.failed += chunk.length;
+      hardTransportErrors += chunk.length;
+      wbAdsLoadProgress.failed = hardTransportErrors;
       updateWbAdsLoadStatus();
       continue;
     }
@@ -5092,7 +5105,6 @@ async function enrichWbCampaignRows(runToken) {
     const temporaryUnavailable = Boolean(meta?.temporary_unavailable);
     partialStatsMissingTotal += partialStatsIds.length;
     const hasMissingMeta = Array.isArray(meta?.hard_missing_ids) || Array.isArray(meta?.missing_ids) || Array.isArray(meta?.partial_summary_ids);
-    let chunkMissing = 0;
     if (temporaryUnavailable) {
       temporaryUnavailableChunks += 1;
       partialFallback = true;
@@ -5118,14 +5130,11 @@ async function enrichWbCampaignRows(runToken) {
     });
     if (!partialSummaryIds.length) partialSummaryIds = chunkSummaryMissing;
     partialSummaryMissingTotal += partialSummaryIds.length;
-    if (!temporaryUnavailable) {
-      chunkMissing = chunkContextMissing.length;
-      if (chunkMissing > 0 && !hasMissingMeta) partialFallback = true;
+    if (!temporaryUnavailable && chunkContextMissing.length > 0 && !hasMissingMeta) {
+      partialFallback = true;
     }
-    const chunkResolved = Math.max(0, chunk.length - chunkMissing);
-    if (chunkMissing > 0) partialFallback = true;
-    wbAdsLoadProgress.loaded += chunkResolved;
-    wbAdsLoadProgress.failed += chunkMissing;
+    wbAdsLoadProgress.loaded += chunk.length;
+    wbAdsLoadProgress.failed = hardTransportErrors;
     updateWbAdsLoadStatus();
     renderWbCampaignRows();
   }
