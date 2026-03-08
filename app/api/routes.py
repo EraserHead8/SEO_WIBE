@@ -41,6 +41,7 @@ from app.models import (
     AccountingExpense,
     AccountingSettings,
     ModuleAccess,
+    MarketplaceApiCache,
     PositionSnapshot,
     Product,
     SeoJob,
@@ -290,6 +291,45 @@ def _market_cache_ttl(module_code: str, *, fast_mode: bool = False) -> int:
     if fast_mode:
         return max(45, int(base * 0.7))
     return base
+
+
+def _market_cache_latest_payload(
+    db: Session,
+    *,
+    user_id: int,
+    module_code: str,
+    marketplace: str,
+    max_age_sec: int = 24 * 60 * 60,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    now = datetime.utcnow()
+    rows = db.scalars(
+        select(MarketplaceApiCache)
+        .where(
+            MarketplaceApiCache.user_id == int(user_id),
+            MarketplaceApiCache.module_code == str(module_code or "").strip()[:80],
+            MarketplaceApiCache.marketplace == str(marketplace or "").strip()[:30],
+        )
+        .order_by(MarketplaceApiCache.fetched_at.desc(), MarketplaceApiCache.id.desc())
+        .limit(25)
+    ).all()
+    for row in rows:
+        fetched_at = row.fetched_at or row.last_hit_at
+        if not fetched_at:
+            continue
+        age_sec = max(0, int((now - fetched_at).total_seconds()))
+        if age_sec > max(60, int(max_age_sec or 0)):
+            continue
+        try:
+            payload = json.loads(str(row.payload_json or ""))
+        except Exception:
+            continue
+        if isinstance(payload, dict) and payload:
+            return payload, {
+                "source": "db-latest-module-fallback",
+                "age_sec": age_sec,
+                "cache_key": str(row.cache_key or ""),
+            }
+    return None, {}
 
 
 def _enqueue_sales_cache_warmup(
@@ -869,23 +909,28 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
 
 HELP_RELEASES: list[dict[str, Any]] = [
     {
-        "version": "0.3.3",
-        "android_version_code": 4,
-        "released_at": "2026-03-07",
+        "version": "0.3.6",
+        "android_version_code": 7,
+        "released_at": "2026-03-08",
         "current": True,
-        "summary": "Android APK: исправлена загрузка истории чатов, снижено мерцание интерфейса, добавлены бейджи и быстрый ответ из шторки.",
+        "summary": "Android APK: обновлена иконка, стабилизированы чаты/реклама, бухгалтерия с устойчивым fallback на кэш, обновления с нового сервера.",
         "diff_from_previous": [
-            "Чаты загружают историю сразу при открытии диалога (без необходимости отправлять новое сообщение).",
-            "Убраны лишние перерисовки и гонки обновления в Social Hub, из-за которых наблюдалось визуальное мерцание.",
-            "Android-уведомления получили счетчик непрочитанных (badge) и group-summary для корректного отображения на иконке приложения.",
-            "В системной шторке добавлено быстрое действие «Ответить» с отправкой сообщения прямо из уведомления.",
+            "WB Ads: догрузка больше не помечает отсутствие stats как фатальную ошибку, улучшен fallback summary кампаний.",
+            "Social Hub: усилены ретраи начальной загрузки истории, убраны пустые строки чатов, улучшены fallback-аватары.",
+            "Бухгалтерия: при 429 WB API используется последняя стабильная выборка кэша без срыва отображения.",
+            "Mobile/Auth UI: исправлены адаптивные проблемы мобильного браузера и Android-клиента.",
         ],
         "changes": [
-            "Launcher APK обновлен: иконка и название приложения «SEO WIBE».",
-            "Сборка Android обновлена до versionCode=4 / versionName=1.3.0.",
+            "Сборка Android обновлена до versionCode=7 / versionName=1.5.1.",
+            "Launcher APK обновлен на новую иконку SEO WIBE (rocket).",
+            "Проверка обновлений APK продолжает работать через /api/mobile/apk/latest на новом сервере 5.129.207.106:8016.",
+            "В мобильном режиме оптимизирована работа аватаров чатов (lazy/decode + fallback) и снижены визуальные артефакты.",
+            "В игре «Змейка» добавлено управление тапом относительно позиции змейки (вверх/вниз/влево/вправо).",
+            "WB Ads snapshot-синхронизация подтягивает более полные данные и дополняет placeholder-кампании summary-данными.",
+            "Бухгалтерия использует кэширование отчета и fallback на последние стабильные данные при временных лимитах API (429).",
             "APK-обновление скачивается через DownloadManager и запускает системную установку.",
-            "Background worker переведен на устойчивый цикл one-shot polling с автопланированием следующей проверки.",
-            "Нажатие уведомления открывает социальный модуль и целевой чат внутри приложения.",
+            "Background worker использует устойчивый цикл one-shot polling с автопланированием следующей проверки.",
+            "Нажатие уведомления открывает социальный модуль и целевой чат внутри приложения; быстрый ответ из шторки сохранен.",
         ],
         "android_download_url": "/static/downloads/seo-wibe-mobile-latest.apk",
         "android_download_name": "SEO WIBE Android (.apk)",
@@ -2410,6 +2455,56 @@ def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depen
             source = "snapshot-empty"
         else:
             source = "snapshot+queue-refresh"
+    placeholder_ids: list[int] = []
+    for row in rows:
+        cid = _to_int_safe(_campaign_id_from_any(row))
+        if cid <= 0:
+            continue
+        summary = _campaign_summary_from_base_row(row, cid)
+        if not _campaign_summary_has_context(summary, cid):
+            placeholder_ids.append(cid)
+    if placeholder_ids:
+        preview_ids = sorted(set(placeholder_ids))[:40]
+        placeholder_key = build_market_cache_key(
+            {
+                "kind": "wb_campaigns_placeholder_summaries",
+                "ids": preview_ids,
+                "key_rev": _secret_revision(wb_key),
+            }
+        )
+        try:
+            extra_summaries, _placeholder_meta = get_or_refresh_market_cache(
+                db,
+                user_id=int(user.id),
+                module_code="wb_ads",
+                marketplace="wb",
+                cache_key=placeholder_key,
+                ttl_sec=max(120, _market_cache_ttl("wb_ads")),
+                fetcher=lambda: fetch_wb_campaign_summaries(wb_key, preview_ids, fallback_limit=40),
+                stale_if_error_sec=60 * 60,
+            )
+        except Exception:
+            extra_summaries = {}
+        if isinstance(extra_summaries, dict) and extra_summaries:
+            for row in rows:
+                cid = _to_int_safe(_campaign_id_from_any(row))
+                if cid <= 0:
+                    continue
+                summary = extra_summaries.get(str(cid))
+                if not isinstance(summary, dict):
+                    continue
+                name = str(summary.get("name") or "").strip()
+                status = str(summary.get("status") or "").strip()
+                ctype = str(summary.get("type") or "").strip()
+                budget = str(summary.get("budget") or "").strip()
+                if name and not (name.lower().startswith("кампания ") or name.lower().startswith("campaign ")):
+                    row["name"] = name
+                if status and status not in {"-", "—"}:
+                    row["status"] = status
+                if ctype and ctype not in {"-", "—"}:
+                    row["type"] = ctype
+                if budget and budget not in {"-", "—"}:
+                    row["budget"] = budget
     ids = sorted({_to_int_safe(_campaign_id_from_any(row)) for row in rows if _to_int_safe(_campaign_id_from_any(row)) > 0})
     _audit(
         db,
@@ -2599,7 +2694,7 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
         if not _campaign_stat_has_context(stats.get(str(cid)))
     ]
     if unresolved_stats_ids:
-        for cid in unresolved_stats_ids[:60]:
+        for cid in unresolved_stats_ids[:12]:
             try:
                 one_map = fetch_wb_campaign_stats_bulk(wb_key, [int(cid)], date_from=None, date_to=None)
             except Exception:
@@ -5180,20 +5275,107 @@ def accounting_data(
         .order_by(AccountingExpense.id.asc())
     ).all()
     products_payload = _collect_product_cost_payload(db, user, selected_market)
-    data = build_accounting_payload(
-        marketplace=selected_market,
-        date_from=left,
-        date_to=right,
-        wb_api_key=wb_key,
-        ozon_api_key=ozon_key,
-        products=products_payload,
-        expenses=_collect_accounting_expense_payload(expense_rows),
-        settings=settings_payload,
-        granularity=gran,
-        tz_name=tz_name,
-        search=str(q or ""),
-        sort_by=str(sort_by or "net_profit_desc"),
+    expenses_payload = _collect_accounting_expense_payload(expense_rows)
+    expense_sig_raw = "|".join(
+        [
+            ";".join(
+                [
+                    str(int(row.id)),
+                    _normalize_accounting_marketplace(row.marketplace),
+                    f"{float(round(row.amount or 0.0, 2)):.2f}",
+                    row.period_from.isoformat(),
+                    row.period_to.isoformat(),
+                    "1" if bool(row.is_active) else "0",
+                    row.updated_at.isoformat() if row.updated_at else "",
+                ]
+            )
+            for row in expense_rows
+        ]
     )
+    products_sig_raw = "|".join(
+        sorted(
+            [
+                ";".join(
+                    [
+                        str(x.get("marketplace") or ""),
+                        str(x.get("external_id") or ""),
+                        str(x.get("article") or ""),
+                        f"{float(round(_to_float_safe(x.get('purchase_price'), 0.0), 2)):.2f}",
+                    ]
+                )
+                for x in products_payload
+            ]
+        )
+    )
+    cache_key = build_market_cache_key(
+        {
+            "kind": "accounting_data",
+            "market": selected_market,
+            "date_from": left.isoformat(),
+            "date_to": right.isoformat(),
+            "granularity": gran,
+            "tz": tz_name,
+            "q": str(q or "").strip().lower(),
+            "sort_by": str(sort_by or "net_profit_desc").strip().lower(),
+            "wb_key_rev": _secret_revision(wb_key),
+            "ozon_key_rev": _secret_revision(ozon_key),
+            "settings": settings_payload,
+            "expense_sig": hashlib.sha1(expense_sig_raw.encode("utf-8")).hexdigest(),
+            "products_sig": hashlib.sha1(products_sig_raw.encode("utf-8")).hexdigest(),
+        }
+    )
+    data, accounting_cache_meta = get_or_refresh_market_cache(
+        db,
+        user_id=int(user.id),
+        module_code="accounting",
+        marketplace=selected_market,
+        cache_key=cache_key,
+        ttl_sec=max(180, _market_cache_ttl("accounting")),
+        fetcher=lambda: build_accounting_payload(
+            marketplace=selected_market,
+            date_from=left,
+            date_to=right,
+            wb_api_key=wb_key,
+            ozon_api_key=ozon_key,
+            products=products_payload,
+            expenses=expenses_payload,
+            settings=settings_payload,
+            granularity=gran,
+            tz_name=tz_name,
+            search=str(q or ""),
+            sort_by=str(sort_by or "net_profit_desc"),
+        ),
+        stale_if_error_sec=6 * 60 * 60,
+    )
+    warnings_now = [str(x or "") for x in (data.get("warnings") if isinstance(data, dict) else [])]
+    has_rate_limit_warning = any(
+        ("429" in w) or ("rate_limit" in w.lower()) or ("огранич" in w.lower())
+        for w in warnings_now
+    )
+    if has_rate_limit_warning:
+        fallback_data, fallback_meta = _market_cache_latest_payload(
+            db,
+            user_id=int(user.id),
+            module_code="accounting",
+            marketplace=selected_market,
+            max_age_sec=48 * 60 * 60,
+        )
+        if isinstance(fallback_data, dict):
+            fallback_warnings = [str(x or "") for x in (fallback_data.get("warnings") or [])]
+            fallback_has_rate_limit = any(
+                ("429" in w) or ("rate_limit" in w.lower()) or ("огранич" in w.lower())
+                for w in fallback_warnings
+            )
+            if not fallback_has_rate_limit:
+                data = fallback_data
+                accounting_cache_meta = fallback_meta or {"source": "db-latest-module-fallback", "age_sec": -1}
+                data.setdefault("warnings", []).append(
+                    "Показаны последние стабильные данные: API WB временно ограничивает запросы (429)."
+                )
+    if accounting_cache_meta.get("source") == "db-stale-fallback":
+        data.setdefault("warnings", []).append(
+            "Показаны кэшированные данные из-за временной недоступности API маркетплейса."
+        )
     rows = list(data.get("analysis_rows") or [])
     if len(rows) > 2000:
         rows = rows[:2000]

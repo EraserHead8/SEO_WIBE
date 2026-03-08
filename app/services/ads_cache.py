@@ -56,9 +56,9 @@ def sync_wb_campaign_snapshots(db: Session, user_id: int, wb_api_key: str) -> di
 
     fetched = fetch_wb_campaigns(
         wb_api_key.strip(),
-        enrich=False,
-        fast_mode=True,
-        max_attempts=1,
+        enrich=True,
+        fast_mode=False,
+        max_attempts=8,
     )
     if not isinstance(fetched, list):
         fetched = []
@@ -175,4 +175,3 @@ def _safe_json_loads(raw: str) -> Any:
         return json.loads(raw or "")
     except Exception:
         return None
-

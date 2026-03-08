@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <string name="app_name">SEO WIBE</string>
-  <string name="base_url">http://176.32.34.232:8016/mobile?mobile_app=1</string>
+  <string name="base_url">http://5.129.207.106:8016/mobile?mobile_app=1</string>
   <string name="update_title">Доступно обновление</string>
   <string name="update_message">Доступна новая версия SEO WIBE: %1$s</string>
   <string name="update_install">Установить</string>

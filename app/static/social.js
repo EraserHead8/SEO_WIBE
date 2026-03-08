@@ -1,6 +1,6 @@
 let socialState = {
   boot: null,
-  currentSubtab: "games",
+  currentSubtab: "chat",
   gamesLeaderboardCache: new Map(),
   currentGameCode: "",
   activeGameRunner: null,
@@ -461,7 +461,7 @@ function resetSocialState() {
   socialStopGlobalHooks();
   socialState = {
     boot: null,
-    currentSubtab: "games",
+    currentSubtab: "chat",
     gamesLeaderboardCache: new Map(),
     currentGameCode: "",
     activeGameRunner: null,
@@ -515,7 +515,7 @@ function resetSocialState() {
 function switchSocialSubtab(tab, loadNow = true) {
   const safe = ["games", "chat", "tasks", "calendar", "calculator", "notes"].includes(String(tab || ""))
     ? String(tab)
-    : "games";
+    : "chat";
   socialState.currentSubtab = safe;
   currentSocialSubtab = safe;
   if (typeof window.syncMobileQuickNavSelection === "function") {
@@ -539,15 +539,16 @@ function switchSocialSubtab(tab, loadNow = true) {
   if (safe !== "chat") socialSetChatView(false);
   if (safe === "games") socialRenderGames();
   if (safe === "chat") {
-    socialLoadThreads({ ensureCurrentMessages: true }).catch(() => null);
-    if (socialState.currentThreadId) {
-      socialLoadMessages(socialState.currentThreadId, { silent: true, bypassUnchanged: true }).catch(() => null);
-    }
+    socialLoadThreads({ ensureCurrentMessages: false }).then(() => {
+      if (socialState.currentThreadId) {
+        socialLoadMessages(socialState.currentThreadId, { silent: true, ensureVisible: true }).catch(() => null);
+      }
+    }).catch(() => null);
     if (!socialState.chatRefreshTimer) {
       socialState.chatRefreshTimer = setInterval(() => {
         if (document.hidden) return;
         if (currentTab === "social" && socialState.currentSubtab === "chat") {
-          socialLoadThreads({ silent: true, ensureCurrentMessages: true }).catch(() => null);
+          socialLoadThreads({ silent: true, ensureCurrentMessages: false }).catch(() => null);
           if (socialState.currentThreadId) {
             socialLoadMessages(socialState.currentThreadId, { silent: true }).catch(() => null);
           }
@@ -583,7 +584,7 @@ async function loadSocialWorkspace() {
   socialState.actors = Array.isArray(boot.company_actors) ? boot.company_actors : [];
   socialBindChatInputEnter();
   socialRenderGames();
-  switchSocialSubtab(currentSocialSubtab || socialState.currentSubtab || "games", true);
+  switchSocialSubtab(currentSocialSubtab || socialState.currentSubtab || "chat", true);
   socialStartGlobalHooks();
 }
 
@@ -794,7 +795,7 @@ function socialStartGame(code) {
     ? tr("Змейка", "Snake")
     : (safe === "tetris" ? tr("Тетрис", "Tetris") : "2048");
   const hint = safe === "snake"
-    ? tr("Управление: стрелки. Ешьте еду и не врезайтесь.", "Controls: arrows. Eat food and avoid collisions.")
+    ? tr("Управление: стрелки, свайпы и тап по стороне от змейки. Ешьте еду и не врезайтесь.", "Controls: arrows, swipes, and tap around snake direction. Eat food and avoid collisions.")
     : (safe === "tetris"
       ? tr("Управление: ← →, ↓, ↑ поворот, пробел — быстрый сброс.", "Controls: ← →, ↓, ↑ rotate, Space hard drop.")
       : tr("Управление: стрелки. Совмещайте одинаковые плитки.", "Controls: arrows. Merge equal tiles."));
@@ -848,6 +849,7 @@ function socialRunSnake() {
   let timer = null;
   let touchStartX = 0;
   let touchStartY = 0;
+  let touchStartTs = 0;
 
   function setDirection(next) {
     if (!next || typeof next.x !== "number" || typeof next.y !== "number") return;
@@ -887,6 +889,7 @@ function socialRunSnake() {
     document.removeEventListener("keydown", onKey);
     canvas.removeEventListener("touchstart", onTouchStart);
     canvas.removeEventListener("touchend", onTouchEnd);
+    canvas.removeEventListener("pointerdown", onPointerDown);
     socialStoreGameScore("snake", score).catch(() => null);
     if (gameOver) {
       socialOpenModal(tr("Змейка", "Snake"), socialGameOverlay(tr("Игра окончена", "Game over"), score, () => socialStartGame("snake")));
@@ -931,14 +934,19 @@ function socialRunSnake() {
     if (!touch) return;
     touchStartX = touch.clientX;
     touchStartY = touch.clientY;
+    touchStartTs = Date.now();
   }
 
-  function onTouchEnd(e) {
-    const touch = e.changedTouches?.[0];
-    if (!touch) return;
-    const dx = touch.clientX - touchStartX;
-    const dy = touch.clientY - touchStartY;
-    if (Math.abs(dx) < 24 && Math.abs(dy) < 24) return;
+  function setDirectionByPoint(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const px = clientX - rect.left;
+    const py = clientY - rect.top;
+    const head = snake[0];
+    const hx = (head.x + 0.5) * size;
+    const hy = (head.y + 0.5) * size;
+    const dx = px - hx;
+    const dy = py - hy;
+    if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
     if (Math.abs(dx) > Math.abs(dy)) {
       setDirection(dx > 0 ? { x: 1, y: 0 } : { x: -1, y: 0 });
     } else {
@@ -946,9 +954,32 @@ function socialRunSnake() {
     }
   }
 
+  function onTouchEnd(e) {
+    const touch = e.changedTouches?.[0];
+    if (!touch) return;
+    const dx = touch.clientX - touchStartX;
+    const dy = touch.clientY - touchStartY;
+    if (Math.abs(dx) < 24 && Math.abs(dy) < 24) {
+      setDirectionByPoint(touch.clientX, touch.clientY);
+      return;
+    }
+    if (Math.abs(dx) > Math.abs(dy)) {
+      setDirection(dx > 0 ? { x: 1, y: 0 } : { x: -1, y: 0 });
+    } else {
+      setDirection(dy > 0 ? { x: 0, y: 1 } : { x: 0, y: -1 });
+    }
+  }
+
+  function onPointerDown(e) {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (e.pointerType === "touch" && Date.now() - touchStartTs < 180) return;
+    setDirectionByPoint(e.clientX, e.clientY);
+  }
+
   document.addEventListener("keydown", onKey);
   canvas.addEventListener("touchstart", onTouchStart, { passive: true });
   canvas.addEventListener("touchend", onTouchEnd, { passive: true });
+  canvas.addEventListener("pointerdown", onPointerDown, { passive: true });
   spawnFood();
   draw();
   timer = setTimeout(step, speed);
@@ -1413,6 +1444,17 @@ if (typeof window !== "undefined") {
 }
 
 async function socialLoadThreads(opts = {}) {
+  const hasThreadContent = (thread) => {
+    if (!thread || typeof thread !== "object") return false;
+    const kind = String(thread.kind || "").trim();
+    const title = String(thread.title || "").trim();
+    const participants = Array.isArray(thread.participants) ? thread.participants : [];
+    const last = thread.last_message && typeof thread.last_message === "object" ? thread.last_message : null;
+    const lastText = String(last?.text || "").trim();
+    const lastSender = String(last?.sender_nick || "").trim();
+    const lastId = Number(last?.id || 0);
+    return Boolean(kind || title || participants.length || lastText || lastSender || lastId > 0);
+  };
   const signatureOf = (rows) => rows.map((thread) => {
     const last = thread?.last_message || {};
     return [
@@ -1428,19 +1470,23 @@ async function socialLoadThreads(opts = {}) {
     return null;
   });
   if (!Array.isArray(data)) return;
-  const nextSig = signatureOf(data);
+  const rows = data
+    .filter((row) => row && typeof row === "object")
+    .filter((row) => Number(row.id || 0) > 0)
+    .filter((row) => hasThreadContent(row));
+  const nextSig = signatureOf(rows);
   const prevSig = String(socialState.chatThreadsSignature || "");
   const hadRows = Array.isArray(socialState.chatThreads) && socialState.chatThreads.length > 0;
   const selectionMissing = Boolean(
     socialState.currentThreadId
-    && !data.some((x) => Number(x.id) === Number(socialState.currentThreadId))
+    && !rows.some((x) => Number(x.id) === Number(socialState.currentThreadId))
   );
   const shouldRender = !opts.silent || !hadRows || selectionMissing || nextSig !== prevSig;
-  socialState.chatThreads = data;
+  socialState.chatThreads = rows;
   socialState.chatThreadsSignature = nextSig;
   if (shouldRender) socialRenderThreads();
   if (socialState.currentThreadId) {
-    const current = data.find((x) => Number(x.id) === Number(socialState.currentThreadId));
+    const current = rows.find((x) => Number(x.id) === Number(socialState.currentThreadId));
     if (current) socialSetChatHeader(current);
   }
   if (socialState.currentThreadId && opts.ensureCurrentMessages) {
@@ -1449,9 +1495,9 @@ async function socialLoadThreads(opts = {}) {
       { silent: true, bypassUnchanged: true }
     ).catch(() => null);
   }
-  if ((!socialState.currentThreadId || selectionMissing) && data.length) {
+  if ((!socialState.currentThreadId || selectionMissing) && rows.length) {
     const lastPreferred = Number(socialState.chatLastThreadId || 0);
-    const preferred = data.find((x) => Number(x.id) === lastPreferred) || data[0];
+    const preferred = rows.find((x) => Number(x.id) === lastPreferred) || rows[0];
     if (preferred) {
       await socialSelectThread(Number(preferred.id || 0), { bypassUnchanged: true });
     }
@@ -1527,14 +1573,18 @@ function socialColorForSender(key) {
   return TG_USER_COLORS[hash % TG_USER_COLORS.length];
 }
 
-function socialAvatarMarkup(url, label, size = "sm") {
+function socialAvatarMarkup(url, label, size = "sm", eager = false) {
   const safeUrl = String(url || "").trim();
   const fallback = typeof computeAvatarInitials === "function"
     ? computeAvatarInitials(label, "")
     : String(label || "--").slice(0, 2).toUpperCase();
+  const loading = eager ? "eager" : "lazy";
   return `
-    <div class="tg-avatar tg-avatar-${size}">
-      ${safeUrl ? `<img src="${escapeHtml(safeUrl)}" alt="${escapeHtml(label || "avatar")}" />` : `<span>${escapeHtml(fallback)}</span>`}
+    <div class="tg-avatar tg-avatar-${size}${safeUrl ? " loading" : " no-image"}">
+      ${safeUrl
+        ? `<img src="${escapeHtml(safeUrl)}" alt="${escapeHtml(label || "avatar")}" loading="${loading}" decoding="async" referrerpolicy="no-referrer" onload="this.parentElement&&this.parentElement.classList.add('has-image');this.parentElement&&this.parentElement.classList.remove('loading');" onerror="this.remove();this.parentElement&&this.parentElement.classList.add('no-image');this.parentElement&&this.parentElement.classList.remove('loading');" />`
+        : ""}
+      <span class="tg-avatar-fallback">${escapeHtml(fallback)}</span>
     </div>
   `;
 }
@@ -1543,7 +1593,16 @@ function socialThreadDisplay(thread) {
   const participants = Array.isArray(thread?.participants) ? thread.participants : [];
   const isDirect = thread?.kind === "direct";
   const other = isDirect ? participants.find((p) => !p.is_me) : null;
-  const title = String(thread?.title || thread?.kind || tr("Чат", "Chat"));
+  const title = [
+    thread?.title,
+    other?.nick,
+    thread?.last_message?.sender_nick,
+    thread?.kind,
+    tr("Чат", "Chat"),
+  ]
+    .map((value) => String(value || "").trim())
+    .find((value) => Boolean(value))
+    || tr("Чат", "Chat");
   const avatarUrl = isDirect ? (other?.avatar_url || "") : (thread?.avatar_url || "");
   return {
     title,
@@ -1562,6 +1621,12 @@ function socialSetChatView(open) {
   const layout = document.querySelector("#socialSubtabChat .social-chat-layout");
   if (!layout) return;
   layout.classList.toggle("chat-open", Boolean(open));
+}
+
+function socialHasRenderedMessages(host = null) {
+  const node = host || document.getElementById("socialChatMessages");
+  if (!node) return false;
+  return Boolean(node.querySelector(".tg-msg-row"));
 }
 
 function socialCloseThread() {
@@ -1654,7 +1719,7 @@ function socialSetChatHeader(row) {
   }
   if (head) head.textContent = display.title;
   if (sub) sub.textContent = subtitle;
-  if (avatar) avatar.innerHTML = socialAvatarMarkup(display.avatarUrl, display.avatarLabel, "md");
+  if (avatar) avatar.innerHTML = socialAvatarMarkup(display.avatarUrl, display.avatarLabel, "md", true);
   if (meta) {
     if (row.kind === "direct") {
       const label = lastSeen || tr("нет данных", "unknown");
@@ -1691,7 +1756,8 @@ async function socialSelectThread(threadId, opts = {}) {
   }
   await socialLoadMessages(id, {
     forceBottom: true,
-    bypassUnchanged: Boolean(opts.bypassUnchanged),
+    bypassUnchanged: true,
+    ensureVisible: true,
   });
   await socialRequest(`/api/social/chat/read/${id}`, { method: "POST" }).catch(() => null);
   socialPollNotifications().catch(() => null);
@@ -1806,10 +1872,8 @@ async function socialToggleReaction(messageId, emoji) {
   const idx = (socialState.chatMessages || []).findIndex((x) => Number(x.id) === id);
   if (idx >= 0) {
     socialState.chatMessages[idx] = row;
-    socialLoadMessages(threadId, { silent: true });
-  } else {
-    socialLoadMessages(threadId, { silent: true });
   }
+  socialLoadMessages(threadId, { silent: true }).catch(() => null);
 }
 
 function socialContextReact(emoji) {
@@ -1829,7 +1893,7 @@ function socialMessageAttachmentsHtml(message) {
     const ctype = String(item?.content_type || "").toLowerCase();
     const isImage = ctype.startsWith("image/") || /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(url);
     if (isImage) {
-      return `<a class="tg-attach tg-attach-image" href="${escapeHtml(url)}" target="_blank" rel="noopener"><img src="${escapeHtml(url)}" alt="${escapeHtml(name)}" /></a>`;
+      return `<a class="tg-attach tg-attach-image" href="${escapeHtml(url)}" target="_blank" rel="noopener"><img src="${escapeHtml(url)}" alt="${escapeHtml(name)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" /></a>`;
     }
     return `<a class="tg-attach tg-attach-file" href="${escapeHtml(url)}" target="_blank" rel="noopener">📎 ${escapeHtml(name)}</a>`;
   }).join("");
@@ -2035,9 +2099,20 @@ async function socialLoadMessages(threadId, opts = {}) {
     const inflight = socialState.chatMessagesInflightByThread?.[id];
     if (inflight) {
       await inflight.catch(() => null);
+      const hostNode = document.getElementById("socialChatMessages");
+      const mustEnsureVisible = Boolean(opts.ensureVisible);
+      if (mustEnsureVisible && !socialHasRenderedMessages(hostNode) && !opts.__retryAfterInflight) {
+        await socialLoadMessages(id, {
+          ...opts,
+          silent: true,
+          bypassUnchanged: true,
+          forceBottom: true,
+          ensureVisible: false,
+          __retryAfterInflight: true,
+        });
+      }
       if (opts.forceBottom) {
-        const host = document.getElementById("socialChatMessages");
-        if (host) host.scrollTop = host.scrollHeight;
+        if (hostNode) hostNode.scrollTop = hostNode.scrollHeight;
       }
       return;
     }
@@ -2054,12 +2129,27 @@ async function socialLoadMessages(threadId, opts = {}) {
   const prevScrollHeight = host ? host.scrollHeight : 0;
   const prevScrollTop = host ? host.scrollTop : 0;
   const atBottom = host ? (host.scrollHeight - host.scrollTop - host.clientHeight < 40) : true;
-  const hasRenderedMessages = Boolean(host && host.childElementCount > 0);
+  const hasRenderedMessages = socialHasRenderedMessages(host);
   const rows = await socialRequest(`/api/social/chat/messages/${id}?limit=${limit}${beforeId ? `&before_id=${beforeId}` : ""}`).catch((e) => {
     if (!opts.silent && e?.message) alert(e.message);
     return null;
   });
   if (!Array.isArray(rows)) return;
+  const currentThread = (socialState.chatThreads || []).find((x) => Number(x?.id || 0) === id) || null;
+  const expectedLastId = Number(currentThread?.last_message?.id || 0);
+  const emptyRetryCount = Number(opts.__retryOnEmptyCount || 0);
+  const emptyRetryLimit = expectedLastId > 0 ? 3 : (opts.ensureVisible ? 1 : 0);
+  if (!beforeId && !rows.length && emptyRetryCount < emptyRetryLimit) {
+    await new Promise((resolve) => setTimeout(resolve, 180 * (emptyRetryCount + 1)));
+    await socialLoadMessages(id, {
+      ...opts,
+      silent: true,
+      bypassUnchanged: true,
+      forceBottom: true,
+      __retryOnEmptyCount: emptyRetryCount + 1,
+    });
+    return;
+  }
   if (!beforeId && Number(socialState.chatMessagesRequestSeqByThread?.[id] || 0) !== requestSeq) return;
   const prevSig = String(socialState.chatMessagesSignatureByThread?.[id] || "");
   const nextSig = signatureOf(rows);

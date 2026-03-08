@@ -6721,6 +6721,14 @@ body[data-theme="dark"] .landing-band .band-stats span {
   object-fit: cover;
 }
 
+.tg-avatar .tg-avatar-fallback {
+  display: inline;
+}
+
+.tg-avatar.has-image .tg-avatar-fallback {
+  display: none;
+}
+
 .tg-avatar-xs {
   width: 28px;
   height: 28px;
@@ -8785,11 +8793,57 @@ body.mobile-apk-mode #mobileDrawerQuickNav {
     grid-template-columns: 1fr;
   }
 
+  body.mobile-client-mode #authSection .auth-shell {
+    padding: 16px 12px 20px;
+  }
+
+  body.mobile-client-mode #authSection .auth-hero {
+    gap: 14px;
+  }
+
+  body.mobile-client-mode #authSection .auth-card {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
   body.mobile-apk-mode #appSection {
     padding: 0 6px 12px;
   }
 
   body.mobile-apk-mode #appSection .workspace {
     padding: 8px;
+  }
+}
+
+@media (max-width: 980px) and (min-width: 720px) {
+  #appSection #mainSidebar:not(.compact) .nav-label {
+    display: block !important;
+  }
+
+  #appSection #mainSidebar:not(.compact) .nav-btn {
+    justify-content: flex-start !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+}
+
+#appSection #mainSidebar:not(.compact) .nav-label {
+  display: block !important;
+}
+
+#appSection #mainSidebar:not(.compact) .nav-btn {
+  justify-content: flex-start !important;
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+}
+
+/* 2026-03-08 hotfix: auth mobile overflow + stable hero columns */
+#authSection .auth-card.auth-hero {
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+}
+
+@media (max-width: 1200px) {
+  #authSection .auth-card.auth-hero {
+    grid-template-columns: 1fr !important;
   }
 }

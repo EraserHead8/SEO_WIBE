@@ -1214,20 +1214,20 @@
       <section id="social" class="tab hidden">
         <div class="panel">
           <div class="module-subtabs">
-            <button class="chip-btn active" id="socialSubtabGamesBtn" type="button" onclick="switchSocialSubtab('games')">Игры</button>
-            <button class="chip-btn" id="socialSubtabChatBtn" type="button" onclick="switchSocialSubtab('chat')">Чат</button>
+            <button class="chip-btn active" id="socialSubtabChatBtn" type="button" onclick="switchSocialSubtab('chat')">Чат</button>
             <button class="chip-btn" id="socialSubtabTasksBtn" type="button" onclick="switchSocialSubtab('tasks')">Задачи</button>
             <button class="chip-btn" id="socialSubtabCalendarBtn" type="button" onclick="switchSocialSubtab('calendar')">Календарь</button>
             <button class="chip-btn" id="socialSubtabCalculatorBtn" type="button" onclick="switchSocialSubtab('calculator')">Калькулятор</button>
             <button class="chip-btn" id="socialSubtabNotesBtn" type="button" onclick="switchSocialSubtab('notes')">Заметки</button>
+            <button class="chip-btn" id="socialSubtabGamesBtn" type="button" onclick="switchSocialSubtab('games')">Игры</button>
           </div>
         </div>
 
-        <div id="socialSubtabGames">
+        <div id="socialSubtabGames" class="hidden">
           <div class="panel social-games-grid" id="socialGamesGrid"></div>
         </div>
 
-        <div id="socialSubtabChat" class="hidden">
+        <div id="socialSubtabChat">
           <div class="panel social-chat-layout">
             <aside class="social-chat-sidebar">
               <div class="social-chat-sidebar-head">

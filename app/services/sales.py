@@ -1219,8 +1219,7 @@ def _fetch_ozon_finance_rows(api_key: str, date_from: date, date_to: date) -> tu
             page += 1
         chunk_from = chunk_to + timedelta(days=1)
 
-    if not rows and not warnings:
-        warnings.append("Ozon finance API не вернул финансовые операции за период.")
+    # Empty finance list for a period is normal for part of accounts; keep UI clean.
     return rows, list(dict.fromkeys(warnings))
 
 

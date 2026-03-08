@@ -176,7 +176,7 @@ let currentReviewsSubtab = "reviews";
 let currentAdsSubtab = "campaigns";
 let currentAccountingSubtab = "overview";
 let currentHelpSubtab = "docs";
-let currentSocialSubtab = "games";
+let currentSocialSubtab = "chat";
 const moduleLoadState = new Map();
 const moduleInflightState = new Map();
 const MODULE_CACHE_TTL_MS = 30 * 60 * 1000;
@@ -581,7 +581,8 @@ function applySidebarMode() {
   const sidebar = document.getElementById("mainSidebar");
   const shell = document.getElementById("appSection");
   if (!sidebar) return;
-  const compact = Boolean(sidebarCompact);
+  const vw = Math.max(window.innerWidth || 0, document.documentElement?.clientWidth || 0);
+  const compact = (mobileClientMode || vw <= 1200) ? false : Boolean(sidebarCompact);
   sidebar.classList.toggle("compact", compact);
   if (shell) shell.classList.toggle("sidebar-compact", compact);
   const toggle = sidebar.querySelector(".sidebar-toggle");
@@ -2245,12 +2246,13 @@ function getMobileQuickNavSelects() {
 function getMobileQuickNavOptions() {
   const isEn = currentLang === "en";
   return [
-    { value: "social_games", label: isEn ? "Games" : "Игры" },
+    { value: "sales_dashboard", label: isEn ? "Statistics" : "Статистика" },
     { value: "social_chat", label: isEn ? "Chat" : "Чат" },
     { value: "social_tasks", label: isEn ? "Tasks" : "Задачи" },
     { value: "social_notes", label: isEn ? "Notes" : "Заметки" },
     { value: "social_calculator", label: isEn ? "Calculator" : "Калькулятор" },
     { value: "social_calendar", label: isEn ? "Calendar" : "Календарь" },
+    { value: "social_games", label: isEn ? "Games" : "Игры" },
     { value: "reviews_reviews", label: isEn ? "Review replies" : "Ответы на отзывы" },
     { value: "reviews_questions", label: isEn ? "Question replies" : "Ответы на вопросы" },
     { value: "profile_main", label: isEn ? "Profile" : "Профиль" },
@@ -2258,6 +2260,7 @@ function getMobileQuickNavOptions() {
 }
 
 function getCurrentMobileQuickValue() {
+  if (currentTab === "sales") return "sales_dashboard";
   if (currentTab === "social") {
     const sub = ["games", "chat", "tasks", "notes", "calculator", "calendar"].includes(String(currentSocialSubtab || ""))
       ? String(currentSocialSubtab)
@@ -2337,6 +2340,11 @@ function openMobileQuickNavValue(valueRaw) {
       return true;
     };
     if (!runSwitch()) setTimeout(runSwitch, 160);
+    closeMobileNav();
+    return;
+  }
+  if (value === "sales_dashboard") {
+    showTab("sales", document.querySelector(".nav-btn[data-tab='sales']"));
     closeMobileNav();
     return;
   }
@@ -2478,7 +2486,7 @@ async function logout() {
   currentReviewsSubtab = "reviews";
   currentAdsSubtab = "campaigns";
   currentHelpSubtab = "docs";
-  currentSocialSubtab = "games";
+  currentSocialSubtab = "chat";
   helpAssistantHistory = [];
   profileAiState = null;
   wbReviewDrafts.clear();
@@ -2684,7 +2692,8 @@ async function ensureAuth(allowFallback = true) {
         let initialTab = isTabAvailable(storedTab) ? storedTab : resolveInitialTab();
         if (mobileClientMode) {
           currentSocialSubtab = "chat";
-          if (isTabAvailable("social")) initialTab = "social";
+          if (isTabAvailable("sales")) initialTab = "sales";
+          else if (isTabAvailable("social")) initialTab = "social";
           else if (isTabAvailable("reviews")) initialTab = "reviews";
           else if (isTabAvailable("profile")) initialTab = "profile";
         }
@@ -4953,6 +4962,12 @@ function isPlaceholderCampaignName(name, campaignId = "") {
   return false;
 }
 
+function campaignHasRealName(row) {
+  const cid = getCampaignRowId(row);
+  const name = String(row?.name || row?.campaignName || row?.campaign_name || row?.subject || row?.title || "").trim();
+  return Boolean(name) && !isPlaceholderCampaignName(name, cid);
+}
+
 function mergeCampaignSummaryIntoRow(row, summary) {
   if (!summary || typeof summary !== "object") return row;
   const next = { ...row };
@@ -5008,7 +5023,25 @@ async function enrichWbCampaignRows(runToken) {
     updateWbAdsLoadStatus(tr("Кампании не найдены.", "No campaigns found."));
     return;
   }
-  const pending = [...new Set(allIds)];
+  const pending = [...new Set(
+    wbCampaignRows
+      .filter((row) => {
+        const cid = Number(getCampaignRowId(row) || 0);
+        if (cid <= 0) return false;
+        return !campaignHasContext(row) || !campaignHasRealName(row);
+      })
+      .map((row) => Number(getCampaignRowId(row) || 0))
+      .filter((id) => id > 0)
+  )];
+  if (!pending.length) {
+    wbAdsLoadProgress.active = false;
+    wbAdsLoadProgress.total = allIds.length;
+    wbAdsLoadProgress.loaded = allIds.length;
+    wbAdsLoadProgress.failed = 0;
+    updateWbAdsLoadStatus();
+    renderWbCampaignRows();
+    return;
+  }
   wbAdsLoadProgress.total = pending.length;
   wbAdsLoadProgress.loaded = 0;
   wbAdsLoadProgress.failed = 0;
@@ -5039,39 +5072,22 @@ async function enrichWbCampaignRows(runToken) {
     const summaries = payload?.summaries && typeof payload.summaries === "object" ? payload.summaries : {};
     const stats = payload?.stats && typeof payload.stats === "object" ? payload.stats : {};
     const meta = payload?.meta && typeof payload.meta === "object" ? payload.meta : {};
-    const hardMissingIds = Array.isArray(meta?.hard_missing_ids)
-      ? meta.hard_missing_ids.map((x) => Number(x || 0)).filter((x) => Number.isFinite(x) && x > 0)
-      : (Array.isArray(meta?.missing_ids)
-        ? meta.missing_ids.map((x) => Number(x || 0)).filter((x) => Number.isFinite(x) && x > 0)
-        : []);
     const partialStatsIds = Array.isArray(meta?.partial_stats_ids)
       ? meta.partial_stats_ids.map((x) => Number(x || 0)).filter((x) => Number.isFinite(x) && x > 0)
       : [];
-    const partialSummaryIds = Array.isArray(meta?.partial_summary_ids)
+    let partialSummaryIds = Array.isArray(meta?.partial_summary_ids)
       ? meta.partial_summary_ids.map((x) => Number(x || 0)).filter((x) => Number.isFinite(x) && x > 0)
       : [];
     const temporaryUnavailable = Boolean(meta?.temporary_unavailable);
     partialStatsMissingTotal += partialStatsIds.length;
-    partialSummaryMissingTotal += partialSummaryIds.length;
-    const hasMissingMeta = Array.isArray(meta?.hard_missing_ids) || Array.isArray(meta?.missing_ids);
-    let chunkMissing = hardMissingIds.length;
+    const hasMissingMeta = Array.isArray(meta?.hard_missing_ids) || Array.isArray(meta?.missing_ids) || Array.isArray(meta?.partial_summary_ids);
+    let chunkMissing = 0;
     if (temporaryUnavailable) {
       temporaryUnavailableChunks += 1;
       partialFallback = true;
       if (!partialStatsIds.length) partialStatsMissingTotal += chunk.length;
       if (!partialSummaryIds.length) partialSummaryMissingTotal += chunk.length;
-      chunkMissing = 0;
     }
-    if (!hasMissingMeta && chunkMissing <= 0) {
-      chunkMissing = chunk.filter((cid) => {
-        const key = String(cid);
-        const hasSummary = Boolean(summaries[key] && typeof summaries[key] === "object");
-        const hasStats = Boolean(stats[key] && typeof stats[key] === "object");
-        return !hasSummary && !hasStats;
-      }).length;
-    }
-    const chunkResolved = Math.max(0, chunk.length - chunkMissing);
-    if (chunkMissing > 0) partialFallback = true;
     wbCampaignRows = wbCampaignRows.map((row) => {
       const cid = getCampaignRowId(row);
       if (!cid) return row;
@@ -5079,6 +5095,24 @@ async function enrichWbCampaignRows(runToken) {
       if (stats[cid] && typeof stats[cid] === "object") return { ...merged, ...stats[cid] };
       return merged;
     });
+    const chunkContextMissing = chunk.filter((cid) => {
+      const cidText = String(cid);
+      const row = wbCampaignRows.find((item) => getCampaignRowId(item) === cidText);
+      return !row || !campaignHasContext(row);
+    });
+    const chunkSummaryMissing = chunk.filter((cid) => {
+      const cidText = String(cid);
+      const row = wbCampaignRows.find((item) => getCampaignRowId(item) === cidText);
+      return !row || !campaignHasRealName(row);
+    });
+    if (!partialSummaryIds.length) partialSummaryIds = chunkSummaryMissing;
+    partialSummaryMissingTotal += partialSummaryIds.length;
+    if (!temporaryUnavailable) {
+      chunkMissing = chunkContextMissing.length;
+      if (chunkMissing > 0 && !hasMissingMeta) partialFallback = true;
+    }
+    const chunkResolved = Math.max(0, chunk.length - chunkMissing);
+    if (chunkMissing > 0) partialFallback = true;
     wbAdsLoadProgress.loaded += chunkResolved;
     wbAdsLoadProgress.failed += chunkMissing;
     updateWbAdsLoadStatus();
@@ -5101,6 +5135,11 @@ async function enrichWbCampaignRows(runToken) {
       msg = tr(
         `Кампании загружены. Для ${formatInt(partialStatsMissingTotal)} кампаний статистика за период пока не вернулась API.`,
         `Campaigns loaded. Period stats are not returned yet for ${formatInt(partialStatsMissingTotal)} campaigns.`
+      );
+    } else if (partialSummaryMissingTotal > 0 && Number(wbAdsLoadProgress.failed || 0) <= 0) {
+      msg = tr(
+        `Кампании загружены. Для ${formatInt(partialSummaryMissingTotal)} кампаний API WB не вернуло человекочитаемое название.`,
+        `Campaigns loaded. WB API returned no readable name for ${formatInt(partialSummaryMissingTotal)} campaigns.`
       );
     } else if (partialStatsMissingTotal > 0 || partialSummaryMissingTotal > 0) {
       msg += ` ${tr("Неполные поля", "Incomplete fields")}: ${formatInt(partialStatsMissingTotal + partialSummaryMissingTotal)}.`;
@@ -9819,6 +9858,10 @@ setupMobileClientMode();
 initHoverTips();
 window.__socialHooksRequested = true;
 ensureAuth();
+
+window.addEventListener("resize", () => {
+  applySidebarMode();
+}, { passive: true });
 
 window.addEventListener("focus", () => {
   if (token || me) ensureAuth(false).catch(() => null);
