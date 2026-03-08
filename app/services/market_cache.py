@@ -33,6 +33,7 @@ def get_or_refresh_market_cache(
     ttl_sec: int,
     fetcher: Callable[[], Any],
     stale_if_error_sec: int = 20 * 60,
+    prefer_stale_sec: int = 0,
 ) -> tuple[Any, dict[str, Any]]:
     now = datetime.utcnow()
     row = _get_cache_row(db, user_id=user_id, module_code=module_code, marketplace=marketplace, cache_key=cache_key)
@@ -41,6 +42,16 @@ def get_or_refresh_market_cache(
         row.hit_count = int(row.hit_count or 0) + 1
         row.last_hit_at = now
         return cached, _cache_meta("db-hit", now=now, row=row)
+    if (
+        row
+        and cached is not None
+        and row.fetched_at
+        and int(prefer_stale_sec or 0) > 0
+        and max(0, int((now - row.fetched_at).total_seconds())) <= max(60, int(prefer_stale_sec or 0))
+    ):
+        row.hit_count = int(row.hit_count or 0) + 1
+        row.last_hit_at = now
+        return cached, _cache_meta("db-stale-fastpath", now=now, row=row, stale=True)
 
     lock_id = f"{int(user_id)}:{module_code}:{marketplace}:{cache_key}"
     with _lock_for_key(lock_id):
@@ -51,6 +62,16 @@ def get_or_refresh_market_cache(
             row.hit_count = int(row.hit_count or 0) + 1
             row.last_hit_at = now
             return cached, _cache_meta("db-hit-race", now=now, row=row)
+        if (
+            row
+            and cached is not None
+            and row.fetched_at
+            and int(prefer_stale_sec or 0) > 0
+            and max(0, int((now - row.fetched_at).total_seconds())) <= max(60, int(prefer_stale_sec or 0))
+        ):
+            row.hit_count = int(row.hit_count or 0) + 1
+            row.last_hit_at = now
+            return cached, _cache_meta("db-stale-fastpath-race", now=now, row=row, stale=True)
 
         try:
             payload = fetcher()
