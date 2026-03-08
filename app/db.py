@@ -16,18 +16,14 @@ is_sqlite = settings.database_url.startswith("sqlite")
 connect_args = {"check_same_thread": False, "timeout": 30} if is_sqlite else {}
 engine_kwargs = {
     "pool_pre_ping": True,
+    "pool_size": 20 if is_sqlite else 12,
+    "max_overflow": 40 if is_sqlite else 24,
+    "pool_timeout": 90 if is_sqlite else 45,
+    "pool_recycle": 1800,
+    "pool_use_lifo": True,
 }
-if is_sqlite:
-    # Under concurrent web polling + worker jobs the default SQLAlchemy QueuePool
-    # (size=5, overflow=10) is too small and causes 30s timeouts.
-    engine_kwargs.update(
-        {
-            "pool_size": 20,
-            "max_overflow": 40,
-            "pool_timeout": 90,
-            "pool_recycle": 1800,
-        }
-    )
+# Under concurrent web polling + worker jobs default QueuePool values are too low
+# and may cause connection checkout timeouts during traffic spikes.
 engine = create_engine(settings.database_url, connect_args=connect_args, **engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

@@ -301,8 +301,10 @@ def _market_cache_latest_payload(
     module_code: str,
     marketplace: str,
     max_age_sec: int = 24 * 60 * 60,
+    exclude_cache_keys: set[str] | None = None,
 ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
     now = datetime.utcnow()
+    excluded = {str(x or "").strip() for x in (exclude_cache_keys or set()) if str(x or "").strip()}
     rows = db.scalars(
         select(MarketplaceApiCache)
         .where(
@@ -314,6 +316,8 @@ def _market_cache_latest_payload(
         .limit(25)
     ).all()
     for row in rows:
+        if excluded and str(row.cache_key or "").strip() in excluded:
+            continue
         fetched_at = row.fetched_at or row.last_hit_at
         if not fetched_at:
             continue
@@ -331,6 +335,76 @@ def _market_cache_latest_payload(
                 "cache_key": str(row.cache_key or ""),
             }
     return None, {}
+
+
+def _warnings_indicate_upstream_failure(warnings: list[Any]) -> bool:
+    raw = [str(x or "").strip().lower() for x in (warnings or []) if str(x or "").strip()]
+    if not raw:
+        return False
+    markers = (
+        "429",
+        "rate_limited",
+        "timed out",
+        "timeout",
+        "недоступ",
+        "ошибка",
+        "error",
+        "api вернул",
+        "api недоступен",
+    )
+    return any(any(mark in item for mark in markers) for item in raw)
+
+
+def _sales_payload_has_data(payload: dict[str, Any] | None) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    rows = payload.get("rows")
+    if isinstance(rows, list) and rows:
+        return True
+    totals = payload.get("totals") if isinstance(payload.get("totals"), dict) else {}
+    numeric_keys = (
+        "orders",
+        "units",
+        "buyouts",
+        "revenue",
+        "wb_orders",
+        "ozon_orders",
+        "wb_revenue",
+        "ozon_revenue",
+    )
+    for key in numeric_keys:
+        try:
+            if abs(float(totals.get(key) or 0.0)) > 1e-9:
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _accounting_payload_has_data(payload: dict[str, Any] | None) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    overview = payload.get("overview") if isinstance(payload.get("overview"), dict) else {}
+    numeric_keys = ("orders", "units", "buyouts", "revenue", "gross_profit", "net_profit")
+    for key in numeric_keys:
+        try:
+            if abs(float(overview.get(key) or 0.0)) > 1e-9:
+                return True
+        except Exception:
+            continue
+    chart = payload.get("chart")
+    if isinstance(chart, list):
+        for row in chart:
+            if not isinstance(row, dict):
+                continue
+            for key in ("orders", "units", "revenue", "gross_profit", "net_profit"):
+                try:
+                    if abs(float(row.get(key) or 0.0)) > 1e-9:
+                        return True
+                except Exception:
+                    continue
+    analysis_rows = payload.get("analysis_rows")
+    return isinstance(analysis_rows, list) and len(analysis_rows) > 0
 
 
 def _enqueue_sales_cache_warmup(
@@ -5005,6 +5079,27 @@ def sales_stats(
     chart = chart if isinstance(chart, list) else []
     totals = totals if isinstance(totals, dict) else {}
     warnings = warnings if isinstance(warnings, list) else []
+    if (not _sales_payload_has_data(payload)) and _warnings_indicate_upstream_failure(warnings):
+        fallback_payload, fallback_meta = _market_cache_latest_payload(
+            db,
+            user_id=int(user.id),
+            module_code="sales_stats",
+            marketplace=selected_market,
+            max_age_sec=48 * 60 * 60,
+            exclude_cache_keys={str(sales_cache_meta.get("cache_key") or "").strip()},
+        )
+        if _sales_payload_has_data(fallback_payload):
+            payload = fallback_payload or {}
+            sales_cache_meta = fallback_meta or {"source": "db-latest-module-fallback", "age_sec": -1}
+            rows = payload.get("rows") if isinstance(payload, dict) else []
+            chart = payload.get("chart") if isinstance(payload, dict) else []
+            totals = payload.get("totals") if isinstance(payload, dict) else {}
+            warnings = payload.get("warnings") if isinstance(payload, dict) else []
+            rows = rows if isinstance(rows, list) else []
+            chart = chart if isinstance(chart, list) else []
+            totals = totals if isinstance(totals, dict) else {}
+            warnings = warnings if isinstance(warnings, list) else []
+            warnings.append("Показаны последние стабильные данные: текущий запрос к API вернул пустой ответ.")
     warm_result = _enqueue_sales_cache_warmup(
         int(user.id),
         marketplace=selected_market,
@@ -5406,30 +5501,22 @@ def accounting_data(
         stale_if_error_sec=6 * 60 * 60,
     )
     warnings_now = [str(x or "") for x in (data.get("warnings") if isinstance(data, dict) else [])]
-    has_rate_limit_warning = any(
-        ("429" in w) or ("rate_limit" in w.lower()) or ("огранич" in w.lower())
-        for w in warnings_now
-    )
-    if has_rate_limit_warning:
+    has_upstream_warning = _warnings_indicate_upstream_failure(warnings_now)
+    if has_upstream_warning and not _accounting_payload_has_data(data):
         fallback_data, fallback_meta = _market_cache_latest_payload(
             db,
             user_id=int(user.id),
             module_code="accounting",
             marketplace=selected_market,
             max_age_sec=48 * 60 * 60,
+            exclude_cache_keys={str(accounting_cache_meta.get("cache_key") or "").strip()},
         )
-        if isinstance(fallback_data, dict):
-            fallback_warnings = [str(x or "") for x in (fallback_data.get("warnings") or [])]
-            fallback_has_rate_limit = any(
-                ("429" in w) or ("rate_limit" in w.lower()) or ("огранич" in w.lower())
-                for w in fallback_warnings
+        if _accounting_payload_has_data(fallback_data):
+            data = fallback_data or {}
+            accounting_cache_meta = fallback_meta or {"source": "db-latest-module-fallback", "age_sec": -1}
+            data.setdefault("warnings", []).append(
+                "Показаны последние стабильные данные: текущий запрос к API вернул пустой ответ."
             )
-            if not fallback_has_rate_limit:
-                data = fallback_data
-                accounting_cache_meta = fallback_meta or {"source": "db-latest-module-fallback", "age_sec": -1}
-                data.setdefault("warnings", []).append(
-                    "Показаны последние стабильные данные: API WB временно ограничивает запросы (429)."
-                )
     if accounting_cache_meta.get("source") == "db-stale-fallback":
         data.setdefault("warnings", []).append(
             "Показаны кэшированные данные из-за временной недоступности API маркетплейса."
