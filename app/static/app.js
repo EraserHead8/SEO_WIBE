@@ -176,7 +176,7 @@ let currentReviewsSubtab = "reviews";
 let currentAdsSubtab = "campaigns";
 let currentAccountingSubtab = "overview";
 let currentHelpSubtab = "docs";
-let currentSocialSubtab = "chat";
+let currentSocialSubtab = mobileApkMode ? "calendar" : "chat";
 const moduleLoadState = new Map();
 const moduleInflightState = new Map();
 const MODULE_CACHE_TTL_MS = 30 * 60 * 1000;
@@ -724,7 +724,12 @@ function applyUiLanguage() {
   setText("#authWhatItem3", lang === "en" ? "AI-assisted review/question handling with predictable quality." : "AI-обработка отзывов и вопросов с предсказуемым качеством.");
   setText("#authStartTitle", lang === "en" ? "How to start quickly" : "Как быстро стартовать");
   setText("#authStartItem1", lang === "en" ? "Sign in as owner or create a new workspace." : "Войдите как владелец или создайте новый кабинет.");
-  setText("#authStartItem2", lang === "en" ? "Connect WB/Ozon API keys in Profile." : "Подключите API-ключи WB/Ozon в профиле.");
+  setText(
+    "#authStartItem2",
+    mobileApkMode
+      ? (lang === "en" ? "Open your workspace module and start right away." : "Откройте нужный модуль и сразу начинайте работу.")
+      : (lang === "en" ? "Connect WB/Ozon API keys in Profile." : "Подключите API-ключи WB/Ozon в профиле.")
+  );
   setText("#authStartItem3", lang === "en" ? "Open a module and run the first workflow." : "Откройте модуль и запустите первый рабочий сценарий.");
   setText("#authPitchNote", lang === "en" ? "Designed for teams from solo operators to multi-role departments with strict access boundaries." : "Подходит как для соло-продавцов, так и для многоуровневых команд со строгими границами доступа.");
   setText("#landingCard1Title", lang === "en" ? "Revenue control center" : "Центр управления выручкой");
@@ -2176,6 +2181,9 @@ function showTab(name, btn = null) {
   if (targetTab === "help") runModuleLoader("help", loadHelpWorkspace, { maxAgeMs: MODULE_CACHE_TTL_MS });
   if (targetTab === "admin") loadAdmin();
   syncMobileQuickNavSelection();
+  if (typeof window.socialSyncMobileChatChrome === "function") {
+    try { window.socialSyncMobileChatChrome(); } catch (_) {}
+  }
   closeMobileNav();
   if ((window.innerWidth || 0) <= 980) {
     try { window.scrollTo(0, 0); } catch (_) {}
@@ -2691,9 +2699,12 @@ async function ensureAuth(allowFallback = true) {
         const storedTab = normalizeLegacyTabName(storedRaw).tab;
         let initialTab = isTabAvailable(storedTab) ? storedTab : resolveInitialTab();
         if (mobileClientMode) {
-          currentSocialSubtab = "chat";
-          if (isTabAvailable("sales")) initialTab = "sales";
-          else if (isTabAvailable("social")) initialTab = "social";
+          const mobileDefaultSocial = mobileApkMode ? "calendar" : "chat";
+          currentSocialSubtab = ["games", "chat", "tasks", "calendar", "calculator", "notes"].includes(storedSocialSubtab)
+            ? storedSocialSubtab
+            : mobileDefaultSocial;
+          if (isTabAvailable("social")) initialTab = "social";
+          else if (isTabAvailable("sales")) initialTab = "sales";
           else if (isTabAvailable("reviews")) initialTab = "reviews";
           else if (isTabAvailable("profile")) initialTab = "profile";
         }

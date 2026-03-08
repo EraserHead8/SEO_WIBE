@@ -47,12 +47,29 @@ let socialState = {
   chatContextX: 0,
   chatContextY: 0,
   keepEmojiOpenUntil: 0,
+  mobileThreadAutoSelectEnabled: true,
   pollClientId: `poll-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`,
 };
 
 const SOCIAL_POLL_LEADER_KEY = "seo_wibe_social_poll_leader_v1";
 const SOCIAL_POLL_SHARED_STATE_KEY = "seo_wibe_social_poll_shared_v1";
 const SOCIAL_POLL_LEASE_MS = 22000;
+
+function socialIsMobileClientShell() {
+  try {
+    if (document.body?.classList?.contains("mobile-client-mode")) return true;
+    if (typeof mobileClientMode !== "undefined") return Boolean(mobileClientMode);
+  } catch (_) {}
+  return false;
+}
+
+function socialIsMobileApkShell() {
+  try {
+    if (document.body?.classList?.contains("mobile-apk-mode")) return true;
+    if (typeof mobileApkMode !== "undefined") return Boolean(mobileApkMode);
+  } catch (_) {}
+  return false;
+}
 
 function socialMaybeStartHooks() {
   if (!token && !me) return;
@@ -507,9 +524,11 @@ function resetSocialState() {
     chatContextX: 0,
     chatContextY: 0,
     keepEmojiOpenUntil: 0,
+    mobileThreadAutoSelectEnabled: !socialIsMobileClientShell(),
     pollClientId: `poll-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`,
   };
   socialSetBell(0);
+  socialSyncMobileChatChrome(null);
 }
 
 function switchSocialSubtab(tab, loadNow = true) {
@@ -535,6 +554,7 @@ function switchSocialSubtab(tab, loadNow = true) {
     const btn = document.getElementById(`socialSubtab${key.charAt(0).toUpperCase()}${key.slice(1)}Btn`);
     if (btn) btn.classList.toggle("active", key === safe);
   });
+  socialSyncMobileChatChrome();
   if (!loadNow) return;
   if (safe !== "chat") socialSetChatView(false);
   if (safe === "games") socialRenderGames();
@@ -581,11 +601,13 @@ async function loadSocialWorkspace() {
   if (!boot) return;
   socialState.boot = boot;
   socialState.moduleLoaded = true;
+  socialState.mobileThreadAutoSelectEnabled = !socialIsMobileClientShell();
   socialState.actors = Array.isArray(boot.company_actors) ? boot.company_actors : [];
   socialBindChatInputEnter();
   socialRenderGames();
   switchSocialSubtab(currentSocialSubtab || socialState.currentSubtab || "chat", true);
   socialStartGlobalHooks();
+  socialSyncMobileChatChrome();
 }
 
 function socialBindChatInputEnter() {
@@ -1495,7 +1517,10 @@ async function socialLoadThreads(opts = {}) {
       { silent: true, bypassUnchanged: true }
     ).catch(() => null);
   }
-  if ((!socialState.currentThreadId || selectionMissing) && rows.length) {
+  const allowAutoSelect = !socialIsMobileClientShell()
+    || socialState.mobileThreadAutoSelectEnabled
+    || Boolean(opts.forceAutoSelect);
+  if ((!socialState.currentThreadId || selectionMissing) && rows.length && allowAutoSelect) {
     const lastPreferred = Number(socialState.chatLastThreadId || 0);
     const preferred = rows.find((x) => Number(x.id) === lastPreferred) || rows[0];
     if (preferred) {
@@ -1612,6 +1637,34 @@ function socialThreadDisplay(thread) {
   };
 }
 
+function socialSyncMobileChatChrome(row = null) {
+  const host = document.getElementById("mobileChatCompactHead");
+  const backBtn = document.getElementById("mobileChatCompactBack");
+  const titleNode = document.getElementById("mobileChatCompactTitle");
+  const subtitleNode = document.getElementById("mobileChatCompactSubtitle");
+  if (!host || !backBtn || !titleNode || !subtitleNode) return;
+  const isApkShell = socialIsMobileApkShell();
+  const inSocialChat = typeof currentTab !== "undefined"
+    && String(currentTab || "") === "social"
+    && String(socialState.currentSubtab || "") === "chat";
+  const activeThread = row || socialGetCurrentThread();
+  const show = isApkShell && inSocialChat && Number(socialState.currentThreadId || 0) > 0 && Boolean(activeThread);
+  host.classList.toggle("hidden", !show);
+  backBtn.classList.toggle("hidden", !show);
+  if (!show) {
+    titleNode.textContent = tr("Чаты", "Chats");
+    subtitleNode.textContent = "";
+    return;
+  }
+  const display = socialThreadDisplay(activeThread);
+  const participants = Array.isArray(display.participants) ? display.participants : [];
+  const subtitle = activeThread?.kind === "direct"
+    ? tr("Личный чат", "Direct chat")
+    : `${tr("Группа", "Group")} • ${participants.length}`;
+  titleNode.textContent = String(display.title || tr("Чат", "Chat"));
+  subtitleNode.textContent = subtitle;
+}
+
 function socialFilterThreads() {
   socialState.chatSearch = String(document.getElementById("socialChatSearch")?.value || "").trim().toLowerCase();
   socialRenderThreads();
@@ -1621,6 +1674,7 @@ function socialSetChatView(open) {
   const layout = document.querySelector("#socialSubtabChat .social-chat-layout");
   if (!layout) return;
   layout.classList.toggle("chat-open", Boolean(open));
+  socialSyncMobileChatChrome();
 }
 
 function socialHasRenderedMessages(host = null) {
@@ -1629,9 +1683,10 @@ function socialHasRenderedMessages(host = null) {
   return Boolean(node.querySelector(".tg-msg-row"));
 }
 
-function socialCloseThread() {
+function socialCloseThread(opts = {}) {
   socialState.currentThreadId = 0;
   socialState.currentThreadKind = "";
+  socialState.mobileThreadAutoSelectEnabled = Boolean(opts.keepAutoSelect) || !socialIsMobileClientShell();
   socialState.chatMessages = [];
   socialState.chatOldestId = 0;
   socialState.chatHasMore = true;
@@ -1654,6 +1709,7 @@ function socialCloseThread() {
   if (host) host.innerHTML = "";
   socialRenderThreads();
   socialSetChatView(false);
+  socialSyncMobileChatChrome(null);
 }
 
 function socialRenderThreads() {
@@ -1705,6 +1761,7 @@ function socialSetChatHeader(row) {
     }
     if (avatarBtn) avatarBtn.classList.add("hidden");
     if (groupBtn) groupBtn.classList.add("hidden");
+    socialSyncMobileChatChrome(null);
     return;
   }
   const display = socialThreadDisplay(row);
@@ -1736,6 +1793,7 @@ function socialSetChatHeader(row) {
   if (groupBtn) {
     groupBtn.classList.toggle("hidden", String(row.kind || "") !== "group");
   }
+  socialSyncMobileChatChrome(row);
 }
 
 async function socialSelectThread(threadId, opts = {}) {
@@ -1743,6 +1801,7 @@ async function socialSelectThread(threadId, opts = {}) {
   if (!id) return;
   socialState.currentThreadId = id;
   socialState.chatLastThreadId = id;
+  socialState.mobileThreadAutoSelectEnabled = true;
   const row = socialState.chatThreads.find((x) => Number(x.id) === id) || null;
   socialState.currentThreadKind = String(row?.kind || "");
   socialClearReply();
@@ -2138,7 +2197,7 @@ async function socialLoadMessages(threadId, opts = {}) {
   const currentThread = (socialState.chatThreads || []).find((x) => Number(x?.id || 0) === id) || null;
   const expectedLastId = Number(currentThread?.last_message?.id || 0);
   const emptyRetryCount = Number(opts.__retryOnEmptyCount || 0);
-  const emptyRetryLimit = expectedLastId > 0 ? 3 : (opts.ensureVisible ? 1 : 0);
+  const emptyRetryLimit = expectedLastId > 0 ? 4 : (opts.ensureVisible ? 3 : 0);
   if (!beforeId && !rows.length && emptyRetryCount < emptyRetryLimit) {
     await new Promise((resolve) => setTimeout(resolve, 180 * (emptyRetryCount + 1)));
     await socialLoadMessages(id, {
@@ -3351,6 +3410,7 @@ window.socialSaveGroupEditor = socialSaveGroupEditor;
 window.socialFilterDirectActors = socialFilterDirectActors;
 window.socialStartDirectChat = socialStartDirectChat;
 window.socialSelectThread = socialSelectThread;
+window.socialCloseThread = socialCloseThread;
 window.socialSendMessage = socialSendMessage;
 window.socialTriggerChatFileDialog = socialTriggerChatFileDialog;
 window.socialUploadChatFiles = socialUploadChatFiles;
@@ -3398,6 +3458,7 @@ window.socialUploadNoteFiles = socialUploadNoteFiles;
 window.socialDeleteNoteFile = socialDeleteNoteFile;
 window.socialStartGlobalHooks = socialStartGlobalHooks;
 window.socialStopGlobalHooks = socialStopGlobalHooks;
+window.socialSyncMobileChatChrome = socialSyncMobileChatChrome;
 window.resetSocialState = resetSocialState;
 
 document.addEventListener("visibilitychange", () => {

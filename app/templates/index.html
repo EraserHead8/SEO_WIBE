@@ -218,6 +218,13 @@
           <p id="sectionSubtitle">Продажи, KPI и динамика в одном модуле</p>
         </div>
         <div class="topbar-controls">
+          <div id="mobileChatCompactHead" class="mobile-chat-compact-head hidden">
+            <button id="mobileChatCompactBack" class="mobile-chat-compact-back hidden" type="button" onclick="socialCloseThread()" aria-label="Назад">←</button>
+            <div class="mobile-chat-compact-text">
+              <div id="mobileChatCompactTitle" class="mobile-chat-compact-title">Чаты</div>
+              <div id="mobileChatCompactSubtitle" class="mobile-chat-compact-subtitle"></div>
+            </div>
+          </div>
           <button id="mobileNavToggle" class="chip-btn mobile-nav-toggle" type="button" onclick="toggleMobileNav()" aria-label="Навигация" aria-controls="mainSidebar" aria-expanded="false" aria-haspopup="true">☰</button>
           <button id="socialBellBtn" class="chip-btn icon-bell-btn hidden" type="button" onclick="openSocialChatFromBell()" title="Уведомления">
             <span class="bell-emoji" aria-hidden="true">🔔</span>
@@ -1261,7 +1268,6 @@
                 <div class="social-chat-head-actions">
                   <button id="socialChatGroupBtn" class="btn-secondary hidden" type="button" onclick="socialOpenGroupEditor(true)">Участники</button>
                   <button id="socialChatAvatarBtn" class="btn-secondary hidden" type="button" onclick="socialOpenGroupAvatarModal()">Аватар</button>
-                  <button class="btn-secondary" type="button" onclick="socialLoadThreads({ silent: true })">Обновить</button>
                 </div>
               </div>
               <div id="socialChatMessages" class="social-chat-messages"></div>
