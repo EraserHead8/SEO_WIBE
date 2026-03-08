@@ -1463,7 +1463,11 @@
     <div class="campaign-modal-card product-modal-card">
       <div class="campaign-modal-head">
         <h3>Карточка товара</h3>
-        <button class="campaign-close" onclick="closeProductViewModal()">✕</button>
+        <div class="product-modal-head-actions">
+          <button class="btn-secondary" type="button" id="productViewRefreshBtn" onclick="refreshProductViewModal()">Обновить из API</button>
+          <button type="button" id="productViewEditBtn" onclick="openProductEditFromView()">Редактировать</button>
+          <button class="campaign-close" onclick="closeProductViewModal()">✕</button>
+        </div>
       </div>
       <div class="product-modal-info">
         <div id="productViewMeta" class="hint">-</div>
@@ -1522,6 +1526,7 @@
         <section class="product-modal-section product-edit-summary-col">
           <h4>Карточка и характеристики</h4>
           <div id="productEditSummary" class="product-kv-grid"></div>
+          <div class="hint product-photo-order-hint">Перетаскивайте фото мышкой: первое фото станет главным.</div>
           <div id="productEditPhotos" class="product-modal-photos"></div>
           <div id="productEditAttrs" class="product-modal-attrs"></div>
         </section>
@@ -1532,6 +1537,7 @@
             <label><span>Категория</span><input id="productEditCategory" placeholder="Категория" /></label>
             <label><span>Баркод</span><input id="productEditBarcode" placeholder="Баркод" /></label>
             <label><span>URL главного фото</span><input id="productEditPhotoUrl" placeholder="URL главного фото" /></label>
+            <label><span>Закупочная цена</span><input id="productEditPurchasePrice" type="number" step="0.01" min="0" placeholder="0.00" /></label>
             <label class="full"><span>Описание</span><textarea id="productEditDescription" rows="8" placeholder="Описание"></textarea></label>
             <label class="full"><span>Целевые ключевые слова (через запятую)</span><textarea id="productEditKeywords" rows="4" placeholder="Целевые ключевые слова через запятую"></textarea></label>
           </div>

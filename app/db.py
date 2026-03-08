@@ -261,6 +261,18 @@ def run_lightweight_migrations():
                 "ON wb_ads_campaign_snapshots(user_id, is_deleted, campaign_id DESC)"
             )
         )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_products_user_last_position "
+                "ON products(user_id, last_position)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_products_user_owner_last_position "
+                "ON products(user_id, owner_member_id, last_position)"
+            )
+        )
 
 
 def ensure_admin_emails():

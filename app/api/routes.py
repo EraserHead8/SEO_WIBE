@@ -984,10 +984,33 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
 
 HELP_RELEASES: list[dict[str, Any]] = [
     {
+        "version": "0.3.9",
+        "android_version_code": 10,
+        "released_at": "2026-03-09",
+        "current": True,
+        "summary": "Исправлена установка Android-обновления, ускорены детали товаров и кэш WB Ads enrich.",
+        "diff_from_previous": [
+            "APK обновлен до versionCode=10 / versionName=1.5.4 и подписан корректной схемой v2/v3 для установки поверх предыдущей версии.",
+            "В товарах убрана отдельная кнопка редактирования из строки: теперь вход в редактирование идет из окна просмотра.",
+            "В редакторе товара добавлен drag&drop порядка фото; первое фото становится главным.",
+            "Детали карточки товара и WB Ads enrich переведены на быстрый cache-first режим, снижены задержки открытия и p95 API.",
+        ],
+        "changes": [
+            "Добавлен принудительный refresh деталей товара («Обновить из API») без тормозов обычного просмотра.",
+            "В help/загрузках обновлена карточка релиза для Android APK 1.5.4.",
+            "Добавлены индексы SQLite для ускорения count/фильтров товаров по user/owner/last_position.",
+            "Сохранены пуш-уведомления, бейджи и быстрый ответ в Android.",
+        ],
+        "android_download_url": "/static/downloads/seo-wibe-mobile-latest.apk",
+        "android_download_name": "SEO WIBE Android (.apk)",
+        "app_entry_url": "/mobile",
+        "notes": "APK 1.5.4 исправляет сценарий «обновление скачалось, но не установилось» и открывает системный установщик Android после загрузки.",
+    },
+    {
         "version": "0.3.8",
         "android_version_code": 9,
         "released_at": "2026-03-08",
-        "current": True,
+        "current": False,
         "summary": "Стабилизация сервера, ускорение рекламы/кэшей, online-статусы и обновленный Android APK 1.5.3.",
         "diff_from_previous": [
             "Исправлена нестабильность автодеплоя на сервере (safe.directory + HOME для systemd unit).",
@@ -2772,14 +2795,52 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
     stats: dict[str, dict[str, Any]] = {}
     warnings: list[str] = []
     error_flags: list[str] = []
+    summaries_cache_meta: dict[str, Any] = {}
+    stats_cache_meta: dict[str, Any] = {}
+    summaries_cache_key = build_market_cache_key(
+        {
+            "kind": "wb_campaign_summaries_bulk",
+            "ids": ids,
+            "key_rev": _secret_revision(wb_key),
+        }
+    )
+    stats_cache_key = build_market_cache_key(
+        {
+            "kind": "wb_campaign_stats_bulk",
+            "ids": ids,
+            "date_from": "",
+            "date_to": "",
+            "key_rev": _secret_revision(wb_key),
+        }
+    )
     try:
-        summaries = fetch_wb_campaign_summaries(wb_key, ids, fallback_limit=120)
+        summaries, summaries_cache_meta = get_or_refresh_market_cache(
+            db,
+            user_id=int(user.id),
+            module_code="wb_ads",
+            marketplace="wb",
+            cache_key=summaries_cache_key,
+            ttl_sec=max(90, _market_cache_ttl("wb_ads")),
+            fetcher=lambda: fetch_wb_campaign_summaries(wb_key, ids, fallback_limit=120),
+            stale_if_error_sec=30 * 60,
+            prefer_stale_sec=20 * 60,
+        )
     except Exception:
         summaries = {}
         error_flags.append("summaries")
         warnings.append("summary_fetch_failed")
     try:
-        stats = fetch_wb_campaign_stats_bulk(wb_key, ids, date_from=None, date_to=None)
+        stats, stats_cache_meta = get_or_refresh_market_cache(
+            db,
+            user_id=int(user.id),
+            module_code="wb_ads_analytics",
+            marketplace="wb",
+            cache_key=stats_cache_key,
+            ttl_sec=max(90, _market_cache_ttl("wb_ads_analytics")),
+            fetcher=lambda: fetch_wb_campaign_stats_bulk(wb_key, ids, date_from=None, date_to=None),
+            stale_if_error_sec=30 * 60,
+            prefer_stale_sec=20 * 60,
+        )
     except Exception:
         stats = {}
         error_flags.append("stats")
@@ -2860,6 +2921,10 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
         "missing_summary_ids": missing_summary_ids[:160],
         "missing_stats_ids": missing_stats_ids[:160],
         "temporary_unavailable": temporary_unavailable,
+        "summary_source": str(summaries_cache_meta.get("source") or ""),
+        "summary_age_sec": int(summaries_cache_meta.get("age_sec") or 0),
+        "stats_source": str(stats_cache_meta.get("source") or ""),
+        "stats_age_sec": int(stats_cache_meta.get("age_sec") or 0),
         "warnings": warnings,
         "errors": error_flags,
     }
@@ -3583,6 +3648,7 @@ def get_help_releases(
         if is_en:
             # Lightweight EN localization for release cards without splitting data model.
             item["summary"] = {
+                "Исправлена установка Android-обновления, ускорены детали товаров и кэш WB Ads enrich.": "Android update installation fixed, product details are faster, and WB Ads enrich now uses faster caching.",
                 "Стабилизация сервера, ускорение рекламы/кэшей, online-статусы и обновленный Android APK 1.5.3.": "Server stabilization, faster ads/cache loading, online-status fixes, and refreshed Android APK 1.5.3.",
                 "Android APK: исправлена загрузка истории чатов, снижено мерцание интерфейса, добавлены бейджи и быстрый ответ из шторки.": "Android APK: fixed chat history preload, reduced UI flicker, and added badges plus quick reply from notification shade.",
                 "Android APK: обновленный drawer-only интерфейс, фоновый polling уведомлений и стабильная загрузка чатов/рекламы/бухгалтерии.": "Android APK: updated drawer-only UI, background notification polling, and stable loading for chat/ads/accounting.",
@@ -3593,6 +3659,7 @@ def get_help_releases(
                 "Стабилизация модулей товаров, отзывов/вопросов, рекламы и чата.": "Stabilization for products, reviews/questions, ads, and chat modules.",
             }.get(str(item.get("summary") or ""), str(item.get("summary") or ""))
             item["notes"] = {
+                "APK 1.5.4 исправляет сценарий «обновление скачалось, но не установилось» и открывает системный установщик Android после загрузки.": "APK 1.5.4 fixes the case when update downloaded but failed to install, and opens Android system installer after download.",
                 "APK 1.5.3 проверяет обновления при запуске и предлагает «Установить / Позже». После загрузки открывается системный установщик Android.": "APK 1.5.3 checks for updates at startup and shows Install/Later. After download, Android system installer is opened.",
                 "APK проверяет обновления при запуске и предлагает «Установить / Позже». После загрузки открывается системный установщик Android. Уведомления в шторке поддерживают быстрый ответ.": "APK checks for updates at startup and shows Install/Later. After download, Android system installer is opened. Notification shade supports inline quick reply.",
                 "APK проверяет обновления при запуске и предлагает «Установить / Позже». После загрузки открывается системный установщик Android.": "APK checks for updates at startup and shows Install/Later. After download, Android system installer is opened.",
@@ -4129,7 +4196,12 @@ def list_products(
 
 
 @router.get("/products/{product_id}/details", response_model=ProductDetailOut)
-def product_details(product_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def product_details(
+    product_id: int,
+    refresh: bool = False,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     product = db.scalar(
         select(Product).where(
             Product.id == product_id,
@@ -4141,15 +4213,48 @@ def product_details(product_id: int, user: User = Depends(get_current_user), db:
         raise HTTPException(status_code=404, detail="Товар не найден")
     _hydrate_external_id_if_needed(db, user.id, product)
     details_payload: dict[str, Any] = {"photos": [], "attributes": {}, "raw": {}}
+    details_cache_meta: dict[str, Any] = {}
     warnings: list[str] = []
     credential = _get_active_marketplace_api_key(db, user.id, product.marketplace)
     if credential:
-        details_payload = fetch_marketplace_product_details(
+        detail_cache_key = build_market_cache_key(
+            {
+                "kind": "product_details",
+                "product_id": int(product.id),
+                "marketplace": str(product.marketplace or "").strip().lower(),
+                "article": str(product.article or "").strip(),
+                "external_id": str(product.external_id or "").strip(),
+                "key_rev": _secret_revision(credential),
+            }
+        )
+        fetcher = lambda: fetch_marketplace_product_details(
             marketplace=product.marketplace,
             api_key=credential,
             article=product.article,
             external_id=product.external_id or "",
         )
+        try:
+            if bool(refresh):
+                details_payload = fetcher()
+                details_cache_meta = {"source": "api-live-forced", "stale": False, "age_sec": 0}
+            else:
+                details_payload, details_cache_meta = get_or_refresh_market_cache(
+                    db,
+                    user_id=int(user.id),
+                    module_code="products_details",
+                    marketplace=str(product.marketplace or "").strip().lower(),
+                    cache_key=detail_cache_key,
+                    ttl_sec=max(120, _market_cache_ttl("products")),
+                    fetcher=fetcher,
+                    stale_if_error_sec=60 * 60,
+                    prefer_stale_sec=20 * 60,
+                )
+        except Exception as exc:
+            warnings.append(f"Детали из API временно недоступны: {str(exc or '')[:220]}")
+            details_payload = {"photos": [], "attributes": {}, "raw": {}}
+            details_cache_meta = {"source": "error", "stale": True, "age_sec": -1}
+        if details_cache_meta.get("stale"):
+            warnings.append("Показаны кэшированные детали карточки, API обновляется в фоне.")
     else:
         warnings.append(f"API ключ {product.marketplace.upper()} не подключен.")
     live_photos = _normalize_product_photo_list(details_payload.get("photos") if isinstance(details_payload, dict) else [])
@@ -4188,7 +4293,10 @@ def product_details(product_id: int, user: User = Depends(get_current_user), db:
         db,
         user,
         action="product_details_read",
-        details=f"product_id={product.id};marketplace={product.marketplace}",
+        details=(
+            f"product_id={product.id};marketplace={product.marketplace};refresh={1 if refresh else 0};"
+            f"source={str(details_cache_meta.get('source') or '-')};age={int(details_cache_meta.get('age_sec') or 0)}"
+        ),
         module_code="products",
         entity_type="product",
         entity_id=str(product.id),

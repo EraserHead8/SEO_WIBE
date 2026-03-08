@@ -73,6 +73,11 @@ let selectedProductId = null;
 let selectedProductDetails = null;
 let activeProductViewId = 0;
 let activeProductEditId = 0;
+let activeProductViewIsRefreshing = false;
+let productEditPhotoOrder = [];
+let productEditDragIndex = -1;
+const PRODUCT_DETAILS_CACHE_TTL_MS = 3 * 60 * 1000;
+const productDetailsCache = new Map();
 let autoKeywordProductId = null;
 let enabledModules = new Set();
 let wbReviewRows = [];
@@ -874,6 +879,8 @@ function applyUiLanguage() {
   setText("#campaignDetailModal .actions button:nth-of-type(2)", isEn ? "Pause" : "Пауза");
   setText("#campaignDetailModal .actions button:nth-of-type(3)", isEn ? "Stop" : "Остановить");
   setText("#campaignDetailModal .actions button:nth-of-type(4)", isEn ? "Refresh details" : "Обновить детали");
+  setText("#productViewRefreshBtn", isEn ? "Refresh from API" : "Обновить из API");
+  setText("#productViewEditBtn", isEn ? "Edit" : "Редактировать");
   setText("#reviews thead th:nth-child(1)", isEn ? "Status" : "Статус");
   setText("#reviews thead th:nth-child(2)", isEn ? "Date" : "Дата");
   setText("#reviews thead th:nth-child(3)", isEn ? "Product" : "Товар");
@@ -6557,21 +6564,14 @@ async function loadProducts() {
     tdActions.innerHTML = `
       <div class="product-row-actions">
         <button class="btn-secondary btn-row-action btn-row-action-icon" type="button" data-tip="${escapeHtml(tr("Посмотреть", "View"))}" aria-label="${escapeHtml(tr("Посмотреть", "View"))}">&#128065;</button>
-        <button class="btn-row-action btn-row-action-icon" type="button" data-tip="${escapeHtml(tr("Редактировать", "Edit"))}" aria-label="${escapeHtml(tr("Редактировать", "Edit"))}">&#9998;</button>
         <button class="btn-danger btn-row-action btn-row-action-icon" type="button" data-tip="${escapeHtml(tr("Удалить локально", "Delete local"))}" aria-label="${escapeHtml(tr("Удалить локально", "Delete local"))}">&#128465;</button>
       </div>
     `;
-    const [viewBtn, editBtn, deleteBtn] = tdActions.querySelectorAll("button");
+    const [viewBtn, deleteBtn] = tdActions.querySelectorAll("button");
     if (viewBtn) {
       viewBtn.onclick = (e) => {
         e.stopPropagation();
         openProductViewModal(p.id);
-      };
-    }
-    if (editBtn) {
-      editBtn.onclick = (e) => {
-        e.stopPropagation();
-        openProductEditModal(p.id);
       };
     }
     if (deleteBtn) {
@@ -6612,26 +6612,68 @@ function closeProductViewModal() {
   const modal = document.getElementById("productViewModal");
   if (modal) modal.classList.add("hidden");
   activeProductViewId = 0;
+  activeProductViewIsRefreshing = false;
 }
 
 function closeProductEditModal() {
   const modal = document.getElementById("productEditModal");
   if (modal) modal.classList.add("hidden");
   activeProductEditId = 0;
+  productEditPhotoOrder = [];
+  productEditDragIndex = -1;
 }
 
 async function fetchProductDetailsById(productId, opts = {}) {
   const id = Number(productId || 0);
   if (!id) return null;
   const silent = Boolean(opts?.silent);
-  const data = await requestJson(`/api/products/${id}/details`, {
+  const refresh = Boolean(opts?.refresh);
+  const cached = productDetailsCache.get(id);
+  if (!refresh) {
+    if (
+      cached
+      && (Date.now() - Number(cached.ts || 0)) <= PRODUCT_DETAILS_CACHE_TTL_MS
+      && cached.payload
+    ) {
+      return cached.payload;
+    }
+  }
+  const data = await requestJson(`/api/products/${id}/details?refresh=${refresh ? 1 : 0}`, {
     headers: authHeaders(),
     timeoutMs: 90000,
   }).catch((e) => {
+    if (cached?.payload) return cached.payload;
     if (!silent) alert(e.message);
     return null;
   });
+  if (data) {
+    productDetailsCache.set(id, { ts: Date.now(), payload: data });
+    if (productDetailsCache.size > 120) {
+      const oldest = productDetailsCache.keys().next().value;
+      if (oldest !== undefined) productDetailsCache.delete(oldest);
+    }
+  }
   return data;
+}
+
+function openProductEditFromView() {
+  const id = Number(activeProductViewId || 0);
+  if (!id) return;
+  closeProductViewModal();
+  openProductEditModal(id);
+}
+
+async function refreshProductViewModal() {
+  const id = Number(activeProductViewId || 0);
+  if (!id || activeProductViewIsRefreshing) return;
+  activeProductViewIsRefreshing = true;
+  const refreshBtn = document.getElementById("productViewRefreshBtn");
+  if (refreshBtn) refreshBtn.disabled = true;
+  const warnEl = document.getElementById("productViewWarn");
+  if (warnEl) warnEl.textContent = tr("Обновляем данные по API…", "Refreshing data from API...");
+  await openProductViewModal(id, { refresh: true });
+  if (refreshBtn) refreshBtn.disabled = false;
+  activeProductViewIsRefreshing = false;
 }
 
 function normalizeProductDetailValue(value) {
@@ -6855,15 +6897,23 @@ function renderProductAttributeTable(items) {
   `;
 }
 
-async function openProductViewModal(productId) {
+async function openProductViewModal(productId, opts = {}) {
   const id = Number(productId || 0);
   if (!id) return;
+  const refresh = Boolean(opts?.refresh);
   const modal = document.getElementById("productViewModal");
   if (!modal) return;
   activeProductViewId = id;
   const product = currentProducts.find((x) => Number(x.id) === id) || null;
   const name = product?.name || tr("Товар", "Product");
   const titleEl = modal.querySelector("h3");
+  const editBtn = document.getElementById("productViewEditBtn");
+  const refreshBtn = document.getElementById("productViewRefreshBtn");
+  if (editBtn) {
+    editBtn.disabled = false;
+    editBtn.dataset.productId = String(id);
+  }
+  if (refreshBtn) refreshBtn.disabled = activeProductViewIsRefreshing;
   if (titleEl) titleEl.textContent = `${tr("Карточка товара", "Product card")}: ${name}`;
   modal.classList.remove("hidden");
   const metaEl = document.getElementById("productViewMeta");
@@ -6891,7 +6941,7 @@ async function openProductViewModal(productId) {
   if (attrsEl) attrsEl.innerHTML = "";
   if (rawEl) rawEl.textContent = "-";
 
-  const details = await fetchProductDetailsById(id, { silent: true });
+  const details = await fetchProductDetailsById(id, { silent: true, refresh });
   if (!details || activeProductViewId !== id) return;
   const context = extractProductDetailContext(details, product || {});
   if (titleEl) titleEl.textContent = `${tr("Карточка товара", "Product card")}: ${context.name}`;
@@ -6986,6 +7036,7 @@ async function openProductEditModal(productId) {
   setValue("productEditCategory", base.category_name);
   setValue("productEditBarcode", base.barcode);
   setValue("productEditPhotoUrl", base.photo_url);
+  setValue("productEditPurchasePrice", base.purchase_price);
   setValue("productEditDescription", base.current_description || context.description);
   setValue("productEditKeywords", base.target_keywords);
   if (summaryEl) {
@@ -7001,22 +7052,105 @@ async function openProductEditModal(productId) {
       tr("Детали карточки недоступны.", "Details are unavailable.")
     );
   }
-  if (photosEl) {
-    photosEl.innerHTML = context.photos.length
-      ? context.photos.map((url, idx) => `<img src="${escapeHtml(String(url))}" alt="edit-photo-${idx + 1}" loading="lazy" class="product-detail-photo">`).join("")
-      : `<div class="hint">${escapeHtml(tr("Фотографии не найдены.", "No photos found."))}</div>`;
-  }
+  productEditPhotoOrder = Array.isArray(context.photos) ? context.photos.map((x) => String(x || "")).filter(Boolean) : [];
+  productEditDragIndex = -1;
+  renderProductEditPhotos();
   if (attrsEl) attrsEl.innerHTML = renderProductAttributeTable(context.attributeItems);
+}
+
+function movePhotoInOrder(fromIdx, toIdx) {
+  if (!Array.isArray(productEditPhotoOrder) || !productEditPhotoOrder.length) return;
+  const from = Math.max(0, Math.min(productEditPhotoOrder.length - 1, Number(fromIdx)));
+  const to = Math.max(0, Math.min(productEditPhotoOrder.length - 1, Number(toIdx)));
+  if (from === to) return;
+  const next = productEditPhotoOrder.slice();
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  productEditPhotoOrder = next;
+}
+
+function renderProductEditPhotos() {
+  const photosEl = document.getElementById("productEditPhotos");
+  if (!photosEl) return;
+  const photos = Array.isArray(productEditPhotoOrder) ? productEditPhotoOrder : [];
+  if (!photos.length) {
+    photosEl.innerHTML = `<div class="hint">${escapeHtml(tr("Фотографии не найдены.", "No photos found."))}</div>`;
+    return;
+  }
+  photosEl.innerHTML = photos
+    .map((url, idx) => `
+      <div
+        class="product-edit-photo-item${idx === 0 ? " is-main" : ""}"
+        draggable="true"
+        data-idx="${idx}"
+      >
+        <img src="${escapeHtml(String(url))}" alt="edit-photo-${idx + 1}" loading="lazy" class="product-detail-photo">
+        <span class="product-edit-photo-index">${idx + 1}</span>
+        ${idx === 0 ? `<span class="product-edit-photo-main">${escapeHtml(tr("Главное", "Main"))}</span>` : ""}
+      </div>
+    `)
+    .join("");
+  const nodes = photosEl.querySelectorAll(".product-edit-photo-item");
+  nodes.forEach((node) => {
+    const idx = Number(node.getAttribute("data-idx") || -1);
+    node.addEventListener("dragstart", (e) => {
+      productEditDragIndex = idx;
+      node.classList.add("drag-source");
+      try {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", String(idx));
+      } catch (_) {}
+    });
+    node.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      node.classList.add("drag-target");
+      try {
+        e.dataTransfer.dropEffect = "move";
+      } catch (_) {}
+    });
+    node.addEventListener("dragleave", () => {
+      node.classList.remove("drag-target");
+    });
+    node.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const fromData = Number((() => {
+        try {
+          return e.dataTransfer.getData("text/plain");
+        } catch (_) {
+          return productEditDragIndex;
+        }
+      })());
+      const from = Number.isFinite(fromData) ? fromData : productEditDragIndex;
+      const to = idx;
+      movePhotoInOrder(from, to);
+      productEditDragIndex = -1;
+      renderProductEditPhotos();
+    });
+    node.addEventListener("dragend", () => {
+      productEditDragIndex = -1;
+      photosEl.querySelectorAll(".product-edit-photo-item").forEach((item) => {
+        item.classList.remove("drag-target", "drag-source");
+      });
+    });
+  });
 }
 
 async function saveProductEditModal() {
   const id = Number(activeProductEditId || 0);
   if (!id) return;
+  const purchaseRaw = String(document.getElementById("productEditPurchasePrice")?.value || "").trim().replace(",", ".");
+  let purchasePrice = null;
+  if (purchaseRaw) {
+    const parsed = Number.parseFloat(purchaseRaw);
+    purchasePrice = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+  }
   const payload = {
     name: String(document.getElementById("productEditName")?.value || "").trim(),
     category_name: String(document.getElementById("productEditCategory")?.value || "").trim(),
     barcode: String(document.getElementById("productEditBarcode")?.value || "").trim(),
     photo_url: String(document.getElementById("productEditPhotoUrl")?.value || "").trim(),
+    purchase_price: purchasePrice,
+    photos_order: Array.isArray(productEditPhotoOrder) ? productEditPhotoOrder.slice() : [],
     current_description: String(document.getElementById("productEditDescription")?.value || ""),
     target_keywords: String(document.getElementById("productEditKeywords")?.value || "").trim(),
   };
@@ -7035,6 +7169,7 @@ async function saveProductEditModal() {
   });
   if (!updated) return;
   invalidateModuleCache("products", "seo");
+  productDetailsCache.delete(id);
   await loadProducts();
   closeProductEditModal();
   alert(tr("Карточка товара обновлена.", "Product card updated."));
