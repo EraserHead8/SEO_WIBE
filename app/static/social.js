@@ -761,7 +761,14 @@ function socialBindChatInputEnter() {
   input.dataset.enterBind = "1";
   input.addEventListener("keydown", (e) => {
     if (e.key !== "Enter" || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey || e.isComposing) return;
-    if (socialIsMobileClientShell() || socialIsMobileApkShell()) return;
+    const isCoarsePointer = (() => {
+      try {
+        return Boolean(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+      } catch (_) {
+        return false;
+      }
+    })();
+    if (socialIsMobileClientShell() || socialIsMobileApkShell() || isCoarsePointer || (window.innerWidth || 0) <= 980) return;
     e.preventDefault();
     socialSendMessage();
   });

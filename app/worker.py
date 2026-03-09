@@ -13,13 +13,20 @@ from app.models import ApiCredential
 from app.services.ads_cache import sync_wb_campaign_snapshots
 from app.services.market_cache import build_market_cache_key, get_or_refresh_market_cache
 from app.services.sales import build_sales_report
-from app.services.task_queue import dequeue_task, queue_available
+from app.services.task_queue import dequeue_task, queue_available, queue_depth
 from app.services.wb_bidder import run_bidder_rules
 from app.services.wb_modules import fetch_ozon_ads_campaigns, fetch_wb_campaigns
 
 
 _RUNNING = True
 _IDLE_SLEEP_SEC = 2
+_TASK_MAX_AGE_SEC = {
+    "warm_sales_cache": 6 * 60,
+    "warm_wb_campaigns": 6 * 60,
+    "warm_ozon_campaigns": 6 * 60,
+    "sync_wb_snapshots": 12 * 60,
+    "wb_bidder_run": 5 * 60,
+}
 _MARKET_CACHE_TTL_SEC = {
     "sales_stats": 120,
     "wb_ads": 120,
@@ -219,6 +226,30 @@ def _parse_iso_date(raw: str) -> date | None:
         return None
 
 
+def _task_age_sec(task: dict[str, Any]) -> int:
+    queued_at = float(task.get("queued_at") or 0.0)
+    if queued_at <= 0:
+        return 0
+    return max(0, int(time.time() - queued_at))
+
+
+def _should_drop_task(task: dict[str, Any]) -> bool:
+    task_type = str(task.get("type") or "").strip().lower()
+    if not task_type:
+        return True
+    age_sec = _task_age_sec(task)
+    max_age = int(_TASK_MAX_AGE_SEC.get(task_type, 0) or 0)
+    if max_age > 0 and age_sec > max_age:
+        return True
+    depth = max(0, int(queue_depth() or 0))
+    # Keep worker responsive under burst load: stale warmup jobs are safe to drop.
+    if depth > 600 and task_type in {"warm_sales_cache", "warm_wb_campaigns", "warm_ozon_campaigns"} and age_sec > 45:
+        return True
+    if depth > 900 and task_type == "sync_wb_snapshots" and age_sec > 75:
+        return True
+    return False
+
+
 def process_task(task: dict[str, Any]) -> None:
     task_type = str(task.get("type") or "").strip().lower()
     payload = task.get("payload") if isinstance(task.get("payload"), dict) else {}
@@ -248,6 +279,8 @@ def run_worker() -> None:
             continue
         task = dequeue_task(timeout_sec=10)
         if not task:
+            continue
+        if _should_drop_task(task):
             continue
         try:
             process_task(task)

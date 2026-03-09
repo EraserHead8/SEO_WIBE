@@ -142,7 +142,7 @@ async def wb_ads_snapshot_sync_loop():
         await asyncio.sleep(12 * 60 + random.randint(30, 90))
         if not queue_enabled():
             continue
-        if queue_depth() > 240:
+        if queue_depth() > 120:
             continue
         db = SessionLocal()
         try:
@@ -178,10 +178,10 @@ async def wb_ads_snapshot_sync_loop():
 
 async def marketplace_cache_warmup_loop():
     while True:
-        await asyncio.sleep(120 + random.randint(20, 45))
+        await asyncio.sleep(180 + random.randint(20, 45))
         if not queue_enabled():
             continue
-        if queue_depth() > 100:
+        if queue_depth() > 60:
             continue
         db = SessionLocal()
         try:
@@ -199,7 +199,7 @@ async def wb_ads_bidder_loop():
         await asyncio.sleep(90 + random.randint(5, 15))
         if not queue_enabled():
             continue
-        if queue_depth() > 180:
+        if queue_depth() > 120:
             continue
         db = SessionLocal()
         try:

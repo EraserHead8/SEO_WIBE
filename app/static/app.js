@@ -5074,6 +5074,16 @@ function campaignHasRealName(row) {
   return Boolean(name) && !isPlaceholderCampaignName(name, cid);
 }
 
+function campaignHasStats(row) {
+  if (!row || typeof row !== "object") return false;
+  const metricKeys = ["views", "clicks", "orders", "spent", "ctr", "cr", "cpc", "cpo"];
+  return metricKeys.some((key) => {
+    if (!(key in row)) return false;
+    const val = Number(row[key]);
+    return Number.isFinite(val);
+  });
+}
+
 function mergeCampaignSummaryIntoRow(row, summary) {
   if (!summary || typeof summary !== "object") return row;
   const next = { ...row };
@@ -5134,12 +5144,12 @@ async function enrichWbCampaignRows(runToken) {
       .filter((row) => {
         const cid = Number(getCampaignRowId(row) || 0);
         if (cid <= 0) return false;
-        return !campaignHasContext(row) || !campaignHasRealName(row);
+        return !campaignHasContext(row) || !campaignHasRealName(row) || !campaignHasStats(row);
       })
       .map((row) => Number(getCampaignRowId(row) || 0))
       .filter((id) => id > 0)
   )];
-  const pending = pendingRaw.slice(0, 60);
+  const pending = pendingRaw.slice(0, 140);
   const deferredCount = Math.max(0, pendingRaw.length - pending.length);
   if (!pending.length) {
     wbAdsLoadProgress.active = false;
@@ -5155,7 +5165,7 @@ async function enrichWbCampaignRows(runToken) {
   wbAdsLoadProgress.failed = 0;
   updateWbAdsLoadStatus();
 
-  const batchSize = 12;
+  const batchSize = 16;
   let partialFallback = false;
   let partialStatsMissingTotal = 0;
   let partialSummaryMissingTotal = 0;
@@ -7053,6 +7063,8 @@ function closeProductEditModal() {
   activeProductEditId = 0;
   productEditPhotoOrder = [];
   productEditDragIndex = -1;
+  const addInput = document.getElementById("productEditPhotoAddUrl");
+  if (addInput) addInput.value = "";
 }
 
 async function fetchProductDetailsById(productId, opts = {}) {
@@ -7468,6 +7480,7 @@ async function openProductEditModal(productId) {
   setValue("productEditCategory", base.category_name);
   setValue("productEditBarcode", base.barcode);
   setValue("productEditPhotoUrl", base.photo_url);
+  setValue("productEditPhotoAddUrl", "");
   setValue("productEditPurchasePrice", base.purchase_price);
   setValue("productEditDescription", base.current_description || context.description);
   setValue("productEditKeywords", base.target_keywords);
@@ -7486,8 +7499,27 @@ async function openProductEditModal(productId) {
   }
   productEditPhotoOrder = Array.isArray(context.photos) ? context.photos.map((x) => String(x || "")).filter(Boolean) : [];
   productEditDragIndex = -1;
+  if (!productEditPhotoOrder.length) {
+    const fallbackPhoto = String(base.photo_url || "").trim();
+    if (fallbackPhoto) productEditPhotoOrder = [fallbackPhoto];
+  }
+  syncProductEditMainPhotoUrl(true);
   renderProductEditPhotos();
   if (attrsEl) attrsEl.innerHTML = renderProductAttributeTable(context.attributeItems);
+}
+
+function syncProductEditMainPhotoUrl(force = false) {
+  const input = document.getElementById("productEditPhotoUrl");
+  if (!input) return;
+  const first = String((Array.isArray(productEditPhotoOrder) && productEditPhotoOrder.length ? productEditPhotoOrder[0] : "") || "").trim();
+  if (!first) {
+    if (force) input.value = "";
+    return;
+  }
+  const current = String(input.value || "").trim();
+  if (force || !current || current === "-") {
+    input.value = first;
+  }
 }
 
 function movePhotoInOrder(fromIdx, toIdx) {
@@ -7499,6 +7531,43 @@ function movePhotoInOrder(fromIdx, toIdx) {
   const [moved] = next.splice(from, 1);
   next.splice(to, 0, moved);
   productEditPhotoOrder = next;
+  syncProductEditMainPhotoUrl(true);
+}
+
+function addProductEditPhoto(photoUrl) {
+  const clean = String(photoUrl || "").trim();
+  if (!clean) return false;
+  const current = Array.isArray(productEditPhotoOrder) ? productEditPhotoOrder.slice() : [];
+  const exists = current.some((item) => String(item || "").trim().toLowerCase() === clean.toLowerCase());
+  if (exists) return false;
+  current.push(clean);
+  productEditPhotoOrder = current;
+  syncProductEditMainPhotoUrl(current.length <= 1);
+  renderProductEditPhotos();
+  return true;
+}
+
+function addProductEditPhotoFromInput() {
+  const input = document.getElementById("productEditPhotoAddUrl");
+  const raw = String(input?.value || "").trim();
+  if (!raw) return;
+  const added = addProductEditPhoto(raw);
+  if (!added) {
+    alert(tr("Фото уже добавлено.", "Photo is already added."));
+    return;
+  }
+  if (input) input.value = "";
+}
+
+function removeProductEditPhoto(index) {
+  const idx = Number(index || -1);
+  if (!Array.isArray(productEditPhotoOrder) || !productEditPhotoOrder.length) return;
+  if (!Number.isFinite(idx) || idx < 0 || idx >= productEditPhotoOrder.length) return;
+  const next = productEditPhotoOrder.slice();
+  next.splice(idx, 1);
+  productEditPhotoOrder = next;
+  syncProductEditMainPhotoUrl(true);
+  renderProductEditPhotos();
 }
 
 function renderProductEditPhotos() {
@@ -7518,10 +7587,20 @@ function renderProductEditPhotos() {
       >
         <img src="${escapeHtml(String(url))}" alt="edit-photo-${idx + 1}" loading="lazy" class="product-detail-photo">
         <span class="product-edit-photo-index">${idx + 1}</span>
+        <button class="product-edit-photo-remove" type="button" data-remove-idx="${idx}" aria-label="${escapeHtml(tr("Удалить фото", "Remove photo"))}">✕</button>
         ${idx === 0 ? `<span class="product-edit-photo-main">${escapeHtml(tr("Главное", "Main"))}</span>` : ""}
       </div>
     `)
     .join("");
+  const removeNodes = photosEl.querySelectorAll(".product-edit-photo-remove");
+  removeNodes.forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const idx = Number(btn.getAttribute("data-remove-idx") || -1);
+      removeProductEditPhoto(idx);
+    });
+  });
   const nodes = photosEl.querySelectorAll(".product-edit-photo-item");
   nodes.forEach((node) => {
     const idx = Number(node.getAttribute("data-idx") || -1);
@@ -7576,13 +7655,22 @@ async function saveProductEditModal() {
     const parsed = Number.parseFloat(purchaseRaw);
     purchasePrice = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
   }
+  const rawMainPhoto = String(document.getElementById("productEditPhotoUrl")?.value || "").trim();
+  const nextPhotosOrder = Array.isArray(productEditPhotoOrder) ? productEditPhotoOrder.slice() : [];
+  let mainPhoto = rawMainPhoto;
+  if (mainPhoto && !nextPhotosOrder.some((x) => String(x || "").trim().toLowerCase() === mainPhoto.toLowerCase())) {
+    nextPhotosOrder.unshift(mainPhoto);
+  }
+  if (!mainPhoto && nextPhotosOrder.length) {
+    mainPhoto = String(nextPhotosOrder[0] || "").trim();
+  }
   const payload = {
     name: String(document.getElementById("productEditName")?.value || "").trim(),
     category_name: String(document.getElementById("productEditCategory")?.value || "").trim(),
     barcode: String(document.getElementById("productEditBarcode")?.value || "").trim(),
-    photo_url: String(document.getElementById("productEditPhotoUrl")?.value || "").trim(),
+    photo_url: mainPhoto,
     purchase_price: purchasePrice,
-    photos_order: Array.isArray(productEditPhotoOrder) ? productEditPhotoOrder.slice() : [],
+    photos_order: nextPhotosOrder,
     current_description: String(document.getElementById("productEditDescription")?.value || ""),
     target_keywords: String(document.getElementById("productEditKeywords")?.value || "").trim(),
   };

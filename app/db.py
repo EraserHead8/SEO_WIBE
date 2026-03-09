@@ -13,13 +13,13 @@ class Base(DeclarativeBase):
 
 
 is_sqlite = settings.database_url.startswith("sqlite")
-connect_args = {"check_same_thread": False, "timeout": 45} if is_sqlite else {}
+connect_args = {"check_same_thread": False, "timeout": 60} if is_sqlite else {}
 engine_kwargs = {
     "pool_pre_ping": True,
-    # SQLite has a single-writer model; oversized pools increase lock contention.
-    "pool_size": 4 if is_sqlite else 12,
-    "max_overflow": 0 if is_sqlite else 24,
-    "pool_timeout": 45 if is_sqlite else 45,
+    # SQLite has a single-writer model; keep pool moderate but avoid checkout starvation.
+    "pool_size": 8 if is_sqlite else 12,
+    "max_overflow": 8 if is_sqlite else 24,
+    "pool_timeout": 20 if is_sqlite else 45,
     "pool_recycle": 1800,
     "pool_use_lifo": True,
 }
@@ -42,7 +42,7 @@ def _on_connect(dbapi_connection, _connection_record):
     try:
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA synchronous=NORMAL")
-        cursor.execute("PRAGMA busy_timeout=30000")
+        cursor.execute("PRAGMA busy_timeout=45000")
     finally:
         cursor.close()
 

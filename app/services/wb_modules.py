@@ -1869,8 +1869,14 @@ def _extract_campaign_summary(data: dict[str, Any] | list[dict[str, Any]], campa
         _pick_first_str(target_row.get("name")),
         _pick_first_str(target_row.get("campaignName")),
         _pick_first_str(target_row.get("campaign_name")),
+        _pick_first_str(target_row.get("advertName")),
+        _pick_first_str(target_row.get("advert_name")),
+        _pick_first_str(target_row.get("advertTitle")),
+        _pick_first_str(target_row.get("campaignTitle")),
         _pick_first_str(settings.get("name")),
         _pick_first_str(settings.get("title")),
+        _pick_first_str(settings.get("campaign_name")),
+        _pick_first_str(settings.get("advert_name")),
         _pick_first_str(target_row.get("subject")),
         _pick_first_str(target_row.get("title")),
     ]
@@ -1896,7 +1902,9 @@ def _extract_campaign_summary(data: dict[str, Any] | list[dict[str, Any]], campa
         target_row.get("type"),
         target_row.get("campaignType"),
         target_row.get("adType"),
+        target_row.get("advertType"),
         target_row.get("typeName"),
+        target_row.get("type_name"),
         target_row.get("bid_type"),
         settings.get("bid_type"),
         settings.get("type"),
@@ -1905,6 +1913,8 @@ def _extract_campaign_summary(data: dict[str, Any] | list[dict[str, Any]], campa
         target_row.get("dailyBudget"),
         target_row.get("budget"),
         target_row.get("sum"),
+        target_row.get("dailyBudgetTotal"),
+        target_row.get("daily_sum_limit"),
         target_row.get("balance"),
         finance.get("budget"),
         finance.get("dailyBudget"),
@@ -2907,11 +2917,26 @@ def _has_campaign_context(row: dict[str, Any]) -> bool:
     if not isinstance(row, dict):
         return False
     settings = row.get("settings") if isinstance(row.get("settings"), dict) else {}
-    for key in ("name", "campaignName", "campaign_name", "status", "state", "type", "adType", "campaignType", "bid_type"):
+    for key in (
+        "name",
+        "campaignName",
+        "campaign_name",
+        "advertName",
+        "advert_name",
+        "advertTitle",
+        "campaignTitle",
+        "status",
+        "state",
+        "type",
+        "adType",
+        "campaignType",
+        "advertType",
+        "bid_type",
+    ):
         value = row.get(key)
         if value not in (None, "", "-", []):
             return True
-    for key in ("name", "title", "status", "type", "bid_type"):
+    for key in ("name", "title", "campaign_name", "advert_name", "status", "type", "bid_type"):
         value = settings.get(key)
         if value not in (None, "", "-", []):
             return True
@@ -2958,7 +2983,17 @@ def _merge_detail_rows(base: dict[str, Any] | None, incoming: dict[str, Any] | N
         if value in (None, "", [], {}, "-"):
             continue
         prev = merged.get(key)
-        if key in {"name", "campaignName", "campaign_name", "title", "subject"}:
+        if key in {
+            "name",
+            "campaignName",
+            "campaign_name",
+            "advertName",
+            "advert_name",
+            "advertTitle",
+            "campaignTitle",
+            "title",
+            "subject",
+        }:
             if _is_placeholder_name(prev) and not _is_placeholder_name(value):
                 merged[key] = value
                 continue

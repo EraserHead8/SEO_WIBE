@@ -1080,10 +1080,33 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
 
 HELP_RELEASES: list[dict[str, Any]] = [
     {
+        "version": "0.4.1",
+        "android_version_code": 12,
+        "released_at": "2026-03-09",
+        "current": True,
+        "summary": "APK 1.5.6: стабилизирована очередь/БД, улучшена догрузка WB Ads и добавлено управление фото в редакторе товара.",
+        "diff_from_previous": [
+            "Android APK обновлен до versionCode=12 / versionName=1.5.6.",
+            "WB Ads: догрузка кампаний расширена (имена/контекст/метрики), увеличены batch-лимиты enrich и fallback по summary/stat.",
+            "В редакторе товара добавлены действия «Добавить фото» и «Удалить фото», плюс синхронизация главного фото с порядком.",
+            "Снижена вероятность подвисаний: worker отбрасывает устаревшие warmup-задачи при глубокой очереди.",
+            "Для SQLite уменьшен риск checkout-timeout под пиковыми нагрузками (пул/таймауты скорректированы).",
+        ],
+        "changes": [
+            "В WB Ads summary extraction добавлены новые алиасы полей названия/типа/бюджета для совместимости с изменениями API.",
+            "На touch/mobile Enter в чате не отправляет сообщение автоматически; отправка Enter сохранена для desktop.",
+            "В help/загрузках обновлена карточка релиза и ссылка на актуальный APK.",
+        ],
+        "android_download_url": "/static/downloads/seo-wibe-mobile-latest.apk",
+        "android_download_name": "SEO WIBE Android (.apk)",
+        "app_entry_url": "/mobile",
+        "notes": "APK 1.5.6 устанавливается поверх предыдущей версии. После обновления перезапустите приложение для применения нового клиента.",
+    },
+    {
         "version": "0.4.0",
         "android_version_code": 11,
         "released_at": "2026-03-09",
-        "current": True,
+        "current": False,
         "summary": "APK 1.5.5: исправлены back-навигация чатов, онлайн-статус/профиль в личных чатах и добавлены глобальные объявления.",
         "diff_from_previous": [
             "Android APK обновлен до versionCode=11 / versionName=1.5.5.",
@@ -2700,7 +2723,8 @@ def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depen
         if cid <= 0:
             continue
         summary = _campaign_summary_from_base_row(row, cid)
-        if not _campaign_summary_has_context(summary, cid):
+        name = str(summary.get("name") or "").strip()
+        if _campaign_name_is_placeholder(name, cid) or not _campaign_summary_has_context(summary, cid):
             placeholder_ids.append(cid)
     if placeholder_ids:
         preview_ids = sorted(set(placeholder_ids))[:500]
@@ -2722,7 +2746,7 @@ def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depen
                 fetcher=lambda: fetch_wb_campaign_summaries(
                     wb_key,
                     preview_ids,
-                    fallback_limit=max(160, min(1200, len(preview_ids))),
+                    fallback_limit=max(160, min(1200, len(preview_ids) * 2)),
                 ),
                 stale_if_error_sec=60 * 60,
             )
@@ -2943,7 +2967,11 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
             marketplace="wb",
             cache_key=summaries_cache_key,
             ttl_sec=max(90, _market_cache_ttl("wb_ads")),
-            fetcher=lambda: fetch_wb_campaign_summaries(wb_key, ids, fallback_limit=120),
+            fetcher=lambda: fetch_wb_campaign_summaries(
+                wb_key,
+                ids,
+                fallback_limit=max(120, min(1200, len(ids) * 2)),
+            ),
             stale_if_error_sec=30 * 60,
             prefer_stale_sec=20 * 60,
         )
@@ -2977,7 +3005,7 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
     if unresolved_stats_ids:
         # Keep API latency bounded: one-by-one fallback is expensive and can
         # trigger upstream timeouts when WB rate-limits.
-        single_retry_limit = 6 if len(ids) > 24 else 12
+        single_retry_limit = 12 if len(ids) > 36 else 24
         for cid in unresolved_stats_ids[:single_retry_limit]:
             try:
                 one_map = fetch_wb_campaign_stats_bulk(wb_key, [int(cid)], date_from=None, date_to=None)
@@ -2986,6 +3014,35 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
             one = one_map.get(str(cid)) if isinstance(one_map, dict) else None
             if isinstance(one, dict) and one:
                 stats[str(cid)] = one
+
+    unresolved_summary_ids = [
+        cid
+        for cid in ids
+        if (
+            not _campaign_summary_has_context(summaries.get(str(cid)), cid)
+            or _campaign_name_is_placeholder(
+                str((summaries.get(str(cid)) or {}).get("name") or ""),
+                cid,
+            )
+        )
+    ]
+    if unresolved_summary_ids:
+        retry_limit = 12 if len(ids) > 36 else 24
+        for cid in unresolved_summary_ids[:retry_limit]:
+            try:
+                detail_payload = fetch_wb_campaign_details(wb_key, campaign_id=int(cid))
+            except Exception:
+                detail_payload = {}
+            detail_summary = detail_payload.get("summary") if isinstance(detail_payload, dict) else None
+            if isinstance(detail_summary, dict) and detail_summary:
+                merged = _merge_campaign_row({}, detail_summary, {})
+                summaries[str(cid)] = {
+                    "campaign_id": int(detail_summary.get("campaign_id") or cid),
+                    "name": str(merged.get("name") or detail_summary.get("name") or f"Кампания {cid}"),
+                    "status": str(merged.get("status") or detail_summary.get("status") or "-"),
+                    "type": str(merged.get("type") or detail_summary.get("type") or "-"),
+                    "budget": str(merged.get("budget") or detail_summary.get("budget") or "-"),
+                }
 
     missing_ids: list[int] = []
     missing_summary_ids: list[int] = []
@@ -11353,17 +11410,25 @@ def _campaign_summary_from_base_row(row: dict[str, Any], campaign_id: int) -> di
     }
 
 
+def _campaign_name_is_placeholder(name: str, campaign_id: int) -> bool:
+    text = str(name or "").strip().lower()
+    if not text:
+        return True
+    if re.fullmatch(r"(кампания|campaign)\s*\d+", text):
+        return True
+    cid = int(campaign_id or 0)
+    if cid > 0 and text in {f"кампания {cid}", f"campaign {cid}"}:
+        return True
+    return False
+
+
 def _campaign_summary_has_context(summary: dict[str, Any] | None, campaign_id: int) -> bool:
     if not isinstance(summary, dict):
         return False
     cid = int(campaign_id or 0)
     name = str(summary.get("name") or "").strip()
-    if name:
-        low = name.lower()
-        if not re.fullmatch(r"(кампания|campaign)\s*\d+", low):
-            return True
-        if cid > 0 and low not in {f"кампания {cid}", f"campaign {cid}"}:
-            return True
+    if name and not _campaign_name_is_placeholder(name, cid):
+        return True
     status = str(summary.get("status") or "").strip()
     ctype = str(summary.get("type") or "").strip()
     budget = str(summary.get("budget") or "").strip()

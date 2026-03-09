@@ -2396,6 +2396,17 @@ pre {
   margin-top: -2px;
 }
 
+.product-edit-photo-controls {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  margin: 8px 0 6px;
+}
+
+.product-edit-photo-controls input {
+  width: 100%;
+}
+
 .product-edit-photo-item {
   position: relative;
   border: 1px solid rgba(133, 165, 255, 0.34);
@@ -2452,6 +2463,30 @@ pre {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.product-edit-photo-remove {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 154, 177, 0.65);
+  background: rgba(32, 8, 18, 0.84);
+  color: #ffd7df;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.product-edit-photo-remove:hover {
+  border-color: rgba(255, 112, 151, 0.92);
+  color: #fff1f5;
 }
 
 .product-edit-photo-main {
