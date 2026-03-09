@@ -1351,7 +1351,8 @@ def _fetch_wb_campaign_detail_map(api_key: str, ids: list[int]) -> dict[str, dic
         "https://advert-api.wb.ru/adv/v1/promotion/adverts",
         "https://advert-api.wildberries.ru/adv/v1/promotion/adverts",
     ]
-    for cid in ids[:200]:
+    single_lookup_limit = min(600, max(220, len(ids)))
+    for cid in ids[:single_lookup_limit]:
         text_id = str(cid)
         if text_id in detail_map and _has_campaign_context(detail_map[text_id]):
             continue

@@ -427,7 +427,7 @@
             </select>
             <input id="salesDateFrom" type="date" />
             <input id="salesDateTo" type="date" />
-            <button class="btn-secondary" onclick="loadSalesStats()">Загрузить статистику</button>
+            <button class="btn-secondary" onclick="loadSalesStats(0, true)">Загрузить статистику</button>
           </div>
           <div class="sales-quick-range">
             <button class="chip-btn" data-sales-range="day" onclick="setSalesRange('day')">День</button>
@@ -1713,7 +1713,7 @@
   <div id="hoverTip" class="hover-tip hidden"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script src="/static/app.js?v=20260309g"></script>
+  <script src="/static/app.js?v=20260309h"></script>
   <script src="/static/accounting.js?v=20260308b"></script>
   <script src="/static/social.js?v=20260309g"></script>
 </body>

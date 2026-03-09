@@ -1080,10 +1080,33 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
 
 HELP_RELEASES: list[dict[str, Any]] = [
     {
+        "version": "0.4.3",
+        "android_version_code": 14,
+        "released_at": "2026-03-09",
+        "current": True,
+        "summary": "APK 1.5.8: ускорена статистика (форс-рефреш), усилена догрузка WB Ads кампаний и исправлен back из чата в Android.",
+        "diff_from_previous": [
+            "Android APK обновлен до versionCode=14 / versionName=1.5.8.",
+            "Статистика продаж: кнопка «Загрузить статистику» выполняет принудительный refresh без ожидания cache TTL.",
+            "Статистика: для длинных периодов ускорен режим сравнения (предыдущий период ограничен меньшим диапазоном).",
+            "WB Ads: увеличены лимиты добора summary/stat, чтобы чаще подтягивались реальные названия и метрики кампаний.",
+            "Мобильный back в социальном модуле: из открытого диалога всегда возвращает в список чатов.",
+        ],
+        "changes": [
+            "WB campaigns enrich ускорен на больших кабинетах за счет более крупного batching на клиенте.",
+            "В audit добавлен флаг force-refresh для диагностики запросов статистики.",
+            "Сохранены доработки 1.5.7 по возвратам, сессии, фото-редактору и bidder.",
+        ],
+        "android_download_url": "/static/downloads/seo-wibe-mobile-latest.apk",
+        "android_download_name": "SEO WIBE Android (.apk)",
+        "app_entry_url": "/mobile",
+        "notes": "APK 1.5.8 устанавливается поверх предыдущей версии. После обновления откройте модуль «Статистика» и выполните ручной refresh один раз.",
+    },
+    {
         "version": "0.4.2",
         "android_version_code": 13,
         "released_at": "2026-03-09",
-        "current": True,
+        "current": False,
         "summary": "APK 1.5.7: стабильность сессии и загрузок, WB Ads/Returns доработаны, в редактор товара добавлена загрузка фото файлами.",
         "diff_from_previous": [
             "Android APK обновлен до versionCode=13 / versionName=1.5.7.",
@@ -2728,7 +2751,7 @@ def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depen
         if _campaign_name_is_placeholder(name, cid) or not _campaign_summary_has_context(summary, cid):
             placeholder_ids.append(cid)
     if placeholder_ids:
-        preview_ids = sorted(set(placeholder_ids))[:500]
+        preview_ids = sorted(set(placeholder_ids))[:600]
         placeholder_key = build_market_cache_key(
             {
                 "kind": "wb_campaigns_placeholder_summaries",
@@ -3006,7 +3029,7 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
     if unresolved_stats_ids:
         # Keep API latency bounded: one-by-one fallback is expensive and can
         # trigger upstream timeouts when WB rate-limits.
-        single_retry_limit = 12 if len(ids) > 36 else 24
+        single_retry_limit = 18 if len(ids) > 220 else (28 if len(ids) > 80 else 42)
         for cid in unresolved_stats_ids[:single_retry_limit]:
             try:
                 one_map = fetch_wb_campaign_stats_bulk(wb_key, [int(cid)], date_from=None, date_to=None)
@@ -3028,7 +3051,7 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
         )
     ]
     if unresolved_summary_ids:
-        retry_limit = 12 if len(ids) > 36 else 24
+        retry_limit = 24 if len(ids) > 220 else (40 if len(ids) > 80 else 60)
         for cid in unresolved_summary_ids[:retry_limit]:
             try:
                 detail_payload = fetch_wb_campaign_details(wb_key, campaign_id=int(cid))
@@ -5555,6 +5578,7 @@ def sales_stats(
     date_to: date | None = None,
     granularity: str = "auto",
     tz: str = "UTC",
+    force_refresh: bool = False,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -5604,38 +5628,63 @@ def sales_stats(
             timezone=tz_name,
         )
 
-    try:
-        payload, sales_cache_meta = get_or_refresh_market_cache(
-            db,
-            user_id=int(user.id),
-            module_code="sales_stats",
-            marketplace=selected_market,
-            cache_key=sales_cache_key,
-            ttl_sec=_market_cache_ttl("sales_stats"),
-            fetcher=lambda: _load_sales_payload(left, right),
-            stale_if_error_sec=20 * 60,
-            prefer_stale_sec=0,
-        )
-    except Exception as exc:
-        sales_cache_meta = {"source": "error", "age_sec": -1}
-        payload = {
-            "rows": [],
-            "chart": [],
-            "totals": {
-                "orders": 0,
-                "units": 0,
-                "buyouts": 0,
-                "revenue": 0.0,
-                "returns": 0,
-                "ad_spend": 0.0,
-                "penalties": 0.0,
-                "days": 0,
-                "gross_profit": 0.0,
-            },
-            "warnings": [f"Ошибка загрузки статистики: {str(exc or '')[:220]}"],
-            "granularity": "day",
-            "timezone": tz_name,
-        }
+    if force_refresh:
+        try:
+            payload = _load_sales_payload(left, right)
+            sales_cache_meta = {"source": "api-live-force", "age_sec": 0, "stale": False, "ttl_sec": 0}
+        except Exception as exc:
+            sales_cache_meta = {"source": "error", "age_sec": -1}
+            payload = {
+                "rows": [],
+                "chart": [],
+                "totals": {
+                    "orders": 0,
+                    "units": 0,
+                    "buyouts": 0,
+                    "revenue": 0.0,
+                    "returns": 0,
+                    "ad_spend": 0.0,
+                    "penalties": 0.0,
+                    "days": 0,
+                    "gross_profit": 0.0,
+                },
+                "warnings": [f"Ошибка загрузки статистики: {str(exc or '')[:220]}"],
+                "granularity": "day",
+                "timezone": tz_name,
+            }
+    else:
+        try:
+            payload, sales_cache_meta = get_or_refresh_market_cache(
+                db,
+                user_id=int(user.id),
+                module_code="sales_stats",
+                marketplace=selected_market,
+                cache_key=sales_cache_key,
+                ttl_sec=_market_cache_ttl("sales_stats"),
+                fetcher=lambda: _load_sales_payload(left, right),
+                stale_if_error_sec=20 * 60,
+                prefer_stale_sec=0,
+            )
+        except Exception as exc:
+            sales_cache_meta = {"source": "error", "age_sec": -1}
+            payload = {
+                "rows": [],
+                "chart": [],
+                "totals": {
+                    "orders": 0,
+                    "units": 0,
+                    "buyouts": 0,
+                    "revenue": 0.0,
+                    "returns": 0,
+                    "ad_spend": 0.0,
+                    "penalties": 0.0,
+                    "days": 0,
+                    "gross_profit": 0.0,
+                },
+                "warnings": [f"Ошибка загрузки статистики: {str(exc or '')[:220]}"],
+                "granularity": "day",
+                "timezone": tz_name,
+            }
     rows = payload.get("rows") if isinstance(payload, dict) else []
     chart = payload.get("chart") if isinstance(payload, dict) else []
     totals = payload.get("totals") if isinstance(payload, dict) else {}
@@ -5677,8 +5726,11 @@ def sales_stats(
     comparison_rows: list[dict[str, Any]] = []
     comparison_chart: list[dict[str, Any]] = []
     period_days = max(1, (right - left).days + 1)
-    if period_days > 62:
-        warnings.append("Сравнение с предыдущим периодом отключено для диапазона более 62 дней (ускоренный режим).")
+    comparison_limit_days = 31 if force_refresh else 45
+    if period_days > comparison_limit_days:
+        warnings.append(
+            f"Сравнение с предыдущим периодом отключено для диапазона более {comparison_limit_days} дней (ускоренный режим)."
+        )
         prev_cache_meta = {"source": "skipped-long-period"}
     else:
         try:
@@ -5778,6 +5830,7 @@ def sales_stats(
         details=(
             f"market={selected_market};from={left.isoformat()};to={right.isoformat()};rows={len(rows)};"
             f"granularity={report_granularity};tz={report_tz};comparison={1 if comparison else 0};"
+            f"force={int(bool(force_refresh))};"
             f"source={sales_cache_meta.get('source')};prev_source={prev_cache_meta.get('source')};"
             f"cache_entries={cache_stats.get('entries')};cache_hits={cache_stats.get('hits')};"
             f"cache_refreshes={cache_stats.get('refreshes')};warm_queued={int(bool(warm_result.get('queued')))}"

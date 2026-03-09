@@ -2278,8 +2278,11 @@ function handleMobileBackPress() {
   if (String(currentTab || "") === "social") {
     const subtab = String(currentSocialSubtab || window.socialState?.currentSubtab || "chat");
     const currentThreadId = Number(window.socialState?.currentThreadId || 0);
-    if (subtab === "chat" && currentThreadId > 0 && typeof window.socialCloseThread === "function") {
+    if (currentThreadId > 0 && typeof window.socialCloseThread === "function") {
       currentSocialSubtab = "chat";
+      if (subtab !== "chat" && typeof window.switchSocialSubtab === "function") {
+        try { window.switchSocialSubtab("chat", true); } catch (_) {}
+      }
       window.socialCloseThread({ keepAutoSelect: false });
       return true;
     }
@@ -5179,7 +5182,7 @@ async function enrichWbCampaignRows(runToken) {
   wbAdsLoadProgress.failed = 0;
   updateWbAdsLoadStatus();
 
-  const batchSize = 16;
+  const batchSize = pending.length > 280 ? 40 : 24;
   let partialFallback = false;
   let partialStatsMissingTotal = 0;
   let partialSummaryMissingTotal = 0;
@@ -8980,7 +8983,7 @@ function renderSalesStats() {
   renderSalesChart(chartRows);
 }
 
-async function loadSalesStats(retryAttempt = 0) {
+async function loadSalesStats(retryAttempt = 0, forceRefresh = false) {
   if (modulesLoaded && !enabledModules.has("sales_stats")) {
     const meta = document.getElementById("salesStatsMeta");
     if (meta) meta.textContent = tr("Модуль статистики продаж отключен администратором.", "Sales statistics module is disabled by admin.");
@@ -9033,6 +9036,7 @@ async function loadSalesStats(retryAttempt = 0) {
   qp.set("granularity", "auto");
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   qp.set("tz", tz);
+  if (forceRefresh) qp.set("force_refresh", "1");
   if (date_from) qp.set("date_from", date_from);
   if (date_to) qp.set("date_to", date_to);
   const meta = document.getElementById("salesStatsMeta");
@@ -9124,7 +9128,7 @@ async function loadSalesStats(retryAttempt = 0) {
     updateSalesLoadStatus(tr("Повторный запрос статистики...", "Retrying sales request..."));
     await new Promise((resolve) => setTimeout(resolve, 1200));
     if (runToken !== salesLoadToken) return;
-    await loadSalesStats(retryAttempt + 1);
+    await loadSalesStats(retryAttempt + 1, forceRefresh);
     return;
   }
   if (meta) {
