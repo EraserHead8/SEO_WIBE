@@ -2286,7 +2286,9 @@ function handleMobileBackPress() {
   if (String(currentTab || "") === "social") {
     const subtab = String(currentSocialSubtab || window.socialState?.currentSubtab || "chat");
     const currentThreadId = Number(window.socialState?.currentThreadId || 0);
-    if (currentThreadId > 0 && typeof window.socialCloseThread === "function") {
+    const chatLayout = document.querySelector("#socialSubtabChat .social-chat-layout");
+    const chatOpenedByLayout = Boolean(chatLayout?.classList.contains("chat-open"));
+    if ((currentThreadId > 0 || chatOpenedByLayout) && typeof window.socialCloseThread === "function") {
       currentSocialSubtab = "chat";
       if (subtab !== "chat" && typeof window.switchSocialSubtab === "function") {
         try { window.switchSocialSubtab("chat", true); } catch (_) {}

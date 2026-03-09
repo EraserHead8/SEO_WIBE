@@ -9303,6 +9303,10 @@ body.mobile-apk-mode #appSection .topbar-controls #mobileChatCompactHead:not(.hi
   display: inline-flex !important;
 }
 
+body.mobile-apk-mode #ads .module-subtabs {
+  display: none !important;
+}
+
 @media (max-width: 980px) {
   body.mobile-client-mode #appSection > .workspace > .topbar {
     position: sticky !important;

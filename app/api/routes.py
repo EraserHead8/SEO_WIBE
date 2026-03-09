@@ -285,6 +285,7 @@ DEFAULT_UI_SETTINGS = {
     "default_theme": "classic",
     "allowed_themes": list(AVAILABLE_THEMES),
 }
+MOBILE_MODULE_OVERRIDES_SETTING_KEY = "mobile_module_overrides"
 AUDIT_STORAGE_MAX_BYTES = 3 * 1024 * 1024 * 1024
 AUDIT_STORAGE_TARGET_BYTES = int(AUDIT_STORAGE_MAX_BYTES * 0.9)
 AUDIT_PRUNE_BATCH = 5000
@@ -1120,7 +1121,7 @@ HELP_RELEASES: list[dict[str, Any]] = [
         ],
         "changes": [
             "Социальный модуль: в списке задач кнопка «Закрыть» видна только владельцу или назначенному исполнителю.",
-            "API /auth/me дополнен actor_email для корректного отображения в web/apk интерфейсе.",
+            "Профиль в APK: в шапке и профиле теперь показывается email активного сотрудника, а не владельца компании.",
             "Обновлены версии статических ресурсов (styles/app/social) для принудительного обновления кэша у клиентов.",
             "Сохранены доработки 1.5.9 по быстрым переходам к Бидеру/Справке и фото-редактору товара.",
         ],
@@ -1543,7 +1544,8 @@ def current_modules(request: Request, user: User = Depends(get_current_user), db
     out: list[CurrentModuleOut] = []
     enabled_count = 0
     for row in rows:
-        allowed = bool(row.enabled) and _actor_can_use_module(user, row.module_code)
+        effective_enabled = _module_enabled_for_context(db, user, row.module_code, bool(row.enabled))
+        allowed = effective_enabled and _actor_can_use_module(user, row.module_code)
         if allowed:
             enabled_count += 1
         out.append(CurrentModuleOut(module_code=row.module_code, enabled=allowed))
@@ -7666,6 +7668,26 @@ def admin_modules(_: User = Depends(get_admin_user), db: Session = Depends(get_d
     return [ModuleAccessOut(user_id=r.user_id, module_code=r.module_code, enabled=r.enabled) for r in rows]
 
 
+@router.get("/admin/modules/mobile", response_model=list[ModuleAccessOut])
+def admin_mobile_modules(
+    user_id: int | None = None,
+    _: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    overrides = _get_mobile_module_overrides(db)
+    out: list[ModuleAccessOut] = []
+    for user_key, module_map in overrides.items():
+        uid = _to_int_safe(user_key)
+        if uid <= 0:
+            continue
+        if user_id and int(user_id) > 0 and uid != int(user_id):
+            continue
+        for module_code, enabled in module_map.items():
+            out.append(ModuleAccessOut(user_id=uid, module_code=module_code, enabled=bool(enabled)))
+    out.sort(key=lambda x: (int(x.user_id or 0), str(x.module_code or "")))
+    return out
+
+
 @router.get("/admin/ui/settings", response_model=UiSettingsOut)
 def admin_get_ui_settings(_: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     return _get_ui_settings(db)
@@ -7716,6 +7738,30 @@ def set_module_access(payload: ModuleAccessIn, me: User = Depends(get_admin_user
     )
     db.commit()
     return ModuleAccessOut(user_id=row.user_id, module_code=row.module_code, enabled=row.enabled)
+
+
+@router.post("/admin/modules/mobile", response_model=ModuleAccessOut)
+def set_mobile_module_access(payload: ModuleAccessIn, me: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    code = str(payload.module_code or "").strip().lower()
+    if code not in DEFAULT_MODULES:
+        raise HTTPException(status_code=400, detail=f"Неизвестный module_code: {payload.module_code}")
+    target_user = db.get(User, int(payload.user_id or 0))
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    safe = _set_mobile_module_override(db, user_id=int(payload.user_id), module_code=code, enabled=bool(payload.enabled))
+    _audit(
+        db,
+        me,
+        action="admin_mobile_module_updated",
+        details=f"user_id={payload.user_id};module={code};enabled={1 if payload.enabled else 0}",
+        module_code="admin",
+        entity_type="mobile_module_access",
+        entity_id=f"{payload.user_id}:{code}",
+    )
+    db.commit()
+    user_map = safe.get(str(int(payload.user_id)), {})
+    current_enabled = bool(user_map.get(code, bool(payload.enabled)))
+    return ModuleAccessOut(user_id=int(payload.user_id), module_code=code, enabled=current_enabled)
 
 
 @router.get("/admin/credentials", response_model=list[ApiCredentialOut])
@@ -12932,6 +12978,74 @@ def _set_system_setting(db: Session, key: str, value: str) -> None:
     row.value = value
 
 
+def _sanitize_mobile_module_overrides(raw: dict[str, Any] | None) -> dict[str, dict[str, bool]]:
+    payload = raw if isinstance(raw, dict) else {}
+    out: dict[str, dict[str, bool]] = {}
+    allowed_codes = {str(code).strip().lower() for code in DEFAULT_MODULES}
+    for user_key, row in payload.items():
+        uid = _to_int_safe(user_key)
+        if uid <= 0:
+            continue
+        mapping = row if isinstance(row, dict) else {}
+        clean_row: dict[str, bool] = {}
+        for module_code, enabled in mapping.items():
+            code = str(module_code or "").strip().lower()
+            if not code or code not in allowed_codes:
+                continue
+            clean_row[code] = bool(enabled)
+        if clean_row:
+            out[str(uid)] = clean_row
+    return out
+
+
+def _get_mobile_module_overrides(db: Session) -> dict[str, dict[str, bool]]:
+    raw = _get_system_setting(db, MOBILE_MODULE_OVERRIDES_SETTING_KEY)
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        parsed = {}
+    safe = _sanitize_mobile_module_overrides(parsed if isinstance(parsed, dict) else {})
+    if safe != parsed:
+        _set_system_setting(db, MOBILE_MODULE_OVERRIDES_SETTING_KEY, json.dumps(safe, ensure_ascii=False))
+        db.flush()
+    return safe
+
+
+def _set_mobile_module_override(db: Session, *, user_id: int, module_code: str, enabled: bool) -> dict[str, dict[str, bool]]:
+    code = str(module_code or "").strip().lower()
+    if code not in DEFAULT_MODULES:
+        return _get_mobile_module_overrides(db)
+    safe = _get_mobile_module_overrides(db)
+    user_key = str(int(user_id or 0))
+    if not user_key.isdigit() or int(user_key) <= 0:
+        return safe
+    row = dict(safe.get(user_key) or {})
+    row[code] = bool(enabled)
+    safe[user_key] = row
+    safe = _sanitize_mobile_module_overrides(safe)
+    _set_system_setting(db, MOBILE_MODULE_OVERRIDES_SETTING_KEY, json.dumps(safe, ensure_ascii=False))
+    db.flush()
+    return safe
+
+
+def _module_enabled_for_context(db: Session, user: User, module_code: str, default_enabled: bool) -> bool:
+    base = bool(default_enabled)
+    if not bool(getattr(user, "_is_mobile_app", False)):
+        return base
+    safe = _get_mobile_module_overrides(db)
+    user_map = safe.get(str(int(user.id or 0)), {})
+    if not isinstance(user_map, dict):
+        return base
+    code = str(module_code or "").strip().lower()
+    if not code:
+        return base
+    if code in user_map:
+        return bool(user_map.get(code))
+    return base
+
+
 def _sanitize_ui_settings_payload(raw: dict[str, Any] | None) -> dict[str, Any]:
     data = raw if isinstance(raw, dict) else {}
     enabled = bool(data.get("theme_choice_enabled", DEFAULT_UI_SETTINGS["theme_choice_enabled"]))
@@ -13734,10 +13848,11 @@ def ensure_module_enabled(db: Session, user: User, module_code: str):
         select(ModuleAccess).where(
             ModuleAccess.user_id == user.id,
             ModuleAccess.module_code == code,
-            ModuleAccess.enabled.is_(True),
         )
     )
     if not row:
+        raise HTTPException(status_code=403, detail=f"Модуль '{module_code}' отключен для вашего тарифа")
+    if not _module_enabled_for_context(db, user, code, bool(row.enabled)):
         raise HTTPException(status_code=403, detail=f"Модуль '{module_code}' отключен для вашего тарифа")
     if not _actor_can_use_module(user, code):
         raise HTTPException(status_code=403, detail=f"Доступ к модулю '{module_code}' ограничен для вашего сотрудника")

@@ -2252,6 +2252,12 @@ async function socialSelectThread(threadId, opts = {}) {
   socialState.chatLastThreadId = id;
   socialState.chatManualClosedUntil = 0;
   socialState.mobileThreadAutoSelectEnabled = true;
+  if (!sameThread) {
+    socialState.chatMessages = [];
+    socialState.chatMessagesSignatureByThread[id] = "";
+    socialState.chatOldestId = 0;
+    socialState.chatHasMore = true;
+  }
   const row = socialState.chatThreads.find((x) => Number(x.id) === id) || null;
   socialState.currentThreadKind = String(row?.kind || "");
   socialClearReply();
@@ -2260,7 +2266,7 @@ async function socialSelectThread(threadId, opts = {}) {
   socialRenderThreads();
   socialSetChatView(true);
   const host = document.getElementById("socialChatMessages");
-  if (host && Number(socialState.currentThreadId || 0) === id && !socialHasRenderedMessages(host)) {
+  if (host && Number(socialState.currentThreadId || 0) === id) {
     host.innerHTML = `<div class="hint social-chat-loading">${tr("Загрузка сообщений…", "Loading messages…")}</div>`;
   }
   await socialLoadMessages(id, {
@@ -2700,7 +2706,18 @@ async function socialLoadMessages(threadId, opts = {}) {
     if (!opts.silent && e?.message) alert(e.message);
     return null;
   });
-  if (!Array.isArray(rows)) return;
+  if (!Array.isArray(rows)) {
+    if (!beforeId && Number(socialState.currentThreadId || 0) === id) {
+      socialState.chatMessages = [];
+      socialState.chatMessagesSignatureByThread[id] = "";
+      socialState.chatOldestId = 0;
+      socialState.chatHasMore = true;
+      if (host) {
+        host.innerHTML = `<div class="hint social-chat-error">${escapeHtml(tr("Не удалось загрузить сообщения. Потяните вниз или откройте чат снова.", "Failed to load messages. Pull to refresh or reopen the chat."))}</div>`;
+      }
+    }
+    return;
+  }
   const currentThread = (socialState.chatThreads || []).find((x) => Number(x?.id || 0) === id) || null;
   const expectedLastId = Number(currentThread?.last_message?.id || 0);
   const emptyRetryCount = Number(opts.__retryOnEmptyCount || 0);

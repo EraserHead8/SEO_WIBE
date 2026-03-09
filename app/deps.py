@@ -51,6 +51,21 @@ def _extract_tokens(request: Request) -> tuple[str, str]:
     return header_token, cookie_token
 
 
+def _request_is_mobile_app(request: Request | None) -> bool:
+    if request is None:
+        return False
+    try:
+        mobile_qs = str(request.query_params.get("mobile_app") or "").strip().lower()
+        if mobile_qs in {"1", "true", "yes"}:
+            return True
+    except Exception:
+        pass
+    ua = str(request.headers.get("user-agent") or "").strip().lower()
+    if "seo_wibe_android_app" in ua:
+        return True
+    return False
+
+
 def _team_scope_from_member(member: TeamMember | None) -> list[str]:
     if not member:
         return ["*"]
@@ -166,6 +181,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
             continue
         user = _resolve_user_from_subject(db, str(subject or "").strip())
         if user:
+            user._is_mobile_app = _request_is_mobile_app(request)
             return user
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Невалидный токен")
 

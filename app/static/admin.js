@@ -5,6 +5,7 @@ let adminTokenStorage = storedAdminSession ? "session" : (storedAdminLocal ? "lo
 let adminMe = null;
 let adminUsers = [];
 let adminModules = [];
+let adminMobileModules = [];
 let adminCredentials = [];
 let adminUiSettings = null;
 let adminAuditRows = [];
@@ -265,6 +266,7 @@ const AUDIT_ACTION_TITLES = {
   admin_role_updated: { ru: "Админ изменил роль пользователя", en: "Admin changed user role" },
   admin_user_deleted: { ru: "Админ удалил пользователя", en: "Admin deleted user" },
   admin_module_updated: { ru: "Админ изменил доступ к модулю", en: "Admin changed module access" },
+  admin_mobile_module_updated: { ru: "Админ изменил доступ к APK модулю", en: "Admin changed APK module access" },
   admin_credential_saved: { ru: "Админ сохранил API ключ", en: "Admin saved API key" },
   admin_ai_global_default_saved: { ru: "Админ обновил AI default", en: "Admin updated AI default" },
   admin_ai_global_service_added: { ru: "Админ добавил глобальный AI сервис", en: "Admin added global AI service" },
@@ -584,8 +586,14 @@ function applyAdminLanguage() {
     ["#adminTab-users .grid-3 button", aTr("Обновить таблицу", "Refresh table")],
     ["#adminUsersSearch", aTr("Поиск email / id / компания / город", "Search by email / id / company / city")],
     ["#adminTab-modules .panel h3", aTr("Модули доступа", "Module access")],
-    ["#adminTab-modules .grid-3 .hint", aTr("Выберите пользователя и переключайте статусы модулей в таблице ниже.", "Select user and toggle module access below.")],
+    ["#adminTab-modules .grid-3 .hint", aTr("Выберите пользователя и переключайте статусы модулей отдельно для Web и APK.", "Select user and toggle module access separately for Web and APK.")],
     ["#adminTab-modules .grid-3 button", aTr("Обновить таблицу", "Refresh table")],
+    ["#adminTab-modules thead th:nth-child(1)", aTr("Код", "Code")],
+    ["#adminTab-modules thead th:nth-child(2)", aTr("Название", "Name")],
+    ["#adminTab-modules thead th:nth-child(3)", "Web"],
+    ["#adminTab-modules thead th:nth-child(4)", aTr("Web действие", "Web action")],
+    ["#adminTab-modules thead th:nth-child(5)", "APK"],
+    ["#adminTab-modules thead th:nth-child(6)", aTr("APK действие", "APK action")],
     ["#adminTab-ai .panel:nth-of-type(1) h3", aTr("Глобальные AI сервисы", "Global AI services")],
     ["#adminTab-ai .panel:nth-of-type(1) .grid-4 button:nth-of-type(1)", aTr("Сохранить global default", "Save global default")],
     ["#adminTab-ai .panel:nth-of-type(1) .grid-4 button:nth-of-type(2)", aTr("Обновить", "Refresh")],
@@ -871,6 +879,7 @@ async function adminLogout() {
   adminMe = null;
   adminUsers = [];
   adminModules = [];
+  adminMobileModules = [];
   adminCredentials = [];
   adminAuditRows = [];
   adminAuditPage = 1;
@@ -912,10 +921,11 @@ async function ensureAdminAuth() {
 }
 
 async function loadAdminAll() {
-  const [stats, users, modules, allCreds, uiSettings, aiGlobal, serverMetrics, notifSettings, announcements] = await Promise.all([
+  const [stats, users, modules, mobileModules, allCreds, uiSettings, aiGlobal, serverMetrics, notifSettings, announcements] = await Promise.all([
     adminRequest("/api/admin/stats", { headers: adminHeaders() }).catch(() => null),
     adminRequest("/api/admin/users", { headers: adminHeaders() }).catch(() => null),
     adminRequest("/api/admin/modules", { headers: adminHeaders() }).catch(() => null),
+    adminRequest("/api/admin/modules/mobile", { headers: adminHeaders() }).catch(() => null),
     adminRequest("/api/admin/credentials/all", { headers: adminHeaders() }).catch(() => []),
     adminRequest("/api/admin/ui/settings", { headers: adminHeaders() }).catch(() => null),
     adminRequest("/api/admin/ai/global", { headers: adminHeaders() }).catch(() => null),
@@ -933,6 +943,9 @@ async function loadAdminAll() {
   }
   if (Array.isArray(modules)) {
     adminModules = modules;
+  }
+  if (Array.isArray(mobileModules)) {
+    adminMobileModules = mobileModules;
   }
   adminCredentials = Array.isArray(allCreds) ? allCreds : [];
   adminUiSettings = uiSettings && typeof uiSettings === "object" ? uiSettings : null;
@@ -1756,19 +1769,29 @@ async function adminDeleteCredential(credential_id) {
 }
 
 function getModuleRowsForUser(userId) {
-  const existing = new Map();
+  const existingWeb = new Map();
   for (const row of adminModules) {
     if (Number(row.user_id) !== Number(userId)) continue;
-    existing.set(row.module_code, Boolean(row.enabled));
+    existingWeb.set(String(row.module_code || "").trim(), Boolean(row.enabled));
+  }
+  const existingMobile = new Map();
+  for (const row of adminMobileModules) {
+    if (Number(row.user_id) !== Number(userId)) continue;
+    existingMobile.set(String(row.module_code || "").trim(), Boolean(row.enabled));
   }
   const codes = new Set(DEFAULT_MODULE_CODES);
   for (const row of adminModules) codes.add(row.module_code);
+  for (const row of adminMobileModules) codes.add(row.module_code);
   return [...codes]
     .sort()
     .map((code) => ({
       module_code: code,
       title: MODULE_TITLES[code]?.[adminLang] || code,
-      enabled: existing.has(code) ? existing.get(code) : false,
+      enabled: existingWeb.has(code) ? existingWeb.get(code) : false,
+      mobile_overridden: existingMobile.has(code),
+      mobile_enabled: existingMobile.has(code)
+        ? existingMobile.get(code)
+        : (existingWeb.has(code) ? existingWeb.get(code) : false),
     }));
 }
 
@@ -1780,7 +1803,7 @@ function renderAdminModulesTable() {
   const userId = Number(document.getElementById("adminModuleUserSelect")?.value || 0);
   if (!userId) {
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="4">${aTr("Выберите пользователя.", "Select user.")}</td>`;
+    tr.innerHTML = `<td colspan="6">${aTr("Выберите пользователя.", "Select user.")}</td>`;
     tbody.appendChild(tr);
     return;
   }
@@ -1788,26 +1811,40 @@ function renderAdminModulesTable() {
   const rows = getModuleRowsForUser(userId);
   if (!rows.length) {
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="4">${aTr("Модули не найдены.", "No modules found.")}</td>`;
+    tr.innerHTML = `<td colspan="6">${aTr("Модули не найдены.", "No modules found.")}</td>`;
     tbody.appendChild(tr);
     return;
   }
 
   for (const row of rows) {
     const tr = document.createElement("tr");
-    const statusLabel = row.enabled ? aTr("Включен", "Enabled") : aTr("Отключен", "Disabled");
-    const actionLabel = row.enabled ? aTr("Отключить", "Disable") : aTr("Включить", "Enable");
-    const actionClass = row.enabled ? "btn-danger" : "btn-secondary";
+    const webStatusLabel = row.enabled ? aTr("Включен", "Enabled") : aTr("Отключен", "Disabled");
+    const webActionLabel = row.enabled ? aTr("Отключить", "Disable") : aTr("Включить", "Enable");
+    const webActionClass = row.enabled ? "btn-danger" : "btn-secondary";
+    const apkStatusLabel = row.mobile_enabled
+      ? aTr("Включен", "Enabled")
+      : aTr("Отключен", "Disabled");
+    const apkStatusFull = row.mobile_overridden
+      ? apkStatusLabel
+      : `${apkStatusLabel} (${aTr("по web", "web default")})`;
+    const apkActionLabel = row.mobile_enabled ? aTr("Отключить", "Disable") : aTr("Включить", "Enable");
+    const apkActionClass = row.mobile_enabled ? "btn-danger" : "btn-secondary";
     tr.innerHTML = `
       <td>${escapeHtml(row.module_code)}</td>
       <td>${escapeHtml(row.title)}</td>
-      <td>${statusLabel}</td>
-      <td><button class="${actionClass}" data-module-code="${escapeHtml(row.module_code)}">${actionLabel}</button></td>
+      <td>${webStatusLabel}</td>
+      <td><button class="${webActionClass}" data-module-code="${escapeHtml(row.module_code)}" data-kind="web">${webActionLabel}</button></td>
+      <td>${apkStatusFull}</td>
+      <td><button class="${apkActionClass}" data-module-code="${escapeHtml(row.module_code)}" data-kind="apk">${apkActionLabel}</button></td>
     `;
-    const btn = tr.querySelector("button");
-    if (btn) {
-      btn.onclick = () => adminToggleModule(row.module_code, !row.enabled);
-    }
+    tr.querySelectorAll("button[data-module-code]").forEach((btn) => {
+      const kind = String(btn.dataset.kind || "web");
+      if (kind === "apk") {
+        btn.onclick = () => adminToggleMobileModule(row.module_code, !row.mobile_enabled);
+      } else {
+        btn.onclick = () => adminToggleModule(row.module_code, !row.enabled);
+      }
+    });
     tbody.appendChild(tr);
   }
 }
@@ -1816,6 +1853,20 @@ async function adminToggleModule(module_code, enabled) {
   const user_id = Number(document.getElementById("adminModuleUserSelect")?.value || 0);
   if (!user_id || !module_code) return alert(aTr("Выберите пользователя и модуль", "Select user and module"));
   await adminRequest("/api/admin/modules", {
+    method: "POST",
+    headers: adminHeaders(),
+    body: JSON.stringify({ user_id, module_code, enabled }),
+  }).catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  await loadAdminAll();
+}
+
+async function adminToggleMobileModule(module_code, enabled) {
+  const user_id = Number(document.getElementById("adminModuleUserSelect")?.value || 0);
+  if (!user_id || !module_code) return alert(aTr("Выберите пользователя и модуль", "Select user and module"));
+  await adminRequest("/api/admin/modules/mobile", {
     method: "POST",
     headers: adminHeaders(),
     body: JSON.stringify({ user_id, module_code, enabled }),

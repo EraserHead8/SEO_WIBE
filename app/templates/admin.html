@@ -149,13 +149,13 @@
           <h3>Модули доступа</h3>
           <div class="grid-3">
             <select id="adminModuleUserSelect"></select>
-            <div class="hint">Выберите пользователя и переключайте статусы модулей в таблице ниже.</div>
+            <div class="hint">Выберите пользователя и переключайте статусы модулей отдельно для Web и APK.</div>
             <button class="btn-secondary" onclick="loadAdminAll()">Обновить таблицу</button>
           </div>
           <div class="table-card">
             <table>
               <thead>
-                <tr><th>Код</th><th>Название</th><th>Статус</th><th>Действие</th></tr>
+                <tr><th>Код</th><th>Название</th><th>Web</th><th>Web действие</th><th>APK</th><th>APK действие</th></tr>
               </thead>
               <tbody id="adminModulesTable"></tbody>
             </table>
