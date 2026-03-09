@@ -24,6 +24,7 @@ class UserOut(BaseModel):
 
     id: int
     email: EmailStr
+    actor_email: EmailStr | None = None
     role: str
     created_at: datetime | None = None
     actor_key: str | None = None

@@ -2899,7 +2899,7 @@ function setTopbarAvatarImage(imgNode, urlRaw, { wrapper = null, fallbackTextNod
 function renderProfileMenuIntro() {
   const nickNode = document.getElementById("profileSectionsIntroNick");
   if (!nickNode) return;
-  nickNode.textContent = String(me?.actor_nick || me?.email || "-");
+  nickNode.textContent = String(me?.actor_nick || me?.actor_email || me?.email || "-");
 }
 
 function renderMobileDrawerUser() {
@@ -2909,8 +2909,9 @@ function renderMobileDrawerUser() {
     btn.classList.add("hidden");
     return;
   }
-  const name = String(me.actor_nick || me.email || "-");
-  const initials = computeAvatarInitials(name, me.email);
+  const actorEmail = String(me.actor_email || me.email || "").trim();
+  const name = String(me.actor_nick || actorEmail || "-");
+  const initials = computeAvatarInitials(name, actorEmail);
   const avatarText = document.getElementById("mobileDrawerAvatarText");
   const avatarName = document.getElementById("mobileDrawerAvatarName");
   const avatarImg = document.getElementById("mobileDrawerAvatarImg");
@@ -2934,12 +2935,13 @@ function renderTopbarUser() {
     renderMobileDrawerUser();
     return;
   }
-  const name = String(me.actor_nick || me.email || "-");
+  const actorEmail = String(me.actor_email || me.email || "").trim();
+  const name = String(me.actor_nick || actorEmail || "-");
   const isOwner = Boolean(me.actor_is_owner);
   const roleText = me.role === "admin"
     ? tr("Админ", "Admin")
     : (isOwner ? tr("Владелец", "Owner") : tr("Сотрудник", "Member"));
-  const initials = computeAvatarInitials(name, me.email);
+  const initials = computeAvatarInitials(name, actorEmail);
   const avatarText = document.getElementById("topbarAvatarText");
   const avatarName = document.getElementById("topbarAvatarName");
   const popAvatar = document.getElementById("topbarPopoverAvatar");
@@ -2957,7 +2959,7 @@ function renderTopbarUser() {
   setTopbarAvatarImage(popAvatarImg, avatarUrl, { wrapper: popAvatar, fallbackTextNode: popAvatarText });
   if (popName) popName.textContent = name;
   if (popRole) popRole.textContent = roleText;
-  if (popEmail) popEmail.textContent = String(me.email || "-");
+  if (popEmail) popEmail.textContent = actorEmail || "-";
   renderProfileMenuIntro();
   btn.classList.remove("hidden");
   renderMobileDrawerUser();
@@ -4855,25 +4857,79 @@ function normalizeReturnRow(rawRow, marketplace, idx) {
   if (!rawRow || typeof rawRow !== "object") return null;
   const row = { ...rawRow };
   const synthetic = buildFeedbackSyntheticId(rawRow, `${marketplace}-return`);
-  const rid = String(
-    rawRow.id
-    ?? rawRow.claim_id
-    ?? rawRow.claimId
-    ?? rawRow.return_id
-    ?? rawRow.returnId
-    ?? synthetic
-    ?? `${marketplace}-return-${idx + 1}`
-  ).trim();
+  const pickText = (...paths) => {
+    for (const path of paths) {
+      const text = normalizeFeedbackText(getValueByPath(rawRow, path));
+      if (!text) continue;
+      const low = String(text).trim().toLowerCase();
+      if (!low || low === "0" || low === "-" || low === "—" || low === "null" || low === "undefined") continue;
+      return String(text).trim();
+    }
+    return "";
+  };
+  const rid = pickText(
+    "id",
+    "claim_id",
+    "claimId",
+    "return_id",
+    "returnId",
+    "claim.id",
+    "return.id",
+    "posting_number",
+    "posting.number"
+  ) || String(synthetic || `${marketplace}-return-${idx + 1}`).trim();
   row.id = rid;
   row._marketplace = marketplace;
-  row.status = normalizeFeedbackText(rawRow.status || rawRow.state || rawRow.claim_status || rawRow.claimState || "");
-  row.date = normalizeFeedbackText(rawRow.date || rawRow.created_at || rawRow.createdAt || "");
-  row.created_at = normalizeFeedbackText(rawRow.created_at || rawRow.createdAt || rawRow.date || "");
-  row.product = normalizeFeedbackText(rawRow.product || rawRow.product_name || rawRow.productName || "");
-  row.article = normalizeFeedbackText(rawRow.article || rawRow.offer_id || rawRow.offerId || "");
-  row.barcode = normalizeFeedbackText(rawRow.barcode || "");
-  row.description = normalizeFeedbackText(rawRow.description || rawRow.reason || rawRow.comment || rawRow.text || "");
-  row.photos = normalizeFeedbackPhotos(rawRow.photos || rawRow.images || rawRow.pictures || []);
+  row.status = pickText("status", "state", "claim_status", "claimState", "claim.status", "return.status", "return.state");
+  row.date = pickText("date", "created_at", "createdAt", "created_date", "createdDate", "updated_at", "updatedAt");
+  row.created_at = pickText("created_at", "createdAt", "date", "created_date", "createdDate", "updated_at", "updatedAt");
+  row.product = pickText(
+    "product",
+    "product_name",
+    "productName",
+    "name",
+    "item.name",
+    "claim.item.name",
+    "return.item.name",
+    "subjectName",
+    "imtName"
+  );
+  row.article = pickText(
+    "article",
+    "offer_id",
+    "offerId",
+    "vendorCode",
+    "supplierVendorCode",
+    "item.article",
+    "claim.item.article",
+    "return.item.article",
+    "item.offer_id"
+  );
+  row.barcode = pickText("barcode", "item.barcode", "claim.item.barcode", "return.item.barcode");
+  row.description = pickText(
+    "description",
+    "reason",
+    "comment",
+    "text",
+    "rejectReason",
+    "claim.description",
+    "claim.reason",
+    "claim.comment",
+    "return.reason",
+    "return.comment"
+  );
+  row.photos = normalizeFeedbackPhotos(
+    rawRow.photos
+    || rawRow.images
+    || rawRow.pictures
+    || rawRow.attachments
+    || rawRow.files
+    || rawRow.claim?.photos
+    || rawRow.claim?.images
+    || rawRow.return?.photos
+    || rawRow.return?.images
+    || []
+  );
   return row;
 }
 
@@ -4914,10 +4970,8 @@ async function loadReturns() {
   const suffix = qp.toString() ? `?${qp.toString()}` : "";
   const endpoint = marketplace === "ozon" ? `/api/ozon/returns${suffix}` : `/api/wb/returns${suffix}`;
   const statusEl = document.getElementById("returnsLoadStatus");
-  const raw = document.getElementById("returnsRaw");
   if (statusEl) statusEl.textContent = tr("Загрузка возвратов...", "Loading returns...");
   setTableMessage("returnsTable", 6, tr("Загружаем возвраты...", "Loading returns..."));
-  if (raw) raw.textContent = "";
   const data = await requestJson(endpoint, { headers: authHeaders(), timeoutMs: 120000 }).catch((e) => {
     const msg = String(e?.message || "").trim();
     if (isMarketplaceKeyError(msg)) {
@@ -4945,7 +4999,6 @@ async function loadReturns() {
       statusEl.textContent = tr("Возвраты загружены", "Returns loaded");
     }
   }
-  if (raw) raw.textContent = "";
   markModuleLoaded("reviews");
 }
 
@@ -4958,47 +5011,98 @@ function closeReturnDetailModal(evt = null) {
 
 function extractReturnDetailContext(detail, returnId = "") {
   const raw = detail && typeof detail === "object" ? detail : {};
+  const containers = [
+    raw,
+    raw.raw,
+    raw.claim,
+    raw.return,
+    raw.item,
+    raw.product,
+    raw.result,
+    raw.data,
+  ].filter((item) => item && typeof item === "object");
   const pick = (...paths) => {
     for (const path of paths) {
-      const val = normalizeProductDetailValue(getValueByPath(raw, path));
-      if (val) return val;
+      for (const container of containers) {
+        const val = normalizeProductDetailValue(getValueByPath(container, path));
+        if (!val) continue;
+        const low = String(val).trim().toLowerCase();
+        if (!low || low === "0" || low === "-" || low === "—" || low === "null" || low === "undefined") continue;
+        return val;
+      }
     }
     return "";
   };
-  const id = pick("id", "claimId", "claim_id", "returnId", "return_id", "claim.id") || String(returnId || "");
-  const status = pick("status", "state", "claimStatus", "claim.status");
-  const createdAt = pick("created_at", "createdAt", "date", "createdDate", "claim.createdAt");
-  const updatedAt = pick("updated_at", "updatedAt", "claim.updatedAt");
-  const article = pick("article", "supplierVendorCode", "vendorCode", "offerId", "offer_id", "item.article");
-  const product = pick("product", "productName", "name", "subjectName", "imtName", "item.name");
-  const quantity = pick("quantity", "count", "itemsCount", "qty");
-  const amount = pick("amount", "sum", "total", "refundAmount", "returnAmount", "price");
-  const reason = pick("reason", "comment", "rejectReason", "description", "text", "claim.reason", "claim.comment");
+  const id = pick("id", "claimId", "claim_id", "returnId", "return_id", "claim.id", "return.id", "posting_number") || String(returnId || "");
+  const status = pick("status", "state", "claimStatus", "claim.status", "return.status", "return.state");
+  const createdAt = pick("created_at", "createdAt", "date", "createdDate", "claim.createdAt", "return.createdAt");
+  const updatedAt = pick("updated_at", "updatedAt", "claim.updatedAt", "return.updatedAt");
+  const article = pick(
+    "article",
+    "supplierVendorCode",
+    "vendorCode",
+    "offerId",
+    "offer_id",
+    "item.article",
+    "claim.item.article",
+    "return.item.article"
+  );
+  const product = pick(
+    "product",
+    "productName",
+    "name",
+    "subjectName",
+    "imtName",
+    "item.name",
+    "claim.item.name",
+    "return.item.name"
+  );
+  const quantity = pick("quantity", "count", "itemsCount", "qty", "item.quantity", "claim.item.quantity", "return.item.quantity");
+  const amount = pick("amount", "sum", "total", "refundAmount", "returnAmount", "price", "claim.amount", "return.amount");
+  const reason = pick(
+    "reason",
+    "comment",
+    "rejectReason",
+    "description",
+    "text",
+    "claim.reason",
+    "claim.comment",
+    "return.reason",
+    "return.comment"
+  );
 
   const photos = [];
-  const appendPhotos = (src) => {
-    if (!src) return;
+  const appendPhotos = (src, depth = 0) => {
+    if (!src || depth > 3) return;
     if (Array.isArray(src)) {
-      src.forEach((item) => appendPhotos(item));
+      src.forEach((item) => appendPhotos(item, depth + 1));
       return;
     }
     if (typeof src === "string") {
       const url = String(src || "").trim();
-      if (url && !photos.includes(url)) photos.push(url);
+      if (/^https?:\/\//i.test(url) && !photos.includes(url)) photos.push(url);
       return;
     }
     if (typeof src === "object") {
-      const url = normalizeFeedbackText(src.url || src.photo || src.src || src.link || src.href || "");
-      if (url && !photos.includes(url)) photos.push(url);
+      const url = normalizeFeedbackText(src.url || src.photo || src.src || src.link || src.href || src.path || "");
+      if (/^https?:\/\//i.test(url) && !photos.includes(url)) {
+        photos.push(url);
+      }
+      const keys = Object.keys(src);
+      for (const key of keys) {
+        if (/photo|image|picture|attachment|file/i.test(key)) {
+          appendPhotos(src[key], depth + 1);
+        }
+      }
     }
   };
-  appendPhotos(raw.photos);
-  appendPhotos(raw.images);
-  appendPhotos(raw.pictures);
-  appendPhotos(raw.attachments);
-  appendPhotos(raw.files);
-  appendPhotos(raw.claim?.photos);
-  appendPhotos(raw.claim?.images);
+  for (const container of containers) {
+    appendPhotos(container.photos);
+    appendPhotos(container.images);
+    appendPhotos(container.pictures);
+    appendPhotos(container.attachments);
+    appendPhotos(container.files);
+  }
 
   return {
     id,
@@ -5023,7 +5127,6 @@ function renderReturnDetailModal(detail, returnId = "") {
   const cardsEl = document.getElementById("returnDetailCards");
   const descEl = document.getElementById("returnDetailDescription");
   const photosEl = document.getElementById("returnDetailPhotos");
-  const rawEl = document.getElementById("returnDetailRaw");
   const ctx = extractReturnDetailContext(detail, returnId);
 
   if (titleEl) {
@@ -5065,7 +5168,6 @@ function renderReturnDetailModal(detail, returnId = "") {
       });
     }
   }
-  if (rawEl) rawEl.textContent = JSON.stringify(ctx.raw || {}, null, 2);
   modal.classList.remove("hidden");
 }
 
@@ -5075,13 +5177,11 @@ async function openReturnDetails(returnId) {
   const endpoint = currentReturnsMarketplace === "ozon"
     ? `/api/ozon/returns/${encodeURIComponent(rid)}`
     : `/api/wb/returns/${encodeURIComponent(rid)}`;
-  const raw = document.getElementById("returnsRaw");
   const data = await requestJson(endpoint, { headers: authHeaders(), timeoutMs: 60000 }).catch((e) => {
     alert(e.message);
     return null;
   });
   if (!data) return;
-  if (raw) raw.textContent = JSON.stringify(data, null, 2);
   renderReturnDetailModal(data, rid);
 }
 
@@ -9479,7 +9579,7 @@ function renderProfileData(data) {
   const actorRow = Array.isArray(data?.team_members)
     ? data.team_members.find((x) => Number(x.id || 0) === actorMemberId)
     : null;
-  const actorName = String(actorRow?.full_name || actorRow?.nickname || me?.actor_nick || me?.email || "");
+  const actorName = String(actorRow?.full_name || actorRow?.nickname || me?.actor_nick || me?.actor_email || me?.email || "");
   const actorAvatar = (!me?.actor_is_owner && actorRow)
     ? String(actorRow.avatar_url || "").trim()
     : String(data.avatar_url || "").trim();
@@ -9595,6 +9695,8 @@ function renderProfileData(data) {
   }
 
   teamMembers = Array.isArray(data.team_members) ? data.team_members : [];
+  const addBtn = document.getElementById("teamAddMemberBtn");
+  if (addBtn) addBtn.classList.toggle("hidden", Boolean(me && !me.actor_is_owner));
   renderTeamMembers();
 }
 
@@ -9880,6 +9982,10 @@ function openTeamMemberEditor(memberId) {
 }
 
 function openTeamMemberCreator() {
+  if (me && !me.actor_is_owner) {
+    alert(tr("Только владелец кабинета может добавлять сотрудников.", "Only workspace owner can add employees."));
+    return;
+  }
   const modal = document.getElementById("teamMemberEditModal");
   if (!modal) return;
   setTeamModalMode("create");
@@ -10034,6 +10140,10 @@ async function addProfileAiService() {
 
 async function addTeamMember(payloadOverride = null) {
   if (!enabledModules.has("user_profile")) return null;
+  if (me && !me.actor_is_owner) {
+    alert(tr("Только владелец кабинета может добавлять сотрудников.", "Only workspace owner can add employees."));
+    return null;
+  }
   const payload = payloadOverride && typeof payloadOverride === "object"
     ? payloadOverride
     : buildTeamMemberPayloadFromModal(0);
@@ -10434,7 +10544,7 @@ async function loadHelpDocs() {
             <li>${lang === "en" ? "Fill required filters/fields before action." : "Заполните обязательные поля/фильтры перед запуском."}</li>
             <li>${lang === "en" ? "Run action and watch the status bar." : "Запустите действие и контролируйте статус-бар."}</li>
             <li>${lang === "en" ? "Check resulting table and totals." : "Проверьте итоговую таблицу и сводные показатели."}</li>
-            <li>${lang === "en" ? "If needed, inspect RAW block for diagnostics." : "При необходимости откройте RAW-блок для диагностики."}</li>
+            <li>${lang === "en" ? "If something looks wrong, refresh the module and check warnings in the status line." : "Если данные выглядят некорректно, обновите модуль и проверьте предупреждения в строке статуса."}</li>
           </ol>
         </div>
       </article>

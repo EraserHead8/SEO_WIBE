@@ -3152,6 +3152,7 @@ function socialRenderTasks() {
   if (!host) return;
   const rows = socialState.tasks || [];
   const myActorKey = String(socialState.boot?.actor?.actor_key || "").trim();
+  const isOwner = Boolean(socialState.boot?.actor?.is_owner);
   if (!rows.length) {
     host.innerHTML = `<div class="hint">${tr("Задач пока нет", "No tasks yet")}</div>`;
     return;
@@ -3170,6 +3171,7 @@ function socialRenderTasks() {
         const isOverdue = !isDone && dueDt instanceof Date && !Number.isNaN(dueDt.getTime()) && dueDt.getTime() < Date.now();
         const project = task.project_title || tr("Без проекта", "No project");
         const isMine = myActorKey && String(task.assignee_key || "") === myActorKey;
+        const canClose = Boolean(isMine || isOwner);
         const mineBadge = isMine ? `<span class="social-task-tag">${tr("Ваша задача", "Your task")}</span>` : "";
         return `
           <article class="social-task-row ${isMine ? "is-assignee" : ""} ${isDone ? "is-done" : ""} ${isOverdue ? "is-overdue" : ""}" ondblclick="socialOpenTaskModal(${Number(task.id || 0)})">
@@ -3188,7 +3190,7 @@ function socialRenderTasks() {
             </div>
             <div class="social-task-actions">
               <button type="button" onclick="socialOpenTaskModal(${Number(task.id || 0)})">${tr("Открыть", "Open")}</button>
-              ${status !== "done" ? `<button class="btn-secondary" type="button" onclick="socialQuickDone(${Number(task.id || 0)})">${tr("Закрыть", "Done")}</button>` : ""}
+              ${status !== "done" && canClose ? `<button class="btn-secondary" type="button" onclick="socialQuickDone(${Number(task.id || 0)})">${tr("Закрыть", "Done")}</button>` : ""}
             </div>
           </article>
         `;
@@ -3293,6 +3295,15 @@ async function socialAddTaskComment(taskId) {
 async function socialQuickDone(taskId) {
   const id = Number(taskId || 0);
   if (!id) return;
+  const row = (socialState.tasks || []).find((x) => Number(x.id || 0) === id) || null;
+  if (!row) return;
+  const myActorKey = String(socialState.boot?.actor?.actor_key || "").trim();
+  const isOwner = Boolean(socialState.boot?.actor?.is_owner);
+  const isMine = myActorKey && String(row.assignee_key || "") === myActorKey;
+  if (!isOwner && !isMine) {
+    alert(tr("Сотрудник может закрывать только свои задачи.", "Employee can close only own tasks."));
+    return;
+  }
   await socialRequest(`/api/social/tasks/${id}`, {
     method: "PUT",
     body: JSON.stringify({ status: "done" }),

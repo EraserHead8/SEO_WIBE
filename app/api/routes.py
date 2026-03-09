@@ -1104,10 +1104,36 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
 
 HELP_RELEASES: list[dict[str, Any]] = [
     {
+        "version": "0.4.5",
+        "android_version_code": 16,
+        "released_at": "2026-03-09",
+        "current": True,
+        "summary": "APK 1.5.10: возвраты без RAW, права сотрудников ужесточены, биддер/справка закреплены в мобильной навигации.",
+        "diff_from_previous": [
+            "Android APK обновлен до versionCode=16 / versionName=1.5.10.",
+            "Возвраты: убран пользовательский RAW-блок, карточка деталей стала только в понятном формате (поля, фото, описание).",
+            "Возвраты: улучшен разбор ID/статуса/товара из вложенных WB/Ozon структур, уменьшены «пустые» строки в таблице.",
+            "Профиль: у сотрудников скрыта кнопка «Добавить сотрудника», добавлена защита на клиенте от создания сотрудников.",
+            "Задачи: сотрудник может закрывать только свои задачи (и в UI, и на API).",
+            "Профиль в шапке: теперь показывается email текущего сотрудника (actor_email), а не email владельца.",
+            "Справка: общий чек-лист обновлен без упора на RAW-диагностику для пользовательских сценариев.",
+        ],
+        "changes": [
+            "Социальный модуль: в списке задач кнопка «Закрыть» видна только владельцу или назначенному исполнителю.",
+            "API /auth/me дополнен actor_email для корректного отображения в web/apk интерфейсе.",
+            "Обновлены версии статических ресурсов (styles/app/social) для принудительного обновления кэша у клиентов.",
+            "Сохранены доработки 1.5.9 по быстрым переходам к Бидеру/Справке и фото-редактору товара.",
+        ],
+        "android_download_url": "/static/downloads/seo-wibe-mobile-latest.apk",
+        "android_download_name": "SEO WIBE Android (.apk)",
+        "app_entry_url": "/mobile",
+        "notes": "APK 1.5.10 ставится поверх предыдущей версии. После обновления откройте «Реклама → Бидер», «Справка» и «Отзывы/Возвраты» для проверки нового интерфейса.",
+    },
+    {
         "version": "0.4.4",
         "android_version_code": 15,
         "released_at": "2026-03-09",
-        "current": True,
+        "current": False,
         "summary": "APK 1.5.9: добавлены быстрые переходы к Бидеру/Справке, улучшен редактор фото товаров и усилены уведомления по задачам.",
         "diff_from_previous": [
             "Android APK обновлен до versionCode=15 / versionName=1.5.9.",
@@ -1505,6 +1531,7 @@ def me(request: Request, user: User = Depends(get_current_user), db: Session = D
     )
     db.commit()
     payload = UserOut.model_validate(user)
+    payload.actor_email = (_actor_email(user) or str(payload.email or "").strip().lower()) or None
     payload.actor_key = actor_key
     payload.actor_nick = actor_nick
     payload.actor_is_owner = bool(_actor_is_owner(user))
@@ -10640,6 +10667,7 @@ def social_update_task(
 ):
     ensure_module_enabled(db, user, "social_hub")
     actor_key, actor_nick, _ = _social_actor_identity(db, user)
+    actor_aliases = set(_social_actor_alias_keys(db, actor_key))
     task = db.get(SocialTask, task_id)
     if not task or int(task.user_id) != int(user.id):
         raise HTTPException(status_code=404, detail="Задача не найдена")
@@ -10675,6 +10703,10 @@ def social_update_task(
         safe_status = str(payload.status or "").strip().lower()
         if safe_status not in {"todo", "in_progress", "done"}:
             raise HTTPException(status_code=400, detail="Некорректный статус задачи")
+        if safe_status == "done" and not _actor_is_owner(user):
+            assignee_key = _social_canonical_actor_key(db, str(task.assignee_key or "").strip().lower())
+            if not assignee_key or assignee_key not in actor_aliases:
+                raise HTTPException(status_code=403, detail="Сотрудник может закрывать только свои задачи")
         task.status = safe_status
         if safe_status == "done":
             task.closed_at = datetime.utcnow()

@@ -7971,10 +7971,6 @@ body[data-theme="light"] .social-calc-eq {
   line-height: 1;
 }
 
-#returnsRaw:empty {
-  display: none;
-}
-
 @media (max-width: 1024px) {
   .social-chat-layout,
   .social-notes-layout {
