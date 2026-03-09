@@ -2840,26 +2840,33 @@ def wb_ads_campaigns(
     source = "snapshot"
     stale = is_wb_snapshot_stale(db, user.id)
     refresh_queued = False
-    queue_depth_now = queue_depth()
+    queue_depth_now = 0
+    queue_available_now = False
     if not rows or stale:
-        queue_result = enqueue_task(
-            "sync_wb_snapshots",
-            {"user_id": int(user.id)},
-            dedupe_key=f"wb_snapshots:{int(user.id)}",
-            dedupe_ttl_sec=120,
-        )
-        refresh_queued = bool(queue_result.get("queued"))
-        queue_depth_now = queue_depth()
-        force_sync_now = bool(not rows) or bool(stale and queue_depth_now > 220 and not fast)
-        if force_sync_now:
-            sync_wb_campaign_snapshots(db, user.id, wb_key)
-            rows = get_wb_snapshot_rows(db, user.id)
-            source = "sync-fallback" if not rows else "sync-refresh"
-            stale = is_wb_snapshot_stale(db, user.id)
-        elif not rows:
-            source = "snapshot-empty"
+        should_queue_refresh = not (bool(fast) and bool(rows))
+        if should_queue_refresh:
+            queue_depth_now = queue_depth()
+            queue_available_now = queue_available()
+            queue_result = enqueue_task(
+                "sync_wb_snapshots",
+                {"user_id": int(user.id)},
+                dedupe_key=f"wb_snapshots:{int(user.id)}",
+                dedupe_ttl_sec=120,
+            )
+            refresh_queued = bool(queue_result.get("queued"))
+            queue_depth_now = queue_depth()
+            force_sync_now = bool(not rows) or bool(stale and queue_depth_now > 220 and not fast)
+            if force_sync_now:
+                sync_wb_campaign_snapshots(db, user.id, wb_key)
+                rows = get_wb_snapshot_rows(db, user.id)
+                source = "sync-fallback" if not rows else "sync-refresh"
+                stale = is_wb_snapshot_stale(db, user.id)
+            elif not rows:
+                source = "snapshot-empty"
+            else:
+                source = "snapshot+queue-refresh"
         else:
-            source = "snapshot+queue-refresh"
+            source = "snapshot-stale-fast"
     def _collect_placeholder_campaign_ids(items: list[dict[str, Any]]) -> list[int]:
         out: list[int] = []
         for item in items:
@@ -3034,7 +3041,7 @@ def wb_ads_campaigns(
             "stale": stale,
             "count": len(rows),
             "refresh_queued": refresh_queued,
-            "queue_available": queue_available(),
+            "queue_available": queue_available_now,
             "queue_depth": queue_depth_now,
             "placeholder_count": len(placeholder_ids),
             "summary_hydrated": len(hydrated_summaries) if isinstance(hydrated_summaries, dict) else 0,
