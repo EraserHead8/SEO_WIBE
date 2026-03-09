@@ -31,9 +31,14 @@ let socialState = {
   currentNoteId: 0,
   noteSaveTimer: null,
   notificationsTimer: null,
+  announcementsTimer: null,
   lastNotificationId: 0,
   unreadCount: 0,
+  markReadInFlight: false,
   notificationSettings: null,
+  announcementModalId: 0,
+  pendingAnnouncementIds: new Set(),
+  participantProfileCache: new Map(),
   userInteracted: false,
   lastSoundAtByKind: {},
   moduleLoaded: false,
@@ -153,6 +158,7 @@ function socialNotificationKindGroup(kind) {
   if (code.startsWith("chat_")) return "chat";
   if (code.startsWith("task_")) return "task";
   if (code.startsWith("calendar_")) return "calendar";
+  if (code.startsWith("announcement")) return "default";
   return "default";
 }
 
@@ -260,6 +266,89 @@ function socialOpenNotificationTarget(row) {
     setTimeout(() => {
       if (typeof switchSocialSubtab === "function") switchSocialSubtab("calendar", true);
     }, 140);
+    return;
+  }
+  if (kind === "announcement") {
+    socialOpenAnnouncementModal({
+      id: Number(payload.announcement_id || 0),
+      title: row.title || tr("Объявление", "Announcement"),
+      body: row.body || "",
+    });
+  }
+}
+
+async function socialMarkNotificationsReadAll(syncLocal = true) {
+  if (socialState.markReadInFlight) return;
+  socialState.markReadInFlight = true;
+  if (syncLocal) {
+    socialState.unreadCount = 0;
+    socialSetBell(0);
+    socialWriteSharedPollState({
+      unread: 0,
+      last_notification_id: Number(socialState.lastNotificationId || 0),
+      stamp: socialNowMs(),
+    });
+  }
+  try {
+    await socialRequest("/api/social/notifications/read-all", {
+      method: "POST",
+      body: JSON.stringify({}),
+      timeoutMs: 12000,
+    });
+  } catch (_) {
+  } finally {
+    socialState.markReadInFlight = false;
+  }
+}
+
+function socialOpenAnnouncementModal(row) {
+  if (!row || typeof row !== "object") return;
+  const annId = Number(row.id || 0);
+  if (!annId || socialState.announcementModalId === annId) return;
+  socialState.announcementModalId = annId;
+  const title = String(row.title || tr("Объявление", "Announcement")).trim();
+  const body = String(row.body || "").trim();
+  socialOpenModal(
+    title || tr("Объявление", "Announcement"),
+    `
+      <div class="social-announcement-modal">
+        <div class="social-announcement-body">${escapeHtml(body || tr("Нет текста объявления.", "Announcement text is empty."))}</div>
+        <div class="actions">
+          <button type="button" class="btn-primary" id="socialAnnouncementAckBtn">${escapeHtml(tr("ОК", "OK"))}</button>
+        </div>
+      </div>
+    `
+  );
+  const ackBtn = document.getElementById("socialAnnouncementAckBtn");
+  if (ackBtn) {
+    ackBtn.addEventListener("click", async () => {
+      if (annId > 0) {
+        await socialRequest(`/api/social/announcements/${annId}/ack`, {
+          method: "POST",
+          body: JSON.stringify({}),
+          timeoutMs: 12000,
+        }).catch(() => null);
+      }
+      socialState.announcementModalId = 0;
+      socialCloseModal();
+      socialMarkNotificationsReadAll(true);
+      socialLoadPendingAnnouncements().catch(() => null);
+    });
+  }
+}
+
+async function socialLoadPendingAnnouncements() {
+  const data = await socialRequest("/api/social/announcements/pending?limit=5", {
+    timeoutMs: 12000,
+  }).catch(() => null);
+  const rows = Array.isArray(data?.rows) ? data.rows : [];
+  if (!rows.length) return;
+  for (const row of rows) {
+    const annId = Number(row?.id || 0);
+    if (!annId || socialState.pendingAnnouncementIds.has(annId)) continue;
+    socialState.pendingAnnouncementIds.add(annId);
+    socialOpenAnnouncementModal(row);
+    break;
   }
 }
 
@@ -422,12 +511,20 @@ async function socialPollNotifications() {
         socialLoadMessages(threadId, { silent: true });
       }
     }
+    if (String(row.kind || "").trim().toLowerCase() === "announcement") {
+      socialOpenAnnouncementModal({
+        id: Number(row.payload?.announcement_id || 0),
+        title: row.title || tr("Объявление", "Announcement"),
+        body: row.body || "",
+      });
+    }
   }
   socialWriteSharedPollState({
     unread: Number(socialState.unreadCount || 0),
     last_notification_id: Number(socialState.lastNotificationId || 0),
     stamp: socialNowMs(),
   });
+  socialLoadPendingAnnouncements().catch(() => null);
 }
 
 function socialNextPollDelayMs() {
@@ -459,12 +556,17 @@ function socialStartGlobalHooks() {
   socialApplySharedPollState();
   socialSetBell(socialState.unreadCount || 0);
   socialScheduleNotificationsPoll(true);
+  socialLoadPendingAnnouncements().catch(() => null);
 }
 
 function socialStopGlobalHooks() {
   if (socialState.notificationsTimer) {
     clearTimeout(socialState.notificationsTimer);
     socialState.notificationsTimer = null;
+  }
+  if (socialState.announcementsTimer) {
+    clearTimeout(socialState.announcementsTimer);
+    socialState.announcementsTimer = null;
   }
   if (socialState.chatRefreshTimer) {
     clearInterval(socialState.chatRefreshTimer);
@@ -502,9 +604,14 @@ function resetSocialState() {
     currentNoteId: 0,
     noteSaveTimer: null,
     notificationsTimer: null,
+    announcementsTimer: null,
     lastNotificationId: 0,
     unreadCount: 0,
+    markReadInFlight: false,
     notificationSettings: null,
+    announcementModalId: 0,
+    pendingAnnouncementIds: new Set(),
+    participantProfileCache: new Map(),
     userInteracted: false,
     lastSoundAtByKind: {},
     moduleLoaded: false,
@@ -1707,15 +1814,35 @@ function socialSyncMobileChatChrome(row = null) {
   if (!show) {
     titleNode.textContent = tr("Чаты", "Chats");
     subtitleNode.textContent = "";
+    subtitleNode.classList.remove("online-now");
+    titleNode.classList.remove("is-clickable");
+    subtitleNode.classList.remove("is-clickable");
+    titleNode.onclick = null;
+    subtitleNode.onclick = null;
     return;
   }
   const display = socialThreadDisplay(activeThread);
   const participants = Array.isArray(display.participants) ? display.participants : [];
-  const subtitle = activeThread?.kind === "direct"
-    ? tr("Личный чат", "Direct chat")
-    : `${tr("Группа", "Group")} • ${participants.length}`;
+  let subtitle = "";
+  let subtitleOnline = false;
+  if (activeThread?.kind === "direct") {
+    const other = participants.find((p) => !p.is_me);
+    const onlineNow = socialIsParticipantOnline(other);
+    const stateText = onlineNow
+      ? tr("сейчас онлайн", "online now")
+      : (socialFormatLastSeen(other?.last_seen_at || "") || tr("нет данных", "unknown"));
+    subtitle = `${tr("Личный чат", "Direct chat")} • ${stateText}`;
+    subtitleOnline = onlineNow;
+  } else {
+    subtitle = `${tr("Группа", "Group")} • ${participants.length}`;
+  }
   titleNode.textContent = String(display.title || tr("Чат", "Chat"));
   subtitleNode.textContent = subtitle;
+  subtitleNode.classList.toggle("online-now", subtitleOnline);
+  titleNode.classList.toggle("is-clickable", true);
+  subtitleNode.classList.toggle("is-clickable", true);
+  titleNode.onclick = () => socialOpenCurrentParticipantProfile();
+  subtitleNode.onclick = () => socialOpenCurrentParticipantProfile();
 }
 
 function socialFilterThreads() {
@@ -1990,12 +2117,27 @@ async function socialOpenParticipantProfile(actorKey, threadId = 0) {
   const safeActorKey = String(actorKey || "").trim();
   const safeThreadId = Number(threadId || socialState.currentThreadId || 0);
   if (!safeActorKey || !safeThreadId) return;
+  const cacheKey = `${safeThreadId}:${safeActorKey.toLowerCase()}`;
+  const cached = socialState.participantProfileCache.get(cacheKey);
+  if (cached && Number(cached.stamp || 0) > 0 && (socialNowMs() - Number(cached.stamp || 0)) < 120000) {
+    socialRenderParticipantProfileModal(cached.data || {}, safeActorKey);
+    return;
+  }
   const profile = await socialRequest(
     `/api/social/chat/participant/profile?thread_id=${safeThreadId}&actor_key=${encodeURIComponent(safeActorKey)}`
   ).catch((e) => {
     alert(e?.message || tr("Не удалось открыть профиль", "Failed to open profile"));
     return null;
   });
+  if (!profile || typeof profile !== "object") return;
+  socialState.participantProfileCache.set(cacheKey, {
+    stamp: socialNowMs(),
+    data: profile,
+  });
+  socialRenderParticipantProfileModal(profile, safeActorKey);
+}
+
+function socialRenderParticipantProfileModal(profile, safeActorKey = "") {
   if (!profile || typeof profile !== "object") return;
   const nick = String(profile.nick || safeActorKey || "-").trim() || "-";
   const email = String(profile.email || "").trim();
@@ -3095,7 +3237,10 @@ function socialRenderCalendar() {
   }
   html += `</div>`;
   grid.innerHTML = html;
-  const fallback = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+  const todayFallback = todayKey && String(todayKey).startsWith(`${year}-${String(month + 1).padStart(2, "0")}-`)
+    ? todayKey
+    : "";
+  const fallback = todayFallback || `${year}-${String(month + 1).padStart(2, "0")}-01`;
   const inMonth = String(socialState.calendarSelectedDay || "").startsWith(`${year}-${String(month + 1).padStart(2, "0")}-`);
   socialShowDay(inMonth ? socialState.calendarSelectedDay : fallback);
 }
@@ -3689,6 +3834,7 @@ window.socialLoadCalendar = socialLoadCalendar;
 window.socialRenderCalendar = socialRenderCalendar;
 window.socialShowDay = socialShowDay;
 window.socialSetBell = socialSetBell;
+window.socialMarkNotificationsReadAll = socialMarkNotificationsReadAll;
 window.socialMaybeStartHooks = socialMaybeStartHooks;
 window.socialToggleEmojiPicker = socialToggleEmojiPicker;
 window.socialInsertEmoji = socialInsertEmoji;

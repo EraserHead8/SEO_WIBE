@@ -2221,6 +2221,9 @@ function showTab(name, btn = null) {
 }
 
 function openSocialChatFromBell() {
+  if (typeof window.socialMarkNotificationsReadAll === "function") {
+    try { window.socialMarkNotificationsReadAll(true); } catch (_) {}
+  }
   currentSocialSubtab = "chat";
   const socialBtn = document.querySelector(".nav-btn[data-tab='social']");
   showTab("social", socialBtn || null);
@@ -2236,6 +2239,55 @@ function openSocialChatFromBell() {
     tries += 1;
     if (trySwitch() || tries >= 10) clearInterval(timer);
   }, 120);
+}
+
+function handleMobileBackPress() {
+  if (!mobileApkMode) return false;
+  const shell = document.getElementById("appSection");
+  const isNavOpen = Boolean(shell?.classList.contains("nav-open"));
+  const activeModal = document.querySelector(".modal:not(.hidden)");
+  if (activeModal) {
+    const closeBtn = activeModal.querySelector(".modal-close");
+    if (closeBtn instanceof HTMLElement) {
+      closeBtn.click();
+    } else {
+      activeModal.classList.add("hidden");
+    }
+    return true;
+  }
+  if (String(currentTab || "") === "social") {
+    const subtab = String(currentSocialSubtab || window.socialState?.currentSubtab || "chat");
+    const currentThreadId = Number(window.socialState?.currentThreadId || 0);
+    if (subtab === "chat" && currentThreadId > 0 && typeof window.socialCloseThread === "function") {
+      window.socialCloseThread({ keepAutoSelect: false });
+      return true;
+    }
+    if (subtab !== "calendar" && typeof window.switchSocialSubtab === "function") {
+      currentSocialSubtab = "calendar";
+      window.switchSocialSubtab("calendar", true);
+      return true;
+    }
+    if (shell && !isNavOpen) {
+      shell.classList.add("nav-open");
+      const btn = document.getElementById("mobileNavToggle");
+      if (btn) btn.setAttribute("aria-expanded", "true");
+      return true;
+    }
+    return false;
+  }
+  if (isNavOpen) {
+    closeMobileNav();
+    return true;
+  }
+  const socialBtn = document.querySelector(".nav-btn[data-tab='social']");
+  showTab("social", socialBtn || null);
+  if (typeof window.switchSocialSubtab === "function") {
+    currentSocialSubtab = "calendar";
+    setTimeout(() => {
+      try { window.switchSocialSubtab("calendar", true); } catch (_) {}
+    }, 120);
+  }
+  return true;
 }
 
 function toggleMobileNav() {
@@ -2861,9 +2913,8 @@ function closeTopbarUserPopover() {
 function openMyProfileFromTopbar() {
   pendingProfileActorFocus = true;
   closeTopbarUserPopover();
-  invalidateModuleCache("profile");
   showTab("profile", document.querySelector(".nav-btn[data-tab='profile']"));
-  runModuleLoader("profile", loadProfile, { force: true, maxAgeMs: 0 });
+  runModuleLoader("profile", loadProfile, { maxAgeMs: 120000 });
 }
 
 function renderAvatarPreview(previewId, url, fallbackText = "--") {
@@ -3881,6 +3932,7 @@ async function renderWbReviews() {
     head.className = "feedback-row-head";
     const meta = document.createElement("div");
     meta.className = "feedback-meta-row";
+    const reviewMp = (currentReviewMarketplace || "wb").trim().toLowerCase() === "ozon" ? "ozon" : "wb";
     const pill = document.createElement("span");
     pill.className = "review-type-pill";
     pill.textContent = status === "new" ? "🆕" : "✅";
@@ -3888,6 +3940,7 @@ async function renderWbReviews() {
     meta.appendChild(pill);
     const dateBadge = document.createElement("span");
     dateBadge.className = "feedback-meta-badge";
+    dateBadge.classList.add(`feedback-date-${reviewMp}`);
     dateBadge.textContent = row?.date || "-";
     meta.appendChild(dateBadge);
     const stars = Number(row.stars || 0);
@@ -3902,7 +3955,6 @@ async function renderWbReviews() {
     }
     const mpBadge = document.createElement("span");
     mpBadge.className = "feedback-meta-badge";
-    const reviewMp = (currentReviewMarketplace || "wb").trim().toLowerCase() === "ozon" ? "ozon" : "wb";
     mpBadge.classList.add(`feedback-market-${reviewMp}`);
     mpBadge.textContent = reviewMp.toUpperCase();
     meta.appendChild(mpBadge);
@@ -4476,6 +4528,7 @@ async function renderWbQuestions() {
     head.className = "feedback-row-head";
     const meta = document.createElement("div");
     meta.className = "feedback-meta-row";
+    const questionMp = (currentQuestionMarketplace || "wb").trim().toLowerCase() === "ozon" ? "ozon" : "wb";
     const pill = document.createElement("span");
     pill.className = "review-type-pill";
     pill.textContent = status === "new" ? "🆕" : "✅";
@@ -4483,11 +4536,11 @@ async function renderWbQuestions() {
     meta.appendChild(pill);
     const dateBadge = document.createElement("span");
     dateBadge.className = "feedback-meta-badge";
+    dateBadge.classList.add(`feedback-date-${questionMp}`);
     dateBadge.textContent = row?.date || "-";
     meta.appendChild(dateBadge);
     const mpBadge = document.createElement("span");
     mpBadge.className = "feedback-meta-badge";
-    const questionMp = (currentQuestionMarketplace || "wb").trim().toLowerCase() === "ozon" ? "ozon" : "wb";
     mpBadge.classList.add(`feedback-market-${questionMp}`);
     mpBadge.textContent = questionMp.toUpperCase();
     meta.appendChild(mpBadge);
@@ -10210,5 +10263,6 @@ window.uploadTeamAvatar = uploadTeamAvatar;
 window.toggleFeedbackPrompt = toggleFeedbackPrompt;
 window.toggleMobileNav = toggleMobileNav;
 window.closeMobileNav = closeMobileNav;
+window.handleMobileBackPress = handleMobileBackPress;
 window.onMobileQuickNavChanged = onMobileQuickNavChanged;
 window.syncMobileQuickNavSelection = syncMobileQuickNavSelection;

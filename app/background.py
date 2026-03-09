@@ -9,7 +9,7 @@ from sqlalchemy import delete, select
 from app.db import SessionLocal
 from app.models import ApiCredential, AuditLog, MarketplaceApiCache, ModuleAccess, Product, SeoJob, User, UserKeyword
 from app.services.marketplace import find_competitors, resolve_wb_external_id, update_product_description
-from app.services.task_queue import enqueue_task, queue_enabled
+from app.services.task_queue import enqueue_task, queue_depth, queue_enabled
 from app.services.seo import (
     build_seo_description,
     discover_keywords,
@@ -139,8 +139,10 @@ def _safe_known_position(value: int | None) -> int:
 
 async def wb_ads_snapshot_sync_loop():
     while True:
-        await asyncio.sleep(3600 + random.randint(60, 180))
+        await asyncio.sleep(12 * 60 + random.randint(30, 90))
         if not queue_enabled():
+            continue
+        if queue_depth() > 240:
             continue
         db = SessionLocal()
         try:
@@ -176,12 +178,14 @@ async def wb_ads_snapshot_sync_loop():
 
 async def marketplace_cache_warmup_loop():
     while True:
-        await asyncio.sleep(95 + random.randint(10, 30))
+        await asyncio.sleep(120 + random.randint(20, 45))
         if not queue_enabled():
+            continue
+        if queue_depth() > 100:
             continue
         db = SessionLocal()
         try:
-            _warm_marketplace_cache_for_recent_users(db, user_limit=8, warm_budget=30)
+            _warm_marketplace_cache_for_recent_users(db, user_limit=4, warm_budget=10)
             _cleanup_market_cache_rows(db, max_age_hours=96)
             db.commit()
         except Exception:
@@ -259,7 +263,7 @@ def _warm_marketplace_cache_for_user(
                 "tz": tz_name,
             },
             dedupe_key=f"warm_sales:{user_id}:{selected_market}:{today.isoformat()}:hour",
-            dedupe_ttl_sec=120,
+            dedupe_ttl_sec=10 * 60,
         )
         if result.get("queued"):
             consumed += 1
@@ -269,7 +273,7 @@ def _warm_marketplace_cache_for_user(
             "warm_wb_campaigns",
             {"user_id": int(user_id)},
             dedupe_key=f"warm_wb_campaigns:{user_id}",
-            dedupe_ttl_sec=120,
+            dedupe_ttl_sec=10 * 60,
         )
         if result.get("queued"):
             consumed += 1
@@ -279,7 +283,7 @@ def _warm_marketplace_cache_for_user(
             "warm_ozon_campaigns",
             {"user_id": int(user_id)},
             dedupe_key=f"warm_ozon_campaigns:{user_id}",
-            dedupe_ttl_sec=120,
+            dedupe_ttl_sec=10 * 60,
         )
         if result.get("queued"):
             consumed += 1

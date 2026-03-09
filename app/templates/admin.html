@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260308b" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260309d" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -260,6 +260,37 @@
             <button class="btn-secondary" type="button" onclick="adminLoadNotificationSettings()">Обновить</button>
           </div>
           <div id="adminNotifSettingsMeta" class="hint">-</div>
+        </div>
+        <div class="panel">
+          <h3>Глобальные объявления</h3>
+          <div class="grid-4">
+            <input id="adminAnnouncementTitle" placeholder="Заголовок объявления" />
+            <input id="adminAnnouncementStartsAt" type="datetime-local" />
+            <input id="adminAnnouncementEndsAt" type="datetime-local" />
+            <select id="adminAnnouncementTargetUser">
+              <option value="0">Все пользователи</option>
+            </select>
+          </div>
+          <div class="grid-2">
+            <textarea id="adminAnnouncementBody" rows="4" placeholder="Текст объявления..."></textarea>
+            <div class="admin-announcement-actions">
+              <label class="check"><input id="adminAnnouncementActive" type="checkbox" checked /> Активно</label>
+              <div class="actions">
+                <button type="button" onclick="adminSaveAnnouncement()">Сохранить объявление</button>
+                <button class="btn-secondary" type="button" onclick="adminResetAnnouncementForm()">Сбросить</button>
+                <button class="btn-secondary" type="button" onclick="adminLoadAnnouncements()">Обновить список</button>
+              </div>
+              <div id="adminAnnouncementMeta" class="hint">-</div>
+            </div>
+          </div>
+          <div class="table-card">
+            <table>
+              <thead>
+                <tr><th>ID</th><th>Период</th><th>Кому</th><th>Заголовок</th><th>Статус</th><th>Действия</th></tr>
+              </thead>
+              <tbody id="adminAnnouncementsTable"></tbody>
+            </table>
+          </div>
         </div>
       </section>
 
@@ -515,6 +546,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script src="/static/admin.js?v=20260305a"></script>
+  <script src="/static/admin.js?v=20260309d"></script>
 </body>
 </html>

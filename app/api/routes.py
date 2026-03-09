@@ -56,6 +56,8 @@ from app.models import (
     SocialChatThread,
     SocialChatThreadMember,
     SocialGameScore,
+    SocialAnnouncement,
+    SocialAnnouncementAck,
     SocialNote,
     SocialNoteFile,
     SocialNotification,
@@ -160,6 +162,9 @@ from app.schemas import (
     SocialNoteFileOut,
     SocialNoteOut,
     SocialNotificationOut,
+    SocialAnnouncementIn,
+    SocialAnnouncementOut,
+    SocialAnnouncementPublicOut,
     SocialTaskCommentIn,
     SocialTaskIn,
     SocialTaskOut,
@@ -984,10 +989,33 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
 
 HELP_RELEASES: list[dict[str, Any]] = [
     {
+        "version": "0.4.0",
+        "android_version_code": 11,
+        "released_at": "2026-03-09",
+        "current": True,
+        "summary": "APK 1.5.5: исправлены back-навигация чатов, онлайн-статус/профиль в личных чатах и добавлены глобальные объявления.",
+        "diff_from_previous": [
+            "Android APK обновлен до versionCode=11 / versionName=1.5.5.",
+            "В чате APK исправлена цепочка назад: диалог → чаты → календарь → список модулей; выход по двойному back сохранен.",
+            "В личных чатах возвращен «сейчас онлайн / последний раз в сети» и кликабельный профиль участника в заголовке.",
+            "В отзывах/вопросах дата карточки теперь подсвечивается по маркетплейсу (WB/Ozon) в вебе и APK.",
+            "Добавлены глобальные объявления (админка + показ пользователям с подтверждением ОК).",
+        ],
+        "changes": [
+            "В колокольчике добавлен моментальный local-sync read-all, чтобы бейдж быстрее сбрасывался после прочтения.",
+            "Календарь в социальном модуле по умолчанию открывается на текущем дне текущего месяца.",
+            "В help/загрузках обновлена карточка релиза и ссылка на актуальный APK-файл.",
+        ],
+        "android_download_url": "/static/downloads/seo-wibe-mobile-latest.apk",
+        "android_download_name": "SEO WIBE Android (.apk)",
+        "app_entry_url": "/mobile",
+        "notes": "После скачивания APK 1.5.5 из раздела «Справка → Загрузки» откроется системный установщик Android для обновления поверх предыдущей версии.",
+    },
+    {
         "version": "0.3.9",
         "android_version_code": 10,
         "released_at": "2026-03-09",
-        "current": True,
+        "current": False,
         "summary": "Исправлена установка Android-обновления, ускорены детали товаров и кэш WB Ads enrich.",
         "diff_from_previous": [
             "APK обновлен до versionCode=10 / versionName=1.5.4 и подписан корректной схемой v2/v3 для установки поверх предыдущей версии.",
@@ -2555,6 +2583,7 @@ def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depen
     source = "snapshot"
     stale = is_wb_snapshot_stale(db, user.id)
     refresh_queued = False
+    queue_depth_now = queue_depth()
     if not rows or stale:
         queue_result = enqueue_task(
             "sync_wb_snapshots",
@@ -2563,10 +2592,12 @@ def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depen
             dedupe_ttl_sec=120,
         )
         refresh_queued = bool(queue_result.get("queued"))
-        if not refresh_queued and not rows:
+        queue_depth_now = queue_depth()
+        force_sync_now = bool(not rows) or bool(stale and queue_depth_now > 220)
+        if force_sync_now:
             sync_wb_campaign_snapshots(db, user.id, wb_key)
             rows = get_wb_snapshot_rows(db, user.id)
-            source = "sync-fallback"
+            source = "sync-fallback" if not rows else "sync-refresh"
             stale = is_wb_snapshot_stale(db, user.id)
         elif not rows:
             source = "snapshot-empty"
@@ -2633,7 +2664,7 @@ def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depen
         action="wb_ads_campaigns_read",
         details=(
             f"count={len(rows)};ids={len(ids)};source={source};stale={int(stale)};"
-            f"queue={int(refresh_queued)};queue_depth={queue_depth()}"
+            f"queue={int(refresh_queued)};queue_depth={queue_depth_now}"
         ),
         module_code="wb_ads",
         entity_type="campaign",
@@ -2648,7 +2679,7 @@ def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depen
             "count": len(rows),
             "refresh_queued": refresh_queued,
             "queue_available": queue_available(),
-            "queue_depth": queue_depth(),
+            "queue_depth": queue_depth_now,
         },
     )
 
@@ -8250,6 +8281,72 @@ def _social_emit_due_reminders(db: Session, *, user_id: int, actor_key: str, act
             body=f"{str(row.title or '')[:140]} • {start_iso.replace('T', ' ')} UTC",
             payload={"event_id": int(row.id), "kind": "calendar"},
         )
+    _social_emit_due_announcements(db, user_id=safe_user_id, actor_key=safe_actor_key)
+
+
+def _social_announcement_to_out(row: SocialAnnouncement) -> SocialAnnouncementOut:
+    return SocialAnnouncementOut(
+        id=int(row.id),
+        title=str(row.title or ""),
+        body=str(row.body or ""),
+        starts_at=_to_utc_iso(row.starts_at),
+        ends_at=_to_utc_iso(row.ends_at),
+        is_active=bool(row.is_active),
+        user_id=int(row.user_id) if row.user_id is not None else None,
+        created_by_user_id=int(row.created_by_user_id) if row.created_by_user_id is not None else None,
+        created_at=_to_utc_iso(row.created_at),
+        updated_at=_to_utc_iso(row.updated_at),
+    )
+
+
+def _social_announcement_to_public_out(row: SocialAnnouncement) -> SocialAnnouncementPublicOut:
+    return SocialAnnouncementPublicOut(
+        id=int(row.id),
+        title=str(row.title or ""),
+        body=str(row.body or ""),
+        starts_at=_to_utc_iso(row.starts_at),
+        ends_at=_to_utc_iso(row.ends_at),
+    )
+
+
+def _social_emit_due_announcements(db: Session, *, user_id: int, actor_key: str) -> None:
+    safe_user_id = int(user_id or 0)
+    safe_actor_key = str(actor_key or "").strip()
+    if safe_user_id <= 0 or not safe_actor_key:
+        return
+    now = datetime.utcnow()
+    rows = db.scalars(
+        select(SocialAnnouncement).where(
+            SocialAnnouncement.is_active.is_(True),
+            SocialAnnouncement.starts_at <= now,
+            or_(SocialAnnouncement.ends_at.is_(None), SocialAnnouncement.ends_at >= now),
+            or_(SocialAnnouncement.user_id.is_(None), SocialAnnouncement.user_id == safe_user_id),
+        ).order_by(SocialAnnouncement.starts_at.asc(), SocialAnnouncement.id.asc())
+    ).all()
+    if not rows:
+        return
+    acked_ids = set(
+        db.scalars(
+            select(SocialAnnouncementAck.announcement_id).where(
+                SocialAnnouncementAck.user_id == safe_user_id,
+                SocialAnnouncementAck.actor_key == safe_actor_key,
+            )
+        ).all()
+    )
+    for row in rows:
+        ann_id = int(row.id or 0)
+        if ann_id <= 0 or ann_id in acked_ids:
+            continue
+        _social_push_notification(
+            db,
+            user_id=safe_user_id,
+            recipient_key=safe_actor_key,
+            kind="announcement",
+            dedupe_key=f"announcement:{ann_id}:{safe_actor_key}",
+            title=str(row.title or "Объявление")[:255],
+            body=str(row.body or "")[:5000],
+            payload={"announcement_id": ann_id, "kind": "announcement"},
+        )
 
 
 def _social_push_notification(
@@ -10239,6 +10336,89 @@ def social_notifications_read_all(
     return MessageOut(message="Ок")
 
 
+@router.get("/social/announcements/pending", response_model=dict[str, Any])
+def social_pending_announcements(
+    limit: int = 5,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, actor_nick, _ = _social_actor_identity(db, user)
+    _social_emit_due_reminders(db, user_id=int(user.id), actor_key=actor_key, actor_nick=actor_nick)
+    safe_limit = max(1, min(int(limit or 5), 20))
+    now = datetime.utcnow()
+    acked_ids = set(
+        db.scalars(
+            select(SocialAnnouncementAck.announcement_id).where(
+                SocialAnnouncementAck.user_id == int(user.id),
+                SocialAnnouncementAck.actor_key == actor_key,
+            )
+        ).all()
+    )
+    rows = db.scalars(
+        select(SocialAnnouncement).where(
+            SocialAnnouncement.is_active.is_(True),
+            SocialAnnouncement.starts_at <= now,
+            or_(SocialAnnouncement.ends_at.is_(None), SocialAnnouncement.ends_at >= now),
+            or_(SocialAnnouncement.user_id.is_(None), SocialAnnouncement.user_id == int(user.id)),
+        ).order_by(SocialAnnouncement.starts_at.asc(), SocialAnnouncement.id.asc())
+    ).all()
+    pending = [_social_announcement_to_public_out(x).model_dump() for x in rows if int(x.id or 0) not in acked_ids]
+    return {"rows": pending[:safe_limit]}
+
+
+@router.post("/social/announcements/{announcement_id}/ack", response_model=MessageOut)
+def social_ack_announcement(
+    announcement_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    ann_id = int(announcement_id or 0)
+    if ann_id <= 0:
+        raise HTTPException(status_code=400, detail="Некорректный ID объявления")
+    actor_key, _, _ = _social_actor_identity(db, user)
+    row = db.get(SocialAnnouncement, ann_id)
+    if not row or not row.is_active:
+        raise HTTPException(status_code=404, detail="Объявление не найдено")
+    if row.user_id is not None and int(row.user_id) != int(user.id):
+        raise HTTPException(status_code=403, detail="Нет доступа к объявлению")
+    exists = db.scalar(
+        select(SocialAnnouncementAck).where(
+            SocialAnnouncementAck.announcement_id == ann_id,
+            SocialAnnouncementAck.user_id == int(user.id),
+            SocialAnnouncementAck.actor_key == actor_key,
+        )
+    )
+    if not exists:
+        db.add(
+            SocialAnnouncementAck(
+                announcement_id=ann_id,
+                user_id=int(user.id),
+                actor_key=actor_key[:60],
+            )
+        )
+    db.execute(
+        text(
+            """
+            UPDATE social_notifications
+            SET is_read = 1
+            WHERE user_id = :user_id
+              AND recipient_key = :recipient_key
+              AND kind = 'announcement'
+              AND dedupe_key = :dedupe_key
+            """
+        ),
+        {
+            "user_id": int(user.id),
+            "recipient_key": actor_key,
+            "dedupe_key": f"announcement:{ann_id}:{actor_key}",
+        },
+    )
+    db.commit()
+    return MessageOut(message="Ок")
+
+
 def _notification_sound_storage_dir() -> Path:
     static_root = Path(__file__).resolve().parent.parent / "static"
     target_dir = static_root / "uploads" / "notification_sounds"
@@ -10280,6 +10460,144 @@ def admin_get_notification_settings(
     db: Session = Depends(get_db),
 ):
     return _get_notification_sound_settings(db)
+
+
+@router.get("/admin/announcements", response_model=list[SocialAnnouncementOut])
+def admin_announcements(
+    active_only: bool = False,
+    _: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    query = select(SocialAnnouncement)
+    if active_only:
+        query = query.where(SocialAnnouncement.is_active.is_(True))
+    rows = db.scalars(query.order_by(SocialAnnouncement.starts_at.desc(), SocialAnnouncement.id.desc()).limit(300)).all()
+    return [_social_announcement_to_out(x) for x in rows]
+
+
+@router.post("/admin/announcements", response_model=SocialAnnouncementOut)
+def admin_create_announcement(
+    payload: SocialAnnouncementIn,
+    me: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    title = str(payload.title or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Укажите заголовок объявления")
+    starts_at = _social_parse_dt(payload.starts_at)
+    if not starts_at:
+        raise HTTPException(status_code=400, detail="Некорректная дата/время публикации")
+    ends_at = _social_parse_dt(payload.ends_at) if payload.ends_at else None
+    if ends_at and ends_at < starts_at:
+        raise HTTPException(status_code=400, detail="Дата завершения меньше даты публикации")
+    target_user_id = int(payload.user_id or 0)
+    if target_user_id <= 0:
+        target_user_id = None
+    row = SocialAnnouncement(
+        user_id=target_user_id,
+        title=title[:255],
+        body=str(payload.body or "")[:5000],
+        starts_at=starts_at,
+        ends_at=ends_at,
+        is_active=bool(payload.is_active),
+        created_by_user_id=int(me.id),
+    )
+    db.add(row)
+    db.flush()
+    _audit(
+        db,
+        me,
+        action="admin_announcement_created",
+        details=json.dumps(
+            {
+                "announcement_id": int(row.id or 0),
+                "starts_at": _to_utc_iso(starts_at),
+                "ends_at": _to_utc_iso(ends_at),
+                "user_id": target_user_id,
+            },
+            ensure_ascii=False,
+        ),
+        module_code="admin",
+        entity_type="announcement",
+        entity_id=str(row.id or ""),
+    )
+    db.commit()
+    return _social_announcement_to_out(row)
+
+
+@router.put("/admin/announcements/{announcement_id}", response_model=SocialAnnouncementOut)
+def admin_update_announcement(
+    announcement_id: int,
+    payload: SocialAnnouncementIn,
+    me: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    row = db.get(SocialAnnouncement, int(announcement_id or 0))
+    if not row:
+        raise HTTPException(status_code=404, detail="Объявление не найдено")
+    title = str(payload.title or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Укажите заголовок объявления")
+    starts_at = _social_parse_dt(payload.starts_at)
+    if not starts_at:
+        raise HTTPException(status_code=400, detail="Некорректная дата/время публикации")
+    ends_at = _social_parse_dt(payload.ends_at) if payload.ends_at else None
+    if ends_at and ends_at < starts_at:
+        raise HTTPException(status_code=400, detail="Дата завершения меньше даты публикации")
+    target_user_id = int(payload.user_id or 0)
+    if target_user_id <= 0:
+        target_user_id = None
+    row.title = title[:255]
+    row.body = str(payload.body or "")[:5000]
+    row.starts_at = starts_at
+    row.ends_at = ends_at
+    row.user_id = target_user_id
+    row.is_active = bool(payload.is_active)
+    row.updated_at = datetime.utcnow()
+    _audit(
+        db,
+        me,
+        action="admin_announcement_updated",
+        details=json.dumps(
+            {
+                "announcement_id": int(row.id or 0),
+                "starts_at": _to_utc_iso(starts_at),
+                "ends_at": _to_utc_iso(ends_at),
+                "user_id": target_user_id,
+                "is_active": bool(row.is_active),
+            },
+            ensure_ascii=False,
+        ),
+        module_code="admin",
+        entity_type="announcement",
+        entity_id=str(row.id or ""),
+    )
+    db.commit()
+    return _social_announcement_to_out(row)
+
+
+@router.delete("/admin/announcements/{announcement_id}", response_model=MessageOut)
+def admin_delete_announcement(
+    announcement_id: int,
+    me: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    row = db.get(SocialAnnouncement, int(announcement_id or 0))
+    if not row:
+        raise HTTPException(status_code=404, detail="Объявление не найдено")
+    row.is_active = False
+    row.updated_at = datetime.utcnow()
+    _audit(
+        db,
+        me,
+        action="admin_announcement_deleted",
+        details=json.dumps({"announcement_id": int(row.id or 0)}, ensure_ascii=False),
+        module_code="admin",
+        entity_type="announcement",
+        entity_id=str(row.id or ""),
+    )
+    db.commit()
+    return MessageOut(message="Ок")
 
 
 @router.post("/admin/notification-settings", response_model=NotificationSoundSettingsOut)

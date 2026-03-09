@@ -557,6 +557,39 @@ class SocialNotification(Base):
     user: Mapped["User"] = relationship()
 
 
+class SocialAnnouncement(Base):
+    __tablename__ = "social_announcements"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), default="")
+    body: Mapped[str] = mapped_column(Text, default="")
+    starts_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped["User | None"] = relationship(foreign_keys=[user_id])
+
+
+class SocialAnnouncementAck(Base):
+    __tablename__ = "social_announcement_acks"
+    __table_args__ = (
+        UniqueConstraint("announcement_id", "user_id", "actor_key", name="uq_social_announcement_ack"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    announcement_id: Mapped[int] = mapped_column(Integer, ForeignKey("social_announcements.id"), index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    actor_key: Mapped[str] = mapped_column(String(60), index=True)
+    acked_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    announcement: Mapped["SocialAnnouncement"] = relationship()
+    user: Mapped["User"] = relationship()
+
+
 class SocialCalendarEvent(Base):
     __tablename__ = "social_calendar_events"
 

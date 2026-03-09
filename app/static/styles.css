@@ -834,12 +834,41 @@ body[data-theme="light"] .review-type-pill {
   text-overflow: ellipsis;
 }
 
+.mobile-chat-compact-title.is-clickable,
+.mobile-chat-compact-subtitle.is-clickable {
+  cursor: pointer;
+}
+
+.mobile-chat-compact-title.is-clickable:hover,
+.mobile-chat-compact-subtitle.is-clickable:hover {
+  color: color-mix(in oklab, var(--accent) 66%, var(--text));
+}
+
 .mobile-chat-compact-subtitle {
   font-size: 11px;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.mobile-chat-compact-subtitle.online-now {
+  color: color-mix(in oklab, #16c784 74%, var(--text));
+  font-weight: 700;
+}
+
+.social-announcement-modal {
+  display: grid;
+  gap: 12px;
+}
+
+.social-announcement-body {
+  white-space: pre-wrap;
+  line-height: 1.45;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--panel-bg) 90%, #ffffff);
+  padding: 10px 12px;
 }
 
 .mobile-nav-toggle {
@@ -5559,6 +5588,20 @@ body[data-theme="dark"] tbody tr:hover td {
   color: color-mix(in oklab, #08386a 72%, #ffffff);
 }
 
+#reviews .feedback-meta-badge.feedback-date-wb,
+#reviewsSubtabQuestions .feedback-meta-badge.feedback-date-wb {
+  background: color-mix(in oklab, #7a4dff 20%, #ffffff);
+  border-color: color-mix(in oklab, #7a4dff 40%, var(--ds-border));
+  color: color-mix(in oklab, #23114f 76%, #ffffff);
+}
+
+#reviews .feedback-meta-badge.feedback-date-ozon,
+#reviewsSubtabQuestions .feedback-meta-badge.feedback-date-ozon {
+  background: color-mix(in oklab, #2ec5ff 20%, #ffffff);
+  border-color: color-mix(in oklab, #2ec5ff 40%, var(--ds-border));
+  color: color-mix(in oklab, #0e4f84 76%, #ffffff);
+}
+
 #reviews .feedback-meta-badge.feedback-rating-5,
 #reviewsSubtabQuestions .feedback-meta-badge.feedback-rating-5 {
   background: color-mix(in oklab, #22c55e 24%, #ffffff);
@@ -8418,6 +8461,16 @@ button,
 .admin-sound-upload-grid label {
   display: grid;
   gap: 6px;
+}
+
+.admin-announcement-actions {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+#adminAnnouncementBody {
+  min-height: 118px;
 }
 
 #adminPanelSection .kpi {

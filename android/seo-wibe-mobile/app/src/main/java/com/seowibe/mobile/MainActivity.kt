@@ -57,7 +57,7 @@ class MainActivity : AppCompatActivity() {
   private val authPrefs by lazy { getSharedPreferences(BackgroundNotifyWorker.PREF_AUTH, Context.MODE_PRIVATE) }
   private val allowedHosts by lazy {
     val host = Uri.parse(getString(R.string.base_url)).host?.lowercase(Locale.ROOT).orEmpty()
-    setOf(host, "127.0.0.1", "localhost")
+    setOf(host, "www.seowibe.ru", "5.129.207.106", "127.0.0.1", "localhost")
   }
 
   private data class ApkRelease(
@@ -347,10 +347,6 @@ class MainActivity : AppCompatActivity() {
 
   private fun tryHandleAppBackPress() {
     if (tryHandleJsBack()) return
-    if (webView.canGoBack()) {
-      webView.goBack()
-      return
-    }
     val now = System.currentTimeMillis()
     if (now - lastBackPressedAtMs < 1800L) {
       finish()
@@ -367,19 +363,6 @@ class MainActivity : AppCompatActivity() {
           if (typeof window.handleMobileBackPress === "function") {
             return window.handleMobileBackPress() === true;
           }
-          if (window.socialState && window.socialState.currentSubtab === "chat" && Number(window.socialState.currentThreadId || 0) > 0) {
-            if (typeof window.socialCloseThread === "function") {
-              window.socialCloseThread({keepAutoSelect:false});
-              return true;
-            }
-          }
-          if (typeof window.showTab === "function" && typeof window.currentTab !== "undefined") {
-            if (String(window.currentTab || "") !== "sales") {
-              var salesBtn = document.querySelector(".nav-btn[data-tab='sales']");
-              window.showTab("sales", salesBtn || null);
-              return true;
-            }
-          }
         } catch (e) {}
         return false;
       })();
@@ -388,10 +371,6 @@ class MainActivity : AppCompatActivity() {
       webView.evaluateJavascript(js) { result ->
         val handled = (result ?: "").contains("true")
         if (!handled) {
-          if (webView.canGoBack()) {
-            webView.goBack()
-            return@evaluateJavascript
-          }
           val now = System.currentTimeMillis()
           if (now - lastBackPressedAtMs < 1800L) {
             finish()

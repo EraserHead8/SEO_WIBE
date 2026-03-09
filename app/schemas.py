@@ -1082,3 +1082,33 @@ class NotificationSoundSettingsIn(BaseModel):
     chat_sound_url: str = ""
     task_sound_url: str = ""
     calendar_sound_url: str = ""
+
+
+class SocialAnnouncementIn(BaseModel):
+    title: str
+    body: str = ""
+    starts_at: str
+    ends_at: str | None = None
+    is_active: bool = True
+    user_id: int | None = None
+
+
+class SocialAnnouncementOut(BaseModel):
+    id: int
+    title: str
+    body: str = ""
+    starts_at: str
+    ends_at: str | None = None
+    is_active: bool = True
+    user_id: int | None = None
+    created_by_user_id: int | None = None
+    created_at: str
+    updated_at: str
+
+
+class SocialAnnouncementPublicOut(BaseModel):
+    id: int
+    title: str
+    body: str = ""
+    starts_at: str
+    ends_at: str | None = None

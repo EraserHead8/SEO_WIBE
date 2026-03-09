@@ -17,6 +17,8 @@ let adminSelectedUserAiState = null;
 let adminServerMetrics = null;
 let adminServerHistory = [];
 let adminNotificationSettings = null;
+let adminAnnouncements = [];
+let adminAnnouncementEditId = 0;
 let adminServerAutoTimer = null;
 const adminUserProfileCache = new Map();
 let adminTeamModalState = {
@@ -815,6 +817,14 @@ function refreshUserSelects() {
       el.value = prev;
     }
   });
+  const annSelect = document.getElementById("adminAnnouncementTargetUser");
+  if (annSelect) {
+    const prev = annSelect.value;
+    annSelect.innerHTML = `<option value="0">${escapeHtml(aTr("Все пользователи", "All users"))}</option>${html}`;
+    if (prev && [...annSelect.options].some((o) => o.value === prev)) {
+      annSelect.value = prev;
+    }
+  }
 }
 
 async function adminLogin() {
@@ -855,6 +865,8 @@ async function adminLogout() {
   adminAiGlobalState = null;
   adminSelectedUserAiState = null;
   adminNotificationSettings = null;
+  adminAnnouncements = [];
+  adminAnnouncementEditId = 0;
   adminUserProfileCache.clear();
   localStorage.removeItem("admin_token");
   sessionStorage.removeItem("admin_token");
@@ -885,7 +897,7 @@ async function ensureAdminAuth() {
 }
 
 async function loadAdminAll() {
-  const [stats, users, modules, allCreds, uiSettings, aiGlobal, serverMetrics, notifSettings] = await Promise.all([
+  const [stats, users, modules, allCreds, uiSettings, aiGlobal, serverMetrics, notifSettings, announcements] = await Promise.all([
     adminRequest("/api/admin/stats", { headers: adminHeaders() }).catch(() => null),
     adminRequest("/api/admin/users", { headers: adminHeaders() }).catch(() => null),
     adminRequest("/api/admin/modules", { headers: adminHeaders() }).catch(() => null),
@@ -894,6 +906,7 @@ async function loadAdminAll() {
     adminRequest("/api/admin/ai/global", { headers: adminHeaders() }).catch(() => null),
     adminRequest("/api/admin/server/metrics", { headers: adminHeaders() }).catch(() => null),
     adminRequest("/api/admin/notification-settings", { headers: adminHeaders() }).catch(() => null),
+    adminRequest("/api/admin/announcements", { headers: adminHeaders() }).catch(() => []),
   ]);
 
   const statsView = document.getElementById("adminStatsView");
@@ -911,6 +924,7 @@ async function loadAdminAll() {
   adminAiGlobalState = aiGlobal && typeof aiGlobal === "object" ? aiGlobal : null;
   adminServerMetrics = serverMetrics && typeof serverMetrics === "object" ? serverMetrics : null;
   adminNotificationSettings = normalizeAdminNotificationSettings(notifSettings);
+  adminAnnouncements = Array.isArray(announcements) ? announcements : [];
   adminSelectedUserAiState = null;
 
   renderAdminDashboard(stats, users || [], modules || []);
@@ -919,6 +933,7 @@ async function loadAdminAll() {
   renderAdminCredentialsTable();
   renderAdminAppearance();
   renderAdminNotificationSettings();
+  renderAdminAnnouncements();
   renderAdminAiTab();
   renderAdminServerMetrics();
 }
@@ -2839,6 +2854,159 @@ async function adminUploadNotificationSound(group) {
   await adminSaveNotificationSettings();
 }
 
+function toDateTimeLocalValue(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return "";
+  const dt = new Date(text);
+  if (Number.isNaN(dt.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+}
+
+function adminResetAnnouncementForm() {
+  adminAnnouncementEditId = 0;
+  const titleEl = document.getElementById("adminAnnouncementTitle");
+  const bodyEl = document.getElementById("adminAnnouncementBody");
+  const startsEl = document.getElementById("adminAnnouncementStartsAt");
+  const endsEl = document.getElementById("adminAnnouncementEndsAt");
+  const targetEl = document.getElementById("adminAnnouncementTargetUser");
+  const activeEl = document.getElementById("adminAnnouncementActive");
+  const metaEl = document.getElementById("adminAnnouncementMeta");
+  if (titleEl) titleEl.value = "";
+  if (bodyEl) bodyEl.value = "";
+  if (startsEl) startsEl.value = toDateTimeLocalValue(new Date().toISOString());
+  if (endsEl) endsEl.value = "";
+  if (targetEl) targetEl.value = "0";
+  if (activeEl) activeEl.checked = true;
+  if (metaEl) metaEl.textContent = aTr("Новое объявление", "New announcement");
+}
+
+function renderAdminAnnouncements() {
+  const tbody = document.getElementById("adminAnnouncementsTable");
+  if (!tbody) return;
+  const rows = Array.isArray(adminAnnouncements) ? adminAnnouncements : [];
+  tbody.innerHTML = "";
+  if (!rows.length) {
+    const trEl = document.createElement("tr");
+    trEl.innerHTML = `<td colspan="6">${escapeHtml(aTr("Объявлений пока нет.", "No announcements yet."))}</td>`;
+    tbody.appendChild(trEl);
+    if (!adminAnnouncementEditId) adminResetAnnouncementForm();
+    return;
+  }
+  for (const row of rows) {
+    const id = Number(row?.id || 0);
+    const trEl = document.createElement("tr");
+    const startsAt = formatDateTime(row?.starts_at);
+    const endsAt = row?.ends_at ? formatDateTime(row?.ends_at) : "—";
+    const title = String(row?.title || "").trim() || "-";
+    const userId = Number(row?.user_id || 0);
+    const status = row?.is_active ? aTr("Активно", "Active") : aTr("Отключено", "Disabled");
+    trEl.innerHTML = `
+      <td>${escapeHtml(String(id || "-"))}</td>
+      <td>${escapeHtml(`${startsAt} → ${endsAt}`)}</td>
+      <td>${escapeHtml(userId > 0 ? `#${userId}` : aTr("Все", "All"))}</td>
+      <td>${escapeHtml(title)}</td>
+      <td>${escapeHtml(status)}</td>
+      <td class="actions">
+        <button class="btn-secondary" type="button" data-ann-edit="${escapeHtml(String(id))}">${escapeHtml(aTr("Изменить", "Edit"))}</button>
+        <button class="btn-danger" type="button" data-ann-del="${escapeHtml(String(id))}">${escapeHtml(aTr("Отключить", "Disable"))}</button>
+      </td>
+    `;
+    tbody.appendChild(trEl);
+  }
+  tbody.querySelectorAll("[data-ann-edit]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = Number(btn.getAttribute("data-ann-edit") || 0);
+      const row = adminAnnouncements.find((x) => Number(x?.id || 0) === id);
+      if (!row) return;
+      adminAnnouncementEditId = id;
+      const titleEl = document.getElementById("adminAnnouncementTitle");
+      const bodyEl = document.getElementById("adminAnnouncementBody");
+      const startsEl = document.getElementById("adminAnnouncementStartsAt");
+      const endsEl = document.getElementById("adminAnnouncementEndsAt");
+      const targetEl = document.getElementById("adminAnnouncementTargetUser");
+      const activeEl = document.getElementById("adminAnnouncementActive");
+      const metaEl = document.getElementById("adminAnnouncementMeta");
+      if (titleEl) titleEl.value = String(row?.title || "");
+      if (bodyEl) bodyEl.value = String(row?.body || "");
+      if (startsEl) startsEl.value = toDateTimeLocalValue(row?.starts_at || "");
+      if (endsEl) endsEl.value = toDateTimeLocalValue(row?.ends_at || "");
+      if (targetEl) targetEl.value = String(Number(row?.user_id || 0));
+      if (activeEl) activeEl.checked = Boolean(row?.is_active);
+      if (metaEl) metaEl.textContent = aTr(`Редактирование #${id}`, `Editing #${id}`);
+    });
+  });
+  tbody.querySelectorAll("[data-ann-del]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = Number(btn.getAttribute("data-ann-del") || 0);
+      if (id <= 0) return;
+      if (!confirm(aTr(`Отключить объявление #${id}?`, `Disable announcement #${id}?`))) return;
+      const ok = await adminRequest(`/api/admin/announcements/${id}`, {
+        method: "DELETE",
+        headers: adminHeaders(),
+      }).catch((e) => {
+        alert(e.message);
+        return null;
+      });
+      if (!ok) return;
+      await adminLoadAnnouncements();
+    });
+  });
+  if (!adminAnnouncementEditId) adminResetAnnouncementForm();
+}
+
+async function adminLoadAnnouncements() {
+  const rows = await adminRequest("/api/admin/announcements", { headers: adminHeaders() }).catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  if (!rows) return;
+  adminAnnouncements = Array.isArray(rows) ? rows : [];
+  renderAdminAnnouncements();
+}
+
+async function adminSaveAnnouncement() {
+  const title = String(document.getElementById("adminAnnouncementTitle")?.value || "").trim();
+  const body = String(document.getElementById("adminAnnouncementBody")?.value || "").trim();
+  const startsAtRaw = String(document.getElementById("adminAnnouncementStartsAt")?.value || "").trim();
+  const endsAtRaw = String(document.getElementById("adminAnnouncementEndsAt")?.value || "").trim();
+  const targetUser = Number(document.getElementById("adminAnnouncementTargetUser")?.value || 0);
+  const isActive = Boolean(document.getElementById("adminAnnouncementActive")?.checked);
+  if (!title) {
+    alert(aTr("Введите заголовок объявления.", "Enter announcement title."));
+    return;
+  }
+  if (!startsAtRaw) {
+    alert(aTr("Укажите дату и время публикации.", "Specify publish date and time."));
+    return;
+  }
+  const startsAtIso = new Date(startsAtRaw).toISOString();
+  const endsAtIso = endsAtRaw ? new Date(endsAtRaw).toISOString() : "";
+  const payload = {
+    title,
+    body,
+    starts_at: startsAtIso,
+    ends_at: endsAtIso || null,
+    is_active: isActive,
+    user_id: targetUser > 0 ? targetUser : null,
+  };
+  const url = adminAnnouncementEditId > 0
+    ? `/api/admin/announcements/${adminAnnouncementEditId}`
+    : "/api/admin/announcements";
+  const method = adminAnnouncementEditId > 0 ? "PUT" : "POST";
+  const saved = await adminRequest(url, {
+    method,
+    headers: adminHeaders(),
+    body: JSON.stringify(payload),
+  }).catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  if (!saved) return;
+  adminAnnouncementEditId = 0;
+  await adminLoadAnnouncements();
+}
+
 function renderAdminAppearance() {
   const summaryEl = document.getElementById("adminAppearanceSummary");
   const summaryTable = document.getElementById("adminAppearanceSummaryTable");
@@ -2964,6 +3132,9 @@ window.adminSaveUiSettings = adminSaveUiSettings;
 window.adminSaveNotificationSettings = adminSaveNotificationSettings;
 window.adminLoadNotificationSettings = adminLoadNotificationSettings;
 window.adminUploadNotificationSound = adminUploadNotificationSound;
+window.adminSaveAnnouncement = adminSaveAnnouncement;
+window.adminResetAnnouncementForm = adminResetAnnouncementForm;
+window.adminLoadAnnouncements = adminLoadAnnouncements;
 window.loadAdminServerMetrics = loadAdminServerMetrics;
 window.adminOpenAppearanceModal = adminOpenAppearanceModal;
 window.adminCloseAppearanceModal = adminCloseAppearanceModal;
