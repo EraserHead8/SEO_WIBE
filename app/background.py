@@ -7,7 +7,7 @@ import random
 from sqlalchemy import delete, select
 
 from app.db import SessionLocal
-from app.models import ApiCredential, AuditLog, MarketplaceApiCache, ModuleAccess, Product, SeoJob, User, UserKeyword
+from app.models import ApiCredential, AuditLog, MarketplaceApiCache, ModuleAccess, Product, SeoJob, User, UserKeyword, WbAdsBidderRule
 from app.services.marketplace import find_competitors, resolve_wb_external_id, update_product_description
 from app.services.task_queue import enqueue_task, queue_depth, queue_enabled
 from app.services.seo import (
@@ -188,6 +188,59 @@ async def marketplace_cache_warmup_loop():
             _warm_marketplace_cache_for_recent_users(db, user_limit=4, warm_budget=10)
             _cleanup_market_cache_rows(db, max_age_hours=96)
             db.commit()
+        except Exception:
+            db.rollback()
+        finally:
+            db.close()
+
+
+async def wb_ads_bidder_loop():
+    while True:
+        await asyncio.sleep(90 + random.randint(5, 15))
+        if not queue_enabled():
+            continue
+        if queue_depth() > 180:
+            continue
+        db = SessionLocal()
+        try:
+            now_utc = datetime.utcnow()
+            rows = db.execute(
+                select(
+                    WbAdsBidderRule.user_id,
+                    WbAdsBidderRule.last_run_at,
+                    WbAdsBidderRule.cooldown_sec,
+                )
+                .join(
+                    ModuleAccess,
+                    (ModuleAccess.user_id == WbAdsBidderRule.user_id) & (ModuleAccess.module_code == "wb_ads"),
+                )
+                .join(
+                    ApiCredential,
+                    (ApiCredential.user_id == WbAdsBidderRule.user_id) & (ApiCredential.marketplace == "wb"),
+                )
+                .where(
+                    WbAdsBidderRule.is_active.is_(True),
+                    ModuleAccess.enabled.is_(True),
+                    ApiCredential.active.is_(True),
+                )
+            ).all()
+            dedupe: set[int] = set()
+            for uid, last_run_at, cooldown_sec in rows:
+                safe_uid = int(uid or 0)
+                if safe_uid <= 0 or safe_uid in dedupe:
+                    continue
+                safe_cooldown = max(30, int(cooldown_sec or 0) or 300)
+                if isinstance(last_run_at, datetime):
+                    elapsed = (now_utc - last_run_at).total_seconds()
+                    if elapsed < safe_cooldown:
+                        continue
+                dedupe.add(safe_uid)
+                enqueue_task(
+                    "wb_bidder_run",
+                    {"user_id": safe_uid, "rule_ids": [], "force": False},
+                    dedupe_key=f"wb_bidder_run:{safe_uid}:all",
+                    dedupe_ttl_sec=70,
+                )
         except Exception:
             db.rollback()
         finally:

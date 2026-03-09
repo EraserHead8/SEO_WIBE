@@ -1197,6 +1197,32 @@ body[data-theme="light"] .review-type-pill {
   min-width: 0;
 }
 
+.ads-bidder-grid {
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
+}
+
+.ads-bidder-actions {
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+}
+
+.ads-bidder-status-ok {
+  color: #138b4f;
+}
+
+.ads-bidder-status-error {
+  color: #d14747;
+}
+
+.ads-bidder-status-skipped {
+  color: #7b8aa9;
+}
+
+.ads-bidder-row-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .sales-quick-range {
   display: flex;
   flex-wrap: wrap;
@@ -3866,7 +3892,9 @@ body[data-theme="light"] .hover-tip {
   #reviewsSubtabQuestions .panel > .grid-6:first-of-type,
   .ads-toolbar-main,
   .ads-toolbar-filters,
-  .ads-toolbar-meta {
+  .ads-toolbar-meta,
+  .ads-bidder-grid,
+  .ads-bidder-actions {
     grid-template-columns: 1fr;
   }
   .sales-kpis { grid-template-columns: 1fr; }

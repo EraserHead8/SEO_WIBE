@@ -115,6 +115,8 @@ let adsAnalyticsRows = [];
 let adsRecommendationRows = [];
 let adsRecLoadProgress = { active: false, total: 0, loaded: 0 };
 let adsRecLoadToken = 0;
+let wbBidderRules = [];
+let wbBidderRuns = [];
 let salesRows = [];
 let salesChartRows = [];
 let salesCompareRows = [];
@@ -810,6 +812,7 @@ function applyUiLanguage() {
   setText("#adsSubtabAnalytics .grid-4 button", isEn ? "Build Report" : "Построить отчет");
   setText("#adsSubtabRecommendations .panel h3", isEn ? "WB Ads Recommendations" : "Рекомендации WB Ads");
   setText("#adsSubtabRecommendations .grid-4 button", isEn ? "Build Recommendations" : "Построить рекомендации");
+  setText("#adsSubtabBidder .panel h3", isEn ? "WB Ads Bidder" : "Бидер WB Ads");
   setText("#adsSubtabOzon .panel h3", isEn ? "Ozon Ads (beta)" : "Реклама Ozon (бета)");
   setText("#profileCompanyHeader", isEn ? "Company Profile" : "Профиль компании");
   setText("#profileMainPanel h3", isEn ? "Company Profile" : "Профиль компании");
@@ -861,6 +864,7 @@ function applyUiLanguage() {
   setText("#adsSubtabCampaignsBtn", isEn ? "Campaigns" : "Кампании");
   setText("#adsSubtabAnalyticsBtn", isEn ? "Analytics" : "Аналитика");
   setText("#adsSubtabRecommendationsBtn", isEn ? "Recommendations" : "Рекомендации");
+  setText("#adsSubtabBidderBtn", isEn ? "Bidder" : "Бидер");
   setText("#adsSubtabOzonBtn", isEn ? "Ozon Ads" : "Реклама Ozon");
   setText("#socialSubtabGamesBtn", isEn ? "Games" : "Игры");
   setText("#socialSubtabChatBtn", isEn ? "Chat" : "Чат");
@@ -2750,7 +2754,7 @@ async function ensureAuth(allowFallback = true) {
         const storedReviewsSubtab = String(sessionStorage.getItem("seo_wibe_last_reviews_subtab") || "").trim();
         if (["reviews", "questions", "returns"].includes(storedReviewsSubtab)) currentReviewsSubtab = storedReviewsSubtab;
         const storedAdsSubtab = String(sessionStorage.getItem("seo_wibe_last_ads_subtab") || "").trim();
-        if (["campaigns", "analytics", "recommendations"].includes(storedAdsSubtab)) currentAdsSubtab = storedAdsSubtab;
+        if (["campaigns", "analytics", "recommendations", "bidder", "ozon"].includes(storedAdsSubtab)) currentAdsSubtab = storedAdsSubtab;
         const storedAccountingSubtab = String(sessionStorage.getItem("seo_wibe_last_accounting_subtab") || "").trim();
         if (["overview", "analysis", "expenses", "settings"].includes(storedAccountingSubtab)) currentAccountingSubtab = storedAccountingSubtab;
         const storedHelpSubtab = String(sessionStorage.getItem("seo_wibe_last_help_subtab") || "").trim();
@@ -3164,10 +3168,10 @@ function syncReviewsSubtabAccess() {
 }
 
 function switchAdsSubtab(tab, preload = true) {
-  const allowed = new Set(["campaigns", "analytics", "recommendations", "ozon"]);
+  const allowed = new Set(["campaigns", "analytics", "recommendations", "bidder", "ozon"]);
   const next = allowed.has(String(tab || "")) ? String(tab) : "campaigns";
   currentAdsSubtab = next;
-  const all = ["campaigns", "analytics", "recommendations", "ozon"];
+  const all = ["campaigns", "analytics", "recommendations", "bidder", "ozon"];
   for (const key of all) {
     const active = key === next;
     document.getElementById(`adsSubtab${key[0].toUpperCase()}${key.slice(1)}`)?.classList.toggle("hidden", !active);
@@ -3186,6 +3190,11 @@ function switchAdsSubtab(tab, preload = true) {
     trackUiActivity("ui_subtab_opened", "wb_ads_recommendations", "subtab=recommendations", { cooldownMs: 15000 });
     loadAdsRecommendations();
   }
+  if (next === "bidder" && enabledModules.has("wb_ads")) {
+    trackUiActivity("ui_subtab_opened", "wb_ads", "subtab=bidder", { cooldownMs: 15000 });
+    syncWbBidderTargetKindUi();
+    loadWbBidderWorkspace();
+  }
 }
 
 function syncAdsSubtabAccess() {
@@ -3193,6 +3202,7 @@ function syncAdsSubtabAccess() {
     campaigns: enabledModules.has("wb_ads"),
     analytics: enabledModules.has("wb_ads_analytics"),
     recommendations: enabledModules.has("wb_ads_recommendations"),
+    bidder: enabledModules.has("wb_ads"),
     ozon: true,
   };
   for (const [tab, ok] of Object.entries(access)) {
@@ -3200,7 +3210,7 @@ function syncAdsSubtabAccess() {
     document.getElementById(`adsSubtab${label}Btn`)?.classList.toggle("hidden", !ok);
   }
   if (!access[currentAdsSubtab]) {
-    currentAdsSubtab = access.campaigns ? "campaigns" : (access.analytics ? "analytics" : (access.recommendations ? "recommendations" : "ozon"));
+    currentAdsSubtab = access.campaigns ? "campaigns" : (access.analytics ? "analytics" : (access.recommendations ? "recommendations" : (access.bidder ? "bidder" : "ozon")));
   }
 }
 
@@ -3255,10 +3265,7 @@ async function loadAdsWorkspace() {
   const hasAnyAdsModule = enabledModules.has("wb_ads") || enabledModules.has("wb_ads_analytics") || enabledModules.has("wb_ads_recommendations");
   if (!hasAnyAdsModule) return;
   syncAdsSubtabAccess();
-  switchAdsSubtab(currentAdsSubtab || "campaigns", false);
-  if (enabledModules.has("wb_ads")) await loadWbAdCampaigns();
-  if (enabledModules.has("wb_ads_analytics")) await loadAdsAnalytics();
-  if (enabledModules.has("wb_ads_recommendations")) await loadAdsRecommendations();
+  switchAdsSubtab(currentAdsSubtab || "campaigns", true);
 }
 
 async function loadHelpWorkspace() {
@@ -5506,6 +5513,8 @@ function renderWbCampaignRows() {
       selectedWbCampaignId = id;
       const campaignInput = document.getElementById("wbRateCampaignId");
       if (campaignInput) campaignInput.value = String(id);
+      const bidderCampaignInput = document.getElementById("wbBidderCampaignId");
+      if (bidderCampaignInput) bidderCampaignInput.value = String(id);
       const analyticsInput = document.getElementById("adsAnalyticsCampaignId");
       if (analyticsInput) analyticsInput.value = String(id);
       const typeInput = document.getElementById("wbRateCampaignType");
@@ -6308,6 +6317,350 @@ function renderAdsRecommendationsRows() {
       <td>${escapeHtml(row.reason ?? "-")}</td>
     `;
     tbody.appendChild(rowEl);
+  }
+}
+
+function setWbBidderStatus(message = "-", tone = "") {
+  const box = document.getElementById("wbBidderStatus");
+  if (!box) return;
+  box.classList.remove("ads-bidder-status-ok", "ads-bidder-status-error", "ads-bidder-status-skipped");
+  if (tone === "ok") box.classList.add("ads-bidder-status-ok");
+  if (tone === "error") box.classList.add("ads-bidder-status-error");
+  if (tone === "skipped") box.classList.add("ads-bidder-status-skipped");
+  box.textContent = String(message || "-");
+}
+
+function syncWbBidderTargetKindUi() {
+  const kind = String(document.getElementById("wbBidderTargetKind")?.value || "normquery").trim().toLowerCase();
+  const targetValueEl = document.getElementById("wbBidderTargetValue");
+  if (!targetValueEl) return;
+  if (kind === "nm") {
+    targetValueEl.disabled = true;
+    targetValueEl.placeholder = tr("Для nm не используется", "Not used for nm");
+    targetValueEl.value = "";
+    return;
+  }
+  targetValueEl.disabled = false;
+  targetValueEl.placeholder = tr("Фраза (для normquery)", "Phrase (for normquery)");
+}
+
+function resetWbBidderForm() {
+  const defaults = [
+    ["wbBidderRuleId", ""],
+    ["wbBidderCampaignId", ""],
+    ["wbBidderNmId", ""],
+    ["wbBidderTargetKind", "normquery"],
+    ["wbBidderTargetValue", ""],
+    ["wbBidderPlacement", "search"],
+    ["wbBidderStrategy", "optimal"],
+    ["wbBidderDesiredBid", ""],
+    ["wbBidderMinBid", ""],
+    ["wbBidderMaxBid", ""],
+    ["wbBidderStepBid", "100"],
+    ["wbBidderPosFrom", "1"],
+    ["wbBidderPosTo", "5"],
+    ["wbBidderMinClicks", "0"],
+    ["wbBidderCooldownSec", "300"],
+    ["wbBidderNotes", ""],
+  ];
+  for (const [id, value] of defaults) {
+    const el = document.getElementById(id);
+    if (el) el.value = value;
+  }
+  const activeEl = document.getElementById("wbBidderIsActive");
+  if (activeEl) activeEl.checked = true;
+  syncWbBidderTargetKindUi();
+}
+
+function fillWbBidderForm(row) {
+  if (!row || typeof row !== "object") return;
+  const values = [
+    ["wbBidderRuleId", String(row.id || "")],
+    ["wbBidderCampaignId", String(row.campaign_id || "")],
+    ["wbBidderNmId", String(row.nm_id || "")],
+    ["wbBidderTargetKind", String(row.target_kind || "normquery")],
+    ["wbBidderTargetValue", String(row.target_value || "")],
+    ["wbBidderPlacement", String(row.placement || "search")],
+    ["wbBidderStrategy", String(row.strategy || "optimal")],
+    ["wbBidderDesiredBid", String(row.desired_bid || "")],
+    ["wbBidderMinBid", String(row.min_bid || "")],
+    ["wbBidderMaxBid", String(row.max_bid || "")],
+    ["wbBidderStepBid", String(row.step_bid || "100")],
+    ["wbBidderPosFrom", String(row.target_pos_from || "1")],
+    ["wbBidderPosTo", String(row.target_pos_to || "5")],
+    ["wbBidderMinClicks", String(row.min_clicks || "0")],
+    ["wbBidderCooldownSec", String(row.cooldown_sec || "300")],
+    ["wbBidderNotes", String(row.notes || "")],
+  ];
+  for (const [id, value] of values) {
+    const el = document.getElementById(id);
+    if (el) el.value = value;
+  }
+  const activeEl = document.getElementById("wbBidderIsActive");
+  if (activeEl) activeEl.checked = Boolean(row.is_active);
+  syncWbBidderTargetKindUi();
+}
+
+function collectWbBidderPayload() {
+  const asInt = (id, fallback = 0) => {
+    const num = Number(document.getElementById(id)?.value || fallback);
+    return Number.isFinite(num) ? Math.trunc(num) : fallback;
+  };
+  const asFloat = (id, fallback = 0) => {
+    const num = Number(document.getElementById(id)?.value || fallback);
+    return Number.isFinite(num) ? num : fallback;
+  };
+  return {
+    campaign_id: asInt("wbBidderCampaignId", 0),
+    nm_id: asInt("wbBidderNmId", 0),
+    target_kind: String(document.getElementById("wbBidderTargetKind")?.value || "normquery").trim().toLowerCase(),
+    target_value: String(document.getElementById("wbBidderTargetValue")?.value || "").trim(),
+    placement: String(document.getElementById("wbBidderPlacement")?.value || "search").trim().toLowerCase(),
+    strategy: String(document.getElementById("wbBidderStrategy")?.value || "optimal").trim().toLowerCase(),
+    desired_bid: asInt("wbBidderDesiredBid", 0),
+    min_bid: asInt("wbBidderMinBid", 0),
+    max_bid: asInt("wbBidderMaxBid", 0),
+    step_bid: asInt("wbBidderStepBid", 100),
+    target_pos_from: asFloat("wbBidderPosFrom", 1),
+    target_pos_to: asFloat("wbBidderPosTo", 5),
+    min_clicks: asInt("wbBidderMinClicks", 0),
+    cooldown_sec: asInt("wbBidderCooldownSec", 300),
+    notes: String(document.getElementById("wbBidderNotes")?.value || "").trim(),
+    is_active: Boolean(document.getElementById("wbBidderIsActive")?.checked),
+  };
+}
+
+function bidderRuleTargetText(row) {
+  const kind = String(row?.target_kind || "").toLowerCase();
+  const nm = Number(row?.nm_id || 0);
+  if (kind === "normquery") {
+    return `nm:${nm} · ${String(row?.target_value || "-")}`;
+  }
+  return `nm:${nm}`;
+}
+
+function bidderStatusBadge(status) {
+  const low = String(status || "").trim().toLowerCase();
+  if (low === "ok") return `<span class="ads-bidder-status-ok">${escapeHtml(tr("ok", "ok"))}</span>`;
+  if (low === "error") return `<span class="ads-bidder-status-error">${escapeHtml(tr("ошибка", "error"))}</span>`;
+  if (low === "skipped") return `<span class="ads-bidder-status-skipped">${escapeHtml(tr("пропуск", "skipped"))}</span>`;
+  return escapeHtml(String(status || "-"));
+}
+
+async function loadWbBidderWorkspace() {
+  if (!enabledModules.has("wb_ads")) return;
+  await loadWbBidderRules();
+  await loadWbBidderRuns();
+}
+
+async function loadWbBidderRules() {
+  if (!enabledModules.has("wb_ads")) return;
+  const data = await requestJson("/api/wb/ads/bidder/rules", {
+    headers: authHeaders(),
+    timeoutMs: 60000,
+  }).catch((e) => {
+    setWbBidderStatus(e.message || tr("Не удалось загрузить правила биддера.", "Unable to load bidder rules."), "error");
+    return null;
+  });
+  if (!data) return;
+  wbBidderRules = Array.isArray(data.rows) ? data.rows : [];
+  renderWbBidderRules();
+  syncWbBidderTargetKindUi();
+  const activeCount = wbBidderRules.filter((x) => Boolean(x?.is_active)).length;
+  setWbBidderStatus(
+    tr(`Правил: ${wbBidderRules.length}, активных: ${activeCount}`, `Rules: ${wbBidderRules.length}, active: ${activeCount}`),
+    wbBidderRules.length ? "ok" : "skipped"
+  );
+}
+
+function renderWbBidderRules() {
+  const tbody = document.getElementById("wbBidderRulesTable");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  if (!Array.isArray(wbBidderRules) || !wbBidderRules.length) {
+    const row = document.createElement("tr");
+    row.innerHTML = `<td colspan="11">${escapeHtml(tr("Правила пока не созданы.", "No bidder rules yet."))}</td>`;
+    tbody.appendChild(row);
+    return;
+  }
+  for (const row of wbBidderRules) {
+    const trEl = document.createElement("tr");
+    trEl.innerHTML = `
+      <td>${escapeHtml(String(row.id || "-"))}</td>
+      <td>${row.is_active ? "✅" : "⏸️"}</td>
+      <td>${escapeHtml(String(row.campaign_id || "-"))}</td>
+      <td>${escapeHtml(bidderRuleTargetText(row))}</td>
+      <td>${escapeHtml(String(row.strategy || "-"))} · ${escapeHtml(String(row.placement || "-"))}</td>
+      <td>${escapeHtml(String(row.min_bid || 0))} .. ${escapeHtml(String(row.max_bid || 0))} · step ${escapeHtml(String(row.step_bid || 0))}</td>
+      <td>${escapeHtml(String(row.target_pos_from || 0))} .. ${escapeHtml(String(row.target_pos_to || 0))}</td>
+      <td>${escapeHtml(String(row.cooldown_sec || 0))}s</td>
+      <td>${escapeHtml(String(row.last_run_at || "-"))}</td>
+      <td>${bidderStatusBadge(row.last_status)}<br><small>${escapeHtml(String(row.last_reason || ""))}</small></td>
+      <td>
+        <div class="ads-bidder-row-actions">
+          <button type="button" class="btn-secondary" onclick="editWbBidderRule(${Number(row.id || 0)})">✎</button>
+          <button type="button" class="btn-secondary" onclick="runWbBidderRuleNow(${Number(row.id || 0)})">▶</button>
+          <button type="button" class="btn-secondary" onclick="toggleWbBidderRule(${Number(row.id || 0)}, ${row.is_active ? "false" : "true"})">${row.is_active ? "⏸" : "▶"}</button>
+          <button type="button" class="btn-danger" onclick="deleteWbBidderRule(${Number(row.id || 0)})">🗑</button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(trEl);
+  }
+}
+
+function editWbBidderRule(ruleId) {
+  const row = wbBidderRules.find((x) => Number(x?.id || 0) === Number(ruleId || 0));
+  if (!row) return;
+  fillWbBidderForm(row);
+  setWbBidderStatus(
+    tr(`Редактирование правила #${row.id}`, `Editing rule #${row.id}`),
+    "skipped"
+  );
+}
+
+async function saveWbBidderRule() {
+  if (!enabledModules.has("wb_ads")) return;
+  const payload = collectWbBidderPayload();
+  const ruleId = Number(document.getElementById("wbBidderRuleId")?.value || 0);
+  if (!payload.campaign_id || !payload.nm_id) {
+    setWbBidderStatus(
+      tr("Заполните campaign_id и nm_id.", "Fill campaign_id and nm_id."),
+      "error"
+    );
+    return;
+  }
+  if (payload.target_kind === "normquery" && !payload.target_value) {
+    setWbBidderStatus(
+      tr("Для normquery укажите фразу.", "For normquery provide the phrase."),
+      "error"
+    );
+    return;
+  }
+  const method = ruleId > 0 ? "PATCH" : "POST";
+  const endpoint = ruleId > 0 ? `/api/wb/ads/bidder/rules/${ruleId}` : "/api/wb/ads/bidder/rules";
+  const data = await requestJson(endpoint, {
+    method,
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+    timeoutMs: 60000,
+  }).catch((e) => {
+    setWbBidderStatus(e.message || tr("Не удалось сохранить правило.", "Unable to save rule."), "error");
+    return null;
+  });
+  if (!data) return;
+  resetWbBidderForm();
+  setWbBidderStatus(
+    ruleId > 0
+      ? tr(`Правило #${ruleId} обновлено.`, `Rule #${ruleId} updated.`)
+      : tr("Правило создано.", "Rule created."),
+    "ok"
+  );
+  await loadWbBidderRules();
+  await loadWbBidderRuns();
+}
+
+async function deleteWbBidderRule(ruleId) {
+  const id = Number(ruleId || 0);
+  if (id <= 0) return;
+  const sure = window.confirm(tr(`Удалить правило #${id}?`, `Delete rule #${id}?`));
+  if (!sure) return;
+  const data = await requestJson(`/api/wb/ads/bidder/rules/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+    timeoutMs: 60000,
+  }).catch((e) => {
+    setWbBidderStatus(e.message || tr("Не удалось удалить правило.", "Unable to delete rule."), "error");
+    return null;
+  });
+  if (!data) return;
+  setWbBidderStatus(tr(`Правило #${id} удалено.`, `Rule #${id} deleted.`), "ok");
+  await loadWbBidderRules();
+  await loadWbBidderRuns();
+}
+
+async function toggleWbBidderRule(ruleId, active) {
+  const id = Number(ruleId || 0);
+  if (id <= 0) return;
+  const isActive = active === true || active === "true";
+  const data = await requestJson(`/api/wb/ads/bidder/rules/${id}`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify({ is_active: isActive }),
+    timeoutMs: 60000,
+  }).catch((e) => {
+    setWbBidderStatus(e.message || tr("Не удалось обновить статус правила.", "Unable to update rule state."), "error");
+    return null;
+  });
+  if (!data) return;
+  setWbBidderStatus(
+    tr(`Правило #${id}: ${isActive ? "включено" : "выключено"}.`, `Rule #${id}: ${isActive ? "enabled" : "disabled"}.`),
+    isActive ? "ok" : "skipped"
+  );
+  await loadWbBidderRules();
+}
+
+async function runWbBidder(force = false, ruleIds = []) {
+  const ids = Array.isArray(ruleIds)
+    ? ruleIds.map((x) => Number(x || 0)).filter((x) => Number.isFinite(x) && x > 0)
+    : [];
+  const data = await requestJson("/api/wb/ads/bidder/run", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ rule_ids: ids, force: Boolean(force) }),
+    timeoutMs: 120000,
+  }).catch((e) => {
+    setWbBidderStatus(e.message || tr("Не удалось запустить биддер.", "Unable to run bidder."), "error");
+    return null;
+  });
+  if (!data) return;
+  const tone = data.ok ? "ok" : "error";
+  setWbBidderStatus(String(data.message || "-"), tone);
+  await loadWbBidderRules();
+  await loadWbBidderRuns();
+}
+
+async function runWbBidderRuleNow(ruleId) {
+  const id = Number(ruleId || 0);
+  if (id <= 0) return;
+  await runWbBidder(true, [id]);
+}
+
+async function loadWbBidderRuns() {
+  if (!enabledModules.has("wb_ads")) return;
+  const data = await requestJson("/api/wb/ads/bidder/runs?limit=120", {
+    headers: authHeaders(),
+    timeoutMs: 60000,
+  }).catch(() => null);
+  if (!data) return;
+  wbBidderRuns = Array.isArray(data.rows) ? data.rows : [];
+  renderWbBidderRuns();
+}
+
+function renderWbBidderRuns() {
+  const tbody = document.getElementById("wbBidderRunsTable");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  if (!Array.isArray(wbBidderRuns) || !wbBidderRuns.length) {
+    const row = document.createElement("tr");
+    row.innerHTML = `<td colspan="9">${escapeHtml(tr("Логи пока пусты.", "Run logs are empty."))}</td>`;
+    tbody.appendChild(row);
+    return;
+  }
+  for (const row of wbBidderRuns) {
+    const trEl = document.createElement("tr");
+    trEl.innerHTML = `
+      <td>${escapeHtml(String(row.created_at || "-"))}</td>
+      <td>#${escapeHtml(String(row.rule_id || "-"))}</td>
+      <td>${escapeHtml(String(row.campaign_id || "-"))}</td>
+      <td>${escapeHtml(bidderRuleTargetText(row))}</td>
+      <td>${escapeHtml(String(row.previous_bid || 0))} → ${escapeHtml(String(row.next_bid || 0))}</td>
+      <td>${escapeHtml(String(row.avg_position || 0))}</td>
+      <td>${escapeHtml(String(row.clicks || 0))} / ${escapeHtml(String(row.orders || 0))}</td>
+      <td>${bidderStatusBadge(row.status)}</td>
+      <td>${escapeHtml(String(row.reason || "-"))}</td>
+    `;
+    tbody.appendChild(trEl);
   }
 }
 

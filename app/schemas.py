@@ -429,6 +429,112 @@ class WbAdsRecommendationsOut(BaseModel):
     meta: dict[str, Any]
 
 
+class WbBidderRuleIn(BaseModel):
+    campaign_id: int
+    target_kind: str = "normquery"
+    nm_id: int = 0
+    target_value: str = ""
+    placement: str = "search"
+    strategy: str = "optimal"
+    desired_bid: int = 0
+    min_bid: int = 0
+    max_bid: int = 0
+    step_bid: int = 100
+    target_pos_from: float = 1.0
+    target_pos_to: float = 5.0
+    min_clicks: int = 0
+    is_active: bool = True
+    cooldown_sec: int = 300
+    notes: str = ""
+
+
+class WbBidderRuleUpdateIn(BaseModel):
+    campaign_id: int | None = None
+    target_kind: str | None = None
+    nm_id: int | None = None
+    target_value: str | None = None
+    placement: str | None = None
+    strategy: str | None = None
+    desired_bid: int | None = None
+    min_bid: int | None = None
+    max_bid: int | None = None
+    step_bid: int | None = None
+    target_pos_from: float | None = None
+    target_pos_to: float | None = None
+    min_clicks: int | None = None
+    is_active: bool | None = None
+    cooldown_sec: int | None = None
+    notes: str | None = None
+
+
+class WbBidderRuleOut(BaseModel):
+    id: int
+    campaign_id: int
+    target_kind: str
+    nm_id: int
+    target_value: str
+    placement: str
+    strategy: str
+    desired_bid: int
+    min_bid: int
+    max_bid: int
+    step_bid: int
+    target_pos_from: float
+    target_pos_to: float
+    min_clicks: int
+    is_active: bool
+    cooldown_sec: int
+    notes: str
+    last_run_at: str | None
+    last_status: str
+    last_reason: str
+    created_at: str
+    updated_at: str
+
+
+class WbBidderRulesOut(BaseModel):
+    rows: list[WbBidderRuleOut]
+    meta: dict[str, Any] = Field(default_factory=dict)
+
+
+class WbBidderRunRowOut(BaseModel):
+    id: int
+    rule_id: int
+    campaign_id: int
+    target_kind: str
+    nm_id: int
+    target_value: str
+    placement: str
+    previous_bid: int
+    next_bid: int
+    min_bid_floor: int
+    avg_position: float
+    clicks: float
+    orders: float
+    spent: float
+    changed: bool
+    status: str
+    reason: str
+    created_at: str
+
+
+class WbBidderRunsOut(BaseModel):
+    rows: list[WbBidderRunRowOut]
+    meta: dict[str, Any] = Field(default_factory=dict)
+
+
+class WbBidderRunIn(BaseModel):
+    rule_ids: list[int] = Field(default_factory=list)
+    force: bool = False
+
+
+class WbBidderRunOut(BaseModel):
+    ok: bool
+    message: str
+    results: list[dict[str, Any]] = Field(default_factory=list)
+    meta: dict[str, Any] = Field(default_factory=dict)
+
+
 class CampaignIdsIn(BaseModel):
     ids: list[int] = []
 

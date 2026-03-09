@@ -1344,6 +1344,341 @@ def fetch_wb_campaign_rates(api_key: str, campaign_id: int, campaign_type: str) 
     return _request_wb_json("GET", endpoint, api_key=api_key)
 
 
+def fetch_wb_normquery_bids(
+    api_key: str,
+    items: list[dict[str, int]],
+) -> dict[str, Any]:
+    safe_items: list[dict[str, int]] = []
+    seen: set[tuple[int, int]] = set()
+    for raw in items:
+        advert_id = _to_int((raw or {}).get("advert_id"))
+        nm_id = _to_int((raw or {}).get("nm_id"))
+        if not advert_id or not nm_id:
+            continue
+        key = (advert_id, nm_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        safe_items.append({"advert_id": advert_id, "nm_id": nm_id})
+    if not safe_items:
+        return {"items": [], "ok": False, "reason": "empty_items"}
+
+    endpoints = [
+        "https://advert-api.wb.ru/adv/v0/normquery/get-bids",
+        "https://advert-api.wildberries.ru/adv/v0/normquery/get-bids",
+    ]
+    safe_payload_items = safe_items[:100]
+    alt_items = [
+        {
+            "advertId": int(x.get("advert_id") or 0),
+            "nmId": int(x.get("nm_id") or 0),
+        }
+        for x in safe_payload_items
+        if int(x.get("advert_id") or 0) > 0 and int(x.get("nm_id") or 0) > 0
+    ]
+    payload_variants: list[dict[str, Any] | list[dict[str, Any]]] = [
+        {"items": safe_payload_items},
+    ]
+    if alt_items:
+        payload_variants.append({"items": alt_items})
+    payload_variants.append(safe_payload_items)
+    if alt_items:
+        payload_variants.append(alt_items)
+    for endpoint in endpoints:
+        for payload in payload_variants:
+            data = _request_wb_json("POST", endpoint, api_key=api_key, payload=payload)
+            rows = _extract_first_dict_list(data, preferred_keys=("items", "bids", "rows", "result", "data", "list"))
+            if rows:
+                return {"items": rows, "ok": True, "source": endpoint}
+    return {"items": [], "ok": False, "reason": "api_failed"}
+
+
+def set_wb_normquery_bids(
+    api_key: str,
+    bids: list[dict[str, Any]],
+) -> dict[str, Any]:
+    safe_rows: list[dict[str, Any]] = []
+    for raw in bids:
+        advert_id = _to_int((raw or {}).get("advert_id"))
+        nm_id = _to_int((raw or {}).get("nm_id"))
+        norm_query = str(
+            (raw or {}).get("norm_query")
+            or (raw or {}).get("normquery")
+            or (raw or {}).get("query")
+            or (raw or {}).get("keyword")
+            or ""
+        ).strip()
+        bid = _to_int((raw or {}).get("bid"))
+        if not advert_id or not nm_id or not norm_query or bid is None:
+            continue
+        safe_rows.append(
+            {
+                "advert_id": advert_id,
+                "nm_id": nm_id,
+                "norm_query": norm_query,
+                "bid": max(1, bid),
+            }
+        )
+    if not safe_rows:
+        return {"ok": False, "reason": "empty_bids"}
+
+    endpoints = [
+        "https://advert-api.wb.ru/adv/v0/normquery/bids",
+        "https://advert-api.wildberries.ru/adv/v0/normquery/bids",
+    ]
+    base_rows = safe_rows[:100]
+    alt_rows = [
+        {
+            "advertId": int(x.get("advert_id") or 0),
+            "nmId": int(x.get("nm_id") or 0),
+            "normquery": str(x.get("norm_query") or ""),
+            "normQuery": str(x.get("norm_query") or ""),
+            "bid": int(x.get("bid") or 0),
+            "cpm": int(x.get("bid") or 0),
+        }
+        for x in base_rows
+    ]
+    payload_variants: list[dict[str, Any] | list[dict[str, Any]]] = [
+        {"bids": base_rows},
+        {"items": base_rows},
+    ]
+    if alt_rows:
+        payload_variants.append({"bids": alt_rows})
+        payload_variants.append({"items": alt_rows})
+    payload_variants.append(base_rows)
+    if alt_rows:
+        payload_variants.append(alt_rows)
+    for endpoint in endpoints:
+        for payload in payload_variants:
+            data = _request_wb_json("POST", endpoint, api_key=api_key, payload=payload)
+            if data is not None:
+                return {"ok": True, "data": data, "source": endpoint}
+    return {"ok": False, "reason": "api_failed"}
+
+
+def fetch_wb_normquery_stats(
+    api_key: str,
+    items: list[dict[str, int]],
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> dict[str, Any]:
+    safe_items: list[dict[str, int]] = []
+    seen: set[tuple[int, int]] = set()
+    for raw in items:
+        advert_id = _to_int((raw or {}).get("advert_id"))
+        nm_id = _to_int((raw or {}).get("nm_id"))
+        if not advert_id or not nm_id:
+            continue
+        key = (advert_id, nm_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        safe_items.append({"advert_id": advert_id, "nm_id": nm_id})
+    if not safe_items:
+        return {"items": [], "ok": False, "reason": "empty_items"}
+
+    left = _parse_iso_date(date_from) or (date.today() - timedelta(days=1))
+    right = _parse_iso_date(date_to) or date.today()
+    if left > right:
+        left, right = right, left
+    safe_payload_items = safe_items[:100]
+    alt_items = [
+        {
+            "advertId": int(x.get("advert_id") or 0),
+            "nmId": int(x.get("nm_id") or 0),
+        }
+        for x in safe_payload_items
+        if int(x.get("advert_id") or 0) > 0 and int(x.get("nm_id") or 0) > 0
+    ]
+    payload_variants: list[dict[str, Any] | list[dict[str, Any]]] = [
+        {
+            "date_from": left.isoformat(),
+            "date_to": right.isoformat(),
+            "items": safe_payload_items,
+        },
+        {
+            "dateFrom": left.isoformat(),
+            "dateTo": right.isoformat(),
+            "items": safe_payload_items,
+        },
+        {
+            "period": {"from": left.isoformat(), "to": right.isoformat()},
+            "items": safe_payload_items,
+        },
+    ]
+    if alt_items:
+        payload_variants.extend(
+            [
+                {"date_from": left.isoformat(), "date_to": right.isoformat(), "items": alt_items},
+                {"dateFrom": left.isoformat(), "dateTo": right.isoformat(), "items": alt_items},
+            ]
+        )
+    endpoints = [
+        "https://advert-api.wb.ru/adv/v0/normquery/stats",
+        "https://advert-api.wildberries.ru/adv/v0/normquery/stats",
+        "https://advert-api.wb.ru/adv/v1/normquery/stats",
+        "https://advert-api.wildberries.ru/adv/v1/normquery/stats",
+    ]
+    for endpoint in endpoints:
+        for payload in payload_variants:
+            data = _request_wb_json("POST", endpoint, api_key=api_key, payload=payload)
+            rows = _extract_first_dict_list(data, preferred_keys=("stats", "items", "rows", "result", "data", "list"))
+            if rows:
+                return {"items": rows, "ok": True, "source": endpoint}
+    return {"items": [], "ok": False, "reason": "api_failed"}
+
+
+def fetch_wb_nm_bids(
+    api_key: str,
+    items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    grouped: dict[int, list[dict[str, Any]]] = {}
+    for raw in items:
+        advert_id = _to_int((raw or {}).get("advert_id"))
+        nm_id = _to_int((raw or {}).get("nm_id"))
+        placement = str((raw or {}).get("placement") or "").strip().lower()
+        if not advert_id or not nm_id:
+            continue
+        if placement not in {"search", "recommendations", "recommendation", "combined"}:
+            placement = "search"
+        grouped.setdefault(advert_id, []).append(
+            {
+                "nm_id": int(nm_id),
+                "placement": "recommendations" if placement == "recommendation" else placement,
+            }
+        )
+    if not grouped:
+        return {"ok": False, "reason": "empty_items", "bids": []}
+
+    payload = {
+        "bids": [
+            {
+                "advert_id": int(advert_id),
+                "nm_bids": items[:50],
+            }
+            for advert_id, items in grouped.items()
+        ][:100]
+    }
+    endpoints = [
+        "https://advert-api.wb.ru/api/advert/v1/bids",
+        "https://advert-api.wildberries.ru/api/advert/v1/bids",
+    ]
+    for endpoint in endpoints:
+        data = _request_wb_json("POST", endpoint, api_key=api_key, payload=payload)
+        if isinstance(data, dict):
+            rows = _extract_first_dict_list(data, preferred_keys=("bids", "items", "rows", "result", "data", "list"))
+            if rows:
+                return {"ok": True, "bids": rows, "source": endpoint}
+        elif isinstance(data, list):
+            rows = _as_dict_list(data)
+            if rows:
+                return {"ok": True, "bids": rows, "source": endpoint}
+    return {"ok": False, "reason": "api_failed", "bids": []}
+
+
+def fetch_wb_min_nm_bids(
+    api_key: str,
+    *,
+    advert_id: int,
+    nm_ids: list[int],
+    payment_type: str = "cpm",
+    placement_types: list[str] | None = None,
+) -> dict[str, Any]:
+    safe_nm_ids = sorted({int(x) for x in nm_ids if int(x) > 0})[:100]
+    if advert_id <= 0 or not safe_nm_ids:
+        return {"ok": False, "reason": "empty_items", "bids": []}
+    placements = [str(x or "").strip().lower() for x in (placement_types or ["search", "recommendation"])]
+    normalized_placements = [x for x in placements if x in {"combined", "search", "recommendation"}]
+    if not normalized_placements:
+        normalized_placements = ["search", "recommendation"]
+    safe_payment_type = "cpc" if str(payment_type or "").strip().lower() == "cpc" else "cpm"
+    payload = {
+        "advert_id": int(advert_id),
+        "nm_ids": safe_nm_ids,
+        "payment_type": safe_payment_type,
+        "placement_types": normalized_placements,
+    }
+    endpoints = [
+        "https://advert-api.wb.ru/api/advert/v1/bids/min",
+        "https://advert-api.wildberries.ru/api/advert/v1/bids/min",
+        "https://advert-api.wb.ru/adv/v0/bids/min",
+        "https://advert-api.wildberries.ru/adv/v0/bids/min",
+    ]
+    for endpoint in endpoints:
+        data = _request_wb_json("POST", endpoint, api_key=api_key, payload=payload)
+        if isinstance(data, dict):
+            rows = _extract_first_dict_list(data, preferred_keys=("bids", "items", "rows", "result", "data", "list"))
+            if rows:
+                return {"ok": True, "bids": rows, "source": endpoint}
+        elif isinstance(data, list):
+            rows = _as_dict_list(data)
+            if rows:
+                return {"ok": True, "bids": rows, "source": endpoint}
+    return {"ok": False, "reason": "api_failed", "bids": []}
+
+
+def set_wb_nm_bids(
+    api_key: str,
+    bids: list[dict[str, Any]],
+) -> dict[str, Any]:
+    safe: list[dict[str, Any]] = []
+    grouped: dict[int, list[dict[str, Any]]] = {}
+    for raw in bids:
+        advert_id = _to_int((raw or {}).get("advert_id"))
+        nm_id = _to_int((raw or {}).get("nm_id"))
+        bid_kopecks = _to_int((raw or {}).get("bid_kopecks"))
+        placement = str((raw or {}).get("placement") or "").strip().lower()
+        if not advert_id or not nm_id or bid_kopecks is None:
+            continue
+        if placement not in {"search", "recommendations", "recommendation", "combined"}:
+            placement = "search"
+        if placement == "recommendation":
+            placement = "recommendations"
+        item = {
+            "nm_id": nm_id,
+            "bid_kopecks": max(1, bid_kopecks),
+            "placement": placement,
+        }
+        safe.append({"advert_id": advert_id, **item})
+        grouped.setdefault(advert_id, []).append(item)
+    if not safe:
+        return {"ok": False, "reason": "empty_bids"}
+
+    payload_variants: list[dict[str, Any]] = []
+    for advert_id, items in grouped.items():
+        payload_variants.append({"bids": [{"advert_id": advert_id, "nm_bids": items[:50]}]})
+        payload_variants.append(
+            {
+                "bids": [
+                    {
+                        "advert_id": advert_id,
+                        "nm_bids": [
+                            {
+                                "nm_id": int(item.get("nm_id") or 0),
+                                "bid": int(item.get("bid_kopecks") or 0),
+                                "placement": str(item.get("placement") or "search"),
+                            }
+                            for item in items[:50]
+                            if int(item.get("nm_id") or 0) > 0
+                        ],
+                    }
+                ]
+            }
+        )
+    payload_variants.append({"bids": safe[:50]})
+
+    endpoints = [
+        "https://advert-api.wb.ru/api/advert/v1/bids",
+        "https://advert-api.wildberries.ru/api/advert/v1/bids",
+    ]
+    for endpoint in endpoints:
+        for payload in payload_variants:
+            data = _request_wb_json("PATCH", endpoint, api_key=api_key, payload=payload)
+            if data is not None:
+                return {"ok": True, "data": data, "source": endpoint}
+    return {"ok": False, "reason": "api_failed"}
+
+
 def fetch_wb_ads_balance(api_key: str) -> dict[str, Any] | None:
     endpoints = [
         "https://advert-api.wb.ru/adv/v1/balance",
@@ -1861,6 +2196,7 @@ def _request_wb_json(
     token = api_key.strip()
     if not token:
         return None
+    safe_method = str(method or "GET").strip().upper() or "GET"
     auth_variants = [token, f"Bearer {token}"]
     for auth_value in auth_variants:
         headers = {"Authorization": auth_value, "Content-Type": "application/json"}
@@ -1868,8 +2204,12 @@ def _request_wb_json(
             response = None
             try:
                 with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
-                    if method == "POST":
+                    if safe_method == "POST":
                         response = client.post(url, headers=headers, params=params, json=payload)
+                    elif safe_method == "PATCH":
+                        response = client.patch(url, headers=headers, params=params, json=payload)
+                    elif safe_method == "DELETE":
+                        response = client.request("DELETE", url, headers=headers, params=params, json=payload)
                     else:
                         response = client.get(url, headers=headers, params=params)
             except Exception:
@@ -1887,12 +2227,16 @@ def _request_wb_json(
                 break
             if response.status_code >= 400:
                 break
+            body_text = _safe_response_text(response).strip()
+            if not body_text:
+                return {}
             try:
                 parsed = response.json()
                 if isinstance(parsed, (dict, list)):
                     return parsed
+                return {"value": parsed}
             except Exception:
-                break
+                return {"raw": body_text[:2000]}
     return None
 
 

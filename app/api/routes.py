@@ -68,6 +68,8 @@ from app.models import (
     UserKeyword,
     SystemSetting,
     WbAdsCampaignSnapshot,
+    WbAdsBidderRule,
+    WbAdsBidderRun,
     WorkItemClaim,
 )
 from app.schemas import (
@@ -180,6 +182,14 @@ from app.schemas import (
     WbAdsAnalyticsOut,
     WbAdsRecommendationsOut,
     WbAdsBalanceOut,
+    WbBidderRuleIn,
+    WbBidderRuleOut,
+    WbBidderRuleUpdateIn,
+    WbBidderRulesOut,
+    WbBidderRunIn,
+    WbBidderRunOut,
+    WbBidderRunRowOut,
+    WbBidderRunsOut,
     WbCampaignEnrichOut,
     WbCampaignRatesOut,
     WbCampaignsOut,
@@ -253,6 +263,15 @@ from app.services.wb_modules import (
     fetch_ozon_ads_analytics,
     fetch_ozon_returns,
     fetch_ozon_return_details,
+)
+from app.services.wb_bidder import (
+    apply_rule_payload,
+    list_bidder_rules,
+    list_bidder_runs,
+    normalize_rule_payload,
+    run_bidder_rules,
+    serialize_bidder_rule,
+    serialize_bidder_run,
 )
 
 router = APIRouter(prefix="/api")
@@ -3109,6 +3128,220 @@ def wb_ads_action(payload: WbAdsActionIn, user: User = Depends(get_current_user)
     if not ok:
         raise HTTPException(status_code=400, detail=message)
     return WbAdsActionOut(campaign_id=payload.campaign_id, action=payload.action, ok=ok, message=message)
+
+
+@router.get("/wb/ads/bidder/rules", response_model=WbBidderRulesOut)
+def wb_ads_bidder_rules(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "wb_ads")
+    rows = [serialize_bidder_rule(x) for x in list_bidder_rules(db, user.id)]
+    active_count = len([x for x in rows if bool(x.get("is_active"))])
+    _audit(
+        db,
+        user,
+        action="wb_ads_bidder_rules_read",
+        details=f"rows={len(rows)};active={active_count}",
+        module_code="wb_ads",
+        entity_type="bidder_rule",
+    )
+    db.commit()
+    return WbBidderRulesOut(rows=[WbBidderRuleOut(**x) for x in rows], meta={"count": len(rows), "active": active_count})
+
+
+@router.post("/wb/ads/bidder/rules", response_model=WbBidderRuleOut)
+def wb_ads_bidder_rules_create(
+    payload: WbBidderRuleIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "wb_ads")
+    try:
+        normalized = normalize_rule_payload(payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    row = WbAdsBidderRule(user_id=int(user.id), **normalized)
+    db.add(row)
+    db.flush()
+    serialized = serialize_bidder_rule(row)
+    _audit(
+        db,
+        user,
+        action="wb_ads_bidder_rule_created",
+        details=f"rule_id={row.id};campaign_id={row.campaign_id};target_kind={row.target_kind};nm_id={row.nm_id};active={int(row.is_active)}",
+        module_code="wb_ads",
+        entity_type="bidder_rule",
+        entity_id=str(row.id),
+    )
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        low = str(exc or "").lower()
+        if "uq_wb_ads_bidder_rule_target" in low or "unique" in low:
+            raise HTTPException(status_code=400, detail="Такое правило уже существует")
+        raise
+    return WbBidderRuleOut(**serialized)
+
+
+@router.patch("/wb/ads/bidder/rules/{rule_id}", response_model=WbBidderRuleOut)
+def wb_ads_bidder_rules_update(
+    rule_id: int,
+    payload: WbBidderRuleUpdateIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "wb_ads")
+    row = db.scalar(
+        select(WbAdsBidderRule).where(
+            WbAdsBidderRule.user_id == int(user.id),
+            WbAdsBidderRule.id == int(rule_id),
+        )
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Правило не найдено")
+    raw_patch = payload.model_dump(exclude_unset=True)
+    if not raw_patch:
+        return WbBidderRuleOut(**serialize_bidder_rule(row))
+    try:
+        normalized = normalize_rule_payload(raw_patch, partial=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    apply_rule_payload(row, normalized)
+    serialized = serialize_bidder_rule(row)
+    _audit(
+        db,
+        user,
+        action="wb_ads_bidder_rule_updated",
+        details=f"rule_id={row.id};fields={','.join(sorted(normalized.keys()))[:300]}",
+        module_code="wb_ads",
+        entity_type="bidder_rule",
+        entity_id=str(row.id),
+    )
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        low = str(exc or "").lower()
+        if "uq_wb_ads_bidder_rule_target" in low or "unique" in low:
+            raise HTTPException(status_code=400, detail="Такое правило уже существует")
+        raise
+    return WbBidderRuleOut(**serialized)
+
+
+@router.delete("/wb/ads/bidder/rules/{rule_id}", response_model=MessageOut)
+def wb_ads_bidder_rules_delete(
+    rule_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "wb_ads")
+    row = db.scalar(
+        select(WbAdsBidderRule).where(
+            WbAdsBidderRule.user_id == int(user.id),
+            WbAdsBidderRule.id == int(rule_id),
+        )
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Правило не найдено")
+    db.execute(
+        delete(WbAdsBidderRun).where(
+            WbAdsBidderRun.user_id == int(user.id),
+            WbAdsBidderRun.rule_id == int(row.id),
+        )
+    )
+    db.delete(row)
+    _audit(
+        db,
+        user,
+        action="wb_ads_bidder_rule_deleted",
+        details=f"rule_id={int(rule_id)}",
+        module_code="wb_ads",
+        entity_type="bidder_rule",
+        entity_id=str(rule_id),
+    )
+    db.commit()
+    return MessageOut(message="Правило удалено")
+
+
+@router.get("/wb/ads/bidder/runs", response_model=WbBidderRunsOut)
+def wb_ads_bidder_runs(
+    limit: int = 120,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "wb_ads")
+    rows = list_bidder_runs(db, user.id, limit=limit)
+    serialized = [serialize_bidder_run(x) for x in rows]
+    db.commit()
+    return WbBidderRunsOut(
+        rows=[WbBidderRunRowOut(**x) for x in serialized],
+        meta={
+            "count": len(serialized),
+            "limit": max(1, min(int(limit or 1), 400)),
+        },
+    )
+
+
+@router.post("/wb/ads/bidder/run", response_model=WbBidderRunOut)
+def wb_ads_bidder_run(
+    payload: WbBidderRunIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "wb_ads")
+    wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
+    if not wb_key:
+        raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
+
+    ids = sorted({int(x) for x in payload.rule_ids if int(x) > 0})[:200]
+    if not payload.force and queue_available():
+        queued = enqueue_task(
+            "wb_bidder_run",
+            {"user_id": int(user.id), "rule_ids": ids, "force": bool(payload.force)},
+            dedupe_key=f"wb_bidder_run:{int(user.id)}:{','.join(str(x) for x in ids) or 'all'}",
+            dedupe_ttl_sec=90,
+        )
+        if queued.get("queued"):
+            db.commit()
+            return WbBidderRunOut(
+                ok=True,
+                message="Запуск биддера поставлен в очередь",
+                results=[],
+                meta={
+                    "queued": True,
+                    "queue_depth": queue_depth(),
+                    "queue_available": queue_available(),
+                    "rule_ids": ids,
+                },
+            )
+
+    result = run_bidder_rules(
+        db,
+        user_id=int(user.id),
+        wb_api_key=wb_key,
+        rule_ids=ids,
+        force=bool(payload.force),
+    )
+    _audit(
+        db,
+        user,
+        action="wb_ads_bidder_run",
+        details=(
+            f"rules={len(ids) if ids else 'all'};force={int(payload.force)};"
+            f"executed={int((result.get('meta') or {}).get('executed') or 0)};"
+            f"changed={int((result.get('meta') or {}).get('changed') or 0)};"
+            f"errors={int((result.get('meta') or {}).get('errors') or 0)}"
+        ),
+        module_code="wb_ads",
+        entity_type="bidder_rule",
+        status="ok" if bool(result.get("ok")) else "partial",
+    )
+    db.commit()
+    return WbBidderRunOut(
+        ok=bool(result.get("ok")),
+        message=str(result.get("message") or ""),
+        results=list(result.get("results") or []),
+        meta=dict(result.get("meta") or {}),
+    )
 
 
 @router.get("/wb/ads/analytics", response_model=WbAdsAnalyticsOut)

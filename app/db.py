@@ -273,6 +273,26 @@ def run_lightweight_migrations():
                 "ON products(user_id, owner_member_id, last_position)"
             )
         )
+        bidder_rule_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(wb_ads_bidder_rules)"))}
+        if bidder_rule_cols and "nm_id" not in bidder_rule_cols:
+            conn.execute(text("ALTER TABLE wb_ads_bidder_rules ADD COLUMN nm_id INTEGER DEFAULT 0"))
+            conn.execute(text("UPDATE wb_ads_bidder_rules SET nm_id = 0 WHERE nm_id IS NULL"))
+        bidder_run_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(wb_ads_bidder_runs)"))}
+        if bidder_run_cols and "nm_id" not in bidder_run_cols:
+            conn.execute(text("ALTER TABLE wb_ads_bidder_runs ADD COLUMN nm_id INTEGER DEFAULT 0"))
+            conn.execute(text("UPDATE wb_ads_bidder_runs SET nm_id = 0 WHERE nm_id IS NULL"))
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_wb_ads_bidder_rules_user_active "
+                "ON wb_ads_bidder_rules(user_id, is_active, updated_at)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_wb_ads_bidder_runs_user_created "
+                "ON wb_ads_bidder_runs(user_id, created_at DESC)"
+            )
+        )
 
 
 def ensure_admin_emails():

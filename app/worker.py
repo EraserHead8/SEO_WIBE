@@ -14,6 +14,7 @@ from app.services.ads_cache import sync_wb_campaign_snapshots
 from app.services.market_cache import build_market_cache_key, get_or_refresh_market_cache
 from app.services.sales import build_sales_report
 from app.services.task_queue import dequeue_task, queue_available
+from app.services.wb_bidder import run_bidder_rules
 from app.services.wb_modules import fetch_ozon_ads_campaigns, fetch_wb_campaigns
 
 
@@ -182,6 +183,32 @@ def _handle_warm_ozon_campaigns(payload: dict[str, Any]) -> None:
         db.close()
 
 
+def _handle_wb_bidder_run(payload: dict[str, Any]) -> None:
+    user_id = int(payload.get("user_id") or 0)
+    if user_id <= 0:
+        return
+    raw_ids = payload.get("rule_ids")
+    rule_ids = [int(x) for x in raw_ids] if isinstance(raw_ids, list) else []
+    force = bool(payload.get("force"))
+    db = SessionLocal()
+    try:
+        wb_key = _active_key(db, user_id, "wb")
+        if not wb_key:
+            return
+        run_bidder_rules(
+            db,
+            user_id=int(user_id),
+            wb_api_key=wb_key,
+            rule_ids=rule_ids,
+            force=force,
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
 def _parse_iso_date(raw: str) -> date | None:
     text = str(raw or "").strip()
     if not text:
@@ -206,6 +233,9 @@ def process_task(task: dict[str, Any]) -> None:
         return
     if task_type == "warm_ozon_campaigns":
         _handle_warm_ozon_campaigns(payload)
+        return
+    if task_type == "wb_bidder_run":
+        _handle_wb_bidder_run(payload)
         return
 
 

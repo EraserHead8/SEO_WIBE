@@ -75,19 +75,25 @@ def sync_wb_campaign_snapshots(db: Session, user_id: int, wb_api_key: str) -> di
     for item in fetched:
         if not isinstance(item, dict):
             continue
-        cid = _campaign_id_from_row(item)
+        incoming_row = dict(item)
+        cid = _campaign_id_from_row(incoming_row)
         if cid <= 0:
             continue
         seen_ids.add(cid)
-        payload = json.dumps(item, ensure_ascii=False, sort_keys=True)
-        payload_hash = hashlib.sha1(payload.encode("utf-8")).hexdigest()
         row = db.scalar(
             select(WbAdsCampaignSnapshot).where(
                 WbAdsCampaignSnapshot.user_id == user_id,
                 WbAdsCampaignSnapshot.campaign_id == cid,
             )
         )
-        status = str(item.get("status") or "")
+        merged_row = incoming_row
+        if row and row.payload_json:
+            previous_payload = _safe_json_loads(row.payload_json)
+            if isinstance(previous_payload, dict):
+                merged_row = _merge_snapshot_payload(previous_payload, incoming_row, campaign_id=cid)
+        payload = json.dumps(merged_row, ensure_ascii=False, sort_keys=True)
+        payload_hash = hashlib.sha1(payload.encode("utf-8")).hexdigest()
+        status = str(merged_row.get("status") or "")
         if not row:
             row = WbAdsCampaignSnapshot(
                 user_id=user_id,
@@ -219,6 +225,71 @@ def _is_placeholder_name(value: str, campaign_id: int) -> bool:
             return True
         return text in {f"кампания {campaign_id}", f"campaign {campaign_id}"}
     return False
+
+
+def _merge_snapshot_payload(existing: dict[str, Any], incoming: dict[str, Any], *, campaign_id: int) -> dict[str, Any]:
+    # Keep richer context from previous successful syncs when WB returns partial payloads.
+    out = dict(incoming or {})
+    prev = existing if isinstance(existing, dict) else {}
+
+    def _pick_text(row: dict[str, Any], *keys: str) -> str:
+        for key in keys:
+            val = str((row or {}).get(key) or "").strip()
+            if val and val not in {"-", "—"}:
+                return val
+        return ""
+
+    def _copy_if_missing(*keys: str) -> None:
+        cur = _pick_text(out, *keys)
+        if cur:
+            return
+        fallback = _pick_text(prev, *keys)
+        if not fallback:
+            return
+        for key in keys:
+            if key in prev:
+                out[key] = prev.get(key)
+                break
+
+    def _copy_if_name_placeholder(*keys: str) -> None:
+        cur = _pick_text(out, *keys)
+        fallback = _pick_text(prev, *keys)
+        if not fallback:
+            return
+        if not cur or _is_placeholder_name(cur, campaign_id):
+            if not _is_placeholder_name(fallback, campaign_id):
+                for key in keys:
+                    if key in prev:
+                        out[key] = prev.get(key)
+                        break
+
+    def _copy_metric_if_missing(*keys: str) -> None:
+        for key in keys:
+            if key in out and out.get(key) not in (None, "", "-", "—"):
+                return
+        for key in keys:
+            if key in prev and prev.get(key) not in (None, "", "-", "—"):
+                out[key] = prev.get(key)
+                return
+
+    _copy_if_name_placeholder("name", "campaignName", "campaign_name", "subject", "title")
+    _copy_if_missing("status", "state")
+    _copy_if_missing("type", "adType", "campaignType", "typeId")
+    _copy_if_missing("budget", "dailyBudget", "sum", "money")
+
+    for metric_keys in (
+        ("views", "impressions", "shows", "view_count"),
+        ("clicks", "click_count"),
+        ("orders", "orders_count", "order_count", "orders_sum"),
+        ("spent", "sum", "cost", "expense", "total_spent"),
+        ("ctr",),
+        ("cr", "cvr", "conversion"),
+        ("cpc",),
+        ("cpo", "cpa"),
+    ):
+        _copy_metric_if_missing(*metric_keys)
+
+    return out
 
 
 def sync_wb_campaign_snapshots_for_all_users(db: Session) -> dict[str, int]:

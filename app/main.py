@@ -9,7 +9,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.auth import create_access_token, decode_access_token_payload
 from app.api.routes import router
-from app.background import marketplace_cache_warmup_loop, seo_recheck_loop, wb_ads_snapshot_sync_loop
+from app.background import marketplace_cache_warmup_loop, seo_recheck_loop, wb_ads_bidder_loop, wb_ads_snapshot_sync_loop
 from app.db import Base, engine, ensure_admin_emails, run_lightweight_migrations
 from app.config import settings
 from app.telemetry import record_api_timing
@@ -116,6 +116,7 @@ async def on_startup():
     ensure_admin_emails()
     asyncio.create_task(seo_recheck_loop())
     asyncio.create_task(wb_ads_snapshot_sync_loop())
+    asyncio.create_task(wb_ads_bidder_loop())
     asyncio.create_task(marketplace_cache_warmup_loop())
 
 

@@ -824,6 +824,7 @@
             <button class="chip-btn active" id="adsSubtabCampaignsBtn" type="button" onclick="switchAdsSubtab('campaigns')">Кампании</button>
             <button class="chip-btn" id="adsSubtabAnalyticsBtn" type="button" onclick="switchAdsSubtab('analytics')">Аналитика</button>
             <button class="chip-btn" id="adsSubtabRecommendationsBtn" type="button" onclick="switchAdsSubtab('recommendations')">Рекомендации</button>
+            <button class="chip-btn" id="adsSubtabBidderBtn" type="button" onclick="switchAdsSubtab('bidder')">Бидер</button>
             <button class="chip-btn" id="adsSubtabOzonBtn" type="button" onclick="switchAdsSubtab('ozon')">Реклама Ozon</button>
           </div>
         </div>
@@ -945,6 +946,94 @@
               <tr><th>ID</th><th>Название</th><th>Статус</th><th>Тип</th><th>Показы</th><th>Клики</th><th>CTR</th><th>Заказы</th><th>Расход</th><th>CPC</th><th>CPO</th><th>Приоритет</th><th>Рекомендация</th><th>Причина</th></tr>
             </thead>
           <tbody id="adsRecTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="adsSubtabBidder" class="hidden">
+        <div class="panel">
+          <h3>Бидер WB Ads</h3>
+          <div class="grid-6 ads-bidder-grid">
+            <input id="wbBidderCampaignId" type="number" min="1" placeholder="campaign_id" />
+            <input id="wbBidderNmId" type="number" min="1" placeholder="nm_id" />
+            <select id="wbBidderTargetKind" onchange="syncWbBidderTargetKindUi()">
+              <option value="normquery">Фраза (normquery)</option>
+              <option value="nm">Карточка (nm)</option>
+            </select>
+            <input id="wbBidderTargetValue" placeholder="Фраза (для normquery)" />
+            <select id="wbBidderPlacement">
+              <option value="search">search</option>
+              <option value="recommendations">recommendations</option>
+              <option value="combined">combined</option>
+            </select>
+            <select id="wbBidderStrategy">
+              <option value="optimal">optimal</option>
+              <option value="position">position</option>
+              <option value="range">range</option>
+              <option value="hold">hold</option>
+            </select>
+          </div>
+          <div class="grid-6 ads-bidder-grid">
+            <input id="wbBidderDesiredBid" type="number" min="0" placeholder="Целевая ставка" />
+            <input id="wbBidderMinBid" type="number" min="0" placeholder="Мин. ставка" />
+            <input id="wbBidderMaxBid" type="number" min="0" placeholder="Макс. ставка" />
+            <input id="wbBidderStepBid" type="number" min="1" placeholder="Шаг" value="100" />
+            <input id="wbBidderPosFrom" type="number" min="1" step="0.1" placeholder="Позиция от" value="1" />
+            <input id="wbBidderPosTo" type="number" min="1" step="0.1" placeholder="Позиция до" value="5" />
+          </div>
+          <div class="grid-6 ads-bidder-grid">
+            <input id="wbBidderMinClicks" type="number" min="0" placeholder="Мин. кликов для автошага" value="0" />
+            <input id="wbBidderCooldownSec" type="number" min="30" placeholder="Cooldown, сек" value="300" />
+            <input id="wbBidderNotes" placeholder="Комментарий (опционально)" />
+            <label class="checkbox-inline"><input id="wbBidderIsActive" type="checkbox" checked /> Активно</label>
+            <button class="btn-secondary" type="button" onclick="saveWbBidderRule()">Сохранить правило</button>
+            <button class="btn-secondary" type="button" onclick="resetWbBidderForm()">Сбросить форму</button>
+          </div>
+          <input id="wbBidderRuleId" type="hidden" />
+          <div class="grid-4 ads-bidder-actions">
+            <button class="btn-secondary" type="button" onclick="loadWbBidderRules()">Обновить правила</button>
+            <button class="btn-secondary" type="button" onclick="runWbBidder(false)">Запустить (очередь)</button>
+            <button class="btn-secondary" type="button" onclick="runWbBidder(true)">Запустить сейчас</button>
+            <button class="btn-secondary" type="button" onclick="loadWbBidderRuns()">Обновить логи</button>
+          </div>
+          <div id="wbBidderStatus" class="hint load-status">-</div>
+        </div>
+        <div class="table-card">
+          <table class="ads-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Активно</th>
+                <th>Кампания</th>
+                <th>Цель</th>
+                <th>Стратегия</th>
+                <th>Ставки</th>
+                <th>Позиция</th>
+                <th>Cooldown</th>
+                <th>Последний запуск</th>
+                <th>Статус</th>
+                <th>Действия</th>
+              </tr>
+            </thead>
+            <tbody id="wbBidderRulesTable"></tbody>
+          </table>
+        </div>
+        <div class="table-card">
+          <table class="ads-table">
+            <thead>
+              <tr>
+                <th>Время</th>
+                <th>Rule</th>
+                <th>Кампания</th>
+                <th>Цель</th>
+                <th>Ставка</th>
+                <th>Позиция</th>
+                <th>Клики/Заказы</th>
+                <th>Статус</th>
+                <th>Причина</th>
+              </tr>
+            </thead>
+            <tbody id="wbBidderRunsTable"></tbody>
           </table>
         </div>
       </div>

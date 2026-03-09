@@ -320,6 +320,74 @@ class WbAdsCampaignSnapshot(Base):
     user: Mapped["User"] = relationship()
 
 
+class WbAdsBidderRule(Base):
+    __tablename__ = "wb_ads_bidder_rules"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "campaign_id",
+            "target_kind",
+            "nm_id",
+            "target_value",
+            name="uq_wb_ads_bidder_rule_target",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    campaign_id: Mapped[int] = mapped_column(Integer, index=True)
+    target_kind: Mapped[str] = mapped_column(String(24), default="normquery", index=True)  # normquery | nm
+    nm_id: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    target_value: Mapped[str] = mapped_column(String(255), default="", index=True)  # normquery text or nm id
+    placement: Mapped[str] = mapped_column(String(24), default="search", index=True)  # search | recommendations | combined
+    strategy: Mapped[str] = mapped_column(String(24), default="optimal", index=True)  # hold | range | position | optimal
+    desired_bid: Mapped[int] = mapped_column(Integer, default=0)
+    min_bid: Mapped[int] = mapped_column(Integer, default=0)
+    max_bid: Mapped[int] = mapped_column(Integer, default=0)
+    step_bid: Mapped[int] = mapped_column(Integer, default=100)
+    target_pos_from: Mapped[float] = mapped_column(Float, default=1.0)
+    target_pos_to: Mapped[float] = mapped_column(Float, default=5.0)
+    min_clicks: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    cooldown_sec: Mapped[int] = mapped_column(Integer, default=300)
+    notes: Mapped[str] = mapped_column(String(500), default="")
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    last_status: Mapped[str] = mapped_column(String(24), default="")
+    last_reason: Mapped[str] = mapped_column(String(500), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped["User"] = relationship()
+
+
+class WbAdsBidderRun(Base):
+    __tablename__ = "wb_ads_bidder_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    rule_id: Mapped[int] = mapped_column(Integer, ForeignKey("wb_ads_bidder_rules.id"), index=True)
+    campaign_id: Mapped[int] = mapped_column(Integer, index=True)
+    target_kind: Mapped[str] = mapped_column(String(24), default="normquery", index=True)
+    nm_id: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    target_value: Mapped[str] = mapped_column(String(255), default="", index=True)
+    placement: Mapped[str] = mapped_column(String(24), default="search", index=True)
+    previous_bid: Mapped[int] = mapped_column(Integer, default=0)
+    next_bid: Mapped[int] = mapped_column(Integer, default=0)
+    min_bid_floor: Mapped[int] = mapped_column(Integer, default=0)
+    avg_position: Mapped[float] = mapped_column(Float, default=0.0)
+    clicks: Mapped[float] = mapped_column(Float, default=0.0)
+    orders: Mapped[float] = mapped_column(Float, default=0.0)
+    spent: Mapped[float] = mapped_column(Float, default=0.0)
+    changed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    status: Mapped[str] = mapped_column(String(24), default="ok", index=True)  # ok | skipped | error
+    reason: Mapped[str] = mapped_column(String(500), default="")
+    response_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    user: Mapped["User"] = relationship()
+    rule: Mapped["WbAdsBidderRule"] = relationship()
+
+
 class MarketplaceApiCache(Base):
     __tablename__ = "marketplace_api_cache"
     __table_args__ = (
