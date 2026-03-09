@@ -92,6 +92,25 @@ def run_lightweight_migrations():
             conn.execute(text("ALTER TABLE products ADD COLUMN price_marketing FLOAT DEFAULT 0"))
         if product_cols and "owner_member_id" not in product_cols:
             conn.execute(text("ALTER TABLE products ADD COLUMN owner_member_id INTEGER"))
+        if product_cols and "photo_url" in product_cols:
+            conn.execute(
+                text(
+                    """
+                    UPDATE products
+                    SET photo_url = '/static/' || substr(photo_url, length('https://static/') + 1)
+                    WHERE photo_url LIKE 'https://static/%'
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    UPDATE products
+                    SET photo_url = '/static/' || substr(photo_url, length('http://static/') + 1)
+                    WHERE photo_url LIKE 'http://static/%'
+                    """
+                )
+            )
 
         seo_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(seo_jobs)"))}
         if seo_cols and "competitor_snapshot" not in seo_cols:
