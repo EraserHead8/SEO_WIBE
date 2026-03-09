@@ -10,5 +10,6 @@ android-sdk/
 android/seo-wibe-mobile/.gradle/
 android/seo-wibe-mobile/.gradle-home/
 android/seo-wibe-mobile/.idea/
+android/seo-wibe-mobile/local.properties
 android/seo-wibe-mobile/build/
 android/seo-wibe-mobile/app/build/

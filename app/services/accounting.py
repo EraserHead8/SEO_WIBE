@@ -967,6 +967,16 @@ def _normalize_accounting_warnings(warnings: list[Any]) -> list[str]:
         if "bad_json" in low and "wb" in low:
             out.append("WB API вернул нестабильный ответ, применена частичная статистика.")
             continue
+        if "wb finance api недоступен" in low and (
+            "wb sales api вернул некорректный ответ" in low
+            or "wb sales api вернул неожиданный формат" in low
+            or "bad_json" in low
+        ):
+            out.append("WB API вернул нестабильный ответ, применена частичная статистика.")
+            continue
+        if "ads api недоступен" in low or "рекламные расходы временно недоступны" in low:
+            out.append("Рекламные расходы временно недоступны в API. Остальные показатели рассчитаны.")
+            continue
         if "некорректный ответ" in low and "ozon" in low:
             out.append("Ozon accounting API вернул нестандартный ответ, показаны доступные данные.")
             continue

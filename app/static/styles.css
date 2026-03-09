@@ -2320,6 +2320,10 @@ pre {
   gap: 12px;
 }
 
+.return-detail-modal-card {
+  width: min(980px, 96vw);
+}
+
 .product-modal-head-actions {
   display: inline-flex;
   align-items: center;
@@ -2398,13 +2402,21 @@ pre {
 
 .product-edit-photo-controls {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
   gap: 8px;
   margin: 8px 0 6px;
 }
 
 .product-edit-photo-controls input {
   width: 100%;
+}
+
+.product-edit-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .product-edit-photo-item {
@@ -2501,6 +2513,12 @@ pre {
   font-weight: 700;
   padding: 2px 6px;
   white-space: nowrap;
+}
+
+@media (max-width: 860px) {
+  .product-edit-photo-controls {
+    grid-template-columns: 1fr;
+  }
 }
 
 .product-modal-attrs {
@@ -7350,6 +7368,16 @@ body[data-theme="dark"] .landing-band .band-stats span {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
+.social-task-row.is-done {
+  border-color: color-mix(in srgb, #22c55e 52%, var(--line) 48%);
+  background: color-mix(in srgb, #22c55e 16%, var(--panel-bg-soft) 84%);
+}
+
+.social-task-row.is-overdue {
+  border-color: color-mix(in srgb, #ef4444 52%, var(--line) 48%);
+  background: color-mix(in srgb, #ef4444 13%, var(--panel-bg-soft) 87%);
+}
+
 .social-task-tag {
   display: inline-flex;
   align-items: center;
@@ -7447,6 +7475,18 @@ body[data-theme="dark"] .landing-band .band-stats span {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.social-calendar-sync {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: minmax(260px, 1.4fr) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.social-calendar-sync input {
+  width: 100%;
 }
 
 .social-calendar-grid {
@@ -8874,10 +8914,16 @@ button,
 
   #socialSubtabCalendar .social-calendar-nav .btn-secondary,
   #socialSubtabCalendar .social-calendar-toolbar > .btn-secondary,
-  #socialSubtabCalendar #socialCalendarMonth {
+  #socialSubtabCalendar #socialCalendarMonth,
+  #socialSubtabCalendar .social-calendar-sync .btn-secondary {
     min-height: 36px;
     padding: 6px 9px;
     font-size: 13px;
+  }
+
+  #socialSubtabCalendar .social-calendar-sync {
+    grid-template-columns: 1fr;
+    gap: 6px;
   }
 }
 

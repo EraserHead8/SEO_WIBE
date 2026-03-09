@@ -750,50 +750,104 @@ def fetch_wb_returns(
 
     def _append_rows(parsed_rows: list[dict[str, Any]]) -> None:
         for raw in parsed_rows:
-            rid = _pick_first_str(raw.get("id"), raw.get("claimId"), raw.get("claim_id"), raw.get("returnId"))
+            rid = _pick_first_str(
+                raw.get("id"),
+                raw.get("claimId"),
+                raw.get("claim_id"),
+                raw.get("returnId"),
+                raw.get("return_id"),
+                (raw.get("claim") or {}).get("id") if isinstance(raw.get("claim"), dict) else "",
+                (raw.get("return") or {}).get("id") if isinstance(raw.get("return"), dict) else "",
+            )
             rid = str(rid or "").strip()
-            if not rid or rid in seen_ids:
+            if (not rid) or rid in {"0", "-", "—"} or rid in seen_ids:
                 continue
-            seen_ids.add(rid)
             created = _pick_first_str(
                 raw.get("createdAt"),
                 raw.get("created_at"),
                 raw.get("createdDate"),
                 raw.get("date"),
+                raw.get("updatedAt"),
+                raw.get("updated_at"),
+                (raw.get("claim") or {}).get("createdAt") if isinstance(raw.get("claim"), dict) else "",
             )
+            status_value = str(_pick_first_str(raw.get("status"), raw.get("state"), raw.get("claimStatus")) or "").strip()
+            article = str(
+                _pick_first_str(
+                    raw.get("article"),
+                    raw.get("supplierVendorCode"),
+                    raw.get("vendorCode"),
+                    raw.get("offerId"),
+                    raw.get("nmId"),
+                    (raw.get("item") or {}).get("article") if isinstance(raw.get("item"), dict) else "",
+                )
+                or ""
+            ).strip()
+            product = str(
+                _pick_first_str(
+                    raw.get("productName"),
+                    raw.get("name"),
+                    raw.get("subjectName"),
+                    raw.get("imtName"),
+                    (raw.get("item") or {}).get("name") if isinstance(raw.get("item"), dict) else "",
+                )
+                or ""
+            ).strip()
+            reason = str(
+                _pick_first_str(
+                    raw.get("reason"),
+                    raw.get("comment"),
+                    raw.get("rejectReason"),
+                    raw.get("description"),
+                )
+                or ""
+            ).strip()
+            photos_raw = (
+                raw.get("photos")
+                or raw.get("images")
+                or raw.get("pictures")
+                or raw.get("attachments")
+                or raw.get("files")
+                or []
+            )
+            photos: list[str] = []
+            if isinstance(photos_raw, list):
+                for item in photos_raw:
+                    if isinstance(item, str):
+                        url = str(item or "").strip()
+                    elif isinstance(item, dict):
+                        url = str(
+                            _pick_first_str(
+                                item.get("url"),
+                                item.get("photo"),
+                                item.get("src"),
+                                item.get("link"),
+                                item.get("href"),
+                            )
+                            or ""
+                        ).strip()
+                    else:
+                        url = ""
+                    if not url:
+                        continue
+                    if url not in photos:
+                        photos.append(url)
+
+            # Some WB responses include envelope/service rows that are not actual return claims.
+            # Keep only rows that have at least one business field in addition to id.
+            if not any([status_value, created, article, product, reason, photos]):
+                continue
+
+            seen_ids.add(rid)
             rows.append(
                 {
                     "id": rid,
-                    "status": str(_pick_first_str(raw.get("status"), raw.get("state"), raw.get("claimStatus")) or "").strip(),
+                    "status": status_value,
                     "created_at": str(created or "").strip(),
-                    "article": str(
-                        _pick_first_str(
-                            raw.get("article"),
-                            raw.get("supplierVendorCode"),
-                            raw.get("vendorCode"),
-                            raw.get("offerId"),
-                            raw.get("nmId"),
-                        )
-                        or ""
-                    ).strip(),
-                    "product": str(
-                        _pick_first_str(
-                            raw.get("productName"),
-                            raw.get("name"),
-                            raw.get("subjectName"),
-                            raw.get("imtName"),
-                        )
-                        or ""
-                    ).strip(),
-                    "reason": str(
-                        _pick_first_str(
-                            raw.get("reason"),
-                            raw.get("comment"),
-                            raw.get("rejectReason"),
-                            raw.get("description"),
-                        )
-                        or ""
-                    ).strip(),
+                    "article": article,
+                    "product": product,
+                    "reason": reason,
+                    "photos": photos,
                     "marketplace": "wb",
                     "raw": raw,
                 }

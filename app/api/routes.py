@@ -148,6 +148,8 @@ from app.schemas import (
     UserOut,
     SocialCalendarEventIn,
     SocialCalendarEventOut,
+    SocialCalendarGoogleSyncIn,
+    SocialCalendarGoogleSyncOut,
     SocialChatDirectStartIn,
     SocialChatGroupIn,
     SocialChatGroupUpdateIn,
@@ -491,6 +493,16 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
             "- Размер страницы: 30/50/100/200/500/1000 строк.\n"
             "- Поле «Фильтр»: быстрый поиск по артикулу/названию.\n"
             "- Детали справа: просмотр фото, атрибутов и редактирование карточки.\n\n"
+            "Поля цен в карточке:\n"
+            "- Закупочная цена: себестоимость единицы (используется в бухгалтерии для COGS/маржи).\n"
+            "- Цена без скидки: базовая (старая) цена до промо и скидок.\n"
+            "- Цена со скидкой: текущая фактическая цена продажи.\n"
+            "- Мин. цена: нижняя граница цены по вашей стратегии.\n"
+            "- Маркетинг цена: промо-цена для рекламных/маркетинговых сценариев.\n\n"
+            "Фото в редакторе:\n"
+            "- «Добавить URL»: добавляет фото по прямой ссылке.\n"
+            "- «Добавить фото»: открывает локальные папки и поддерживает выбор нескольких файлов.\n"
+            "- Перетаскивание фото меняет порядок; первое фото становится главным.\n\n"
             "Рекомендуемый порядок работы:\n"
             "1) Импортируйте каталог.\n"
             "2) Отфильтруйте нужную группу SKU.\n"
@@ -499,7 +511,8 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
             "5) Для проверки позиций перейдите в подмодуль «SEO задачи».\n\n"
             "Диагностика:\n"
             "- Если фильтр WB/Ozon не срабатывает, проверьте выбранный маркетплейс в селекте над таблицей.\n"
-            "- Если таблица пустая после импорта, очистите фильтр и повторите загрузку.\n\n"
+            "- Если таблица пустая после импорта, очистите фильтр и повторите загрузку.\n"
+            "- После добавления/перетаскивания фото нажмите «Сохранить», чтобы зафиксировать порядок.\n\n"
             "Пример: импортируйте товары Ozon, включите 100 строк на страницу, отфильтруйте «дымоход», откройте карточку и обновите описание."
         ),
     },
@@ -801,6 +814,16 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
             "- Page size: 30/50/100/200/500/1000 rows.\n"
             "- Filter input: quick search by article/title.\n"
             "- Right-side details panel: photos, attributes, card editing.\n\n"
+            "Price fields in product card:\n"
+            "- Purchase price: unit cost (used by accounting for COGS/margin).\n"
+            "- Base price: list/old price before discounts.\n"
+            "- Discounted price: current sell price.\n"
+            "- Min price: lower bound allowed by your pricing strategy.\n"
+            "- Marketing price: promo-focused price for campaign workflows.\n\n"
+            "Photos in editor:\n"
+            "- Add URL: attach image by direct link.\n"
+            "- Add photo: opens local folders and supports multi-file selection.\n"
+            "- Drag and drop changes order; first image is main photo.\n\n"
             "Recommended workflow:\n"
             "1) Import catalog.\n"
             "2) Filter priority SKU group.\n"
@@ -809,7 +832,8 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
             "5) Run ranking checks in the SEO Jobs submodule.\n\n"
             "Troubleshooting:\n"
             "- If WB/Ozon filter looks wrong, verify selected marketplace in top selector.\n"
-            "- If table looks empty after import, clear filters and reload data.\n\n"
+            "- If table looks empty after import, clear filters and reload data.\n"
+            "- After adding/reordering photos, press Save to persist the new order.\n\n"
             "Example: import Ozon catalog, set 100 rows per page, filter \"chimney\", open card details, and update description."
         ),
     },
@@ -1080,10 +1104,35 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
 
 HELP_RELEASES: list[dict[str, Any]] = [
     {
+        "version": "0.4.4",
+        "android_version_code": 15,
+        "released_at": "2026-03-09",
+        "current": True,
+        "summary": "APK 1.5.9: добавлены быстрые переходы к Бидеру/Справке, улучшен редактор фото товаров и усилены уведомления по задачам.",
+        "diff_from_previous": [
+            "Android APK обновлен до versionCode=15 / versionName=1.5.9.",
+            "В мобильном быстром переключателе добавлены пункты «Реклама: кампании», «Реклама: бидер», «Справка».",
+            "Редактор товара: кнопка «Добавить фото» открывает локальные папки и поддерживает множественный выбор файлов.",
+            "Возвраты: вместо RAW-alert открывается детальное модальное окно с понятными полями и фото.",
+            "Задачи: улучшена доставка уведомлений при alias actor_key (u:/m:), добавлена визуальная подсветка done/overdue.",
+            "Календарь: добавлена синхронизация по Google Calendar ICS URL (импорт/обновление событий).",
+        ],
+        "changes": [
+            "WB Ads кампании: усилена серверная догрузка названий/статусов/статистики для placeholder-строк.",
+            "Бухгалтерия: нормализованы шумные сообщения WB finance/sales API в более понятные предупреждения.",
+            "Товары: добавлены поля цен (base/discount/min/marketing), синхронизированные с просмотром/редактированием.",
+            "Справка: расширено описание модуля Бидер и карточки товаров (поля цен, работа с фото).",
+        ],
+        "android_download_url": "/static/downloads/seo-wibe-mobile-latest.apk",
+        "android_download_name": "SEO WIBE Android (.apk)",
+        "app_entry_url": "/mobile",
+        "notes": "APK 1.5.9 устанавливается поверх предыдущих версий. После обновления откройте «Реклама → Бидер» и «Товары → Редактировать», чтобы проверить новые элементы.",
+    },
+    {
         "version": "0.4.3",
         "android_version_code": 14,
         "released_at": "2026-03-09",
-        "current": True,
+        "current": False,
         "summary": "APK 1.5.8: ускорена статистика (форс-рефреш), усилена догрузка WB Ads кампаний и исправлен back из чата в Android.",
         "diff_from_previous": [
             "Android APK обновлен до versionCode=14 / versionName=1.5.8.",
@@ -2741,15 +2790,31 @@ def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depen
             source = "snapshot-empty"
         else:
             source = "snapshot+queue-refresh"
-    placeholder_ids: list[int] = []
-    for row in rows:
-        cid = _to_int_safe(_campaign_id_from_any(row))
-        if cid <= 0:
-            continue
-        summary = _campaign_summary_from_base_row(row, cid)
-        name = str(summary.get("name") or "").strip()
-        if _campaign_name_is_placeholder(name, cid) or not _campaign_summary_has_context(summary, cid):
-            placeholder_ids.append(cid)
+    def _collect_placeholder_campaign_ids(items: list[dict[str, Any]]) -> list[int]:
+        out: list[int] = []
+        for item in items:
+            cid_local = _to_int_safe(_campaign_id_from_any(item))
+            if cid_local <= 0:
+                continue
+            summary_local = _campaign_summary_from_base_row(item, cid_local)
+            name_local = str(summary_local.get("name") or "").strip()
+            if _campaign_name_is_placeholder(name_local, cid_local) or not _campaign_summary_has_context(summary_local, cid_local):
+                out.append(cid_local)
+        return out
+
+    placeholder_ids = _collect_placeholder_campaign_ids(rows)
+    if stale and rows and len(placeholder_ids) >= max(6, int(len(rows) * 0.35)):
+        # Snapshot can stay stale while queue is busy. If many rows are placeholders,
+        # run direct sync for this user to avoid blank campaign names on UI.
+        try:
+            sync_wb_campaign_snapshots(db, user.id, wb_key)
+            rows = get_wb_snapshot_rows(db, user.id)
+            source = "sync-on-placeholder"
+            stale = is_wb_snapshot_stale(db, user.id)
+        except Exception:
+            pass
+        placeholder_ids = _collect_placeholder_campaign_ids(rows)
+
     if placeholder_ids:
         preview_ids = sorted(set(placeholder_ids))[:600]
         placeholder_key = build_market_cache_key(
@@ -2797,13 +2862,94 @@ def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depen
                 if budget and budget not in {"-", "—"}:
                     row["budget"] = budget
     ids = sorted({_to_int_safe(_campaign_id_from_any(row)) for row in rows if _to_int_safe(_campaign_id_from_any(row)) > 0})
+    hydrated_stats: dict[str, dict[str, Any]] = {}
+    hydrated_summaries: dict[str, dict[str, Any]] = {}
+    hydrate_ids = ids[:360]
+    if hydrate_ids:
+        summary_hydrate_key = build_market_cache_key(
+            {
+                "kind": "wb_campaigns_hydrate_summaries",
+                "ids": hydrate_ids,
+                "key_rev": _secret_revision(wb_key),
+            }
+        )
+        stats_hydrate_key = build_market_cache_key(
+            {
+                "kind": "wb_campaigns_hydrate_stats",
+                "ids": hydrate_ids,
+                "date_from": "",
+                "date_to": "",
+                "key_rev": _secret_revision(wb_key),
+            }
+        )
+        try:
+            hydrated_summaries, _summary_meta = get_or_refresh_market_cache(
+                db,
+                user_id=int(user.id),
+                module_code="wb_ads",
+                marketplace="wb",
+                cache_key=summary_hydrate_key,
+                ttl_sec=max(120, _market_cache_ttl("wb_ads")),
+                fetcher=lambda: fetch_wb_campaign_summaries(
+                    wb_key,
+                    hydrate_ids,
+                    fallback_limit=max(120, min(1000, len(hydrate_ids) * 2)),
+                ),
+                stale_if_error_sec=45 * 60,
+                prefer_stale_sec=20 * 60,
+            )
+        except Exception:
+            hydrated_summaries = {}
+        try:
+            hydrated_stats, _stats_meta = get_or_refresh_market_cache(
+                db,
+                user_id=int(user.id),
+                module_code="wb_ads_analytics",
+                marketplace="wb",
+                cache_key=stats_hydrate_key,
+                ttl_sec=max(120, _market_cache_ttl("wb_ads_analytics")),
+                fetcher=lambda: fetch_wb_campaign_stats_bulk(wb_key, hydrate_ids, date_from=None, date_to=None),
+                stale_if_error_sec=45 * 60,
+                prefer_stale_sec=20 * 60,
+            )
+        except Exception:
+            hydrated_stats = {}
+        if isinstance(hydrated_summaries, dict) or isinstance(hydrated_stats, dict):
+            merged_rows: list[dict[str, Any]] = []
+            for row in rows:
+                cid = _to_int_safe(_campaign_id_from_any(row))
+                if cid <= 0:
+                    merged_rows.append(row)
+                    continue
+                key = str(cid)
+                summary = hydrated_summaries.get(key) if isinstance(hydrated_summaries, dict) else None
+                stat = hydrated_stats.get(key) if isinstance(hydrated_stats, dict) else None
+                merged = dict(row)
+                if isinstance(summary, dict):
+                    current_name = str(merged.get("name") or "").strip()
+                    if summary.get("name") and (_campaign_name_is_placeholder(current_name, cid) or not current_name):
+                        merged["name"] = str(summary.get("name") or "")
+                    if summary.get("status") and str(merged.get("status") or "").strip() in {"", "-", "—"}:
+                        merged["status"] = str(summary.get("status") or "")
+                    if summary.get("type") and str(merged.get("type") or "").strip() in {"", "-", "—"}:
+                        merged["type"] = str(summary.get("type") or "")
+                    if summary.get("budget") and str(merged.get("budget") or merged.get("dailyBudget") or "").strip() in {"", "-", "—"}:
+                        merged["budget"] = str(summary.get("budget") or "")
+                if isinstance(stat, dict):
+                    for metric_key in ("views", "clicks", "orders", "spent", "ctr", "cr", "cpc", "cpo", "add_to_cart"):
+                        if metric_key in stat:
+                            merged[metric_key] = _to_float_safe(stat.get(metric_key), 0.0)
+                merged_rows.append(merged)
+            rows = merged_rows
     _audit(
         db,
         user,
         action="wb_ads_campaigns_read",
         details=(
             f"count={len(rows)};ids={len(ids)};source={source};stale={int(stale)};"
-            f"queue={int(refresh_queued)};queue_depth={queue_depth_now}"
+            f"queue={int(refresh_queued)};queue_depth={queue_depth_now};"
+            f"summary_hydrated={len(hydrated_summaries) if isinstance(hydrated_summaries, dict) else 0};"
+            f"stats_hydrated={len(hydrated_stats) if isinstance(hydrated_stats, dict) else 0}"
         ),
         module_code="wb_ads",
         entity_type="campaign",
@@ -2811,7 +2957,7 @@ def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depen
     db.commit()
     return WbCampaignsOut(
         campaigns=rows,
-        stats={},
+        stats=hydrated_stats if isinstance(hydrated_stats, dict) else {},
         meta={
             "source": source,
             "stale": stale,
@@ -2819,6 +2965,8 @@ def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depen
             "refresh_queued": refresh_queued,
             "queue_available": queue_available(),
             "queue_depth": queue_depth_now,
+            "summary_hydrated": len(hydrated_summaries) if isinstance(hydrated_summaries, dict) else 0,
+            "stats_hydrated": len(hydrated_stats) if isinstance(hydrated_stats, dict) else 0,
         },
     )
 
@@ -4068,6 +4216,7 @@ def get_help_releases(
         if is_en:
             # Lightweight EN localization for release cards without splitting data model.
             item["summary"] = {
+                "APK 1.5.9: добавлены быстрые переходы к Бидеру/Справке, улучшен редактор фото товаров и усилены уведомления по задачам.": "APK 1.5.9: quick navigation to Bidder/Help added, product photo editor improved, and task notifications strengthened.",
                 "Исправлена установка Android-обновления, ускорены детали товаров и кэш WB Ads enrich.": "Android update installation fixed, product details are faster, and WB Ads enrich now uses faster caching.",
                 "Стабилизация сервера, ускорение рекламы/кэшей, online-статусы и обновленный Android APK 1.5.3.": "Server stabilization, faster ads/cache loading, online-status fixes, and refreshed Android APK 1.5.3.",
                 "Android APK: исправлена загрузка истории чатов, снижено мерцание интерфейса, добавлены бейджи и быстрый ответ из шторки.": "Android APK: fixed chat history preload, reduced UI flicker, and added badges plus quick reply from notification shade.",
@@ -4079,6 +4228,7 @@ def get_help_releases(
                 "Стабилизация модулей товаров, отзывов/вопросов, рекламы и чата.": "Stabilization for products, reviews/questions, ads, and chat modules.",
             }.get(str(item.get("summary") or ""), str(item.get("summary") or ""))
             item["notes"] = {
+                "APK 1.5.9 устанавливается поверх предыдущих версий. После обновления откройте «Реклама → Бидер» и «Товары → Редактировать», чтобы проверить новые элементы.": "APK 1.5.9 installs over previous versions. After update, open Ads -> Bidder and Products -> Edit to verify new elements.",
                 "APK 1.5.4 исправляет сценарий «обновление скачалось, но не установилось» и открывает системный установщик Android после загрузки.": "APK 1.5.4 fixes the case when update downloaded but failed to install, and opens Android system installer after download.",
                 "APK 1.5.3 проверяет обновления при запуске и предлагает «Установить / Позже». После загрузки открывается системный установщик Android.": "APK 1.5.3 checks for updates at startup and shows Install/Later. After download, Android system installer is opened.",
                 "APK проверяет обновления при запуске и предлагает «Установить / Позже». После загрузки открывается системный установщик Android. Уведомления в шторке поддерживают быстрый ответ.": "APK checks for updates at startup and shows Install/Later. After download, Android system installer is opened. Notification shade supports inline quick reply.",
@@ -4692,6 +4842,14 @@ def product_details(
     attributes_payload = details_payload.get("attributes") if isinstance(details_payload, dict) else {}
     if not isinstance(attributes_payload, dict):
         attributes_payload = {}
+
+    def _pick_first_price(*values: Any) -> float:
+        for value in values:
+            amount = float(round(_to_money(value), 2))
+            if amount > 0:
+                return amount
+        return 0.0
+
     next_category = ""
     if not str(product.category_name or "").strip():
         next_category = str(attributes_payload.get("category_name") or "").strip()
@@ -4709,6 +4867,30 @@ def product_details(
         if next_category:
             product.category_name = next_category[:255]
             db.flush()
+    if float(product.price_discount or 0.0) <= 0:
+        product.price_discount = _pick_first_price(
+            attributes_payload.get("price"),
+            raw_payload.get("price"),
+            (raw_payload.get("result") or {}).get("price") if isinstance(raw_payload.get("result"), dict) else None,
+        )
+    if float(product.price_base or 0.0) <= 0:
+        product.price_base = _pick_first_price(
+            attributes_payload.get("old_price"),
+            raw_payload.get("old_price"),
+            raw_payload.get("price_without_discount"),
+            raw_payload.get("list_price"),
+        )
+    if float(product.price_min or 0.0) <= 0:
+        product.price_min = _pick_first_price(
+            attributes_payload.get("min_price"),
+            raw_payload.get("min_price"),
+        )
+    if float(product.price_marketing or 0.0) <= 0:
+        product.price_marketing = _pick_first_price(
+            attributes_payload.get("marketing_price"),
+            raw_payload.get("marketing_price"),
+            raw_payload.get("promo_price"),
+        )
     _audit(
         db,
         user,
@@ -4749,6 +4931,10 @@ def update_product(product_id: int, payload: ProductUpdateIn, user: User = Depen
     next_photo = str(payload.photo_url or "").strip()
     next_keywords = str(payload.target_keywords or "").strip()
     next_purchase_price = max(0.0, round(_to_money(payload.purchase_price), 2)) if payload.purchase_price is not None else None
+    next_price_base = max(0.0, round(_to_money(payload.price_base), 2)) if payload.price_base is not None else None
+    next_price_discount = max(0.0, round(_to_money(payload.price_discount), 2)) if payload.price_discount is not None else None
+    next_price_min = max(0.0, round(_to_money(payload.price_min), 2)) if payload.price_min is not None else None
+    next_price_marketing = max(0.0, round(_to_money(payload.price_marketing), 2)) if payload.price_marketing is not None else None
     next_photos_order = (
         _normalize_product_photo_list(payload.photos_order or [])
         if payload.photos_order is not None
@@ -4764,6 +4950,14 @@ def update_product(product_id: int, payload: ProductUpdateIn, user: User = Depen
         product.current_description = next_description[:16000]
     if next_purchase_price is not None:
         product.purchase_price = next_purchase_price
+    if next_price_base is not None:
+        product.price_base = next_price_base
+    if next_price_discount is not None:
+        product.price_discount = next_price_discount
+    if next_price_min is not None:
+        product.price_min = next_price_min
+    if next_price_marketing is not None:
+        product.price_marketing = next_price_marketing
     if payload.photo_url is not None:
         normalized_photo = _normalize_product_photo_url(next_photo)
         product.photo_url = normalized_photo[:500]
@@ -4790,6 +4984,10 @@ def update_product(product_id: int, payload: ProductUpdateIn, user: User = Depen
         f"photos_order={'1' if payload.photos_order is not None else '0'}",
         f"keywords={'1' if bool(payload.target_keywords is not None) else '0'}",
         f"purchase_price={'1' if payload.purchase_price is not None else '0'}",
+        f"price_base={'1' if payload.price_base is not None else '0'}",
+        f"price_discount={'1' if payload.price_discount is not None else '0'}",
+        f"price_min={'1' if payload.price_min is not None else '0'}",
+        f"price_marketing={'1' if payload.price_marketing is not None else '0'}",
     ]
     api_key = _get_active_marketplace_api_key(db, user.id, product.marketplace)
     if payload.current_description is not None:
@@ -8937,6 +9135,132 @@ def _social_parse_dt(raw: str | None) -> datetime | None:
         return None
 
 
+def _social_ical_unfold_lines(raw_text: str) -> list[str]:
+    text_value = str(raw_text or "").replace("\r\n", "\n").replace("\r", "\n")
+    lines = text_value.split("\n")
+    out: list[str] = []
+    for line in lines:
+        if (line.startswith(" ") or line.startswith("\t")) and out:
+            out[-1] += line[1:]
+            continue
+        out.append(line)
+    return out
+
+
+def _social_ical_unescape(value: str) -> str:
+    text_value = str(value or "")
+    text_value = text_value.replace("\\n", "\n").replace("\\N", "\n")
+    text_value = text_value.replace("\\,", ",").replace("\\;", ";").replace("\\\\", "\\")
+    return text_value.strip()
+
+
+def _social_ical_parse_dt(raw: str, *, tzid: str = "", is_date_only: bool = False) -> datetime | None:
+    text_value = str(raw or "").strip()
+    if not text_value:
+        return None
+    if re.fullmatch(r"\d{8}", text_value):
+        try:
+            dt_local = datetime.strptime(text_value, "%Y%m%d")
+            return dt_local
+        except Exception:
+            return None
+    fmt_candidates = ["%Y%m%dT%H%M%SZ", "%Y%m%dT%H%M%S", "%Y%m%dT%H%M"]
+    parsed: datetime | None = None
+    used_utc_suffix = False
+    for fmt in fmt_candidates:
+        try:
+            parsed = datetime.strptime(text_value, fmt)
+            used_utc_suffix = fmt.endswith("Z")
+            break
+        except Exception:
+            continue
+    if parsed is None:
+        return None
+    if used_utc_suffix:
+        return parsed.replace(tzinfo=timezone.utc).astimezone(timezone.utc).replace(tzinfo=None)
+    if tzid:
+        try:
+            tzinfo = ZoneInfo(str(tzid))
+            return parsed.replace(tzinfo=tzinfo).astimezone(timezone.utc).replace(tzinfo=None)
+        except Exception:
+            return parsed
+    if is_date_only:
+        return parsed.replace(hour=0, minute=0, second=0, microsecond=0)
+    return parsed
+
+
+def _social_parse_ical_events(raw_text: str) -> tuple[list[dict[str, Any]], list[str]]:
+    lines = _social_ical_unfold_lines(raw_text)
+    events: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    current: dict[str, Any] | None = None
+    for line in lines:
+        text_line = str(line or "").strip()
+        if not text_line:
+            continue
+        upper = text_line.upper()
+        if upper == "BEGIN:VEVENT":
+            current = {}
+            continue
+        if upper == "END:VEVENT":
+            if not isinstance(current, dict):
+                current = None
+                continue
+            status = str(current.get("STATUS") or "").strip().upper()
+            if status == "CANCELLED":
+                current = None
+                continue
+            uid = str(current.get("UID") or "").strip()
+            title = str(current.get("SUMMARY") or "").strip() or "Google event"
+            details = _social_ical_unescape(str(current.get("DESCRIPTION") or ""))
+            dt_start_raw, dt_start_tz, dt_start_is_date = current.get("_DTSTART", ("", "", False))
+            dt_end_raw, dt_end_tz, dt_end_is_date = current.get("_DTEND", ("", "", False))
+            start_at = _social_ical_parse_dt(dt_start_raw, tzid=dt_start_tz, is_date_only=bool(dt_start_is_date))
+            end_at = _social_ical_parse_dt(dt_end_raw, tzid=dt_end_tz, is_date_only=bool(dt_end_is_date))
+            if not start_at:
+                current = None
+                continue
+            if end_at and end_at <= start_at:
+                end_at = start_at + timedelta(hours=1)
+            events.append(
+                {
+                    "uid": uid or hashlib.sha1(f"{title}|{start_at.isoformat()}|{details}".encode("utf-8")).hexdigest()[:24],
+                    "title": title[:255],
+                    "details": details[:5000],
+                    "start_at": start_at,
+                    "end_at": end_at,
+                }
+            )
+            current = None
+            continue
+        if current is None:
+            continue
+        if ":" not in text_line:
+            continue
+        key_part, value = text_line.split(":", 1)
+        key_tokens = [str(x or "").strip() for x in key_part.split(";") if str(x or "").strip()]
+        if not key_tokens:
+            continue
+        key = key_tokens[0].upper()
+        params: dict[str, str] = {}
+        for token in key_tokens[1:]:
+            if "=" not in token:
+                continue
+            pkey, pval = token.split("=", 1)
+            params[str(pkey or "").strip().upper()] = str(pval or "").strip()
+        if key in {"UID", "SUMMARY", "DESCRIPTION", "STATUS"}:
+            current[key] = value
+            continue
+        if key in {"DTSTART", "DTEND"}:
+            tzid = str(params.get("TZID") or "").strip()
+            is_date = str(params.get("VALUE") or "").strip().upper() == "DATE"
+            current[f"_{key}"] = (value, tzid, is_date)
+            continue
+    if not events:
+        warnings.append("Google Calendar не вернул событий в ICS.")
+    return events, warnings
+
+
 @router.get("/social/bootstrap", response_model=dict[str, Any])
 def social_bootstrap(
     request: Request,
@@ -10413,6 +10737,163 @@ def social_calendar_events(
     ]
 
 
+@router.post("/social/calendar/google-sync", response_model=SocialCalendarGoogleSyncOut)
+def social_calendar_google_sync(
+    payload: SocialCalendarGoogleSyncIn,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, _, _ = _social_actor_identity(db, user)
+    url_raw = str(payload.ical_url or "").strip()
+    if not url_raw:
+        raise HTTPException(status_code=400, detail="Укажите ссылку ICS/Google Calendar")
+    url_value = url_raw
+    if url_value.lower().startswith("webcal://"):
+        url_value = "https://" + url_value[9:]
+    parsed_url = urllib.parse.urlparse(url_value)
+    if parsed_url.scheme not in {"http", "https"}:
+        raise HTTPException(status_code=400, detail="Поддерживаются только ссылки http/https (или webcal)")
+
+    warnings: list[str] = []
+    try:
+        req = urllib.request.Request(url_value, headers={"User-Agent": "SEO-WIBE/1.0"})
+        with urllib.request.urlopen(req, timeout=25) as response:
+            raw_bytes = response.read(2 * 1024 * 1024)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Не удалось загрузить ICS: {str(exc or '')[:220]}")
+
+    text_payload = ""
+    for encoding in ("utf-8", "utf-8-sig", "cp1251", "latin-1"):
+        try:
+            text_payload = raw_bytes.decode(encoding)
+            break
+        except Exception:
+            continue
+    if not text_payload:
+        raise HTTPException(status_code=400, detail="Не удалось декодировать ICS файл")
+
+    parsed_events, parse_warnings = _social_parse_ical_events(text_payload)
+    warnings.extend(parse_warnings)
+    if not parsed_events:
+        db.commit()
+        return SocialCalendarGoogleSyncOut(ok=True, imported=0, updated=0, deleted=0, skipped=0, warnings=warnings)
+
+    source_hash = hashlib.sha1(url_value.encode("utf-8")).hexdigest()[:16]
+    marker_prefix = f"[[gcal_sync source={source_hash} "
+    marker_pattern = re.compile(r"\[\[gcal_sync source=([a-f0-9]{16}) uid=([^\]\s]+)\]\]")
+
+    existing_rows = db.scalars(
+        select(SocialCalendarEvent).where(
+            SocialCalendarEvent.user_id == int(user.id),
+            SocialCalendarEvent.actor_key == actor_key,
+            SocialCalendarEvent.details.like(f"%{marker_prefix}%"),
+        )
+    ).all()
+    existing_by_uid: dict[str, SocialCalendarEvent] = {}
+    for row in existing_rows:
+        details_text = str(row.details or "")
+        match = marker_pattern.search(details_text)
+        if not match:
+            continue
+        if match.group(1) != source_hash:
+            continue
+        uid_text = urllib.parse.unquote(str(match.group(2) or "").strip())
+        if uid_text:
+            existing_by_uid[uid_text] = row
+
+    imported = 0
+    updated = 0
+    skipped = 0
+    seen_uids: set[str] = set()
+    safe_is_public = bool(payload.is_public)
+    for event in parsed_events[:1800]:
+        uid = str(event.get("uid") or "").strip()
+        if not uid:
+            skipped += 1
+            continue
+        if uid in seen_uids:
+            continue
+        seen_uids.add(uid)
+        marker_uid = urllib.parse.quote(uid, safe="")[:220]
+        marker = f"[[gcal_sync source={source_hash} uid={marker_uid}]]"
+        details = str(event.get("details") or "").strip()
+        stored_details = f"{details}\n\n{marker}" if details else marker
+        start_at = event.get("start_at") if isinstance(event.get("start_at"), datetime) else None
+        end_at = event.get("end_at") if isinstance(event.get("end_at"), datetime) else None
+        if not start_at:
+            skipped += 1
+            continue
+        row = existing_by_uid.get(uid)
+        if row is None:
+            db.add(
+                SocialCalendarEvent(
+                    user_id=int(user.id),
+                    actor_key=actor_key,
+                    is_public=safe_is_public,
+                    title=str(event.get("title") or "Google event")[:255],
+                    details=stored_details[:5000],
+                    start_at=start_at,
+                    end_at=end_at,
+                )
+            )
+            imported += 1
+            continue
+        changed = False
+        next_title = str(event.get("title") or row.title or "Google event")[:255]
+        if str(row.title or "") != next_title:
+            row.title = next_title
+            changed = True
+        if str(row.details or "") != stored_details[:5000]:
+            row.details = stored_details[:5000]
+            changed = True
+        if bool(row.is_public) != safe_is_public:
+            row.is_public = safe_is_public
+            changed = True
+        if row.start_at != start_at:
+            row.start_at = start_at
+            changed = True
+        if row.end_at != end_at:
+            row.end_at = end_at
+            changed = True
+        if changed:
+            updated += 1
+        else:
+            skipped += 1
+
+    deleted = 0
+    if bool(payload.replace_source_events):
+        for uid, row in existing_by_uid.items():
+            if uid in seen_uids:
+                continue
+            db.delete(row)
+            deleted += 1
+
+    _audit(
+        db,
+        user,
+        action="social_calendar_google_sync",
+        details=(
+            f"source={source_hash};imported={imported};updated={updated};"
+            f"deleted={deleted};skipped={skipped};events={len(parsed_events)}"
+        ),
+        module_code="social_hub",
+        entity_type="calendar_sync",
+        status="ok",
+        request=request,
+    )
+    db.commit()
+    return SocialCalendarGoogleSyncOut(
+        ok=True,
+        imported=imported,
+        updated=updated,
+        deleted=deleted,
+        skipped=skipped,
+        warnings=warnings,
+    )
+
+
 @router.post("/social/calendar/events", response_model=SocialCalendarEventOut)
 def social_calendar_create_event(
     payload: SocialCalendarEventIn,
@@ -10836,11 +11317,12 @@ def social_notifications(
 ):
     ensure_module_enabled(db, user, "social_hub")
     actor_key, actor_nick, _ = _social_actor_identity(db, user)
+    actor_aliases = _social_actor_alias_keys(db, actor_key)
     _social_emit_due_reminders(db, user_id=int(user.id), actor_key=actor_key, actor_nick=actor_nick)
     safe_limit = max(10, min(int(limit or 40), 200))
     query = select(SocialNotification).where(
         SocialNotification.user_id == int(user.id),
-        SocialNotification.recipient_key == actor_key,
+        SocialNotification.recipient_key.in_(actor_aliases),
     )
     if int(since_id or 0) > 0:
         query = query.where(SocialNotification.id > int(since_id))
@@ -10850,7 +11332,7 @@ def social_notifications(
         .select_from(SocialNotification)
         .where(
             SocialNotification.user_id == int(user.id),
-            SocialNotification.recipient_key == actor_key,
+            SocialNotification.recipient_key.in_(actor_aliases),
             SocialNotification.is_read.is_(False),
         )
     ) or 0
@@ -10881,15 +11363,22 @@ def social_notifications_read_all(
 ):
     ensure_module_enabled(db, user, "social_hub")
     actor_key, _, _ = _social_actor_identity(db, user)
+    actor_aliases = _social_actor_alias_keys(db, actor_key)
     db.execute(
         text(
             """
             UPDATE social_notifications
             SET is_read = 1
-            WHERE user_id = :user_id AND recipient_key = :key AND is_read = 0
+            WHERE user_id = :user_id
+              AND recipient_key IN (:k1, :k2)
+              AND is_read = 0
             """
         ),
-        {"key": actor_key, "user_id": int(user.id)},
+        {
+            "user_id": int(user.id),
+            "k1": actor_aliases[0] if actor_aliases else actor_key,
+            "k2": actor_aliases[1] if len(actor_aliases) > 1 else actor_aliases[0] if actor_aliases else actor_key,
+        },
     )
     db.commit()
     return MessageOut(message="Ок")

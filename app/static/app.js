@@ -76,7 +76,6 @@ let activeProductEditId = 0;
 let activeProductViewIsRefreshing = false;
 let productEditPhotoOrder = [];
 let productEditDragIndex = -1;
-let productEditUploadAutoMode = false;
 const PRODUCT_DETAILS_CACHE_TTL_MS = 3 * 60 * 1000;
 const productDetailsCache = new Map();
 let autoKeywordProductId = null;
@@ -889,7 +888,8 @@ function applyUiLanguage() {
   setText("#productViewRefreshBtn", isEn ? "Refresh from API" : "Обновить из API");
   setText("#productViewEditBtn", isEn ? "Edit" : "Редактировать");
   setText("#productEditPhotoAddBtn", isEn ? "Add photo" : "Добавить фото");
-  setText("#productEditPhotoUploadBtn", isEn ? "Upload files" : "Загрузить файлы");
+  setText("#productEditPhotoAddUrlBtn", isEn ? "Add URL" : "Добавить URL");
+  setText("#productEditPhotoPickBtn", isEn ? "Choose files" : "Выбрать файлы");
   setText("#reviews thead th:nth-child(1)", isEn ? "Status" : "Статус");
   setText("#reviews thead th:nth-child(2)", isEn ? "Date" : "Дата");
   setText("#reviews thead th:nth-child(3)", isEn ? "Product" : "Товар");
@@ -2340,22 +2340,40 @@ function getMobileQuickNavSelects() {
 
 function getMobileQuickNavOptions() {
   const isEn = currentLang === "en";
-  return [
-    { value: "sales_dashboard", label: isEn ? "Statistics" : "Статистика" },
-    { value: "social_chat", label: isEn ? "Chat" : "Чат" },
-    { value: "social_tasks", label: isEn ? "Tasks" : "Задачи" },
-    { value: "social_notes", label: isEn ? "Notes" : "Заметки" },
-    { value: "social_calculator", label: isEn ? "Calculator" : "Калькулятор" },
-    { value: "social_calendar", label: isEn ? "Calendar" : "Календарь" },
-    { value: "social_games", label: isEn ? "Games" : "Игры" },
-    { value: "reviews_reviews", label: isEn ? "Review replies" : "Ответы на отзывы" },
-    { value: "reviews_questions", label: isEn ? "Question replies" : "Ответы на вопросы" },
-    { value: "profile_main", label: isEn ? "Profile" : "Профиль" },
-  ];
+  const has = (code) => {
+    if (!modulesLoaded) return true;
+    return enabledModules instanceof Set && enabledModules.has(code);
+  };
+  const options = [{ value: "sales_dashboard", label: isEn ? "Statistics" : "Статистика" }];
+  if (has("wb_ads")) {
+    options.push({ value: "ads_campaigns", label: isEn ? "Ads campaigns" : "Реклама: кампании" });
+    options.push({ value: "ads_bidder", label: isEn ? "WB bidder" : "Реклама: бидер" });
+  }
+  if (has("social_hub")) {
+    options.push({ value: "social_chat", label: isEn ? "Chat" : "Чат" });
+    options.push({ value: "social_tasks", label: isEn ? "Tasks" : "Задачи" });
+    options.push({ value: "social_notes", label: isEn ? "Notes" : "Заметки" });
+    options.push({ value: "social_calculator", label: isEn ? "Calculator" : "Калькулятор" });
+    options.push({ value: "social_calendar", label: isEn ? "Calendar" : "Календарь" });
+    options.push({ value: "social_games", label: isEn ? "Games" : "Игры" });
+  }
+  if (has("wb_reviews_ai") || has("wb_questions_ai") || has("returns")) {
+    options.push({ value: "reviews_reviews", label: isEn ? "Review replies" : "Ответы на отзывы" });
+    options.push({ value: "reviews_questions", label: isEn ? "Question replies" : "Ответы на вопросы" });
+  }
+  options.push({ value: "profile_main", label: isEn ? "Profile" : "Профиль" });
+  if (has("help_center")) {
+    options.push({ value: "help_main", label: isEn ? "Help" : "Справка" });
+  }
+  return options;
 }
 
 function getCurrentMobileQuickValue() {
   if (currentTab === "sales") return "sales_dashboard";
+  if (currentTab === "ads") {
+    const sub = String(currentAdsSubtab || "campaigns").trim().toLowerCase();
+    return sub === "bidder" ? "ads_bidder" : "ads_campaigns";
+  }
   if (currentTab === "social") {
     const sub = ["games", "chat", "tasks", "notes", "calculator", "calendar"].includes(String(currentSocialSubtab || ""))
       ? String(currentSocialSubtab)
@@ -2367,6 +2385,9 @@ function getCurrentMobileQuickValue() {
   }
   if (currentTab === "profile") {
     return "profile_main";
+  }
+  if (currentTab === "help") {
+    return "help_main";
   }
   return "";
 }
@@ -2443,6 +2464,17 @@ function openMobileQuickNavValue(valueRaw) {
     closeMobileNav();
     return;
   }
+  if (value.startsWith("ads_")) {
+    const sub = value.endsWith("_bidder") ? "bidder" : "campaigns";
+    showTab("ads", document.querySelector(".nav-btn[data-tab='ads']"));
+    if (typeof switchAdsSubtab === "function") {
+      setTimeout(() => {
+        try { switchAdsSubtab(sub, true); } catch (_) {}
+      }, 120);
+    }
+    closeMobileNav();
+    return;
+  }
   if (value.startsWith("reviews_")) {
     const sub = value.endsWith("_questions") ? "questions" : "reviews";
     showTab("reviews", document.querySelector(".nav-btn[data-tab='reviews']"));
@@ -2452,6 +2484,11 @@ function openMobileQuickNavValue(valueRaw) {
   }
   if (value === "profile_main") {
     showTab("profile", document.querySelector(".nav-btn[data-tab='profile']"));
+    closeMobileNav();
+    return;
+  }
+  if (value === "help_main") {
+    showTab("help", document.querySelector(".nav-btn[data-tab='help']"));
     closeMobileNav();
   }
 }
@@ -4912,6 +4949,126 @@ async function loadReturns() {
   markModuleLoaded("reviews");
 }
 
+function closeReturnDetailModal(evt = null) {
+  const modal = document.getElementById("returnDetailModal");
+  if (!modal) return;
+  if (evt && evt.target && evt.target !== modal) return;
+  modal.classList.add("hidden");
+}
+
+function extractReturnDetailContext(detail, returnId = "") {
+  const raw = detail && typeof detail === "object" ? detail : {};
+  const pick = (...paths) => {
+    for (const path of paths) {
+      const val = normalizeProductDetailValue(getValueByPath(raw, path));
+      if (val) return val;
+    }
+    return "";
+  };
+  const id = pick("id", "claimId", "claim_id", "returnId", "return_id", "claim.id") || String(returnId || "");
+  const status = pick("status", "state", "claimStatus", "claim.status");
+  const createdAt = pick("created_at", "createdAt", "date", "createdDate", "claim.createdAt");
+  const updatedAt = pick("updated_at", "updatedAt", "claim.updatedAt");
+  const article = pick("article", "supplierVendorCode", "vendorCode", "offerId", "offer_id", "item.article");
+  const product = pick("product", "productName", "name", "subjectName", "imtName", "item.name");
+  const quantity = pick("quantity", "count", "itemsCount", "qty");
+  const amount = pick("amount", "sum", "total", "refundAmount", "returnAmount", "price");
+  const reason = pick("reason", "comment", "rejectReason", "description", "text", "claim.reason", "claim.comment");
+
+  const photos = [];
+  const appendPhotos = (src) => {
+    if (!src) return;
+    if (Array.isArray(src)) {
+      src.forEach((item) => appendPhotos(item));
+      return;
+    }
+    if (typeof src === "string") {
+      const url = String(src || "").trim();
+      if (url && !photos.includes(url)) photos.push(url);
+      return;
+    }
+    if (typeof src === "object") {
+      const url = normalizeFeedbackText(src.url || src.photo || src.src || src.link || src.href || "");
+      if (url && !photos.includes(url)) photos.push(url);
+    }
+  };
+  appendPhotos(raw.photos);
+  appendPhotos(raw.images);
+  appendPhotos(raw.pictures);
+  appendPhotos(raw.attachments);
+  appendPhotos(raw.files);
+  appendPhotos(raw.claim?.photos);
+  appendPhotos(raw.claim?.images);
+
+  return {
+    id,
+    status,
+    createdAt,
+    updatedAt,
+    article,
+    product,
+    quantity,
+    amount,
+    reason,
+    photos,
+    raw,
+  };
+}
+
+function renderReturnDetailModal(detail, returnId = "") {
+  const modal = document.getElementById("returnDetailModal");
+  if (!modal) return;
+  const titleEl = document.getElementById("returnDetailTitle");
+  const summaryEl = document.getElementById("returnDetailSummary");
+  const cardsEl = document.getElementById("returnDetailCards");
+  const descEl = document.getElementById("returnDetailDescription");
+  const photosEl = document.getElementById("returnDetailPhotos");
+  const rawEl = document.getElementById("returnDetailRaw");
+  const ctx = extractReturnDetailContext(detail, returnId);
+
+  if (titleEl) {
+    const rid = ctx.id || String(returnId || "-");
+    titleEl.textContent = `${tr("Детали возврата", "Return details")} #${rid}`;
+  }
+  if (summaryEl) {
+    const parts = [
+      ctx.status ? `${tr("Статус", "Status")}: ${ctx.status}` : "",
+      ctx.createdAt ? `${tr("Создан", "Created")}: ${ctx.createdAt}` : "",
+      ctx.updatedAt ? `${tr("Обновлен", "Updated")}: ${ctx.updatedAt}` : "",
+    ].filter(Boolean);
+    summaryEl.textContent = parts.join(" • ") || tr("Карточка возврата загружена.", "Return card loaded.");
+  }
+  if (cardsEl) {
+    cardsEl.innerHTML = renderProductInfoGrid(
+      [
+        { label: "id", value: ctx.id || "-" },
+        { label: tr("Статус", "Status"), value: ctx.status || "-" },
+        { label: tr("Товар", "Product"), value: ctx.product || "-" },
+        { label: tr("Артикул", "Article"), value: ctx.article || "-" },
+        { label: tr("Количество", "Quantity"), value: ctx.quantity || "-" },
+        { label: tr("Сумма", "Amount"), value: ctx.amount || "-" },
+      ],
+      tr("Ключевые поля отсутствуют.", "No key fields.")
+    );
+  }
+  if (descEl) {
+    descEl.textContent = ctx.reason || tr("Описание отсутствует.", "Description is not available.");
+  }
+  if (photosEl) {
+    photosEl.innerHTML = ctx.photos.length
+      ? ctx.photos.map((url, idx) => `<img src="${escapeHtml(String(url))}" alt="return-photo-${idx + 1}" loading="lazy" class="product-detail-photo">`).join("")
+      : `<div class="hint">${escapeHtml(tr("Фото не прикреплены.", "No photos attached."))}</div>`;
+    if (ctx.photos.length) {
+      photosEl.querySelectorAll("img.product-detail-photo").forEach((imgEl, idx) => {
+        imgEl.classList.add("clickable-photo");
+        imgEl.addEventListener("click", () => openReviewPhotoViewer(ctx.photos, idx));
+      });
+    }
+  }
+  if (rawEl) rawEl.textContent = JSON.stringify(ctx.raw || {}, null, 2);
+  modal.classList.remove("hidden");
+}
+
 async function openReturnDetails(returnId) {
   const rid = String(returnId || "").trim();
   if (!rid) return;
@@ -4925,7 +5082,7 @@ async function openReturnDetails(returnId) {
   });
   if (!data) return;
   if (raw) raw.textContent = JSON.stringify(data, null, 2);
-  alert(tr("Детали возврата загружены в RAW блок.", "Return details loaded into RAW block."));
+  renderReturnDetailModal(data, rid);
 }
 
 async function actionReturn(returnId, actionCode) {
@@ -7081,7 +7238,6 @@ function closeProductEditModal() {
   activeProductEditId = 0;
   productEditPhotoOrder = [];
   productEditDragIndex = -1;
-  productEditUploadAutoMode = false;
   const addInput = document.getElementById("productEditPhotoAddUrl");
   if (addInput) addInput.value = "";
   const uploadInput = document.getElementById("productEditPhotoUploadInput");
@@ -7245,10 +7401,11 @@ function extractProductDetailContext(details, fallbackProduct) {
   ];
 
   const commerceItems = [
-    { label: tr("Цена", "Price"), value: pickAny(pickAttr("price"), pickRaw("price")) || "-" },
-    { label: tr("Старая цена", "Old price"), value: pickAny(pickAttr("old_price"), pickRaw("old_price")) || "-" },
-    { label: tr("Мин. цена", "Min price"), value: pickAny(pickAttr("min_price"), pickRaw("min_price")) || "-" },
-    { label: tr("Маркетинг цена", "Marketing price"), value: pickAny(pickAttr("marketing_price"), pickRaw("marketing_price")) || "-" },
+    { label: tr("Закупочная цена", "Purchase price"), value: pickAny(base.purchase_price, pickAttr("purchase_price"), pickRaw("purchase_price")) || "-" },
+    { label: tr("Цена без скидки", "Base price"), value: pickAny(base.price_base, pickAttr("old_price"), pickRaw("old_price")) || "-" },
+    { label: tr("Цена со скидкой", "Discounted price"), value: pickAny(base.price_discount, pickAttr("price"), pickRaw("price")) || "-" },
+    { label: tr("Мин. цена", "Min price"), value: pickAny(base.price_min, pickAttr("min_price"), pickRaw("min_price")) || "-" },
+    { label: tr("Маркетинг цена", "Marketing price"), value: pickAny(base.price_marketing, pickAttr("marketing_price"), pickRaw("marketing_price")) || "-" },
     { label: tr("Валюта", "Currency"), value: pickAny(pickAttr("currency_code"), pickRaw("currency_code")) || "-" },
     { label: tr("НДС", "VAT"), value: pickAny(pickAttr("vat"), pickRaw("vat")) || "-" },
     { label: tr("Статус", "Status"), value: pickAny(pickAttr("state"), pickRaw("state.name", "state")) || "-" },
@@ -7503,6 +7660,10 @@ async function openProductEditModal(productId) {
   setValue("productEditPhotoUrl", base.photo_url);
   setValue("productEditPhotoAddUrl", "");
   setValue("productEditPurchasePrice", base.purchase_price);
+  setValue("productEditPriceBase", base.price_base);
+  setValue("productEditPriceDiscount", base.price_discount);
+  setValue("productEditPriceMin", base.price_min);
+  setValue("productEditPriceMarketing", base.price_marketing);
   setValue("productEditDescription", base.current_description || context.description);
   setValue("productEditKeywords", base.target_keywords);
   if (summaryEl) {
@@ -7572,10 +7733,7 @@ function addProductEditPhotoFromInput() {
   const input = document.getElementById("productEditPhotoAddUrl");
   const raw = String(input?.value || "").trim();
   if (!raw) {
-    const uploadInput = document.getElementById("productEditPhotoUploadInput");
-    if (!uploadInput) return;
-    productEditUploadAutoMode = true;
-    uploadInput.click();
+    alert(tr("Вставьте URL фото или используйте кнопку «Добавить фото».", "Paste photo URL or use the Add photo button."));
     return;
   }
   const added = addProductEditPhoto(raw);
@@ -7586,9 +7744,13 @@ function addProductEditPhotoFromInput() {
   if (input) input.value = "";
 }
 
+function pickProductEditPhotoFiles() {
+  const input = document.getElementById("productEditPhotoUploadInput");
+  if (!input) return;
+  input.click();
+}
+
 function onProductEditPhotoFilesChanged() {
-  if (!productEditUploadAutoMode) return;
-  productEditUploadAutoMode = false;
   uploadProductEditPhotos({ silentNoFiles: true });
 }
 
@@ -7735,12 +7897,17 @@ function renderProductEditPhotos() {
 async function saveProductEditModal() {
   const id = Number(activeProductEditId || 0);
   if (!id) return;
-  const purchaseRaw = String(document.getElementById("productEditPurchasePrice")?.value || "").trim().replace(",", ".");
-  let purchasePrice = null;
-  if (purchaseRaw) {
-    const parsed = Number.parseFloat(purchaseRaw);
-    purchasePrice = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
-  }
+  const parseMoneyField = (idValue) => {
+    const raw = String(document.getElementById(idValue)?.value || "").trim().replace(",", ".");
+    if (!raw) return null;
+    const parsed = Number.parseFloat(raw);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+  };
+  const purchasePrice = parseMoneyField("productEditPurchasePrice");
+  const priceBase = parseMoneyField("productEditPriceBase");
+  const priceDiscount = parseMoneyField("productEditPriceDiscount");
+  const priceMin = parseMoneyField("productEditPriceMin");
+  const priceMarketing = parseMoneyField("productEditPriceMarketing");
   const rawMainPhoto = String(document.getElementById("productEditPhotoUrl")?.value || "").trim();
   const nextPhotosOrder = Array.isArray(productEditPhotoOrder) ? productEditPhotoOrder.slice() : [];
   let mainPhoto = rawMainPhoto;
@@ -7756,6 +7923,10 @@ async function saveProductEditModal() {
     barcode: String(document.getElementById("productEditBarcode")?.value || "").trim(),
     photo_url: mainPhoto,
     purchase_price: purchasePrice,
+    price_base: priceBase,
+    price_discount: priceDiscount,
+    price_min: priceMin,
+    price_marketing: priceMarketing,
     photos_order: nextPhotosOrder,
     current_description: String(document.getElementById("productEditDescription")?.value || ""),
     target_keywords: String(document.getElementById("productEditKeywords")?.value || "").trim(),

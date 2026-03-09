@@ -81,6 +81,11 @@ class ProductOut(BaseModel):
     photo_url: str
     name: str
     category_name: str = ""
+    purchase_price: float = 0.0
+    price_base: float = 0.0
+    price_discount: float = 0.0
+    price_min: float = 0.0
+    price_marketing: float = 0.0
     current_description: str
     target_keywords: str
     last_position: int | None
@@ -95,6 +100,10 @@ class ProductUpdateIn(BaseModel):
     photos_order: list[str] | None = None
     target_keywords: str | None = None
     purchase_price: float | None = None
+    price_base: float | None = None
+    price_discount: float | None = None
+    price_min: float | None = None
+    price_marketing: float | None = None
 
 
 class ProductBulkDeleteIn(BaseModel):
@@ -1142,6 +1151,21 @@ class SocialCalendarEventOut(BaseModel):
     end_at: str | None = None
     created_at: str
     is_public: bool = False
+
+
+class SocialCalendarGoogleSyncIn(BaseModel):
+    ical_url: str
+    is_public: bool = True
+    replace_source_events: bool = False
+
+
+class SocialCalendarGoogleSyncOut(BaseModel):
+    ok: bool = True
+    imported: int = 0
+    updated: int = 0
+    deleted: int = 0
+    skipped: int = 0
+    warnings: list[str] = Field(default_factory=list)
 
 
 class SocialNoteIn(BaseModel):

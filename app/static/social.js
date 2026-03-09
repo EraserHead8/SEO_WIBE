@@ -3144,11 +3144,14 @@ function socialRenderTasks() {
           : (status === "in_progress" ? tr("В работе", "In progress") : tr("Готово", "Done"));
         const priority = String(task.priority || "normal");
         const due = task.due_date ? String(task.due_date).slice(0, 10) : "";
+        const dueDt = task.due_date ? socialParseDateSafe(String(task.due_date || "")) : null;
+        const isDone = status === "done";
+        const isOverdue = !isDone && dueDt instanceof Date && !Number.isNaN(dueDt.getTime()) && dueDt.getTime() < Date.now();
         const project = task.project_title || tr("Без проекта", "No project");
         const isMine = myActorKey && String(task.assignee_key || "") === myActorKey;
         const mineBadge = isMine ? `<span class="social-task-tag">${tr("Ваша задача", "Your task")}</span>` : "";
         return `
-          <article class="social-task-row ${isMine ? "is-assignee" : ""}" ondblclick="socialOpenTaskModal(${Number(task.id || 0)})">
+          <article class="social-task-row ${isMine ? "is-assignee" : ""} ${isDone ? "is-done" : ""} ${isOverdue ? "is-overdue" : ""}" ondblclick="socialOpenTaskModal(${Number(task.id || 0)})">
             <div class="social-task-main">
               <div class="social-task-title">
                 <b>${escapeHtml(task.title || "-")}</b>
@@ -3278,6 +3281,19 @@ async function socialQuickDone(taskId) {
 
 async function socialLoadCalendar() {
   const monthInput = document.getElementById("socialCalendarMonth");
+  const syncUrlInput = document.getElementById("socialCalendarGoogleIcs");
+  if (syncUrlInput && !String(syncUrlInput.value || "").trim()) {
+    try {
+      syncUrlInput.value = String(localStorage.getItem("social_calendar_google_ics_url") || "").trim();
+    } catch (_) {}
+  }
+  const syncReplace = document.getElementById("socialCalendarGoogleReplace");
+  if (syncReplace && !syncReplace.dataset.bound) {
+    syncReplace.dataset.bound = "1";
+    try {
+      syncReplace.checked = localStorage.getItem("social_calendar_google_replace") === "1";
+    } catch (_) {}
+  }
   if (monthInput && !monthInput.value) {
     const d = socialState.calendarDate;
     monthInput.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -3369,6 +3385,17 @@ function socialRenderCalendar() {
   socialShowDay(inMonth ? socialState.calendarSelectedDay : fallback);
 }
 
+function socialCleanCalendarDetails(raw) {
+  const value = String(raw || "");
+  if (!value.trim()) return "";
+  const cleaned = value
+    .split("\n")
+    .filter((line) => !/^\s*\[\[gcal_sync\s+source=[a-f0-9]{16}\s+uid=[^\]\s]+\]\]\s*$/i.test(String(line || "")))
+    .join("\n")
+    .trim();
+  return cleaned;
+}
+
 function socialShowDay(dayKey) {
   const list = document.getElementById("socialCalendarEvents");
   if (!list) return;
@@ -3379,7 +3406,7 @@ function socialShowDay(dayKey) {
     <h4>${escapeHtml(dayKey)}</h4>
     <div class="social-day-events">
       <h5>${tr("События", "Events")}</h5>
-      ${events.length ? events.map((e) => `<div class="social-day-item"><b>${escapeHtml(e.title || "-")}</b><small>${escapeHtml(String(e.start_at || "").slice(11,16))}${e.is_public ? ` • ${escapeHtml(tr("Общее", "Public"))}` : ` • ${escapeHtml(tr("Личное", "Private"))}`}</small><div>${escapeHtml(e.details || "")}</div><div class="actions"><button type="button" onclick="socialOpenCalendarModal(${Number(e.id)})">${tr("Изменить", "Edit")}</button><button class="btn-danger" type="button" onclick="socialDeleteEvent(${Number(e.id)})">${tr("Удалить", "Delete")}</button></div></div>`).join("") : `<div class="hint">${tr("Нет событий", "No events")}</div>`}
+      ${events.length ? events.map((e) => `<div class="social-day-item"><b>${escapeHtml(e.title || "-")}</b><small>${escapeHtml(String(e.start_at || "").slice(11,16))}${e.is_public ? ` • ${escapeHtml(tr("Общее", "Public"))}` : ` • ${escapeHtml(tr("Личное", "Private"))}`}</small><div>${escapeHtml(socialCleanCalendarDetails(e.details || ""))}</div><div class="actions"><button type="button" onclick="socialOpenCalendarModal(${Number(e.id)})">${tr("Изменить", "Edit")}</button><button class="btn-danger" type="button" onclick="socialDeleteEvent(${Number(e.id)})">${tr("Удалить", "Delete")}</button></div></div>`).join("") : `<div class="hint">${tr("Нет событий", "No events")}</div>`}
     </div>
     <div class="social-day-events">
       <h5>${tr("Дедлайны задач", "Task deadlines")}</h5>
@@ -3472,7 +3499,7 @@ function socialOpenCalendarModal(eventId = 0) {
         <label><span>${tr("Начало", "Start")}</span><input id="socialEventStart" type="datetime-local" value="${escapeHtml(row?.start_at ? String(row.start_at).slice(0,16) : "")}" /></label>
         <label><span>${tr("Конец", "End")}</span><input id="socialEventEnd" type="datetime-local" value="${escapeHtml(row?.end_at ? String(row.end_at).slice(0,16) : "")}" /></label>
         <label class="check"><input id="socialEventPublic" type="checkbox" ${row?.is_public ? "checked" : ""} /> ${tr("Общее событие (видно всем)", "Public event (visible to all)")}</label>
-        <label class="full"><span>${tr("Описание", "Details")}</span><textarea id="socialEventDetails" rows="4">${escapeHtml(row?.details || "")}</textarea></label>
+        <label class="full"><span>${tr("Описание", "Details")}</span><textarea id="socialEventDetails" rows="4">${escapeHtml(socialCleanCalendarDetails(row?.details || ""))}</textarea></label>
       </div>
       <div class="actions"><button type="button" onclick="socialSaveEvent(${row ? Number(row.id) : 0})">${row ? tr("Сохранить", "Save") : tr("Создать", "Create")}</button></div>
     `
@@ -3500,6 +3527,46 @@ async function socialDeleteEvent(eventId) {
   const id = Number(eventId || 0);
   if (!id) return;
   await socialRequest(`/api/social/calendar/events/${id}`, { method: "DELETE" }).catch((e) => alert(e.message));
+  await socialLoadCalendar();
+}
+
+async function socialSyncGoogleCalendar() {
+  const urlInput = document.getElementById("socialCalendarGoogleIcs");
+  const replaceInput = document.getElementById("socialCalendarGoogleReplace");
+  const url = String(urlInput?.value || "").trim();
+  const replaceSource = Boolean(replaceInput?.checked);
+  if (!url) {
+    alert(tr("Вставьте ссылку ICS из Google Calendar.", "Paste Google Calendar ICS URL."));
+    return;
+  }
+  try {
+    localStorage.setItem("social_calendar_google_ics_url", url);
+    localStorage.setItem("social_calendar_google_replace", replaceSource ? "1" : "0");
+  } catch (_) {}
+  const data = await socialRequest("/api/social/calendar/google-sync", {
+    method: "POST",
+    body: JSON.stringify({
+      ical_url: url,
+      is_public: true,
+      replace_source_events: replaceSource,
+    }),
+    timeoutMs: 90000,
+    retryOnPost: true,
+    maxRetries: 1,
+  }).catch((e) => {
+    alert(e.message || tr("Не удалось синхронизировать календарь.", "Calendar sync failed."));
+    return null;
+  });
+  if (!data) return;
+  const warnings = Array.isArray(data.warnings) ? data.warnings.filter(Boolean) : [];
+  const summary = [
+    `${tr("Импорт", "Imported")}: ${Number(data.imported || 0)}`,
+    `${tr("Обновлено", "Updated")}: ${Number(data.updated || 0)}`,
+    `${tr("Удалено", "Deleted")}: ${Number(data.deleted || 0)}`,
+    `${tr("Пропущено", "Skipped")}: ${Number(data.skipped || 0)}`,
+  ];
+  if (warnings.length) summary.push(`${tr("Предупреждения", "Warnings")}: ${warnings.join(" | ")}`);
+  alert(summary.join("\n"));
   await socialLoadCalendar();
 }
 

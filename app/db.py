@@ -82,6 +82,14 @@ def run_lightweight_migrations():
             conn.execute(text("ALTER TABLE products ADD COLUMN category_name VARCHAR(255) DEFAULT ''"))
         if product_cols and "purchase_price" not in product_cols:
             conn.execute(text("ALTER TABLE products ADD COLUMN purchase_price FLOAT DEFAULT 0"))
+        if product_cols and "price_base" not in product_cols:
+            conn.execute(text("ALTER TABLE products ADD COLUMN price_base FLOAT DEFAULT 0"))
+        if product_cols and "price_discount" not in product_cols:
+            conn.execute(text("ALTER TABLE products ADD COLUMN price_discount FLOAT DEFAULT 0"))
+        if product_cols and "price_min" not in product_cols:
+            conn.execute(text("ALTER TABLE products ADD COLUMN price_min FLOAT DEFAULT 0"))
+        if product_cols and "price_marketing" not in product_cols:
+            conn.execute(text("ALTER TABLE products ADD COLUMN price_marketing FLOAT DEFAULT 0"))
         if product_cols and "owner_member_id" not in product_cols:
             conn.execute(text("ALTER TABLE products ADD COLUMN owner_member_id INTEGER"))
 

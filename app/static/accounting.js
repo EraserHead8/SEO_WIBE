@@ -172,6 +172,16 @@ function normalizeAccountingWarning(raw) {
       "WB API returned malformed data. Partial statistics were used."
     );
   }
+  if (low.includes("wb finance api недоступен") && (
+    low.includes("wb sales api вернул некорректный ответ")
+    || low.includes("wb sales api вернул неожиданный формат")
+    || low.includes("bad_json")
+  )) {
+    return tr(
+      "WB API вернул нестабильный ответ. Использована частичная статистика.",
+      "WB API returned unstable data. Partial statistics were used."
+    );
+  }
   if (low.includes("ads api недоступен")) {
     return tr(
       "Рекламные расходы временно недоступны в API. Остальные показатели рассчитаны.",

@@ -186,6 +186,9 @@
         </button>
         <label id="mobileDrawerQuickNavLabel" class="mobile-drawer-quick-label" for="mobileDrawerQuickNav">Раздел</label>
         <select id="mobileDrawerQuickNav" class="chip-select mobile-drawer-quick-nav" onchange="onMobileQuickNavChanged('mobileDrawerQuickNav')">
+          <option value="sales_dashboard">Статистика</option>
+          <option value="ads_campaigns">Реклама: кампании</option>
+          <option value="ads_bidder">Реклама: бидер</option>
           <option value="social_games">Игры</option>
           <option value="social_chat">Чат</option>
           <option value="social_tasks">Задачи</option>
@@ -195,6 +198,7 @@
           <option value="reviews_reviews">Ответы на отзывы</option>
           <option value="reviews_questions">Ответы на вопросы</option>
           <option value="profile_main">Профиль</option>
+          <option value="help_main">Справка</option>
         </select>
         <div id="mobileDrawerQuickList" class="mobile-drawer-quick-list"></div>
       </div>
@@ -231,6 +235,9 @@
             <span id="socialBellBadge" class="icon-bell-badge hidden">0</span>
           </button>
           <select id="mobileQuickNav" class="chip-select mobile-quick-nav hidden" onchange="onMobileQuickNavChanged('mobileQuickNav')">
+            <option value="sales_dashboard">Статистика</option>
+            <option value="ads_campaigns">Реклама: кампании</option>
+            <option value="ads_bidder">Реклама: бидер</option>
             <option value="social_games">Игры</option>
             <option value="social_chat">Чат</option>
             <option value="social_tasks">Задачи</option>
@@ -240,6 +247,7 @@
             <option value="reviews_reviews">Ответы на отзывы</option>
             <option value="reviews_questions">Ответы на вопросы</option>
             <option value="profile_main">Профиль</option>
+            <option value="help_main">Справка</option>
           </select>
           <select id="uiLangSelect" class="chip-select" onchange="changeUiLang()">
             <option value="ru">RU</option>
@@ -1405,6 +1413,11 @@
               <input id="socialCalendarMonth" type="month" onchange="socialLoadCalendar()" />
               <button class="btn-secondary" type="button" onclick="socialOpenCalendarModal()">Добавить событие</button>
             </div>
+            <div class="social-calendar-sync">
+              <input id="socialCalendarGoogleIcs" placeholder="Google Calendar ICS URL (webcal://...)" />
+              <label class="check"><input id="socialCalendarGoogleReplace" type="checkbox" /> Очистить старые события из этого источника</label>
+              <button class="btn-secondary" type="button" onclick="socialSyncGoogleCalendar()">Синхронизировать Google</button>
+            </div>
             <div id="socialCalendarGrid" class="social-calendar-grid"></div>
             <div id="socialCalendarEvents" class="social-calendar-events"></div>
           </div>
@@ -1548,6 +1561,32 @@
     </div>
   </div>
 
+  <div id="returnDetailModal" class="campaign-modal hidden" onclick="closeReturnDetailModal(event)">
+    <div class="campaign-modal-card return-detail-modal-card" onclick="event.stopPropagation()">
+      <div class="campaign-modal-head">
+        <h3 id="returnDetailTitle">Детали возврата</h3>
+        <button class="campaign-close" onclick="closeReturnDetailModal()">✕</button>
+      </div>
+      <div id="returnDetailSummary" class="hint">-</div>
+      <section class="product-modal-section">
+        <h4>Ключевые поля</h4>
+        <div id="returnDetailCards" class="product-kv-grid"></div>
+      </section>
+      <section class="product-modal-section">
+        <h4>Описание</h4>
+        <div id="returnDetailDescription" class="product-modal-description">-</div>
+      </section>
+      <section class="product-modal-section">
+        <h4>Фото</h4>
+        <div id="returnDetailPhotos" class="product-modal-photos"></div>
+      </section>
+      <details class="product-modal-raw">
+        <summary>RAW</summary>
+        <pre id="returnDetailRaw">-</pre>
+      </details>
+    </div>
+  </div>
+
   <div id="productViewModal" class="campaign-modal hidden">
     <div class="campaign-modal-card product-modal-card">
       <div class="campaign-modal-head">
@@ -1618,13 +1657,11 @@
           <div class="hint product-photo-order-hint">Перетаскивайте фото мышкой: первое фото станет главным.</div>
           <div class="product-edit-photo-controls">
             <input id="productEditPhotoAddUrl" placeholder="https://... (добавить фото)" />
-            <button class="btn-secondary" type="button" id="productEditPhotoAddBtn" onclick="addProductEditPhotoFromInput()">Добавить фото</button>
+            <button class="btn-secondary" type="button" id="productEditPhotoAddUrlBtn" onclick="addProductEditPhotoFromInput()">Добавить URL</button>
+            <button class="btn-secondary" type="button" id="productEditPhotoAddBtn" onclick="pickProductEditPhotoFiles()">Добавить фото</button>
           </div>
-          <div class="hint">Введите URL и нажмите «Добавить фото», либо оставьте поле пустым: откроется выбор файлов с компьютера.</div>
-          <div class="product-edit-photo-controls">
-            <input id="productEditPhotoUploadInput" type="file" accept="image/*" multiple onchange="onProductEditPhotoFilesChanged()" />
-            <button class="btn-secondary" type="button" id="productEditPhotoUploadBtn" onclick="uploadProductEditPhotos()">Загрузить файлы</button>
-          </div>
+          <div class="hint">Кнопка «Добавить фото» открывает выбор файлов с компьютера. Можно выбрать сразу несколько изображений.</div>
+          <input class="product-edit-file-input" id="productEditPhotoUploadInput" type="file" accept="image/*" multiple onchange="onProductEditPhotoFilesChanged()" />
           <div id="productEditPhotos" class="product-modal-photos"></div>
           <div id="productEditAttrs" class="product-modal-attrs"></div>
         </section>
@@ -1636,6 +1673,10 @@
             <label><span>Баркод</span><input id="productEditBarcode" placeholder="Баркод" /></label>
             <label><span>URL главного фото</span><input id="productEditPhotoUrl" placeholder="URL главного фото" /></label>
             <label><span>Закупочная цена</span><input id="productEditPurchasePrice" type="number" step="0.01" min="0" placeholder="0.00" /></label>
+            <label><span>Цена без скидки</span><input id="productEditPriceBase" type="number" step="0.01" min="0" placeholder="0.00" /></label>
+            <label><span>Цена со скидкой</span><input id="productEditPriceDiscount" type="number" step="0.01" min="0" placeholder="0.00" /></label>
+            <label><span>Мин. цена</span><input id="productEditPriceMin" type="number" step="0.01" min="0" placeholder="0.00" /></label>
+            <label><span>Маркетинг цена</span><input id="productEditPriceMarketing" type="number" step="0.01" min="0" placeholder="0.00" /></label>
             <label class="full"><span>Описание</span><textarea id="productEditDescription" rows="8" placeholder="Описание"></textarea></label>
             <label class="full"><span>Целевые ключевые слова (через запятую)</span><textarea id="productEditKeywords" rows="4" placeholder="Целевые ключевые слова через запятую"></textarea></label>
           </div>
