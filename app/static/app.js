@@ -5289,7 +5289,7 @@ async function loadWbAdCampaigns() {
     wbAdsLoadProgress = { active: true, total: 0, loaded: 0, failed: 0 };
     updateWbAdsLoadStatus(tr("Загрузка списка кампаний…", "Loading campaign list..."));
 
-    const data = await requestJson("/api/wb/ads/campaigns", { headers: authHeaders(), timeoutMs: 120000 }).catch(() => {
+    const data = await requestJson("/api/wb/ads/campaigns?fast=1", { headers: authHeaders(), timeoutMs: 120000 }).catch(() => {
       return null;
     });
     if (!data) {

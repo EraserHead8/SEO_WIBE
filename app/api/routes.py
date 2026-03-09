@@ -664,6 +664,26 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
             "Пример: задайте «Мин. расход = 500», найдите high-priority кампании и начните с действий pause/refresh."
         ),
     },
+    "ads_bidder": {
+        "title": "Бидер WB Ads",
+        "content": (
+            "Назначение: автоматическое управление ставками по правилам в WB Ads.\n\n"
+            "Где открыть:\n"
+            "- Модуль «Реклама WB/Ozon» → вкладка «Бидер».\n\n"
+            "Как создать правило:\n"
+            "1) Укажите campaign_id и nm_id.\n"
+            "2) Выберите target_type: normquery или nm.\n"
+            "3) Для normquery заполните target_value (фразу).\n"
+            "4) Выберите стратегию (optimal/position/range/hold).\n"
+            "5) Задайте min_bid, max_bid, step и cooldown.\n"
+            "6) Нажмите «Сохранить правило» и затем «Запустить сейчас».\n\n"
+            "Проверка результата:\n"
+            "- В таблице запусков смотрите статус ok/skipped/error и причину.\n"
+            "- Если много skipped(cooldown), увеличьте cooldown и уменьшите частоту ручных запусков.\n"
+            "- Если 401/403 или api_failed, перепроверьте WB Ads ключ в профиле.\n\n"
+            "Пример: создайте правило с step=50 и cooldown=300, запустите вручную и проверьте последнюю строку логов."
+        ),
+    },
     "billing": {
         "title": "Биллинг",
         "content": (
@@ -977,6 +997,26 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
             "- Build Recommendations: calculates priority/action/reason.\n"
             "- Output columns: priority, recommendation, reason, action.\n\n"
             "Example: set min spend to 500 and start from high-priority campaigns with pause/refresh actions."
+        ),
+    },
+    "ads_bidder": {
+        "title": "WB Ads Bidder",
+        "content": (
+            "Purpose: automate bid control for WB Ads campaigns using rules.\n\n"
+            "Where to open:\n"
+            "- Ads module -> Bidder subtab.\n\n"
+            "Create a rule:\n"
+            "1) Fill campaign_id and nm_id.\n"
+            "2) Choose target_type: normquery or nm.\n"
+            "3) For normquery, provide target_value phrase.\n"
+            "4) Choose strategy (optimal/position/range/hold).\n"
+            "5) Set min_bid, max_bid, step, cooldown.\n"
+            "6) Save rule and run once manually.\n\n"
+            "Validate runs:\n"
+            "- Check run log status: ok / skipped / error and reason text.\n"
+            "- If skipped(cooldown) appears too often, increase cooldown.\n"
+            "- For 401/403 or api_failed, reconnect WB Ads API key in Profile.\n\n"
+            "Example: create a conservative rule (step=50, cooldown=300), run now, verify the latest log row."
         ),
     },
     "billing": {
@@ -2787,7 +2827,11 @@ def wb_save_ai_settings(payload: ReviewAiSettingsIn, user: User = Depends(get_cu
 
 
 @router.get("/wb/ads/campaigns", response_model=WbCampaignsOut)
-def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def wb_ads_campaigns(
+    fast: bool = True,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     ensure_module_enabled(db, user, "wb_ads")
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
@@ -2806,7 +2850,7 @@ def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depen
         )
         refresh_queued = bool(queue_result.get("queued"))
         queue_depth_now = queue_depth()
-        force_sync_now = bool(not rows) or bool(stale and queue_depth_now > 220)
+        force_sync_now = bool(not rows) or bool(stale and queue_depth_now > 220 and not fast)
         if force_sync_now:
             sync_wb_campaign_snapshots(db, user.id, wb_key)
             rows = get_wb_snapshot_rows(db, user.id)
@@ -2829,7 +2873,7 @@ def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depen
         return out
 
     placeholder_ids = _collect_placeholder_campaign_ids(rows)
-    if stale and rows and len(placeholder_ids) >= max(6, int(len(rows) * 0.35)):
+    if (not fast) and stale and rows and len(placeholder_ids) >= max(6, int(len(rows) * 0.35)):
         # Snapshot can stay stale while queue is busy. If many rows are placeholders,
         # run direct sync for this user to avoid blank campaign names on UI.
         try:
@@ -2841,7 +2885,7 @@ def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depen
             pass
         placeholder_ids = _collect_placeholder_campaign_ids(rows)
 
-    if placeholder_ids:
+    if (not fast) and placeholder_ids:
         preview_ids = sorted(set(placeholder_ids))[:600]
         placeholder_key = build_market_cache_key(
             {
@@ -2891,7 +2935,7 @@ def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depen
     hydrated_stats: dict[str, dict[str, Any]] = {}
     hydrated_summaries: dict[str, dict[str, Any]] = {}
     hydrate_ids = ids[:360]
-    if hydrate_ids:
+    if (not fast) and hydrate_ids:
         summary_hydrate_key = build_market_cache_key(
             {
                 "kind": "wb_campaigns_hydrate_summaries",
@@ -2986,11 +3030,13 @@ def wb_ads_campaigns(user: User = Depends(get_current_user), db: Session = Depen
         stats=hydrated_stats if isinstance(hydrated_stats, dict) else {},
         meta={
             "source": source,
+            "fast_mode": bool(fast),
             "stale": stale,
             "count": len(rows),
             "refresh_queued": refresh_queued,
             "queue_available": queue_available(),
             "queue_depth": queue_depth_now,
+            "placeholder_count": len(placeholder_ids),
             "summary_hydrated": len(hydrated_summaries) if isinstance(hydrated_summaries, dict) else 0,
             "stats_hydrated": len(hydrated_stats) if isinstance(hydrated_stats, dict) else 0,
         },
@@ -5028,9 +5074,18 @@ def update_product(product_id: int, payload: ProductUpdateIn, user: User = Depen
         f"price_marketing={'1' if payload.price_marketing is not None else '0'}",
     ]
     api_key = _get_active_marketplace_api_key(db, user.id, product.marketplace)
+    if product.marketplace == "wb" and (payload.current_description is not None or payload.photos_order is not None):
+        _hydrate_external_id_if_needed(db, user.id, product)
+        details.append(f"wb_external_id={'set' if bool(product.external_id) else 'missing'}")
     if payload.current_description is not None:
         if api_key:
-            ok = update_product_description(product.marketplace, api_key, product.article, product.current_description)
+            ok = update_product_description(
+                product.marketplace,
+                api_key,
+                product.article,
+                product.current_description,
+                external_id=product.external_id,
+            )
             details.append(f"remote_update={'ok' if ok else 'failed'}")
         else:
             details.append("remote_update=skipped_no_key")
@@ -6334,6 +6389,22 @@ def accounting_data(
             "products_sig": hashlib.sha1(products_sig_raw.encode("utf-8")).hexdigest(),
         }
     )
+    previous_same_key_payload: dict[str, Any] | None = None
+    prev_same_key_row = db.scalar(
+        select(MarketplaceApiCache).where(
+            MarketplaceApiCache.user_id == int(user.id),
+            MarketplaceApiCache.module_code == "accounting",
+            MarketplaceApiCache.marketplace == selected_market[:30],
+            MarketplaceApiCache.cache_key == cache_key,
+        )
+    )
+    if prev_same_key_row and str(prev_same_key_row.payload_json or "").strip():
+        try:
+            parsed_prev = json.loads(str(prev_same_key_row.payload_json or ""))
+            if isinstance(parsed_prev, dict):
+                previous_same_key_payload = parsed_prev
+        except Exception:
+            previous_same_key_payload = None
     data, accounting_cache_meta = get_or_refresh_market_cache(
         db,
         user_id=int(user.id),
@@ -6361,14 +6432,31 @@ def accounting_data(
     warnings_now = [str(x or "") for x in (data.get("warnings") if isinstance(data, dict) else [])]
     has_upstream_warning = _warnings_indicate_upstream_failure(warnings_now)
     if has_upstream_warning and not _accounting_payload_has_data(data):
-        fallback_data, fallback_meta = _market_cache_latest_payload(
-            db,
-            user_id=int(user.id),
-            module_code="accounting",
-            marketplace=selected_market,
-            max_age_sec=48 * 60 * 60,
-            exclude_cache_keys={str(accounting_cache_meta.get("cache_key") or "").strip()},
-        )
+        fallback_data: dict[str, Any] | None = None
+        fallback_meta: dict[str, Any] = {}
+        if _accounting_payload_has_data(previous_same_key_payload):
+            fallback_data = previous_same_key_payload
+            fallback_meta = {"source": "db-same-key-fallback", "age_sec": -1, "cache_key": cache_key}
+        else:
+            excluded = {str(cache_key or "").strip()}
+            for _ in range(10):
+                probe_data, probe_meta = _market_cache_latest_payload(
+                    db,
+                    user_id=int(user.id),
+                    module_code="accounting",
+                    marketplace=selected_market,
+                    max_age_sec=48 * 60 * 60,
+                    exclude_cache_keys=excluded,
+                )
+                if not isinstance(probe_data, dict):
+                    break
+                probe_key = str((probe_meta or {}).get("cache_key") or "").strip()
+                if probe_key:
+                    excluded.add(probe_key)
+                if _accounting_payload_has_data(probe_data):
+                    fallback_data = probe_data
+                    fallback_meta = probe_meta or {"source": "db-latest-module-fallback", "age_sec": -1}
+                    break
         if _accounting_payload_has_data(fallback_data):
             data = fallback_data or {}
             accounting_cache_meta = fallback_meta or {"source": "db-latest-module-fallback", "age_sec": -1}

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+import os
 import re
 import time
 from typing import Any
@@ -26,6 +27,7 @@ WB_POSITION_OVERFLOW = 501
 
 _WB_SEARCH_CACHE: dict[tuple[str, int, int], tuple[float, list[dict[str, Any]] | None]] = {}
 _WB_ANALYTICS_CACHE: dict[tuple[str, str, str], tuple[float, int | None]] = {}
+_PUBLIC_BASE_URL = str(os.getenv("SEO_WIBE_PUBLIC_BASE_URL") or "https://seowibe.ru").strip().rstrip("/")
 
 
 @dataclass
@@ -136,7 +138,13 @@ def find_competitors(
     return competitors
 
 
-def update_product_description(marketplace: str, api_key: str, article: str, description: str) -> bool:
+def update_product_description(
+    marketplace: str,
+    api_key: str,
+    article: str,
+    description: str,
+    external_id: str = "",
+) -> bool:
     """
     Заглушка для MVP. Реальная отправка изменений в WB/Ozon.
     """
@@ -144,7 +152,7 @@ def update_product_description(marketplace: str, api_key: str, article: str, des
         if not httpx:
             return False
         if marketplace == "wb":
-            return _update_wb_description(api_key, article, description)
+            return _update_wb_description(api_key, article, description, external_id=external_id)
         if marketplace == "ozon":
             return _update_ozon_description(api_key, article, description)
     except Exception:
@@ -1323,17 +1331,44 @@ def enrich_ozon_category_names(api_key: str, refs: list[dict[str, str]]) -> dict
     return mapped
 
 
-def _update_wb_description(api_key: str, article: str, description: str) -> bool:
+def _update_wb_description(api_key: str, article: str, description: str, external_id: str = "") -> bool:
     if not httpx:
         return False
-    # Обновление по article зависит от структуры карточки и может требовать nmID.
-    # Здесь сохраняем совместимый вариант через общий update endpoint.
-    endpoint = "https://content-api.wildberries.ru/content/v2/cards/update"
-    headers = {"Authorization": api_key, "Content-Type": "application/json"}
-    payload = {"cards": [{"vendorCode": article, "description": description}]}
-    with httpx.Client(timeout=20.0) as client:
-        response = client.post(endpoint, headers=headers, json=payload)
-    return response.status_code < 400
+    token = str(api_key or "").strip()
+    vendor_code = str(article or "").strip()
+    if not token or not vendor_code:
+        return False
+    nm_id = 0
+    try:
+        nm_id = int(str(external_id or "").strip())
+    except Exception:
+        nm_id = 0
+    card_base: dict[str, Any] = {"vendorCode": vendor_code}
+    if nm_id > 0:
+        card_base["nmID"] = nm_id
+        card_base["nmId"] = nm_id
+    payloads = [
+        {"cards": [{**card_base, "description": str(description or "")[:5000]}]},
+    ]
+    endpoints = [
+        "https://content-api.wildberries.ru/content/v2/cards/update",
+        "https://suppliers-api.wildberries.ru/content/v2/cards/update",
+    ]
+    auth_variants = [token, f"Bearer {token}"]
+    with httpx.Client(timeout=25.0, follow_redirects=True) as client:
+        for auth_value in auth_variants:
+            headers = {"Authorization": auth_value, "Content-Type": "application/json"}
+            for endpoint in endpoints:
+                for payload in payloads:
+                    try:
+                        response = client.post(endpoint, headers=headers, json=payload)
+                    except Exception:
+                        continue
+                    if _marketplace_response_ok(response):
+                        return True
+                    if response.status_code in {401, 403}:
+                        break
+    return False
 
 
 def _update_ozon_description(api_key: str, article: str, description: str) -> bool:
@@ -1369,7 +1404,7 @@ def _update_wb_photos_order(api_key: str, article: str, external_id: str, photos
     vendor_code = str(article or "").strip()
     if not token or not vendor_code or not photos:
         return False
-    headers = {"Authorization": token, "Content-Type": "application/json"}
+    auth_variants = [token, f"Bearer {token}"]
     nm_id = 0
     try:
         nm_id = int(str(external_id or "").strip())
@@ -1379,6 +1414,7 @@ def _update_wb_photos_order(api_key: str, article: str, external_id: str, photos
     card_base: dict[str, Any] = {"vendorCode": vendor_code}
     if nm_id > 0:
         card_base["nmID"] = nm_id
+        card_base["nmId"] = nm_id
     payloads.append({"cards": [{**card_base, "mediaFiles": photos}]})
     payloads.append({"cards": [{**card_base, "photos": photos}]})
     payloads.append({"cards": [{**card_base, "photos": [{"big": url} for url in photos]}]})
@@ -1387,16 +1423,18 @@ def _update_wb_photos_order(api_key: str, article: str, external_id: str, photos
         "https://suppliers-api.wildberries.ru/content/v2/cards/update",
     ]
     with httpx.Client(timeout=25.0, follow_redirects=True) as client:
-        for endpoint in endpoints:
-            for payload in payloads:
-                try:
-                    response = client.post(endpoint, headers=headers, json=payload)
-                except Exception:
-                    continue
-                if _marketplace_response_ok(response):
-                    return True
-                if response.status_code in {401, 403}:
-                    return False
+        for auth_value in auth_variants:
+            headers = {"Authorization": auth_value, "Content-Type": "application/json"}
+            for endpoint in endpoints:
+                for payload in payloads:
+                    try:
+                        response = client.post(endpoint, headers=headers, json=payload)
+                    except Exception:
+                        continue
+                    if _marketplace_response_ok(response):
+                        return True
+                    if response.status_code in {401, 403}:
+                        break
     return False
 
 
@@ -1579,6 +1617,13 @@ def _normalize_photo_url(value: str) -> str:
     raw = value.strip()
     if not raw:
         return ""
+    if raw.startswith("/"):
+        base = _PUBLIC_BASE_URL or "https://seowibe.ru"
+        return f"{base}{raw}"
+    low = raw.lower()
+    if low.startswith("static/") or low.startswith("uploads/"):
+        base = _PUBLIC_BASE_URL or "https://seowibe.ru"
+        return f"{base}/{raw.lstrip('/')}"
     if raw.startswith("//"):
         return f"https:{raw}"
     if raw.startswith("http://") or raw.startswith("https://"):
