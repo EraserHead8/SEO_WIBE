@@ -1508,16 +1508,13 @@ def me(request: Request, user: User = Depends(get_current_user), db: Session = D
             profile = db.scalar(select(UserProfile).where(UserProfile.user_id == user.id))
             avatar_url = str(profile.avatar_url or "") if profile else ""
     else:
-        profile = db.scalar(select(UserProfile).where(UserProfile.user_id == user.id))
-        avatar_url = str(profile.avatar_url or "") if profile else ""
-        if not avatar_url:
-            owner_member = db.scalar(
-                select(TeamMember).where(
-                    TeamMember.user_id == user.id,
-                    TeamMember.is_owner.is_(True),
-                ).order_by(TeamMember.id.asc())
-            )
-            avatar_url = str(owner_member.avatar_url or "") if owner_member else ""
+        owner_member = db.scalar(
+            select(TeamMember).where(
+                TeamMember.user_id == user.id,
+                TeamMember.is_owner.is_(True),
+            ).order_by(TeamMember.id.asc())
+        )
+        avatar_url = str(owner_member.avatar_url or "") if owner_member else ""
     _audit(
         db,
         user,

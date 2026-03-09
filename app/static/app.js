@@ -493,7 +493,14 @@ function applyUiThemeSettingsToSelect() {
     ? uiThemeSettings.allowed_themes
     : ["classic", "dark", "light", "moon", "newyear", "summer", "autumn", "winter", "spring", "japan", "greenland"];
   const allowedSet = new Set(allowed.map((x) => String(x || "").toLowerCase()));
+  const fallbackTheme = String(uiThemeSettings.default_theme || allowed[0] || "classic").toLowerCase();
   targets.forEach((node) => {
+    const currentValue = String(node.value || "").toLowerCase();
+    if (!allowedSet.has(currentValue)) {
+      const preferred = allowedSet.has(fallbackTheme) ? fallbackTheme : String(allowed[0] || "classic").toLowerCase();
+      const next = [...node.options].find((opt) => String(opt.value || "").toLowerCase() === preferred);
+      if (next) node.value = next.value;
+    }
     [...node.options].forEach((opt) => {
       opt.hidden = !allowedSet.has(String(opt.value || "").toLowerCase());
       opt.disabled = !allowedSet.has(String(opt.value || "").toLowerCase());
@@ -2028,11 +2035,11 @@ async function loadUiThemeSettings() {
     default_theme: String(data.default_theme || "classic").toLowerCase(),
     allowed_themes: Array.isArray(data.allowed_themes) ? data.allowed_themes.map((x) => String(x || "").toLowerCase()) : ["classic", "dark", "light", "moon"],
   };
-  applyUiThemeSettingsToSelect();
   const desired = (uiThemeSettings.theme_choice_enabled && !uiThemeSettings.force_theme)
     ? (localStorage.getItem("ui_theme") || currentTheme || uiThemeSettings.default_theme || "classic")
     : (uiThemeSettings.default_theme || "classic");
   applyTheme(desired);
+  applyUiThemeSettingsToSelect();
   lastUiSettingsLoadAt = Date.now();
 }
 
@@ -3056,7 +3063,7 @@ async function uploadProfileAvatar() {
       setInputValue("profileAvatarUrl", url);
       renderAvatarPreview("profileAvatarPreview", url, computeAvatarInitials(me?.actor_nick, me?.email));
     });
-    if (me) {
+    if (me && !me.actor_is_owner) {
       me.avatar_url = String(data.url || "");
       renderTopbarUser();
     }
@@ -3091,6 +3098,10 @@ async function uploadTeamAvatar() {
     const row = findTeamMemberById(activeTeamMemberId);
     if (row) {
       row.avatar_url = String(data.url || "");
+      if (me && Number(me.actor_member_id || 0) === Number(activeTeamMemberId || 0)) {
+        me.avatar_url = String(data.url || "");
+        renderTopbarUser();
+      }
       renderTeamMembers();
     }
   } catch (e) {
@@ -7477,6 +7488,35 @@ function extractProductDetailContext(details, fallbackProduct) {
     }
     return "";
   };
+  const pickDeep = (...keys) => {
+    const wanted = new Set(
+      keys
+        .map((x) => String(x || "").trim().toLowerCase())
+        .filter(Boolean)
+    );
+    if (!wanted.size) return "";
+    const queue = rawCandidates.slice();
+    const seen = new Set();
+    while (queue.length) {
+      const node = queue.shift();
+      if (!node || typeof node !== "object") continue;
+      if (seen.has(node)) continue;
+      seen.add(node);
+      if (Array.isArray(node)) {
+        for (const item of node) {
+          if (item && typeof item === "object") queue.push(item);
+        }
+        continue;
+      }
+      for (const [key, value] of Object.entries(node)) {
+        const keyNorm = String(key || "").trim().toLowerCase();
+        const text = normalizeProductDetailValue(value);
+        if (wanted.has(keyNorm) && text) return text;
+        if (value && typeof value === "object") queue.push(value);
+      }
+    }
+    return "";
+  };
 
   const name = pickAny(base.name, pickAttr("name", "title"), pickRaw("name", "title"));
   const marketplace = pickAny(base.marketplace)?.toUpperCase() || "-";
@@ -7500,12 +7540,62 @@ function extractProductDetailContext(details, fallbackProduct) {
     { label: tr("Баркод", "Barcode"), value: barcode || "-" },
   ];
 
+  const purchasePriceValue = pickAny(
+    base.purchase_price,
+    pickAttr("purchase_price", "cost_price"),
+    pickRaw("purchase_price", "cost_price"),
+    pickDeep("purchase_price", "cost_price", "buy_price", "supplier_price")
+  );
+  const priceBaseValue = pickAny(
+    base.price_base,
+    pickAttr("old_price", "price_base", "list_price", "price_without_discount"),
+    pickRaw(
+      "old_price",
+      "price_base",
+      "price_without_discount",
+      "list_price",
+      "result.old_price",
+      "result.price_without_discount",
+      "sizes.0.price",
+      "sizes.0.originalPrice",
+      "sizes.0.priceWithoutDiscount"
+    ),
+    pickDeep("old_price", "base_price", "list_price", "price_without_discount", "original_price")
+  );
+  const priceDiscountValue = pickAny(
+    base.price_discount,
+    pickAttr("price", "discounted_price", "discountedPrice"),
+    pickRaw(
+      "price",
+      "discounted_price",
+      "discountedPrice",
+      "promo_price",
+      "sizes.0.discountedPrice",
+      "sizes.0.salePrice",
+      "result.price",
+      "result.discounted_price"
+    ),
+    pickDeep("discounted_price", "discountedprice", "sale_price", "saleprice", "price_with_discount", "promo_price")
+  );
+  const priceMinValue = pickAny(
+    base.price_min,
+    pickAttr("min_price", "price_min"),
+    pickRaw("min_price", "price_min", "result.min_price"),
+    pickDeep("min_price", "price_min", "minimum_price")
+  );
+  const priceMarketingValue = pickAny(
+    base.price_marketing,
+    pickAttr("marketing_price", "promo_price"),
+    pickRaw("marketing_price", "promo_price", "advert_price", "campaign_price", "result.marketing_price"),
+    pickDeep("marketing_price", "promo_price", "campaign_price", "special_price", "advert_price")
+  );
+
   const commerceItems = [
-    { label: tr("Закупочная цена", "Purchase price"), value: pickAny(base.purchase_price, pickAttr("purchase_price"), pickRaw("purchase_price")) || "-" },
-    { label: tr("Цена без скидки", "Base price"), value: pickAny(base.price_base, pickAttr("old_price"), pickRaw("old_price")) || "-" },
-    { label: tr("Цена со скидкой", "Discounted price"), value: pickAny(base.price_discount, pickAttr("price"), pickRaw("price")) || "-" },
-    { label: tr("Мин. цена", "Min price"), value: pickAny(base.price_min, pickAttr("min_price"), pickRaw("min_price")) || "-" },
-    { label: tr("Маркетинг цена", "Marketing price"), value: pickAny(base.price_marketing, pickAttr("marketing_price"), pickRaw("marketing_price")) || "-" },
+    { label: tr("Закупочная цена", "Purchase price"), value: purchasePriceValue || "-" },
+    { label: tr("Цена без скидки", "Base price"), value: priceBaseValue || "-" },
+    { label: tr("Цена со скидкой", "Discounted price"), value: priceDiscountValue || "-" },
+    { label: tr("Мин. цена", "Min price"), value: priceMinValue || "-" },
+    { label: tr("Маркетинг цена", "Marketing price"), value: priceMarketingValue || "-" },
     { label: tr("Валюта", "Currency"), value: pickAny(pickAttr("currency_code"), pickRaw("currency_code")) || "-" },
     { label: tr("НДС", "VAT"), value: pickAny(pickAttr("vat"), pickRaw("vat")) || "-" },
     { label: tr("Статус", "Status"), value: pickAny(pickAttr("state"), pickRaw("state.name", "state")) || "-" },
@@ -7571,19 +7661,33 @@ function extractProductDetailContext(details, fallbackProduct) {
     description,
     summaryItems,
     commerceItems,
+    priceValues: {
+      purchase_price: purchasePriceValue,
+      price_base: priceBaseValue,
+      price_discount: priceDiscountValue,
+      price_min: priceMinValue,
+      price_marketing: priceMarketingValue,
+    },
     logisticsItems,
     technicalItems,
     attributeItems: cleanedAttributes,
   };
 }
 
-function renderProductInfoGrid(items, emptyLabel) {
+function renderProductInfoGrid(items, emptyLabel, options = {}) {
+  const keepEmptyRows = Boolean(options && options.keepEmptyRows);
+  const emptyValueLabel = String(
+    options && options.emptyValueLabel !== undefined
+      ? options.emptyValueLabel
+      : tr("нет данных", "n/a")
+  );
   const rows = (Array.isArray(items) ? items : [])
     .map((item) => {
       const label = normalizeProductDetailValue(item?.label);
       const value = normalizeProductDetailValue(item?.value);
-      if (!label || !value) return "";
-      return `<article class="product-kv-card"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></article>`;
+      if (!label) return "";
+      if (!value && !keepEmptyRows) return "";
+      return `<article class="product-kv-card"><span>${escapeHtml(label)}</span><b>${escapeHtml(value || emptyValueLabel)}</b></article>`;
     })
     .filter(Boolean)
     .join("");
@@ -7696,7 +7800,8 @@ async function openProductViewModal(productId, opts = {}) {
   if (commerceEl) {
     commerceEl.innerHTML = renderProductInfoGrid(
       context.commerceItems,
-      tr("Коммерческие данные не найдены.", "Commerce data not found.")
+      tr("Коммерческие данные не найдены.", "Commerce data not found."),
+      { keepEmptyRows: true, emptyValueLabel: tr("нет данных", "n/a") }
     );
   }
   if (logisticsEl) {
@@ -7752,18 +7857,25 @@ async function openProductEditModal(productId) {
   }
   const setValue = (idValue, value) => {
     const el = document.getElementById(idValue);
-    if (el) el.value = String(value || "");
+    if (el) el.value = String(value ?? "");
   };
+  const pickPreferredValue = (...values) => {
+    for (const value of values) {
+      if (normalizeProductDetailValue(value)) return value;
+    }
+    return values.length ? values[values.length - 1] : "";
+  };
+  const priceValues = context?.priceValues && typeof context.priceValues === "object" ? context.priceValues : {};
   setValue("productEditName", base.name);
   setValue("productEditCategory", base.category_name);
   setValue("productEditBarcode", base.barcode);
   setValue("productEditPhotoUrl", base.photo_url);
   setValue("productEditPhotoAddUrl", "");
-  setValue("productEditPurchasePrice", base.purchase_price);
-  setValue("productEditPriceBase", base.price_base);
-  setValue("productEditPriceDiscount", base.price_discount);
-  setValue("productEditPriceMin", base.price_min);
-  setValue("productEditPriceMarketing", base.price_marketing);
+  setValue("productEditPurchasePrice", pickPreferredValue(priceValues.purchase_price, base.purchase_price));
+  setValue("productEditPriceBase", pickPreferredValue(priceValues.price_base, base.price_base));
+  setValue("productEditPriceDiscount", pickPreferredValue(priceValues.price_discount, base.price_discount));
+  setValue("productEditPriceMin", pickPreferredValue(priceValues.price_min, base.price_min));
+  setValue("productEditPriceMarketing", pickPreferredValue(priceValues.price_marketing, base.price_marketing));
   setValue("productEditDescription", base.current_description || context.description);
   setValue("productEditKeywords", base.target_keywords);
   if (summaryEl) {
@@ -9579,10 +9691,12 @@ function renderProfileData(data) {
   const actorRow = Array.isArray(data?.team_members)
     ? data.team_members.find((x) => Number(x.id || 0) === actorMemberId)
     : null;
+  const companyAvatar = String(data?.avatar_url || "").trim();
+  const actorPersonalAvatar = String(actorRow?.avatar_url || "").trim();
   const actorName = String(actorRow?.full_name || actorRow?.nickname || me?.actor_nick || me?.actor_email || me?.email || "");
   const actorAvatar = (!me?.actor_is_owner && actorRow)
-    ? String(actorRow.avatar_url || "").trim()
-    : String(data.avatar_url || "").trim();
+    ? actorPersonalAvatar
+    : companyAvatar;
   const introNickNode = document.getElementById("profileSectionsIntroNick");
   if (introNickNode) introNickNode.textContent = actorName || String(me?.actor_nick || me?.email || "-");
 
@@ -9602,12 +9716,12 @@ function renderProfileData(data) {
   renderAvatarPicker("profileAvatarPicker", actorAvatar || "", (url) => {
     setInputValue("profileAvatarUrl", url);
     renderAvatarPreview("profileAvatarPreview", url, initials);
-    if (me) {
+    if (me && !me.actor_is_owner) {
       me.avatar_url = String(url || "");
       renderTopbarUser();
     }
   });
-  if (me) {
+  if (me && !me.actor_is_owner) {
     me.avatar_url = String(actorAvatar || "");
     renderTopbarUser();
   }
@@ -10216,6 +10330,10 @@ async function updateTeamMember(memberId, payloadOverride = null) {
   if (!row) return;
   invalidateModuleCache("profile");
   teamMembers = teamMembers.map((x) => (Number(x.id) === id ? row : x));
+  if (me && Number(me.actor_member_id || 0) === id) {
+    me.avatar_url = String(row.avatar_url || "").trim();
+    renderTopbarUser();
+  }
   renderTeamMembers();
   return row;
 }
