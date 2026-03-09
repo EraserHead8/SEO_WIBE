@@ -8599,6 +8599,10 @@ button,
   align-content: start;
 }
 
+#adminAnnouncementTargetUser[multiple] {
+  min-height: 152px;
+}
+
 #adminAnnouncementBody {
   min-height: 118px;
 }

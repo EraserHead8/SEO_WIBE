@@ -819,10 +819,25 @@ function refreshUserSelects() {
   });
   const annSelect = document.getElementById("adminAnnouncementTargetUser");
   if (annSelect) {
-    const prev = annSelect.value;
+    const prev = Array.from(annSelect.selectedOptions || [])
+      .map((opt) => Number(opt?.value || 0))
+      .filter((value) => Number.isFinite(value));
     annSelect.innerHTML = `<option value="0">${escapeHtml(aTr("Все пользователи", "All users"))}</option>${html}`;
-    if (prev && [...annSelect.options].some((o) => o.value === prev)) {
-      annSelect.value = prev;
+    if (annSelect.multiple) {
+      const safePrev = prev.filter((value) => value > 0);
+      if (safePrev.length) {
+        for (const opt of annSelect.options) {
+          const value = Number(opt?.value || 0);
+          opt.selected = value > 0 && safePrev.includes(value);
+        }
+      } else if (annSelect.options.length) {
+        annSelect.options[0].selected = true;
+      }
+    } else if (prev.length) {
+      const single = String(Number(prev[0] || 0));
+      if ([...annSelect.options].some((o) => o.value === single)) {
+        annSelect.value = single;
+      }
     }
   }
 }
@@ -2876,9 +2891,32 @@ function adminResetAnnouncementForm() {
   if (bodyEl) bodyEl.value = "";
   if (startsEl) startsEl.value = toDateTimeLocalValue(new Date().toISOString());
   if (endsEl) endsEl.value = "";
-  if (targetEl) targetEl.value = "0";
+  if (targetEl) {
+    for (const opt of targetEl.options) opt.selected = false;
+    if (targetEl.options.length) targetEl.options[0].selected = true;
+  }
   if (activeEl) activeEl.checked = true;
   if (metaEl) metaEl.textContent = aTr("Новое объявление", "New announcement");
+}
+
+function adminGetAnnouncementTargetUserIds() {
+  const targetEl = document.getElementById("adminAnnouncementTargetUser");
+  if (!targetEl) return [];
+  const source = targetEl.multiple
+    ? Array.from(targetEl.selectedOptions || []).map((opt) => Number(opt?.value || 0))
+    : [Number(targetEl.value || 0)];
+  const ids = [...new Set(source.map((x) => Number(x || 0)).filter((x) => Number.isFinite(x) && x > 0))];
+  return ids;
+}
+
+function adminSetAnnouncementTargetUserIds(userIds = []) {
+  const targetEl = document.getElementById("adminAnnouncementTargetUser");
+  if (!targetEl) return;
+  const safeIds = [...new Set((Array.isArray(userIds) ? userIds : []).map((x) => Number(x || 0)).filter((x) => Number.isFinite(x) && x > 0))];
+  for (const opt of targetEl.options) {
+    const value = Number(opt?.value || 0);
+    opt.selected = safeIds.length ? (value > 0 && safeIds.includes(value)) : (value === 0);
+  }
 }
 
 function renderAdminAnnouncements() {
@@ -2899,12 +2937,18 @@ function renderAdminAnnouncements() {
     const startsAt = formatDateTime(row?.starts_at);
     const endsAt = row?.ends_at ? formatDateTime(row?.ends_at) : "—";
     const title = String(row?.title || "").trim() || "-";
+    const userIds = Array.isArray(row?.user_ids)
+      ? row.user_ids.map((x) => Number(x || 0)).filter((x) => Number.isFinite(x) && x > 0)
+      : [];
     const userId = Number(row?.user_id || 0);
+    const targetLabel = userIds.length > 1
+      ? aTr(`${userIds.length} пользователей`, `${userIds.length} users`)
+      : (userIds.length === 1 ? `#${userIds[0]}` : (userId > 0 ? `#${userId}` : aTr("Все", "All")));
     const status = row?.is_active ? aTr("Активно", "Active") : aTr("Отключено", "Disabled");
     trEl.innerHTML = `
       <td>${escapeHtml(String(id || "-"))}</td>
       <td>${escapeHtml(`${startsAt} → ${endsAt}`)}</td>
-      <td>${escapeHtml(userId > 0 ? `#${userId}` : aTr("Все", "All"))}</td>
+      <td>${escapeHtml(targetLabel)}</td>
       <td>${escapeHtml(title)}</td>
       <td>${escapeHtml(status)}</td>
       <td class="actions">
@@ -2924,14 +2968,17 @@ function renderAdminAnnouncements() {
       const bodyEl = document.getElementById("adminAnnouncementBody");
       const startsEl = document.getElementById("adminAnnouncementStartsAt");
       const endsEl = document.getElementById("adminAnnouncementEndsAt");
-      const targetEl = document.getElementById("adminAnnouncementTargetUser");
       const activeEl = document.getElementById("adminAnnouncementActive");
       const metaEl = document.getElementById("adminAnnouncementMeta");
       if (titleEl) titleEl.value = String(row?.title || "");
       if (bodyEl) bodyEl.value = String(row?.body || "");
       if (startsEl) startsEl.value = toDateTimeLocalValue(row?.starts_at || "");
       if (endsEl) endsEl.value = toDateTimeLocalValue(row?.ends_at || "");
-      if (targetEl) targetEl.value = String(Number(row?.user_id || 0));
+      const rowTargets = Array.isArray(row?.user_ids)
+        ? row.user_ids.map((x) => Number(x || 0)).filter((x) => Number.isFinite(x) && x > 0)
+        : [];
+      if (!rowTargets.length && Number(row?.user_id || 0) > 0) rowTargets.push(Number(row.user_id));
+      adminSetAnnouncementTargetUserIds(rowTargets);
       if (activeEl) activeEl.checked = Boolean(row?.is_active);
       if (metaEl) metaEl.textContent = aTr(`Редактирование #${id}`, `Editing #${id}`);
     });
@@ -2970,7 +3017,7 @@ async function adminSaveAnnouncement() {
   const body = String(document.getElementById("adminAnnouncementBody")?.value || "").trim();
   const startsAtRaw = String(document.getElementById("adminAnnouncementStartsAt")?.value || "").trim();
   const endsAtRaw = String(document.getElementById("adminAnnouncementEndsAt")?.value || "").trim();
-  const targetUser = Number(document.getElementById("adminAnnouncementTargetUser")?.value || 0);
+  const targetUserIds = adminGetAnnouncementTargetUserIds();
   const isActive = Boolean(document.getElementById("adminAnnouncementActive")?.checked);
   if (!title) {
     alert(aTr("Введите заголовок объявления.", "Enter announcement title."));
@@ -2988,7 +3035,8 @@ async function adminSaveAnnouncement() {
     starts_at: startsAtIso,
     ends_at: endsAtIso || null,
     is_active: isActive,
-    user_id: targetUser > 0 ? targetUser : null,
+    user_id: targetUserIds.length === 1 ? targetUserIds[0] : null,
+    user_ids: targetUserIds,
   };
   const url = adminAnnouncementEditId > 0
     ? `/api/admin/announcements/${adminAnnouncementEditId}`

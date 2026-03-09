@@ -9,6 +9,7 @@ from decimal import Decimal
 from typing import Any, Callable
 
 from sqlalchemy import case, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import MarketplaceApiCache
@@ -183,22 +184,33 @@ def _upsert_cache_row(
     safe_ttl = max(30, int(ttl_sec or 0))
     expires_at = now + timedelta(seconds=safe_ttl)
     if not row:
-        row = MarketplaceApiCache(
-            user_id=int(user_id),
-            module_code=str(module_code or "")[:80],
-            marketplace=str(marketplace or "")[:30],
-            cache_key=str(cache_key or "")[:120],
-            payload_json=payload_json,
-            payload_hash=payload_hash,
-            refresh_count=1,
-            fetched_at=now,
-            expires_at=expires_at,
-            last_hit_at=now,
-        )
-        db.add(row)
-        db.flush()
-        _invalidate_stats_cache()
-        return
+        created = False
+        try:
+            with db.begin_nested():
+                candidate = MarketplaceApiCache(
+                    user_id=int(user_id),
+                    module_code=str(module_code or "")[:80],
+                    marketplace=str(marketplace or "")[:30],
+                    cache_key=str(cache_key or "")[:120],
+                    payload_json=payload_json,
+                    payload_hash=payload_hash,
+                    refresh_count=1,
+                    fetched_at=now,
+                    expires_at=expires_at,
+                    last_hit_at=now,
+                )
+                db.add(candidate)
+                db.flush()
+                created = True
+        except IntegrityError:
+            row = _get_cache_row(db, user_id=user_id, module_code=module_code, marketplace=marketplace, cache_key=cache_key)
+        if created:
+            _invalidate_stats_cache()
+            return
+        if not row:
+            row = _get_cache_row(db, user_id=user_id, module_code=module_code, marketplace=marketplace, cache_key=cache_key)
+            if not row:
+                return
     row.payload_json = payload_json
     row.payload_hash = payload_hash
     row.refresh_count = int(row.refresh_count or 0) + 1

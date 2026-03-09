@@ -7716,15 +7716,20 @@ function movePhotoInOrder(fromIdx, toIdx) {
   syncProductEditMainPhotoUrl(true);
 }
 
-function addProductEditPhoto(photoUrl) {
+function addProductEditPhoto(photoUrl, options = {}) {
+  const prepend = Boolean(options?.prepend);
   const clean = String(photoUrl || "").trim();
   if (!clean) return false;
   const current = Array.isArray(productEditPhotoOrder) ? productEditPhotoOrder.slice() : [];
   const exists = current.some((item) => String(item || "").trim().toLowerCase() === clean.toLowerCase());
   if (exists) return false;
-  current.push(clean);
+  if (prepend) {
+    current.unshift(clean);
+  } else {
+    current.push(clean);
+  }
   productEditPhotoOrder = current;
-  syncProductEditMainPhotoUrl(current.length <= 1);
+  syncProductEditMainPhotoUrl(prepend || current.length <= 1);
   renderProductEditPhotos();
   return true;
 }
@@ -7798,11 +7803,13 @@ async function uploadProductEditPhotos(options = {}) {
   }
   if (input) input.value = "";
   if (!uploadedUrls.length) return;
-  for (const url of uploadedUrls) addProductEditPhoto(url);
+  for (let idx = uploadedUrls.length - 1; idx >= 0; idx -= 1) {
+    addProductEditPhoto(uploadedUrls[idx], { prepend: true });
+  }
   alert(
     tr(
-      `Загружено фото: ${uploadedUrls.length}. Сохраните карточку, чтобы применить порядок.`,
-      `Uploaded photos: ${uploadedUrls.length}. Save product to apply photo order.`
+      `Загружено фото: ${uploadedUrls.length}. Фото сразу добавлены в карточку.`,
+      `Uploaded photos: ${uploadedUrls.length}. Photos were added to product card immediately.`
     )
   );
 }

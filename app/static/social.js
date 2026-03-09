@@ -57,6 +57,9 @@ let socialState = {
   mobileThreadAutoSelectEnabled: true,
   pollClientId: `poll-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`,
   fileUploadInFlight: false,
+  notificationsPollInFlight: false,
+  pendingAnnouncementsInFlight: false,
+  globalHooksStarted: false,
 };
 
 const SOCIAL_POLL_LEADER_KEY = "seo_wibe_social_poll_leader_v1";
@@ -370,17 +373,23 @@ function socialOpenAnnouncementModal(row) {
 }
 
 async function socialLoadPendingAnnouncements() {
+  if (socialState.pendingAnnouncementsInFlight) return;
+  socialState.pendingAnnouncementsInFlight = true;
   const data = await socialRequest("/api/social/announcements/pending?limit=5", {
     timeoutMs: 12000,
   }).catch(() => null);
-  const rows = Array.isArray(data?.rows) ? data.rows : [];
-  if (!rows.length) return;
-  for (const row of rows) {
-    const annId = Number(row?.id || 0);
-    if (!annId || socialState.pendingAnnouncementIds.has(annId)) continue;
-    socialState.pendingAnnouncementIds.add(annId);
-    socialOpenAnnouncementModal(row);
-    break;
+  try {
+    const rows = Array.isArray(data?.rows) ? data.rows : [];
+    if (!rows.length) return;
+    for (const row of rows) {
+      const annId = Number(row?.id || 0);
+      if (!annId || socialState.pendingAnnouncementIds.has(annId)) continue;
+      socialState.pendingAnnouncementIds.add(annId);
+      socialOpenAnnouncementModal(row);
+      break;
+    }
+  } finally {
+    socialState.pendingAnnouncementsInFlight = false;
   }
 }
 
@@ -508,61 +517,67 @@ function socialApplySharedPollState() {
 }
 
 async function socialPollNotifications() {
-  if (!token && !me) return;
-  if (modulesLoaded && (!(enabledModules instanceof Set) || !enabledModules.has("social_hub"))) {
-    socialSetBell(0);
-    return;
-  }
-  const isLeader = socialTryAcquirePollLeader();
-  if (!isLeader) {
-    socialApplySharedPollState();
-    return;
-  }
-  const data = await socialRequest(`/api/social/notifications?since_id=${socialState.lastNotificationId}&limit=60`).catch(() => null);
-  if (!data || typeof data !== "object") return;
-  socialState.unreadCount = Number(data.unread || 0);
-  socialSetBell(socialState.unreadCount);
-  const rows = Array.isArray(data.rows) ? data.rows : [];
-  for (const row of rows) {
-    const id = Number(row.id || 0);
-    if (id > socialState.lastNotificationId) socialState.lastNotificationId = id;
-    if (!id || socialState.toastsSeen.has(id)) continue;
-    socialState.toastsSeen.add(id);
-    socialShowToast(row.title || tr("Уведомление", "Notification"), row.body || "");
-    const kindGroup = socialNotificationKindGroup(row.kind || "");
-    socialPlayNotificationSound(kindGroup);
-    const shouldDesktopNotify = document.hidden
-      || currentTab !== "social"
-      || socialState.currentSubtab !== "chat";
-    if (shouldDesktopNotify) {
-      socialNotifyDesktop(row);
+  if (socialState.notificationsPollInFlight) return;
+  socialState.notificationsPollInFlight = true;
+  try {
+    if (!token && !me) return;
+    if (modulesLoaded && (!(enabledModules instanceof Set) || !enabledModules.has("social_hub"))) {
+      socialSetBell(0);
+      return;
     }
-    if (String(row.kind || "") === "chat_message" && currentTab === "social" && socialState.currentSubtab === "chat") {
-      const threadId = Number(row.payload?.thread_id || 0);
-      if (threadId && threadId === socialState.currentThreadId) {
-        socialLoadMessages(threadId, { silent: true });
+    const isLeader = socialTryAcquirePollLeader();
+    if (!isLeader) {
+      socialApplySharedPollState();
+      return;
+    }
+    const data = await socialRequest(`/api/social/notifications?since_id=${socialState.lastNotificationId}&limit=60`).catch(() => null);
+    if (!data || typeof data !== "object") return;
+    socialState.unreadCount = Number(data.unread || 0);
+    socialSetBell(socialState.unreadCount);
+    const rows = Array.isArray(data.rows) ? data.rows : [];
+    for (const row of rows) {
+      const id = Number(row.id || 0);
+      if (id > socialState.lastNotificationId) socialState.lastNotificationId = id;
+      if (!id || socialState.toastsSeen.has(id)) continue;
+      socialState.toastsSeen.add(id);
+      socialShowToast(row.title || tr("Уведомление", "Notification"), row.body || "");
+      const kindGroup = socialNotificationKindGroup(row.kind || "");
+      socialPlayNotificationSound(kindGroup);
+      const shouldDesktopNotify = document.hidden
+        || currentTab !== "social"
+        || socialState.currentSubtab !== "chat";
+      if (shouldDesktopNotify) {
+        socialNotifyDesktop(row);
+      }
+      if (String(row.kind || "") === "chat_message" && currentTab === "social" && socialState.currentSubtab === "chat") {
+        const threadId = Number(row.payload?.thread_id || 0);
+        if (threadId && threadId === socialState.currentThreadId) {
+          socialLoadMessages(threadId, { silent: true });
+        }
+      }
+      if (String(row.kind || "").trim().toLowerCase() === "announcement") {
+        socialOpenAnnouncementModal({
+          id: Number(row.payload?.announcement_id || 0),
+          title: row.title || tr("Объявление", "Announcement"),
+          body: row.body || "",
+        });
       }
     }
-    if (String(row.kind || "").trim().toLowerCase() === "announcement") {
-      socialOpenAnnouncementModal({
-        id: Number(row.payload?.announcement_id || 0),
-        title: row.title || tr("Объявление", "Announcement"),
-        body: row.body || "",
-      });
-    }
+    socialWriteSharedPollState({
+      unread: Number(socialState.unreadCount || 0),
+      last_notification_id: Number(socialState.lastNotificationId || 0),
+      stamp: socialNowMs(),
+    });
+    socialLoadPendingAnnouncements().catch(() => null);
+  } finally {
+    socialState.notificationsPollInFlight = false;
   }
-  socialWriteSharedPollState({
-    unread: Number(socialState.unreadCount || 0),
-    last_notification_id: Number(socialState.lastNotificationId || 0),
-    stamp: socialNowMs(),
-  });
-  socialLoadPendingAnnouncements().catch(() => null);
 }
 
 function socialNextPollDelayMs() {
-  if (document.hidden) return 22000;
-  if (currentTab === "social" && socialState.currentSubtab === "chat") return 7000;
-  return 11000;
+  if (document.hidden) return 30000;
+  if (currentTab === "social" && socialState.currentSubtab === "chat") return 10000;
+  return 16000;
 }
 
 function socialScheduleNotificationsPoll(immediate = false) {
@@ -570,7 +585,7 @@ function socialScheduleNotificationsPoll(immediate = false) {
     clearTimeout(socialState.notificationsTimer);
     socialState.notificationsTimer = null;
   }
-  const delayMs = immediate ? 250 : socialNextPollDelayMs();
+  const delayMs = immediate ? 500 : socialNextPollDelayMs();
   socialState.notificationsTimer = setTimeout(() => {
     socialPollNotifications()
       .catch(() => null)
@@ -579,6 +594,8 @@ function socialScheduleNotificationsPoll(immediate = false) {
 }
 
 function socialStartGlobalHooks() {
+  if (socialState.globalHooksStarted) return;
+  socialState.globalHooksStarted = true;
   if (socialState.notificationsTimer) {
     clearTimeout(socialState.notificationsTimer);
     socialState.notificationsTimer = null;
@@ -592,6 +609,7 @@ function socialStartGlobalHooks() {
 }
 
 function socialStopGlobalHooks() {
+  socialState.globalHooksStarted = false;
   if (socialState.notificationsTimer) {
     clearTimeout(socialState.notificationsTimer);
     socialState.notificationsTimer = null;
@@ -670,6 +688,9 @@ function resetSocialState() {
     keepEmojiOpenUntil: 0,
     mobileThreadAutoSelectEnabled: !socialIsMobileClientShell(),
     fileUploadInFlight: false,
+    notificationsPollInFlight: false,
+    pendingAnnouncementsInFlight: false,
+    globalHooksStarted: false,
     pollClientId: `poll-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`,
   };
   socialSetBell(0);

@@ -4354,7 +4354,16 @@ def _normalize_product_photo_url(value: str | None) -> str:
         return ""
     if raw.startswith("//"):
         return f"https:{raw}"
+    malformed_static = re.match(r"^https?://static/(.+)$", raw, flags=re.IGNORECASE)
+    if malformed_static:
+        return f"/static/{str(malformed_static.group(1) or '').lstrip('/')}"
     if raw.startswith("http://") or raw.startswith("https://"):
+        return raw
+    if raw.startswith("/static/"):
+        return raw
+    if raw.startswith("static/"):
+        return f"/{raw}"
+    if raw.startswith("/"):
         return raw
     return f"https://{raw.lstrip('/')}"
 
@@ -4751,6 +4760,9 @@ def list_products(
     ).all()
     for row in rows:
         stored_photos = _product_photos_from_row(row)
+        normalized_main = _normalize_product_photo_url(getattr(row, "photo_url", ""))
+        if normalized_main != str(row.photo_url or ""):
+            row.photo_url = normalized_main
         if stored_photos and not row.photo_url:
             row.photo_url = stored_photos[0]
         if not row.photo_url:
@@ -5065,10 +5077,9 @@ def product_photo_upload(
     url = f"/static/uploads/products/user-{int(user.id)}/{filename}"
 
     existing_photos = _product_photos_from_row(product)
-    next_photos = _normalize_product_photo_list(existing_photos + [url])
+    next_photos = _normalize_product_photo_list([url] + existing_photos)
     product.photos_json = json.dumps(next_photos, ensure_ascii=False) if next_photos else "[]"
-    if not str(product.photo_url or "").strip():
-        product.photo_url = next_photos[0] if next_photos else url
+    product.photo_url = next_photos[0] if next_photos else url
 
     _audit(
         db,
@@ -9022,6 +9033,8 @@ def _social_emit_due_reminders(db: Session, *, user_id: int, actor_key: str, act
 
 
 def _social_announcement_to_out(row: SocialAnnouncement) -> SocialAnnouncementOut:
+    target_user_ids = _social_announcement_target_user_ids(row)
+    target_user_id = int(row.user_id) if row.user_id is not None else (target_user_ids[0] if len(target_user_ids) == 1 else None)
     return SocialAnnouncementOut(
         id=int(row.id),
         title=str(row.title or ""),
@@ -9029,7 +9042,8 @@ def _social_announcement_to_out(row: SocialAnnouncement) -> SocialAnnouncementOu
         starts_at=_to_utc_iso(row.starts_at),
         ends_at=_to_utc_iso(row.ends_at),
         is_active=bool(row.is_active),
-        user_id=int(row.user_id) if row.user_id is not None else None,
+        user_id=target_user_id,
+        user_ids=target_user_ids,
         created_by_user_id=int(row.created_by_user_id) if row.created_by_user_id is not None else None,
         created_at=_to_utc_iso(row.created_at),
         updated_at=_to_utc_iso(row.updated_at),
@@ -9046,6 +9060,56 @@ def _social_announcement_to_public_out(row: SocialAnnouncement) -> SocialAnnounc
     )
 
 
+def _social_announcement_target_user_ids(row: SocialAnnouncement) -> list[int]:
+    result: list[int] = []
+    seen: set[int] = set()
+    raw = str(getattr(row, "target_user_ids_json", "") or "").strip()
+    parsed: Any = []
+    if raw:
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            parsed = []
+    source = parsed if isinstance(parsed, list) else []
+    for value in source:
+        uid = int(value or 0)
+        if uid <= 0 or uid in seen:
+            continue
+        seen.add(uid)
+        result.append(uid)
+    legacy_uid = int(getattr(row, "user_id", 0) or 0)
+    if legacy_uid > 0 and legacy_uid not in seen:
+        result.append(legacy_uid)
+    return result
+
+
+def _social_announcement_is_for_user(row: SocialAnnouncement, user_id: int) -> bool:
+    targets = _social_announcement_target_user_ids(row)
+    if not targets:
+        return True
+    return int(user_id or 0) in set(targets)
+
+
+def _social_resolve_announcement_targets(payload: SocialAnnouncementIn) -> tuple[int | None, list[int]]:
+    resolved: list[int] = []
+    seen: set[int] = set()
+    single_user_id = int(payload.user_id or 0)
+    if single_user_id > 0:
+        resolved.append(single_user_id)
+        seen.add(single_user_id)
+    for raw in payload.user_ids or []:
+        uid = int(raw or 0)
+        if uid <= 0 or uid in seen:
+            continue
+        seen.add(uid)
+        resolved.append(uid)
+        if len(resolved) >= 1000:
+            break
+    if len(resolved) == 1:
+        return resolved[0], resolved
+    return None, resolved
+
+
 def _social_emit_due_announcements(db: Session, *, user_id: int, actor_key: str) -> None:
     safe_user_id = int(user_id or 0)
     safe_actor_key = str(actor_key or "").strip()
@@ -9057,7 +9121,6 @@ def _social_emit_due_announcements(db: Session, *, user_id: int, actor_key: str)
             SocialAnnouncement.is_active.is_(True),
             SocialAnnouncement.starts_at <= now,
             or_(SocialAnnouncement.ends_at.is_(None), SocialAnnouncement.ends_at >= now),
-            or_(SocialAnnouncement.user_id.is_(None), SocialAnnouncement.user_id == safe_user_id),
         ).order_by(SocialAnnouncement.starts_at.asc(), SocialAnnouncement.id.asc())
     ).all()
     if not rows:
@@ -9073,6 +9136,8 @@ def _social_emit_due_announcements(db: Session, *, user_id: int, actor_key: str)
     for row in rows:
         ann_id = int(row.id or 0)
         if ann_id <= 0 or ann_id in acked_ids:
+            continue
+        if not _social_announcement_is_for_user(row, safe_user_id):
             continue
         _social_push_notification(
             db,
@@ -11408,10 +11473,13 @@ def social_pending_announcements(
             SocialAnnouncement.is_active.is_(True),
             SocialAnnouncement.starts_at <= now,
             or_(SocialAnnouncement.ends_at.is_(None), SocialAnnouncement.ends_at >= now),
-            or_(SocialAnnouncement.user_id.is_(None), SocialAnnouncement.user_id == int(user.id)),
         ).order_by(SocialAnnouncement.starts_at.asc(), SocialAnnouncement.id.asc())
     ).all()
-    pending = [_social_announcement_to_public_out(x).model_dump() for x in rows if int(x.id or 0) not in acked_ids]
+    pending = [
+        _social_announcement_to_public_out(x).model_dump()
+        for x in rows
+        if int(x.id or 0) not in acked_ids and _social_announcement_is_for_user(x, int(user.id))
+    ]
     return {"rows": pending[:safe_limit]}
 
 
@@ -11429,7 +11497,7 @@ def social_ack_announcement(
     row = db.get(SocialAnnouncement, ann_id)
     if not row or not row.is_active:
         raise HTTPException(status_code=404, detail="Объявление не найдено")
-    if row.user_id is not None and int(row.user_id) != int(user.id):
+    if not _social_announcement_is_for_user(row, int(user.id)):
         raise HTTPException(status_code=403, detail="Нет доступа к объявлению")
     exists = db.scalar(
         select(SocialAnnouncementAck).where(
@@ -11538,11 +11606,10 @@ def admin_create_announcement(
     ends_at = _social_parse_dt(payload.ends_at) if payload.ends_at else None
     if ends_at and ends_at < starts_at:
         raise HTTPException(status_code=400, detail="Дата завершения меньше даты публикации")
-    target_user_id = int(payload.user_id or 0)
-    if target_user_id <= 0:
-        target_user_id = None
+    target_user_id, target_user_ids = _social_resolve_announcement_targets(payload)
     row = SocialAnnouncement(
         user_id=target_user_id,
+        target_user_ids_json=json.dumps(target_user_ids, ensure_ascii=False),
         title=title[:255],
         body=str(payload.body or "")[:5000],
         starts_at=starts_at,
@@ -11562,6 +11629,7 @@ def admin_create_announcement(
                 "starts_at": _to_utc_iso(starts_at),
                 "ends_at": _to_utc_iso(ends_at),
                 "user_id": target_user_id,
+                "user_ids": target_user_ids,
             },
             ensure_ascii=False,
         ),
@@ -11592,14 +11660,13 @@ def admin_update_announcement(
     ends_at = _social_parse_dt(payload.ends_at) if payload.ends_at else None
     if ends_at and ends_at < starts_at:
         raise HTTPException(status_code=400, detail="Дата завершения меньше даты публикации")
-    target_user_id = int(payload.user_id or 0)
-    if target_user_id <= 0:
-        target_user_id = None
+    target_user_id, target_user_ids = _social_resolve_announcement_targets(payload)
     row.title = title[:255]
     row.body = str(payload.body or "")[:5000]
     row.starts_at = starts_at
     row.ends_at = ends_at
     row.user_id = target_user_id
+    row.target_user_ids_json = json.dumps(target_user_ids, ensure_ascii=False)
     row.is_active = bool(payload.is_active)
     row.updated_at = datetime.utcnow()
     _audit(
@@ -11612,6 +11679,7 @@ def admin_update_announcement(
                 "starts_at": _to_utc_iso(starts_at),
                 "ends_at": _to_utc_iso(ends_at),
                 "user_id": target_user_id,
+                "user_ids": target_user_ids,
                 "is_active": bool(row.is_active),
             },
             ensure_ascii=False,

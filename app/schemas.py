@@ -1228,6 +1228,7 @@ class SocialAnnouncementIn(BaseModel):
     ends_at: str | None = None
     is_active: bool = True
     user_id: int | None = None
+    user_ids: list[int] = Field(default_factory=list)
 
 
 class SocialAnnouncementOut(BaseModel):
@@ -1238,6 +1239,7 @@ class SocialAnnouncementOut(BaseModel):
     ends_at: str | None = None
     is_active: bool = True
     user_id: int | None = None
+    user_ids: list[int] = Field(default_factory=list)
     created_by_user_id: int | None = None
     created_at: str
     updated_at: str

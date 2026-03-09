@@ -13,13 +13,13 @@ class Base(DeclarativeBase):
 
 
 is_sqlite = settings.database_url.startswith("sqlite")
-connect_args = {"check_same_thread": False, "timeout": 60} if is_sqlite else {}
+connect_args = {"check_same_thread": False, "timeout": 120} if is_sqlite else {}
 engine_kwargs = {
     "pool_pre_ping": True,
-    # SQLite has a single-writer model; keep pool moderate but avoid checkout starvation.
-    "pool_size": 8 if is_sqlite else 12,
-    "max_overflow": 8 if is_sqlite else 24,
-    "pool_timeout": 20 if is_sqlite else 45,
+    # For mixed web + worker load we allow larger checkout headroom to avoid pool starvation.
+    "pool_size": 24 if is_sqlite else 12,
+    "max_overflow": 48 if is_sqlite else 24,
+    "pool_timeout": 45 if is_sqlite else 45,
     "pool_recycle": 1800,
     "pool_use_lifo": True,
 }
@@ -42,7 +42,7 @@ def _on_connect(dbapi_connection, _connection_record):
     try:
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA synchronous=NORMAL")
-        cursor.execute("PRAGMA busy_timeout=45000")
+        cursor.execute("PRAGMA busy_timeout=120000")
     finally:
         cursor.close()
 
@@ -192,6 +192,22 @@ def run_lightweight_migrations():
                 conn.execute(text("ALTER TABLE social_chat_messages ADD COLUMN attachments_json TEXT DEFAULT '[]'"))
             if "reactions_json" not in chat_message_cols:
                 conn.execute(text("ALTER TABLE social_chat_messages ADD COLUMN reactions_json TEXT DEFAULT '{}'"))
+
+        ann_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(social_announcements)"))}
+        if ann_cols and "target_user_ids_json" not in ann_cols:
+            conn.execute(text("ALTER TABLE social_announcements ADD COLUMN target_user_ids_json TEXT DEFAULT '[]'"))
+            conn.execute(
+                text(
+                    """
+                    UPDATE social_announcements
+                    SET target_user_ids_json = CASE
+                        WHEN user_id IS NULL THEN '[]'
+                        ELSE ('[' || CAST(user_id AS TEXT) || ']')
+                    END
+                    WHERE target_user_ids_json IS NULL OR trim(target_user_ids_json) = ''
+                    """
+                )
+            )
 
         team_member_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(team_members)"))}
         if team_member_cols:
