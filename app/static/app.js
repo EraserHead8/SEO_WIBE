@@ -76,6 +76,7 @@ let activeProductEditId = 0;
 let activeProductViewIsRefreshing = false;
 let productEditPhotoOrder = [];
 let productEditDragIndex = -1;
+let productEditUploadAutoMode = false;
 const PRODUCT_DETAILS_CACHE_TTL_MS = 3 * 60 * 1000;
 const productDetailsCache = new Map();
 let autoKeywordProductId = null;
@@ -7080,6 +7081,7 @@ function closeProductEditModal() {
   activeProductEditId = 0;
   productEditPhotoOrder = [];
   productEditDragIndex = -1;
+  productEditUploadAutoMode = false;
   const addInput = document.getElementById("productEditPhotoAddUrl");
   if (addInput) addInput.value = "";
   const uploadInput = document.getElementById("productEditPhotoUploadInput");
@@ -7569,7 +7571,13 @@ function addProductEditPhoto(photoUrl) {
 function addProductEditPhotoFromInput() {
   const input = document.getElementById("productEditPhotoAddUrl");
   const raw = String(input?.value || "").trim();
-  if (!raw) return;
+  if (!raw) {
+    const uploadInput = document.getElementById("productEditPhotoUploadInput");
+    if (!uploadInput) return;
+    productEditUploadAutoMode = true;
+    uploadInput.click();
+    return;
+  }
   const added = addProductEditPhoto(raw);
   if (!added) {
     alert(tr("Фото уже добавлено.", "Photo is already added."));
@@ -7578,13 +7586,22 @@ function addProductEditPhotoFromInput() {
   if (input) input.value = "";
 }
 
-async function uploadProductEditPhotos() {
+function onProductEditPhotoFilesChanged() {
+  if (!productEditUploadAutoMode) return;
+  productEditUploadAutoMode = false;
+  uploadProductEditPhotos({ silentNoFiles: true });
+}
+
+async function uploadProductEditPhotos(options = {}) {
+  const silentNoFiles = Boolean(options?.silentNoFiles);
   const productId = Number(activeProductEditId || 0);
   if (!productId) return;
   const input = document.getElementById("productEditPhotoUploadInput");
   const files = Array.from(input?.files || []);
   if (!files.length) {
-    alert(tr("Выберите изображения для загрузки.", "Select images to upload."));
+    if (!silentNoFiles) {
+      alert(tr("Выберите изображения для загрузки.", "Select images to upload."));
+    }
     return;
   }
   const imageFiles = files.filter((file) => String(file?.type || "").startsWith("image/"));

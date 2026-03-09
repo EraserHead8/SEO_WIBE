@@ -1620,8 +1620,9 @@
             <input id="productEditPhotoAddUrl" placeholder="https://... (добавить фото)" />
             <button class="btn-secondary" type="button" id="productEditPhotoAddBtn" onclick="addProductEditPhotoFromInput()">Добавить фото</button>
           </div>
+          <div class="hint">Введите URL и нажмите «Добавить фото», либо оставьте поле пустым: откроется выбор файлов с компьютера.</div>
           <div class="product-edit-photo-controls">
-            <input id="productEditPhotoUploadInput" type="file" accept="image/*" multiple />
+            <input id="productEditPhotoUploadInput" type="file" accept="image/*" multiple onchange="onProductEditPhotoFilesChanged()" />
             <button class="btn-secondary" type="button" id="productEditPhotoUploadBtn" onclick="uploadProductEditPhotos()">Загрузить файлы</button>
           </div>
           <div id="productEditPhotos" class="product-modal-photos"></div>
