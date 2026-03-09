@@ -13,12 +13,13 @@ class Base(DeclarativeBase):
 
 
 is_sqlite = settings.database_url.startswith("sqlite")
-connect_args = {"check_same_thread": False, "timeout": 30} if is_sqlite else {}
+connect_args = {"check_same_thread": False, "timeout": 45} if is_sqlite else {}
 engine_kwargs = {
     "pool_pre_ping": True,
-    "pool_size": 20 if is_sqlite else 12,
-    "max_overflow": 40 if is_sqlite else 24,
-    "pool_timeout": 90 if is_sqlite else 45,
+    # SQLite has a single-writer model; oversized pools increase lock contention.
+    "pool_size": 4 if is_sqlite else 12,
+    "max_overflow": 0 if is_sqlite else 24,
+    "pool_timeout": 45 if is_sqlite else 45,
     "pool_recycle": 1800,
     "pool_use_lifo": True,
 }

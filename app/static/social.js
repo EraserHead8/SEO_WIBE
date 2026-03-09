@@ -56,6 +56,7 @@ let socialState = {
   keepEmojiOpenUntil: 0,
   mobileThreadAutoSelectEnabled: true,
   pollClientId: `poll-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`,
+  fileUploadInFlight: false,
 };
 
 const SOCIAL_POLL_LEADER_KEY = "seo_wibe_social_poll_leader_v1";
@@ -636,6 +637,7 @@ function resetSocialState() {
     chatContextY: 0,
     keepEmojiOpenUntil: 0,
     mobileThreadAutoSelectEnabled: !socialIsMobileClientShell(),
+    fileUploadInFlight: false,
     pollClientId: `poll-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`,
   };
   socialSetBell(0);
@@ -727,6 +729,7 @@ function socialBindChatInputEnter() {
   input.dataset.enterBind = "1";
   input.addEventListener("keydown", (e) => {
     if (e.key !== "Enter" || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey || e.isComposing) return;
+    if (socialIsMobileClientShell()) return;
     e.preventDefault();
     socialSendMessage();
   });
@@ -2289,6 +2292,13 @@ function socialOpenMessageContext(messageId, event) {
   menu.style.left = `${Math.max(8, x)}px`;
   menu.style.top = `${Math.max(8, y)}px`;
   menu.classList.remove("hidden");
+  const rect = menu.getBoundingClientRect();
+  const vw = window.innerWidth || document.documentElement.clientWidth || 0;
+  const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+  const clampedX = Math.max(8, Math.min(Math.max(8, x), Math.max(8, vw - rect.width - 8)));
+  const clampedY = Math.max(8, Math.min(Math.max(8, y), Math.max(8, vh - rect.height - 8)));
+  menu.style.left = `${clampedX}px`;
+  menu.style.top = `${clampedY}px`;
 }
 
 function socialContextReply() {
@@ -2736,6 +2746,7 @@ async function socialSendMessage() {
 }
 
 function socialTriggerChatFileDialog() {
+  if (socialState.fileUploadInFlight) return;
   const input = document.getElementById("socialChatFileInput");
   if (!input) return;
   input.click();
@@ -2744,35 +2755,43 @@ function socialTriggerChatFileDialog() {
 async function socialUploadChatFiles(fileList) {
   const threadId = Number(socialState.currentThreadId || 0);
   const files = Array.from(fileList || []);
-  if (!threadId || !files.length) return;
+  if (!threadId || !files.length || socialState.fileUploadInFlight) return;
+  socialState.fileUploadInFlight = true;
   const input = document.getElementById("socialChatFileInput");
+  const attachBtn = document.getElementById("socialAttachBtn");
+  if (attachBtn) attachBtn.disabled = true;
   const textInput = document.getElementById("socialChatInput");
   const text = String(textInput?.value || "").trim();
   const replyId = Number(socialState.chatReplyTo?.id || 0) || null;
   if (textInput) textInput.value = "";
-  for (const file of files) {
-    const form = new FormData();
-    form.append("file", file);
-    if (text) form.append("text", text);
-    if (replyId) form.append("reply_to_message_id", String(replyId));
-    const row = await socialRequest(`/api/social/chat/messages/${threadId}/files`, {
-      method: "POST",
-      body: form,
-      retryOnPost: true,
-      maxRetries: 1,
-    }).catch((e) => {
-      alert(e?.message || tr("Ошибка загрузки файла", "File upload error"));
-      return null;
-    });
-    if (!row) {
-      await socialLoadMessages(threadId, { silent: true });
-      continue;
+  try {
+    for (const file of files) {
+      const form = new FormData();
+      form.append("file", file);
+      if (text) form.append("text", text);
+      if (replyId) form.append("reply_to_message_id", String(replyId));
+      const row = await socialRequest(`/api/social/chat/messages/${threadId}/files`, {
+        method: "POST",
+        body: form,
+        retryOnPost: true,
+        maxRetries: 1,
+      }).catch((e) => {
+        alert(e?.message || tr("Ошибка загрузки файла", "File upload error"));
+        return null;
+      });
+      if (!row) {
+        await socialLoadMessages(threadId, { silent: true });
+        continue;
+      }
     }
+    socialClearReply();
+    if (input) input.value = "";
+    await socialLoadMessages(threadId, { silent: true });
+    await socialLoadThreads({ silent: true });
+  } finally {
+    socialState.fileUploadInFlight = false;
+    if (attachBtn) attachBtn.disabled = false;
   }
-  socialClearReply();
-  if (input) input.value = "";
-  await socialLoadMessages(threadId, { silent: true });
-  await socialLoadThreads({ silent: true });
 }
 
 async function socialOpenDirectPicker() {

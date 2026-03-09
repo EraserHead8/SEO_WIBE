@@ -111,6 +111,7 @@ let wbAdsBalanceData = null;
 let currentCampaignDetailId = 0;
 let wbAdsLoadProgress = { active: false, total: 0, loaded: 0, failed: 0 };
 let wbAdsLoadToken = 0;
+let wbAdsLoadInflight = null;
 let adsAnalyticsRows = [];
 let adsRecommendationRows = [];
 let adsRecLoadProgress = { active: false, total: 0, loaded: 0 };
@@ -310,6 +311,7 @@ const LEGACY_TAB_REDIRECT = {
   questions: { tab: "reviews", reviewsSubtab: "questions", adsSubtab: "" },
   "ads-analytics": { tab: "ads", reviewsSubtab: "", adsSubtab: "analytics" },
   "ads-recommendations": { tab: "ads", reviewsSubtab: "", adsSubtab: "recommendations" },
+  "ads-bidder": { tab: "ads", reviewsSubtab: "", adsSubtab: "bidder" },
   keywords: { tab: "products", productsSubtab: "seo", reviewsSubtab: "", adsSubtab: "" },
 };
 
@@ -2266,9 +2268,9 @@ function handleMobileBackPress() {
       window.socialCloseThread({ keepAutoSelect: false });
       return true;
     }
-    if (subtab !== "calendar" && typeof window.switchSocialSubtab === "function") {
-      currentSocialSubtab = "calendar";
-      window.switchSocialSubtab("calendar", true);
+    if (subtab !== "chat" && typeof window.switchSocialSubtab === "function") {
+      currentSocialSubtab = "chat";
+      window.switchSocialSubtab("chat", true);
       return true;
     }
     if (shell && !isNavOpen) {
@@ -2286,9 +2288,9 @@ function handleMobileBackPress() {
   const socialBtn = document.querySelector(".nav-btn[data-tab='social']");
   showTab("social", socialBtn || null);
   if (typeof window.switchSocialSubtab === "function") {
-    currentSocialSubtab = "calendar";
+    currentSocialSubtab = "chat";
     setTimeout(() => {
-      try { window.switchSocialSubtab("calendar", true); } catch (_) {}
+      try { window.switchSocialSubtab("chat", true); } catch (_) {}
     }, 120);
   }
   return true;
@@ -4985,48 +4987,57 @@ function renderReturns() {
 
 async function loadWbAdCampaigns() {
   if (!enabledModules.has("wb_ads")) return;
-  wbAdsLoadToken += 1;
-  const runToken = wbAdsLoadToken;
-  wbAdsLoadProgress = { active: true, total: 0, loaded: 0, failed: 0 };
-  updateWbAdsLoadStatus(tr("Загрузка списка кампаний…", "Loading campaign list..."));
+  if (wbAdsLoadInflight) return wbAdsLoadInflight;
 
-  const data = await requestJson("/api/wb/ads/campaigns", { headers: authHeaders(), timeoutMs: 120000 }).catch(() => {
-    return null;
+  const runTask = (async () => {
+    wbAdsLoadToken += 1;
+    const runToken = wbAdsLoadToken;
+    wbAdsLoadProgress = { active: true, total: 0, loaded: 0, failed: 0 };
+    updateWbAdsLoadStatus(tr("Загрузка списка кампаний…", "Loading campaign list..."));
+
+    const data = await requestJson("/api/wb/ads/campaigns", { headers: authHeaders(), timeoutMs: 120000 }).catch(() => {
+      return null;
+    });
+    if (!data) {
+      wbAdsLoadProgress.active = false;
+      updateWbAdsLoadStatus(
+        tr(
+          "Не удалось обновить кампании сейчас. Повторим при следующем цикле загрузки.",
+          "Unable to refresh campaigns now. Will retry on next refresh cycle."
+        )
+      );
+      return;
+    }
+    wbCampaignRows = Array.isArray(data.campaigns) ? data.campaigns : [];
+    const statsMap = (data && typeof data.stats === "object" && data.stats) ? data.stats : {};
+    wbCampaignRows = wbCampaignRows.map((row) => {
+      const cid = getCampaignRowId(row);
+      if (!cid || !statsMap[cid]) return row;
+      return { ...row, ...statsMap[cid] };
+    });
+    const ids = wbCampaignRows.map((row) => Number(getCampaignRowId(row) || 0)).filter((id) => id > 0);
+    wbAdsLoadProgress.total = ids.length;
+    wbAdsLoadProgress.loaded = 0;
+    if (selectedWbCampaignId && !wbCampaignRows.some((x) => getCampaignRowId(x) === selectedWbCampaignId)) {
+      selectedWbCampaignId = "";
+    }
+    updateWbAdsLoadStatus();
+    renderWbCampaignRows();
+    requestJson("/api/wb/ads/balance", { headers: authHeaders(), timeoutMs: 30000 })
+      .then((payload) => {
+        if (runToken !== wbAdsLoadToken) return;
+        wbAdsBalanceData = payload;
+        renderWbCampaignRows();
+      })
+      .catch(() => null);
+    await enrichWbCampaignRows(runToken);
+    markModuleLoaded("ads");
+  })();
+
+  wbAdsLoadInflight = runTask.finally(() => {
+    wbAdsLoadInflight = null;
   });
-  if (!data) {
-    wbAdsLoadProgress.active = false;
-    updateWbAdsLoadStatus(
-      tr(
-        "Не удалось обновить кампании сейчас. Повторим при следующем цикле загрузки.",
-        "Unable to refresh campaigns now. Will retry on next refresh cycle."
-      )
-    );
-    return;
-  }
-  wbCampaignRows = Array.isArray(data.campaigns) ? data.campaigns : [];
-  const statsMap = (data && typeof data.stats === "object" && data.stats) ? data.stats : {};
-  wbCampaignRows = wbCampaignRows.map((row) => {
-    const cid = getCampaignRowId(row);
-    if (!cid || !statsMap[cid]) return row;
-    return { ...row, ...statsMap[cid] };
-  });
-  const ids = wbCampaignRows.map((row) => Number(getCampaignRowId(row) || 0)).filter((id) => id > 0);
-  wbAdsLoadProgress.total = ids.length;
-  wbAdsLoadProgress.loaded = 0;
-  if (selectedWbCampaignId && !wbCampaignRows.some((x) => getCampaignRowId(x) === selectedWbCampaignId)) {
-    selectedWbCampaignId = "";
-  }
-  updateWbAdsLoadStatus();
-  renderWbCampaignRows();
-  requestJson("/api/wb/ads/balance", { headers: authHeaders(), timeoutMs: 30000 })
-    .then((payload) => {
-      if (runToken !== wbAdsLoadToken) return;
-      wbAdsBalanceData = payload;
-      renderWbCampaignRows();
-    })
-    .catch(() => null);
-  await enrichWbCampaignRows(runToken);
-  markModuleLoaded("ads");
+  return wbAdsLoadInflight;
 }
 
 function getCampaignRowId(row) {
@@ -5112,7 +5123,7 @@ async function enrichWbCampaignRows(runToken) {
     updateWbAdsLoadStatus(tr("Кампании не найдены.", "No campaigns found."));
     return;
   }
-  const pending = [...new Set(
+  const pendingRaw = [...new Set(
     wbCampaignRows
       .filter((row) => {
         const cid = Number(getCampaignRowId(row) || 0);
@@ -5122,6 +5133,8 @@ async function enrichWbCampaignRows(runToken) {
       .map((row) => Number(getCampaignRowId(row) || 0))
       .filter((id) => id > 0)
   )];
+  const pending = pendingRaw.slice(0, 60);
+  const deferredCount = Math.max(0, pendingRaw.length - pending.length);
   if (!pending.length) {
     wbAdsLoadProgress.active = false;
     wbAdsLoadProgress.total = allIds.length;
@@ -5232,6 +5245,13 @@ async function enrichWbCampaignRows(runToken) {
       msg += ` ${tr("Неполные поля", "Incomplete fields")}: ${formatInt(partialStatsMissingTotal + partialSummaryMissingTotal)}.`;
     }
     updateWbAdsLoadStatus(msg);
+  } else if (deferredCount > 0) {
+    updateWbAdsLoadStatus(
+      tr(
+        `Кампании загружены. Для снижения нагрузки детальная догрузка ограничена: отложено ${formatInt(deferredCount)}.`,
+        `Campaigns loaded. To reduce load, detailed enrichment is deferred for ${formatInt(deferredCount)} campaigns.`
+      )
+    );
   } else {
     updateWbAdsLoadStatus();
   }

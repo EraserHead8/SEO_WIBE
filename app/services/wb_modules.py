@@ -2198,9 +2198,10 @@ def _request_wb_json(
         return None
     safe_method = str(method or "GET").strip().upper() or "GET"
     auth_variants = [token, f"Bearer {token}"]
+    max_attempts = 2
     for auth_value in auth_variants:
         headers = {"Authorization": auth_value, "Content-Type": "application/json"}
-        for attempt in range(4):
+        for attempt in range(max_attempts):
             response = None
             try:
                 with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
@@ -2215,11 +2216,11 @@ def _request_wb_json(
             except Exception:
                 response = None
             if response is None:
-                if attempt < 3:
+                if attempt < (max_attempts - 1):
                     time.sleep(0.35 * (attempt + 1))
                 continue
             if response.status_code == 429:
-                if attempt < 3:
+                if attempt < (max_attempts - 1):
                     time.sleep(0.65 * (attempt + 1))
                     continue
                 break

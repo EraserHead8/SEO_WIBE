@@ -39,8 +39,6 @@ def get_or_refresh_market_cache(
     row = _get_cache_row(db, user_id=user_id, module_code=module_code, marketplace=marketplace, cache_key=cache_key)
     cached = _safe_json_loads(str(row.payload_json or "")) if row else None
     if row and cached is not None and row.expires_at and row.expires_at > now:
-        row.hit_count = int(row.hit_count or 0) + 1
-        row.last_hit_at = now
         return cached, _cache_meta("db-hit", now=now, row=row)
     if (
         row
@@ -49,8 +47,6 @@ def get_or_refresh_market_cache(
         and int(prefer_stale_sec or 0) > 0
         and max(0, int((now - row.fetched_at).total_seconds())) <= max(60, int(prefer_stale_sec or 0))
     ):
-        row.hit_count = int(row.hit_count or 0) + 1
-        row.last_hit_at = now
         return cached, _cache_meta("db-stale-fastpath", now=now, row=row, stale=True)
 
     lock_id = f"{int(user_id)}:{module_code}:{marketplace}:{cache_key}"
@@ -59,8 +55,6 @@ def get_or_refresh_market_cache(
         row = _get_cache_row(db, user_id=user_id, module_code=module_code, marketplace=marketplace, cache_key=cache_key)
         cached = _safe_json_loads(str(row.payload_json or "")) if row else None
         if row and cached is not None and row.expires_at and row.expires_at > now:
-            row.hit_count = int(row.hit_count or 0) + 1
-            row.last_hit_at = now
             return cached, _cache_meta("db-hit-race", now=now, row=row)
         if (
             row
@@ -69,8 +63,6 @@ def get_or_refresh_market_cache(
             and int(prefer_stale_sec or 0) > 0
             and max(0, int((now - row.fetched_at).total_seconds())) <= max(60, int(prefer_stale_sec or 0))
         ):
-            row.hit_count = int(row.hit_count or 0) + 1
-            row.last_hit_at = now
             return cached, _cache_meta("db-stale-fastpath-race", now=now, row=row, stale=True)
 
         try:
@@ -79,9 +71,6 @@ def get_or_refresh_market_cache(
             if row and cached is not None and row.fetched_at:
                 age_sec = max(0, int((now - row.fetched_at).total_seconds()))
                 if age_sec <= max(60, int(stale_if_error_sec or 0)):
-                    row.hit_count = int(row.hit_count or 0) + 1
-                    row.last_hit_at = now
-                    row.last_error = str(exc or "")[:500]
                     return cached, _cache_meta("db-stale-fallback", now=now, row=row, stale=True, error=str(exc or ""))
             raise
 

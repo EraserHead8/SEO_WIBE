@@ -585,6 +585,31 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
             "- Поиск/фильтры: ID, название, статус, тип, работает, бюджет.\n"
             "- Двойной клик по строке: открывает модальное окно с деталями.\n"
             "- В деталях кампании: Запустить / Пауза / Остановить / Обновить детали.\n\n"
+            "Подвкладка «Бидер WB Ads»:\n"
+            "- Откройте «Реклама» -> «Бидер».\n"
+            "- Заполните campaign_id и nm_id.\n"
+            "- Выберите цель:\n"
+            "  normquery: фраза (укажите target_value),\n"
+            "  nm: карточка (target_value можно оставить пустым).\n"
+            "- Выберите стратегию:\n"
+            "  optimal: держать ставку в оптимуме WB,\n"
+            "  position: удерживать позицию в диапазоне,\n"
+            "  range: удерживать ставку в коридоре min/max,\n"
+            "  hold: фиксировать текущую логику без агрессивных шагов.\n"
+            "- Укажите min/max/step и cooldown (секунды между запусками правила).\n"
+            "- Нажмите «Сохранить правило».\n"
+            "- Для ручного запуска: «Запустить сейчас».\n"
+            "- Для фонового режима: оставьте «Активно», воркер будет запускать правило по cooldown.\n\n"
+            "Как читать логи биддера:\n"
+            "- ok: ставка применена или подтверждена.\n"
+            "- skipped: запуск пропущен по условиям (cooldown/нет данных/лимиты).\n"
+            "- error: ошибка API или некорректная конфигурация правила.\n"
+            "- Причина всегда пишется в колонке «Причина» и в статусе правила.\n\n"
+            "Практика настройки:\n"
+            "- Начинайте с консервативного шага (50-100), чтобы не раскачать расход.\n"
+            "- Ставьте cooldown не меньше 180-300 секунд для стабильных кампаний.\n"
+            "- Для новых кампаний сначала проверьте ручной запуск, затем включайте фон.\n"
+            "- Если правило часто в skipped/error, проверьте цель, ключ WB Ads и тип кампании.\n\n"
             "Пример: отфильтруйте «только работает», найдите кампании с высоким расходом и проверьте детали двойным кликом."
         ),
     },
@@ -855,6 +880,27 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
             "- Filters: search, status, type, running flag, budget range.\n"
             "- Double-click row: open campaign details modal.\n"
             "- In modal: Start / Pause / Stop / Refresh details.\n\n"
+            "Bidder subtab:\n"
+            "- Open Ads -> Bidder.\n"
+            "- Set campaign_id and nm_id.\n"
+            "- Target type:\n"
+            "  normquery: phrase target (fill target_value),\n"
+            "  nm: card target (target_value can be empty).\n"
+            "- Strategy:\n"
+            "  optimal, position, range, hold.\n"
+            "- Set min/max/step and cooldown (seconds between rule runs).\n"
+            "- Save rule.\n"
+            "- Manual run: Run now.\n"
+            "- Background mode: keep rule active and worker will run it by cooldown.\n\n"
+            "Bidder logs:\n"
+            "- ok: bid applied/confirmed.\n"
+            "- skipped: run was skipped by conditions (cooldown/no data/limits).\n"
+            "- error: API/configuration issue.\n"
+            "- Reason column explains each run result.\n\n"
+            "Tuning tips:\n"
+            "- Start with conservative step (50-100).\n"
+            "- Use cooldown >= 180-300 sec for stable campaigns.\n"
+            "- Validate with manual run first, then enable background mode.\n\n"
             "Example: filter running campaigns, sort by spend, inspect a campaign in detail modal."
         ),
     },
@@ -2903,7 +2949,10 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
         if not _campaign_stat_has_context(stats.get(str(cid)))
     ]
     if unresolved_stats_ids:
-        for cid in unresolved_stats_ids[:40]:
+        # Keep API latency bounded: one-by-one fallback is expensive and can
+        # trigger upstream timeouts when WB rate-limits.
+        single_retry_limit = 6 if len(ids) > 24 else 12
+        for cid in unresolved_stats_ids[:single_retry_limit]:
             try:
                 one_map = fetch_wb_campaign_stats_bulk(wb_key, [int(cid)], date_from=None, date_to=None)
             except Exception:
@@ -12322,7 +12371,7 @@ def _estimate_audit_storage_bytes(db: Session) -> int:
 def _prune_audit_storage_if_needed(db: Session) -> None:
     global _AUDIT_PRUNE_LAST_CHECK_AT
     now_ts = datetime.utcnow().timestamp()
-    if now_ts - _AUDIT_PRUNE_LAST_CHECK_AT < 15:
+    if now_ts - _AUDIT_PRUNE_LAST_CHECK_AT < 180:
         return
     _AUDIT_PRUNE_LAST_CHECK_AT = now_ts
 
@@ -12377,6 +12426,17 @@ def _audit(
     status: str = "ok",
     request: Request | None = None,
 ) -> None:
+    # High-frequency read events and UI pings create write contention on SQLite.
+    # Keep mutating/security events, but skip noisy telemetry-grade records.
+    action_key = str(action or "").strip().lower()
+    if (
+        not action_key
+        or action_key.startswith("ui_")
+        or action_key.endswith("_read")
+        or action_key in {"auth_session_check", "wb_ads_campaigns_enrich"}
+    ):
+        return
+
     actor_email = _actor_email(user) if user else ""
     actor_member_id = _actor_member_id(user) if user else None
     actor_is_owner = _actor_is_owner(user) if user else True
