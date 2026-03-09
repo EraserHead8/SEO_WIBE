@@ -187,6 +187,8 @@ class TeamMember(Base):
     email: Mapped[str] = mapped_column(String(255), default="", index=True)
     phone: Mapped[str] = mapped_column(String(40), default="")
     full_name: Mapped[str] = mapped_column(String(255), default="")
+    city: Mapped[str] = mapped_column(String(120), default="")
+    position_title: Mapped[str] = mapped_column(String(120), default="")
     nickname: Mapped[str] = mapped_column(String(120), default="")
     avatar_url: Mapped[str] = mapped_column(String(500), default="")
     hashed_password: Mapped[str] = mapped_column(String(255), default="")

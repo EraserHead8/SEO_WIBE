@@ -5470,8 +5470,8 @@ def sales_stats(
             cache_key=sales_cache_key,
             ttl_sec=_market_cache_ttl("sales_stats"),
             fetcher=lambda: _load_sales_payload(left, right),
-            stale_if_error_sec=45 * 60,
-            prefer_stale_sec=2 * 60 * 60,
+            stale_if_error_sec=20 * 60,
+            prefer_stale_sec=0,
         )
     except Exception as exc:
         sales_cache_meta = {"source": "error", "age_sec": -1}
@@ -5533,94 +5533,97 @@ def sales_stats(
     comparison: dict[str, Any] = {}
     comparison_rows: list[dict[str, Any]] = []
     comparison_chart: list[dict[str, Any]] = []
+    period_days = max(1, (right - left).days + 1)
+    if period_days > 62:
+        warnings.append("Сравнение с предыдущим периодом отключено для диапазона более 62 дней (ускоренный режим).")
+        prev_cache_meta = {"source": "skipped-long-period"}
+    else:
+        try:
+            prev_to = left - timedelta(days=1)
+            prev_from = prev_to - timedelta(days=period_days - 1)
+            prev_cache_key = build_market_cache_key(
+                {
+                    "marketplace": selected_market,
+                    "date_from": prev_from.isoformat(),
+                    "date_to": prev_to.isoformat(),
+                    "granularity": gran,
+                    "tz": tz_name,
+                    "key_rev": key_rev,
+                    "comparison": 1,
+                }
+            )
+            prev_payload, prev_cache_meta = get_or_refresh_market_cache(
+                db,
+                user_id=int(user.id),
+                module_code="sales_stats",
+                marketplace=selected_market,
+                cache_key=prev_cache_key,
+                ttl_sec=_market_cache_ttl("sales_stats"),
+                fetcher=lambda: _load_sales_payload(prev_from, prev_to),
+                stale_if_error_sec=45 * 60,
+                prefer_stale_sec=2 * 60 * 60,
+            )
+            prev_totals = prev_payload.get("totals") if isinstance(prev_payload, dict) else {}
+            prev_totals = prev_totals if isinstance(prev_totals, dict) else {}
+            prev_rows = prev_payload.get("rows") if isinstance(prev_payload, dict) else []
+            prev_chart = prev_payload.get("chart") if isinstance(prev_payload, dict) else []
+            comparison_rows = prev_rows if isinstance(prev_rows, list) else []
+            comparison_chart = prev_chart if isinstance(prev_chart, list) else []
 
-    try:
-        period_days = max(1, (right - left).days + 1)
-        prev_to = left - timedelta(days=1)
-        prev_from = prev_to - timedelta(days=period_days - 1)
-        prev_cache_key = build_market_cache_key(
-            {
-                "marketplace": selected_market,
-                "date_from": prev_from.isoformat(),
-                "date_to": prev_to.isoformat(),
-                "granularity": gran,
-                "tz": tz_name,
-                "key_rev": key_rev,
-                "comparison": 1,
+            def _cmp(metric: str) -> dict[str, Any]:
+                cur = float(totals.get(metric) or 0.0)
+                prev = float(prev_totals.get(metric) or 0.0)
+                if abs(prev) < 1e-9:
+                    delta_pct = 100.0 if abs(cur) > 1e-9 else 0.0
+                else:
+                    delta_pct = ((cur - prev) / abs(prev)) * 100.0
+                return {
+                    "current": cur,
+                    "previous": prev,
+                    "delta": cur - prev,
+                    "delta_pct": round(delta_pct, 2),
+                }
+
+            comparison = {
+                "period_days": period_days,
+                "current_from": left.isoformat(),
+                "current_to": right.isoformat(),
+                "previous_from": prev_from.isoformat(),
+                "previous_to": prev_to.isoformat(),
+                "metrics": {
+                    "orders": _cmp("orders"),
+                    "units": _cmp("units"),
+                    "buyouts": _cmp("buyouts"),
+                    "order_amount": _cmp("order_amount"),
+                    "buyout_amount": _cmp("buyout_amount"),
+                    "revenue": _cmp("revenue"),
+                    "returns": _cmp("returns"),
+                    "ad_spend": _cmp("ad_spend"),
+                    "penalties": _cmp("penalties"),
+                    "income": _cmp("income"),
+                    "expense": _cmp("expense"),
+                    "net": _cmp("net"),
+                    "commission": _cmp("commission"),
+                    "logistics": _cmp("logistics"),
+                    "storage": _cmp("storage"),
+                    "deductions": _cmp("deductions"),
+                    "acceptance": _cmp("acceptance"),
+                    "other_expense": _cmp("other_expense"),
+                    "gross_profit": _cmp("gross_profit"),
+                },
             }
-        )
-        prev_payload, prev_cache_meta = get_or_refresh_market_cache(
-            db,
-            user_id=int(user.id),
-            module_code="sales_stats",
-            marketplace=selected_market,
-            cache_key=prev_cache_key,
-            ttl_sec=_market_cache_ttl("sales_stats"),
-            fetcher=lambda: _load_sales_payload(prev_from, prev_to),
-            stale_if_error_sec=45 * 60,
-            prefer_stale_sec=2 * 60 * 60,
-        )
-        prev_totals = prev_payload.get("totals") if isinstance(prev_payload, dict) else {}
-        prev_totals = prev_totals if isinstance(prev_totals, dict) else {}
-        prev_rows = prev_payload.get("rows") if isinstance(prev_payload, dict) else []
-        prev_chart = prev_payload.get("chart") if isinstance(prev_payload, dict) else []
-        comparison_rows = prev_rows if isinstance(prev_rows, list) else []
-        comparison_chart = prev_chart if isinstance(prev_chart, list) else []
-
-        def _cmp(metric: str) -> dict[str, Any]:
-            cur = float(totals.get(metric) or 0.0)
-            prev = float(prev_totals.get(metric) or 0.0)
-            if abs(prev) < 1e-9:
-                delta_pct = 100.0 if abs(cur) > 1e-9 else 0.0
-            else:
-                delta_pct = ((cur - prev) / abs(prev)) * 100.0
-            return {
-                "current": cur,
-                "previous": prev,
-                "delta": cur - prev,
-                "delta_pct": round(delta_pct, 2),
-            }
-
-        comparison = {
-            "period_days": period_days,
-            "current_from": left.isoformat(),
-            "current_to": right.isoformat(),
-            "previous_from": prev_from.isoformat(),
-            "previous_to": prev_to.isoformat(),
-            "metrics": {
-                "orders": _cmp("orders"),
-                "units": _cmp("units"),
-                "buyouts": _cmp("buyouts"),
-                "order_amount": _cmp("order_amount"),
-                "buyout_amount": _cmp("buyout_amount"),
-                "revenue": _cmp("revenue"),
-                "returns": _cmp("returns"),
-                "ad_spend": _cmp("ad_spend"),
-                "penalties": _cmp("penalties"),
-                "income": _cmp("income"),
-                "expense": _cmp("expense"),
-                "net": _cmp("net"),
-                "commission": _cmp("commission"),
-                "logistics": _cmp("logistics"),
-                "storage": _cmp("storage"),
-                "deductions": _cmp("deductions"),
-                "acceptance": _cmp("acceptance"),
-                "other_expense": _cmp("other_expense"),
-                "gross_profit": _cmp("gross_profit"),
-            },
-        }
-        _enqueue_sales_cache_warmup(
-            int(user.id),
-            marketplace=selected_market,
-            date_from=prev_from,
-            date_to=prev_to,
-            granularity=gran,
-            tz_name=tz_name,
-        )
-    except Exception as exc:
-        comparison = {}
-        warnings.append(f"Сравнение с предыдущим периодом недоступно: {str(exc or '')[:140]}")
-        prev_cache_meta = {"source": "error"}
+            _enqueue_sales_cache_warmup(
+                int(user.id),
+                marketplace=selected_market,
+                date_from=prev_from,
+                date_to=prev_to,
+                granularity=gran,
+                tz_name=tz_name,
+            )
+        except Exception as exc:
+            comparison = {}
+            warnings.append(f"Сравнение с предыдущим периодом недоступно: {str(exc or '')[:140]}")
+            prev_cache_meta = {"source": "error"}
 
     report_granularity = str(payload.get("granularity") or ("hour" if gran == "hour" else "day"))
     report_tz = str(payload.get("timezone") or tz_name)
@@ -6395,6 +6398,8 @@ def profile_team_add(payload: TeamMemberIn, user: User = Depends(get_current_use
         email=email[:255],
         phone=payload.phone.strip()[:40],
         full_name=payload.full_name.strip()[:255],
+        city=payload.city.strip()[:120],
+        position_title=payload.position_title.strip()[:120],
         nickname=payload.nickname.strip()[:120],
         avatar_url=payload.avatar_url.strip()[:500],
         hashed_password=get_password_hash(password),
@@ -6428,6 +6433,8 @@ def profile_team_update(member_id: int, payload: TeamMemberIn, user: User = Depe
             raise HTTPException(status_code=403, detail="Недостаточно прав")
         row.phone = payload.phone.strip()[:40]
         row.full_name = payload.full_name.strip()[:255]
+        row.city = payload.city.strip()[:120]
+        row.position_title = payload.position_title.strip()[:120]
         row.nickname = payload.nickname.strip()[:120]
         row.avatar_url = payload.avatar_url.strip()[:500]
         _audit(
@@ -6444,6 +6451,8 @@ def profile_team_update(member_id: int, payload: TeamMemberIn, user: User = Depe
     if row.is_owner:
         row.phone = payload.phone.strip()[:40]
         row.full_name = payload.full_name.strip()[:255]
+        row.city = payload.city.strip()[:120]
+        row.position_title = payload.position_title.strip()[:120]
         row.nickname = (payload.nickname.strip() or "owner")[:120]
         row.avatar_url = payload.avatar_url.strip()[:500]
         row.access_scope = json.dumps(["*"], ensure_ascii=False)
@@ -6456,6 +6465,8 @@ def profile_team_update(member_id: int, payload: TeamMemberIn, user: User = Depe
         row.email = email[:255]
         row.phone = payload.phone.strip()[:40]
         row.full_name = payload.full_name.strip()[:255]
+        row.city = payload.city.strip()[:120]
+        row.position_title = payload.position_title.strip()[:120]
         row.nickname = payload.nickname.strip()[:120]
         row.avatar_url = payload.avatar_url.strip()[:500]
         row.access_scope = json.dumps(_safe_team_scope(payload.access_scope), ensure_ascii=False)
@@ -6844,6 +6855,8 @@ def admin_team_add(
         email=email[:255],
         phone=payload.phone.strip()[:40],
         full_name=payload.full_name.strip()[:255],
+        city=payload.city.strip()[:120],
+        position_title=payload.position_title.strip()[:120],
         nickname=payload.nickname.strip()[:120],
         avatar_url=payload.avatar_url.strip()[:500],
         hashed_password=get_password_hash(password),
@@ -6882,6 +6895,8 @@ def admin_team_update(
     if row.is_owner:
         row.phone = payload.phone.strip()[:40]
         row.full_name = payload.full_name.strip()[:255]
+        row.city = payload.city.strip()[:120]
+        row.position_title = payload.position_title.strip()[:120]
         row.nickname = (payload.nickname.strip() or "owner")[:120]
         row.avatar_url = payload.avatar_url.strip()[:500]
         row.access_scope = json.dumps(["*"], ensure_ascii=False)
@@ -6894,6 +6909,8 @@ def admin_team_update(
         row.email = email[:255]
         row.phone = payload.phone.strip()[:40]
         row.full_name = payload.full_name.strip()[:255]
+        row.city = payload.city.strip()[:120]
+        row.position_title = payload.position_title.strip()[:120]
         row.nickname = payload.nickname.strip()[:120]
         row.avatar_url = payload.avatar_url.strip()[:500]
         row.access_scope = json.dumps(_safe_team_scope(payload.access_scope), ensure_ascii=False)
@@ -8120,8 +8137,8 @@ def _social_public_profile_by_key(db: Session, actor_key: str) -> dict[str, Any]
                 "full_name": str(member.full_name or "").strip(),
                 "email": str(member.email or "").strip().lower(),
                 "company_name": str(profile.company_name or "").strip() if profile else "",
-                "city": str(profile.city or "").strip() if profile else "",
-                "position_title": str(profile.position_title or "").strip() if profile else "",
+                "city": str(member.city or "").strip() or (str(profile.city or "").strip() if profile else ""),
+                "position_title": str(member.position_title or "").strip() or (str(profile.position_title or "").strip() if profile else ""),
                 "is_owner": bool(member.is_owner),
                 "user_id": int(member.user_id or 0),
                 "member_id": int(member.id or 0),
@@ -8219,9 +8236,50 @@ def _social_parse_reactions(raw: str | None) -> dict[str, list[dict[str, str]]]:
     return out
 
 
+def _social_message_delivery_meta(db: Session, row: SocialChatMessage) -> tuple[str, int, int]:
+    cache: dict[str, str] = {}
+
+    def _canon(raw_key: str) -> str:
+        key = str(raw_key or "").strip().lower()
+        if not key:
+            return ""
+        if key in cache:
+            return cache[key]
+        safe = _social_canonical_actor_key(db, key)
+        cache[key] = safe
+        return safe
+
+    sender_key = _canon(str(row.sender_key or ""))
+    members = db.scalars(
+        select(SocialChatThreadMember).where(SocialChatThreadMember.thread_id == int(row.thread_id))
+    ).all()
+    recipient_reads: dict[str, int] = {}
+    for member in members:
+        raw_key = str(member.actor_key or "").strip().lower()
+        canonical_key = _canon(raw_key)
+        if not canonical_key or canonical_key == sender_key:
+            continue
+        last_read = int(member.last_read_message_id or 0)
+        prev = recipient_reads.get(canonical_key, 0)
+        if last_read > prev:
+            recipient_reads[canonical_key] = last_read
+    total = len(recipient_reads)
+    read_by = sum(1 for last_read in recipient_reads.values() if int(last_read) >= int(row.id or 0))
+    status = "read" if total > 0 and read_by >= total else "sent"
+    return status, int(read_by), int(total)
+
+
 def _social_message_to_out(db: Session, actor_key: str, row: SocialChatMessage) -> SocialChatMessageOut:
     sender_key = str(row.sender_key or "")
     sender_nick = _social_current_nick_by_key(db, sender_key) or str(row.sender_nick or "")
+    safe_sender_key = _social_canonical_actor_key(db, sender_key.strip().lower())
+    safe_actor_key = _social_canonical_actor_key(db, str(actor_key or "").strip().lower())
+    is_mine = bool(safe_sender_key and safe_actor_key and safe_sender_key == safe_actor_key)
+    delivery_status: str | None = None
+    delivery_read_by = 0
+    delivery_total = 0
+    if is_mine:
+        delivery_status, delivery_read_by, delivery_total = _social_message_delivery_meta(db, row)
     reply_payload: dict[str, Any] | None = None
     reply_id = int(row.reply_to_message_id or 0)
     if reply_id > 0:
@@ -8258,7 +8316,10 @@ def _social_message_to_out(db: Session, actor_key: str, row: SocialChatMessage) 
         reply_to=reply_payload,
         attachments=_social_parse_attachments(getattr(row, "attachments_json", "") or "[]"),
         reactions=reactions,
-        is_mine=sender_key == actor_key,
+        is_mine=is_mine,
+        delivery_status=delivery_status,
+        delivery_read_by=int(delivery_read_by),
+        delivery_total=int(delivery_total),
     )
 
 
@@ -11546,6 +11607,8 @@ def _team_member_to_out(row: TeamMember) -> TeamMemberOut:
         has_password=bool(str(row.hashed_password or "").strip()),
         phone=row.phone or "",
         full_name=row.full_name or "",
+        city=row.city or "",
+        position_title=row.position_title or "",
         nickname=row.nickname or "",
         avatar_url=row.avatar_url or "",
         access_scope=_team_scope_from_row(row),

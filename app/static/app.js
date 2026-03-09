@@ -1072,6 +1072,8 @@ function applyUiLanguage() {
     ["#teamModalPassword", isEn ? "New password (optional)" : "Новый пароль (опц.)"],
     ["#teamModalPhone", isEn ? "Phone" : "Телефон"],
     ["#teamModalFullName", isEn ? "Full name" : "ФИО"],
+    ["#teamModalCity", isEn ? "City" : "Город"],
+    ["#teamModalPosition", isEn ? "Position title" : "Должность"],
     ["#teamModalNickname", isEn ? "Nickname" : "Ник"],
     ["#teamModalAvatar", isEn ? "Avatar URL" : "Ссылка на аватар"],
     ["#profileAiName", isEn ? "AI service name" : "Название AI сервиса"],
@@ -9493,6 +9495,8 @@ function openTeamMemberEditor(memberId) {
   activeTeamMemberId = Number(row.id || 0);
   setInputValue("teamModalEmail", String(row.email || ""));
   setInputValue("teamModalFullName", String(row.full_name || ""));
+  setInputValue("teamModalCity", String(row.city || ""));
+  setInputValue("teamModalPosition", String(row.position_title || ""));
   setInputValue("teamModalPhone", String(row.phone || ""));
   setInputValue("teamModalNickname", String(row.nickname || ""));
   setInputValue("teamModalAvatar", String(row.avatar_url || ""));
@@ -9525,6 +9529,8 @@ function openTeamMemberCreator() {
   activeTeamMemberId = 0;
   setInputValue("teamModalEmail", "");
   setInputValue("teamModalFullName", "");
+  setInputValue("teamModalCity", "");
+  setInputValue("teamModalPosition", "");
   setInputValue("teamModalPhone", "");
   setInputValue("teamModalNickname", "");
   setInputValue("teamModalAvatar", "");
@@ -9560,6 +9566,8 @@ function buildTeamMemberPayloadFromModal(memberId) {
     password: String(document.getElementById("teamModalPassword")?.value || ""),
     phone: String(document.getElementById("teamModalPhone")?.value || "").trim(),
     full_name: String(document.getElementById("teamModalFullName")?.value || "").trim(),
+    city: String(document.getElementById("teamModalCity")?.value || "").trim(),
+    position_title: String(document.getElementById("teamModalPosition")?.value || "").trim(),
     nickname: String(document.getElementById("teamModalNickname")?.value || "").trim(),
     avatar_url: String(document.getElementById("teamModalAvatar")?.value || "").trim(),
     access_scope: row?.is_owner ? ["*"] : collectTeamModalAccess(),
@@ -9677,6 +9685,8 @@ async function addTeamMember(payloadOverride = null) {
   payload.password = String(payload.password || "");
   payload.phone = String(payload.phone || "").trim();
   payload.full_name = String(payload.full_name || "").trim();
+  payload.city = String(payload.city || "").trim();
+  payload.position_title = String(payload.position_title || "").trim();
   payload.nickname = String(payload.nickname || "").trim();
   payload.avatar_url = String(payload.avatar_url || "").trim();
   if (!Array.isArray(payload.access_scope)) payload.access_scope = [];
@@ -9710,11 +9720,19 @@ async function updateTeamMember(memberId, payloadOverride = null) {
     password: "",
     phone: String(current.phone || "").trim(),
     full_name: String(current.full_name || "").trim(),
+    city: String(current.city || "").trim(),
+    position_title: String(current.position_title || "").trim(),
     nickname: String(current.nickname || "").trim(),
     avatar_url: String(current.avatar_url || "").trim(),
     access_scope: Array.isArray(current.access_scope) ? current.access_scope : [],
   };
   payload.email = String(payload.email || "").trim();
+  payload.phone = String(payload.phone || "").trim();
+  payload.full_name = String(payload.full_name || "").trim();
+  payload.city = String(payload.city || "").trim();
+  payload.position_title = String(payload.position_title || "").trim();
+  payload.nickname = String(payload.nickname || "").trim();
+  payload.avatar_url = String(payload.avatar_url || "").trim();
   if (!payload.email) {
     alert(tr("Email сотрудника обязателен.", "Employee email is required."));
     return null;
@@ -9791,6 +9809,8 @@ async function saveProfileData() {
       password: "",
       phone: String(document.getElementById("profilePhone")?.value || "").trim(),
       full_name: String(document.getElementById("profileFullName")?.value || "").trim(),
+      city: String(document.getElementById("profileCity")?.value || "").trim(),
+      position_title: String(document.getElementById("profilePositionTitle")?.value || "").trim(),
       nickname: String(actorRow.nickname || "").trim(),
       avatar_url: String(document.getElementById("profileAvatarUrl")?.value || "").trim(),
       access_scope: Array.isArray(actorRow.access_scope) ? actorRow.access_scope : [],

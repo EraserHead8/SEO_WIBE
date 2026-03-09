@@ -914,6 +914,8 @@ class TeamMemberIn(BaseModel):
     password: str = ""
     phone: str = ""
     full_name: str = ""
+    city: str = ""
+    position_title: str = ""
     nickname: str = ""
     avatar_url: str = ""
     access_scope: list[str] = Field(default_factory=list)
@@ -925,6 +927,8 @@ class TeamMemberOut(BaseModel):
     has_password: bool = False
     phone: str
     full_name: str
+    city: str = ""
+    position_title: str = ""
     nickname: str
     avatar_url: str
     access_scope: list[str] = Field(default_factory=list)
@@ -1062,6 +1066,9 @@ class SocialChatMessageOut(BaseModel):
     attachments: list[dict[str, Any]] = Field(default_factory=list)
     reactions: list[dict[str, Any]] = Field(default_factory=list)
     is_mine: bool = False
+    delivery_status: str | None = None
+    delivery_read_by: int = 0
+    delivery_total: int = 0
 
 
 class SocialTaskProjectIn(BaseModel):

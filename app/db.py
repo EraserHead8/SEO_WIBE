@@ -185,6 +185,13 @@ def run_lightweight_migrations():
             if "reactions_json" not in chat_message_cols:
                 conn.execute(text("ALTER TABLE social_chat_messages ADD COLUMN reactions_json TEXT DEFAULT '{}'"))
 
+        team_member_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(team_members)"))}
+        if team_member_cols:
+            if "city" not in team_member_cols:
+                conn.execute(text("ALTER TABLE team_members ADD COLUMN city VARCHAR(120) DEFAULT ''"))
+            if "position_title" not in team_member_cols:
+                conn.execute(text("ALTER TABLE team_members ADD COLUMN position_title VARCHAR(120) DEFAULT ''"))
+
         settings_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(system_settings)"))}
         if settings_cols:
             default_ui = json.dumps(

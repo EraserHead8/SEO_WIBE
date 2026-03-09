@@ -6941,6 +6941,32 @@ body[data-theme="dark"] .landing-band .band-stats span {
   margin-top: 4px;
 }
 
+.tg-msg-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.tg-msg-status-dot.sending {
+  background: #f5c14b;
+}
+
+.tg-msg-status-dot.failed {
+  background: #e05252;
+}
+
+.tg-msg-status-dot.sent {
+  background: #4d8cff;
+}
+
+.tg-msg-status-dot.read {
+  background: #24b47e;
+}
+
 .tg-msg-row.mine .tg-msg-time {
   color: color-mix(in oklab, var(--tg-user-accent) 55%, var(--text-muted));
 }

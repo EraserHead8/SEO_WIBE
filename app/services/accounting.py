@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
+import json
 import math
 import time
 from typing import Any
@@ -320,10 +321,32 @@ def _fetch_ozon_product_finance_rows(
             try:
                 data = response.json()
             except Exception:
-                warnings.append("Ozon accounting API вернул некорректный ответ.")
-                break
+                raw_text = ""
+                try:
+                    raw_text = str(response.text or "")
+                except Exception:
+                    raw_text = ""
+                try:
+                    data = json.loads(raw_text.lstrip("\ufeff"))
+                except Exception:
+                    warnings.append("Ozon accounting API вернул некорректный ответ.")
+                    break
             result = data.get("result") if isinstance(data, dict) else {}
             operations = result.get("operations") if isinstance(result, dict) else []
+            if not isinstance(operations, list):
+                operations = []
+            if not operations and isinstance(result, dict):
+                for key in ("items", "rows", "list", "transactions"):
+                    candidate = result.get(key)
+                    if isinstance(candidate, list):
+                        operations = candidate
+                        break
+            if not operations and isinstance(data, dict):
+                for key in ("operations", "items", "rows", "list", "transactions"):
+                    candidate = data.get(key)
+                    if isinstance(candidate, list):
+                        operations = candidate
+                        break
             if not isinstance(operations, list) or not operations:
                 break
             for op in operations:
@@ -943,6 +966,9 @@ def _normalize_accounting_warnings(warnings: list[Any]) -> list[str]:
             continue
         if "bad_json" in low and "wb" in low:
             out.append("WB API вернул нестабильный ответ, применена частичная статистика.")
+            continue
+        if "некорректный ответ" in low and "ozon" in low:
+            out.append("Ozon accounting API вернул нестандартный ответ, показаны доступные данные.")
             continue
         if "api недоступен" in low or "api unavailable" in low:
             out.append(text)

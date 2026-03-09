@@ -743,12 +743,18 @@ def fetch_wb_returns(
 ) -> dict[str, Any]:
     warnings: list[str] = []
     rows: list[dict[str, Any]] = []
-    endpoints = [
-        "https://returns-api.wildberries.ru/api/v1/claims",
-        "https://returns-api.wildberries.ru/api/v1/returns",
+    seen_ids: set[str] = set()
+    safe_status = str(status or "").strip().lower()
+    list_attempts: list[tuple[str, dict[str, Any]]] = [
+        ("https://returns-api.wildberries.ru/api/v1/claims", {"is_archive": False, "limit": 200}),
+        ("https://returns-api.wildberries.ru/api/v1/claims", {"is_archive": True, "limit": 200}),
+        ("https://returns-api.wildberries.ru/api/v1/returns", {"limit": 200}),
     ]
-    for endpoint in endpoints:
-        data = _request_wb_json("GET", endpoint, api_key=api_key, params={"limit": 500})
+    if safe_status and safe_status not in {"all", "any", "*"}:
+        for _, params in list_attempts:
+            params["status"] = safe_status
+    for endpoint, params in list_attempts:
+        data = _request_wb_json("GET", endpoint, api_key=api_key, params=params)
         if data is None:
             warnings.append(f"WB returns endpoint unavailable: {endpoint}")
             continue
@@ -756,27 +762,58 @@ def fetch_wb_returns(
         if not parsed and isinstance(data, dict):
             parsed = [data]
         for raw in parsed:
-            rid = str(raw.get("id") or raw.get("claimId") or raw.get("returnId") or "").strip()
-            if not rid:
+            rid = _pick_first_str(raw.get("id"), raw.get("claimId"), raw.get("claim_id"), raw.get("returnId"))
+            rid = str(rid or "").strip()
+            if not rid or rid in seen_ids:
                 continue
+            seen_ids.add(rid)
+            created = _pick_first_str(
+                raw.get("createdAt"),
+                raw.get("created_at"),
+                raw.get("createdDate"),
+                raw.get("date"),
+            )
             row = {
                 "id": rid,
-                "status": str(raw.get("status") or raw.get("state") or "").strip(),
-                "created_at": str(raw.get("createdAt") or raw.get("created_at") or raw.get("date") or "").strip(),
-                "article": str(raw.get("article") or raw.get("supplierVendorCode") or "").strip(),
-                "product": str(raw.get("productName") or raw.get("name") or "").strip(),
-                "reason": str(raw.get("reason") or raw.get("comment") or "").strip(),
+                "status": str(_pick_first_str(raw.get("status"), raw.get("state"), raw.get("claimStatus")) or "").strip(),
+                "created_at": str(created or "").strip(),
+                "article": str(
+                    _pick_first_str(
+                        raw.get("article"),
+                        raw.get("supplierVendorCode"),
+                        raw.get("vendorCode"),
+                        raw.get("offerId"),
+                        raw.get("nmId"),
+                    )
+                    or ""
+                ).strip(),
+                "product": str(
+                    _pick_first_str(
+                        raw.get("productName"),
+                        raw.get("name"),
+                        raw.get("subjectName"),
+                        raw.get("imtName"),
+                    )
+                    or ""
+                ).strip(),
+                "reason": str(
+                    _pick_first_str(
+                        raw.get("reason"),
+                        raw.get("comment"),
+                        raw.get("rejectReason"),
+                        raw.get("description"),
+                    )
+                    or ""
+                ).strip(),
                 "marketplace": "wb",
                 "raw": raw,
             }
             rows.append(row)
-        if rows:
-            break
     rows = _filter_rows_by_period(rows, date_from=date_from, date_to=date_to)
-    safe_status = str(status or "").strip().lower()
     if safe_status and safe_status not in {"all", "any", "*"}:
         rows = [x for x in rows if safe_status in str(x.get("status") or "").strip().lower()]
-    return {"rows": rows, "warnings": warnings}
+    rows.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
+    return {"rows": rows, "warnings": list(dict.fromkeys(warnings))}
 
 
 def fetch_wb_return_details(api_key: str, return_id: str) -> dict[str, Any]:
@@ -784,9 +821,10 @@ def fetch_wb_return_details(api_key: str, return_id: str) -> dict[str, Any]:
     if not rid:
         return {}
     candidates = [
+        ("GET", "https://returns-api.wildberries.ru/api/v1/claims", {"id": rid, "is_archive": False}),
+        ("GET", "https://returns-api.wildberries.ru/api/v1/claims", {"id": rid, "is_archive": True}),
         ("GET", f"https://returns-api.wildberries.ru/api/v1/claims/{rid}", None),
         ("GET", f"https://returns-api.wildberries.ru/api/v1/returns/{rid}", None),
-        ("GET", "https://returns-api.wildberries.ru/api/v1/claims", {"id": rid}),
     ]
     for method, endpoint, params in candidates:
         data = _request_wb_json(method, endpoint, api_key=api_key, params=params)
@@ -808,18 +846,25 @@ def action_wb_return(api_key: str, return_id: str, action: str, comment: str | N
     rid = str(return_id or "").strip()
     if not rid:
         return False, "Некорректный ID возврата", None
-    safe_action = str(action or "").strip().lower()
-    if safe_action not in {"approve", "reject", "decline", "accept", "cancel"}:
-        safe_action = "approve"
+    action_raw = str(action or "").strip().lower()
+    action_map = {
+        "accept": "approve",
+        "approve": "approve",
+        "decline": "reject",
+        "reject": "reject",
+        "cancel": "reject",
+    }
+    safe_action = action_map.get(action_raw, action_raw or "approve")
     payload = {"id": rid, "action": safe_action}
     if comment:
         payload["comment"] = str(comment).strip()[:500]
-    endpoints = [
-        "https://returns-api.wildberries.ru/api/v1/claims/action",
-        f"https://returns-api.wildberries.ru/api/v1/claims/{rid}/{safe_action}",
+    attempts = [
+        ("PATCH", "https://returns-api.wildberries.ru/api/v1/claim", payload),
+        ("POST", "https://returns-api.wildberries.ru/api/v1/claims/action", payload),
+        ("POST", f"https://returns-api.wildberries.ru/api/v1/claims/{rid}/{safe_action}", payload),
     ]
-    for endpoint in endpoints:
-        data = _request_wb_json("POST", endpoint, api_key=api_key, payload=payload)
+    for method, endpoint, request_payload in attempts:
+        data = _request_wb_json(method, endpoint, api_key=api_key, payload=request_payload)
         if data is not None:
             return True, "Действие по возврату отправлено", data if isinstance(data, dict) else {"data": data}
     return False, "WB API не принял действие по возврату", None

@@ -729,7 +729,7 @@ function socialBindChatInputEnter() {
   input.dataset.enterBind = "1";
   input.addEventListener("keydown", (e) => {
     if (e.key !== "Enter" || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey || e.isComposing) return;
-    if (socialIsMobileClientShell()) return;
+    if (socialIsMobileClientShell() || socialIsMobileApkShell()) return;
     e.preventDefault();
     socialSendMessage();
   });
@@ -2369,6 +2369,30 @@ function socialMessageReactionsHtml(message) {
   return `<div class="tg-msg-reactions">${buttons}</div>`;
 }
 
+function socialMessageDeliveryStatus(message) {
+  if (!message || !message.is_mine) return "";
+  const raw = String(message.delivery_status || message._local_delivery_status || "").trim().toLowerCase();
+  if (raw === "sending" || raw === "failed" || raw === "sent" || raw === "read") return raw;
+  return "sent";
+}
+
+function socialMessageStatusDotHtml(message) {
+  const status = socialMessageDeliveryStatus(message);
+  if (!status) return "";
+  const readBy = Math.max(0, Number(message?.delivery_read_by || 0));
+  const readTotal = Math.max(0, Number(message?.delivery_total || 0));
+  const titleByStatus = {
+    sending: tr("Отправляется…", "Sending..."),
+    failed: tr("Не отправлено", "Not sent"),
+    sent: tr("Отправлено, не прочитано", "Sent, unread"),
+    read: tr("Прочитано", "Read"),
+  };
+  const title = status === "read" && readTotal > 0
+    ? `${titleByStatus.read} (${readBy}/${readTotal})`
+    : titleByStatus[status] || titleByStatus.sent;
+  return `<span class="tg-msg-status-dot ${status}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"></span>`;
+}
+
 function socialOpenGroupAvatarModal() {
   const thread = socialGetCurrentThread();
   if (!thread || String(thread.kind || "") === "direct") return;
@@ -2506,6 +2530,7 @@ function socialRenderChatMessages(opts = {}) {
       : "";
     const attachments = socialMessageAttachmentsHtml(msg);
     const reactions = socialMessageReactionsHtml(msg);
+    const statusDot = socialMessageStatusDotHtml(msg);
     return `
       ${dateBlock}
       <div class="${rowClass}" ${accentStyle}>
@@ -2516,7 +2541,7 @@ function socialRenderChatMessages(opts = {}) {
           <div class="tg-msg-text">${escapeHtml(msg.text || "")}</div>
           ${attachments}
           ${reactions}
-          <div class="tg-msg-time">${escapeHtml(time)}</div>
+          <div class="tg-msg-time">${statusDot}${escapeHtml(time)}</div>
         </div>
       </div>
     `;
@@ -2549,6 +2574,9 @@ async function socialLoadMessages(threadId, opts = {}) {
       String(row?.sender_avatar || ""),
       Number(row?.reply_to_id || 0),
       String(row?.text || ""),
+      String(row?.delivery_status || ""),
+      Number(row?.delivery_read_by || 0),
+      Number(row?.delivery_total || 0),
       reactions,
       attachments,
     ].join("|");
@@ -2689,8 +2717,11 @@ async function socialSendMessage() {
     created_at: localNow,
     updated_at: localNow,
     attachments: [],
-    reactions: {},
+    reactions: [],
     reply_to: optimisticReply,
+    delivery_status: "sending",
+    delivery_read_by: 0,
+    delivery_total: 0,
   };
   const sendMessageOnce = () => socialRequest(`/api/social/chat/messages/${threadId}`, {
     method: "POST",
@@ -2715,12 +2746,20 @@ async function socialSendMessage() {
     socialClearReply();
     let data = await sendMessageOnce().catch((e) => e);
     if (data instanceof Error) {
-      socialState.chatMessages = (socialState.chatMessages || []).filter((row) => Number(row?.id || 0) !== localId);
+      socialState.chatMessages = (socialState.chatMessages || []).map((row) => {
+        if (Number(row?.id || 0) !== localId) return row;
+        return {
+          ...row,
+          delivery_status: "failed",
+          _local_delivery_status: "failed",
+        };
+      });
       socialRenderChatMessages({ forceBottom: true });
       if (typeof isNetworkError === "function" && isNetworkError(data)) {
         await delay(220);
         await socialLoadMessages(threadId, { silent: true, forceBottom: true });
         if (isMineByText()) {
+          socialState.chatMessages = (socialState.chatMessages || []).filter((row) => Number(row?.id || 0) !== localId);
           socialLoadThreads({ silent: true }).catch(() => null);
           return;
         }
@@ -2729,7 +2768,14 @@ async function socialSendMessage() {
       return;
     }
     if (!data) {
-      socialState.chatMessages = (socialState.chatMessages || []).filter((row) => Number(row?.id || 0) !== localId);
+      socialState.chatMessages = (socialState.chatMessages || []).map((row) => {
+        if (Number(row?.id || 0) !== localId) return row;
+        return {
+          ...row,
+          delivery_status: "failed",
+          _local_delivery_status: "failed",
+        };
+      });
       socialRenderChatMessages({ forceBottom: true });
       return;
     }
