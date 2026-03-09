@@ -184,7 +184,7 @@ let currentReviewsSubtab = "reviews";
 let currentAdsSubtab = "campaigns";
 let currentAccountingSubtab = "overview";
 let currentHelpSubtab = "docs";
-let currentSocialSubtab = mobileApkMode ? "calendar" : "chat";
+let currentSocialSubtab = "chat";
 const moduleLoadState = new Map();
 const moduleInflightState = new Map();
 const MODULE_CACHE_TTL_MS = 30 * 60 * 1000;
@@ -2267,6 +2267,7 @@ function handleMobileBackPress() {
     const subtab = String(currentSocialSubtab || window.socialState?.currentSubtab || "chat");
     const currentThreadId = Number(window.socialState?.currentThreadId || 0);
     if (subtab === "chat" && currentThreadId > 0 && typeof window.socialCloseThread === "function") {
+      currentSocialSubtab = "chat";
       window.socialCloseThread({ keepAutoSelect: false });
       return true;
     }
@@ -2769,7 +2770,7 @@ async function ensureAuth(allowFallback = true) {
         const storedTab = normalizeLegacyTabName(storedRaw).tab;
         let initialTab = isTabAvailable(storedTab) ? storedTab : resolveInitialTab();
         if (mobileClientMode) {
-          const mobileDefaultSocial = mobileApkMode ? "calendar" : "chat";
+          const mobileDefaultSocial = "chat";
           currentSocialSubtab = ["games", "chat", "tasks", "calendar", "calculator", "notes"].includes(storedSocialSubtab)
             ? storedSocialSubtab
             : mobileDefaultSocial;
@@ -3175,6 +3176,9 @@ function switchAdsSubtab(tab, preload = true) {
   const allowed = new Set(["campaigns", "analytics", "recommendations", "bidder", "ozon"]);
   const next = allowed.has(String(tab || "")) ? String(tab) : "campaigns";
   currentAdsSubtab = next;
+  try {
+    sessionStorage.setItem("seo_wibe_last_ads_subtab", String(currentAdsSubtab || "campaigns"));
+  } catch (_) {}
   const all = ["campaigns", "analytics", "recommendations", "bidder", "ozon"];
   for (const key of all) {
     const active = key === next;

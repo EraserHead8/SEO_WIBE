@@ -7066,6 +7066,7 @@ body[data-theme="dark"] .landing-band .band-stats span {
   position: fixed;
   z-index: 2200;
   min-width: 188px;
+  max-width: min(320px, calc(100vw - 20px));
   border: 1px solid var(--line);
   border-radius: 12px;
   box-shadow: 0 12px 24px rgba(9, 19, 46, 0.25);

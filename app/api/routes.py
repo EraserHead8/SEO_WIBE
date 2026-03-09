@@ -600,11 +600,24 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
             "- Нажмите «Сохранить правило».\n"
             "- Для ручного запуска: «Запустить сейчас».\n"
             "- Для фонового режима: оставьте «Активно», воркер будет запускать правило по cooldown.\n\n"
+            "Быстрый старт (3 минуты):\n"
+            "1) В «Кампании» найдите активную кампанию и скопируйте campaign_id.\n"
+            "2) В «Бидер» вставьте campaign_id и nm_id, выберите normquery или nm.\n"
+            "3) Для normquery обязательно заполните фразу target_value.\n"
+            "4) Стартовые настройки: step=50..100, cooldown=300, min_bid/max_bid в безопасном диапазоне.\n"
+            "5) Нажмите «Сохранить правило», затем «Запустить сейчас» и проверьте строку в логах.\n"
+            "6) Если лог ok/skipped без ошибок — включайте фоновый режим.\n\n"
             "Как читать логи биддера:\n"
             "- ok: ставка применена или подтверждена.\n"
             "- skipped: запуск пропущен по условиям (cooldown/нет данных/лимиты).\n"
             "- error: ошибка API или некорректная конфигурация правила.\n"
             "- Причина всегда пишется в колонке «Причина» и в статусе правила.\n\n"
+            "Если правило не работает:\n"
+            "- Проверьте, что ключ WB Ads активен и у пользователя есть доступ к модулю «Реклама WB/Ozon».\n"
+            "- Убедитесь, что campaign_id/nm_id из одной кампании, а не из разных кабинетов.\n"
+            "- Для normquery проверьте точное совпадение фразы (без лишних пробелов).\n"
+            "- Если часто skipped(cooldown) — уменьшите частоту запуска вручную и увеличьте cooldown.\n"
+            "- Если error 401/403 — переустановите WB Ads ключ в профиле.\n\n"
             "Практика настройки:\n"
             "- Начинайте с консервативного шага (50-100), чтобы не раскачать расход.\n"
             "- Ставьте cooldown не меньше 180-300 секунд для стабильных кампаний.\n"
@@ -892,11 +905,24 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
             "- Save rule.\n"
             "- Manual run: Run now.\n"
             "- Background mode: keep rule active and worker will run it by cooldown.\n\n"
+            "Quick start (3 minutes):\n"
+            "1) In Campaigns, choose a running campaign and copy campaign_id.\n"
+            "2) In Bidder, fill campaign_id + nm_id and pick normquery or nm target.\n"
+            "3) For normquery, target_value phrase is required.\n"
+            "4) Safe starting profile: step=50..100, cooldown=300, conservative min/max bid range.\n"
+            "5) Save rule, run once manually, then check one fresh log row.\n"
+            "6) If no errors, keep rule active for background runs.\n\n"
             "Bidder logs:\n"
             "- ok: bid applied/confirmed.\n"
             "- skipped: run was skipped by conditions (cooldown/no data/limits).\n"
             "- error: API/configuration issue.\n"
             "- Reason column explains each run result.\n\n"
+            "If a rule does not work:\n"
+            "- Verify WB Ads key is valid and module access is enabled for the user.\n"
+            "- Ensure campaign_id and nm_id belong to the same campaign/account.\n"
+            "- For normquery, use exact phrase without trailing spaces.\n"
+            "- If you often get skipped(cooldown), increase cooldown and avoid frequent manual reruns.\n"
+            "- For 401/403 errors, reconnect WB Ads key in Profile.\n\n"
             "Tuning tips:\n"
             "- Start with conservative step (50-100).\n"
             "- Use cooldown >= 180-300 sec for stable campaigns.\n"
@@ -9605,22 +9631,40 @@ def social_chat_send_file(
         raise HTTPException(status_code=400, detail="Файл слишком большой (до 12 МБ)")
     original_name = _social_chat_clean_filename(file.filename or "file")
     ext = _social_chat_guess_ext(original_name, str(file.content_type or ""))
-    storage_name = f"chat-{int(thread_id)}-{secrets.token_hex(8)}{ext}"
-    path = _social_chat_storage_dir() / storage_name
-    path.write_bytes(raw)
-    url = f"/static/uploads/social_chat/{storage_name}"
     reply_id = int(reply_to_message_id or 0) if reply_to_message_id else 0
     if reply_id > 0:
         reply_row = db.get(SocialChatMessage, reply_id)
         if not reply_row or int(reply_row.thread_id or 0) != int(thread_id):
             raise HTTPException(status_code=400, detail="Сообщение для ответа не найдено")
+    safe_text = str(text or "").strip()[:5000]
+    request_id = str(request.headers.get("x-request-id") or "").strip()[:120]
+    file_hash = hashlib.sha256(raw).hexdigest()[:24]
+    payload_hash = hashlib.sha1(
+        f"{safe_text}\n{original_name.lower()}".encode("utf-8", "ignore")
+    ).hexdigest()[:20]
+    dedupe_keys: list[str] = []
+    if request_id:
+        dedupe_keys.append(f"{int(user.id)}:{int(thread_id)}:file:req:{request_id}")
+    dedupe_keys.append(
+        f"{int(user.id)}:{int(thread_id)}:file:sig:{int(reply_id)}:{len(raw)}:{file_hash}:{payload_hash}"
+    )
+    for cache_key in dedupe_keys:
+        cached_id = _social_msg_cache_get(cache_key)
+        if cached_id <= 0:
+            continue
+        cached_msg = db.get(SocialChatMessage, int(cached_id))
+        if cached_msg and int(cached_msg.sender_user_id or 0) == int(user.id):
+            return _social_message_to_out(db, actor_key, cached_msg)
+    storage_name = f"chat-{int(thread_id)}-{secrets.token_hex(8)}{ext}"
+    path = _social_chat_storage_dir() / storage_name
+    path.write_bytes(raw)
+    url = f"/static/uploads/social_chat/{storage_name}"
     attachment = {
         "url": url,
         "filename": original_name[:255],
         "content_type": str(file.content_type or "application/octet-stream")[:120],
         "size_bytes": len(raw),
     }
-    safe_text = str(text or "").strip()[:5000]
     message = SocialChatMessage(
         thread_id=int(thread_id),
         sender_user_id=int(user.id),
@@ -9680,6 +9724,8 @@ def social_chat_send_file(
         request=request,
     )
     db.commit()
+    for cache_key in dedupe_keys:
+        _social_msg_cache_set(cache_key, int(message.id))
     return _social_message_to_out(db, actor_key, message)
 
 

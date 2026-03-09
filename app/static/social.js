@@ -62,6 +62,8 @@ let socialState = {
 const SOCIAL_POLL_LEADER_KEY = "seo_wibe_social_poll_leader_v1";
 const SOCIAL_POLL_SHARED_STATE_KEY = "seo_wibe_social_poll_shared_v1";
 const SOCIAL_POLL_LEASE_MS = 22000;
+const SOCIAL_UPLOAD_DEDUPE_TTL_MS = 120000;
+const SOCIAL_UPLOAD_REQUEST_CACHE = new Map();
 
 function socialIsMobileClientShell() {
   try {
@@ -77,6 +79,35 @@ function socialIsMobileApkShell() {
     if (typeof mobileApkMode !== "undefined") return Boolean(mobileApkMode);
   } catch (_) {}
   return false;
+}
+
+function socialBuildFileUploadFingerprint(file, threadId, text, replyId) {
+  const safeName = String(file?.name || "").trim().toLowerCase();
+  const safeSize = Number(file?.size || 0);
+  const safeMtime = Number(file?.lastModified || 0);
+  const textPart = String(text || "").trim().slice(0, 220).replace(/\s+/g, " ");
+  return `${Number(threadId || 0)}|${Number(replyId || 0)}|${safeName}|${safeSize}|${safeMtime}|${textPart}`;
+}
+
+function socialGetUploadRequestId(fingerprint) {
+  const key = String(fingerprint || "").trim();
+  if (!key) {
+    return `chat-file-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+  }
+  const nowTs = Date.now();
+  for (const [k, meta] of SOCIAL_UPLOAD_REQUEST_CACHE.entries()) {
+    const expiresAt = Number(meta?.expiresAt || 0);
+    if (!expiresAt || expiresAt <= nowTs) {
+      SOCIAL_UPLOAD_REQUEST_CACHE.delete(k);
+    }
+  }
+  const cached = SOCIAL_UPLOAD_REQUEST_CACHE.get(key);
+  if (cached && Number(cached.expiresAt || 0) > nowTs && String(cached.requestId || "").trim()) {
+    return String(cached.requestId).trim();
+  }
+  const requestId = `chat-file-${nowTs}-${Math.random().toString(16).slice(2, 10)}`;
+  SOCIAL_UPLOAD_REQUEST_CACHE.set(key, { requestId, expiresAt: nowTs + SOCIAL_UPLOAD_DEDUPE_TTL_MS });
+  return requestId;
 }
 
 function socialMaybeStartHooks() {
@@ -581,6 +612,7 @@ function socialStopGlobalHooks() {
 
 function resetSocialState() {
   socialStopGlobalHooks();
+  SOCIAL_UPLOAD_REQUEST_CACHE.clear();
   socialState = {
     boot: null,
     currentSubtab: "chat",
@@ -1867,6 +1899,8 @@ function socialHasRenderedMessages(host = null) {
 }
 
 function socialCloseThread(opts = {}) {
+  socialState.currentSubtab = "chat";
+  if (typeof currentSocialSubtab !== "undefined") currentSocialSubtab = "chat";
   socialState.currentThreadId = 0;
   socialState.currentThreadKind = "";
   socialState.mobileThreadAutoSelectEnabled = Boolean(opts.keepAutoSelect) || !socialIsMobileClientShell();
@@ -2278,8 +2312,15 @@ function socialOpenMessageContext(messageId, event) {
   if (event?.stopPropagation) event.stopPropagation();
   socialState.chatContextMessageId = id;
   socialState.chatContextThreadId = Number(socialState.currentThreadId || 0);
-  const x = Number(event?.clientX || 0);
-  const y = Number(event?.clientY || 0);
+  let x = Number(event?.clientX || 0);
+  let y = Number(event?.clientY || 0);
+  if ((!Number.isFinite(x) || x <= 0 || !Number.isFinite(y) || y <= 0) && event?.target?.getBoundingClientRect) {
+    const rect = event.target.getBoundingClientRect();
+    x = Number(rect.left || 0) + Math.max(12, Math.min(40, Number(rect.width || 0) * 0.5));
+    y = Number(rect.top || 0) + Math.max(12, Math.min(26, Number(rect.height || 0) * 0.4));
+  }
+  if (!Number.isFinite(x) || x <= 0) x = 18;
+  if (!Number.isFinite(y) || y <= 0) y = 18;
   socialState.chatContextX = x;
   socialState.chatContextY = y;
   const quick = ["👍", "🔥", "❤️", "😂", "🙏", "✅"];
@@ -2291,14 +2332,22 @@ function socialOpenMessageContext(messageId, event) {
   `;
   menu.style.left = `${Math.max(8, x)}px`;
   menu.style.top = `${Math.max(8, y)}px`;
+  menu.style.maxWidth = "min(320px, calc(100vw - 20px))";
+  menu.style.visibility = "hidden";
   menu.classList.remove("hidden");
   const rect = menu.getBoundingClientRect();
   const vw = window.innerWidth || document.documentElement.clientWidth || 0;
   const vh = window.innerHeight || document.documentElement.clientHeight || 0;
-  const clampedX = Math.max(8, Math.min(Math.max(8, x), Math.max(8, vw - rect.width - 8)));
-  const clampedY = Math.max(8, Math.min(Math.max(8, y), Math.max(8, vh - rect.height - 8)));
+  const margin = 8;
+  let nextX = x + 6;
+  let nextY = y + 6;
+  if (nextX + rect.width + margin > vw) nextX = x - rect.width - 6;
+  if (nextY + rect.height + margin > vh) nextY = y - rect.height - 6;
+  const clampedX = Math.max(margin, Math.min(nextX, Math.max(margin, vw - rect.width - margin)));
+  const clampedY = Math.max(margin, Math.min(nextY, Math.max(margin, vh - rect.height - margin)));
   menu.style.left = `${clampedX}px`;
   menu.style.top = `${clampedY}px`;
+  menu.style.visibility = "visible";
 }
 
 function socialContextReply() {
@@ -2812,6 +2861,8 @@ async function socialUploadChatFiles(fileList) {
   if (textInput) textInput.value = "";
   try {
     for (const file of files) {
+      const fingerprint = socialBuildFileUploadFingerprint(file, threadId, text, replyId || 0);
+      const requestId = socialGetUploadRequestId(fingerprint);
       const form = new FormData();
       form.append("file", file);
       if (text) form.append("text", text);
@@ -2819,6 +2870,7 @@ async function socialUploadChatFiles(fileList) {
       const row = await socialRequest(`/api/social/chat/messages/${threadId}/files`, {
         method: "POST",
         body: form,
+        headers: { "X-Request-ID": requestId },
         retryOnPost: true,
         maxRetries: 1,
       }).catch((e) => {
