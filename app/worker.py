@@ -243,9 +243,16 @@ def _should_drop_task(task: dict[str, Any]) -> bool:
         return True
     depth = max(0, int(queue_depth() or 0))
     # Keep worker responsive under burst load: stale warmup jobs are safe to drop.
+    if depth > 400 and task_type in {"warm_sales_cache", "warm_wb_campaigns", "warm_ozon_campaigns"} and age_sec > 20:
+        return True
     if depth > 600 and task_type in {"warm_sales_cache", "warm_wb_campaigns", "warm_ozon_campaigns"} and age_sec > 45:
         return True
+    # Snapshot/bidder tasks are useful only when fresh; when queue is deep keep latest jobs.
+    if depth > 700 and task_type in {"sync_wb_snapshots", "wb_bidder_run"} and age_sec > 60:
+        return True
     if depth > 900 and task_type == "sync_wb_snapshots" and age_sec > 75:
+        return True
+    if depth > 1100 and task_type in {"sync_wb_snapshots", "wb_bidder_run"} and age_sec > 25:
         return True
     return False
 

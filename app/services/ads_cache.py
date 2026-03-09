@@ -190,7 +190,7 @@ def _hydrate_campaign_rows_with_stats(wb_api_key: str, rows: list[dict[str, Any]
         stats_map = {}
     unresolved_ids = [cid for cid in ids if not isinstance(stats_map.get(str(cid)), dict)]
     if unresolved_ids:
-        for cid in unresolved_ids[:40]:
+        for cid in unresolved_ids[:140]:
             try:
                 one_map = fetch_wb_campaign_stats_bulk(wb_api_key, [cid], date_from=None, date_to=None)
             except Exception:

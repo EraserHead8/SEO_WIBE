@@ -1618,7 +1618,11 @@
           <div class="hint product-photo-order-hint">Перетаскивайте фото мышкой: первое фото станет главным.</div>
           <div class="product-edit-photo-controls">
             <input id="productEditPhotoAddUrl" placeholder="https://... (добавить фото)" />
-            <button class="btn-secondary" type="button" onclick="addProductEditPhotoFromInput()">Добавить фото</button>
+            <button class="btn-secondary" type="button" id="productEditPhotoAddBtn" onclick="addProductEditPhotoFromInput()">Добавить фото</button>
+          </div>
+          <div class="product-edit-photo-controls">
+            <input id="productEditPhotoUploadInput" type="file" accept="image/*" multiple />
+            <button class="btn-secondary" type="button" id="productEditPhotoUploadBtn" onclick="uploadProductEditPhotos()">Загрузить файлы</button>
           </div>
           <div id="productEditPhotos" class="product-modal-photos"></div>
           <div id="productEditAttrs" class="product-modal-attrs"></div>

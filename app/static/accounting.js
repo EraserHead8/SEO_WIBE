@@ -1,5 +1,6 @@
 let accountingReloadTimer = null;
 let accountingExpenseEditId = 0;
+let accountingRequestSeq = 0;
 
 const ACCOUNTING_SUBTABS = ["overview", "analysis", "expenses", "settings"];
 const ACCOUNTING_RANGE_DAYS = {
@@ -630,6 +631,8 @@ async function loadAccountingData(forceBusy = false, retryAttempt = 0) {
     return false;
   }
 
+  accountingRequestSeq += 1;
+  const runSeq = accountingRequestSeq;
   const marketplace = String(document.getElementById("accountingMarketplace")?.value || "all").trim().toLowerCase() || "all";
   const dateFrom = accountingToYmd(document.getElementById("accountingDateFrom")?.value || "");
   const dateTo = accountingToYmd(document.getElementById("accountingDateTo")?.value || "");
@@ -669,6 +672,27 @@ async function loadAccountingData(forceBusy = false, retryAttempt = 0) {
     });
 
   if (!data) return false;
+  if (runSeq !== accountingRequestSeq) return false;
+  const hasExpectedShape = Boolean(
+    data
+    && typeof data === "object"
+    && (
+      Object.prototype.hasOwnProperty.call(data, "overview")
+      || Object.prototype.hasOwnProperty.call(data, "analysis_rows")
+      || Object.prototype.hasOwnProperty.call(data, "chart")
+      || Object.prototype.hasOwnProperty.call(data, "warnings")
+    )
+  );
+  if (!hasExpectedShape) {
+    accountingSetMeta(
+      "accountingWarnings",
+      tr(
+        "Сервер вернул некорректный ответ по бухгалтерии. Данные сохранены в текущем состоянии, повторите обновление.",
+        "Server returned malformed accounting payload. Current data is kept, please retry refresh."
+      )
+    );
+    return false;
+  }
 
   accountingOverview = data.overview || {};
   accountingChartRows = Array.isArray(data.chart) ? data.chart : [];
@@ -687,6 +711,7 @@ async function loadAccountingData(forceBusy = false, retryAttempt = 0) {
       )
     );
     await delay(1800 + retryAttempt * 800);
+    if (runSeq !== accountingRequestSeq) return false;
     return loadAccountingData(forceBusy, retryAttempt + 1);
   }
 
@@ -705,9 +730,11 @@ async function loadAccountingWorkspace() {
   ensureAccountingDefaults();
   applyAccountingUiLanguage();
   syncAccountingRangeButtons();
-  await loadAccountingSettings();
-  await loadAccountingExpenses();
-  await loadAccountingData();
+  await Promise.all([
+    loadAccountingSettings(),
+    loadAccountingExpenses(),
+    loadAccountingData(),
+  ]);
   switchAccountingSubtab(currentAccountingSubtab || "overview", false);
   return true;
 }

@@ -745,23 +745,11 @@ def fetch_wb_returns(
     rows: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
     safe_status = str(status or "").strip().lower()
-    list_attempts: list[tuple[str, dict[str, Any]]] = [
-        ("https://returns-api.wildberries.ru/api/v1/claims", {"is_archive": False, "limit": 200}),
-        ("https://returns-api.wildberries.ru/api/v1/claims", {"is_archive": True, "limit": 200}),
-        ("https://returns-api.wildberries.ru/api/v1/returns", {"limit": 200}),
-    ]
-    if safe_status and safe_status not in {"all", "any", "*"}:
-        for _, params in list_attempts:
-            params["status"] = safe_status
-    for endpoint, params in list_attempts:
-        data = _request_wb_json("GET", endpoint, api_key=api_key, params=params)
-        if data is None:
-            warnings.append(f"WB returns endpoint unavailable: {endpoint}")
-            continue
-        parsed = _extract_first_dict_list(data, preferred_keys=("claims", "returns", "items", "rows", "data", "list"))
-        if not parsed and isinstance(data, dict):
-            parsed = [data]
-        for raw in parsed:
+    limit = 200
+    max_pages = 5
+
+    def _append_rows(parsed_rows: list[dict[str, Any]]) -> None:
+        for raw in parsed_rows:
             rid = _pick_first_str(raw.get("id"), raw.get("claimId"), raw.get("claim_id"), raw.get("returnId"))
             rid = str(rid or "").strip()
             if not rid or rid in seen_ids:
@@ -773,46 +761,90 @@ def fetch_wb_returns(
                 raw.get("createdDate"),
                 raw.get("date"),
             )
-            row = {
-                "id": rid,
-                "status": str(_pick_first_str(raw.get("status"), raw.get("state"), raw.get("claimStatus")) or "").strip(),
-                "created_at": str(created or "").strip(),
-                "article": str(
-                    _pick_first_str(
-                        raw.get("article"),
-                        raw.get("supplierVendorCode"),
-                        raw.get("vendorCode"),
-                        raw.get("offerId"),
-                        raw.get("nmId"),
-                    )
-                    or ""
-                ).strip(),
-                "product": str(
-                    _pick_first_str(
-                        raw.get("productName"),
-                        raw.get("name"),
-                        raw.get("subjectName"),
-                        raw.get("imtName"),
-                    )
-                    or ""
-                ).strip(),
-                "reason": str(
-                    _pick_first_str(
-                        raw.get("reason"),
-                        raw.get("comment"),
-                        raw.get("rejectReason"),
-                        raw.get("description"),
-                    )
-                    or ""
-                ).strip(),
-                "marketplace": "wb",
-                "raw": raw,
-            }
-            rows.append(row)
+            rows.append(
+                {
+                    "id": rid,
+                    "status": str(_pick_first_str(raw.get("status"), raw.get("state"), raw.get("claimStatus")) or "").strip(),
+                    "created_at": str(created or "").strip(),
+                    "article": str(
+                        _pick_first_str(
+                            raw.get("article"),
+                            raw.get("supplierVendorCode"),
+                            raw.get("vendorCode"),
+                            raw.get("offerId"),
+                            raw.get("nmId"),
+                        )
+                        or ""
+                    ).strip(),
+                    "product": str(
+                        _pick_first_str(
+                            raw.get("productName"),
+                            raw.get("name"),
+                            raw.get("subjectName"),
+                            raw.get("imtName"),
+                        )
+                        or ""
+                    ).strip(),
+                    "reason": str(
+                        _pick_first_str(
+                            raw.get("reason"),
+                            raw.get("comment"),
+                            raw.get("rejectReason"),
+                            raw.get("description"),
+                        )
+                        or ""
+                    ).strip(),
+                    "marketplace": "wb",
+                    "raw": raw,
+                }
+            )
+
+    attempts: list[tuple[str, dict[str, Any], bool]] = [
+        ("https://returns-api.wildberries.ru/api/v1/claims", {"is_archive": False}, True),
+        ("https://returns-api.wildberries.ru/api/v1/claims", {"is_archive": "false"}, True),
+        ("https://returns-api.wildberries.ru/api/v1/claims", {"is_archive": True}, True),
+        ("https://returns-api.wildberries.ru/api/v1/claims", {"is_archive": "true"}, True),
+        ("https://returns-api.wildberries.ru/api/v1/returns", {}, True),
+        ("https://returns-api.wildberries.ru/api/v1/returns/list", {}, False),
+    ]
+    for endpoint, base_params, paged in attempts:
+        endpoint_ok = False
+        offset = 0
+        page_no = 0
+        while True:
+            page_no += 1
+            if page_no > (max_pages if paged else 1):
+                break
+            params = dict(base_params)
+            params["limit"] = limit
+            if paged:
+                params["offset"] = offset
+            if safe_status and safe_status not in {"all", "any", "*"}:
+                params["status"] = safe_status
+            data = _request_wb_json("GET", endpoint, api_key=api_key, params=params)
+            if data is None:
+                if page_no == 1:
+                    warnings.append(f"WB returns endpoint unavailable: {endpoint}")
+                break
+            endpoint_ok = True
+            parsed = _extract_first_dict_list(data, preferred_keys=("claims", "returns", "items", "rows", "data", "list"))
+            if not parsed and isinstance(data, dict):
+                parsed = [data]
+            parsed = [x for x in parsed if isinstance(x, dict)]
+            if not parsed:
+                break
+            _append_rows(parsed)
+            if (not paged) or len(parsed) < limit:
+                break
+            offset += limit
+        if endpoint_ok and rows:
+            break
     rows = _filter_rows_by_period(rows, date_from=date_from, date_to=date_to)
     if safe_status and safe_status not in {"all", "any", "*"}:
         rows = [x for x in rows if safe_status in str(x.get("status") or "").strip().lower()]
     rows.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
+    if rows:
+        warnings = []
     return {"rows": rows, "warnings": list(dict.fromkeys(warnings))}
 
 
@@ -1319,7 +1351,7 @@ def _fetch_wb_campaign_detail_map(api_key: str, ids: list[int]) -> dict[str, dic
         "https://advert-api.wb.ru/adv/v1/promotion/adverts",
         "https://advert-api.wildberries.ru/adv/v1/promotion/adverts",
     ]
-    for cid in ids[:60]:
+    for cid in ids[:200]:
         text_id = str(cid)
         if text_id in detail_map and _has_campaign_context(detail_map[text_id]):
             continue

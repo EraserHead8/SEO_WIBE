@@ -887,6 +887,8 @@ function applyUiLanguage() {
   setText("#campaignDetailModal .actions button:nth-of-type(4)", isEn ? "Refresh details" : "Обновить детали");
   setText("#productViewRefreshBtn", isEn ? "Refresh from API" : "Обновить из API");
   setText("#productViewEditBtn", isEn ? "Edit" : "Редактировать");
+  setText("#productEditPhotoAddBtn", isEn ? "Add photo" : "Добавить фото");
+  setText("#productEditPhotoUploadBtn", isEn ? "Upload files" : "Загрузить файлы");
   setText("#reviews thead th:nth-child(1)", isEn ? "Status" : "Статус");
   setText("#reviews thead th:nth-child(2)", isEn ? "Date" : "Дата");
   setText("#reviews thead th:nth-child(3)", isEn ? "Product" : "Товар");
@@ -1274,6 +1276,16 @@ async function requestJson(url, opts = {}) {
       err.status = response.status;
       err.payload = data;
       lastError = err;
+      if (response.status === 401 || response.status === 403) {
+        const safeUrl = String(url || "");
+        const isAuthEndpoint = safeUrl.includes("/api/auth/login")
+          || safeUrl.includes("/api/auth/register")
+          || safeUrl.includes("/api/auth/logout")
+          || safeUrl.includes("/api/auth/me");
+        if (!isAuthEndpoint) {
+          try { scheduleEnsureAuth(450, false); } catch (_) {}
+        }
+      }
 
       if (attempt < maxRetries && allowRetry && retryStatuses.has(Number(response.status || 0))) {
         const backoff = Math.round(retryBaseDelayMs * (2 ** attempt) + Math.random() * 180);
@@ -2673,13 +2685,15 @@ async function ensureAuth(allowFallback = true) {
             return false;
           }
         }
-        const recentlyAuthenticated = lastAuthSuccessAt > 0 && (Date.now() - lastAuthSuccessAt) < (15 * 60 * 1000);
-        if (recentlyAuthenticated && authRetryCount <= 8) {
-          scheduleEnsureAuth(900 + authRetryCount * 260, false);
-          return false;
-        }
-        if (token && !isTokenExpired(token) && authRetryCount <= 8) {
-          scheduleEnsureAuth(700 + authRetryCount * 250, false);
+        const hasFreshToken = Boolean(token) && !isTokenExpired(token);
+        const recentlyAuthenticated = lastAuthSuccessAt > 0 && (Date.now() - lastAuthSuccessAt) < (30 * 60 * 1000);
+        if ((recentlyAuthenticated || hasFreshToken) && authRetryCount <= 42) {
+          const retryDelay = Math.min(30000, 900 + authRetryCount * 420);
+          scheduleEnsureAuth(retryDelay, false);
+          const authSection = document.getElementById("authSection");
+          const appSection = document.getElementById("appSection");
+          if (authSection) authSection.classList.add("hidden");
+          if (appSection) appSection.classList.remove("hidden");
           return false;
         }
         if (token && isTokenExpired(token)) {
@@ -5149,7 +5163,7 @@ async function enrichWbCampaignRows(runToken) {
       .map((row) => Number(getCampaignRowId(row) || 0))
       .filter((id) => id > 0)
   )];
-  const pending = pendingRaw.slice(0, 140);
+  const pending = pendingRaw.slice(0, 1200);
   const deferredCount = Math.max(0, pendingRaw.length - pending.length);
   if (!pending.length) {
     wbAdsLoadProgress.active = false;
@@ -7065,6 +7079,8 @@ function closeProductEditModal() {
   productEditDragIndex = -1;
   const addInput = document.getElementById("productEditPhotoAddUrl");
   if (addInput) addInput.value = "";
+  const uploadInput = document.getElementById("productEditPhotoUploadInput");
+  if (uploadInput) uploadInput.value = "";
 }
 
 async function fetchProductDetailsById(productId, opts = {}) {
@@ -7557,6 +7573,56 @@ function addProductEditPhotoFromInput() {
     return;
   }
   if (input) input.value = "";
+}
+
+async function uploadProductEditPhotos() {
+  const productId = Number(activeProductEditId || 0);
+  if (!productId) return;
+  const input = document.getElementById("productEditPhotoUploadInput");
+  const files = Array.from(input?.files || []);
+  if (!files.length) {
+    alert(tr("Выберите изображения для загрузки.", "Select images to upload."));
+    return;
+  }
+  const imageFiles = files.filter((file) => String(file?.type || "").startsWith("image/"));
+  if (!imageFiles.length) {
+    alert(tr("Допускаются только файлы изображений.", "Only image files are allowed."));
+    return;
+  }
+  const oversized = imageFiles.find((file) => Number(file?.size || 0) > 8 * 1024 * 1024);
+  if (oversized) {
+    alert(tr("Один из файлов больше 8 МБ.", "One of files is larger than 8 MB."));
+    return;
+  }
+  const uploadedUrls = [];
+  for (const file of imageFiles) {
+    const form = new FormData();
+    form.append("file", file);
+    const headers = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const payload = await requestJson(`/api/products/${productId}/photos/upload`, {
+      method: "POST",
+      headers,
+      body: form,
+      timeoutMs: 120000,
+      retryOnPost: true,
+      maxRetries: 1,
+    }).catch((e) => {
+      alert(e.message || tr("Не удалось загрузить фото.", "Failed to upload photo."));
+      return null;
+    });
+    if (!payload?.url) continue;
+    uploadedUrls.push(String(payload.url || ""));
+  }
+  if (input) input.value = "";
+  if (!uploadedUrls.length) return;
+  for (const url of uploadedUrls) addProductEditPhoto(url);
+  alert(
+    tr(
+      `Загружено фото: ${uploadedUrls.length}. Сохраните карточку, чтобы применить порядок.`,
+      `Uploaded photos: ${uploadedUrls.length}. Save product to apply photo order.`
+    )
+  );
 }
 
 function removeProductEditPhoto(index) {

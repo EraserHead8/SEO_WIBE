@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import threading
+import time
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Callable
@@ -15,6 +16,9 @@ from app.models import MarketplaceApiCache
 
 _CACHE_LOCKS: dict[str, threading.Lock] = {}
 _CACHE_LOCKS_GUARD = threading.Lock()
+_STATS_CACHE: dict[str, tuple[float, dict[str, int]]] = {}
+_STATS_CACHE_LOCK = threading.Lock()
+_STATS_CACHE_TTL_SEC = 20.0
 
 
 def build_market_cache_key(payload: dict[str, Any]) -> str:
@@ -99,6 +103,12 @@ def get_market_cache_stats(
     module_code: str = "",
     marketplace: str = "",
 ) -> dict[str, int]:
+    cache_key = _stats_cache_key(user_id=user_id, module_code=module_code, marketplace=marketplace)
+    now_ts = time.monotonic()
+    with _STATS_CACHE_LOCK:
+        cached = _STATS_CACHE.get(cache_key)
+        if cached and (now_ts - float(cached[0] or 0.0)) <= _STATS_CACHE_TTL_SEC:
+            return dict(cached[1])
     query = select(
         func.count(MarketplaceApiCache.id),
         func.coalesce(func.sum(MarketplaceApiCache.hit_count), 0),
@@ -126,13 +136,18 @@ def get_market_cache_stats(
     safe_hits = int(hits or 0)
     safe_refreshes = int(refreshes or 0)
     safe_expired = int(expired or 0)
-    return {
+    payload = {
         "entries": safe_entries,
         "hits": safe_hits,
         "refreshes": safe_refreshes,
         "expired": safe_expired,
         "api_calls_saved": max(0, safe_hits),
     }
+    with _STATS_CACHE_LOCK:
+        if len(_STATS_CACHE) > 256:
+            _STATS_CACHE.clear()
+        _STATS_CACHE[cache_key] = (now_ts, dict(payload))
+    return payload
 
 
 def _cache_meta(source: str, *, now: datetime, row: MarketplaceApiCache, stale: bool = False, error: str = "") -> dict[str, Any]:
@@ -182,6 +197,7 @@ def _upsert_cache_row(
         )
         db.add(row)
         db.flush()
+        _invalidate_stats_cache()
         return
     row.payload_json = payload_json
     row.payload_hash = payload_hash
@@ -190,6 +206,7 @@ def _upsert_cache_row(
     row.expires_at = expires_at
     row.last_error = ""
     row.last_hit_at = now
+    _invalidate_stats_cache()
 
 
 def _get_cache_row(
@@ -241,3 +258,18 @@ def _json_default(value: Any) -> Any:
     if isinstance(value, Decimal):
         return float(value)
     return str(value)
+
+
+def _stats_cache_key(*, user_id: int | None, module_code: str, marketplace: str) -> str:
+    return "|".join(
+        [
+            str(int(user_id)) if user_id is not None else "*",
+            str(module_code or "").strip()[:80],
+            str(marketplace or "").strip()[:30],
+        ]
+    )
+
+
+def _invalidate_stats_cache() -> None:
+    with _STATS_CACHE_LOCK:
+        _STATS_CACHE.clear()

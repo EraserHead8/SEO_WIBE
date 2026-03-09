@@ -1080,27 +1080,28 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
 
 HELP_RELEASES: list[dict[str, Any]] = [
     {
-        "version": "0.4.1",
-        "android_version_code": 12,
+        "version": "0.4.2",
+        "android_version_code": 13,
         "released_at": "2026-03-09",
         "current": True,
-        "summary": "APK 1.5.6: стабилизирована очередь/БД, улучшена догрузка WB Ads и добавлено управление фото в редакторе товара.",
+        "summary": "APK 1.5.7: стабильность сессии и загрузок, WB Ads/Returns доработаны, в редактор товара добавлена загрузка фото файлами.",
         "diff_from_previous": [
-            "Android APK обновлен до versionCode=12 / versionName=1.5.6.",
-            "WB Ads: догрузка кампаний расширена (имена/контекст/метрики), увеличены batch-лимиты enrich и fallback по summary/stat.",
-            "В редакторе товара добавлены действия «Добавить фото» и «Удалить фото», плюс синхронизация главного фото с порядком.",
-            "Снижена вероятность подвисаний: worker отбрасывает устаревшие warmup-задачи при глубокой очереди.",
-            "Для SQLite уменьшен риск checkout-timeout под пиковыми нагрузками (пул/таймауты скорректированы).",
+            "Android APK обновлен до versionCode=13 / versionName=1.5.7.",
+            "WB Ads: расширена догрузка кампаний (больше лимиты enrichment + дополнительный fallback по summary/stat).",
+            "WB Returns: добавлены fallback-варианты параметров is_archive и постраничный сбор списков заявок.",
+            "В редактор товара добавлена загрузка фото файлами (multiple upload) + запись в локальную карточку.",
+            "Улучшена устойчивость сессии: при кратковременных 401/403 приложение не выбрасывает в авторизацию преждевременно.",
+            "Снижена нагрузка при очереди: worker агрессивнее отбрасывает устаревшие warmup/snapshot/bidder задачи.",
         ],
         "changes": [
-            "В WB Ads summary extraction добавлены новые алиасы полей названия/типа/бюджета для совместимости с изменениями API.",
-            "На touch/mobile Enter в чате не отправляет сообщение автоматически; отправка Enter сохранена для desktop.",
+            "Бухгалтерия: параллельная загрузка подмодулей и защита от некорректного payload на клиенте.",
+            "Серверная статистика cache-слоя кэшируется кратко в памяти, чтобы сократить повторные тяжелые агрегаты.",
             "В help/загрузках обновлена карточка релиза и ссылка на актуальный APK.",
         ],
         "android_download_url": "/static/downloads/seo-wibe-mobile-latest.apk",
         "android_download_name": "SEO WIBE Android (.apk)",
         "app_entry_url": "/mobile",
-        "notes": "APK 1.5.6 устанавливается поверх предыдущей версии. После обновления перезапустите приложение для применения нового клиента.",
+        "notes": "APK 1.5.7 устанавливается поверх предыдущей версии. После обновления перезапустите приложение для применения нового клиента.",
     },
     {
         "version": "0.4.0",
@@ -2933,7 +2934,7 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
     if not wb_key:
         raise HTTPException(status_code=400, detail="Сначала сохраните API ключ для wb")
 
-    ids = sorted({int(x) for x in payload.ids if int(x) > 0})[:140]
+    ids = sorted({int(x) for x in payload.ids if int(x) > 0})[:600]
     if not ids:
         return WbCampaignEnrichOut(summaries={}, stats={})
 
@@ -4800,6 +4801,65 @@ def update_product(product_id: int, payload: ProductUpdateIn, user: User = Depen
     db.commit()
     db.refresh(product)
     return product
+
+
+@router.post("/products/{product_id}/photos/upload", response_model=AvatarUploadOut)
+def product_photo_upload(
+    product_id: int,
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    product = db.scalar(
+        select(Product).where(
+            Product.id == product_id,
+            Product.user_id == user.id,
+            _owned_by_actor_or_owner_filter(Product, user),
+        )
+    )
+    if not product:
+        raise HTTPException(status_code=404, detail="Товар не найден")
+    if not file or not file.filename:
+        raise HTTPException(status_code=400, detail="Файл не выбран")
+
+    content_type = str(file.content_type or "").lower()
+    if not content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Файл должен быть изображением")
+
+    ext = os.path.splitext(str(file.filename or ""))[1].lower()
+    if ext not in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}:
+        ext = ".png"
+    raw = file.file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Файл пустой")
+    if len(raw) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Файл слишком большой (до 8 МБ)")
+
+    static_root = Path(__file__).resolve().parent.parent / "static"
+    target_dir = static_root / "uploads" / "products" / f"user-{int(user.id)}"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"product-{int(product.id)}-{secrets.token_hex(8)}{ext}"
+    path = target_dir / filename
+    path.write_bytes(raw)
+    url = f"/static/uploads/products/user-{int(user.id)}/{filename}"
+
+    existing_photos = _product_photos_from_row(product)
+    next_photos = _normalize_product_photo_list(existing_photos + [url])
+    product.photos_json = json.dumps(next_photos, ensure_ascii=False) if next_photos else "[]"
+    if not str(product.photo_url or "").strip():
+        product.photo_url = next_photos[0] if next_photos else url
+
+    _audit(
+        db,
+        user,
+        action="product_photo_uploaded",
+        details=f"product_id={product.id};size={len(raw)};name={filename}",
+        module_code="products",
+        entity_type="product",
+        entity_id=str(product.id),
+    )
+    db.commit()
+    return AvatarUploadOut(url=url)
 
 
 @router.delete("/products/{product_id}/local", response_model=MessageOut)
