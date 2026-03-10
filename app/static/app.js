@@ -2291,11 +2291,21 @@ function handleMobileBackPress() {
     const chatOpenedByLayout = typeof window.socialIsThreadOpen === "function"
       ? Boolean(window.socialIsThreadOpen())
       : Boolean(document.querySelector("#socialSubtabChat .social-chat-layout")?.classList.contains("chat-open"));
-    if ((currentThreadId > 0 || chatOpenedByLayout) && typeof window.socialCloseThread === "function") {
+    const hasRenderedMessages = Boolean(
+      document.querySelector("#socialSubtabChat #socialChatMessages .tg-msg-row")
+      || document.querySelector("#socialSubtabChat #socialChatMessages .social-chat-loading")
+      || document.querySelector("#socialSubtabChat #socialChatMessages .social-chat-error")
+    );
+    const headText = String(document.getElementById("socialChatHead")?.textContent || "").trim().toLowerCase();
+    const hasSelectedHeader = headText && headText !== "выберите чат" && headText !== "select chat";
+    const shouldCloseThread = subtab === "chat" && (
+      currentThreadId > 0
+      || chatOpenedByLayout
+      || hasRenderedMessages
+      || hasSelectedHeader
+    );
+    if (shouldCloseThread && typeof window.socialCloseThread === "function") {
       currentSocialSubtab = "chat";
-      if (subtab !== "chat" && typeof window.switchSocialSubtab === "function") {
-        try { window.switchSocialSubtab("chat", true); } catch (_) {}
-      }
       window.socialCloseThread({ keepAutoSelect: false });
       return true;
     }
@@ -2357,10 +2367,6 @@ function getMobileQuickNavOptions() {
     return enabledModules instanceof Set && enabledModules.has(code);
   };
   const options = [{ value: "sales_dashboard", label: isEn ? "Statistics" : "Статистика" }];
-  if (has("wb_ads")) {
-    options.push({ value: "ads_campaigns", label: isEn ? "Ads campaigns" : "Реклама: кампании" });
-    options.push({ value: "ads_bidder", label: isEn ? "WB bidder" : "Реклама: бидер" });
-  }
   if (has("social_hub")) {
     options.push({ value: "social_chat", label: isEn ? "Chat" : "Чат" });
     options.push({ value: "social_tasks", label: isEn ? "Tasks" : "Задачи" });
@@ -2383,8 +2389,7 @@ function getMobileQuickNavOptions() {
 function getCurrentMobileQuickValue() {
   if (currentTab === "sales") return "sales_dashboard";
   if (currentTab === "ads") {
-    const sub = String(currentAdsSubtab || "campaigns").trim().toLowerCase();
-    return sub === "bidder" ? "ads_bidder" : "ads_campaigns";
+    return "";
   }
   if (currentTab === "social") {
     const sub = ["games", "chat", "tasks", "notes", "calculator", "calendar"].includes(String(currentSocialSubtab || ""))
@@ -4873,6 +4878,15 @@ function normalizeReturnRow(rawRow, marketplace, idx) {
   if (!rawRow || typeof rawRow !== "object") return null;
   const row = { ...rawRow };
   const synthetic = buildFeedbackSyntheticId(rawRow, `${marketplace}-return`);
+  const normalizeReturnPhotoUrl = (value) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    if (/^https?:\/\//i.test(raw)) return raw;
+    if (raw.startsWith("//")) return `https:${raw}`;
+    if (raw.startsWith("/")) return `${window.location.origin}${raw}`;
+    if (/^(static|uploads)\//i.test(raw)) return `${window.location.origin}/${raw.replace(/^\/+/, "")}`;
+    return "";
+  };
   const pickText = (...paths) => {
     for (const path of paths) {
       const text = normalizeFeedbackText(getValueByPath(rawRow, path));
@@ -4892,63 +4906,211 @@ function normalizeReturnRow(rawRow, marketplace, idx) {
     "claim.id",
     "return.id",
     "posting_number",
-    "posting.number"
+    "posting.number",
+    "raw.id",
+    "raw.claim_id",
+    "raw.claimId",
+    "raw.return_id",
+    "raw.returnId",
+    "raw.claim.id",
+    "raw.return.id",
+    "raw.posting_number",
+    "raw.posting.number"
   ) || String(synthetic || `${marketplace}-return-${idx + 1}`).trim();
   row.id = rid;
   row._marketplace = marketplace;
-  row.status = pickText("status", "state", "claim_status", "claimState", "claim.status", "return.status", "return.state");
-  row.date = pickText("date", "created_at", "createdAt", "created_date", "createdDate", "updated_at", "updatedAt");
-  row.created_at = pickText("created_at", "createdAt", "date", "created_date", "createdDate", "updated_at", "updatedAt");
+  row.status = pickText(
+    "status",
+    "state",
+    "claim_status",
+    "claimState",
+    "claim.status",
+    "return.status",
+    "return.state",
+    "status.name",
+    "state.name",
+    "raw.status",
+    "raw.state",
+    "raw.claim.status",
+    "raw.return.status",
+    "raw.status.name",
+    "raw.state.name"
+  );
+  row.date = pickText(
+    "date",
+    "created_at",
+    "createdAt",
+    "created_date",
+    "createdDate",
+    "updated_at",
+    "updatedAt",
+    "claim.createdAt",
+    "return.createdAt",
+    "raw.date",
+    "raw.created_at",
+    "raw.createdAt",
+    "raw.created_date",
+    "raw.createdDate",
+    "raw.updated_at",
+    "raw.updatedAt",
+    "raw.claim.createdAt",
+    "raw.return.createdAt"
+  );
+  row.created_at = pickText(
+    "created_at",
+    "createdAt",
+    "date",
+    "created_date",
+    "createdDate",
+    "updated_at",
+    "updatedAt",
+    "claim.createdAt",
+    "return.createdAt",
+    "raw.created_at",
+    "raw.createdAt",
+    "raw.date",
+    "raw.created_date",
+    "raw.createdDate",
+    "raw.updated_at",
+    "raw.updatedAt",
+    "raw.claim.createdAt",
+    "raw.return.createdAt"
+  );
   row.product = pickText(
     "product",
     "product_name",
     "productName",
     "name",
+    "title",
     "item.name",
+    "item.title",
     "claim.item.name",
+    "claim.item.title",
     "return.item.name",
+    "return.item.title",
+    "claim.name",
+    "return.name",
+    "product.name",
+    "product.title",
     "subjectName",
-    "imtName"
+    "imtName",
+    "raw.product",
+    "raw.product_name",
+    "raw.productName",
+    "raw.name",
+    "raw.title",
+    "raw.item.name",
+    "raw.item.title",
+    "raw.claim.item.name",
+    "raw.claim.item.title",
+    "raw.return.item.name",
+    "raw.return.item.title",
+    "raw.claim.name",
+    "raw.return.name",
+    "raw.product.name",
+    "raw.product.title",
+    "raw.subjectName",
+    "raw.imtName"
   );
   row.article = pickText(
     "article",
     "offer_id",
     "offerId",
+    "nm_id",
+    "nmId",
     "vendorCode",
     "supplierVendorCode",
     "item.article",
+    "item.offerId",
     "claim.item.article",
+    "claim.item.offerId",
     "return.item.article",
-    "item.offer_id"
+    "return.item.offerId",
+    "item.offer_id",
+    "raw.article",
+    "raw.offer_id",
+    "raw.offerId",
+    "raw.nm_id",
+    "raw.nmId",
+    "raw.vendorCode",
+    "raw.supplierVendorCode",
+    "raw.item.article",
+    "raw.item.offer_id",
+    "raw.item.offerId",
+    "raw.claim.item.article",
+    "raw.claim.item.offer_id",
+    "raw.claim.item.offerId",
+    "raw.return.item.article",
+    "raw.return.item.offer_id",
+    "raw.return.item.offerId"
   );
-  row.barcode = pickText("barcode", "item.barcode", "claim.item.barcode", "return.item.barcode");
+  row.barcode = pickText(
+    "barcode",
+    "item.barcode",
+    "claim.item.barcode",
+    "return.item.barcode",
+    "raw.barcode",
+    "raw.item.barcode",
+    "raw.claim.item.barcode",
+    "raw.return.item.barcode"
+  );
   row.description = pickText(
     "description",
     "reason",
     "comment",
     "text",
     "rejectReason",
+    "reject_reason",
+    "decision_comment",
     "claim.description",
     "claim.reason",
     "claim.comment",
+    "claim.rejectReason",
     "return.reason",
-    "return.comment"
+    "return.description",
+    "return.comment",
+    "return.rejectReason",
+    "raw.description",
+    "raw.reason",
+    "raw.comment",
+    "raw.text",
+    "raw.rejectReason",
+    "raw.reject_reason",
+    "raw.decision_comment",
+    "raw.claim.description",
+    "raw.claim.reason",
+    "raw.claim.comment",
+    "raw.claim.rejectReason",
+    "raw.return.reason",
+    "raw.return.description",
+    "raw.return.comment",
+    "raw.return.rejectReason"
   );
   row.reason = row.description;
-  row.photos = normalizeFeedbackPhotos(
+  const rawPhotos = normalizeFeedbackPhotos(
     rawRow.photos
     || rawRow.images
     || rawRow.pictures
     || rawRow.attachments
     || rawRow.files
+    || rawRow.evidences
     || rawRow.claim?.photos
     || rawRow.claim?.images
     || rawRow.return?.photos
     || rawRow.return?.images
     || rawRow.raw?.photos
     || rawRow.raw?.images
+    || rawRow.raw?.pictures
+    || rawRow.raw?.attachments
+    || rawRow.raw?.files
+    || rawRow.raw?.evidences
+    || rawRow.raw?.claim?.photos
+    || rawRow.raw?.claim?.images
+    || rawRow.raw?.return?.photos
+    || rawRow.raw?.return?.images
     || []
   );
+  row.photos = [...new Set(rawPhotos.map((url) => normalizeReturnPhotoUrl(url)).filter(Boolean))];
   return row;
 }
 
@@ -4968,6 +5130,47 @@ function refreshReturnsStatusOptions(rows, preserve = "") {
   if (preserve && [...select.options].some((x) => String(x.value) === preserve)) {
     select.value = preserve;
   }
+}
+
+function returnRowNeedsHydration(row) {
+  if (!row || typeof row !== "object") return false;
+  const hasProduct = Boolean(String(row.product || "").trim());
+  const hasReason = Boolean(String(row.description || row.reason || "").trim());
+  const hasPhotos = Array.isArray(row.photos) && row.photos.length > 0;
+  return !hasProduct || !hasReason || !hasPhotos;
+}
+
+async function hydrateReturnsRowsFromDetails(rows, marketplace) {
+  const list = Array.isArray(rows) ? rows : [];
+  const pending = list
+    .filter((row) => returnRowNeedsHydration(row))
+    .slice(0, 18);
+  if (!pending.length) return;
+  await Promise.all(pending.map(async (row) => {
+    const rid = String(row?.id || "").trim();
+    if (!rid) return;
+    const endpoint = marketplace === "ozon"
+      ? `/api/ozon/returns/${encodeURIComponent(rid)}`
+      : `/api/wb/returns/${encodeURIComponent(rid)}`;
+    const detail = await requestJson(endpoint, { headers: authHeaders(), timeoutMs: 60000 }).catch(() => null);
+    if (!detail || typeof detail !== "object") return;
+    const normalized = normalizeReturnRow({ ...row, ...detail }, marketplace, 0);
+    if (!normalized) return;
+    if (!String(row.product || "").trim() && String(normalized.product || "").trim()) row.product = normalized.product;
+    if (!String(row.article || "").trim() && String(normalized.article || "").trim()) row.article = normalized.article;
+    if (!String(row.description || row.reason || "").trim() && String(normalized.description || normalized.reason || "").trim()) {
+      row.description = String(normalized.description || normalized.reason || "");
+      row.reason = String(normalized.reason || normalized.description || "");
+    }
+    if ((!Array.isArray(row.photos) || !row.photos.length) && Array.isArray(normalized.photos) && normalized.photos.length) {
+      row.photos = normalized.photos.slice();
+    }
+    if (!String(row.status || "").trim() && String(normalized.status || "").trim()) row.status = normalized.status;
+    if (!String(row.date || row.created_at || "").trim() && String(normalized.date || normalized.created_at || "").trim()) {
+      row.date = String(normalized.date || normalized.created_at || "");
+      row.created_at = String(normalized.created_at || normalized.date || "");
+    }
+  }));
 }
 
 async function loadReturns() {
@@ -5005,6 +5208,7 @@ async function loadReturns() {
   returnsRows = (Array.isArray(data.rows) ? data.rows : [])
     .map((row, idx) => normalizeReturnRow(row, marketplace, idx))
     .filter(Boolean);
+  await hydrateReturnsRowsFromDetails(returnsRows, marketplace);
   refreshReturnsStatusOptions(returnsRows, statusFilter);
   renderReturns();
   const warnings = Array.isArray(data.warnings) ? data.warnings.filter(Boolean) : [];
@@ -5275,7 +5479,7 @@ function renderReturns() {
     const photos = Array.isArray(row.photos) ? row.photos : [];
     const photosHtml = photos.length
       ? photos.slice(0, 3).map((photo, idx) => (
-        `<a href="${escapeHtml(photo)}" target="_blank" rel="noopener noreferrer" class="btn-secondary">#${idx + 1}</a>`
+        `<img src="${escapeHtml(photo)}" alt="return-photo-${idx + 1}" loading="lazy" class="review-photo-thumb clickable-photo" data-return-photo-idx="${idx}" data-return-id="${escapeHtml(rid)}">`
       )).join("")
       : `<span class="hint">-</span>`;
     const actionButtons = currentReturnsMarketplace === "wb"
@@ -5293,7 +5497,7 @@ function renderReturns() {
         </div>
       `;
     trEl.innerHTML = `
-      <td data-label="${escapeHtml(tr("Статус", "Status"))}"><span class="review-type-pill">${escapeHtml(String(row.status || "-"))}</span></td>
+      <td data-label="${escapeHtml(tr("Статус", "Status"))}"><span class="review-type-pill return-status-pill">${escapeHtml(String(row.status || "-"))}</span></td>
       <td data-label="${escapeHtml(tr("Дата", "Date"))}" class="cell-meta-small">${escapeHtml(String(row.date || row.created_at || "-"))}</td>
       <td data-label="${escapeHtml(tr("Товар", "Product"))}">
         <div class="cell-product-name">${escapeHtml(String(row.product || "-"))}</div>
@@ -5304,6 +5508,14 @@ function renderReturns() {
       <td data-label="${escapeHtml(tr("Действия", "Actions"))}">${actionButtons}</td>
     `;
     tbody.appendChild(trEl);
+    if (photos.length) {
+      trEl.querySelectorAll("[data-return-photo-idx]").forEach((node) => {
+        node.addEventListener("click", () => {
+          const idx = Number(node.getAttribute("data-return-photo-idx") || 0);
+          openReviewPhotoViewer(photos, Number.isFinite(idx) ? idx : 0);
+        });
+      });
+    }
   }
   applyButtonTooltips();
 }
@@ -5501,30 +5713,14 @@ async function enrichWbCampaignRows(runToken) {
   wbAdsLoadProgress.failed = 0;
   updateWbAdsLoadStatus();
 
-  const batchSize = pending.length > 280 ? 40 : 24;
-  let partialFallback = false;
-  let partialStatsMissingTotal = 0;
-  let partialSummaryMissingTotal = 0;
-  let temporaryUnavailableChunks = 0;
-  let hardTransportErrors = 0;
-  for (let i = 0; i < pending.length; i += batchSize) {
-    if (runToken !== wbAdsLoadToken) return;
-    const chunk = pending.slice(i, i + batchSize);
-    const payload = await requestJson("/api/wb/ads/campaigns/enrich", {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify({ ids: chunk }),
-      timeoutMs: 120000,
-    }).catch(() => null);
-
-    if (!payload) {
-      partialFallback = true;
-      hardTransportErrors += chunk.length;
-      wbAdsLoadProgress.failed = hardTransportErrors;
-      updateWbAdsLoadStatus();
-      continue;
-    }
-
+  const batchSize = pending.length > 260 ? 12 : (pending.length > 120 ? 8 : 6);
+  const requestEnrichChunk = async (ids, timeoutMs = 120000) => requestJson("/api/wb/ads/campaigns/enrich", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ ids }),
+    timeoutMs,
+  }).catch(() => null);
+  const applyEnrichPayload = (chunk, payload) => {
     const summaries = payload?.summaries && typeof payload.summaries === "object" ? payload.summaries : {};
     const stats = payload?.stats && typeof payload.stats === "object" ? payload.stats : {};
     const meta = payload?.meta && typeof payload.meta === "object" ? payload.meta : {};
@@ -5565,6 +5761,37 @@ async function enrichWbCampaignRows(runToken) {
     if (!temporaryUnavailable && chunkContextMissing.length > 0 && !hasMissingMeta) {
       partialFallback = true;
     }
+  };
+  let partialFallback = false;
+  let partialStatsMissingTotal = 0;
+  let partialSummaryMissingTotal = 0;
+  let temporaryUnavailableChunks = 0;
+  let hardTransportErrors = 0;
+  for (let i = 0; i < pending.length; i += batchSize) {
+    if (runToken !== wbAdsLoadToken) return;
+    const chunk = pending.slice(i, i + batchSize);
+    const payload = await requestEnrichChunk(chunk, 120000);
+
+    if (!payload) {
+      partialFallback = true;
+      const fallbackBatchSize = chunk.length > 6 ? 3 : 1;
+      for (let j = 0; j < chunk.length; j += fallbackBatchSize) {
+        if (runToken !== wbAdsLoadToken) return;
+        const subChunk = chunk.slice(j, j + fallbackBatchSize);
+        const subPayload = await requestEnrichChunk(subChunk, 90000);
+        if (!subPayload) {
+          hardTransportErrors += subChunk.length;
+          continue;
+        }
+        applyEnrichPayload(subChunk, subPayload);
+        wbAdsLoadProgress.loaded += subChunk.length;
+      }
+      wbAdsLoadProgress.failed = hardTransportErrors;
+      updateWbAdsLoadStatus();
+      renderWbCampaignRows();
+      continue;
+    }
+    applyEnrichPayload(chunk, payload);
     wbAdsLoadProgress.loaded += chunk.length;
     wbAdsLoadProgress.failed = hardTransportErrors;
     updateWbAdsLoadStatus();
@@ -9756,9 +9983,7 @@ function renderProfileData(data) {
   const companyAvatar = String(data?.avatar_url || "").trim();
   const actorPersonalAvatar = String(actorRow?.avatar_url || "").trim();
   const actorName = String(actorRow?.full_name || actorRow?.nickname || me?.actor_nick || me?.actor_email || me?.email || "");
-  const actorAvatar = (!me?.actor_is_owner && actorRow)
-    ? actorPersonalAvatar
-    : companyAvatar;
+  const actorAvatar = actorPersonalAvatar || companyAvatar;
   const introNickNode = document.getElementById("profileSectionsIntroNick");
   if (introNickNode) introNickNode.textContent = actorName || String(me?.actor_nick || me?.email || "-");
 
@@ -9778,12 +10003,12 @@ function renderProfileData(data) {
   renderAvatarPicker("profileAvatarPicker", actorAvatar || "", (url) => {
     setInputValue("profileAvatarUrl", url);
     renderAvatarPreview("profileAvatarPreview", url, initials);
-    if (me && !me.actor_is_owner) {
+    if (me) {
       me.avatar_url = String(url || "");
       renderTopbarUser();
     }
   });
-  if (me && !me.actor_is_owner) {
+  if (me) {
     me.avatar_url = String(actorAvatar || "");
     renderTopbarUser();
   }

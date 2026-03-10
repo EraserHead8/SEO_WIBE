@@ -7139,7 +7139,8 @@ def profile_update(payload: UserProfileUpdateIn, user: User = Depends(get_curren
         profile.position_title = payload.position_title.strip()[:120]
         profile.team_size = max(1, min(int(payload.team_size or 1), 100000))
         profile.company_structure = payload.company_structure.strip()[:12000]
-        profile.avatar_url = payload.avatar_url.strip()[:500]
+        owner_member = _ensure_owner_team_member(db, user)
+        owner_member.avatar_url = payload.avatar_url.strip()[:500]
         _audit(
             db,
             user,
@@ -7202,8 +7203,8 @@ def profile_avatar_upload(
     ensure_module_enabled(db, user, "user_profile")
     url = _save_avatar_upload(file, user_id=user.id, prefix="avatar")
     if _actor_is_owner(user):
-        profile = _get_or_create_user_profile(db, user.id)
-        profile.avatar_url = url
+        owner_member = _ensure_owner_team_member(db, user)
+        owner_member.avatar_url = url
     else:
         member_id = _actor_member_id(user)
         row = db.get(TeamMember, member_id)
@@ -13476,7 +13477,7 @@ def _build_user_profile_payload(db: Session, user: User, profile: UserProfile, a
             TeamMember.is_owner.is_(True),
         ).order_by(TeamMember.id.asc())
     ) or ""
-    effective_avatar_url = str(profile.avatar_url or "").strip() or str(owner_member_avatar or "").strip()
+    effective_avatar_url = str(owner_member_avatar or "").strip() or str(profile.avatar_url or "").strip()
     plans = [
         {
             "code": code,

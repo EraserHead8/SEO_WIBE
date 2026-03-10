@@ -2457,7 +2457,7 @@ def _request_wb_json(
         return None
     safe_method = str(method or "GET").strip().upper() or "GET"
     auth_variants = [token, f"Bearer {token}"]
-    max_attempts = 2
+    max_attempts = 4
     for auth_value in auth_variants:
         headers = {"Authorization": auth_value, "Content-Type": "application/json"}
         for attempt in range(max_attempts):
@@ -2480,11 +2480,14 @@ def _request_wb_json(
                 continue
             if response.status_code == 429:
                 if attempt < (max_attempts - 1):
-                    time.sleep(0.65 * (attempt + 1))
+                    time.sleep(_wb_retry_delay_sec(response, attempt))
                     continue
                 break
             if response.status_code in {401, 403}:
                 break
+            if response.status_code in {408, 425, 500, 502, 503, 504} and attempt < (max_attempts - 1):
+                time.sleep(0.5 * (attempt + 1))
+                continue
             if response.status_code >= 400:
                 break
             body_text = _safe_response_text(response).strip()
@@ -2496,8 +2499,29 @@ def _request_wb_json(
                     return parsed
                 return {"value": parsed}
             except Exception:
+                if attempt < (max_attempts - 1):
+                    time.sleep(0.3 * (attempt + 1))
+                    continue
                 return {"raw": body_text[:2000]}
     return None
+
+
+def _wb_retry_delay_sec(response: httpx.Response, attempt: int) -> float:
+    headers = response.headers
+    for header in ("Retry-After", "X-Ratelimit-Retry", "X-RateLimit-Retry", "X-Ratelimit-Reset", "X-RateLimit-Reset"):
+        raw = headers.get(header)
+        if raw is None:
+            continue
+        text = str(raw).strip()
+        if not text:
+            continue
+        try:
+            value = float(text)
+        except Exception:
+            continue
+        if value > 0:
+            return min(12.0, max(0.5, value))
+    return min(8.0, 0.9 * (attempt + 1))
 
 
 def _request_ozon_json(

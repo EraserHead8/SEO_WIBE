@@ -1179,13 +1179,6 @@ def _fetch_ozon_product_details(api_key: str, article: str, external_id: str = "
             if resp.status_code >= 400:
                 return {"photos": [], "attributes": {}, "raw": {}}
             data = resp.json()
-            price_info = _fetch_ozon_price_snapshot(
-                client=client,
-                headers=headers,
-                source=(data.get("result") or {}).get("items", []) if isinstance(data, dict) else [],
-                article=article,
-                external_id=external_id,
-            )
     except Exception:
         return {"photos": [], "attributes": {}, "raw": {}}
     items = (data.get("result") or {}).get("items") or data.get("items") or []
@@ -1215,6 +1208,18 @@ def _fetch_ozon_product_details(api_key: str, article: str, external_id: str = "
     source = item.get("product_info") if isinstance(item, dict) else {}
     if not isinstance(source, dict):
         source = item if isinstance(item, dict) else {}
+    try:
+        with httpx.Client(timeout=25.0) as client:
+            price_info = _fetch_ozon_price_snapshot(
+                client=client,
+                headers=headers,
+                source=[item] if isinstance(item, dict) else [],
+                article=article,
+                external_id=external_id,
+            )
+    except Exception:
+        price_info = {}
+
     def _collect_photo_urls(value: Any) -> list[str]:
         out: list[str] = []
         if isinstance(value, str):
@@ -1537,6 +1542,15 @@ def _update_wb_photos_order(api_key: str, article: str, external_id: str, photos
     normalized_photos = _dedupe_photo_urls([_normalize_photo_url(str(x or "")) for x in (photos or [])])[:30]
     if not token or not vendor_code or not normalized_photos:
         return False
+    photo_variants: list[list[str]] = [normalized_photos]
+    http_fallback = _dedupe_photo_urls(
+        [
+            (f"http://{url[8:]}" if str(url or "").startswith("https://") else str(url or ""))
+            for url in normalized_photos
+        ]
+    )[:30]
+    if http_fallback and http_fallback != normalized_photos:
+        photo_variants.append(http_fallback)
     auth_variants = [token, f"Bearer {token}"]
     nm_id = 0
     try:
@@ -1551,21 +1565,49 @@ def _update_wb_photos_order(api_key: str, article: str, external_id: str, photos
         except Exception:
             nm_id = 0
 
-    media_payloads: list[dict[str, Any]] = []
-    if nm_id > 0:
-        media_payloads.append({"nmId": nm_id, "data": normalized_photos})
-        media_payloads.append({"nmID": nm_id, "data": normalized_photos})
     media_endpoints = [
         "https://content-api.wildberries.ru/content/v3/media/save",
         "https://suppliers-api.wildberries.ru/content/v3/media/save",
     ]
 
     with httpx.Client(timeout=25.0, follow_redirects=True) as client:
-        if media_payloads:
+        for photo_pack in photo_variants:
+            media_payloads: list[dict[str, Any]] = []
+            if nm_id > 0:
+                media_payloads.append({"nmId": nm_id, "data": photo_pack})
+                media_payloads.append({"nmID": nm_id, "data": photo_pack})
+            if media_payloads:
+                for auth_value in auth_variants:
+                    headers = {"Authorization": auth_value, "Content-Type": "application/json"}
+                    for endpoint in media_endpoints:
+                        for payload in media_payloads:
+                            try:
+                                response = client.post(endpoint, headers=headers, json=payload)
+                            except Exception:
+                                continue
+                            if _marketplace_response_ok(response):
+                                return True
+                            if response.status_code in {401, 403}:
+                                break
+
+    endpoints = [
+        "https://content-api.wildberries.ru/content/v2/cards/update",
+        "https://suppliers-api.wildberries.ru/content/v2/cards/update",
+    ]
+    with httpx.Client(timeout=25.0, follow_redirects=True) as client:
+        for photo_pack in photo_variants:
+            payloads: list[dict[str, Any]] = []
+            card_base: dict[str, Any] = {"vendorCode": vendor_code}
+            if nm_id > 0:
+                card_base["nmID"] = nm_id
+                card_base["nmId"] = nm_id
+            payloads.append({"cards": [{**card_base, "mediaFiles": photo_pack}]})
+            payloads.append({"cards": [{**card_base, "photos": photo_pack}]})
+            payloads.append({"cards": [{**card_base, "photos": [{"big": url} for url in photo_pack]}]})
             for auth_value in auth_variants:
                 headers = {"Authorization": auth_value, "Content-Type": "application/json"}
-                for endpoint in media_endpoints:
-                    for payload in media_payloads:
+                for endpoint in endpoints:
+                    for payload in payloads:
                         try:
                             response = client.post(endpoint, headers=headers, json=payload)
                         except Exception:
@@ -1574,32 +1616,6 @@ def _update_wb_photos_order(api_key: str, article: str, external_id: str, photos
                             return True
                         if response.status_code in {401, 403}:
                             break
-
-    payloads: list[dict[str, Any]] = []
-    card_base: dict[str, Any] = {"vendorCode": vendor_code}
-    if nm_id > 0:
-        card_base["nmID"] = nm_id
-        card_base["nmId"] = nm_id
-    payloads.append({"cards": [{**card_base, "mediaFiles": normalized_photos}]})
-    payloads.append({"cards": [{**card_base, "photos": normalized_photos}]})
-    payloads.append({"cards": [{**card_base, "photos": [{"big": url} for url in normalized_photos]}]})
-    endpoints = [
-        "https://content-api.wildberries.ru/content/v2/cards/update",
-        "https://suppliers-api.wildberries.ru/content/v2/cards/update",
-    ]
-    with httpx.Client(timeout=25.0, follow_redirects=True) as client:
-        for auth_value in auth_variants:
-            headers = {"Authorization": auth_value, "Content-Type": "application/json"}
-            for endpoint in endpoints:
-                for payload in payloads:
-                    try:
-                        response = client.post(endpoint, headers=headers, json=payload)
-                    except Exception:
-                        continue
-                    if _marketplace_response_ok(response):
-                        return True
-                    if response.status_code in {401, 403}:
-                        break
     return False
 
 

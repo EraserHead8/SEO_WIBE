@@ -1857,6 +1857,14 @@ tbody tr:hover {
   width: 30px;
   height: 24px;
 }
+.return-status-pill {
+  width: auto;
+  min-width: 44px;
+  max-width: 100%;
+  height: auto;
+  min-height: 24px;
+  padding: 2px 10px;
+}
 .cell-main-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -7480,9 +7488,9 @@ body[data-theme="dark"] .landing-band .band-stats span {
 .social-calendar-sync {
   margin-top: 8px;
   display: grid;
-  grid-template-columns: minmax(280px, 1.2fr) minmax(240px, 1fr) auto;
+  grid-template-columns: minmax(280px, 1.2fr) minmax(220px, 1fr) minmax(180px, auto);
   gap: 10px;
-  align-items: center;
+  align-items: start;
 }
 
 .social-calendar-sync input {
@@ -7504,10 +7512,15 @@ body[data-theme="dark"] .landing-band .band-stats span {
 
 .social-calendar-replace {
   min-width: 0;
+  display: flex;
+  align-items: center;
+  line-height: 1.25;
 }
 
 .social-calendar-sync-btn {
   white-space: nowrap;
+  min-width: 180px;
+  align-self: stretch;
 }
 
 .social-calendar-grid {
@@ -8953,6 +8966,19 @@ button,
   #socialSubtabCalendar .social-calendar-sync {
     grid-template-columns: 1fr;
     gap: 6px;
+  }
+  #socialSubtabCalendar .social-calendar-sync-btn {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 1260px) {
+  #socialSubtabCalendar .social-calendar-sync {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  #socialSubtabCalendar .social-calendar-sync-btn {
+    min-width: 0;
   }
 }
 

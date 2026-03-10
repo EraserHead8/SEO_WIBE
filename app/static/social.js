@@ -1932,7 +1932,17 @@ function socialIsThreadOpen() {
   const currentId = Number(socialState.currentThreadId || 0);
   if (currentId > 0) return true;
   const layout = document.querySelector("#socialSubtabChat .social-chat-layout");
-  return Boolean(layout?.classList.contains("chat-open"));
+  if (layout?.classList.contains("chat-open")) return true;
+  const messagesHost = document.getElementById("socialChatMessages");
+  if (messagesHost && (
+    messagesHost.querySelector(".tg-msg-row")
+    || messagesHost.querySelector(".social-chat-loading")
+    || messagesHost.querySelector(".social-chat-error")
+  )) {
+    return true;
+  }
+  const headText = String(document.getElementById("socialChatHead")?.textContent || "").trim().toLowerCase();
+  return Boolean(headText && headText !== "выберите чат" && headText !== "select chat");
 }
 
 function socialHasRenderedMessages(host = null) {
@@ -3657,12 +3667,7 @@ async function socialSyncGoogleCalendar() {
   const oauthConnected = Boolean(socialState.googleCalendarOauth?.connected);
   const useIcs = Boolean(url);
   if (!useIcs && !oauthConnected) {
-    alert(
-      tr(
-        "Подключите Google OAuth или вставьте ICS-ссылку календаря.",
-        "Connect Google OAuth or paste an ICS calendar URL."
-      )
-    );
+    await socialConnectGoogleCalendar();
     return;
   }
   if (useIcs) {

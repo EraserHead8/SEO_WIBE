@@ -187,8 +187,6 @@
         <label id="mobileDrawerQuickNavLabel" class="mobile-drawer-quick-label" for="mobileDrawerQuickNav">Раздел</label>
         <select id="mobileDrawerQuickNav" class="chip-select mobile-drawer-quick-nav" onchange="onMobileQuickNavChanged('mobileDrawerQuickNav')">
           <option value="sales_dashboard">Статистика</option>
-          <option value="ads_campaigns">Реклама: кампании</option>
-          <option value="ads_bidder">Реклама: бидер</option>
           <option value="social_games">Игры</option>
           <option value="social_chat">Чат</option>
           <option value="social_tasks">Задачи</option>
@@ -236,8 +234,6 @@
           </button>
           <select id="mobileQuickNav" class="chip-select mobile-quick-nav hidden" onchange="onMobileQuickNavChanged('mobileQuickNav')">
             <option value="sales_dashboard">Статистика</option>
-            <option value="ads_campaigns">Реклама: кампании</option>
-            <option value="ads_bidder">Реклама: бидер</option>
             <option value="social_games">Игры</option>
             <option value="social_chat">Чат</option>
             <option value="social_tasks">Задачи</option>
@@ -1419,7 +1415,7 @@
               </div>
               <input id="socialCalendarGoogleIcs" placeholder="Google Calendar ICS URL (опционально, webcal://...)" />
               <label class="check social-calendar-replace"><input id="socialCalendarGoogleReplace" type="checkbox" /> Очистить старые события из этого источника</label>
-              <button class="btn-secondary social-calendar-sync-btn" type="button" onclick="socialSyncGoogleCalendar()">Синхронизировать Google</button>
+              <button class="btn-secondary social-calendar-sync-btn" type="button" onclick="socialSyncGoogleCalendar()">Синхронизировать</button>
             </div>
             <div id="socialCalendarGrid" class="social-calendar-grid"></div>
             <div id="socialCalendarEvents" class="social-calendar-events"></div>

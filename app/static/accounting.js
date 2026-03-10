@@ -712,7 +712,7 @@ async function loadAccountingData(forceBusy = false, retryAttempt = 0) {
     const low = String(x || "").toLowerCase();
     return low.includes("429") && low.includes("wb");
   });
-  if (hasWb429 && (marketplace === "all" || marketplace === "wb") && retryAttempt < 1) {
+  if (hasWb429 && (marketplace === "all" || marketplace === "wb") && retryAttempt < 3) {
     accountingSetMeta(
       "accountingWarnings",
       tr(
@@ -720,7 +720,7 @@ async function loadAccountingData(forceBusy = false, retryAttempt = 0) {
         "WB API rate-limited requests (429). Retrying automatically..."
       )
     );
-    await delay(1800 + retryAttempt * 800);
+    await delay(1800 + retryAttempt * 1400);
     if (runSeq !== accountingRequestSeq) return false;
     return loadAccountingData(forceBusy, retryAttempt + 1);
   }
