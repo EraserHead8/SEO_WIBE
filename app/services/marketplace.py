@@ -1402,7 +1402,8 @@ def _update_ozon_description(api_key: str, article: str, description: str) -> bo
 def _update_wb_photos_order(api_key: str, article: str, external_id: str, photos: list[str]) -> bool:
     token = str(api_key or "").strip()
     vendor_code = str(article or "").strip()
-    if not token or not vendor_code or not photos:
+    normalized_photos = _dedupe_photo_urls([_normalize_photo_url(str(x or "")) for x in (photos or [])])[:30]
+    if not token or not vendor_code or not normalized_photos:
         return False
     auth_variants = [token, f"Bearer {token}"]
     nm_id = 0
@@ -1410,14 +1411,46 @@ def _update_wb_photos_order(api_key: str, article: str, external_id: str, photos
         nm_id = int(str(external_id or "").strip())
     except Exception:
         nm_id = 0
+    if nm_id <= 0:
+        try:
+            resolved = int(str(resolve_wb_external_id(token, vendor_code) or "0").strip())
+            if resolved > 0:
+                nm_id = resolved
+        except Exception:
+            nm_id = 0
+
+    media_payloads: list[dict[str, Any]] = []
+    if nm_id > 0:
+        media_payloads.append({"nmId": nm_id, "data": normalized_photos})
+        media_payloads.append({"nmID": nm_id, "data": normalized_photos})
+    media_endpoints = [
+        "https://content-api.wildberries.ru/content/v3/media/save",
+        "https://suppliers-api.wildberries.ru/content/v3/media/save",
+    ]
+
+    with httpx.Client(timeout=25.0, follow_redirects=True) as client:
+        if media_payloads:
+            for auth_value in auth_variants:
+                headers = {"Authorization": auth_value, "Content-Type": "application/json"}
+                for endpoint in media_endpoints:
+                    for payload in media_payloads:
+                        try:
+                            response = client.post(endpoint, headers=headers, json=payload)
+                        except Exception:
+                            continue
+                        if _marketplace_response_ok(response):
+                            return True
+                        if response.status_code in {401, 403}:
+                            break
+
     payloads: list[dict[str, Any]] = []
     card_base: dict[str, Any] = {"vendorCode": vendor_code}
     if nm_id > 0:
         card_base["nmID"] = nm_id
         card_base["nmId"] = nm_id
-    payloads.append({"cards": [{**card_base, "mediaFiles": photos}]})
-    payloads.append({"cards": [{**card_base, "photos": photos}]})
-    payloads.append({"cards": [{**card_base, "photos": [{"big": url} for url in photos]}]})
+    payloads.append({"cards": [{**card_base, "mediaFiles": normalized_photos}]})
+    payloads.append({"cards": [{**card_base, "photos": normalized_photos}]})
+    payloads.append({"cards": [{**card_base, "photos": [{"big": url} for url in normalized_photos]}]})
     endpoints = [
         "https://content-api.wildberries.ru/content/v2/cards/update",
         "https://suppliers-api.wildberries.ru/content/v2/cards/update",

@@ -441,6 +441,8 @@ function moduleLabel(code) {
     wb_questions_ai: tr("Вопросы", "Questions"),
     returns: tr("Возвраты", "Returns"),
     wb_ads: tr("Реклама", "Ads"),
+    ads_campaigns: tr("Рекламные кампании", "Ad Campaigns"),
+    ads_bidder: tr("Бидер WB", "WB Bidder"),
     wb_ads_analytics: tr("Аналитика Ads", "Ads Analytics"),
     wb_ads_recommendations: tr("Рекомендации Ads", "Ads Recommendations"),
     user_profile: tr("Профиль", "Profile"),
@@ -5289,9 +5291,10 @@ async function loadWbAdCampaigns() {
     wbAdsLoadProgress = { active: true, total: 0, loaded: 0, failed: 0 };
     updateWbAdsLoadStatus(tr("Загрузка списка кампаний…", "Loading campaign list..."));
 
-    const data = await requestJson("/api/wb/ads/campaigns?fast=1", { headers: authHeaders(), timeoutMs: 120000 }).catch(() => {
-      return null;
-    });
+    let data = await requestJson("/api/wb/ads/campaigns?fast=1", { headers: authHeaders(), timeoutMs: 120000 }).catch(() => null);
+    if (!data) {
+      data = await requestJson("/api/wb/ads/campaigns?fast=0", { headers: authHeaders(), timeoutMs: 120000 }).catch(() => null);
+    }
     if (!data) {
       wbAdsLoadProgress.active = false;
       updateWbAdsLoadStatus(
@@ -5301,6 +5304,15 @@ async function loadWbAdCampaigns() {
         )
       );
       return;
+    }
+    if (!Array.isArray(data.campaigns) || !data.campaigns.length) {
+      await requestJson("/api/wb/ads/campaigns/sync", {
+        method: "POST",
+        headers: authHeaders(),
+        timeoutMs: 25000,
+      }).catch(() => null);
+      const retry = await requestJson("/api/wb/ads/campaigns?fast=1", { headers: authHeaders(), timeoutMs: 120000 }).catch(() => null);
+      if (retry && Array.isArray(retry.campaigns)) data = retry;
     }
     wbCampaignRows = Array.isArray(data.campaigns) ? data.campaigns : [];
     const statsMap = (data && typeof data.stats === "object" && data.stats) ? data.stats : {};
@@ -5315,7 +5327,16 @@ async function loadWbAdCampaigns() {
     if (selectedWbCampaignId && !wbCampaignRows.some((x) => getCampaignRowId(x) === selectedWbCampaignId)) {
       selectedWbCampaignId = "";
     }
-    updateWbAdsLoadStatus();
+    if (!wbCampaignRows.length) {
+      updateWbAdsLoadStatus(
+        tr(
+          "Кампании пока не получены: проверьте ключ WB Ads и нажмите обновить.",
+          "No campaigns yet: verify WB Ads key and refresh."
+        )
+      );
+    } else {
+      updateWbAdsLoadStatus();
+    }
     renderWbCampaignRows();
     requestJson("/api/wb/ads/balance", { headers: authHeaders(), timeoutMs: 30000 })
       .then((payload) => {

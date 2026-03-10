@@ -329,6 +329,7 @@ def _market_cache_latest_payload(
     marketplace: str,
     max_age_sec: int = 24 * 60 * 60,
     exclude_cache_keys: set[str] | None = None,
+    scan_limit: int = 80,
 ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
     now = datetime.utcnow()
     excluded = {str(x or "").strip() for x in (exclude_cache_keys or set()) if str(x or "").strip()}
@@ -340,7 +341,7 @@ def _market_cache_latest_payload(
             MarketplaceApiCache.marketplace == str(marketplace or "").strip()[:30],
         )
         .order_by(MarketplaceApiCache.fetched_at.desc(), MarketplaceApiCache.id.desc())
-        .limit(25)
+        .limit(max(10, min(int(scan_limit or 80), 500)))
     ).all()
     for row in rows:
         if excluded and str(row.cache_key or "").strip() in excluded:
@@ -684,6 +685,26 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
             "Пример: создайте правило с step=50 и cooldown=300, запустите вручную и проверьте последнюю строку логов."
         ),
     },
+    "wb_ads_bidder": {
+        "title": "Бидер WB Ads",
+        "content": (
+            "Назначение: автоматическое управление ставками по правилам в WB Ads.\n\n"
+            "Где открыть:\n"
+            "- Модуль «Реклама WB/Ozon» → вкладка «Бидер».\n\n"
+            "Как создать правило:\n"
+            "1) Укажите campaign_id и nm_id.\n"
+            "2) Выберите target_type: normquery или nm.\n"
+            "3) Для normquery заполните target_value (фразу).\n"
+            "4) Выберите стратегию (optimal/position/range/hold).\n"
+            "5) Задайте min_bid, max_bid, step и cooldown.\n"
+            "6) Нажмите «Сохранить правило» и затем «Запустить сейчас».\n\n"
+            "Проверка результата:\n"
+            "- В таблице запусков смотрите статус ok/skipped/error и причину.\n"
+            "- Если много skipped(cooldown), увеличьте cooldown и уменьшите частоту ручных запусков.\n"
+            "- Если 401/403 или api_failed, перепроверьте WB Ads ключ в профиле.\n\n"
+            "Пример: создайте правило с step=50 и cooldown=300, запустите вручную и проверьте последнюю строку логов."
+        ),
+    },
     "billing": {
         "title": "Биллинг",
         "content": (
@@ -1000,6 +1021,26 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
         ),
     },
     "ads_bidder": {
+        "title": "WB Ads Bidder",
+        "content": (
+            "Purpose: automate bid control for WB Ads campaigns using rules.\n\n"
+            "Where to open:\n"
+            "- Ads module -> Bidder subtab.\n\n"
+            "Create a rule:\n"
+            "1) Fill campaign_id and nm_id.\n"
+            "2) Choose target_type: normquery or nm.\n"
+            "3) For normquery, provide target_value phrase.\n"
+            "4) Choose strategy (optimal/position/range/hold).\n"
+            "5) Set min_bid, max_bid, step, cooldown.\n"
+            "6) Save rule and run once manually.\n\n"
+            "Validate runs:\n"
+            "- Check run log status: ok / skipped / error and reason text.\n"
+            "- If skipped(cooldown) appears too often, increase cooldown.\n"
+            "- For 401/403 or api_failed, reconnect WB Ads API key in Profile.\n\n"
+            "Example: create a conservative rule (step=50, cooldown=300), run now, verify the latest log row."
+        ),
+    },
+    "wb_ads_bidder": {
         "title": "WB Ads Bidder",
         "content": (
             "Purpose: automate bid control for WB Ads campaigns using rules.\n\n"
@@ -5019,6 +5060,8 @@ def update_product(product_id: int, payload: ProductUpdateIn, user: User = Depen
     next_barcode = str(payload.barcode or "").strip()
     next_category = str(payload.category_name or "").strip()
     next_description = str(payload.current_description or "").strip()
+    prev_description = str(product.current_description or "")
+    prev_photos_order = _product_photos_from_row(product)
     next_photo = str(payload.photo_url or "").strip()
     next_keywords = str(payload.target_keywords or "").strip()
     next_purchase_price = max(0.0, round(_to_money(payload.purchase_price), 2)) if payload.purchase_price is not None else None
@@ -5031,6 +5074,12 @@ def update_product(product_id: int, payload: ProductUpdateIn, user: User = Depen
         if payload.photos_order is not None
         else None
     )
+    next_description_trimmed = next_description[:16000]
+    description_changed = payload.current_description is not None and next_description_trimmed != prev_description
+    photos_order_changed = (
+        payload.photos_order is not None
+        and (next_photos_order or []) != _normalize_product_photo_list(prev_photos_order)
+    )
     if next_name:
         product.name = next_name[:255]
     if payload.barcode is not None:
@@ -5038,7 +5087,7 @@ def update_product(product_id: int, payload: ProductUpdateIn, user: User = Depen
     if payload.category_name is not None:
         product.category_name = next_category[:255]
     if payload.current_description is not None:
-        product.current_description = next_description[:16000]
+        product.current_description = next_description_trimmed
     if next_purchase_price is not None:
         product.purchase_price = next_purchase_price
     if next_price_base is not None:
@@ -5085,7 +5134,9 @@ def update_product(product_id: int, payload: ProductUpdateIn, user: User = Depen
         _hydrate_external_id_if_needed(db, user.id, product)
         details.append(f"wb_external_id={'set' if bool(product.external_id) else 'missing'}")
     if payload.current_description is not None:
-        if api_key:
+        if not description_changed:
+            details.append("remote_update=skipped_unchanged")
+        elif api_key:
             ok = update_product_description(
                 product.marketplace,
                 api_key,
@@ -5097,7 +5148,9 @@ def update_product(product_id: int, payload: ProductUpdateIn, user: User = Depen
         else:
             details.append("remote_update=skipped_no_key")
     if payload.photos_order is not None:
-        if api_key and next_photos_order:
+        if not photos_order_changed:
+            details.append("remote_photo_order=skipped_unchanged")
+        elif api_key and next_photos_order:
             photos_ok, photos_status = update_product_photos_order(
                 product.marketplace,
                 api_key,
@@ -5648,7 +5701,13 @@ def apply_seo(payload: SeoApplyRequest, user: User = Depends(get_current_user), 
         _hydrate_external_id_if_needed(db, user.id, product)
 
         cred = _resolve_credential(db, user.id, product.marketplace)
-        ok = update_product_description(product.marketplace, cred.api_key, product.article, job.generated_description)
+        ok = update_product_description(
+            product.marketplace,
+            cred.api_key,
+            product.article,
+            job.generated_description,
+            external_id=product.external_id or "",
+        )
         if not ok:
             raise HTTPException(status_code=500, detail="Ошибка применения изменений в маркетплейс")
 
@@ -5996,8 +6055,9 @@ def sales_stats(
             user_id=int(user.id),
             module_code="sales_stats",
             marketplace=selected_market,
-            max_age_sec=48 * 60 * 60,
+            max_age_sec=7 * 24 * 60 * 60,
             exclude_cache_keys={str(sales_cache_meta.get("cache_key") or "").strip()},
+            scan_limit=140,
         )
         if _sales_payload_has_data(fallback_payload):
             payload = fallback_payload or {}
@@ -6452,8 +6512,9 @@ def accounting_data(
                     user_id=int(user.id),
                     module_code="accounting",
                     marketplace=selected_market,
-                    max_age_sec=48 * 60 * 60,
+                    max_age_sec=14 * 24 * 60 * 60,
                     exclude_cache_keys=excluded,
+                    scan_limit=220,
                 )
                 if not isinstance(probe_data, dict):
                     break
