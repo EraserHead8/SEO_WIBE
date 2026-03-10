@@ -1316,7 +1316,7 @@ def fetch_wb_campaigns(
     return _enrich_wb_campaign_rows(api_key, [{"advertId": cid} for cid in ids])
 
 
-def fetch_wb_campaign_summaries(api_key: str, campaign_ids: list[int], fallback_limit: int = 120) -> dict[str, dict[str, Any]]:
+def fetch_wb_campaign_summaries(api_key: str, campaign_ids: list[int], fallback_limit: int = 24) -> dict[str, dict[str, Any]]:
     ids = sorted({int(x) for x in campaign_ids if int(x) > 0})
     if not ids:
         return {}

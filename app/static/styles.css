@@ -7480,13 +7480,34 @@ body[data-theme="dark"] .landing-band .band-stats span {
 .social-calendar-sync {
   margin-top: 8px;
   display: grid;
-  grid-template-columns: minmax(260px, 1.4fr) auto auto;
+  grid-template-columns: minmax(280px, 1.2fr) minmax(240px, 1fr) auto;
   gap: 10px;
   align-items: center;
 }
 
 .social-calendar-sync input {
   width: 100%;
+}
+
+.social-calendar-google-row {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.social-calendar-google-row .hint {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.social-calendar-replace {
+  min-width: 0;
+}
+
+.social-calendar-sync-btn {
+  white-space: nowrap;
 }
 
 .social-calendar-grid {
@@ -8919,6 +8940,14 @@ button,
     min-height: 36px;
     padding: 6px 9px;
     font-size: 13px;
+  }
+
+  #socialSubtabCalendar .social-calendar-google-row {
+    gap: 6px;
+  }
+
+  #socialSubtabCalendar .social-calendar-google-row .hint {
+    flex: 1 1 100%;
   }
 
   #socialSubtabCalendar .social-calendar-sync {

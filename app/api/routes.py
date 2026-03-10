@@ -18,7 +18,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Request, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy import String, cast, delete, func, or_, select, text
 from sqlalchemy.orm import Session
 
@@ -307,6 +307,8 @@ _MARKET_CACHE_TTL_SEC = {
     "wb_ads_analytics": 180,
     "wb_ads_recommendations": 180,
 }
+SOCIAL_GOOGLE_OAUTH_TOKENS_KEY = "social_google_oauth_tokens"
+SOCIAL_GOOGLE_OAUTH_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
 
 
 def _secret_revision(*values: str) -> str:
@@ -432,7 +434,263 @@ def _accounting_payload_has_data(payload: dict[str, Any] | None) -> bool:
                 except Exception:
                     continue
     analysis_rows = payload.get("analysis_rows")
-    return isinstance(analysis_rows, list) and len(analysis_rows) > 0
+    if not isinstance(analysis_rows, list) or not analysis_rows:
+        return False
+    for row in analysis_rows:
+        if not isinstance(row, dict):
+            continue
+        for key in (
+            "orders",
+            "units",
+            "buyouts",
+            "sold_units",
+            "returns",
+            "revenue",
+            "gross_profit",
+            "operating_profit",
+            "net_profit",
+            "marketplace_expenses",
+            "cogs",
+        ):
+            try:
+                if abs(float(row.get(key) or 0.0)) > 1e-9:
+                    return True
+            except Exception:
+                continue
+    return False
+
+
+def _accounting_payload_needs_finance_fallback(payload: dict[str, Any] | None, warnings: list[str] | None = None) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    warning_text = " | ".join(str(x or "").strip().lower() for x in (warnings or []))
+    if not warning_text:
+        return False
+    markers = (
+        "finance api недоступен",
+        "finance api unavailable",
+        "рекламные расходы временно недоступны",
+        "rate_limited",
+        "ограничил запросы",
+    )
+    if not any(marker in warning_text for marker in markers):
+        return False
+
+    overview = payload.get("overview") if isinstance(payload.get("overview"), dict) else {}
+    revenue = abs(float(_to_float_safe(overview.get("revenue"), 0.0)))
+    if revenue <= 1e-9:
+        return False
+
+    for key in (
+        "cogs",
+        "marketplace_expense",
+        "marketplace_expenses",
+        "gross_profit",
+        "operating_profit",
+        "net_profit",
+        "ads",
+        "ad_spent",
+        "commissions",
+        "logistics",
+    ):
+        if abs(float(_to_float_safe(overview.get(key), 0.0))) > 1e-9:
+            return False
+
+    analysis_rows = payload.get("analysis_rows")
+    if isinstance(analysis_rows, list):
+        for row in analysis_rows:
+            if not isinstance(row, dict):
+                continue
+            for key in ("cogs", "marketplace_expense", "marketplace_expenses", "gross_profit", "operating_profit", "net_profit"):
+                if abs(float(_to_float_safe(row.get(key), 0.0))) > 1e-9:
+                    return False
+
+    return True
+
+
+def _normalize_returns_rows(rows: list[dict[str, Any]], marketplace: str) -> list[dict[str, Any]]:
+    safe_market = str(marketplace or "").strip().lower()
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def _clean_text(value: Any) -> str:
+        text = " ".join(str(value or "").split()).strip()
+        low = text.lower()
+        if not text or low in {"-", "—", "0", "null", "none", "undefined", "n/a"}:
+            return ""
+        return text
+
+    def _pick_text(node: dict[str, Any], *paths: str) -> str:
+        def _path_value(root: Any, path: str) -> Any:
+            current = root
+            for part in str(path or "").split("."):
+                key = str(part or "").strip()
+                if not key or not isinstance(current, dict):
+                    return None
+                current = current.get(key)
+            return current
+
+        for path in paths:
+            text = _clean_text(_path_value(node, path))
+            if text:
+                return text
+        return ""
+
+    def _clean_photo(*values: Any) -> list[str]:
+        photos: list[str] = []
+        seen_photo: set[str] = set()
+
+        def _walk(node: Any, depth: int = 0) -> None:
+            if node is None or depth > 4:
+                return
+            if isinstance(node, str):
+                url = str(node or "").strip()
+                if not url or url in seen_photo:
+                    return
+                if not (url.startswith("http://") or url.startswith("https://")):
+                    return
+                seen_photo.add(url)
+                photos.append(url)
+                return
+            if isinstance(node, list):
+                for item in node:
+                    _walk(item, depth + 1)
+                return
+            if isinstance(node, dict):
+                for key in ("url", "photo", "image", "src", "link", "href", "path", "big", "x1", "x2", "orig", "tm"):
+                    _walk(node.get(key), depth + 1)
+                for key, value in node.items():
+                    if re.search(r"(photo|image|picture|attachment|file|evidence)", str(key or ""), flags=re.IGNORECASE):
+                        _walk(value, depth + 1)
+                return
+
+        for value in values:
+            _walk(value, 0)
+        return photos
+
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        raw_node = row.get("raw") if isinstance(row.get("raw"), dict) else {}
+        merged = dict(raw_node)
+        for key, value in row.items():
+            if key not in merged or merged.get(key) in (None, "", [], {}):
+                merged[key] = value
+
+        rid = _pick_text(
+            merged,
+            "id",
+            "return_id",
+            "returnId",
+            "claimId",
+            "claim_id",
+            "claim.id",
+            "return.id",
+            "posting_number",
+            "posting.number",
+        )
+        if not rid or rid in seen:
+            continue
+        status = _pick_text(
+            merged,
+            "status",
+            "state",
+            "claimStatus",
+            "claim.status",
+            "claim.state",
+            "return.status",
+            "return.state",
+            "status.name",
+            "state.name",
+        )
+        created_at = _pick_text(
+            merged,
+            "created_at",
+            "createdAt",
+            "date",
+            "createdDate",
+            "updated_at",
+            "updatedAt",
+            "claim.createdAt",
+            "return.createdAt",
+        )
+        article = _pick_text(
+            merged,
+            "article",
+            "offer_id",
+            "offerId",
+            "vendorCode",
+            "supplierVendorCode",
+            "item.article",
+            "item.offer_id",
+            "claim.item.article",
+            "return.item.article",
+            "product.article",
+            "product.offer_id",
+        )
+        product = _pick_text(
+            merged,
+            "product",
+            "product_name",
+            "productName",
+            "name",
+            "subjectName",
+            "imtName",
+            "item.name",
+            "item.title",
+            "claim.item.name",
+            "return.item.name",
+            "product.name",
+        )
+        reason = _pick_text(
+            merged,
+            "reason",
+            "description",
+            "comment",
+            "text",
+            "rejectReason",
+            "reject_reason",
+            "decision_comment",
+            "claim.reason",
+            "claim.description",
+            "claim.comment",
+            "claim.rejectReason",
+            "return.reason",
+            "return.description",
+            "return.comment",
+            "return.rejectReason",
+        )
+        photos = _clean_photo(
+            merged.get("photos"),
+            merged.get("images"),
+            merged.get("pictures"),
+            merged.get("attachments"),
+            merged.get("files"),
+            merged.get("evidences"),
+            merged.get("claim"),
+            merged.get("return"),
+            merged.get("item"),
+            merged.get("product"),
+        )
+        # Drop transport/envelope rows that only carry binary/photo metadata.
+        if not any([status, created_at, article, product, reason, photos]):
+            continue
+        seen.add(rid)
+        out.append(
+            {
+                "id": rid,
+                "status": status,
+                "created_at": created_at,
+                "article": article,
+                "product": product,
+                "reason": reason,
+                "description": reason,
+                "photos": photos,
+                "marketplace": safe_market or str(merged.get("marketplace") or "").strip().lower(),
+                "raw": raw_node if raw_node else merged,
+            }
+        )
+    return out
 
 
 def _enqueue_sales_cache_warmup(
@@ -1586,9 +1844,6 @@ def me(request: Request, user: User = Depends(get_current_user), db: Session = D
     if actor_key.startswith("m:") and actor_member_id:
         member = db.get(TeamMember, int(actor_member_id))
         avatar_url = str(member.avatar_url or "") if member else ""
-        if not avatar_url:
-            profile = db.scalar(select(UserProfile).where(UserProfile.user_id == user.id))
-            avatar_url = str(profile.avatar_url or "") if profile else ""
     else:
         owner_member = db.scalar(
             select(TeamMember).where(
@@ -2558,6 +2813,7 @@ def wb_returns_list(
     cache_key = build_market_cache_key(
         {
             "kind": "returns",
+            "parser_rev": 3,
             "status": str(status or "").strip().lower(),
             "date_from": left,
             "date_to": right,
@@ -2583,13 +2839,14 @@ def wb_returns_list(
         fetcher=_load_returns_payload,
         stale_if_error_sec=30 * 60,
     )
+    normalized_rows = _normalize_returns_rows(list(payload.get("rows") or []), "wb")
     rows = _filter_claimed_feedback_rows(
         db,
         user,
         module_code="returns",
         marketplace="wb",
         item_type="return",
-        rows=list(payload.get("rows") or []),
+        rows=normalized_rows,
     )
     warnings = [str(x) for x in (payload.get("warnings") or [])]
     _audit(
@@ -2629,6 +2886,7 @@ def wb_returns_detail(return_id: str, user: User = Depends(get_current_user), db
     cache_key = build_market_cache_key(
         {
             "kind": "return_detail",
+            "parser_rev": 3,
             "return_id": rid,
             "key_rev": _secret_revision(wb_key),
         }
@@ -2645,6 +2903,16 @@ def wb_returns_detail(return_id: str, user: User = Depends(get_current_user), db
     )
     if not row:
         raise HTTPException(status_code=404, detail="Заявка на возврат не найдена")
+    normalized = _normalize_returns_rows([row], "wb")
+    if normalized:
+        safe = dict(row)
+        norm = normalized[0]
+        for key in ("id", "status", "created_at", "article", "product", "reason", "photos", "marketplace"):
+            if key in norm and norm.get(key) not in (None, "", [], {}):
+                safe[key] = norm.get(key)
+        safe["description"] = str(safe.get("reason") or safe.get("description") or "")
+        safe["raw"] = row
+        row = safe
     _audit(
         db,
         user,
@@ -2709,6 +2977,7 @@ def ozon_returns_list(
     cache_key = build_market_cache_key(
         {
             "kind": "returns",
+            "parser_rev": 3,
             "status": str(status or "").strip().lower(),
             "date_from": left,
             "date_to": right,
@@ -2734,13 +3003,14 @@ def ozon_returns_list(
         fetcher=_load_returns_payload,
         stale_if_error_sec=30 * 60,
     )
+    normalized_rows = _normalize_returns_rows(list(payload.get("rows") or []), "ozon")
     rows = _filter_claimed_feedback_rows(
         db,
         user,
         module_code="returns",
         marketplace="ozon",
         item_type="return",
-        rows=list(payload.get("rows") or []),
+        rows=normalized_rows,
     )
     warnings = [str(x) for x in (payload.get("warnings") or [])]
     _audit(
@@ -2780,6 +3050,7 @@ def ozon_returns_detail(return_id: str, user: User = Depends(get_current_user), 
     cache_key = build_market_cache_key(
         {
             "kind": "return_detail",
+            "parser_rev": 3,
             "return_id": rid,
             "key_rev": _secret_revision(ozon_key),
         }
@@ -2796,6 +3067,16 @@ def ozon_returns_detail(return_id: str, user: User = Depends(get_current_user), 
     )
     if not row:
         raise HTTPException(status_code=404, detail="Заявка на возврат не найдена")
+    normalized = _normalize_returns_rows([row], "ozon")
+    if normalized:
+        safe = dict(row)
+        norm = normalized[0]
+        for key in ("id", "status", "created_at", "article", "product", "reason", "photos", "marketplace"):
+            if key in norm and norm.get(key) not in (None, "", [], {}):
+                safe[key] = norm.get(key)
+        safe["description"] = str(safe.get("reason") or safe.get("description") or "")
+        safe["raw"] = row
+        row = safe
     _audit(
         db,
         user,
@@ -2953,7 +3234,7 @@ def wb_ads_campaigns(
                 fetcher=lambda: fetch_wb_campaign_summaries(
                     wb_key,
                     preview_ids,
-                    fallback_limit=max(160, min(1200, len(preview_ids) * 2)),
+                    fallback_limit=max(8, min(36, len(preview_ids) // 3 + 6)),
                 ),
                 stale_if_error_sec=60 * 60,
             )
@@ -3011,7 +3292,7 @@ def wb_ads_campaigns(
                 fetcher=lambda: fetch_wb_campaign_summaries(
                     wb_key,
                     hydrate_ids,
-                    fallback_limit=max(120, min(1000, len(hydrate_ids) * 2)),
+                    fallback_limit=max(8, min(28, len(hydrate_ids) // 4 + 6)),
                 ),
                 stale_if_error_sec=45 * 60,
                 prefer_stale_sec=20 * 60,
@@ -3228,6 +3509,8 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
     ids = sorted({int(x) for x in payload.ids if int(x) > 0})[:600]
     if not ids:
         return WbCampaignEnrichOut(summaries={}, stats={})
+    started_at = time.monotonic()
+    fallback_deadline_sec = 18.0
 
     summaries: dict[str, dict[str, Any]] = {}
     stats: dict[str, dict[str, Any]] = {}
@@ -3262,7 +3545,7 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
             fetcher=lambda: fetch_wb_campaign_summaries(
                 wb_key,
                 ids,
-                fallback_limit=max(120, min(1200, len(ids) * 2)),
+                fallback_limit=max(8, min(26, len(ids) // 4 + 8)),
             ),
             stale_if_error_sec=30 * 60,
             prefer_stale_sec=20 * 60,
@@ -3297,8 +3580,11 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
     if unresolved_stats_ids:
         # Keep API latency bounded: one-by-one fallback is expensive and can
         # trigger upstream timeouts when WB rate-limits.
-        single_retry_limit = 18 if len(ids) > 220 else (28 if len(ids) > 80 else 42)
+        single_retry_limit = 12 if len(ids) > 220 else (18 if len(ids) > 80 else 26)
         for cid in unresolved_stats_ids[:single_retry_limit]:
+            if (time.monotonic() - started_at) >= fallback_deadline_sec:
+                warnings.append("stats_retry_timeout")
+                break
             try:
                 one_map = fetch_wb_campaign_stats_bulk(wb_key, [int(cid)], date_from=None, date_to=None)
             except Exception:
@@ -3319,8 +3605,11 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
         )
     ]
     if unresolved_summary_ids:
-        retry_limit = 24 if len(ids) > 220 else (40 if len(ids) > 80 else 60)
+        retry_limit = 16 if len(ids) > 220 else (26 if len(ids) > 80 else 36)
         for cid in unresolved_summary_ids[:retry_limit]:
+            if (time.monotonic() - started_at) >= fallback_deadline_sec:
+                warnings.append("summary_retry_timeout")
+                break
             try:
                 detail_payload = fetch_wb_campaign_details(wb_key, campaign_id=int(cid))
             except Exception:
@@ -4312,13 +4601,18 @@ def get_help_docs(
 ):
     ensure_module_enabled(db, user, "help_center")
     docs = HELP_DOCS_EN if (lang or "").strip().lower() == "en" else HELP_DOCS_RU
+    normalized_module = str(module_code or "").strip()
+    if normalized_module == "ads_bidder":
+        normalized_module = "wb_ads_bidder"
     items = []
     for code, payload in docs.items():
         if code == "dashboard":
             continue
-        if module_code and code != module_code:
+        if normalized_module and code != normalized_module:
             continue
         items.append(HelpDocOut(module_code=code, title=payload["title"], content=payload["content"]))
+        if code == "wb_ads_bidder":
+            items.append(HelpDocOut(module_code="ads_bidder", title=payload["title"], content=payload["content"]))
     return items
 
 
@@ -4922,6 +5216,7 @@ def product_details(
         detail_cache_key = build_market_cache_key(
             {
                 "kind": "product_details",
+                "parser_rev": 2,
                 "product_id": int(product.id),
                 "marketplace": str(product.marketplace or "").strip().lower(),
                 "article": str(product.article or "").strip(),
@@ -4982,6 +5277,88 @@ def product_details(
                 return amount
         return 0.0
 
+    def _value_by_path(node: Any, path: str) -> Any:
+        current = node
+        for part in str(path or "").split("."):
+            key = str(part).strip()
+            if not key:
+                return None
+            if not isinstance(current, dict):
+                return None
+            current = current.get(key)
+        return current
+
+    def _collect_price_values(node: Any, keys: set[str], out: list[Any], depth: int = 0) -> None:
+        if node is None or depth > 5:
+            return
+        if isinstance(node, dict):
+            for raw_key, value in node.items():
+                key = str(raw_key or "").strip().lower()
+                if key in keys:
+                    out.append(value)
+                if isinstance(value, (dict, list)):
+                    _collect_price_values(value, keys, out, depth + 1)
+            return
+        if isinstance(node, list):
+            for item in node[:120]:
+                _collect_price_values(item, keys, out, depth + 1)
+
+    price_discount_values: list[Any] = []
+    price_base_values: list[Any] = []
+    price_min_values: list[Any] = []
+    price_marketing_values: list[Any] = []
+    _collect_price_values(
+        raw_payload,
+        {
+            "price",
+            "sale_price",
+            "discount_price",
+            "price_with_discount",
+            "pricewithdiscount",
+            "final_price",
+            "current_price",
+            "value",
+        },
+        price_discount_values,
+    )
+    _collect_price_values(
+        raw_payload,
+        {"old_price", "list_price", "base_price", "price_without_discount", "before_discount_price"},
+        price_base_values,
+    )
+    _collect_price_values(
+        raw_payload,
+        {"min_price", "minimum_price", "minprice"},
+        price_min_values,
+    )
+    _collect_price_values(
+        raw_payload,
+        {"marketing_price", "promo_price", "promotion_price", "action_price", "campaign_price"},
+        price_marketing_values,
+    )
+    for path in (
+        "price_info.price",
+        "price_info.old_price",
+        "price_info.min_price",
+        "price_info.marketing_price",
+        "price_info.promo_price",
+        "result.price",
+        "result.old_price",
+        "result.min_price",
+        "result.marketing_price",
+    ):
+        value = _value_by_path(raw_payload, path)
+        if value is None:
+            continue
+        if path.endswith((".price", "discount_price", "price_with_discount", "promo_price")):
+            price_discount_values.append(value)
+        if "old_price" in path or "price_without_discount" in path:
+            price_base_values.append(value)
+        if "min_price" in path:
+            price_min_values.append(value)
+        if "marketing_price" in path:
+            price_marketing_values.append(value)
+
     next_category = ""
     if not str(product.category_name or "").strip():
         next_category = str(attributes_payload.get("category_name") or "").strip()
@@ -5002,26 +5379,42 @@ def product_details(
     if float(product.price_discount or 0.0) <= 0:
         product.price_discount = _pick_first_price(
             attributes_payload.get("price"),
+            attributes_payload.get("price_with_discount"),
+            attributes_payload.get("discount_price"),
             raw_payload.get("price"),
+            raw_payload.get("sale_price"),
+            raw_payload.get("price_with_discount"),
+            raw_payload.get("discount_price"),
+            raw_payload.get("final_price"),
+            *price_discount_values,
             (raw_payload.get("result") or {}).get("price") if isinstance(raw_payload.get("result"), dict) else None,
         )
     if float(product.price_base or 0.0) <= 0:
         product.price_base = _pick_first_price(
             attributes_payload.get("old_price"),
+            attributes_payload.get("list_price"),
+            attributes_payload.get("base_price"),
             raw_payload.get("old_price"),
             raw_payload.get("price_without_discount"),
             raw_payload.get("list_price"),
+            raw_payload.get("base_price"),
+            *price_base_values,
         )
     if float(product.price_min or 0.0) <= 0:
         product.price_min = _pick_first_price(
             attributes_payload.get("min_price"),
             raw_payload.get("min_price"),
+            raw_payload.get("minimum_price"),
+            *price_min_values,
         )
     if float(product.price_marketing or 0.0) <= 0:
         product.price_marketing = _pick_first_price(
             attributes_payload.get("marketing_price"),
+            attributes_payload.get("campaign_price"),
             raw_payload.get("marketing_price"),
             raw_payload.get("promo_price"),
+            raw_payload.get("promotion_price"),
+            *price_marketing_values,
         )
     _audit(
         db,
@@ -6498,7 +6891,8 @@ def accounting_data(
     )
     warnings_now = [str(x or "") for x in (data.get("warnings") if isinstance(data, dict) else [])]
     has_upstream_warning = _warnings_indicate_upstream_failure(warnings_now)
-    if has_upstream_warning and not _accounting_payload_has_data(data):
+    finance_fallback_needed = _accounting_payload_needs_finance_fallback(data, warnings_now)
+    if has_upstream_warning and (not _accounting_payload_has_data(data) or finance_fallback_needed):
         fallback_data: dict[str, Any] | None = None
         fallback_meta: dict[str, Any] = {}
         if _accounting_payload_has_data(previous_same_key_payload):
@@ -6528,9 +6922,14 @@ def accounting_data(
         if _accounting_payload_has_data(fallback_data):
             data = fallback_data or {}
             accounting_cache_meta = fallback_meta or {"source": "db-latest-module-fallback", "age_sec": -1}
-            data.setdefault("warnings", []).append(
-                "Показаны последние стабильные данные: текущий запрос к API вернул пустой ответ."
-            )
+            if finance_fallback_needed:
+                data.setdefault("warnings", []).append(
+                    "Показаны последние стабильные данные: текущий ответ API частичный (финансовые метрики временно недоступны)."
+                )
+            else:
+                data.setdefault("warnings", []).append(
+                    "Показаны последние стабильные данные: текущий запрос к API вернул пустой ответ."
+                )
     if accounting_cache_meta.get("source") == "db-stale-fallback":
         data.setdefault("warnings", []).append(
             "Показаны кэшированные данные из-за временной недоступности API маркетплейса."
@@ -10998,6 +11397,226 @@ def social_add_task_comment(
     return _social_task_to_out(db, task)
 
 
+def _social_public_base_url(request: Request) -> str:
+    from_env = str(os.getenv("SEO_WIBE_PUBLIC_BASE_URL") or "").strip().rstrip("/")
+    if from_env:
+        return from_env
+    return str(request.base_url).rstrip("/")
+
+
+def _social_google_oauth_config(request: Request) -> tuple[str, str, str]:
+    client_id = str(os.getenv("SEO_WIBE_GOOGLE_CLIENT_ID") or "").strip()
+    client_secret = str(os.getenv("SEO_WIBE_GOOGLE_CLIENT_SECRET") or "").strip()
+    redirect_uri = str(os.getenv("SEO_WIBE_GOOGLE_REDIRECT_URI") or "").strip()
+    if not redirect_uri:
+        redirect_uri = f"{_social_public_base_url(request)}/api/social/calendar/google-oauth/callback"
+    return client_id, client_secret, redirect_uri
+
+
+def _social_google_oauth_state_for_user(user_id: int) -> str:
+    return create_access_token(f"gcal_oauth:{int(user_id)}:{int(time.time())}", expires_minutes=20)
+
+
+def _social_google_oauth_user_from_state(state: str) -> int:
+    subject = str(decode_access_token(str(state or "").strip()) or "").strip()
+    if not subject.startswith("gcal_oauth:"):
+        return 0
+    chunks = subject.split(":")
+    if len(chunks) < 3:
+        return 0
+    try:
+        return int(chunks[1] or 0)
+    except Exception:
+        return 0
+
+
+def _social_google_tokens_load(db: Session) -> dict[str, dict[str, Any]]:
+    raw = _get_system_setting(db, SOCIAL_GOOGLE_OAUTH_TOKENS_KEY)
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    out: dict[str, dict[str, Any]] = {}
+    for key, value in parsed.items():
+        uid = str(key or "").strip()
+        if not uid or not isinstance(value, dict):
+            continue
+        out[uid] = dict(value)
+    return out
+
+
+def _social_google_tokens_get(db: Session, user_id: int) -> dict[str, Any]:
+    all_tokens = _social_google_tokens_load(db)
+    return dict(all_tokens.get(str(int(user_id))) or {})
+
+
+def _social_google_tokens_save(db: Session, user_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    all_tokens = _social_google_tokens_load(db)
+    safe_payload = {
+        "access_token": str(payload.get("access_token") or "").strip(),
+        "refresh_token": str(payload.get("refresh_token") or "").strip(),
+        "token_type": str(payload.get("token_type") or "Bearer").strip() or "Bearer",
+        "scope": str(payload.get("scope") or "").strip(),
+        "expires_at": int(payload.get("expires_at") or 0),
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+    all_tokens[str(int(user_id))] = safe_payload
+    _set_system_setting(db, SOCIAL_GOOGLE_OAUTH_TOKENS_KEY, json.dumps(all_tokens, ensure_ascii=False))
+    return safe_payload
+
+
+def _social_google_refresh_access_token(
+    db: Session,
+    *,
+    user_id: int,
+    refresh_token: str,
+    client_id: str,
+    client_secret: str,
+) -> dict[str, Any]:
+    form = urllib.parse.urlencode(
+        {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "refresh_token": refresh_token,
+            "grant_type": "refresh_token",
+        }
+    ).encode("utf-8")
+    req = urllib.request.Request(
+        "https://oauth2.googleapis.com/token",
+        data=form,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=25) as response:
+            data = json.loads(response.read().decode("utf-8", errors="ignore"))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Google refresh token error: {str(exc or '')[:220]}")
+    access_token = str(data.get("access_token") or "").strip()
+    if not access_token:
+        raise HTTPException(status_code=400, detail="Google OAuth не вернул access_token при обновлении")
+    expires_in = int(data.get("expires_in") or 3600)
+    next_payload = _social_google_tokens_get(db, user_id)
+    next_payload["access_token"] = access_token
+    next_payload["token_type"] = str(data.get("token_type") or next_payload.get("token_type") or "Bearer")
+    next_payload["scope"] = str(data.get("scope") or next_payload.get("scope") or "")
+    next_payload["expires_at"] = int(time.time()) + max(60, expires_in)
+    if not str(next_payload.get("refresh_token") or "").strip():
+        next_payload["refresh_token"] = refresh_token
+    return _social_google_tokens_save(db, user_id, next_payload)
+
+
+def _social_google_event_dt(value: dict[str, Any] | None, *, is_end: bool = False) -> datetime | None:
+    node = value if isinstance(value, dict) else {}
+    date_time = str(node.get("dateTime") or "").strip()
+    if date_time:
+        try:
+            parsed = datetime.fromisoformat(date_time.replace("Z", "+00:00"))
+            if parsed.tzinfo is not None:
+                parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+            return parsed
+        except Exception:
+            return None
+    date_only = str(node.get("date") or "").strip()
+    if not date_only:
+        return None
+    try:
+        base = datetime.strptime(date_only, "%Y-%m-%d")
+    except Exception:
+        return None
+    if is_end:
+        return base + timedelta(days=1)
+    return base
+
+
+def _social_google_fetch_primary_events(
+    db: Session,
+    *,
+    user_id: int,
+    client_id: str,
+    client_secret: str,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    tokens = _social_google_tokens_get(db, user_id)
+    access_token = str(tokens.get("access_token") or "").strip()
+    refresh_token = str(tokens.get("refresh_token") or "").strip()
+    expires_at = int(tokens.get("expires_at") or 0)
+    if (not access_token) or (expires_at > 0 and expires_at <= int(time.time()) + 45):
+        if not refresh_token:
+            raise HTTPException(status_code=400, detail="Google Calendar не подключен. Нажмите «Подключить Google».")
+        refreshed = _social_google_refresh_access_token(
+            db,
+            user_id=user_id,
+            refresh_token=refresh_token,
+            client_id=client_id,
+            client_secret=client_secret,
+        )
+        access_token = str(refreshed.get("access_token") or "").strip()
+        if not access_token:
+            raise HTTPException(status_code=400, detail="Не удалось обновить Google access_token")
+
+    time_min = (datetime.utcnow() - timedelta(days=180)).replace(microsecond=0).isoformat() + "Z"
+    time_max = (datetime.utcnow() + timedelta(days=365)).replace(microsecond=0).isoformat() + "Z"
+    params = urllib.parse.urlencode(
+        {
+            "singleEvents": "true",
+            "orderBy": "startTime",
+            "maxResults": "2500",
+            "timeMin": time_min,
+            "timeMax": time_max,
+        }
+    )
+    req = urllib.request.Request(
+        f"https://www.googleapis.com/calendar/v3/calendars/primary/events?{params}",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+            "User-Agent": "SEO-WIBE/1.0",
+        },
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=25) as response:
+            payload = json.loads(response.read().decode("utf-8", errors="ignore"))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Не удалось загрузить события Google Calendar: {str(exc or '')[:220]}")
+    rows = payload.get("items") if isinstance(payload, dict) else []
+    if not isinstance(rows, list):
+        rows = []
+    out: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        uid = str(row.get("id") or "").strip()
+        if not uid:
+            continue
+        start_at = _social_google_event_dt(row.get("start"), is_end=False)
+        end_at = _social_google_event_dt(row.get("end"), is_end=True)
+        if not start_at:
+            continue
+        summary = str(row.get("summary") or "").strip() or "Google event"
+        description = str(row.get("description") or "").strip()
+        location = str(row.get("location") or "").strip()
+        details_parts = [description]
+        if location:
+            details_parts.append(f"Location: {location}")
+        details_text = "\n".join([x for x in details_parts if x]).strip()
+        out.append(
+            {
+                "uid": uid,
+                "title": summary[:255],
+                "details": details_text[:5000],
+                "start_at": start_at,
+                "end_at": end_at,
+            }
+        )
+    return out, warnings
+
+
 @router.get("/social/calendar/events", response_model=list[SocialCalendarEventOut])
 def social_calendar_events(
     date_from: str = "",
@@ -11033,6 +11652,137 @@ def social_calendar_events(
     ]
 
 
+@router.get("/social/calendar/google-oauth/status")
+def social_calendar_google_oauth_status(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    tokens = _social_google_tokens_get(db, int(user.id))
+    access_token = str(tokens.get("access_token") or "").strip()
+    refresh_token = str(tokens.get("refresh_token") or "").strip()
+    expires_at = int(tokens.get("expires_at") or 0)
+    return {
+        "connected": bool(access_token or refresh_token),
+        "expires_at": expires_at,
+        "scope": str(tokens.get("scope") or "").strip(),
+        "has_refresh_token": bool(refresh_token),
+    }
+
+
+@router.get("/social/calendar/google-oauth/start")
+def social_calendar_google_oauth_start(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    client_id, _, redirect_uri = _social_google_oauth_config(request)
+    if not client_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Google OAuth не настроен: задайте SEO_WIBE_GOOGLE_CLIENT_ID и SEO_WIBE_GOOGLE_CLIENT_SECRET на сервере.",
+        )
+    state = _social_google_oauth_state_for_user(int(user.id))
+    params = urllib.parse.urlencode(
+        {
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": SOCIAL_GOOGLE_OAUTH_SCOPE,
+            "access_type": "offline",
+            "prompt": "consent",
+            "include_granted_scopes": "true",
+            "state": state,
+        }
+    )
+    url = f"https://accounts.google.com/o/oauth2/v2/auth?{params}"
+    _audit(
+        db,
+        user,
+        action="social_calendar_google_oauth_started",
+        details=f"redirect_uri={redirect_uri}",
+        module_code="social_hub",
+        entity_type="calendar_oauth",
+        status="ok",
+        request=request,
+    )
+    db.commit()
+    return {"ok": True, "url": url}
+
+
+@router.get("/social/calendar/google-oauth/callback")
+def social_calendar_google_oauth_callback(
+    request: Request,
+    code: str = "",
+    state: str = "",
+    error: str = "",
+    db: Session = Depends(get_db),
+):
+    public_base = _social_public_base_url(request)
+    social_redirect = f"{public_base}/?tab=social&social_subtab=calendar"
+    if error:
+        return RedirectResponse(
+            url=f"{social_redirect}&google_oauth_error={urllib.parse.quote(str(error)[:180])}",
+            status_code=302,
+        )
+    user_id = _social_google_oauth_user_from_state(state)
+    if user_id <= 0:
+        return RedirectResponse(url=f"{social_redirect}&google_oauth_error=invalid_state", status_code=302)
+    user = db.get(User, user_id)
+    if not user:
+        return RedirectResponse(url=f"{social_redirect}&google_oauth_error=user_not_found", status_code=302)
+    client_id, client_secret, redirect_uri = _social_google_oauth_config(request)
+    if not client_id or not client_secret:
+        return RedirectResponse(url=f"{social_redirect}&google_oauth_error=oauth_not_configured", status_code=302)
+    form = urllib.parse.urlencode(
+        {
+            "code": str(code or "").strip(),
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code",
+        }
+    ).encode("utf-8")
+    token_req = urllib.request.Request(
+        "https://oauth2.googleapis.com/token",
+        data=form,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(token_req, timeout=25) as response:
+            token_data = json.loads(response.read().decode("utf-8", errors="ignore"))
+    except Exception:
+        return RedirectResponse(url=f"{social_redirect}&google_oauth_error=token_exchange_failed", status_code=302)
+    access_token = str(token_data.get("access_token") or "").strip()
+    refresh_token = str(token_data.get("refresh_token") or "").strip()
+    if not access_token:
+        return RedirectResponse(url=f"{social_redirect}&google_oauth_error=missing_access_token", status_code=302)
+    expires_in = int(token_data.get("expires_in") or 3600)
+    existing = _social_google_tokens_get(db, int(user_id))
+    payload = {
+        "access_token": access_token,
+        "refresh_token": refresh_token or str(existing.get("refresh_token") or "").strip(),
+        "token_type": str(token_data.get("token_type") or "Bearer"),
+        "scope": str(token_data.get("scope") or SOCIAL_GOOGLE_OAUTH_SCOPE),
+        "expires_at": int(time.time()) + max(60, expires_in),
+    }
+    _social_google_tokens_save(db, int(user_id), payload)
+    _audit(
+        db,
+        user,
+        action="social_calendar_google_oauth_connected",
+        details=f"scope={payload.get('scope')};has_refresh={'1' if payload.get('refresh_token') else '0'}",
+        module_code="social_hub",
+        entity_type="calendar_oauth",
+        status="ok",
+        request=request,
+    )
+    db.commit()
+    return RedirectResponse(url=f"{social_redirect}&google_oauth_connected=1", status_code=302)
+
+
 @router.post("/social/calendar/google-sync", response_model=SocialCalendarGoogleSyncOut)
 def social_calendar_google_sync(
     payload: SocialCalendarGoogleSyncIn,
@@ -11043,40 +11793,55 @@ def social_calendar_google_sync(
     ensure_module_enabled(db, user, "social_hub")
     actor_key, _, _ = _social_actor_identity(db, user)
     url_raw = str(payload.ical_url or "").strip()
-    if not url_raw:
-        raise HTTPException(status_code=400, detail="Укажите ссылку ICS/Google Calendar")
-    url_value = url_raw
-    if url_value.lower().startswith("webcal://"):
-        url_value = "https://" + url_value[9:]
-    parsed_url = urllib.parse.urlparse(url_value)
-    if parsed_url.scheme not in {"http", "https"}:
-        raise HTTPException(status_code=400, detail="Поддерживаются только ссылки http/https (или webcal)")
-
     warnings: list[str] = []
-    try:
-        req = urllib.request.Request(url_value, headers={"User-Agent": "SEO-WIBE/1.0"})
-        with urllib.request.urlopen(req, timeout=25) as response:
-            raw_bytes = response.read(2 * 1024 * 1024)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Не удалось загрузить ICS: {str(exc or '')[:220]}")
-
-    text_payload = ""
-    for encoding in ("utf-8", "utf-8-sig", "cp1251", "latin-1"):
+    parsed_events: list[dict[str, Any]] = []
+    source_hash = ""
+    if url_raw:
+        url_value = url_raw
+        if url_value.lower().startswith("webcal://"):
+            url_value = "https://" + url_value[9:]
+        parsed_url = urllib.parse.urlparse(url_value)
+        if parsed_url.scheme not in {"http", "https"}:
+            raise HTTPException(status_code=400, detail="Поддерживаются только ссылки http/https (или webcal)")
         try:
-            text_payload = raw_bytes.decode(encoding)
-            break
-        except Exception:
-            continue
-    if not text_payload:
-        raise HTTPException(status_code=400, detail="Не удалось декодировать ICS файл")
+            req = urllib.request.Request(url_value, headers={"User-Agent": "SEO-WIBE/1.0"})
+            with urllib.request.urlopen(req, timeout=25) as response:
+                raw_bytes = response.read(2 * 1024 * 1024)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Не удалось загрузить ICS: {str(exc or '')[:220]}")
 
-    parsed_events, parse_warnings = _social_parse_ical_events(text_payload)
-    warnings.extend(parse_warnings)
+        text_payload = ""
+        for encoding in ("utf-8", "utf-8-sig", "cp1251", "latin-1"):
+            try:
+                text_payload = raw_bytes.decode(encoding)
+                break
+            except Exception:
+                continue
+        if not text_payload:
+            raise HTTPException(status_code=400, detail="Не удалось декодировать ICS файл")
+        parsed_events, parse_warnings = _social_parse_ical_events(text_payload)
+        warnings.extend(parse_warnings)
+        source_hash = hashlib.sha1(url_value.encode("utf-8")).hexdigest()[:16]
+    else:
+        client_id, client_secret, _ = _social_google_oauth_config(request)
+        if not client_id or not client_secret:
+            raise HTTPException(
+                status_code=400,
+                detail="Google OAuth не настроен на сервере. Добавьте SEO_WIBE_GOOGLE_CLIENT_ID и SEO_WIBE_GOOGLE_CLIENT_SECRET.",
+            )
+        parsed_events, oauth_warnings = _social_google_fetch_primary_events(
+            db,
+            user_id=int(user.id),
+            client_id=client_id,
+            client_secret=client_secret,
+        )
+        warnings.extend(oauth_warnings)
+        source_hash = hashlib.sha1(f"oauth-primary:{int(user.id)}".encode("utf-8")).hexdigest()[:16]
+
     if not parsed_events:
         db.commit()
         return SocialCalendarGoogleSyncOut(ok=True, imported=0, updated=0, deleted=0, skipped=0, warnings=warnings)
 
-    source_hash = hashlib.sha1(url_value.encode("utf-8")).hexdigest()[:16]
     marker_prefix = f"[[gcal_sync source={source_hash} "
     marker_pattern = re.compile(r"\[\[gcal_sync source=([a-f0-9]{16}) uid=([^\]\s]+)\]\]")
 
@@ -13223,6 +13988,8 @@ def _sanitize_ui_settings_payload(raw: dict[str, Any] | None) -> dict[str, Any]:
         allowed = [str(DEFAULT_UI_SETTINGS["default_theme"])]
     if default_theme not in allowed:
         default_theme = allowed[0]
+    if enabled:
+        force_theme = False
     return {
         "theme_choice_enabled": enabled,
         "force_theme": force_theme,

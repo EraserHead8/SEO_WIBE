@@ -2288,8 +2288,9 @@ function handleMobileBackPress() {
   if (String(currentTab || "") === "social") {
     const subtab = String(currentSocialSubtab || window.socialState?.currentSubtab || "chat");
     const currentThreadId = Number(window.socialState?.currentThreadId || 0);
-    const chatLayout = document.querySelector("#socialSubtabChat .social-chat-layout");
-    const chatOpenedByLayout = Boolean(chatLayout?.classList.contains("chat-open"));
+    const chatOpenedByLayout = typeof window.socialIsThreadOpen === "function"
+      ? Boolean(window.socialIsThreadOpen())
+      : Boolean(document.querySelector("#socialSubtabChat .social-chat-layout")?.classList.contains("chat-open"));
     if ((currentThreadId > 0 || chatOpenedByLayout) && typeof window.socialCloseThread === "function") {
       currentSocialSubtab = "chat";
       if (subtab !== "chat" && typeof window.switchSocialSubtab === "function") {
@@ -4933,6 +4934,7 @@ function normalizeReturnRow(rawRow, marketplace, idx) {
     "return.reason",
     "return.comment"
   );
+  row.reason = row.description;
   row.photos = normalizeFeedbackPhotos(
     rawRow.photos
     || rawRow.images
@@ -4943,6 +4945,8 @@ function normalizeReturnRow(rawRow, marketplace, idx) {
     || rawRow.claim?.images
     || rawRow.return?.photos
     || rawRow.return?.images
+    || rawRow.raw?.photos
+    || rawRow.raw?.images
     || []
   );
   return row;
@@ -5196,8 +5200,31 @@ async function openReturnDetails(returnId) {
     alert(e.message);
     return null;
   });
-  if (!data) return;
-  renderReturnDetailModal(data, rid);
+  const listRow = (returnsRows || []).find((x) => String(x?.id || "").trim() === rid) || null;
+  if (!data) {
+    if (listRow) renderReturnDetailModal(listRow, rid);
+    return;
+  }
+  const merged = data && typeof data === "object" ? { ...data } : {};
+  if (listRow && typeof listRow === "object") {
+    if (!normalizeFeedbackText(merged.reason) && normalizeFeedbackText(listRow.reason || listRow.description)) {
+      merged.reason = String(listRow.reason || listRow.description || "");
+    }
+    if (!normalizeFeedbackText(merged.description) && normalizeFeedbackText(listRow.description || listRow.reason)) {
+      merged.description = String(listRow.description || listRow.reason || "");
+    }
+    const detailPhotos = Array.isArray(merged.photos) ? merged.photos : [];
+    if (!detailPhotos.length && Array.isArray(listRow.photos) && listRow.photos.length) {
+      merged.photos = listRow.photos.slice();
+    }
+    if (!normalizeFeedbackText(merged.status) && normalizeFeedbackText(listRow.status)) merged.status = String(listRow.status || "");
+    if (!normalizeFeedbackText(merged.created_at) && normalizeFeedbackText(listRow.created_at || listRow.date)) {
+      merged.created_at = String(listRow.created_at || listRow.date || "");
+    }
+    if (!normalizeFeedbackText(merged.article) && normalizeFeedbackText(listRow.article)) merged.article = String(listRow.article || "");
+    if (!normalizeFeedbackText(merged.product) && normalizeFeedbackText(listRow.product)) merged.product = String(listRow.product || "");
+  }
+  renderReturnDetailModal(merged, rid);
 }
 
 async function actionReturn(returnId, actionCode) {
@@ -5272,7 +5299,7 @@ function renderReturns() {
         <div class="cell-product-name">${escapeHtml(String(row.product || "-"))}</div>
         <div class="cell-meta-small">${escapeHtml(String(row.article || "-"))}</div>
       </td>
-      <td data-label="${escapeHtml(tr("Описание", "Description"))}"><div class="cell-main-text">${escapeHtml(String(row.description || "-"))}</div></td>
+      <td data-label="${escapeHtml(tr("Описание", "Description"))}"><div class="cell-main-text">${escapeHtml(String(row.description || row.reason || "-"))}</div></td>
       <td data-label="${escapeHtml(tr("Фото", "Photos"))}"><div class="review-photo-list">${photosHtml}</div></td>
       <td data-label="${escapeHtml(tr("Действия", "Actions"))}">${actionButtons}</td>
     `;
@@ -7511,6 +7538,18 @@ function extractProductDetailContext(details, fallbackProduct) {
     }
     return "";
   };
+  const pickPrice = (...values) => {
+    let fallback = "";
+    for (const value of values) {
+      const text = normalizeProductDetailValue(value);
+      if (!text) continue;
+      if (!fallback) fallback = text;
+      const normalized = String(text).replace(/\s+/g, "").replace(",", ".").replace(/[^0-9.\-]/g, "");
+      const amount = Number.parseFloat(normalized);
+      if (Number.isFinite(amount) && amount > 0) return text;
+    }
+    return fallback;
+  };
   const pickDeep = (...keys) => {
     const wanted = new Set(
       keys
@@ -7563,14 +7602,13 @@ function extractProductDetailContext(details, fallbackProduct) {
     { label: tr("Баркод", "Barcode"), value: barcode || "-" },
   ];
 
-  const purchasePriceValue = pickAny(
-    base.purchase_price,
+  const purchasePriceValue = pickPrice(
     pickAttr("purchase_price", "cost_price"),
     pickRaw("purchase_price", "cost_price"),
-    pickDeep("purchase_price", "cost_price", "buy_price", "supplier_price")
+    pickDeep("purchase_price", "cost_price", "buy_price", "supplier_price"),
+    base.purchase_price
   );
-  const priceBaseValue = pickAny(
-    base.price_base,
+  const priceBaseValue = pickPrice(
     pickAttr("old_price", "price_base", "list_price", "price_without_discount"),
     pickRaw(
       "old_price",
@@ -7583,10 +7621,10 @@ function extractProductDetailContext(details, fallbackProduct) {
       "sizes.0.originalPrice",
       "sizes.0.priceWithoutDiscount"
     ),
-    pickDeep("old_price", "base_price", "list_price", "price_without_discount", "original_price")
+    pickDeep("old_price", "base_price", "list_price", "price_without_discount", "original_price"),
+    base.price_base
   );
-  const priceDiscountValue = pickAny(
-    base.price_discount,
+  const priceDiscountValue = pickPrice(
     pickAttr("price", "discounted_price", "discountedPrice"),
     pickRaw(
       "price",
@@ -7598,19 +7636,20 @@ function extractProductDetailContext(details, fallbackProduct) {
       "result.price",
       "result.discounted_price"
     ),
-    pickDeep("discounted_price", "discountedprice", "sale_price", "saleprice", "price_with_discount", "promo_price")
+    pickDeep("discounted_price", "discountedprice", "sale_price", "saleprice", "price_with_discount", "promo_price"),
+    base.price_discount
   );
-  const priceMinValue = pickAny(
-    base.price_min,
+  const priceMinValue = pickPrice(
     pickAttr("min_price", "price_min"),
     pickRaw("min_price", "price_min", "result.min_price"),
-    pickDeep("min_price", "price_min", "minimum_price")
+    pickDeep("min_price", "price_min", "minimum_price"),
+    base.price_min
   );
-  const priceMarketingValue = pickAny(
-    base.price_marketing,
+  const priceMarketingValue = pickPrice(
     pickAttr("marketing_price", "promo_price"),
     pickRaw("marketing_price", "promo_price", "advert_price", "campaign_price", "result.marketing_price"),
-    pickDeep("marketing_price", "promo_price", "campaign_price", "special_price", "advert_price")
+    pickDeep("marketing_price", "promo_price", "campaign_price", "special_price", "advert_price"),
+    base.price_marketing
   );
 
   const commerceItems = [

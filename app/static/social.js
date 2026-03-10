@@ -47,6 +47,7 @@ let socialState = {
   currencyRatesStamp: 0,
   currencyRatesTimer: null,
   currencyRatesLoading: false,
+  googleCalendarOauth: null,
   sendingMessage: false,
   chatReplyTo: null,
   chatContextMessageId: 0,
@@ -61,6 +62,9 @@ let socialState = {
   pendingAnnouncementsInFlight: false,
   globalHooksStarted: false,
 };
+if (typeof window !== "undefined") {
+  window.socialState = socialState;
+}
 
 const SOCIAL_POLL_LEADER_KEY = "seo_wibe_social_poll_leader_v1";
 const SOCIAL_POLL_SHARED_STATE_KEY = "seo_wibe_social_poll_shared_v1";
@@ -678,6 +682,7 @@ function resetSocialState() {
     currencyRatesStamp: 0,
     currencyRatesTimer: null,
     currencyRatesLoading: false,
+    googleCalendarOauth: null,
     sendingMessage: false,
     loadingMessagesThreadId: 0,
     chatReplyTo: null,
@@ -693,6 +698,9 @@ function resetSocialState() {
     globalHooksStarted: false,
     pollClientId: `poll-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`,
   };
+  if (typeof window !== "undefined") {
+    window.socialState = socialState;
+  }
   socialSetBell(0);
   socialSyncMobileChatChrome(null);
 }
@@ -1918,6 +1926,13 @@ function socialSetChatView(open) {
   if (!layout) return;
   layout.classList.toggle("chat-open", Boolean(open));
   socialSyncMobileChatChrome();
+}
+
+function socialIsThreadOpen() {
+  const currentId = Number(socialState.currentThreadId || 0);
+  if (currentId > 0) return true;
+  const layout = document.querySelector("#socialSubtabChat .social-chat-layout");
+  return Boolean(layout?.classList.contains("chat-open"));
 }
 
 function socialHasRenderedMessages(host = null) {
@@ -3328,6 +3343,60 @@ async function socialQuickDone(taskId) {
   await socialLoadTasks();
 }
 
+async function socialLoadGoogleCalendarStatus() {
+  const statusNode = document.getElementById("socialCalendarGoogleStatus");
+  const connectBtn = document.getElementById("socialCalendarGoogleConnectBtn");
+  const query = new URLSearchParams(window.location.search || "");
+  const oauthConnected = String(query.get("google_oauth_connected") || "") === "1";
+  const oauthError = String(query.get("google_oauth_error") || "").trim();
+  if (oauthConnected || oauthError) {
+    if (oauthConnected) {
+      alert(tr("Google Calendar успешно подключен.", "Google Calendar connected successfully."));
+    } else if (oauthError) {
+      alert(`${tr("Ошибка Google OAuth", "Google OAuth error")}: ${oauthError}`);
+    }
+    query.delete("google_oauth_connected");
+    query.delete("google_oauth_error");
+    const nextSearch = query.toString();
+    const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${window.location.hash || ""}`;
+    window.history.replaceState({}, document.title, nextUrl);
+  }
+  const data = await socialRequest("/api/social/calendar/google-oauth/status", { timeoutMs: 12000 }).catch(() => null);
+  socialState.googleCalendarOauth = data && typeof data === "object" ? data : null;
+  const connected = Boolean(socialState.googleCalendarOauth?.connected);
+  const expiresAt = Number(socialState.googleCalendarOauth?.expires_at || 0);
+  const expiresText = (expiresAt > 0)
+    ? new Date(expiresAt * 1000).toLocaleString()
+    : "";
+  if (statusNode) {
+    statusNode.textContent = connected
+      ? tr(
+        `Google Calendar подключен${expiresText ? ` (токен до ${expiresText})` : ""}. Можно синхронизировать без ICS-ссылки.`,
+        `Google Calendar is connected${expiresText ? ` (token valid until ${expiresText})` : ""}. Sync can run without ICS URL.`
+      )
+      : tr("Google Calendar не подключен. Нажмите «Подключить Google».", "Google Calendar is not connected. Click Connect Google.");
+  }
+  if (connectBtn) {
+    connectBtn.classList.toggle("btn-success", connected);
+    connectBtn.textContent = connected
+      ? tr("Переподключить Google", "Reconnect Google")
+      : tr("Подключить Google", "Connect Google");
+  }
+}
+
+async function socialConnectGoogleCalendar() {
+  const data = await socialRequest("/api/social/calendar/google-oauth/start", { timeoutMs: 12000 }).catch((e) => {
+    alert(e.message || tr("Не удалось запустить Google OAuth.", "Unable to start Google OAuth."));
+    return null;
+  });
+  const url = String(data?.url || "").trim();
+  if (!url) {
+    alert(tr("Не удалось получить ссылку Google OAuth.", "Unable to obtain Google OAuth URL."));
+    return;
+  }
+  window.location.href = url;
+}
+
 async function socialLoadCalendar() {
   const monthInput = document.getElementById("socialCalendarMonth");
   const syncUrlInput = document.getElementById("socialCalendarGoogleIcs");
@@ -3352,6 +3421,7 @@ async function socialLoadCalendar() {
     const [y, m] = monthVal.split("-").map((x) => Number(x || 0));
     if (y && m) socialState.calendarDate = new Date(y, m - 1, 1);
   }
+  await socialLoadGoogleCalendarStatus();
   const start = new Date(socialState.calendarDate.getFullYear(), socialState.calendarDate.getMonth(), 1);
   const end = new Date(socialState.calendarDate.getFullYear(), socialState.calendarDate.getMonth() + 1, 0, 23, 59, 59);
   const qp = new URLSearchParams({
@@ -3584,18 +3654,27 @@ async function socialSyncGoogleCalendar() {
   const replaceInput = document.getElementById("socialCalendarGoogleReplace");
   const url = String(urlInput?.value || "").trim();
   const replaceSource = Boolean(replaceInput?.checked);
-  if (!url) {
-    alert(tr("Вставьте ссылку ICS из Google Calendar.", "Paste Google Calendar ICS URL."));
+  const oauthConnected = Boolean(socialState.googleCalendarOauth?.connected);
+  const useIcs = Boolean(url);
+  if (!useIcs && !oauthConnected) {
+    alert(
+      tr(
+        "Подключите Google OAuth или вставьте ICS-ссылку календаря.",
+        "Connect Google OAuth or paste an ICS calendar URL."
+      )
+    );
     return;
   }
-  try {
-    localStorage.setItem("social_calendar_google_ics_url", url);
-    localStorage.setItem("social_calendar_google_replace", replaceSource ? "1" : "0");
-  } catch (_) {}
+  if (useIcs) {
+    try {
+      localStorage.setItem("social_calendar_google_ics_url", url);
+      localStorage.setItem("social_calendar_google_replace", replaceSource ? "1" : "0");
+    } catch (_) {}
+  }
   const data = await socialRequest("/api/social/calendar/google-sync", {
     method: "POST",
     body: JSON.stringify({
-      ical_url: url,
+      ical_url: useIcs ? url : "",
       is_public: true,
       replace_source_events: replaceSource,
     }),
@@ -3613,9 +3692,11 @@ async function socialSyncGoogleCalendar() {
     `${tr("Обновлено", "Updated")}: ${Number(data.updated || 0)}`,
     `${tr("Удалено", "Deleted")}: ${Number(data.deleted || 0)}`,
     `${tr("Пропущено", "Skipped")}: ${Number(data.skipped || 0)}`,
+    `${tr("Источник", "Source")}: ${useIcs ? tr("ICS URL", "ICS URL") : "Google OAuth"}`,
   ];
   if (warnings.length) summary.push(`${tr("Предупреждения", "Warnings")}: ${warnings.join(" | ")}`);
   alert(summary.join("\n"));
+  await socialLoadGoogleCalendarStatus();
   await socialLoadCalendar();
 }
 
@@ -4071,6 +4152,7 @@ window.socialSaveEvent = socialSaveEvent;
 window.socialDeleteEvent = socialDeleteEvent;
 window.socialShiftCalendar = socialShiftCalendar;
 window.socialLoadCalendar = socialLoadCalendar;
+window.socialConnectGoogleCalendar = socialConnectGoogleCalendar;
 window.socialRenderCalendar = socialRenderCalendar;
 window.socialShowDay = socialShowDay;
 window.socialSetBell = socialSetBell;
@@ -4098,6 +4180,7 @@ window.socialDeleteNoteFile = socialDeleteNoteFile;
 window.socialStartGlobalHooks = socialStartGlobalHooks;
 window.socialStopGlobalHooks = socialStopGlobalHooks;
 window.socialSyncMobileChatChrome = socialSyncMobileChatChrome;
+window.socialIsThreadOpen = socialIsThreadOpen;
 window.resetSocialState = resetSocialState;
 
 document.addEventListener("visibilitychange", () => {

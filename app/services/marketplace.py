@@ -40,6 +40,7 @@ class MarketplaceProduct:
     description: str
     category_name: str = ""
     photos: list[str] = field(default_factory=list)
+    raw: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -929,6 +930,7 @@ def _fetch_wb_products(
                 description=description,
                 category_name=category_name,
                 photos=photos,
+                raw=card if isinstance(card, dict) else {},
             )
         )
 
@@ -1033,6 +1035,7 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
                 description=description,
                 category_name=category_name,
                 photos=photos,
+                raw=item if isinstance(item, dict) else {},
             )
         )
 
@@ -1102,6 +1105,7 @@ def _fetch_wb_product_details(api_key: str, article: str, external_id: str = "")
             "nm_id": str(best.external_id or "").strip(),
             "name": str(best.name or "").strip(),
         }
+        raw_source = best.raw if isinstance(best.raw, dict) else {}
         raw = {
             "vendorCode": str(best.article or "").strip(),
             "id": str(best.external_id or "").strip(),
@@ -1109,6 +1113,12 @@ def _fetch_wb_product_details(api_key: str, article: str, external_id: str = "")
             "subjectName": str(best.category_name or "").strip(),
             "photos": photos,
         }
+        if raw_source:
+            merged = dict(raw_source)
+            for key, value in raw.items():
+                if key not in merged or merged.get(key) in (None, "", [], {}):
+                    merged[key] = value
+            raw = merged
         return {"photos": photos, "attributes": attrs, "raw": raw}
 
     def _collect_photo_urls(value: Any) -> list[str]:
@@ -1162,18 +1172,46 @@ def _fetch_ozon_product_details(api_key: str, article: str, external_id: str = "
     if not payload["offer_id"] and not payload["product_id"]:
         return {"photos": [], "attributes": {}, "raw": {}}
     endpoint = "https://api-seller.ozon.ru/v3/product/info/list"
+    price_info: dict[str, Any] = {}
     try:
         with httpx.Client(timeout=25.0) as client:
             resp = client.post(endpoint, headers=headers, json=payload)
             if resp.status_code >= 400:
                 return {"photos": [], "attributes": {}, "raw": {}}
             data = resp.json()
+            price_info = _fetch_ozon_price_snapshot(
+                client=client,
+                headers=headers,
+                source=(data.get("result") or {}).get("items", []) if isinstance(data, dict) else [],
+                article=article,
+                external_id=external_id,
+            )
     except Exception:
         return {"photos": [], "attributes": {}, "raw": {}}
     items = (data.get("result") or {}).get("items") or data.get("items") or []
     if not items:
         return {"photos": [], "attributes": {}, "raw": {}}
     item = items[0] if isinstance(items, list) else {}
+    if isinstance(items, list) and len(items) > 1:
+        target_offer = str(article or "").strip()
+        target_external = str(external_id or "").strip()
+        matched: dict[str, Any] | None = None
+        for candidate in items:
+            if not isinstance(candidate, dict):
+                continue
+            candidate_info = candidate.get("product_info") if isinstance(candidate.get("product_info"), dict) else candidate
+            if not isinstance(candidate_info, dict):
+                continue
+            offer_match = str(candidate_info.get("offer_id") or "").strip()
+            pid_match = str(candidate_info.get("id") or candidate_info.get("product_id") or "").strip()
+            if target_external and pid_match and pid_match == target_external:
+                matched = candidate
+                break
+            if target_offer and offer_match and offer_match == target_offer:
+                matched = candidate
+                break
+        if matched is not None:
+            item = matched
     source = item.get("product_info") if isinstance(item, dict) else {}
     if not isinstance(source, dict):
         source = item if isinstance(item, dict) else {}
@@ -1229,7 +1267,101 @@ def _fetch_ozon_product_details(api_key: str, article: str, external_id: str = "
                     normalized_values.append(txt)
         attrs[title] = ", ".join(normalized_values) if normalized_values else str(attr.get("value") or "").strip()
     attrs = {str(k): str(v) for k, v in attrs.items() if str(v or "").strip()}
-    return {"photos": photos, "attributes": attrs, "raw": item if isinstance(item, dict) else {}}
+    raw_out = dict(item) if isinstance(item, dict) else {}
+    if price_info:
+        raw_out["price_info"] = price_info
+    return {"photos": photos, "attributes": attrs, "raw": raw_out}
+
+
+def _fetch_ozon_price_snapshot(
+    *,
+    client: Any,
+    headers: dict[str, str],
+    source: Any,
+    article: str = "",
+    external_id: str = "",
+) -> dict[str, Any]:
+    product_id = 0
+    offer_id = str(article or "").strip()
+    external_text = str(external_id or "").strip()
+    if external_text.isdigit():
+        try:
+            product_id = int(external_text)
+        except Exception:
+            product_id = 0
+    if isinstance(source, list) and source:
+        first = source[0] if isinstance(source[0], dict) else {}
+        info = first.get("product_info") if isinstance(first, dict) and isinstance(first.get("product_info"), dict) else first
+        if isinstance(info, dict):
+            offer_id = str(info.get("offer_id") or offer_id).strip()
+            if not product_id:
+                try:
+                    product_id = int(str(info.get("id") or info.get("product_id") or "0").strip() or 0)
+                except Exception:
+                    product_id = 0
+    if not product_id and not offer_id:
+        return {}
+
+    endpoints = [
+        "https://api-seller.ozon.ru/v5/product/info/prices",
+        "https://api-seller.ozon.ru/v4/product/info/prices",
+    ]
+    payload_variants: list[dict[str, Any]] = [
+        {
+            "filter": {
+                "offer_id": [offer_id] if offer_id else [],
+                "product_id": [product_id] if product_id > 0 else [],
+                "visibility": "ALL",
+            },
+            "limit": 100,
+            "last_id": "",
+        },
+        {
+            "offer_id": [offer_id] if offer_id else [],
+            "product_id": [product_id] if product_id > 0 else [],
+        },
+        {
+            "product_id": [product_id] if product_id > 0 else [],
+        },
+        {
+            "offer_id": [offer_id] if offer_id else [],
+        },
+    ]
+
+    for endpoint in endpoints:
+        for payload in payload_variants:
+            if not any(payload.values()):
+                continue
+            try:
+                response = client.post(endpoint, headers=headers, json=payload)
+                if response.status_code >= 400:
+                    continue
+                data = response.json()
+            except Exception:
+                continue
+            items: list[dict[str, Any]] = []
+            if isinstance(data, dict):
+                result = data.get("result")
+                if isinstance(result, dict) and isinstance(result.get("items"), list):
+                    items = [x for x in result.get("items") if isinstance(x, dict)]
+                elif isinstance(data.get("items"), list):
+                    items = [x for x in data.get("items") if isinstance(x, dict)]
+                elif isinstance(result, list):
+                    items = [x for x in result if isinstance(x, dict)]
+            if not items:
+                continue
+            if product_id > 0:
+                for row in items:
+                    row_pid = str(row.get("product_id") or row.get("id") or "").strip()
+                    if row_pid.isdigit() and int(row_pid) == product_id:
+                        return row
+            if offer_id:
+                for row in items:
+                    row_offer = str(row.get("offer_id") or row.get("offerId") or "").strip()
+                    if row_offer and row_offer == offer_id:
+                        return row
+            return items[0]
+    return {}
 
 
 def enrich_ozon_category_names(api_key: str, refs: list[dict[str, str]]) -> dict[tuple[str, str], str]:

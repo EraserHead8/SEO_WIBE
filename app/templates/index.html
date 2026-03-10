@@ -1413,9 +1413,13 @@
               <button class="btn-secondary" type="button" onclick="socialOpenCalendarModal()">Добавить событие</button>
             </div>
             <div class="social-calendar-sync">
-              <input id="socialCalendarGoogleIcs" placeholder="Google Calendar ICS URL (webcal://...)" />
-              <label class="check"><input id="socialCalendarGoogleReplace" type="checkbox" /> Очистить старые события из этого источника</label>
-              <button class="btn-secondary" type="button" onclick="socialSyncGoogleCalendar()">Синхронизировать Google</button>
+              <div class="social-calendar-google-row">
+                <div id="socialCalendarGoogleStatus" class="hint">Google Calendar не подключен.</div>
+                <button id="socialCalendarGoogleConnectBtn" class="btn-secondary" type="button" onclick="socialConnectGoogleCalendar()">Подключить Google</button>
+              </div>
+              <input id="socialCalendarGoogleIcs" placeholder="Google Calendar ICS URL (опционально, webcal://...)" />
+              <label class="check social-calendar-replace"><input id="socialCalendarGoogleReplace" type="checkbox" /> Очистить старые события из этого источника</label>
+              <button class="btn-secondary social-calendar-sync-btn" type="button" onclick="socialSyncGoogleCalendar()">Синхронизировать Google</button>
             </div>
             <div id="socialCalendarGrid" class="social-calendar-grid"></div>
             <div id="socialCalendarEvents" class="social-calendar-events"></div>

@@ -1155,7 +1155,7 @@ class SocialCalendarEventOut(BaseModel):
 
 
 class SocialCalendarGoogleSyncIn(BaseModel):
-    ical_url: str
+    ical_url: str = ""
     is_public: bool = True
     replace_source_events: bool = False
 
