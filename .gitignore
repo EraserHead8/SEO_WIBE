@@ -13,3 +13,11 @@ android/seo-wibe-mobile/.idea/
 android/seo-wibe-mobile/local.properties
 android/seo-wibe-mobile/build/
 android/seo-wibe-mobile/app/build/
+android/seo-wibe-mobile/keystore.properties
+android/seo-wibe-mobile/*.jks
+android/seo-wibe-mobile/*.keystore
+.secrets/
+*.db-shm
+*.db-wal
+app/static/uploads/
+android/seo-wibe-mobile/*.bak*

@@ -1447,10 +1447,33 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
 
 HELP_RELEASES: list[dict[str, Any]] = [
     {
+        "version": "0.4.7",
+        "android_version_code": 18,
+        "released_at": "2026-03-10",
+        "current": True,
+        "summary": "APK 1.5.12: выпущен на новом постоянном release-ключе, поэтому устанавливается только после удаления старого приложения.",
+        "diff_from_previous": [
+            "Android APK обновлен до versionCode=18 / versionName=1.5.12.",
+            "Подпись APK переведена на новый постоянный release-ключ: future-обновления теперь должны собираться этим же keystore, а не debug-подписью.",
+            "Миграция на 1.5.12 разовая: Android не может обновить поверх старой сборки с другим сертификатом, поэтому перед установкой нужно удалить прежнее приложение.",
+            "Проверка обновлений /api/mobile/apk/latest и карточка релиза теперь явно предупреждают о ручной переустановке, чтобы пользователь не упирался в конфликт пакетов.",
+            "Календарь, WB Ads и мобильный чат остаются в составе релиза 1.5.12 вместе с ранее внесенными функциональными исправлениями.",
+        ],
+        "changes": [
+            "Android APK: релизная сборка больше не должна публиковаться с debug-keystore; для нее введен постоянный release-ключ и отдельная инструкция по сборке.",
+            "Загрузки/Справка: текущий релиз помечен как migration build с явным сценарием «удалить старое приложение -> установить APK 1.5.12».",
+            "Обновлены метаданные help/releases и mobile/apk/latest, чтобы старый клиент показывал корректные инструкции вместо попытки бесшовного обновления.",
+        ],
+        "android_download_url": "/static/downloads/seo-wibe-mobile-latest.apk",
+        "android_download_name": "SEO WIBE Android (.apk)",
+        "app_entry_url": "/mobile",
+        "notes": "Важно: APK 1.5.12 не устанавливается поверх старых версий, подписанных другим ключом. Удалите текущее приложение SEO WIBE, затем скачайте и установите новый APK 1.5.12 из «Справка -> Загрузки». После установки заново войдите в аккаунт и проверьте «Соцсеть -> Календарь», «Реклама -> Аналитика WB Ads» и любой чат на мобильном экране.",
+    },
+    {
         "version": "0.4.6",
         "android_version_code": 17,
         "released_at": "2026-03-10",
-        "current": True,
+        "current": False,
         "summary": "APK 1.5.11: календарь синхронизируется стабильно, WB Ads показывает реальные названия и метрики, а мобильный чат исправлен для APK.",
         "diff_from_previous": [
             "Android APK обновлен до versionCode=17 / versionName=1.5.11.",
@@ -4782,12 +4805,14 @@ def get_help_releases(
             # Lightweight EN localization for release cards without splitting data model.
             version_key = str(item.get("version") or "").strip()
             item["summary"] = {
+                "0.4.7": "APK 1.5.12: reissued with a new stable release key, so users must uninstall the old app before installing this build.",
                 "0.4.6": "APK 1.5.11: calendar sync is stable, WB Ads now shows real names and metrics, and the mobile chat flow is fixed for the APK.",
                 "0.4.5": "APK 1.5.10: returns card cleaned up, employee rights tightened, and bidder/help are pinned in the mobile navigation.",
                 "0.4.4": "APK 1.5.9: quick navigation to Bidder/Help added, product photo editor improved, and task notifications strengthened.",
                 "0.4.3": "APK 1.5.8: Android update installation fixed, product details are faster, and WB Ads enrich now uses faster caching.",
             }.get(version_key, str(item.get("summary") or ""))
             item["notes"] = {
+                "0.4.7": "APK 1.5.12 cannot install over the old app because the signing certificate changed. Uninstall the current SEO WIBE app first, then install APK 1.5.12 and sign in again.",
                 "0.4.6": "APK 1.5.11 installs over previous versions. After the update, open Social -> Calendar, Ads -> WB Ads Analytics, and any mobile chat to verify sync, real metrics, and the fixed back/reactions flow.",
                 "0.4.5": "APK 1.5.10 installs over the previous version. After the update, open Ads -> Bidder, Help, and Reviews/Returns to verify the refreshed interface.",
                 "0.4.4": "APK 1.5.9 installs over previous versions. After update, open Ads -> Bidder and Products -> Edit to verify the new elements.",
