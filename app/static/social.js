@@ -178,6 +178,153 @@ function socialParseDateSafe(value) {
   return null;
 }
 
+function socialCalendarPad(num) {
+  return String(Math.max(0, Math.trunc(Number(num) || 0))).padStart(2, "0");
+}
+
+function socialCalendarParseDate(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return new Date(value.getTime());
+  }
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnly) {
+    return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]), 0, 0, 0, 0);
+  }
+  const localMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d{1,3}))?$/);
+  if (localMatch) {
+    return new Date(
+      Number(localMatch[1]),
+      Number(localMatch[2]) - 1,
+      Number(localMatch[3]),
+      Number(localMatch[4]),
+      Number(localMatch[5]),
+      Number(localMatch[6] || 0),
+      Number(String(localMatch[7] || "0").padEnd(3, "0"))
+    );
+  }
+  const nativeDate = new Date(raw.replace(" ", "T"));
+  if (!Number.isNaN(nativeDate.getTime())) return nativeDate;
+  return socialParseDateSafe(raw);
+}
+
+function socialCalendarDayKey(value) {
+  const dt = socialCalendarParseDate(value);
+  if (dt) {
+    return `${dt.getFullYear()}-${socialCalendarPad(dt.getMonth() + 1)}-${socialCalendarPad(dt.getDate())}`;
+  }
+  const raw = String(value || "").trim();
+  const match = raw.match(/^\d{4}-\d{2}-\d{2}/);
+  return match ? match[0] : "";
+}
+
+function socialCalendarMonthValue(value = null) {
+  const dt = socialCalendarParseDate(value) || new Date();
+  return `${dt.getFullYear()}-${socialCalendarPad(dt.getMonth() + 1)}`;
+}
+
+function socialCalendarDateTimeValue(value) {
+  const dt = socialCalendarParseDate(value);
+  if (!dt) return String(value || "").trim().slice(0, 16);
+  return `${dt.getFullYear()}-${socialCalendarPad(dt.getMonth() + 1)}-${socialCalendarPad(dt.getDate())}T${socialCalendarPad(dt.getHours())}:${socialCalendarPad(dt.getMinutes())}`;
+}
+
+function socialCalendarMonthLabel(value = null) {
+  const dt = socialCalendarParseDate(value) || new Date();
+  return dt.toLocaleDateString(currentLang === "en" ? "en-US" : "ru-RU", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function socialCalendarDayLabel(dayKey) {
+  const dt = socialCalendarParseDate(dayKey);
+  if (!dt) return String(dayKey || "").trim();
+  return dt.toLocaleDateString(currentLang === "en" ? "en-GB" : "ru-RU", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function socialCalendarTimeLabel(value) {
+  const dt = socialCalendarParseDate(value);
+  if (!dt) return String(value || "").trim().slice(11, 16);
+  return dt.toLocaleTimeString(currentLang === "en" ? "en-GB" : "ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function socialCalendarRangeParam(value, endOfDay = false) {
+  const dt = socialCalendarParseDate(value) || new Date();
+  return `${dt.getFullYear()}-${socialCalendarPad(dt.getMonth() + 1)}-${socialCalendarPad(dt.getDate())}T${endOfDay ? "23:59:59" : "00:00:00"}`;
+}
+
+function socialCalendarSourceLabel(value) {
+  const code = String(value || "").trim().toLowerCase();
+  if (code === "ics_url") return "ICS URL";
+  if (code === "google_oauth") return "Google OAuth";
+  return code || "-";
+}
+
+function socialCalendarSyncStateLabel(value) {
+  const code = String(value || "idle").trim().toLowerCase();
+  if (code === "ok") return tr("Успешно", "Successful");
+  if (code === "partial") return tr("Частично", "Partial");
+  if (code === "empty") return tr("Без изменений", "No changes");
+  if (code === "error") return tr("Ошибка", "Error");
+  return tr("Ожидание", "Idle");
+}
+
+function socialSetCalendarSyncMessage(kind = "info", title = "", lines = []) {
+  const node = document.getElementById("socialCalendarSyncMessage");
+  if (!node) return;
+  const safeTitle = String(title || "").trim();
+  const safeLines = Array.isArray(lines)
+    ? lines.map((line) => String(line || "").trim()).filter(Boolean)
+    : [];
+  if (!safeTitle && !safeLines.length) {
+    node.className = "social-calendar-sync-message";
+    node.innerHTML = "";
+    return;
+  }
+  node.className = `social-calendar-sync-message ${String(kind || "info").trim().toLowerCase() || "info"}`;
+  node.innerHTML = `
+    ${safeTitle ? `<strong>${escapeHtml(safeTitle)}</strong>` : ""}
+    ${safeLines.length ? `<div class="social-calendar-sync-lines">${safeLines.map((line) => `<span>${escapeHtml(line)}</span>`).join("")}</div>` : ""}
+  `;
+}
+
+function socialRenderCalendarStatusMeta(status) {
+  const node = document.getElementById("socialCalendarGoogleMeta");
+  if (!node) return;
+  if (!status || typeof status !== "object") {
+    node.innerHTML = `<div class="hint">${escapeHtml(tr("Статус синхронизации появится после первой проверки.", "Sync status appears after the first check."))}</div>`;
+    return;
+  }
+  const rows = [];
+  const expiresAt = Number(status.expires_at || 0);
+  const lastSyncAt = String(status.last_sync_at || "").trim();
+  rows.push([tr("Публичный адрес", "Public base"), String(status.public_base_url || "").trim() || "-"]);
+  rows.push([tr("Redirect URI", "Redirect URI"), String(status.redirect_uri || "").trim() || "-"]);
+  rows.push([tr("Google OAuth", "Google OAuth"), status.oauth_configured ? tr("Настроен", "Configured") : tr("Не настроен", "Not configured")]);
+  rows.push([tr("Подключение", "Connection"), status.connected ? tr("Подключено", "Connected") : tr("Не подключено", "Not connected")]);
+  rows.push([tr("Последняя синхронизация", "Last sync"), lastSyncAt ? new Date(lastSyncAt).toLocaleString(currentLang === "en" ? "en-GB" : "ru-RU") : tr("Ещё не запускалась", "Not run yet")]);
+  rows.push([tr("Источник", "Source"), socialCalendarSourceLabel(status.last_sync_source)]);
+  rows.push([tr("Состояние", "State"), socialCalendarSyncStateLabel(status.last_sync_state)]);
+  if (expiresAt > 0) {
+    rows.push([tr("Токен до", "Token valid until"), new Date(expiresAt * 1000).toLocaleString(currentLang === "en" ? "en-GB" : "ru-RU")]);
+  }
+  node.innerHTML = rows.map(([label, value]) => `
+    <div class="social-calendar-meta-row">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(String(value || "-").trim() || "-")}</strong>
+    </div>
+  `).join("");
+}
 function socialShowToast(title, body) {
   const host = document.getElementById("socialToastHost");
   if (!host) return;
@@ -1924,7 +2071,9 @@ function socialFilterThreads() {
 function socialSetChatView(open) {
   const layout = document.querySelector("#socialSubtabChat .social-chat-layout");
   if (!layout) return;
-  layout.classList.toggle("chat-open", Boolean(open));
+  const nextOpen = Boolean(open);
+  layout.classList.toggle("chat-open", nextOpen);
+  layout.dataset.threadOpen = nextOpen ? "1" : "0";
   socialSyncMobileChatChrome();
 }
 
@@ -1932,19 +2081,8 @@ function socialIsThreadOpen() {
   const currentId = Number(socialState.currentThreadId || 0);
   if (currentId > 0) return true;
   const layout = document.querySelector("#socialSubtabChat .social-chat-layout");
-  if (layout?.classList.contains("chat-open")) return true;
-  const messagesHost = document.getElementById("socialChatMessages");
-  if (messagesHost && (
-    messagesHost.querySelector(".tg-msg-row")
-    || messagesHost.querySelector(".social-chat-loading")
-    || messagesHost.querySelector(".social-chat-error")
-  )) {
-    return true;
-  }
-  const headText = String(document.getElementById("socialChatHead")?.textContent || "").trim().toLowerCase();
-  return Boolean(headText && headText !== "выберите чат" && headText !== "select chat");
+  return String(layout?.dataset?.threadOpen || "") === "1";
 }
-
 function socialHasRenderedMessages(host = null) {
   const node = host || document.getElementById("socialChatMessages");
   if (!node) return false;
@@ -1956,6 +2094,10 @@ function socialCloseThread(opts = {}) {
   if (typeof currentSocialSubtab !== "undefined") currentSocialSubtab = "chat";
   socialState.currentThreadId = 0;
   socialState.currentThreadKind = "";
+  socialState.loadingMessagesThreadId = 0;
+  socialState.chatHeaderSignature = "";
+  socialState.chatContextMessageId = 0;
+  socialState.chatContextThreadId = 0;
   socialState.mobileThreadAutoSelectEnabled = Boolean(opts.keepAutoSelect) || !socialIsMobileClientShell();
   socialState.chatManualClosedUntil = Boolean(opts.keepAutoSelect) ? 0 : (Date.now() + 30000);
   socialState.chatMessages = [];
@@ -1982,7 +2124,6 @@ function socialCloseThread(opts = {}) {
   socialSetChatView(false);
   socialSyncMobileChatChrome(null);
 }
-
 function socialRenderThreads() {
   const host = document.getElementById("socialChatThreads");
   if (!host) return;
@@ -2371,17 +2512,12 @@ function socialOpenMessageContext(messageId, event) {
   if (event?.stopPropagation) event.stopPropagation();
   socialState.chatContextMessageId = id;
   socialState.chatContextThreadId = Number(socialState.currentThreadId || 0);
-  let x = Number(event?.clientX || 0);
-  let y = Number(event?.clientY || 0);
-  if ((!Number.isFinite(x) || x <= 0 || !Number.isFinite(y) || y <= 0) && event?.target?.getBoundingClientRect) {
-    const rect = event.target.getBoundingClientRect();
-    x = Number(rect.left || 0) + Math.max(12, Math.min(40, Number(rect.width || 0) * 0.5));
-    y = Number(rect.top || 0) + Math.max(12, Math.min(26, Number(rect.height || 0) * 0.4));
-  }
-  if (!Number.isFinite(x) || x <= 0) x = 18;
-  if (!Number.isFinite(y) || y <= 0) y = 18;
-  socialState.chatContextX = x;
-  socialState.chatContextY = y;
+  const bubble = event?.target?.closest?.(".tg-msg-bubble") || event?.currentTarget?.closest?.(".tg-msg-bubble") || event?.target || null;
+  const rect = bubble?.getBoundingClientRect ? bubble.getBoundingClientRect() : null;
+  const fallbackX = Number(event?.clientX || 0) || Number(rect?.left || 0) + Math.max(18, Math.min(42, Number(rect?.width || 0) * 0.6));
+  const fallbackY = Number(event?.clientY || 0) || Number(rect?.top || 0) + Math.max(18, Math.min(30, Number(rect?.height || 0) * 0.45));
+  socialState.chatContextX = fallbackX;
+  socialState.chatContextY = fallbackY;
   const quick = ["👍", "🔥", "❤️", "😂", "🙏", "✅"];
   menu.innerHTML = `
     <button type="button" class="social-chat-context-btn" onclick="socialContextReply()">${tr("Ответить", "Reply")}</button>
@@ -2389,26 +2525,39 @@ function socialOpenMessageContext(messageId, event) {
       ${quick.map((emoji) => `<button type="button" class="social-chat-context-emoji" onclick="socialContextReact('${escapeHtml(emoji)}')">${emoji}</button>`).join("")}
     </div>
   `;
-  menu.style.left = `${Math.max(8, x)}px`;
-  menu.style.top = `${Math.max(8, y)}px`;
-  menu.style.maxWidth = "min(320px, calc(100vw - 20px))";
+  menu.style.left = "0px";
+  menu.style.top = "0px";
+  menu.style.maxWidth = "min(320px, calc(100vw - 24px))";
+  menu.style.maxHeight = "min(320px, calc(100dvh - 24px))";
   menu.style.visibility = "hidden";
   menu.classList.remove("hidden");
-  const rect = menu.getBoundingClientRect();
+  const menuRect = menu.getBoundingClientRect();
   const vw = window.innerWidth || document.documentElement.clientWidth || 0;
   const vh = window.innerHeight || document.documentElement.clientHeight || 0;
-  const margin = 8;
-  let nextX = x + 6;
-  let nextY = y + 6;
-  if (nextX + rect.width + margin > vw) nextX = x - rect.width - 6;
-  if (nextY + rect.height + margin > vh) nextY = y - rect.height - 6;
-  const clampedX = Math.max(margin, Math.min(nextX, Math.max(margin, vw - rect.width - margin)));
-  const clampedY = Math.max(margin, Math.min(nextY, Math.max(margin, vh - rect.height - margin)));
+  const safeTop = 10;
+  const safeRight = 10;
+  const safeBottom = 10;
+  const safeLeft = 10;
+  let nextX = Number(rect?.left || fallbackX) + 8;
+  let nextY = Number(rect?.bottom || fallbackY) + 8;
+  if (nextX + menuRect.width + safeRight > vw) {
+    nextX = Number(rect?.right || fallbackX) - menuRect.width;
+  }
+  if (nextY + menuRect.height + safeBottom > vh) {
+    nextY = Number(rect?.top || fallbackY) - menuRect.height - 8;
+  }
+  if (nextY < safeTop && rect) {
+    nextY = Math.max(safeTop, Math.min(vh - menuRect.height - safeBottom, rect.top + Math.max(8, rect.height * 0.2)));
+  }
+  if (nextX < safeLeft && rect) {
+    nextX = Math.max(safeLeft, Math.min(vw - menuRect.width - safeRight, rect.right - menuRect.width));
+  }
+  const clampedX = Math.max(safeLeft, Math.min(nextX, Math.max(safeLeft, vw - menuRect.width - safeRight)));
+  const clampedY = Math.max(safeTop, Math.min(nextY, Math.max(safeTop, vh - menuRect.height - safeBottom)));
   menu.style.left = `${clampedX}px`;
   menu.style.top = `${clampedY}px`;
   menu.style.visibility = "visible";
 }
-
 function socialContextReply() {
   const id = Number(socialState.chatContextMessageId || 0);
   if (!id) return;
@@ -3360,11 +3509,18 @@ async function socialLoadGoogleCalendarStatus() {
   const query = new URLSearchParams(window.location.search || "");
   const oauthConnected = String(query.get("google_oauth_connected") || "") === "1";
   const oauthError = String(query.get("google_oauth_error") || "").trim();
+  let transientKind = "";
+  let transientTitle = "";
+  let transientLines = [];
   if (oauthConnected || oauthError) {
     if (oauthConnected) {
-      alert(tr("Google Calendar успешно подключен.", "Google Calendar connected successfully."));
+      transientKind = "success";
+      transientTitle = tr("Google Calendar подключен", "Google Calendar connected");
+      transientLines = [tr("Теперь можно синхронизировать основной календарь без ICS-ссылки.", "Primary calendar sync can now run without an ICS URL.")];
     } else if (oauthError) {
-      alert(`${tr("Ошибка Google OAuth", "Google OAuth error")}: ${oauthError}`);
+      transientKind = "error";
+      transientTitle = tr("Ошибка Google OAuth", "Google OAuth error");
+      transientLines = [oauthError];
     }
     query.delete("google_oauth_connected");
     query.delete("google_oauth_error");
@@ -3372,23 +3528,42 @@ async function socialLoadGoogleCalendarStatus() {
     const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${window.location.hash || ""}`;
     window.history.replaceState({}, document.title, nextUrl);
   }
-  const data = await socialRequest("/api/social/calendar/google-oauth/status", { timeoutMs: 12000 }).catch(() => null);
+  const data = await socialRequest("/api/social/calendar/google-oauth/status", { timeoutMs: 12000 }).catch((e) => {
+    socialState.googleCalendarOauth = null;
+    if (statusNode) {
+      statusNode.innerHTML = `<strong>${escapeHtml(tr("Не удалось получить статус Google Calendar.", "Could not load Google Calendar status."))}</strong>`;
+    }
+    socialRenderCalendarStatusMeta(null);
+    socialSetCalendarSyncMessage("error", tr("Проверка синхронизации не удалась", "Sync status check failed"), [e?.message || tr("Повторите попытку чуть позже.", "Please retry in a moment.")]);
+    return null;
+  });
   socialState.googleCalendarOauth = data && typeof data === "object" ? data : null;
-  const connected = Boolean(socialState.googleCalendarOauth?.connected);
-  const expiresAt = Number(socialState.googleCalendarOauth?.expires_at || 0);
-  const expiresText = (expiresAt > 0)
-    ? new Date(expiresAt * 1000).toLocaleString()
+  const status = socialState.googleCalendarOauth || {};
+  const configured = Boolean(status.oauth_configured);
+  const connected = Boolean(status.connected);
+  const expiresAt = Number(status.expires_at || 0);
+  const expiresText = expiresAt > 0
+    ? new Date(expiresAt * 1000).toLocaleString(currentLang === "en" ? "en-GB" : "ru-RU")
     : "";
   if (statusNode) {
-    statusNode.textContent = connected
-      ? tr(
-        `Google Calendar подключен${expiresText ? ` (токен до ${expiresText})` : ""}. Можно синхронизировать без ICS-ссылки.`,
-        `Google Calendar is connected${expiresText ? ` (token valid until ${expiresText})` : ""}. Sync can run without ICS URL.`
-      )
-      : tr("Google Calendar не подключен. Нажмите «Подключить Google».", "Google Calendar is not connected. Click Connect Google.");
+    statusNode.innerHTML = connected
+      ? `
+        <strong>${escapeHtml(tr("Google Calendar подключён", "Google Calendar connected"))}</strong>
+        <span>${escapeHtml(expiresText
+          ? tr(`Токен действует до ${expiresText}. Можно запускать синхронизацию напрямую.`, `Token valid until ${expiresText}. Direct sync is available.`)
+          : tr("Можно запускать синхронизацию напрямую или через ICS URL.", "You can sync directly or with an ICS URL."))}</span>
+      `
+      : `
+        <strong>${escapeHtml(configured ? tr("Google Calendar пока не подключён", "Google Calendar not connected yet") : tr("Google OAuth не настроен", "Google OAuth is not configured"))}</strong>
+        <span>${escapeHtml(configured
+          ? tr("Подключите Google или используйте публичную/secret ICS-ссылку.", "Connect Google or use a public/secret ICS URL.")
+          : tr("Пока доступна синхронизация по ICS URL. Для прямого импорта нужно настроить Google OAuth на сервере.", "ICS URL sync is available. Server-side Google OAuth is required for direct import."))}</span>
+      `;
   }
+  socialRenderCalendarStatusMeta(status);
   if (connectBtn) {
     connectBtn.classList.toggle("btn-success", connected);
+    connectBtn.disabled = connectBtn.dataset.loading === "1" ? true : (!configured && !connected);
     if (connectBtn.dataset.loading !== "1") {
       connectBtn.textContent = connected
         ? tr("Переподключить Google", "Reconnect Google")
@@ -3397,11 +3572,39 @@ async function socialLoadGoogleCalendarStatus() {
   }
   if (syncBtn) {
     syncBtn.textContent = connected
-      ? tr("Синхронизировать", "Sync")
-      : tr("Подключить и синхронизировать", "Connect and sync");
+      ? tr("Синхронизировать сейчас", "Sync now")
+      : tr("Синхронизировать календарь", "Sync calendar");
+  }
+  if (transientTitle) {
+    socialSetCalendarSyncMessage(transientKind || "info", transientTitle, transientLines);
+    return;
+  }
+  const lastSyncState = String(status.last_sync_state || "idle").trim().toLowerCase();
+  const lastSyncAt = String(status.last_sync_at || "").trim();
+  const summary = status.last_sync_summary && typeof status.last_sync_summary === "object" ? status.last_sync_summary : {};
+  const warnings = Array.isArray(summary.warnings) ? summary.warnings.map((line) => String(line || "").trim()).filter(Boolean) : [];
+  const summaryLines = [];
+  if (lastSyncAt) {
+    summaryLines.push(`${tr("Время", "Time")}: ${new Date(lastSyncAt).toLocaleString(currentLang === "en" ? "en-GB" : "ru-RU")}`);
+  }
+  summaryLines.push(`${tr("Импорт", "Imported")}: ${Number(summary.imported || 0)}`);
+  summaryLines.push(`${tr("Обновлено", "Updated")}: ${Number(summary.updated || 0)}`);
+  summaryLines.push(`${tr("Удалено", "Deleted")}: ${Number(summary.deleted || 0)}`);
+  summaryLines.push(`${tr("Пропущено", "Skipped")}: ${Number(summary.skipped || 0)}`);
+  if (warnings.length) summaryLines.push(`${tr("Предупреждения", "Warnings")}: ${warnings.join(" | ")}`);
+  const lastError = String(status.last_sync_error || "").trim();
+  if (lastSyncState === "error") {
+    socialSetCalendarSyncMessage("error", tr("Последняя синхронизация завершилась с ошибкой", "Last sync finished with an error"), lastError ? [lastError, ...summaryLines] : summaryLines);
+  } else if (lastSyncState === "partial") {
+    socialSetCalendarSyncMessage("warn", tr("Синхронизация завершилась частично", "Sync completed partially"), summaryLines);
+  } else if (lastSyncState === "ok" || lastSyncState === "empty") {
+    socialSetCalendarSyncMessage("success", tr("Последняя синхронизация сохранена", "Latest sync recorded"), summaryLines);
+  } else if (!configured && !connected) {
+    socialSetCalendarSyncMessage("warn", tr("Google OAuth ещё не настроен", "Google OAuth is not configured yet"), [tr("Используйте ICS URL или добавьте server-side Google credentials.", "Use an ICS URL or add server-side Google credentials.")]);
+  } else {
+    socialSetCalendarSyncMessage();
   }
 }
-
 async function socialConnectGoogleCalendar() {
   const statusNode = document.getElementById("socialCalendarGoogleStatus");
   const connectBtn = document.getElementById("socialCalendarGoogleConnectBtn");
@@ -3425,23 +3628,24 @@ async function socialConnectGoogleCalendar() {
   if (statusNode) {
     statusNode.textContent = tr("Подготавливаем безопасный вход Google OAuth...", "Preparing secure Google OAuth sign-in...");
   }
+  socialSetCalendarSyncMessage("info", tr("Открываем Google OAuth", "Opening Google OAuth"), [tr("После подтверждения вернёмся в SEO WIBE автоматически.", "After confirmation you will return to SEO WIBE automatically.")]);
   const data = await socialRequest("/api/social/calendar/google-oauth/start", { timeoutMs: 12000 }).catch((e) => {
     restoreUi();
-    alert(e.message || tr("Не удалось запустить Google OAuth.", "Unable to start Google OAuth."));
+    socialSetCalendarSyncMessage("error", tr("Не удалось запустить Google OAuth", "Unable to start Google OAuth"), [e?.message || tr("Проверьте настройки OAuth на сервере.", "Check OAuth server settings.")]);
     return null;
   });
   const url = String(data?.url || "").trim();
   if (!url) {
     restoreUi();
-    alert(tr("Не удалось получить ссылку Google OAuth.", "Unable to obtain Google OAuth URL."));
+    socialSetCalendarSyncMessage("error", tr("Не удалось получить ссылку Google OAuth", "Unable to obtain Google OAuth URL"));
     return false;
   }
   window.location.assign(url);
   return true;
 }
-
 async function socialLoadCalendar() {
   const monthInput = document.getElementById("socialCalendarMonth");
+  const monthLabel = document.getElementById("socialCalendarMonthLabel");
   const syncUrlInput = document.getElementById("socialCalendarGoogleIcs");
   if (syncUrlInput && !String(syncUrlInput.value || "").trim()) {
     try {
@@ -3456,62 +3660,84 @@ async function socialLoadCalendar() {
     } catch (_) {}
   }
   if (monthInput && !monthInput.value) {
-    const d = socialState.calendarDate;
-    monthInput.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    monthInput.value = socialCalendarMonthValue(socialState.calendarDate);
   }
-  const monthVal = String(monthInput?.value || "");
+  const monthVal = String(monthInput?.value || "").trim();
   if (monthVal) {
     const [y, m] = monthVal.split("-").map((x) => Number(x || 0));
-    if (y && m) socialState.calendarDate = new Date(y, m - 1, 1);
+    if (y && m) {
+      socialState.calendarDate = new Date(y, m - 1, 1, 0, 0, 0, 0);
+    }
+  }
+  if (monthLabel) {
+    monthLabel.textContent = socialCalendarMonthLabel(socialState.calendarDate);
   }
   await socialLoadGoogleCalendarStatus();
-  const start = new Date(socialState.calendarDate.getFullYear(), socialState.calendarDate.getMonth(), 1);
-  const end = new Date(socialState.calendarDate.getFullYear(), socialState.calendarDate.getMonth() + 1, 0, 23, 59, 59);
+  const start = new Date(socialState.calendarDate.getFullYear(), socialState.calendarDate.getMonth(), 1, 0, 0, 0, 0);
+  const end = new Date(socialState.calendarDate.getFullYear(), socialState.calendarDate.getMonth() + 1, 0, 23, 59, 59, 0);
   const qp = new URLSearchParams({
-    date_from: start.toISOString(),
-    date_to: end.toISOString(),
+    date_from: socialCalendarRangeParam(start, false),
+    date_to: socialCalendarRangeParam(end, true),
   });
   const rows = await socialRequest(`/api/social/calendar/events?${qp.toString()}`).catch((e) => {
-    alert(e.message);
+    socialState.calendarEvents = [];
+    socialSetCalendarSyncMessage("error", tr("Не удалось загрузить события календаря", "Failed to load calendar events"), [e?.message || tr("Повторите попытку чуть позже.", "Please retry in a moment.")]);
     return [];
   });
   socialState.calendarEvents = Array.isArray(rows) ? rows : [];
   socialRenderCalendar();
 }
-
 function socialShiftCalendar(deltaMonths = 0) {
   const delta = Number(deltaMonths || 0);
   if (!Number.isFinite(delta) || !delta) return;
   const d = socialState.calendarDate;
-  socialState.calendarDate = new Date(d.getFullYear(), d.getMonth() + delta, 1);
+  socialState.calendarDate = new Date(d.getFullYear(), d.getMonth() + delta, 1, 0, 0, 0, 0);
   const monthInput = document.getElementById("socialCalendarMonth");
   if (monthInput) {
-    monthInput.value = `${socialState.calendarDate.getFullYear()}-${String(socialState.calendarDate.getMonth() + 1).padStart(2, "0")}`;
+    monthInput.value = socialCalendarMonthValue(socialState.calendarDate);
   }
   socialLoadCalendar();
 }
 
+function socialJumpCalendarToday() {
+  const now = new Date();
+  socialState.calendarDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+  socialState.calendarSelectedDay = socialCalendarDayKey(now);
+  const monthInput = document.getElementById("socialCalendarMonth");
+  if (monthInput) {
+    monthInput.value = socialCalendarMonthValue(socialState.calendarDate);
+  }
+  socialLoadCalendar();
+}
 function socialRenderCalendar() {
   const grid = document.getElementById("socialCalendarGrid");
   const list = document.getElementById("socialCalendarEvents");
+  const monthLabel = document.getElementById("socialCalendarMonthLabel");
   if (!grid || !list) return;
   const d = socialState.calendarDate;
-  const todayKey = typeof toYmd === "function" ? toYmd(new Date()) : "";
+  const todayKey = socialCalendarDayKey(new Date());
   const year = d.getFullYear();
   const month = d.getMonth();
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
+  const firstDay = new Date(year, month, 1, 0, 0, 0, 0);
+  const lastDay = new Date(year, month + 1, 0, 0, 0, 0, 0);
   const shift = (firstDay.getDay() + 6) % 7;
   const days = lastDay.getDate();
   const compactCalendar = typeof window !== "undefined"
     && window.matchMedia
     && window.matchMedia("(max-width: 980px)").matches;
+  const eventsByDay = new Map();
   const tasksByDay = new Map();
   const myTasksByDay = new Map();
   const myActorKey = String(socialState.boot?.actor?.actor_key || "").trim();
+  (socialState.calendarEvents || []).forEach((eventRow) => {
+    const key = socialCalendarDayKey(eventRow?.start_at || "");
+    if (!key) return;
+    if (!eventsByDay.has(key)) eventsByDay.set(key, []);
+    eventsByDay.get(key).push(eventRow);
+  });
   (socialState.tasks || []).forEach((task) => {
-    if (!task.due_date) return;
-    const key = String(task.due_date).slice(0, 10);
+    const key = socialCalendarDayKey(task?.due_date || "");
+    if (!key) return;
     if (!tasksByDay.has(key)) tasksByDay.set(key, []);
     tasksByDay.get(key).push(task);
     if (myActorKey && String(task.assignee_key || "") === myActorKey) {
@@ -3519,11 +3745,14 @@ function socialRenderCalendar() {
       myTasksByDay.get(key).push(task);
     }
   });
+  if (monthLabel) {
+    monthLabel.textContent = socialCalendarMonthLabel(d);
+  }
   let html = `<div class="social-calendar-row head">${[tr("Пн", "Mon"), tr("Вт", "Tue"), tr("Ср", "Wed"), tr("Чт", "Thu"), tr("Пт", "Fri"), tr("Сб", "Sat"), tr("Вс", "Sun")].map((x) => `<span>${x}</span>`).join("")}</div><div class="social-calendar-cells">`;
   for (let i = 0; i < shift; i += 1) html += `<button class="social-day muted" disabled></button>`;
   for (let day = 1; day <= days; day += 1) {
-    const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    const eventsCount = socialState.calendarEvents.filter((e) => String(e.start_at || "").slice(0, 10) === key).length;
+    const key = `${year}-${socialCalendarPad(month + 1)}-${socialCalendarPad(day)}`;
+    const eventsCount = (eventsByDay.get(key) || []).length;
     const tasksCount = (tasksByDay.get(key) || []).length;
     const myTasksCount = (myTasksByDay.get(key) || []).length;
     const active = socialState.calendarSelectedDay === key ? "active" : "";
@@ -3535,18 +3764,17 @@ function socialRenderCalendar() {
     const countsHtml = compactCalendar
       ? `<small><span class="calendar-count calendar-events">${eventsCount}</span><span class="calendar-sep">•</span><span class="calendar-count calendar-tasks ${myTasksCount ? "my-task" : ""}">${tasksCount}</span></small>`
       : `<small><span class="calendar-count calendar-events">${eventsCount} ${tr("соб.", "ev.")}</span><span class="calendar-sep">•</span><span class="calendar-count calendar-tasks ${myTasksCount ? "my-task" : ""}">${tasksCount} ${tr("задач", "tasks")}</span></small>`;
-    html += `<button class="social-day ${active} ${isToday} ${hasEvents} ${hasTasks} ${hasMyTasks} ${manyMyTasks}" type="button" onclick="socialShowDay('${key}')"><b>${day}</b>${countsHtml}</button>`;
+    html += `<button class="social-day ${active} ${isToday} ${hasEvents} ${hasTasks} ${hasMyTasks} ${manyMyTasks}" data-day-key="${key}" type="button" onclick="socialShowDay('${key}')"><b>${day}</b>${countsHtml}</button>`;
   }
   html += `</div>`;
   grid.innerHTML = html;
-  const todayFallback = todayKey && String(todayKey).startsWith(`${year}-${String(month + 1).padStart(2, "0")}-`)
+  const todayFallback = todayKey && String(todayKey).startsWith(`${year}-${socialCalendarPad(month + 1)}-`)
     ? todayKey
     : "";
-  const fallback = todayFallback || `${year}-${String(month + 1).padStart(2, "0")}-01`;
-  const inMonth = String(socialState.calendarSelectedDay || "").startsWith(`${year}-${String(month + 1).padStart(2, "0")}-`);
+  const fallback = todayFallback || `${year}-${socialCalendarPad(month + 1)}-01`;
+  const inMonth = String(socialState.calendarSelectedDay || "").startsWith(`${year}-${socialCalendarPad(month + 1)}-`);
   socialShowDay(inMonth ? socialState.calendarSelectedDay : fallback);
 }
-
 function socialCleanCalendarDetails(raw) {
   const value = String(raw || "");
   if (!value.trim()) return "";
@@ -3562,29 +3790,47 @@ function socialShowDay(dayKey) {
   const list = document.getElementById("socialCalendarEvents");
   if (!list) return;
   socialState.calendarSelectedDay = dayKey;
-  const events = socialState.calendarEvents.filter((e) => String(e.start_at || "").slice(0, 10) === dayKey);
-  const tasks = (socialState.tasks || []).filter((t) => t.due_date && String(t.due_date).slice(0, 10) === dayKey);
+  const events = (socialState.calendarEvents || [])
+    .filter((eventRow) => socialCalendarDayKey(eventRow?.start_at || "") === dayKey)
+    .sort((a, b) => {
+      const left = socialCalendarParseDate(a?.start_at)?.getTime() || 0;
+      const right = socialCalendarParseDate(b?.start_at)?.getTime() || 0;
+      return left - right;
+    });
+  const tasks = (socialState.tasks || [])
+    .filter((task) => socialCalendarDayKey(task?.due_date || "") === dayKey)
+    .sort((a, b) => String(a?.title || "").localeCompare(String(b?.title || ""), currentLang === "en" ? "en" : "ru"));
   list.innerHTML = `
-    <h4>${escapeHtml(dayKey)}</h4>
+    <div class="social-calendar-day-header">
+      <div>
+        <span>${escapeHtml(tr("Выбранный день", "Selected day"))}</span>
+        <h4>${escapeHtml(socialCalendarDayLabel(dayKey))}</h4>
+      </div>
+      <div class="social-calendar-day-stats">
+        <span>${escapeHtml(`${tr("События", "Events")}: ${events.length}`)}</span>
+        <span>${escapeHtml(`${tr("Задачи", "Tasks")}: ${tasks.length}`)}</span>
+      </div>
+    </div>
     <div class="social-day-events">
       <h5>${tr("События", "Events")}</h5>
-      ${events.length ? events.map((e) => `<div class="social-day-item"><b>${escapeHtml(e.title || "-")}</b><small>${escapeHtml(String(e.start_at || "").slice(11,16))}${e.is_public ? ` • ${escapeHtml(tr("Общее", "Public"))}` : ` • ${escapeHtml(tr("Личное", "Private"))}`}</small><div>${escapeHtml(socialCleanCalendarDetails(e.details || ""))}</div><div class="actions"><button type="button" onclick="socialOpenCalendarModal(${Number(e.id)})">${tr("Изменить", "Edit")}</button><button class="btn-danger" type="button" onclick="socialDeleteEvent(${Number(e.id)})">${tr("Удалить", "Delete")}</button></div></div>`).join("") : `<div class="hint">${tr("Нет событий", "No events")}</div>`}
+      ${events.length ? events.map((eventRow) => {
+        const timeLabel = eventRow?.start_at
+          ? `${socialCalendarTimeLabel(eventRow.start_at)}${eventRow?.end_at ? ` - ${socialCalendarTimeLabel(eventRow.end_at)}` : ""}`
+          : "-";
+        const scopeLabel = eventRow?.is_public ? tr("Общее", "Shared") : tr("Личное", "Private");
+        const cleanDetails = socialCleanCalendarDetails(eventRow.details || "");
+        return `<div class="social-day-item"><b>${escapeHtml(eventRow.title || "-")}</b><small>${escapeHtml(timeLabel)} • ${escapeHtml(scopeLabel)}</small><div>${cleanDetails ? escapeHtml(cleanDetails) : `<span class="hint">${escapeHtml(tr("Без описания", "No description"))}</span>`}</div><div class="actions"><button type="button" onclick="socialOpenCalendarModal(${Number(eventRow.id)})">${tr("Изменить", "Edit")}</button><button class="btn-danger" type="button" onclick="socialDeleteEvent(${Number(eventRow.id)})">${tr("Удалить", "Delete")}</button></div></div>`;
+      }).join("") : `<div class="hint">${tr("На этот день событий нет.", "No events for this day.")}</div>`}
     </div>
     <div class="social-day-events">
       <h5>${tr("Дедлайны задач", "Task deadlines")}</h5>
-      ${tasks.length ? tasks.map((t) => `<div class="social-day-item"><b>${escapeHtml(t.title || "-")}</b><small>${escapeHtml(t.assignee_nick || "-")}</small><div>${escapeHtml(t.status || "")}</div></div>`).join("") : `<div class="hint">${tr("Нет задач", "No tasks")}</div>`}
+      ${tasks.length ? tasks.map((task) => `<div class="social-day-item"><b>${escapeHtml(task.title || "-")}</b><small>${escapeHtml(task.assignee_nick || "-")}</small><div>${escapeHtml(task.status || "")}</div></div>`).join("") : `<div class="hint">${tr("На этот день дедлайнов нет.", "No task deadlines for this day.")}</div>`}
     </div>
   `;
   const grid = document.getElementById("socialCalendarGrid");
   if (grid) {
-    grid.querySelectorAll(".social-day").forEach((btn) => {
-      const label = btn.querySelector("b");
-      if (!label) return;
-      const day = String(label.textContent || "").padStart(2, "0");
-      const month = String(socialState.calendarDate.getMonth() + 1).padStart(2, "0");
-      const year = String(socialState.calendarDate.getFullYear());
-      const key = `${year}-${month}-${day}`;
-      btn.classList.toggle("active", key === dayKey);
+    grid.querySelectorAll(".social-day[data-day-key]").forEach((btn) => {
+      btn.classList.toggle("active", String(btn.getAttribute("data-day-key") || "") === dayKey);
     });
   }
 }
@@ -3658,8 +3904,8 @@ function socialOpenCalendarModal(eventId = 0) {
     `
       <div class="grid-2">
         <label><span>${tr("Название", "Title")}</span><input id="socialEventTitle" value="${escapeHtml(row?.title || "")}" /></label>
-        <label><span>${tr("Начало", "Start")}</span><input id="socialEventStart" type="datetime-local" value="${escapeHtml(row?.start_at ? String(row.start_at).slice(0,16) : "")}" /></label>
-        <label><span>${tr("Конец", "End")}</span><input id="socialEventEnd" type="datetime-local" value="${escapeHtml(row?.end_at ? String(row.end_at).slice(0,16) : "")}" /></label>
+        <label><span>${tr("Начало", "Start")}</span><input id="socialEventStart" type="datetime-local" value="${escapeHtml(socialCalendarDateTimeValue(row?.start_at || ""))}" /></label>
+        <label><span>${tr("Конец", "End")}</span><input id="socialEventEnd" type="datetime-local" value="${escapeHtml(socialCalendarDateTimeValue(row?.end_at || ""))}" /></label>
         <label class="check"><input id="socialEventPublic" type="checkbox" ${row?.is_public ? "checked" : ""} /> ${tr("Общее событие (видно всем)", "Public event (visible to all)")}</label>
         <label class="full"><span>${tr("Описание", "Details")}</span><textarea id="socialEventDetails" rows="4">${escapeHtml(socialCleanCalendarDetails(row?.details || ""))}</textarea></label>
       </div>
@@ -3695,6 +3941,8 @@ async function socialDeleteEvent(eventId) {
 async function socialSyncGoogleCalendar() {
   const urlInput = document.getElementById("socialCalendarGoogleIcs");
   const replaceInput = document.getElementById("socialCalendarGoogleReplace");
+  const syncBtn = document.querySelector(".social-calendar-sync-btn");
+  const previousText = String(syncBtn?.textContent || "").trim();
   const url = String(urlInput?.value || "").trim();
   const replaceSource = Boolean(replaceInput?.checked);
   const oauthConnected = Boolean(socialState.googleCalendarOauth?.connected);
@@ -3709,6 +3957,11 @@ async function socialSyncGoogleCalendar() {
       localStorage.setItem("social_calendar_google_replace", replaceSource ? "1" : "0");
     } catch (_) {}
   }
+  if (syncBtn) {
+    syncBtn.disabled = true;
+    syncBtn.textContent = tr("Синхронизируем...", "Syncing...");
+  }
+  socialSetCalendarSyncMessage("info", tr("Синхронизация запущена", "Sync started"), [tr("Подождите, пока SEO WIBE обработает календарные события.", "Please wait while SEO WIBE processes calendar events.")]);
   const data = await socialRequest("/api/social/calendar/google-sync", {
     method: "POST",
     body: JSON.stringify({
@@ -3720,20 +3973,28 @@ async function socialSyncGoogleCalendar() {
     retryOnPost: true,
     maxRetries: 1,
   }).catch((e) => {
-    alert(e.message || tr("Не удалось синхронизировать календарь.", "Calendar sync failed."));
+    socialSetCalendarSyncMessage("error", tr("Синхронизация календаря не удалась", "Calendar sync failed"), [e?.message || tr("Проверьте ссылку, доступность Google OAuth или повторите позже.", "Check the link, Google OAuth availability, or retry later.")]);
     return null;
   });
+  if (syncBtn) {
+    syncBtn.disabled = false;
+    syncBtn.textContent = previousText || tr("Синхронизировать сейчас", "Sync now");
+  }
   if (!data) return;
-  const warnings = Array.isArray(data.warnings) ? data.warnings.filter(Boolean) : [];
-  const summary = [
+  const warnings = Array.isArray(data.warnings) ? data.warnings.map((line) => String(line || "").trim()).filter(Boolean) : [];
+  const summaryLines = [
     `${tr("Импорт", "Imported")}: ${Number(data.imported || 0)}`,
     `${tr("Обновлено", "Updated")}: ${Number(data.updated || 0)}`,
     `${tr("Удалено", "Deleted")}: ${Number(data.deleted || 0)}`,
     `${tr("Пропущено", "Skipped")}: ${Number(data.skipped || 0)}`,
-    `${tr("Источник", "Source")}: ${useIcs ? tr("ICS URL", "ICS URL") : "Google OAuth"}`,
+    `${tr("Источник", "Source")}: ${useIcs ? "ICS URL" : "Google OAuth"}`,
   ];
-  if (warnings.length) summary.push(`${tr("Предупреждения", "Warnings")}: ${warnings.join(" | ")}`);
-  alert(summary.join("\n"));
+  if (warnings.length) summaryLines.push(`${tr("Предупреждения", "Warnings")}: ${warnings.join(" | ")}`);
+  socialSetCalendarSyncMessage(
+    warnings.length ? "warn" : "success",
+    warnings.length ? tr("Синхронизация завершилась с предупреждениями", "Sync completed with warnings") : tr("Календарь синхронизирован", "Calendar synchronized"),
+    summaryLines
+  );
   await socialLoadGoogleCalendarStatus();
   await socialLoadCalendar();
 }
@@ -4189,6 +4450,7 @@ window.socialOpenCalendarModal = socialOpenCalendarModal;
 window.socialSaveEvent = socialSaveEvent;
 window.socialDeleteEvent = socialDeleteEvent;
 window.socialShiftCalendar = socialShiftCalendar;
+window.socialJumpCalendarToday = socialJumpCalendarToday;
 window.socialLoadCalendar = socialLoadCalendar;
 window.socialConnectGoogleCalendar = socialConnectGoogleCalendar;
 window.socialRenderCalendar = socialRenderCalendar;

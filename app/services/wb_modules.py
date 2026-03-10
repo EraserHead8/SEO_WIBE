@@ -1365,39 +1365,38 @@ def fetch_wb_campaign_stats_bulk(
         "https://advert-api.wb.ru/adv/v3/fullstats",
         "https://advert-api.wildberries.ru/adv/v3/fullstats",
     ]
-    rows: list[dict[str, Any]] = []
-    for chunk_start in range(0, len(ids), 40):
-        chunk = ids[chunk_start:chunk_start + 40]
-        ids_csv = ",".join(str(x) for x in chunk)
-        got_chunk = False
+
+    def _request_stats_chunk(chunk_ids: list[int]) -> list[dict[str, Any]]:
+        safe_chunk = [int(x) for x in chunk_ids if int(x) > 0]
+        if not safe_chunk:
+            return []
+        ids_csv = ",".join(str(x) for x in safe_chunk)
         for endpoint in endpoints:
             params = {"ids": ids_csv, "beginDate": left.isoformat(), "endDate": right.isoformat()}
             data = _request_wb_json("GET", endpoint, api_key=api_key, params=params)
             dict_rows = _as_dict_list(data) if data is not None else []
             if dict_rows:
-                rows.extend(dict_rows)
-                got_chunk = True
-                break
+                return dict_rows
 
             payload_variants: list[dict[str, Any]] = [
-                {"ids": chunk, "from": left.isoformat(), "to": right.isoformat()},
-                {"id": chunk, "from": left.isoformat(), "to": right.isoformat()},
-                {"advertIds": chunk, "from": left.isoformat(), "to": right.isoformat()},
+                {"ids": safe_chunk, "from": left.isoformat(), "to": right.isoformat()},
+                {"id": safe_chunk, "from": left.isoformat(), "to": right.isoformat()},
+                {"advertIds": safe_chunk, "from": left.isoformat(), "to": right.isoformat()},
+                {"ids": safe_chunk, "beginDate": left.isoformat(), "endDate": right.isoformat()},
+                {"advertIds": safe_chunk, "beginDate": left.isoformat(), "endDate": right.isoformat()},
             ]
-            posted = False
             for payload in payload_variants:
                 pdata = _request_wb_json("POST", endpoint, api_key=api_key, payload=payload)
                 dict_rows = _as_dict_list(pdata) if pdata is not None else []
                 if dict_rows:
-                    rows.extend(dict_rows)
-                    posted = True
-                    break
-            if posted:
-                got_chunk = True
-                break
+                    return dict_rows
+        return []
 
-        if not got_chunk:
-            continue
+    rows: list[dict[str, Any]] = []
+    chunk_size = 20
+    for chunk_start in range(0, len(ids), chunk_size):
+        chunk = ids[chunk_start:chunk_start + chunk_size]
+        rows.extend(_request_stats_chunk(chunk))
 
     stats: dict[str, dict[str, Any]] = {}
     for row in rows:
@@ -1411,8 +1410,23 @@ def fetch_wb_campaign_stats_bulk(
         if not cid:
             continue
         stats[cid] = _build_campaign_stat_row(row)
-    return stats
 
+    unresolved_ids = [cid for cid in ids if not bool((stats.get(str(cid)) or {}).get("stat_has_context"))]
+    retry_limit = 18 if len(ids) > 180 else (28 if len(ids) > 80 else 40)
+    for retry_start in range(0, min(len(unresolved_ids), retry_limit), 6):
+        retry_chunk = unresolved_ids[retry_start:retry_start + 6]
+        retry_rows = _request_stats_chunk(retry_chunk)
+        for row in retry_rows:
+            cid = _campaign_id_from_row(row)
+            if not cid:
+                continue
+            stats[cid] = _build_campaign_stat_row(row)
+        if retry_rows:
+            unresolved_ids = [cid for cid in ids if not bool((stats.get(str(cid)) or {}).get("stat_has_context"))]
+            if not unresolved_ids:
+                break
+        time.sleep(0.18)
+    return stats
 
 def _fetch_wb_campaign_details(api_key: str, campaign_ids: list[int]) -> list[dict[str, Any]]:
     endpoints = [
@@ -3238,44 +3252,112 @@ def _merge_detail_rows(base: dict[str, Any] | None, incoming: dict[str, Any] | N
 
 
 def _build_campaign_stat_row(row: dict[str, Any]) -> dict[str, Any]:
-    views = _sum_metric_by_aliases(row, {"views", "shows", "impressions", "showscount", "impressionscount"})
-    clicks = _sum_metric_by_aliases(row, {"clicks", "click", "clickscount"})
-    orders = _sum_metric_by_aliases(row, {"orders", "orderscount", "ordercount"})
-    add_to_cart = _sum_metric_by_aliases(row, {"atbs", "addtocart", "add_to_cart", "basketadds"})
-    spent = _sum_metric_by_aliases(row, {"sum", "spent", "cost", "expense", "expenses"})
-    ctr_value = _sum_metric_by_aliases(row, {"ctr"})
-    cr_value = _sum_metric_by_aliases(row, {"cr"})
+    views_scan = _scan_metric_by_aliases(row, {"views", "shows", "impressions", "showscount", "impressionscount"})
+    clicks_scan = _scan_metric_by_aliases(row, {"clicks", "click", "clickscount"})
+    orders_scan = _scan_metric_by_aliases(row, {"orders", "orderscount", "ordercount"})
+    add_to_cart_scan = _scan_metric_by_aliases(row, {"atbs", "addtocart", "add_to_cart", "basketadds"})
+    spent_scan = _scan_metric_by_aliases(row, {"sum", "spent", "cost", "expense", "expenses"})
+    ctr_scan = _scan_metric_by_aliases(row, {"ctr"})
+    cr_scan = _scan_metric_by_aliases(row, {"cr"})
 
-    ctr = ctr_value if ctr_value > 0 else ((clicks / views * 100.0) if views > 0 else 0.0)
-    cr = cr_value if cr_value > 0 else ((orders / clicks * 100.0) if clicks > 0 else 0.0)
-    cpc = (spent / clicks) if clicks > 0 else 0.0
-    cpo = (spent / orders) if orders > 0 else 0.0
+    metric_hits = int(
+        views_scan["hits"]
+        + clicks_scan["hits"]
+        + orders_scan["hits"]
+        + add_to_cart_scan["hits"]
+        + spent_scan["hits"]
+        + ctr_scan["hits"]
+        + cr_scan["hits"]
+    )
+    metric_nonzero_hits = int(
+        views_scan["nonzero_hits"]
+        + clicks_scan["nonzero_hits"]
+        + orders_scan["nonzero_hits"]
+        + add_to_cart_scan["nonzero_hits"]
+        + spent_scan["nonzero_hits"]
+        + ctr_scan["nonzero_hits"]
+        + cr_scan["nonzero_hits"]
+    )
+    stat_has_context = metric_hits > 0
+    stat_nonzero = metric_nonzero_hits > 0
+    if not stat_has_context:
+        return {
+            "views": None,
+            "clicks": None,
+            "orders": None,
+            "add_to_cart": None,
+            "spent": None,
+            "ctr": None,
+            "cr": None,
+            "cpc": None,
+            "cpo": None,
+            "metric_hits": 0,
+            "metric_nonzero_hits": 0,
+            "stat_has_context": False,
+            "stat_nonzero": False,
+        }
+
+    views = float(views_scan["total"])
+    clicks = float(clicks_scan["total"])
+    orders = float(orders_scan["total"])
+    add_to_cart = float(add_to_cart_scan["total"])
+    spent = float(spent_scan["total"])
+
+    ctr: float | None = None
+    if ctr_scan["hits"] > 0:
+        ctr = float(ctr_scan["total"])
+    elif views_scan["hits"] > 0 or clicks_scan["hits"] > 0:
+        ctr = (clicks / views * 100.0) if views > 0 else 0.0
+
+    cr: float | None = None
+    if cr_scan["hits"] > 0:
+        cr = float(cr_scan["total"])
+    elif orders_scan["hits"] > 0 or clicks_scan["hits"] > 0:
+        cr = (orders / clicks * 100.0) if clicks > 0 else 0.0
+
+    cpc: float | None = None
+    if spent_scan["hits"] > 0 or clicks_scan["hits"] > 0:
+        cpc = (spent / clicks) if clicks > 0 else 0.0
+
+    cpo: float | None = None
+    if spent_scan["hits"] > 0 or orders_scan["hits"] > 0:
+        cpo = (spent / orders) if orders > 0 else 0.0
+
     return {
         "views": float(round(views, 3)),
         "clicks": float(round(clicks, 3)),
         "orders": float(round(orders, 3)),
         "add_to_cart": float(round(add_to_cart, 3)),
         "spent": float(round(spent, 3)),
-        "ctr": float(round(ctr, 4)),
-        "cr": float(round(cr, 4)),
-        "cpc": float(round(cpc, 4)),
-        "cpo": float(round(cpo, 4)),
+        "ctr": float(round(ctr, 4)) if ctr is not None else None,
+        "cr": float(round(cr, 4)) if cr is not None else None,
+        "cpc": float(round(cpc, 4)) if cpc is not None else None,
+        "cpo": float(round(cpo, 4)) if cpo is not None else None,
+        "metric_hits": metric_hits,
+        "metric_nonzero_hits": metric_nonzero_hits,
+        "stat_has_context": stat_has_context,
+        "stat_nonzero": stat_nonzero,
     }
 
 
-def _sum_metric_by_aliases(value: Any, aliases: set[str]) -> float:
+def _scan_metric_by_aliases(value: Any, aliases: set[str]) -> dict[str, float | int]:
     alias_set = {x.strip().lower() for x in aliases if x and x.strip()}
     total = 0.0
+    hits = 0
+    nonzero_hits = 0
 
     def walk(node: Any):
-        nonlocal total
+        nonlocal total, hits, nonzero_hits
         if isinstance(node, dict):
             for key, nested in node.items():
                 key_low = str(key).strip().lower()
                 if key_low in alias_set:
                     number = _to_float(nested)
                     if number is not None:
+                        hits += 1
                         total += number
+                        if abs(number) > 1e-9:
+                            nonzero_hits += 1
                 walk(nested)
             return
         if isinstance(node, list):
@@ -3283,8 +3365,15 @@ def _sum_metric_by_aliases(value: Any, aliases: set[str]) -> float:
                 walk(item)
 
     walk(value)
-    return total
+    return {
+        "total": float(total),
+        "hits": int(hits),
+        "nonzero_hits": int(nonzero_hits),
+    }
 
+
+def _sum_metric_by_aliases(value: Any, aliases: set[str]) -> float:
+    return float(_scan_metric_by_aliases(value, aliases).get("total") or 0.0)
 
 def _to_float(value: Any) -> float | None:
     if isinstance(value, bool):

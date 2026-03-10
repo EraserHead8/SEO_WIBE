@@ -1396,33 +1396,58 @@
           </div>
         </div>
 
-        <div id="socialSubtabCalendar" class="hidden">
-          <div class="panel">
-            <div class="social-calendar-toolbar">
-              <div class="social-calendar-nav">
-                <button class="btn-secondary" type="button" onclick="socialShiftCalendar(-12)">« Год</button>
-                <button class="btn-secondary" type="button" onclick="socialShiftCalendar(-1)">‹ Месяц</button>
-                <button class="btn-secondary" type="button" onclick="socialShiftCalendar(1)">Месяц ›</button>
-                <button class="btn-secondary" type="button" onclick="socialShiftCalendar(12)">Год »</button>
+                <div id="socialSubtabCalendar" class="hidden">
+          <div class="panel social-calendar-shell">
+            <div class="social-calendar-hero">
+              <div class="social-calendar-hero-copy">
+                <span class="social-calendar-kicker">Calendar hub</span>
+                <h3 id="socialCalendarMonthLabel">Календарь</h3>
+                <p class="social-calendar-lead">Собирайте события SEO WIBE, дедлайны задач и Google Calendar/ICS синхронизацию в одном рабочем экране.</p>
               </div>
-              <input id="socialCalendarMonth" type="month" onchange="socialLoadCalendar()" />
-              <button class="btn-secondary" type="button" onclick="socialOpenCalendarModal()">Добавить событие</button>
-            </div>
-            <div class="social-calendar-sync">
-              <div class="social-calendar-google-row">
-                <div id="socialCalendarGoogleStatus" class="hint">Google Calendar не подключен.</div>
-                <button id="socialCalendarGoogleConnectBtn" class="btn-secondary" data-tip="Открывает безопасный вход Google для подключения календаря." type="button" onclick="socialConnectGoogleCalendar()">Подключить Google</button>
+              <div class="social-calendar-hero-actions">
+                <button class="btn-secondary" type="button" onclick="socialJumpCalendarToday()">Сегодня</button>
+                <button type="button" onclick="socialOpenCalendarModal()">Добавить событие</button>
               </div>
-              <input id="socialCalendarGoogleIcs" placeholder="Google Calendar ICS URL (опционально, webcal://...)" />
-              <label class="check social-calendar-replace"><input id="socialCalendarGoogleReplace" type="checkbox" /> Очистить старые события из этого источника</label>
-              <button class="btn-secondary social-calendar-sync-btn" data-tip="Запускает синхронизацию событий из Google Calendar." type="button" onclick="socialSyncGoogleCalendar()">Синхронизировать</button>
             </div>
-            <div id="socialCalendarGrid" class="social-calendar-grid"></div>
-            <div id="socialCalendarEvents" class="social-calendar-events"></div>
+            <div class="social-calendar-board">
+              <div class="social-calendar-main">
+                <div class="social-calendar-toolbar social-calendar-toolbar--modern">
+                  <div class="social-calendar-nav social-calendar-nav--cluster">
+                    <button class="btn-secondary" type="button" onclick="socialShiftCalendar(-12)">« Год</button>
+                    <button class="btn-secondary" type="button" onclick="socialShiftCalendar(-1)">‹ Месяц</button>
+                    <button class="btn-secondary" type="button" onclick="socialShiftCalendar(1)">Месяц ›</button>
+                    <button class="btn-secondary" type="button" onclick="socialShiftCalendar(12)">Год »</button>
+                  </div>
+                  <label class="social-calendar-month-picker">
+                    <span>Период</span>
+                    <input id="socialCalendarMonth" type="month" onchange="socialLoadCalendar()" />
+                  </label>
+                </div>
+                <div id="socialCalendarGrid" class="social-calendar-grid"></div>
+                <div id="socialCalendarEvents" class="social-calendar-events"></div>
+              </div>
+              <aside class="social-calendar-sync-card">
+                <div class="social-calendar-sync-card-head">
+                  <div>
+                    <h4>Google / ICS sync</h4>
+                    <p>Прямой импорт из Google OAuth или по public/secret ICS URL без ручного дублирования событий.</p>
+                  </div>
+                  <button id="socialCalendarGoogleConnectBtn" class="btn-secondary" data-tip="Открывает безопасный вход Google для подключения календаря." type="button" onclick="socialConnectGoogleCalendar()">Подключить Google</button>
+                </div>
+                <div id="socialCalendarGoogleStatus" class="social-calendar-google-status"></div>
+                <div id="socialCalendarGoogleMeta" class="social-calendar-google-meta"></div>
+                <div id="socialCalendarSyncMessage" class="social-calendar-sync-message"></div>
+                <label class="social-calendar-sync-field">
+                  <span>ICS URL</span>
+                  <input id="socialCalendarGoogleIcs" placeholder="webcal://... или https://..." />
+                </label>
+                <label class="check social-calendar-replace"><input id="socialCalendarGoogleReplace" type="checkbox" /> Очистить старые события из этого источника перед повторным импортом</label>
+                <button class="social-calendar-sync-btn" data-tip="Запускает синхронизацию событий из Google Calendar или ICS URL." type="button" onclick="socialSyncGoogleCalendar()">Синхронизировать календарь</button>
+              </aside>
+            </div>
           </div>
         </div>
-
-        <div id="socialSubtabCalculator" class="hidden">
+<div id="socialSubtabCalculator" class="hidden">
           <div class="panel">
             <div class="social-calc-grid">
               <section class="social-calc-shell">

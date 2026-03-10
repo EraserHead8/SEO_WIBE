@@ -113,6 +113,7 @@ let wbAdsLoadProgress = { active: false, total: 0, loaded: 0, failed: 0 };
 let wbAdsLoadToken = 0;
 let wbAdsLoadInflight = null;
 let adsAnalyticsRows = [];
+let adsAnalyticsMeta = {};
 let adsRecommendationRows = [];
 let adsRecLoadProgress = { active: false, total: 0, loaded: 0 };
 let adsRecLoadToken = 0;
@@ -1251,6 +1252,57 @@ async function requestJson(url, opts = {}) {
     return `req-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
   };
 
+  const compactRawText = (raw) => {
+    const normalized = String(raw || "").replace(/\s+/g, " ").trim();
+    if (!normalized) return "";
+    return normalized.length > 280 ? `${normalized.slice(0, 277)}...` : normalized;
+  };
+
+  const makeRequestError = (message, extra = {}) => {
+    const err = new Error(String(message || (currentLang === "en" ? "Request error" : "Ошибка запроса")));
+    err.kind = String(extra.kind || "http");
+    err.url = String(extra.url || url || "");
+    if (Number.isFinite(Number(extra.status)) && Number(extra.status) > 0) {
+      err.status = Number(extra.status);
+    }
+    if (extra.payload !== undefined) err.payload = extra.payload;
+    if (typeof extra.rawText === "string") {
+      err.rawText = extra.rawText;
+      err.raw_text = extra.rawText;
+    }
+    if (extra.cause !== undefined) err.cause = extra.cause;
+    return err;
+  };
+
+  const parseResponseBody = async (response) => {
+    const text = await response.text().catch(() => "");
+    const rawText = compactRawText(text);
+    if (!String(text || "").trim()) {
+      return {
+        ok: true,
+        hasBody: false,
+        payload: {},
+        rawText,
+      };
+    }
+    try {
+      return {
+        ok: true,
+        hasBody: true,
+        payload: JSON.parse(text),
+        rawText,
+      };
+    } catch (parseError) {
+      return {
+        ok: false,
+        hasBody: true,
+        payload: null,
+        rawText,
+        parseError,
+      };
+    }
+  };
+
   const headersTemplate = copyHeaders(fetchOptsBase.headers);
   const requestId = method !== "GET" && method !== "HEAD" && method !== "OPTIONS" ? makeRequestId() : "";
   if (requestId && !headersTemplate["X-Request-ID"] && !headersTemplate["x-request-id"]) {
@@ -1279,12 +1331,36 @@ async function requestJson(url, opts = {}) {
         setToken(refreshed, tokenStorage === "local");
       }
 
-      const data = await response.json().catch(() => ({}));
-      if (response.ok) return data;
+      const parsed = await parseResponseBody(response);
+      if (response.ok) {
+        if (!parsed.hasBody) return {};
+        if (parsed.ok) return parsed.payload;
+        throw makeRequestError(
+          currentLang === "en" ? "Server returned an invalid response." : "Сервер вернул некорректный ответ.",
+          {
+            kind: "parse",
+            status: response.status,
+            payload: null,
+            rawText: parsed.rawText,
+            cause: parsed.parseError,
+          }
+        );
+      }
 
-      const err = new Error(data.detail || data.message || (currentLang === "en" ? "Request error" : "Ошибка запроса"));
-      err.status = response.status;
-      err.payload = data;
+      const payload = parsed.ok ? parsed.payload : {};
+      const detail = payload && typeof payload === "object"
+        ? String(payload.detail || payload.message || "").trim()
+        : "";
+      const err = makeRequestError(
+        detail || parsed.rawText || (currentLang === "en" ? "Request error" : "Ошибка запроса"),
+        {
+          kind: parsed.ok ? "http" : "parse",
+          status: response.status,
+          payload,
+          rawText: parsed.rawText,
+          cause: parsed.ok ? undefined : parsed.parseError,
+        }
+      );
       lastError = err;
       if (response.status === 401 || response.status === 403) {
         const safeUrl = String(url || "");
@@ -1304,13 +1380,15 @@ async function requestJson(url, opts = {}) {
       }
       throw err;
     } catch (e) {
-      const isAbort = e?.name === "AbortError";
+      const existingKind = String(e?.kind || "").trim().toLowerCase();
+      const isAbort = e?.name === "AbortError" || existingKind === "timeout";
       const msg = String(e?.message || "").toLowerCase();
-      const isFetchNetwork = isAbort
-        || msg.includes("failed to fetch")
-        || msg.includes("networkerror")
-        || msg.includes("load failed")
-        || msg.includes("network");
+      const isFetchNetwork = existingKind === "network"
+        || (!existingKind && (isAbort
+          || msg.includes("failed to fetch")
+          || msg.includes("networkerror")
+          || msg.includes("load failed")
+          || msg.includes("network")));
       if (attempt < maxRetries && allowRetry && isFetchNetwork) {
         lastError = e;
         const backoff = Math.round(retryBaseDelayMs * (2 ** attempt) + Math.random() * 180);
@@ -1318,11 +1396,18 @@ async function requestJson(url, opts = {}) {
         continue;
       }
       if (isAbort) {
-        throw new Error(currentLang === "en" ? "Request timed out. Please retry." : "Превышено время ожидания. Повторите запрос.");
+        throw makeRequestError(
+          currentLang === "en" ? "Request timed out. Please retry." : "Превышено время ожидания. Повторите запрос.",
+          { kind: "timeout", cause: e }
+        );
       }
       if (isFetchNetwork) {
-        throw new Error(currentLang === "en" ? "Network error. Check connection and retry." : "Сетевая ошибка. Проверьте соединение и повторите.");
+        throw makeRequestError(
+          currentLang === "en" ? "Network error. Check connection and retry." : "Сетевая ошибка. Проверьте соединение и повторите.",
+          { kind: "network", cause: e }
+        );
       }
+      if (e && typeof e === "object" && !e.url) e.url = String(url || "");
       throw e;
     } finally {
       if (timer) clearTimeout(timer);
@@ -1330,14 +1415,19 @@ async function requestJson(url, opts = {}) {
   }
 
   if (lastError?.name === "AbortError") {
-    throw new Error(currentLang === "en" ? "Request timed out. Please retry." : "Превышено время ожидания. Повторите запрос.");
+    throw makeRequestError(
+      currentLang === "en" ? "Request timed out. Please retry." : "Превышено время ожидания. Повторите запрос.",
+      { kind: "timeout", cause: lastError }
+    );
   }
   if (isNetworkError(lastError)) {
-    throw new Error(currentLang === "en" ? "Network error. Check connection and retry." : "Сетевая ошибка. Проверьте соединение и повторите.");
+    throw makeRequestError(
+      currentLang === "en" ? "Network error. Check connection and retry." : "Сетевая ошибка. Проверьте соединение и повторите.",
+      { kind: "network", cause: lastError }
+    );
   }
-  throw lastError || new Error(currentLang === "en" ? "Request error" : "Ошибка запроса");
+  throw lastError || new Error(currentLang === "en" ? "Request error" : "РћС€РёР±РєР° Р·Р°РїСЂРѕСЃР°");
 }
-
 function isNetworkError(err) {
   const msg = String(err?.message || "").toLowerCase();
   return msg.includes("network error")
@@ -2288,23 +2378,10 @@ function handleMobileBackPress() {
   if (String(currentTab || "") === "social") {
     const subtab = String(currentSocialSubtab || window.socialState?.currentSubtab || "chat");
     const currentThreadId = Number(window.socialState?.currentThreadId || 0);
-    const chatOpenedByLayout = typeof window.socialIsThreadOpen === "function"
+    const threadOpen = typeof window.socialIsThreadOpen === "function"
       ? Boolean(window.socialIsThreadOpen())
-      : Boolean(document.querySelector("#socialSubtabChat .social-chat-layout")?.classList.contains("chat-open"));
-    const hasRenderedMessages = Boolean(
-      document.querySelector("#socialSubtabChat #socialChatMessages .tg-msg-row")
-      || document.querySelector("#socialSubtabChat #socialChatMessages .social-chat-loading")
-      || document.querySelector("#socialSubtabChat #socialChatMessages .social-chat-error")
-    );
-    const headText = String(document.getElementById("socialChatHead")?.textContent || "").trim().toLowerCase();
-    const hasSelectedHeader = headText && headText !== "выберите чат" && headText !== "select chat";
-    const shouldCloseThread = subtab === "chat" && (
-      currentThreadId > 0
-      || chatOpenedByLayout
-      || hasRenderedMessages
-      || hasSelectedHeader
-    );
-    if (shouldCloseThread && typeof window.socialCloseThread === "function") {
+      : currentThreadId > 0;
+    if (subtab === "chat" && (threadOpen || currentThreadId > 0) && typeof window.socialCloseThread === "function") {
       currentSocialSubtab = "chat";
       window.socialCloseThread({ keepAutoSelect: false });
       return true;
@@ -2336,7 +2413,6 @@ function handleMobileBackPress() {
   }
   return true;
 }
-
 function toggleMobileNav() {
   const shell = document.getElementById("appSection");
   if (!shell) return;
@@ -5624,14 +5700,16 @@ function campaignHasRealName(row) {
 
 function campaignHasStats(row) {
   if (!row || typeof row !== "object") return false;
+  if (row.stat_has_context === true) return true;
+  if (row.stat_has_context === false) return false;
   const metricKeys = ["views", "clicks", "orders", "spent", "ctr", "cr", "cpc", "cpo"];
   return metricKeys.some((key) => {
     if (!(key in row)) return false;
     const val = Number(row[key]);
-    return Number.isFinite(val);
+    if (!Number.isFinite(val)) return false;
+    return Math.abs(val) > 0.000001 || Number(row.metric_hits || 0) > 0;
   });
 }
-
 function mergeCampaignSummaryIntoRow(row, summary) {
   if (!summary || typeof summary !== "object") return row;
   const next = { ...row };
@@ -6446,6 +6524,7 @@ function buildAdsAnalyticsSummaryText(meta, totals) {
   const periodTo = String(meta?.date_to || "-");
   const campaignsLoaded = Number(meta?.campaigns_loaded || 0);
   const campaignFilter = Number(meta?.campaign_id || 0);
+  const analyticsMeta = meta?.analytics_meta && typeof meta.analytics_meta === "object" ? meta.analytics_meta : {};
   const lines = [
     `${tr("Период", "Period")}: ${periodFrom} - ${periodTo}`,
     `${tr("Кампаний в отчете", "Campaigns in report")}: ${formatInt(campaignsLoaded)}`,
@@ -6461,9 +6540,86 @@ function buildAdsAnalyticsSummaryText(meta, totals) {
   if (campaignFilter > 0) {
     lines.unshift(`${tr("Фильтр campaign_id", "campaign_id filter")}: ${campaignFilter}`);
   }
+  lines.push(...buildAdsAnalyticsMetaLines(analyticsMeta));
   return lines.join("\n");
 }
 
+function describeAdsAnalyticsWarning(code) {
+  const key = String(code || "").trim().toLowerCase();
+  if (key === "temporary_unavailable") {
+    return tr("WB Ads временно не вернул пригодные детали по этому периоду.", "WB Ads temporarily returned no usable details for this period.");
+  }
+  if (key === "summary_partial") {
+    return tr("Часть кампаний пока без нормальных названий или статусов.", "Some campaigns still have placeholder names or statuses.");
+  }
+  if (key === "stats_partial") {
+    return tr("Часть кампаний пока без показов/кликов/расхода за выбранный период.", "Some campaigns still have no views/clicks/spend for the selected period.");
+  }
+  if (key === "base_fetch_failed") {
+    return tr("Не удалось обновить базовый список кампаний.", "Base campaign list refresh failed.");
+  }
+  if (key === "summary_fetch_failed") {
+    return tr("Не удалось догрузить реальные названия и статусы кампаний.", "Campaign names and statuses could not be enriched.");
+  }
+  if (key === "stats_fetch_failed") {
+    return tr("Не удалось догрузить статистику кампаний из WB Ads.", "Campaign statistics could not be loaded from WB Ads.");
+  }
+  return key || "-";
+}
+
+function buildAdsAnalyticsMetaLines(meta) {
+  if (!meta || typeof meta !== "object") return [];
+  const lines = [];
+  if (meta.temporary_unavailable) {
+    lines.push(tr("WB Ads сейчас отдает только частичные данные. Таблица сохранена без обнуления уже загруженных строк.", "WB Ads is returning partial data right now. Existing rows are preserved instead of being blanked."));
+  }
+  const partialSummaryCount = Number(meta.partial_summary_count || 0);
+  const partialStatsCount = Number(meta.partial_stats_count || 0);
+  if (partialSummaryCount > 0) {
+    lines.push(`${tr("Без полного названия или статуса", "Without full name/status")}: ${formatInt(partialSummaryCount)}`);
+  }
+  if (partialStatsCount > 0) {
+    lines.push(`${tr("Без метрик за период", "Without period metrics")}: ${formatInt(partialStatsCount)}`);
+  }
+  const warnings = Array.isArray(meta.warnings)
+    ? meta.warnings.map((code) => describeAdsAnalyticsWarning(code)).filter(Boolean)
+    : [];
+  if (warnings.length) {
+    lines.push(`${tr("Состояние загрузки", "Load state")}: ${warnings.join(" | ")}`);
+  }
+  const sourceParts = [];
+  if (Array.isArray(meta.base_sources) && meta.base_sources.length) sourceParts.push(`base=${meta.base_sources.join(",")}`);
+  if (Array.isArray(meta.summary_sources) && meta.summary_sources.length) sourceParts.push(`summary=${meta.summary_sources.join(",")}`);
+  if (Array.isArray(meta.stats_sources) && meta.stats_sources.length) sourceParts.push(`stats=${meta.stats_sources.join(",")}`);
+  if (sourceParts.length) {
+    lines.push(`${tr("Источники кэша", "Cache sources")}: ${sourceParts.join("; ")}`);
+  }
+  const errors = Array.isArray(meta.errors) ? meta.errors.map((msg) => String(msg || "").trim()).filter(Boolean) : [];
+  if (errors.length) {
+    lines.push(`${tr("Ошибки", "Errors")}: ${errors.join(" | ")}`);
+  }
+  return lines;
+}
+function describeAdsAnalyticsLoadFailure(err) {
+  const kind = String(err?.kind || "").trim().toLowerCase();
+  const status = Number(err?.status || 0);
+  if (kind === "timeout") {
+    return tr("WB Ads не ответил вовремя. Уже загруженные строки сохранены, повторите запрос чуть позже.", "WB Ads timed out. Existing rows were preserved, please retry shortly.");
+  }
+  if (kind === "network") {
+    return tr("Не удалось связаться с сервером WB Ads. Проверьте соединение и повторите загрузку.", "Could not reach WB Ads. Check the connection and retry.");
+  }
+  if (kind === "parse") {
+    return tr("Сервер вернул некорректный ответ WB Ads. Текущие строки не были очищены.", "Server returned a malformed WB Ads response. Existing rows were preserved.");
+  }
+  if (status >= 500) {
+    return tr(`WB Ads временно недоступен (HTTP ${status}). Текущие строки не были очищены.`, `WB Ads is temporarily unavailable (HTTP ${status}). Existing rows were preserved.`);
+  }
+  if (status >= 400) {
+    return tr(`WB Ads отклонил запрос (HTTP ${status}). Проверьте ключ API и выбранный период.`, `WB Ads rejected the request (HTTP ${status}). Check the API key and selected period.`);
+  }
+  return tr("Не удалось загрузить аналитику WB Ads. Уже загруженные строки сохранены.", "Failed to load WB Ads analytics. Existing rows were preserved.");
+}
 async function loadAdsAnalytics() {
   if (!enabledModules.has("wb_ads_analytics")) return;
   const dateFrom = (document.getElementById("adsAnalyticsFrom")?.value || "").trim();
@@ -6481,6 +6637,21 @@ async function loadAdsAnalytics() {
   const mergedRows = [];
   let periodFrom = "";
   let periodTo = "";
+  const mergedMeta = {
+    requested_count: 0,
+    summary_count: 0,
+    stats_count: 0,
+    partial_summary_count: 0,
+    partial_stats_count: 0,
+    partial_summary_ids: [],
+    partial_stats_ids: [],
+    temporary_unavailable: false,
+    warnings: new Set(),
+    base_sources: new Set(),
+    summary_sources: new Set(),
+    stats_sources: new Set(),
+    errors: new Set(),
+  };
   while (keepLoading) {
     page += 1;
     const qp = new URLSearchParams();
@@ -6499,11 +6670,24 @@ async function loadAdsAnalytics() {
       headers: authHeaders(),
       timeoutMs: 120000,
     }).catch((e) => {
-      adsAnalyticsRows = [];
-      renderAdsAnalyticsRows();
-      if (totalBox) totalBox.textContent = tr("Ошибка загрузки аналитики. Проверьте API-ключ и период.", "Analytics loading failed. Check API key and period.");
-      if (rawBox) rawBox.textContent = tr("Ошибка загрузки аналитики.", "Analytics loading failed.");
-      alert(e.message);
+      adsAnalyticsMeta = {
+        temporary_unavailable: false,
+        warnings: [],
+        errors: [String(e?.message || tr("Ошибка загрузки аналитики.", "Analytics loading failed."))],
+      };
+      if (totalBox) totalBox.textContent = describeAdsAnalyticsLoadFailure(e);
+      if (rawBox) {
+        rawBox.textContent = JSON.stringify({
+          error: {
+            message: String(e?.message || ""),
+            status: Number(e?.status || 0),
+            kind: String(e?.kind || ""),
+            url: String(e?.url || `/api/wb/ads/analytics?${qp.toString()}`),
+            raw_text: String(e?.rawText || e?.raw_text || ""),
+          },
+          meta: adsAnalyticsMeta,
+        }, null, 2);
+      }
       return null;
     });
     if (!data) return;
@@ -6511,7 +6695,23 @@ async function loadAdsAnalytics() {
     if (!periodFrom) periodFrom = String(data.date_from || "");
     if (!periodTo) periodTo = String(data.date_to || "");
     const rows = Array.isArray(data.rows) ? data.rows : [];
+    const pageMeta = data?.meta && typeof data.meta === "object" ? data.meta : {};
     mergedRows.push(...rows);
+    mergedMeta.requested_count += Number(pageMeta.requested_count || rows.length || 0);
+    mergedMeta.summary_count += Number(pageMeta.summary_count || 0);
+    mergedMeta.stats_count += Number(pageMeta.stats_count || 0);
+    mergedMeta.partial_summary_count += Number(pageMeta.partial_summary_count || 0);
+    mergedMeta.partial_stats_count += Number(pageMeta.partial_stats_count || 0);
+    mergedMeta.temporary_unavailable = mergedMeta.temporary_unavailable || Boolean(pageMeta.temporary_unavailable);
+    if (Array.isArray(pageMeta.partial_summary_ids)) mergedMeta.partial_summary_ids.push(...pageMeta.partial_summary_ids.map((x) => Number(x || 0)).filter((x) => Number.isFinite(x) && x > 0));
+    if (Array.isArray(pageMeta.partial_stats_ids)) mergedMeta.partial_stats_ids.push(...pageMeta.partial_stats_ids.map((x) => Number(x || 0)).filter((x) => Number.isFinite(x) && x > 0));
+    if (Array.isArray(pageMeta.warnings)) pageMeta.warnings.forEach((code) => mergedMeta.warnings.add(String(code || "").trim()));
+    if (pageMeta.base_source) mergedMeta.base_sources.add(String(pageMeta.base_source || "").trim());
+    if (pageMeta.summary_source) mergedMeta.summary_sources.add(String(pageMeta.summary_source || "").trim());
+    if (pageMeta.stats_source) mergedMeta.stats_sources.add(String(pageMeta.stats_source || "").trim());
+    if (pageMeta.base_error) mergedMeta.errors.add(String(pageMeta.base_error || "").trim());
+    if (pageMeta.summary_error) mergedMeta.errors.add(String(pageMeta.summary_error || "").trim());
+    if (pageMeta.stats_error) mergedMeta.errors.add(String(pageMeta.stats_error || "").trim());
     if (campaignId > 0) {
       keepLoading = false;
     } else {
@@ -6522,6 +6722,21 @@ async function loadAdsAnalytics() {
   }
 
   adsAnalyticsRows = mergedRows.slice().sort((a, b) => Number(b?.spent || 0) - Number(a?.spent || 0));
+  adsAnalyticsMeta = {
+    requested_count: mergedMeta.requested_count,
+    summary_count: mergedMeta.summary_count,
+    stats_count: mergedMeta.stats_count,
+    partial_summary_count: mergedMeta.partial_summary_count,
+    partial_stats_count: mergedMeta.partial_stats_count,
+    partial_summary_ids: [...new Set(mergedMeta.partial_summary_ids)].slice(0, 160),
+    partial_stats_ids: [...new Set(mergedMeta.partial_stats_ids)].slice(0, 160),
+    temporary_unavailable: mergedMeta.temporary_unavailable,
+    warnings: [...mergedMeta.warnings].filter(Boolean),
+    base_sources: [...mergedMeta.base_sources].filter(Boolean),
+    summary_sources: [...mergedMeta.summary_sources].filter(Boolean),
+    stats_sources: [...mergedMeta.stats_sources].filter(Boolean),
+    errors: [...mergedMeta.errors].filter(Boolean),
+  };
   const totals = computeAdsAnalyticsTotals(adsAnalyticsRows);
   if (totalBox) {
     totalBox.textContent = buildAdsAnalyticsSummaryText(
@@ -6530,6 +6745,7 @@ async function loadAdsAnalytics() {
         date_to: periodTo || dateTo || "-",
         campaigns_loaded: adsAnalyticsRows.length,
         campaign_id: campaignId,
+        analytics_meta: adsAnalyticsMeta,
       },
       totals
     );
@@ -6542,6 +6758,7 @@ async function loadAdsAnalytics() {
         campaign_id: campaignId > 0 ? campaignId : null,
         campaigns_loaded: adsAnalyticsRows.length,
         totals,
+        meta: adsAnalyticsMeta,
         rows: adsAnalyticsRows,
       },
       null,
@@ -6558,13 +6775,22 @@ function renderAdsAnalyticsRows() {
   tbody.innerHTML = "";
   if (!adsAnalyticsRows.length) {
     const rowEl = document.createElement("tr");
-    rowEl.innerHTML = `<td colspan="12">${currentLang === "en" ? "No data." : "Нет данных."}</td>`;
+    const emptyMessage = adsAnalyticsMeta?.temporary_unavailable
+      ? (currentLang === "en" ? "WB Ads temporarily returned no usable analytics for this period." : "WB Ads временно не вернул пригодную аналитику за этот период.")
+      : (Array.isArray(adsAnalyticsMeta?.errors) && adsAnalyticsMeta.errors.length
+        ? adsAnalyticsMeta.errors[0]
+        : (currentLang === "en" ? "No data." : "Нет данных."));
+    rowEl.innerHTML = `<td colspan="12">${escapeHtml(emptyMessage)}</td>`;
     tbody.appendChild(rowEl);
     return;
   }
   for (const row of adsAnalyticsRows) {
     const ctrVal = parseCampaignMetric(row, "ctr", 2);
     const rowEl = document.createElement("tr");
+    const rowWarnings = [];
+    if (row.summary_has_context === false) rowWarnings.push(currentLang === "en" ? "Name/status still partial" : "Название/статус ещё частичные");
+    if (row.stat_has_context === false) rowWarnings.push(currentLang === "en" ? "Metrics not loaded for selected period" : "Метрики за период не загружены");
+    if (rowWarnings.length) rowEl.title = rowWarnings.join(" • ");
     rowEl.innerHTML = `
       <td>${escapeHtml(row.campaign_id ?? "-")}</td>
       <td>${escapeHtml(row.name ?? "-")}</td>

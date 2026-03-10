@@ -430,7 +430,7 @@ class WbAdsAnalyticsOut(BaseModel):
     date_to: str
     rows: list[dict[str, Any]]
     totals: dict[str, float]
-
+    meta: dict[str, Any] = Field(default_factory=dict)
 
 class WbAdsRecommendationsOut(BaseModel):
     date_from: str
