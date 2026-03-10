@@ -3356,6 +3356,7 @@ async function socialQuickDone(taskId) {
 async function socialLoadGoogleCalendarStatus() {
   const statusNode = document.getElementById("socialCalendarGoogleStatus");
   const connectBtn = document.getElementById("socialCalendarGoogleConnectBtn");
+  const syncBtn = document.querySelector(".social-calendar-sync-btn");
   const query = new URLSearchParams(window.location.search || "");
   const oauthConnected = String(query.get("google_oauth_connected") || "") === "1";
   const oauthError = String(query.get("google_oauth_error") || "").trim();
@@ -3388,23 +3389,55 @@ async function socialLoadGoogleCalendarStatus() {
   }
   if (connectBtn) {
     connectBtn.classList.toggle("btn-success", connected);
-    connectBtn.textContent = connected
-      ? tr("Переподключить Google", "Reconnect Google")
-      : tr("Подключить Google", "Connect Google");
+    if (connectBtn.dataset.loading !== "1") {
+      connectBtn.textContent = connected
+        ? tr("Переподключить Google", "Reconnect Google")
+        : tr("Подключить Google", "Connect Google");
+    }
+  }
+  if (syncBtn) {
+    syncBtn.textContent = connected
+      ? tr("Синхронизировать", "Sync")
+      : tr("Подключить и синхронизировать", "Connect and sync");
   }
 }
 
 async function socialConnectGoogleCalendar() {
+  const statusNode = document.getElementById("socialCalendarGoogleStatus");
+  const connectBtn = document.getElementById("socialCalendarGoogleConnectBtn");
+  const previousStatus = String(statusNode?.textContent || "").trim();
+  const previousText = String(connectBtn?.textContent || "").trim();
+  const restoreUi = () => {
+    if (connectBtn) {
+      connectBtn.disabled = false;
+      connectBtn.dataset.loading = "0";
+      connectBtn.textContent = previousText || tr("Подключить Google", "Connect Google");
+    }
+    if (statusNode && previousStatus) {
+      statusNode.textContent = previousStatus;
+    }
+  };
+  if (connectBtn) {
+    connectBtn.disabled = true;
+    connectBtn.dataset.loading = "1";
+    connectBtn.textContent = tr("Открываем Google...", "Opening Google...");
+  }
+  if (statusNode) {
+    statusNode.textContent = tr("Подготавливаем безопасный вход Google OAuth...", "Preparing secure Google OAuth sign-in...");
+  }
   const data = await socialRequest("/api/social/calendar/google-oauth/start", { timeoutMs: 12000 }).catch((e) => {
+    restoreUi();
     alert(e.message || tr("Не удалось запустить Google OAuth.", "Unable to start Google OAuth."));
     return null;
   });
   const url = String(data?.url || "").trim();
   if (!url) {
+    restoreUi();
     alert(tr("Не удалось получить ссылку Google OAuth.", "Unable to obtain Google OAuth URL."));
-    return;
+    return false;
   }
-  window.location.href = url;
+  window.location.assign(url);
+  return true;
 }
 
 async function socialLoadCalendar() {

@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260309h" />
+  <link rel="stylesheet" href="/static/styles.css?v={{ static_v('styles.css') }}" />
 </head>
 <body>
   <div class="app-bg"></div>
@@ -1411,11 +1411,11 @@
             <div class="social-calendar-sync">
               <div class="social-calendar-google-row">
                 <div id="socialCalendarGoogleStatus" class="hint">Google Calendar не подключен.</div>
-                <button id="socialCalendarGoogleConnectBtn" class="btn-secondary" type="button" onclick="socialConnectGoogleCalendar()">Подключить Google</button>
+                <button id="socialCalendarGoogleConnectBtn" class="btn-secondary" data-tip="Открывает безопасный вход Google для подключения календаря." type="button" onclick="socialConnectGoogleCalendar()">Подключить Google</button>
               </div>
               <input id="socialCalendarGoogleIcs" placeholder="Google Calendar ICS URL (опционально, webcal://...)" />
               <label class="check social-calendar-replace"><input id="socialCalendarGoogleReplace" type="checkbox" /> Очистить старые события из этого источника</label>
-              <button class="btn-secondary social-calendar-sync-btn" type="button" onclick="socialSyncGoogleCalendar()">Синхронизировать</button>
+              <button class="btn-secondary social-calendar-sync-btn" data-tip="Запускает синхронизацию событий из Google Calendar." type="button" onclick="socialSyncGoogleCalendar()">Синхронизировать</button>
             </div>
             <div id="socialCalendarGrid" class="social-calendar-grid"></div>
             <div id="socialCalendarEvents" class="social-calendar-events"></div>
@@ -1750,8 +1750,8 @@
   <div id="hoverTip" class="hover-tip hidden"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script src="/static/app.js?v=20260309i"></script>
-  <script src="/static/accounting.js?v=20260308b"></script>
-  <script src="/static/social.js?v=20260309h"></script>
+  <script src="/static/app.js?v={{ static_v('app.js') }}"></script>
+  <script src="/static/accounting.js?v={{ static_v('accounting.js') }}"></script>
+  <script src="/static/social.js?v={{ static_v('social.js') }}"></script>
 </body>
 </html>

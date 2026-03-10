@@ -24,6 +24,22 @@ templates = Jinja2Templates(directory="app/templates")
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
+def static_v(path: str = "") -> str:
+    safe = str(path or "").strip().lstrip("/")
+    if not safe:
+        return "0"
+    target = (STATIC_DIR / safe).resolve()
+    if STATIC_DIR not in target.parents:
+        return "0"
+    try:
+        return str(int(target.stat().st_mtime_ns // 1_000_000))
+    except OSError:
+        return str(int(time.time() * 1000))
+
+
+templates.env.globals["static_v"] = static_v
+
+
 @app.middleware("http")
 async def apply_static_cache_headers(request: Request, call_next):
     response = await call_next(request)
@@ -49,6 +65,10 @@ async def apply_static_cache_headers(request: Request, call_next):
             del response.headers["Pragma"]
         if "Expires" in response.headers:
             del response.headers["Expires"]
+    elif "text/html" in str(response.headers.get("content-type") or "").lower():
+        response.headers["Cache-Control"] = "no-store, max-age=0, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
     return response
 
 
