@@ -1015,20 +1015,27 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
 
     mapped: list[MarketplaceProduct] = []
     for item in info_items:
-        source = item.get("product_info") or item
-        article = str(source.get("offer_id") or source.get("id") or "")
+        source_raw = item.get("product_info") if isinstance(item, dict) and isinstance(item.get("product_info"), dict) else {}
+        source = source_raw if isinstance(source_raw, dict) else {}
+        item_map = item if isinstance(item, dict) else {}
+        merged_source: dict[str, Any] = {}
+        if item_map:
+            merged_source.update(item_map)
+        if source:
+            merged_source.update(source)
+        article = str(merged_source.get("offer_id") or merged_source.get("id") or merged_source.get("product_id") or "")
         if not article:
             continue
-        name = str(source.get("name") or "Товар Ozon")
-        description = str(source.get("description") or source.get("marketing_description") or "")
-        barcode = _extract_ozon_barcode(source)
-        photos = _extract_ozon_photos(source)
-        photo_url = photos[0] if photos else _extract_ozon_photo(source)
-        category_name = _extract_ozon_category_name(source)
+        name = str(merged_source.get("name") or "Товар Ozon")
+        description = str(merged_source.get("description") or merged_source.get("marketing_description") or "")
+        barcode = _extract_ozon_barcode(merged_source)
+        photos = _dedupe_photo_urls(_extract_ozon_photos(merged_source) + _extract_ozon_photos(item_map))
+        photo_url = photos[0] if photos else _extract_ozon_photo(merged_source)
+        category_name = _extract_ozon_category_name(merged_source)
         mapped.append(
             MarketplaceProduct(
                 article=article,
-                external_id=str(source.get("id") or ""),
+                external_id=str(merged_source.get("id") or merged_source.get("product_id") or ""),
                 barcode=barcode,
                 photo_url=photo_url,
                 name=name,
@@ -1187,33 +1194,82 @@ def _fetch_ozon_product_details(api_key: str, article: str, external_id: str = "
     item = items[0] if isinstance(items, list) else {}
     if isinstance(items, list) and len(items) > 1:
         target_offer = str(article or "").strip()
+        target_offer_low = target_offer.lower()
         target_external = str(external_id or "").strip()
-        matched: dict[str, Any] | None = None
+        best_item: dict[str, Any] | None = None
+        best_score = -1
         for candidate in items:
             if not isinstance(candidate, dict):
                 continue
-            candidate_info = candidate.get("product_info") if isinstance(candidate.get("product_info"), dict) else candidate
-            if not isinstance(candidate_info, dict):
-                continue
-            offer_match = str(candidate_info.get("offer_id") or "").strip()
-            pid_match = str(candidate_info.get("id") or candidate_info.get("product_id") or "").strip()
-            if target_external and pid_match and pid_match == target_external:
-                matched = candidate
-                break
-            if target_offer and offer_match and offer_match == target_offer:
-                matched = candidate
-                break
-        if matched is not None:
-            item = matched
-    source = item.get("product_info") if isinstance(item, dict) else {}
-    if not isinstance(source, dict):
-        source = item if isinstance(item, dict) else {}
+            candidate_info = candidate.get("product_info") if isinstance(candidate.get("product_info"), dict) else {}
+            nodes: list[dict[str, Any]] = [candidate]
+            if isinstance(candidate_info, dict):
+                nodes.append(candidate_info)
+            offers: list[str] = []
+            product_ids: list[str] = []
+            for node in nodes:
+                if not isinstance(node, dict):
+                    continue
+                for key in ("offer_id", "offerId", "vendor_code", "vendorCode"):
+                    value = str(node.get(key) or "").strip()
+                    if value:
+                        offers.append(value)
+                for key in ("id", "product_id", "productId"):
+                    value = str(node.get(key) or "").strip()
+                    if value:
+                        product_ids.append(value)
+            score = 0
+            if target_external:
+                if any(pid == target_external for pid in product_ids):
+                    score = max(score, 120)
+                elif target_external.isdigit():
+                    try:
+                        target_external_num = int(target_external)
+                    except Exception:
+                        target_external_num = 0
+                    if target_external_num > 0:
+                        for pid in product_ids:
+                            if pid.isdigit() and int(pid) == target_external_num:
+                                score = max(score, 115)
+                                break
+            if target_offer:
+                if any(offer == target_offer for offer in offers):
+                    score = max(score, 100)
+                elif target_offer_low and any(offer.lower() == target_offer_low for offer in offers):
+                    score = max(score, 95)
+                if target_offer.isdigit():
+                    try:
+                        offer_num = int(target_offer)
+                    except Exception:
+                        offer_num = 0
+                    if offer_num > 0:
+                        for pid in product_ids:
+                            if pid.isdigit() and int(pid) == offer_num:
+                                score = max(score, 90)
+                                break
+            if score > best_score:
+                best_score = score
+                best_item = candidate
+                if score >= 120:
+                    break
+        if best_item is not None and best_score > 0:
+            item = best_item
+    item_map = item if isinstance(item, dict) else {}
+    source_raw = item_map.get("product_info") if isinstance(item_map.get("product_info"), dict) else {}
+    source = source_raw if isinstance(source_raw, dict) else {}
+    merged_source: dict[str, Any] = {}
+    if item_map:
+        merged_source.update(item_map)
+    if source:
+        merged_source.update(source)
+    if not merged_source:
+        merged_source = source or item_map
     try:
         with httpx.Client(timeout=25.0) as client:
             price_info = _fetch_ozon_price_snapshot(
                 client=client,
                 headers=headers,
-                source=[item] if isinstance(item, dict) else [],
+                source=[item_map] if isinstance(item_map, dict) else [],
                 article=article,
                 external_id=external_id,
             )
@@ -1227,31 +1283,135 @@ def _fetch_ozon_product_details(api_key: str, article: str, external_id: str = "
             if url:
                 out.append(url)
         elif isinstance(value, dict):
-            for key in ("url", "image", "x1", "x2"):
+            for key in ("url", "image", "x1", "x2", "src", "link", "href", "path", "big", "orig", "preview", "photo"):
                 if key in value and value[key]:
                     out.extend(_collect_photo_urls(value[key]))
+            for key, nested in value.items():
+                key_text = str(key or "").strip().lower()
+                if re.search(r"(photo|image|picture|media|preview)", key_text):
+                    out.extend(_collect_photo_urls(nested))
         elif isinstance(value, list):
             for item in value:
                 out.extend(_collect_photo_urls(item))
         return out
 
     photos: list[str] = []
-    primary = _extract_ozon_photo(source)
-    if primary:
-        photos.append(primary)
-    for key in ("images", "images360", "images_stream"):
-        photos.extend(_collect_photo_urls(source.get(key)))
-    photos = [x for x in dict.fromkeys([p for p in photos if p])]
+    for container in (merged_source, source, item_map):
+        if not isinstance(container, dict):
+            continue
+        photos.extend(_extract_ozon_photos(container))
+        for key in ("primary_image", "images", "images360", "images_stream", "photo_urls", "photos", "image_urls"):
+            photos.extend(_collect_photo_urls(container.get(key)))
+    photos = _dedupe_photo_urls(photos)
+
+    def _to_amount(value: Any) -> float:
+        text = str(value or "").replace("\u00a0", " ").strip()
+        if not text:
+            return 0.0
+        compact = re.sub(r"[^0-9,.\-]", "", text)
+        if not compact:
+            return 0.0
+        if "," in compact and "." in compact:
+            if compact.rfind(",") > compact.rfind("."):
+                compact = compact.replace(".", "").replace(",", ".")
+            else:
+                compact = compact.replace(",", "")
+        else:
+            compact = compact.replace(",", ".")
+        try:
+            value_num = float(compact)
+        except Exception:
+            return 0.0
+        if not (value_num == value_num):  # NaN guard
+            return 0.0
+        return value_num
+
+    def _pick_first_by_keys(nodes: list[Any], keys: set[str]) -> str:
+        wanted = {str(key or "").strip().lower() for key in keys if str(key or "").strip()}
+        if not wanted:
+            return ""
+        queue: list[Any] = list(nodes)
+        seen_ids: set[int] = set()
+        fallback = ""
+        while queue:
+            node = queue.pop(0)
+            if node is None:
+                continue
+            if isinstance(node, (dict, list)):
+                node_id = id(node)
+                if node_id in seen_ids:
+                    continue
+                seen_ids.add(node_id)
+            if isinstance(node, dict):
+                for raw_key, value in node.items():
+                    key = str(raw_key or "").strip().lower()
+                    if key in wanted and not isinstance(value, (dict, list)):
+                        text = str(value or "").strip()
+                        if text and not fallback:
+                            fallback = text
+                        if text and _to_amount(text) > 0:
+                            return text
+                    if isinstance(value, (dict, list)):
+                        queue.append(value)
+            elif isinstance(node, list):
+                for value in node[:200]:
+                    if isinstance(value, (dict, list)):
+                        queue.append(value)
+                    else:
+                        text = str(value or "").strip()
+                        if text and not fallback:
+                            fallback = text
+        return fallback
+
     attrs: dict[str, Any] = {
-        "category_name": _extract_ozon_category_name(source),
-        "name": str(source.get("name") or "").strip(),
-        "offer_id": str(source.get("offer_id") or "").strip(),
-        "product_id": str(source.get("id") or source.get("product_id") or "").strip(),
-        "barcode": _extract_ozon_barcode(source),
-        "brand": str(source.get("brand") or "").strip(),
-        "description": str(source.get("description") or source.get("marketing_description") or "").strip(),
+        "category_name": _extract_ozon_category_name(merged_source),
+        "name": str(merged_source.get("name") or "").strip(),
+        "offer_id": str(merged_source.get("offer_id") or "").strip(),
+        "product_id": str(merged_source.get("id") or merged_source.get("product_id") or "").strip(),
+        "barcode": _extract_ozon_barcode(merged_source),
+        "brand": str(merged_source.get("brand") or "").strip(),
+        "description": str(merged_source.get("description") or merged_source.get("marketing_description") or "").strip(),
     }
-    for attr in (source.get("attributes") or []):
+    price_sources = [price_info, merged_source, source, item_map]
+    price_value = _pick_first_by_keys(
+        price_sources,
+        {"price", "sale_price", "discount_price", "discounted_price", "price_with_discount", "final_price", "current_price"},
+    )
+    old_price_value = _pick_first_by_keys(
+        price_sources,
+        {"old_price", "base_price", "list_price", "price_without_discount", "before_discount_price", "original_price"},
+    )
+    min_price_value = _pick_first_by_keys(
+        price_sources,
+        {"min_price", "minimum_price", "min_ozon_price", "price_min", "auto_action_min_price"},
+    )
+    marketing_price_value = _pick_first_by_keys(
+        price_sources,
+        {"marketing_price", "promo_price", "promotion_price", "action_price", "campaign_price", "recommended_price", "premium_price"},
+    )
+    currency_code_value = _pick_first_by_keys(price_sources, {"currency_code", "currency", "currency_id"})
+    vat_value = _pick_first_by_keys(price_sources, {"vat", "vat_rate", "nds"})
+    if price_value:
+        attrs["price"] = price_value
+        attrs["price_with_discount"] = price_value
+    if old_price_value:
+        attrs["old_price"] = old_price_value
+        attrs["price_without_discount"] = old_price_value
+    if min_price_value:
+        attrs["min_price"] = min_price_value
+        attrs["price_min"] = min_price_value
+    if marketing_price_value:
+        attrs["marketing_price"] = marketing_price_value
+        attrs["promo_price"] = marketing_price_value
+    if currency_code_value:
+        attrs["currency_code"] = currency_code_value
+    if vat_value:
+        attrs["vat"] = vat_value
+
+    attrs_source = merged_source.get("attributes")
+    if not isinstance(attrs_source, list):
+        attrs_source = source.get("attributes") if isinstance(source.get("attributes"), list) else []
+    for attr in (attrs_source or []):
         if not isinstance(attr, dict):
             continue
         title = str(attr.get("name") or attr.get("attribute_name") or attr.get("id") or "").strip()
@@ -1272,7 +1432,11 @@ def _fetch_ozon_product_details(api_key: str, article: str, external_id: str = "
                     normalized_values.append(txt)
         attrs[title] = ", ".join(normalized_values) if normalized_values else str(attr.get("value") or "").strip()
     attrs = {str(k): str(v) for k, v in attrs.items() if str(v or "").strip()}
-    raw_out = dict(item) if isinstance(item, dict) else {}
+    raw_out = dict(item_map) if isinstance(item_map, dict) else {}
+    if source:
+        raw_out["product_info"] = source
+    if merged_source:
+        raw_out["merged_source"] = merged_source
     if price_info:
         raw_out["price_info"] = price_info
     return {"photos": photos, "attributes": attrs, "raw": raw_out}
@@ -1297,13 +1461,27 @@ def _fetch_ozon_price_snapshot(
     if isinstance(source, list) and source:
         first = source[0] if isinstance(source[0], dict) else {}
         info = first.get("product_info") if isinstance(first, dict) and isinstance(first.get("product_info"), dict) else first
-        if isinstance(info, dict):
-            offer_id = str(info.get("offer_id") or offer_id).strip()
-            if not product_id:
-                try:
-                    product_id = int(str(info.get("id") or info.get("product_id") or "0").strip() or 0)
-                except Exception:
-                    product_id = 0
+        info_map = info if isinstance(info, dict) else {}
+        first_map = first if isinstance(first, dict) else {}
+        offer_id = str(
+            info_map.get("offer_id")
+            or first_map.get("offer_id")
+            or first_map.get("offerId")
+            or offer_id
+        ).strip()
+        if not product_id:
+            pid_value = (
+                info_map.get("id")
+                or info_map.get("product_id")
+                or first_map.get("id")
+                or first_map.get("product_id")
+                or first_map.get("productId")
+                or "0"
+            )
+            try:
+                product_id = int(str(pid_value).strip() or 0)
+            except Exception:
+                product_id = 0
     if not product_id and not offer_id:
         return {}
 
@@ -1361,9 +1539,10 @@ def _fetch_ozon_price_snapshot(
                     if row_pid.isdigit() and int(row_pid) == product_id:
                         return row
             if offer_id:
+                offer_id_low = offer_id.lower()
                 for row in items:
                     row_offer = str(row.get("offer_id") or row.get("offerId") or "").strip()
-                    if row_offer and row_offer == offer_id:
+                    if row_offer and (row_offer == offer_id or row_offer.lower() == offer_id_low):
                         return row
             return items[0]
     return {}

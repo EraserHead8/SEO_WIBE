@@ -5313,51 +5313,74 @@ def product_details(
             "price",
             "sale_price",
             "discount_price",
+            "discounted_price",
             "price_with_discount",
             "pricewithdiscount",
             "final_price",
             "current_price",
-            "value",
         },
         price_discount_values,
     )
     _collect_price_values(
         raw_payload,
-        {"old_price", "list_price", "base_price", "price_without_discount", "before_discount_price"},
+        {"old_price", "oldprice", "list_price", "base_price", "price_without_discount", "before_discount_price", "original_price"},
         price_base_values,
     )
     _collect_price_values(
         raw_payload,
-        {"min_price", "minimum_price", "minprice"},
+        {"min_price", "minimum_price", "minprice", "min_ozon_price", "price_min", "auto_action_min_price"},
         price_min_values,
     )
     _collect_price_values(
         raw_payload,
-        {"marketing_price", "promo_price", "promotion_price", "action_price", "campaign_price"},
+        {"marketing_price", "promo_price", "promotion_price", "action_price", "campaign_price", "recommended_price", "premium_price", "special_price"},
         price_marketing_values,
     )
     for path in (
         "price_info.price",
+        "price_info.price.price",
+        "price_info.price.discount_price",
+        "price_info.price.sale_price",
+        "price_info.price.final_price",
+        "price_info.price.current_price",
         "price_info.old_price",
+        "price_info.price.old_price",
+        "price_info.price.list_price",
+        "price_info.price.base_price",
+        "price_info.price.price_without_discount",
         "price_info.min_price",
+        "price_info.price.min_price",
+        "price_info.price.min_ozon_price",
+        "price_info.price.auto_action_min_price",
         "price_info.marketing_price",
         "price_info.promo_price",
+        "price_info.price.marketing_price",
+        "price_info.price.promo_price",
+        "price_info.price.recommended_price",
+        "price_info.price.premium_price",
         "result.price",
         "result.old_price",
         "result.min_price",
         "result.marketing_price",
+        "merged_source.price",
+        "merged_source.old_price",
+        "merged_source.min_price",
+        "merged_source.marketing_price",
     ):
         value = _value_by_path(raw_payload, path)
         if value is None:
             continue
-        if path.endswith((".price", "discount_price", "price_with_discount", "promo_price")):
-            price_discount_values.append(value)
-        if "old_price" in path or "price_without_discount" in path:
+        path_low = str(path).lower()
+        if any(token in path_low for token in ("old_price", "oldprice", "price_without_discount", "list_price", "base_price", "original_price")):
             price_base_values.append(value)
-        if "min_price" in path:
+            continue
+        if any(token in path_low for token in ("min_price", "minimum_price", "min_ozon_price", "price_min", "auto_action_min_price")):
             price_min_values.append(value)
-        if "marketing_price" in path:
+            continue
+        if any(token in path_low for token in ("marketing_price", "promo_price", "promotion_price", "campaign_price", "recommended_price", "premium_price")):
             price_marketing_values.append(value)
+            continue
+        price_discount_values.append(value)
 
     next_category = ""
     if not str(product.category_name or "").strip():
@@ -5381,6 +5404,8 @@ def product_details(
             attributes_payload.get("price"),
             attributes_payload.get("price_with_discount"),
             attributes_payload.get("discount_price"),
+            attributes_payload.get("sale_price"),
+            attributes_payload.get("final_price"),
             raw_payload.get("price"),
             raw_payload.get("sale_price"),
             raw_payload.get("price_with_discount"),
@@ -5394,6 +5419,8 @@ def product_details(
             attributes_payload.get("old_price"),
             attributes_payload.get("list_price"),
             attributes_payload.get("base_price"),
+            attributes_payload.get("price_without_discount"),
+            attributes_payload.get("original_price"),
             raw_payload.get("old_price"),
             raw_payload.get("price_without_discount"),
             raw_payload.get("list_price"),
@@ -5403,6 +5430,9 @@ def product_details(
     if float(product.price_min or 0.0) <= 0:
         product.price_min = _pick_first_price(
             attributes_payload.get("min_price"),
+            attributes_payload.get("minimum_price"),
+            attributes_payload.get("min_ozon_price"),
+            attributes_payload.get("auto_action_min_price"),
             raw_payload.get("min_price"),
             raw_payload.get("minimum_price"),
             *price_min_values,
@@ -5411,6 +5441,9 @@ def product_details(
         product.price_marketing = _pick_first_price(
             attributes_payload.get("marketing_price"),
             attributes_payload.get("campaign_price"),
+            attributes_payload.get("promo_price"),
+            attributes_payload.get("recommended_price"),
+            attributes_payload.get("premium_price"),
             raw_payload.get("marketing_price"),
             raw_payload.get("promo_price"),
             raw_payload.get("promotion_price"),
@@ -13650,13 +13683,61 @@ def _to_iso_or_none(value: datetime | None) -> str | None:
 
 
 def _to_money(value: Any) -> float:
-    try:
+    if value is None:
+        return 0.0
+    if isinstance(value, (int, float)):
         num = float(value)
-    except Exception:
-        try:
-            num = float(str(value).replace(",", ".").strip())
-        except Exception:
+        if not math.isfinite(num):
             return 0.0
+        return float(round(num, 2))
+    if isinstance(value, dict):
+        for key in (
+            "price",
+            "amount",
+            "value",
+            "old_price",
+            "base_price",
+            "list_price",
+            "min_price",
+            "marketing_price",
+            "promo_price",
+            "discount_price",
+            "sale_price",
+            "price_with_discount",
+        ):
+            if key in value:
+                amount = _to_money(value.get(key))
+                if amount > 0:
+                    return amount
+        for nested in value.values():
+            amount = _to_money(nested)
+            if amount > 0:
+                return amount
+        return 0.0
+    if isinstance(value, list):
+        for item in value[:60]:
+            amount = _to_money(item)
+            if amount > 0:
+                return amount
+        return 0.0
+
+    text = str(value or "").replace("\u00a0", " ").strip()
+    if not text:
+        return 0.0
+    compact = re.sub(r"[^0-9,.\-]", "", text)
+    if not compact:
+        return 0.0
+    if "," in compact and "." in compact:
+        if compact.rfind(",") > compact.rfind("."):
+            compact = compact.replace(".", "").replace(",", ".")
+        else:
+            compact = compact.replace(",", "")
+    else:
+        compact = compact.replace(",", ".")
+    try:
+        num = float(compact)
+    except Exception:
+        return 0.0
     if not math.isfinite(num):
         return 0.0
     return float(round(num, 2))

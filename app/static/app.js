@@ -7739,8 +7739,61 @@ function extractProductDetailContext(details, fallbackProduct) {
 
   const rawCandidates = [raw];
   if (raw.product_info && typeof raw.product_info === "object") rawCandidates.push(raw.product_info);
+  if (raw.merged_source && typeof raw.merged_source === "object") rawCandidates.push(raw.merged_source);
   if (raw.result && typeof raw.result === "object") rawCandidates.push(raw.result);
   if (raw.data && typeof raw.data === "object") rawCandidates.push(raw.data);
+  const collectRawPhotos = () => {
+    const out = [];
+    const seen = new Set();
+    const push = (value) => {
+      const text = normalizeProductDetailValue(value);
+      if (!text) return;
+      const lower = text.toLowerCase();
+      if (!/^https?:\/\//.test(lower) && !text.startsWith("/static/")) return;
+      if (seen.has(lower)) return;
+      seen.add(lower);
+      out.push(text);
+    };
+    const queue = rawCandidates.slice();
+    const visited = new Set();
+    let hops = 0;
+    while (queue.length && hops < 2400) {
+      hops += 1;
+      const node = queue.shift();
+      if (!node || typeof node !== "object") continue;
+      if (visited.has(node)) continue;
+      visited.add(node);
+      if (Array.isArray(node)) {
+        node.forEach((item) => {
+          if (item && typeof item === "object") queue.push(item);
+          else push(item);
+        });
+        continue;
+      }
+      Object.entries(node).forEach(([key, value]) => {
+        const keyNorm = String(key || "").toLowerCase();
+        if (typeof value === "string") {
+          if (/(photo|image|picture|media|preview|cover)/.test(keyNorm) || /^https?:\/\//i.test(value)) {
+            push(value);
+          }
+          return;
+        }
+        if (Array.isArray(value) || (value && typeof value === "object")) {
+          if (/(photo|image|picture|media|preview|cover)/.test(keyNorm)) queue.unshift(value);
+          else queue.push(value);
+        }
+      });
+    }
+    return out;
+  };
+  const rawPhotoFallback = collectRawPhotos();
+  for (const url of rawPhotoFallback) {
+    const safe = String(url || "").trim();
+    if (!safe) continue;
+    if (!photos.some((x) => String(x || "").trim().toLowerCase() === safe.toLowerCase())) {
+      photos.push(safe);
+    }
+  }
 
   const pickAttr = (...keys) => {
     for (const key of keys) {
@@ -7836,46 +7889,90 @@ function extractProductDetailContext(details, fallbackProduct) {
     base.purchase_price
   );
   const priceBaseValue = pickPrice(
-    pickAttr("old_price", "price_base", "list_price", "price_without_discount"),
+    pickAttr("old_price", "oldprice", "price_base", "base_price", "list_price", "price_without_discount", "original_price"),
     pickRaw(
       "old_price",
+      "oldprice",
       "price_base",
+      "base_price",
       "price_without_discount",
       "list_price",
+      "original_price",
+      "price_info.old_price",
+      "price_info.price.old_price",
+      "price_info.price_without_discount",
+      "price_info.price.price_without_discount",
       "result.old_price",
       "result.price_without_discount",
       "sizes.0.price",
       "sizes.0.originalPrice",
       "sizes.0.priceWithoutDiscount"
     ),
-    pickDeep("old_price", "base_price", "list_price", "price_without_discount", "original_price"),
+    pickDeep("old_price", "oldprice", "base_price", "list_price", "price_without_discount", "before_discount_price", "original_price"),
     base.price_base
   );
   const priceDiscountValue = pickPrice(
-    pickAttr("price", "discounted_price", "discountedPrice"),
+    pickAttr("price", "discounted_price", "discountedPrice", "discount_price", "sale_price", "price_with_discount", "final_price", "current_price"),
     pickRaw(
       "price",
       "discounted_price",
       "discountedPrice",
+      "discount_price",
+      "sale_price",
+      "price_with_discount",
+      "final_price",
+      "current_price",
       "promo_price",
+      "price_info.price",
+      "price_info.price.price",
+      "price_info.discount_price",
+      "price_info.price.discount_price",
+      "price_info.sale_price",
+      "price_info.price.sale_price",
+      "price_info.final_price",
+      "price_info.price.final_price",
       "sizes.0.discountedPrice",
       "sizes.0.salePrice",
       "result.price",
       "result.discounted_price"
     ),
-    pickDeep("discounted_price", "discountedprice", "sale_price", "saleprice", "price_with_discount", "promo_price"),
+    pickDeep("discounted_price", "discountedprice", "discount_price", "sale_price", "saleprice", "price_with_discount", "final_price", "current_price", "promo_price"),
     base.price_discount
   );
   const priceMinValue = pickPrice(
-    pickAttr("min_price", "price_min"),
-    pickRaw("min_price", "price_min", "result.min_price"),
-    pickDeep("min_price", "price_min", "minimum_price"),
+    pickAttr("min_price", "price_min", "minimum_price", "min_ozon_price", "auto_action_min_price"),
+    pickRaw(
+      "min_price",
+      "price_min",
+      "minimum_price",
+      "min_ozon_price",
+      "auto_action_min_price",
+      "price_info.min_price",
+      "price_info.price.min_price",
+      "price_info.price.min_ozon_price",
+      "result.min_price"
+    ),
+    pickDeep("min_price", "price_min", "minimum_price", "min_ozon_price", "auto_action_min_price"),
     base.price_min
   );
   const priceMarketingValue = pickPrice(
-    pickAttr("marketing_price", "promo_price"),
-    pickRaw("marketing_price", "promo_price", "advert_price", "campaign_price", "result.marketing_price"),
-    pickDeep("marketing_price", "promo_price", "campaign_price", "special_price", "advert_price"),
+    pickAttr("marketing_price", "promo_price", "promotion_price", "campaign_price", "recommended_price", "premium_price"),
+    pickRaw(
+      "marketing_price",
+      "promo_price",
+      "promotion_price",
+      "advert_price",
+      "campaign_price",
+      "recommended_price",
+      "premium_price",
+      "price_info.marketing_price",
+      "price_info.price.marketing_price",
+      "price_info.price.promo_price",
+      "price_info.price.recommended_price",
+      "price_info.price.premium_price",
+      "result.marketing_price"
+    ),
+    pickDeep("marketing_price", "promo_price", "promotion_price", "campaign_price", "special_price", "advert_price", "recommended_price", "premium_price"),
     base.price_marketing
   );
 
@@ -7885,8 +7982,8 @@ function extractProductDetailContext(details, fallbackProduct) {
     { label: tr("Цена со скидкой", "Discounted price"), value: priceDiscountValue || "-" },
     { label: tr("Мин. цена", "Min price"), value: priceMinValue || "-" },
     { label: tr("Маркетинг цена", "Marketing price"), value: priceMarketingValue || "-" },
-    { label: tr("Валюта", "Currency"), value: pickAny(pickAttr("currency_code"), pickRaw("currency_code")) || "-" },
-    { label: tr("НДС", "VAT"), value: pickAny(pickAttr("vat"), pickRaw("vat")) || "-" },
+    { label: tr("Валюта", "Currency"), value: pickAny(pickAttr("currency_code", "currency"), pickRaw("currency_code", "currency", "price_info.currency_code", "price_info.price.currency_code")) || "-" },
+    { label: tr("НДС", "VAT"), value: pickAny(pickAttr("vat", "vat_rate", "nds"), pickRaw("vat", "vat_rate", "nds", "price_info.vat", "price_info.price.vat")) || "-" },
     { label: tr("Статус", "Status"), value: pickAny(pickAttr("state"), pickRaw("state.name", "state")) || "-" },
     { label: tr("Видимость", "Visibility"), value: pickAny(pickAttr("visibility"), pickRaw("visibility")) || "-" },
   ];
