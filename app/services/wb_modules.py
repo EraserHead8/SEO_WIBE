@@ -750,88 +750,132 @@ def fetch_wb_returns(
 
     def _append_rows(parsed_rows: list[dict[str, Any]]) -> None:
         for raw in parsed_rows:
-            rid = _pick_first_str(
-                raw.get("id"),
-                raw.get("claimId"),
-                raw.get("claim_id"),
-                raw.get("returnId"),
-                raw.get("return_id"),
-                (raw.get("claim") or {}).get("id") if isinstance(raw.get("claim"), dict) else "",
-                (raw.get("return") or {}).get("id") if isinstance(raw.get("return"), dict) else "",
+            rid = _pick_first_path_text(
+                raw,
+                "id",
+                "claimId",
+                "claim_id",
+                "returnId",
+                "return_id",
+                "claim.id",
+                "claim.claimId",
+                "claim.claim_id",
+                "return.id",
+                "return.returnId",
+                "return.return_id",
+                "posting_number",
+                "posting.number",
             )
             rid = str(rid or "").strip()
             if (not rid) or rid in {"0", "-", "—"} or rid in seen_ids:
                 continue
-            created = _pick_first_str(
-                raw.get("createdAt"),
-                raw.get("created_at"),
-                raw.get("createdDate"),
-                raw.get("date"),
-                raw.get("updatedAt"),
-                raw.get("updated_at"),
-                (raw.get("claim") or {}).get("createdAt") if isinstance(raw.get("claim"), dict) else "",
+            created = _pick_first_path_text(
+                raw,
+                "createdAt",
+                "created_at",
+                "createdDate",
+                "date",
+                "updatedAt",
+                "updated_at",
+                "claim.createdAt",
+                "claim.created_at",
+                "claim.date",
+                "return.createdAt",
+                "return.created_at",
+                "return.date",
             )
-            status_value = str(_pick_first_str(raw.get("status"), raw.get("state"), raw.get("claimStatus")) or "").strip()
-            article = str(
-                _pick_first_str(
-                    raw.get("article"),
-                    raw.get("supplierVendorCode"),
-                    raw.get("vendorCode"),
-                    raw.get("offerId"),
-                    raw.get("nmId"),
-                    (raw.get("item") or {}).get("article") if isinstance(raw.get("item"), dict) else "",
-                )
-                or ""
-            ).strip()
-            product = str(
-                _pick_first_str(
-                    raw.get("productName"),
-                    raw.get("name"),
-                    raw.get("subjectName"),
-                    raw.get("imtName"),
-                    (raw.get("item") or {}).get("name") if isinstance(raw.get("item"), dict) else "",
-                )
-                or ""
-            ).strip()
-            reason = str(
-                _pick_first_str(
-                    raw.get("reason"),
-                    raw.get("comment"),
-                    raw.get("rejectReason"),
-                    raw.get("description"),
-                )
-                or ""
-            ).strip()
-            photos_raw = (
-                raw.get("photos")
-                or raw.get("images")
-                or raw.get("pictures")
-                or raw.get("attachments")
-                or raw.get("files")
-                or []
+            status_value = _pick_first_path_text(
+                raw,
+                "status",
+                "state",
+                "claimStatus",
+                "claim.status",
+                "claim.status.name",
+                "claim.status.title",
+                "claim.state",
+                "claim.state.name",
+                "return.status",
+                "return.status.name",
+                "return.state",
+                "return.state.name",
             )
-            photos: list[str] = []
-            if isinstance(photos_raw, list):
-                for item in photos_raw:
-                    if isinstance(item, str):
-                        url = str(item or "").strip()
-                    elif isinstance(item, dict):
-                        url = str(
-                            _pick_first_str(
-                                item.get("url"),
-                                item.get("photo"),
-                                item.get("src"),
-                                item.get("link"),
-                                item.get("href"),
-                            )
-                            or ""
-                        ).strip()
-                    else:
-                        url = ""
-                    if not url:
-                        continue
-                    if url not in photos:
-                        photos.append(url)
+            article = _pick_first_path_text(
+                raw,
+                "article",
+                "supplierVendorCode",
+                "vendorCode",
+                "offerId",
+                "offer_id",
+                "nmId",
+                "item.article",
+                "item.offer_id",
+                "item.offerId",
+                "item.vendorCode",
+                "item.supplierVendorCode",
+                "claim.article",
+                "claim.item.article",
+                "claim.item.offer_id",
+                "claim.item.offerId",
+                "claim.item.vendorCode",
+                "claim.item.supplierVendorCode",
+                "return.article",
+                "return.item.article",
+                "return.item.offer_id",
+                "return.item.offerId",
+                "return.item.vendorCode",
+                "return.item.supplierVendorCode",
+                "product.article",
+                "product.offer_id",
+                "product.offerId",
+            )
+            product = _pick_first_path_text(
+                raw,
+                "product",
+                "productName",
+                "name",
+                "subjectName",
+                "imtName",
+                "item.name",
+                "item.title",
+                "claim.name",
+                "claim.productName",
+                "claim.item.name",
+                "claim.item.title",
+                "return.name",
+                "return.productName",
+                "return.item.name",
+                "return.item.title",
+                "product.name",
+                "product.title",
+            )
+            reason = _pick_first_path_text(
+                raw,
+                "reason",
+                "comment",
+                "rejectReason",
+                "description",
+                "text",
+                "claim.reason",
+                "claim.comment",
+                "claim.rejectReason",
+                "claim.description",
+                "return.reason",
+                "return.comment",
+                "return.rejectReason",
+                "return.description",
+            )
+            photos = _extract_photo_urls(
+                raw.get("photos"),
+                raw.get("images"),
+                raw.get("pictures"),
+                raw.get("attachments"),
+                raw.get("files"),
+                raw.get("evidences"),
+                raw.get("claim"),
+                raw.get("return"),
+                raw.get("item"),
+                raw.get("product"),
+            )
 
             # Some WB responses include envelope/service rows that are not actual return claims.
             # Keep only rows that have at least one business field in addition to id.
@@ -1053,6 +1097,7 @@ def fetch_ozon_returns(
 ) -> dict[str, Any]:
     warnings: list[str] = []
     rows: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
     payload = {"limit": 500, "offset": 0}
     if status:
         payload["status"] = status
@@ -1071,17 +1116,89 @@ def fetch_ozon_returns(
             continue
         parsed = _extract_first_dict_list(data, preferred_keys=("returns", "items", "list", "rows", "result", "data"))
         for raw in parsed:
-            rid = str(raw.get("id") or raw.get("return_id") or raw.get("posting_number") or "").strip()
+            rid = _pick_first_path_text(
+                raw,
+                "id",
+                "return_id",
+                "returnId",
+                "posting_number",
+                "posting.number",
+                "return.id",
+                "return.return_id",
+            )
             if not rid:
                 continue
+            if rid in seen_ids:
+                continue
+            seen_ids.add(rid)
             rows.append(
                 {
                     "id": rid,
-                    "status": str(raw.get("status") or raw.get("state") or "").strip(),
-                    "created_at": str(raw.get("created_at") or raw.get("createdAt") or raw.get("date") or "").strip(),
-                    "article": str(raw.get("offer_id") or raw.get("article") or "").strip(),
-                    "product": str(raw.get("name") or raw.get("product_name") or "").strip(),
-                    "reason": str(raw.get("reason") or raw.get("comment") or "").strip(),
+                    "status": _pick_first_path_text(
+                        raw,
+                        "status",
+                        "state",
+                        "return.status",
+                        "return.state",
+                        "status.name",
+                        "state.name",
+                    ),
+                    "created_at": _pick_first_path_text(
+                        raw,
+                        "created_at",
+                        "createdAt",
+                        "date",
+                        "updated_at",
+                        "updatedAt",
+                        "return.created_at",
+                        "return.createdAt",
+                    ),
+                    "article": _pick_first_path_text(
+                        raw,
+                        "offer_id",
+                        "offerId",
+                        "article",
+                        "item.offer_id",
+                        "item.offerId",
+                        "item.article",
+                        "product.offer_id",
+                        "product.offerId",
+                        "product.article",
+                        "return.offer_id",
+                        "return.offerId",
+                        "return.article",
+                    ),
+                    "product": _pick_first_path_text(
+                        raw,
+                        "name",
+                        "product_name",
+                        "productName",
+                        "item.name",
+                        "item.title",
+                        "product.name",
+                        "product.title",
+                        "return.name",
+                        "return.product_name",
+                    ),
+                    "reason": _pick_first_path_text(
+                        raw,
+                        "reason",
+                        "comment",
+                        "description",
+                        "text",
+                        "return.reason",
+                        "return.comment",
+                        "return.description",
+                    ),
+                    "photos": _extract_photo_urls(
+                        raw.get("photos"),
+                        raw.get("images"),
+                        raw.get("attachments"),
+                        raw.get("files"),
+                        raw.get("return"),
+                        raw.get("item"),
+                        raw.get("product"),
+                    ),
                     "marketplace": "ozon",
                     "raw": raw,
                 }
@@ -3539,6 +3656,71 @@ def _extract_answer_text_from_value(value: Any) -> str:
             if text:
                 return text
     return ""
+
+
+def _pick_first_path_text(source: dict[str, Any], *paths: str) -> str:
+    for path in paths:
+        value = _value_by_path(source, path)
+        text = _normalize_scalar_text(value)
+        if text:
+            return text
+    return ""
+
+
+def _value_by_path(source: Any, path: str) -> Any:
+    cursor = source
+    chunks = [x for x in str(path or "").split(".") if x]
+    if not chunks:
+        return None
+    for chunk in chunks:
+        if isinstance(cursor, dict):
+            cursor = cursor.get(chunk)
+            continue
+        if isinstance(cursor, list):
+            try:
+                idx = int(chunk)
+            except Exception:
+                return None
+            if idx < 0 or idx >= len(cursor):
+                return None
+            cursor = cursor[idx]
+            continue
+        return None
+    return cursor
+
+
+def _normalize_scalar_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        text = value.strip()
+    elif isinstance(value, bool):
+        text = ""
+    elif isinstance(value, (int, float)):
+        text = str(int(value)) if isinstance(value, float) and value.is_integer() else str(value)
+    elif isinstance(value, dict):
+        text = _pick_first_str(
+            value.get("name"),
+            value.get("title"),
+            value.get("label"),
+            value.get("text"),
+            value.get("value"),
+            value.get("code"),
+            value.get("status"),
+            value.get("id"),
+        )
+    elif isinstance(value, list):
+        for item in value:
+            text = _normalize_scalar_text(item)
+            if text:
+                return text
+        return ""
+    else:
+        text = ""
+    low = text.strip().lower()
+    if low in {"", "-", "—", "null", "none", "undefined"}:
+        return ""
+    return text.strip()
 
 
 def _pick_first_str(*values: Any) -> str:
