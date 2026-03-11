@@ -68,8 +68,8 @@ android {
     applicationId = "com.seowibe.mobile"
     minSdk = 24
     targetSdk = 34
-    versionCode = 20
-    versionName = "1.5.14"
+    versionCode = 21
+    versionName = "1.5.15"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 

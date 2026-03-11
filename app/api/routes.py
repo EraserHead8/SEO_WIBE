@@ -1746,12 +1746,12 @@ HELP_DOCS_EN: dict[str, dict[str, str]] = {
 HELP_RELEASES: list[dict[str, Any]] = [
     {
         "version": "0.4.9",
-        "android_version_code": 20,
-        "released_at": "2026-03-11",
+        "android_version_code": 21,
+        "released_at": "2026-03-12",
         "current": True,
-        "summary": "APK 1.5.14: WB Ads добирает больше реальных данных по кампаниям, возвраты и верхняя шапка в APK стали понятнее, а календарь теперь честно показывает персональный Google-flow и статус серверной настройки.",
+        "summary": "APK 1.5.15: чат в APK стал ближе к Telegram по шапке и полю ввода, устранены крокозябры и зафиксирован корректный заголовок активного модуля.",
         "diff_from_previous": [
-            "Android APK обновлен до versionCode=20 / versionName=1.5.14.",
+            "Android APK обновлен до versionCode=21 / versionName=1.5.15.",
             "Календарь: сохранен персональный Google OAuth по actor_key для каждого сотрудника, а APK-приложение возвращается в календарь через deep link после авторизации.",
             "Календарь: публичные URL продолжают строиться от canonical public base, поэтому callback и APK download остаются HTTPS-совместимыми.",
             "WB Ads: snapshot sync теперь использует более рирокий набор list/endpoints и повторно добирает статистику по кампаниям, если bulk fullstats вернул только пустой или partial контекст.",
@@ -1767,7 +1767,7 @@ HELP_RELEASES: list[dict[str, Any]] = [
         "android_download_url": "/static/downloads/seo-wibe-mobile-latest.apk",
         "android_download_name": "SEO WIBE Android (.apk)",
         "app_entry_url": "/mobile",
-        "notes": "Если у пользователя уже установлен APK 1.5.12 или 1.5.13 с новым release-ключом, APK 1.5.14 ставится поверх него как обычное обновление. Если на устройстве все еще старая версия до 1.5.12, сначала удалите старое приложение один раз, затем установите новый APK 1.5.14 и войдите в аккаунт заново.",
+        "notes": "APK 1.5.15 устанавливается поверх APK 1.5.12+ (новый release-ключ). Если на устройстве очень старая сборка до 1.5.12, удалите приложение один раз, затем установите APK 1.5.15 и выполните вход заново.",
     },
     {
         "version": "0.4.8",
