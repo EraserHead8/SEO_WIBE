@@ -852,6 +852,7 @@ function resetSocialState() {
   }
   socialSetBell(0);
   socialSyncMobileChatChrome(null);
+  socialSyncChatComposerState();
 }
 
 function switchSocialSubtab(tab, loadNow = true) {
@@ -930,6 +931,8 @@ async function loadSocialWorkspace() {
   socialState.mobileThreadAutoSelectEnabled = !socialIsMobileClientShell();
   socialState.actors = Array.isArray(boot.company_actors) ? boot.company_actors : [];
   socialBindChatInputEnter();
+  socialBindChatComposer();
+  socialSyncChatComposerState();
   socialRenderGames();
   switchSocialSubtab(currentSocialSubtab || socialState.currentSubtab || "chat", true);
   socialStartGlobalHooks();
@@ -953,6 +956,31 @@ function socialBindChatInputEnter() {
     e.preventDefault();
     socialSendMessage();
   });
+}
+function socialSyncChatComposerState() {
+  const wrap = document.querySelector("#socialSubtabChat .social-chat-input-wrap");
+  const input = document.getElementById("socialChatInput");
+  const attachBtn = document.getElementById("socialAttachBtn");
+  const sendBtn = document.getElementById("socialSendIconBtn");
+  if (!wrap || !input || !attachBtn || !sendBtn) return;
+  const hasThread = Number(socialState.currentThreadId || 0) > 0;
+  const hasText = Boolean(String(input.value || "").trim()) && hasThread;
+  wrap.classList.toggle("is-typing", hasText);
+  attachBtn.classList.toggle("hidden", hasText);
+  sendBtn.classList.toggle("hidden", !hasText);
+  attachBtn.disabled = socialState.fileUploadInFlight || !hasThread;
+  sendBtn.disabled = socialState.sendingMessage || !hasText;
+}
+
+function socialBindChatComposer() {
+  const input = document.getElementById("socialChatInput");
+  if (!input || input.dataset.composeBind === "1") return;
+  input.dataset.composeBind = "1";
+  const sync = () => socialSyncChatComposerState();
+  input.addEventListener("input", sync);
+  input.addEventListener("change", sync);
+  input.addEventListener("focus", sync);
+  input.addEventListener("blur", sync);
 }
 
 function socialOpenModal(title, html) {
@@ -2023,9 +2051,10 @@ function socialThreadDisplay(thread) {
 function socialSyncMobileChatChrome(row = null) {
   const host = document.getElementById("mobileChatCompactHead");
   const backBtn = document.getElementById("mobileChatCompactBack");
+  const avatarNode = document.getElementById("mobileChatCompactAvatar");
   const titleNode = document.getElementById("mobileChatCompactTitle");
   const subtitleNode = document.getElementById("mobileChatCompactSubtitle");
-  if (!host || !backBtn || !titleNode || !subtitleNode) return;
+  if (!host || !backBtn || !avatarNode || !titleNode || !subtitleNode) return;
   const body = document.body;
   const shell = document.getElementById("appSection");
   const isApkShell = socialIsMobileApkShell();
@@ -2039,9 +2068,11 @@ function socialSyncMobileChatChrome(row = null) {
   body?.classList?.toggle("social-thread-open", show);
   shell?.classList?.toggle("social-thread-open", show);
   if (!show) {
-    titleNode.textContent = tr("Чаты", "Chats");
+    titleNode.textContent = tr("\u0427\u0430\u0442\u044b", "Chats");
     subtitleNode.textContent = "";
     subtitleNode.classList.remove("online-now");
+    avatarNode.classList.add("hidden");
+    avatarNode.innerHTML = socialAvatarMarkup("", "--", "sm");
     titleNode.classList.remove("is-clickable");
     subtitleNode.classList.remove("is-clickable");
     titleNode.onclick = null;
@@ -2053,26 +2084,29 @@ function socialSyncMobileChatChrome(row = null) {
   }
   const display = socialThreadDisplay(activeThread);
   const participants = Array.isArray(display.participants) ? display.participants : [];
+  avatarNode.classList.remove("hidden");
+  avatarNode.innerHTML = socialAvatarMarkup(display.avatarUrl, display.avatarLabel, "sm", true);
   let subtitle = "";
   let subtitleOnline = false;
   if (activeThread?.kind === "direct") {
     const other = participants.find((p) => !p.is_me);
     const onlineNow = socialIsParticipantOnline(other);
+    const lastSeen = socialFormatLastSeen(other?.last_seen_at || "");
     const stateText = onlineNow
-      ? tr("сейчас онлайн", "online now")
-      : (socialFormatLastSeen(other?.last_seen_at || "") || tr("нет данных", "unknown"));
-    subtitle = `${tr("Личный чат", "Direct chat")} • ${stateText}`;
+      ? tr("\u0432 \u0441\u0435\u0442\u0438", "online")
+      : (lastSeen ? `${tr("\u0431\u044b\u043b(\u0430)", "last seen")} ${lastSeen}` : tr("\u0431\u044b\u043b(\u0430) \u0434\u0430\u0432\u043d\u043e", "long ago"));
+    subtitle = stateText;
     subtitleOnline = onlineNow;
   } else {
-    subtitle = `${tr("Группа", "Group")} • ${participants.length}`;
+    subtitle = `${tr("\u0423\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u043e\u0432", "Members")}: ${participants.length}`;
   }
-  titleNode.textContent = String(display.title || tr("Чат", "Chat"));
+  titleNode.textContent = String(display.title || tr("\u0427\u0430\u0442", "Chat"));
   subtitleNode.textContent = subtitle;
   subtitleNode.classList.toggle("online-now", subtitleOnline);
-  titleNode.classList.toggle("is-clickable", true);
-  subtitleNode.classList.toggle("is-clickable", true);
-  titleNode.onclick = () => socialOpenCurrentParticipantProfile();
-  subtitleNode.onclick = () => socialOpenCurrentParticipantProfile();
+  titleNode.classList.remove("is-clickable");
+  subtitleNode.classList.remove("is-clickable");
+  titleNode.onclick = null;
+  subtitleNode.onclick = null;
 }
 
 function socialFilterThreads() {
@@ -2142,6 +2176,7 @@ function socialCloseThread(opts = {}) {
   socialRenderThreads();
   socialSetChatView(false);
   socialSyncMobileChatChrome(null);
+  socialSyncChatComposerState();
 }
 function socialRenderThreads() {
   const host = document.getElementById("socialChatThreads");
@@ -2431,6 +2466,7 @@ async function socialSelectThread(threadId, opts = {}) {
   if (sameThread && !opts.bypassUnchanged && !opts.forceReload) {
     socialSetChatView(true);
     socialSyncMobileChatChrome();
+    socialSyncChatComposerState();
     return;
   }
   socialState.currentThreadId = id;
@@ -2450,6 +2486,7 @@ async function socialSelectThread(threadId, opts = {}) {
   socialSetChatHeader(row);
   socialRenderThreads();
   socialSetChatView(true);
+  socialSyncChatComposerState();
   const host = document.getElementById("socialChatMessages");
   if (host && Number(socialState.currentThreadId || 0) === id) {
     host.innerHTML = `<div class="hint social-chat-loading">${tr("Загрузка сообщений…", "Loading messages…")}</div>`;
@@ -3030,6 +3067,7 @@ async function socialSendMessage() {
     socialState.chatMessages = [...(socialState.chatMessages || []), optimisticRow];
     socialRenderChatMessages({ forceBottom: true });
     input.value = "";
+    socialSyncChatComposerState();
     socialClearReply();
     let data = await sendMessageOnce().catch((e) => e);
     if (data instanceof Error) {
@@ -3075,6 +3113,7 @@ async function socialSendMessage() {
     socialLoadThreads({ silent: true }).catch(() => null);
   } finally {
     socialState.sendingMessage = false;
+    socialSyncChatComposerState();
   }
 }
 
@@ -3097,6 +3136,7 @@ async function socialUploadChatFiles(fileList) {
   const text = String(textInput?.value || "").trim();
   const replyId = Number(socialState.chatReplyTo?.id || 0) || null;
   if (textInput) textInput.value = "";
+  socialSyncChatComposerState();
   try {
     for (const file of files) {
       const fingerprint = socialBuildFileUploadFingerprint(file, threadId, text, replyId || 0);
@@ -3127,6 +3167,7 @@ async function socialUploadChatFiles(fileList) {
   } finally {
     socialState.fileUploadInFlight = false;
     if (attachBtn) attachBtn.disabled = false;
+    socialSyncChatComposerState();
   }
 }
 
@@ -3941,6 +3982,7 @@ function socialInsertEmoji(emoji) {
   const caret = start + emoji.length;
   input.setSelectionRange(caret, caret);
   input.focus();
+  socialSyncChatComposerState();
   socialToggleEmojiPicker(true);
 }
 
@@ -4537,5 +4579,3 @@ document.addEventListener("visibilitychange", () => {
 });
 
 socialMaybeStartHooks();
-
-

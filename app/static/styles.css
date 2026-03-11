@@ -798,9 +798,24 @@ body[data-theme="light"] .review-type-pill {
 .mobile-chat-compact-head {
   display: none;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
   flex: 1 1 auto;
+}
+
+.mobile-chat-compact-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+
+.mobile-chat-compact-avatar .tg-avatar {
+  width: 100%;
+  height: 100%;
 }
 
 .mobile-chat-compact-back {
@@ -7054,7 +7069,7 @@ body[data-theme="dark"] .landing-band .band-stats span {
   padding: 10px 14px 12px;
   border-top: 1px solid var(--line);
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr;
   gap: 10px;
   align-items: center;
   background: color-mix(in oklab, var(--panel-bg) 88%, #ffffff);
@@ -7097,21 +7112,21 @@ body[data-theme="dark"] .landing-band .band-stats span {
 .social-chat-input-wrap {
   position: relative;
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 8px;
-  align-items: end;
+  align-items: center;
   background: var(--panel-bg);
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 18px;
   padding: 6px 8px;
 }
 
 .social-chat-compose textarea {
   resize: none;
-  min-height: 42px;
+  min-height: 40px;
   max-height: 120px;
   border: 0;
-  padding: 6px 2px;
+  padding: 6px 0;
   background: transparent;
 }
 
@@ -7135,10 +7150,34 @@ body[data-theme="dark"] .landing-band .band-stats span {
   border-radius: 12px;
 }
 
+.social-send-icon-btn {
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  border-radius: 12px;
+  color: #f2f8ff;
+  border-color: color-mix(in oklab, var(--accent) 66%, var(--line));
+  background: linear-gradient(145deg,
+    color-mix(in oklab, var(--accent) 74%, #2f8dff),
+    color-mix(in oklab, var(--accent) 56%, #1f6be5));
+}
+
+.social-chat-input-wrap.is-typing .social-attach-btn {
+  display: none;
+}
+
+.social-chat-input-wrap.is-typing .social-send-icon-btn {
+  display: grid;
+}
+
 .social-chat-send {
   border-radius: 14px;
   padding: 10px 16px;
   font-weight: 700;
+  display: none;
 }
 
 .social-chat-context {
@@ -9349,10 +9388,12 @@ body.mobile-apk-mode #appSection .topbar {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  background: linear-gradient(125deg, rgba(17, 192, 190, 0.22), rgba(27, 152, 206, 0.2));
-  border-color: rgba(49, 201, 198, 0.4);
-  padding: 10px 12px;
-  min-height: 56px;
+  background: linear-gradient(180deg, #2f3d51, #2a3749);
+  border: 0;
+  border-radius: 14px;
+  padding: 8px 10px;
+  min-height: 58px;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.08);
 }
 
 body.mobile-apk-mode #appSection .topbar-title {
@@ -9370,8 +9411,11 @@ body.mobile-apk-mode #appSection .topbar h1 {
   margin: 0;
   min-width: 0;
   max-width: 100%;
-  font-size: 17px;
-  line-height: 1.15;
+  font-size: 18px;
+  font-family: "Manrope", sans-serif;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #f3f7ff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -9387,8 +9431,54 @@ body.mobile-apk-mode #appSection .topbar-controls {
 }
 
 body.mobile-apk-mode #appSection .topbar-controls #mobileNavToggle {
-  min-width: 44px;
-  min-height: 44px;
+  min-width: 36px;
+  min-height: 36px;
+  border: 0;
+  background: transparent;
+  color: #f3f7ff;
+  border-radius: 50%;
+  padding: 0 4px;
+  font-size: 24px;
+  line-height: 1;
+}
+
+body.mobile-apk-mode #appSection .mobile-chat-compact-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: calc(100vw - 88px);
+}
+
+body.mobile-apk-mode #appSection .mobile-chat-compact-back {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  border: 0;
+  background: transparent;
+  color: #f3f7ff;
+  font-size: 24px;
+  border-radius: 50%;
+}
+
+body.mobile-apk-mode #appSection .mobile-chat-compact-avatar {
+  width: 36px;
+  height: 36px;
+}
+
+body.mobile-apk-mode #appSection .mobile-chat-compact-title {
+  color: #f3f7ff;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+body.mobile-apk-mode #appSection .mobile-chat-compact-subtitle {
+  color: rgba(224, 236, 255, 0.78);
+  font-size: 13px;
+}
+
+body.mobile-apk-mode #appSection .mobile-chat-compact-subtitle.online-now {
+  color: #89efbf;
 }
 
 body.mobile-apk-mode.social-thread-open #appSection .topbar-title,
@@ -9457,14 +9547,111 @@ body.mobile-apk-mode #ads .module-subtabs {
   }
 
   body.mobile-apk-mode #socialSubtabChat .social-chat-messages {
-    padding: 10px 10px 8px;
+    padding: 12px 10px 10px;
+    gap: 6px;
+    background:
+      radial-gradient(circle at 16% 4%, rgba(91, 146, 255, 0.16), transparent 42%),
+      radial-gradient(circle at 84% 0%, rgba(61, 225, 197, 0.11), transparent 42%),
+      #152335;
+  }
+
+  body.mobile-apk-mode #socialSubtabChat .tg-date-sep {
+    background: rgba(35, 53, 78, 0.92);
+    border-color: rgba(139, 164, 198, 0.26);
+    color: rgba(218, 228, 246, 0.84);
+  }
+
+  body.mobile-apk-mode #socialSubtabChat .tg-msg-row {
+    max-width: 86%;
+    gap: 6px;
+  }
+
+  body.mobile-apk-mode #socialSubtabChat .tg-msg-avatar {
+    width: 24px;
+    height: 24px;
+  }
+
+  body.mobile-apk-mode #socialSubtabChat .tg-msg-bubble {
+    border-radius: 16px;
+    border: 1px solid rgba(140, 165, 199, 0.22);
+    border-left: 0;
+    background: rgba(34, 49, 69, 0.94);
+    box-shadow: 0 6px 14px rgba(7, 15, 28, 0.24);
+  }
+
+  body.mobile-apk-mode #socialSubtabChat .tg-msg-row.mine .tg-msg-bubble {
+    border: 0;
+    border-right: 0;
+    background: linear-gradient(145deg, #3880f7, #2f69db);
+    color: #f7fbff;
+    box-shadow: 0 8px 16px rgba(22, 68, 152, 0.36);
+  }
+
+  body.mobile-apk-mode #socialSubtabChat .tg-msg-text {
+    line-height: 1.32;
+  }
+
+  body.mobile-apk-mode #socialSubtabChat .tg-msg-time {
+    margin-top: 2px;
+    font-size: 11px;
+    color: rgba(214, 226, 245, 0.72);
+  }
+
+  body.mobile-apk-mode #socialSubtabChat .tg-msg-row.mine .tg-msg-time {
+    color: rgba(233, 242, 255, 0.78);
   }
 
   body.mobile-apk-mode #socialSubtabChat .social-chat-compose {
-    padding: 8px 10px 10px;
+    padding: 8px 8px 10px;
     position: sticky;
     bottom: 0;
     z-index: 8;
+    background: rgba(19, 33, 49, 0.96);
+  }
+
+  body.mobile-apk-mode #socialSubtabChat .social-chat-input-wrap {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 6px;
+    border-radius: 22px;
+    border: 1px solid rgba(126, 150, 183, 0.28);
+    background: rgba(35, 50, 70, 0.94);
+    padding: 6px 8px;
+  }
+
+  body.mobile-apk-mode #socialSubtabChat .social-chat-compose textarea {
+    min-height: 36px;
+    color: #f4f8ff;
+  }
+
+  body.mobile-apk-mode #socialSubtabChat .social-chat-compose textarea::placeholder {
+    color: rgba(204, 220, 244, 0.62);
+  }
+
+  body.mobile-apk-mode #socialSubtabChat .social-emoji-btn,
+  body.mobile-apk-mode #socialSubtabChat .social-attach-btn {
+    min-width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: rgba(227, 237, 255, 0.92);
+  }
+
+  body.mobile-apk-mode #socialSubtabChat .social-send-icon-btn {
+    min-width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #34a2ff, #2f7ef5);
+    color: #ffffff;
+  }
+
+  body.mobile-apk-mode #socialSubtabChat .social-chat-input-wrap.is-typing .social-attach-btn {
+    display: none;
+  }
+
+  body.mobile-apk-mode #socialSubtabChat .social-chat-input-wrap.is-typing .social-send-icon-btn {
+    display: grid;
   }
 
   body.mobile-client-mode .social-games-grid {
