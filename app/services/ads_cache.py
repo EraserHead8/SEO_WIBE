@@ -61,8 +61,8 @@ def sync_wb_campaign_snapshots(db: Session, user_id: int, wb_api_key: str) -> di
     fetched = fetch_wb_campaigns(
         wb_api_key.strip(),
         enrich=False,
-        fast_mode=True,
-        max_attempts=6,
+        fast_mode=False,
+        max_attempts=12,
     )
     if not isinstance(fetched, list):
         fetched = []
@@ -188,9 +188,16 @@ def _hydrate_campaign_rows_with_stats(wb_api_key: str, rows: list[dict[str, Any]
         stats_map = {}
     if not isinstance(stats_map, dict):
         stats_map = {}
-    unresolved_ids = [cid for cid in ids if not isinstance(stats_map.get(str(cid)), dict)]
+    unresolved_ids = []
+    for cid in ids:
+        stat = stats_map.get(str(cid))
+        if not isinstance(stat, dict):
+            unresolved_ids.append(cid)
+            continue
+        if not bool(stat.get("stat_has_context")):
+            unresolved_ids.append(cid)
     if unresolved_ids:
-        for cid in unresolved_ids[:140]:
+        for cid in unresolved_ids[:240]:
             try:
                 one_map = fetch_wb_campaign_stats_bulk(wb_api_key, [cid], date_from=None, date_to=None)
             except Exception:
@@ -341,3 +348,4 @@ def _safe_json_loads(raw: str) -> Any:
         return json.loads(raw or "")
     except Exception:
         return None
+

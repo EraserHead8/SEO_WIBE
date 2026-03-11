@@ -188,16 +188,20 @@
         <select id="mobileDrawerQuickNav" class="chip-select mobile-drawer-quick-nav" onchange="onMobileQuickNavChanged('mobileDrawerQuickNav')">
           <option value="sales_dashboard">Статистика</option>
           <option value="social_games">Игры</option>
-          <option value="social_chat">Чат</option>
+          <option value="social_chat">Чаты</option>
           <option value="social_tasks">Задачи</option>
           <option value="social_notes">Заметки</option>
           <option value="social_calculator">Калькулятор</option>
           <option value="social_calendar">Календарь</option>
-          <option value="reviews_reviews">Ответы на отзывы</option>
-          <option value="reviews_questions">Ответы на вопросы</option>
+          <option value="reviews_reviews">Отзывы</option>
+          <option value="reviews_questions">Вопросы</option>
+          <option value="reviews_returns">Возвраты</option>
+          <option value="ads_campaigns">Реклама WB</option>
+          <option value="ads_analytics">Аналитика рекламы</option>
+          <option value="ads_recommendations">Рекомендации</option>
+          <option value="ads_bidder">Бидер WB Ads</option>
           <option value="profile_main">Профиль</option>
-          <option value="help_main">Справка</option>
-        </select>
+          <option value="help_main">Справка</option>        </select>
         <div id="mobileDrawerQuickList" class="mobile-drawer-quick-list"></div>
       </div>
       <nav class="side-nav">
@@ -233,18 +237,22 @@
             <span id="socialBellBadge" class="icon-bell-badge hidden">0</span>
           </button>
           <select id="mobileQuickNav" class="chip-select mobile-quick-nav hidden" onchange="onMobileQuickNavChanged('mobileQuickNav')">
-            <option value="sales_dashboard">Статистика</option>
-            <option value="social_games">Игры</option>
-            <option value="social_chat">Чат</option>
-            <option value="social_tasks">Задачи</option>
-            <option value="social_notes">Заметки</option>
-            <option value="social_calculator">Калькулятор</option>
-            <option value="social_calendar">Календарь</option>
-            <option value="reviews_reviews">Ответы на отзывы</option>
-            <option value="reviews_questions">Ответы на вопросы</option>
-            <option value="profile_main">Профиль</option>
-            <option value="help_main">Справка</option>
-          </select>
+          <option value="sales_dashboard">Статистика</option>
+          <option value="social_games">Игры</option>
+          <option value="social_chat">Чаты</option>
+          <option value="social_tasks">Задачи</option>
+          <option value="social_notes">Заметки</option>
+          <option value="social_calculator">Калькулятор</option>
+          <option value="social_calendar">Календарь</option>
+          <option value="reviews_reviews">Отзывы</option>
+          <option value="reviews_questions">Вопросы</option>
+          <option value="reviews_returns">Возвраты</option>
+          <option value="ads_campaigns">Реклама WB</option>
+          <option value="ads_analytics">Аналитика рекламы</option>
+          <option value="ads_recommendations">Рекомендации</option>
+          <option value="ads_bidder">Бидер WB Ads</option>
+          <option value="profile_main">Профиль</option>
+          <option value="help_main">Справка</option>          </select>
           <select id="uiLangSelect" class="chip-select" onchange="changeUiLang()">
             <option value="ru">RU</option>
             <option value="en">EN</option>
@@ -795,25 +803,46 @@
       </div>
       <div id="reviewsSubtabReturns" class="hidden">
         <div class="panel">
-          <h3>Возвраты WB/Ozon</h3>
-          <div class="grid-6">
-            <select id="returnsMarketplace" onchange="loadReturns()">
-              <option value="wb">WB</option>
-              <option value="ozon">Ozon</option>
-            </select>
-            <select id="returnsStatusFilter" onchange="renderReturns()">
-              <option value="">Все статусы</option>
-            </select>
-            <input id="returnsDateFrom" type="date" onchange="loadReturns()" />
-            <input id="returnsDateTo" type="date" onchange="loadReturns()" />
-            <button class="btn-secondary" onclick="loadReturns()">Обновить возвраты</button>
+          <div class="returns-hero">
+            <div>
+              <h3>Возвраты WB/Ozon</h3>
+              <p>Показываем понятный статус заявки, товар, причину возврата и доступные действия без иконок-загадок.</p>
+            </div>
+            <button class="btn-secondary" type="button" onclick="loadReturns()">Обновить список</button>
+          </div>
+          <div class="returns-toolbar">
+            <label class="returns-field">
+              <span>Маркетплейс</span>
+              <select id="returnsMarketplace" onchange="loadReturns()">
+                <option value="wb">WB</option>
+                <option value="ozon">Ozon</option>
+              </select>
+            </label>
+            <label class="returns-field">
+              <span>Статус</span>
+              <select id="returnsStatusFilter" onchange="renderReturns()">
+                <option value="">Все статусы</option>
+              </select>
+            </label>
+            <label class="returns-field">
+              <span>Дата от</span>
+              <input id="returnsDateFrom" type="date" onchange="loadReturns()" />
+            </label>
+            <label class="returns-field">
+              <span>Дата до</span>
+              <input id="returnsDateTo" type="date" onchange="loadReturns()" />
+            </label>
+            <div class="returns-field">
+              <span>Что сделать</span>
+              <div class="returns-inline-note">WB: открыть заявку, одобрить или отклонить. Ozon пока работает в режиме чтения.</div>
+            </div>
           </div>
           <div id="returnsLoadStatus" class="hint load-status">-</div>
         </div>
         <div class="table-card">
           <table class="reviews-table questions-table">
             <thead>
-              <tr><th>Статус</th><th>Дата</th><th>Товар</th><th>Описание</th><th>Фото</th><th>Действия</th></tr>
+              <tr><th>Статус</th><th>Дата</th><th>Товар</th><th>Причина / комментарий</th><th>Фото</th><th>Что сделать</th></tr>
             </thead>
             <tbody id="returnsTable"></tbody>
           </table>
@@ -957,7 +986,7 @@
         <div class="panel">
           <h3>Бидер WB Ads</h3>
           <div class="grid-6 ads-bidder-grid">
-            <input id="wbBidderCampaignId" type="number" min="1" placeholder="campaign_id" />
+            <input id="wbBidderCampaignId" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="campaign_id" list="wbBidderCampaignHints" />
             <input id="wbBidderNmId" type="number" min="1" placeholder="nm_id" />
             <select id="wbBidderTargetKind" onchange="syncWbBidderTargetKindUi()">
               <option value="normquery">Фраза (normquery)</option>
@@ -993,6 +1022,7 @@
             <button class="btn-secondary" type="button" onclick="resetWbBidderForm()">Сбросить форму</button>
           </div>
           <input id="wbBidderRuleId" type="hidden" />
+          <datalist id="wbBidderCampaignHints"></datalist>
           <div class="grid-4 ads-bidder-actions">
             <button class="btn-secondary" type="button" onclick="loadWbBidderRules()">Обновить правила</button>
             <button class="btn-secondary" type="button" onclick="runWbBidder(false)">Запустить (очередь)</button>
@@ -1429,20 +1459,23 @@
               <aside class="social-calendar-sync-card">
                 <div class="social-calendar-sync-card-head">
                   <div>
-                    <h4>Google / ICS sync</h4>
-                    <p>Прямой импорт из Google OAuth или по public/secret ICS URL без ручного дублирования событий.</p>
+                    <h4>Google календарь</h4>
+                    <p>Один раз подключите свой Google-аккаунт, и SEO WIBE будет синхронизировать календарь именно этого пользователя. Если прямой импорт ещё не включён, ниже останется запасной путь через ICS URL.</p>
                   </div>
-                  <button id="socialCalendarGoogleConnectBtn" class="btn-secondary" data-tip="Открывает безопасный вход Google для подключения календаря." type="button" onclick="socialConnectGoogleCalendar()">Подключить Google</button>
                 </div>
+                <button id="socialCalendarGoogleConnectBtn" class="social-calendar-connect-btn" data-tip="Открывает безопасное подключение Google Calendar для текущего пользователя." type="button" onclick="socialConnectGoogleCalendar()">Подключить Google календарь</button>
                 <div id="socialCalendarGoogleStatus" class="social-calendar-google-status"></div>
                 <div id="socialCalendarGoogleMeta" class="social-calendar-google-meta"></div>
                 <div id="socialCalendarSyncMessage" class="social-calendar-sync-message"></div>
-                <label class="social-calendar-sync-field">
-                  <span>ICS URL</span>
-                  <input id="socialCalendarGoogleIcs" placeholder="webcal://... или https://..." />
-                </label>
-                <label class="check social-calendar-replace"><input id="socialCalendarGoogleReplace" type="checkbox" /> Очистить старые события из этого источника перед повторным импортом</label>
-                <button class="social-calendar-sync-btn" data-tip="Запускает синхронизацию событий из Google Calendar или ICS URL." type="button" onclick="socialSyncGoogleCalendar()">Синхронизировать календарь</button>
+                <div class="social-calendar-sync-actions">
+                  <label class="social-calendar-sync-field">
+                    <span>ICS URL</span>
+                    <input id="socialCalendarGoogleIcs" placeholder="webcal://... или https://..." />
+                  </label>
+                  <label class="check social-calendar-replace"><input id="socialCalendarGoogleReplace" type="checkbox" /> Очистить старые события из этого источника перед повторным импортом</label>
+                  <button class="btn-secondary social-calendar-sync-btn" data-tip="Запускает синхронизацию событий из Google Calendar или ICS URL." type="button" onclick="socialSyncGoogleCalendar()">Импорт по ICS URL</button>
+                  <div class="social-calendar-setup-note">После серверной настройки Google OAuth каждый пользователь подключает только свой календарь по своей Google-почте. Владелец и сотрудники не делят один общий Google-токен.</div>
+                </div>
               </aside>
             </div>
           </div>

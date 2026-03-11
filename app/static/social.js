@@ -48,6 +48,7 @@ let socialState = {
   currencyRatesTimer: null,
   currencyRatesLoading: false,
   googleCalendarOauth: null,
+  calendarAutoSyncInFlight: false,
   sendingMessage: false,
   chatReplyTo: null,
   chatContextMessageId: 0,
@@ -830,6 +831,7 @@ function resetSocialState() {
     currencyRatesTimer: null,
     currencyRatesLoading: false,
     googleCalendarOauth: null,
+    calendarAutoSyncInFlight: false,
     sendingMessage: false,
     loadingMessagesThreadId: 0,
     chatReplyTo: null,
@@ -858,6 +860,9 @@ function switchSocialSubtab(tab, loadNow = true) {
     : "chat";
   socialState.currentSubtab = safe;
   currentSocialSubtab = safe;
+  if (typeof window.refreshSectionHeading === "function") {
+    try { window.refreshSectionHeading("social"); } catch (_) {}
+  }
   if (typeof window.syncMobileQuickNavSelection === "function") {
     try { window.syncMobileQuickNavSelection(); } catch (_) {}
   }
@@ -2021,6 +2026,8 @@ function socialSyncMobileChatChrome(row = null) {
   const titleNode = document.getElementById("mobileChatCompactTitle");
   const subtitleNode = document.getElementById("mobileChatCompactSubtitle");
   if (!host || !backBtn || !titleNode || !subtitleNode) return;
+  const body = document.body;
+  const shell = document.getElementById("appSection");
   const isApkShell = socialIsMobileApkShell();
   const inSocialChat = typeof currentTab !== "undefined"
     && String(currentTab || "") === "social"
@@ -2029,6 +2036,8 @@ function socialSyncMobileChatChrome(row = null) {
   const show = isApkShell && inSocialChat && Number(socialState.currentThreadId || 0) > 0 && Boolean(activeThread);
   host.classList.toggle("hidden", !show);
   backBtn.classList.toggle("hidden", !show);
+  body?.classList?.toggle("social-thread-open", show);
+  shell?.classList?.toggle("social-thread-open", show);
   if (!show) {
     titleNode.textContent = tr("Чаты", "Chats");
     subtitleNode.textContent = "";
@@ -2037,6 +2046,9 @@ function socialSyncMobileChatChrome(row = null) {
     subtitleNode.classList.remove("is-clickable");
     titleNode.onclick = null;
     subtitleNode.onclick = null;
+    if (typeof window.refreshSectionHeading === "function") {
+      try { window.refreshSectionHeading("social"); } catch (_) {}
+    }
     return;
   }
   const display = socialThreadDisplay(activeThread);
@@ -2078,10 +2090,17 @@ function socialSetChatView(open) {
 }
 
 function socialIsThreadOpen() {
+  const inChat = String(socialState.currentSubtab || currentSocialSubtab || "") === "chat";
+  if (!inChat) return false;
   const currentId = Number(socialState.currentThreadId || 0);
-  if (currentId > 0) return true;
+  if (currentId <= 0) return false;
   const layout = document.querySelector("#socialSubtabChat .social-chat-layout");
-  return String(layout?.dataset?.threadOpen || "") === "1";
+  const layoutOpen = Boolean(layout?.classList?.contains("chat-open")) || String(layout?.dataset?.threadOpen || "") === "1";
+  if (!layoutOpen) return false;
+  if (socialGetCurrentThread()) return true;
+  if (Number(socialState.loadingMessagesThreadId || 0) === currentId) return true;
+  if (String(socialState.chatHeaderSignature || "").trim()) return true;
+  return socialHasRenderedMessages();
 }
 function socialHasRenderedMessages(host = null) {
   const node = host || document.getElementById("socialChatMessages");
@@ -3509,14 +3528,15 @@ async function socialLoadGoogleCalendarStatus() {
   const query = new URLSearchParams(window.location.search || "");
   const oauthConnected = String(query.get("google_oauth_connected") || "") === "1";
   const oauthError = String(query.get("google_oauth_error") || "").trim();
+  const autoGoogleSync = oauthConnected && String(query.get("auto_google_sync") || "") === "1";
   let transientKind = "";
   let transientTitle = "";
   let transientLines = [];
-  if (oauthConnected || oauthError) {
+  if (oauthConnected || oauthError || autoGoogleSync) {
     if (oauthConnected) {
       transientKind = "success";
-      transientTitle = tr("Google Calendar подключен", "Google Calendar connected");
-      transientLines = [tr("Теперь можно синхронизировать основной календарь без ICS-ссылки.", "Primary calendar sync can now run without an ICS URL.")];
+      transientTitle = tr("Google Calendar подключён", "Google Calendar connected");
+      transientLines = [tr("Теперь можно запускать прямой импорт календаря без ICS-ссылки.", "Direct calendar import is now available without an ICS URL.")];
     } else if (oauthError) {
       transientKind = "error";
       transientTitle = tr("Ошибка Google OAuth", "Google OAuth error");
@@ -3524,6 +3544,7 @@ async function socialLoadGoogleCalendarStatus() {
     }
     query.delete("google_oauth_connected");
     query.delete("google_oauth_error");
+    query.delete("auto_google_sync");
     const nextSearch = query.toString();
     const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${window.location.hash || ""}`;
     window.history.replaceState({}, document.title, nextUrl);
@@ -3534,46 +3555,61 @@ async function socialLoadGoogleCalendarStatus() {
       statusNode.innerHTML = `<strong>${escapeHtml(tr("Не удалось получить статус Google Calendar.", "Could not load Google Calendar status."))}</strong>`;
     }
     socialRenderCalendarStatusMeta(null);
-    socialSetCalendarSyncMessage("error", tr("Проверка синхронизации не удалась", "Sync status check failed"), [e?.message || tr("Повторите попытку чуть позже.", "Please retry in a moment.")]);
+    socialSetCalendarSyncMessage("error", tr("Проверка статуса не удалась", "Status check failed"), [e?.message || tr("Повторите попытку чуть позже.", "Please retry in a moment.")]);
     return null;
   });
   socialState.googleCalendarOauth = data && typeof data === "object" ? data : null;
   const status = socialState.googleCalendarOauth || {};
   const configured = Boolean(status.oauth_configured);
   const connected = Boolean(status.connected);
+  const accountEmail = String(status.account_email || "").trim();
   const expiresAt = Number(status.expires_at || 0);
   const expiresText = expiresAt > 0
     ? new Date(expiresAt * 1000).toLocaleString(currentLang === "en" ? "en-GB" : "ru-RU")
     : "";
   if (statusNode) {
-    statusNode.innerHTML = connected
-      ? `
-        <strong>${escapeHtml(tr("Google Calendar подключён", "Google Calendar connected"))}</strong>
-        <span>${escapeHtml(expiresText
-          ? tr(`Токен действует до ${expiresText}. Можно запускать синхронизацию напрямую.`, `Token valid until ${expiresText}. Direct sync is available.`)
-          : tr("Можно запускать синхронизацию напрямую или через ICS URL.", "You can sync directly or with an ICS URL."))}</span>
-      `
-      : `
-        <strong>${escapeHtml(configured ? tr("Google Calendar пока не подключён", "Google Calendar not connected yet") : tr("Google OAuth не настроен", "Google OAuth is not configured"))}</strong>
-        <span>${escapeHtml(configured
-          ? tr("Подключите Google или используйте публичную/secret ICS-ссылку.", "Connect Google or use a public/secret ICS URL.")
-          : tr("Пока доступна синхронизация по ICS URL. Для прямого импорта нужно настроить Google OAuth на сервере.", "ICS URL sync is available. Server-side Google OAuth is required for direct import."))}</span>
+    if (connected) {
+      statusNode.innerHTML = `
+        <strong>${escapeHtml(tr("Ваш Google календарь подключён", "Your Google Calendar is connected"))}</strong>
+        <span>${escapeHtml(accountEmail
+          ? tr(`Подключён аккаунт ${accountEmail}. Можно запускать прямой импорт событий.`, `Account ${accountEmail} is connected. You can run direct event import now.`)
+          : tr("Подключение готово. Можно запускать прямой импорт событий.", "Connection is ready. You can run direct event import now."))}</span>
       `;
+    } else if (configured) {
+      statusNode.innerHTML = `
+        <strong>${escapeHtml(tr("Подключите свой Google аккаунт", "Connect your Google account"))}</strong>
+        <span>${escapeHtml(tr("Нажмите одну кнопку ниже. После этого SEO WIBE будет синхронизировать календарь именно этого пользователя.", "Press the button below once. SEO WIBE will then sync this user's calendar only."))}</span>
+      `;
+    } else {
+      statusNode.innerHTML = `
+        <strong>${escapeHtml(tr("Прямой импорт ещё не включён", "Direct import is not enabled yet"))}</strong>
+        <span>${escapeHtml(tr("Администратору нужно один раз добавить Google OAuth на сервере. После этого каждый пользователь подключает свой Google аккаунт одной кнопкой.", "An administrator needs to add Google OAuth on the server once. After that, each user connects their own Google account with one button."))}</span>
+      `;
+    }
   }
   socialRenderCalendarStatusMeta(status);
   if (connectBtn) {
     connectBtn.classList.toggle("btn-success", connected);
-    connectBtn.disabled = connectBtn.dataset.loading === "1" ? true : (!configured && !connected);
+    connectBtn.disabled = connectBtn.dataset.loading === "1" ? true : !configured;
     if (connectBtn.dataset.loading !== "1") {
       connectBtn.textContent = connected
         ? tr("Переподключить Google", "Reconnect Google")
-        : tr("Подключить Google", "Connect Google");
+        : tr("Подключить Google календарь", "Connect Google Calendar");
     }
   }
   if (syncBtn) {
     syncBtn.textContent = connected
-      ? tr("Синхронизировать сейчас", "Sync now")
-      : tr("Синхронизировать календарь", "Sync calendar");
+      ? tr("Синхронизировать из Google / ICS", "Sync from Google / ICS")
+      : tr("Импорт по ICS URL", "Import via ICS URL");
+  }
+  if (autoGoogleSync && connected && !socialState.calendarAutoSyncInFlight) {
+    socialState.calendarAutoSyncInFlight = true;
+    try {
+      await socialSyncGoogleCalendar({ autoStarted: true });
+    } finally {
+      socialState.calendarAutoSyncInFlight = false;
+    }
+    return;
   }
   if (transientTitle) {
     socialSetCalendarSyncMessage(transientKind || "info", transientTitle, transientLines);
@@ -3584,6 +3620,7 @@ async function socialLoadGoogleCalendarStatus() {
   const summary = status.last_sync_summary && typeof status.last_sync_summary === "object" ? status.last_sync_summary : {};
   const warnings = Array.isArray(summary.warnings) ? summary.warnings.map((line) => String(line || "").trim()).filter(Boolean) : [];
   const summaryLines = [];
+  if (accountEmail) summaryLines.push(`${tr("Google аккаунт", "Google account")}: ${accountEmail}`);
   if (lastSyncAt) {
     summaryLines.push(`${tr("Время", "Time")}: ${new Date(lastSyncAt).toLocaleString(currentLang === "en" ? "en-GB" : "ru-RU")}`);
   }
@@ -3600,7 +3637,16 @@ async function socialLoadGoogleCalendarStatus() {
   } else if (lastSyncState === "ok" || lastSyncState === "empty") {
     socialSetCalendarSyncMessage("success", tr("Последняя синхронизация сохранена", "Latest sync recorded"), summaryLines);
   } else if (!configured && !connected) {
-    socialSetCalendarSyncMessage("warn", tr("Google OAuth ещё не настроен", "Google OAuth is not configured yet"), [tr("Используйте ICS URL или добавьте server-side Google credentials.", "Use an ICS URL or add server-side Google credentials.")]);
+    const setupLines = [tr("Для прямого импорта нужен один раз настроенный Google OAuth на сервере.", "Direct import needs a one-time Google OAuth setup on the server.")];
+    const redirectUri = String(status.required_redirect_uri || status.redirect_uri || "").trim();
+    if (redirectUri) setupLines.push(`${tr("Redirect URI", "Redirect URI")}: ${redirectUri}`);
+    const setupHint = String(status.setup_hint || "").trim();
+    if (setupHint) setupLines.push(setupHint);
+    socialSetCalendarSyncMessage("warn", tr("Google OAuth ещё не настроен", "Google OAuth is not configured yet"), setupLines);
+  } else if (configured && !connected) {
+    socialSetCalendarSyncMessage("info", tr("Остался один шаг", "One step left"), [tr("Нажмите «Подключить Google календарь», войдите в нужный Google-аккаунт и разрешите доступ только к чтению календаря.", "Press “Connect Google Calendar”, sign in to the required Google account, and grant read-only calendar access.")]);
+  } else if (connected && expiresText) {
+    socialSetCalendarSyncMessage("success", tr("Прямой импорт готов", "Direct import is ready"), [`${tr("Токен действует до", "Token valid until")}: ${expiresText}`]);
   } else {
     socialSetCalendarSyncMessage();
   }
@@ -3614,7 +3660,7 @@ async function socialConnectGoogleCalendar() {
     if (connectBtn) {
       connectBtn.disabled = false;
       connectBtn.dataset.loading = "0";
-      connectBtn.textContent = previousText || tr("Подключить Google", "Connect Google");
+      connectBtn.textContent = previousText || tr("Подключить Google календарь", "Connect Google Calendar");
     }
     if (statusNode && previousStatus) {
       statusNode.textContent = previousStatus;
@@ -3626,10 +3672,11 @@ async function socialConnectGoogleCalendar() {
     connectBtn.textContent = tr("Открываем Google...", "Opening Google...");
   }
   if (statusNode) {
-    statusNode.textContent = tr("Подготавливаем безопасный вход Google OAuth...", "Preparing secure Google OAuth sign-in...");
+    statusNode.textContent = tr("Готовим безопасное подключение Google OAuth...", "Preparing secure Google OAuth connection...");
   }
-  socialSetCalendarSyncMessage("info", tr("Открываем Google OAuth", "Opening Google OAuth"), [tr("После подтверждения вернёмся в SEO WIBE автоматически.", "After confirmation you will return to SEO WIBE automatically.")]);
-  const data = await socialRequest("/api/social/calendar/google-oauth/start", { timeoutMs: 12000 }).catch((e) => {
+  socialSetCalendarSyncMessage("info", tr("Открываем Google OAuth", "Opening Google OAuth"), [tr("Подтвердите вход в нужный Google-аккаунт. После разрешения доступа откроется SEO WIBE с уже подключённым календарём.", "Sign in with the required Google account. After granting access, SEO WIBE will open with the calendar connected.")]);
+  const oauthStartUrl = socialIsMobileApkShell() ? "/api/social/calendar/google-oauth/start?return_target=apk" : "/api/social/calendar/google-oauth/start";
+  const data = await socialRequest(oauthStartUrl, { timeoutMs: 12000 }).catch((e) => {
     restoreUi();
     socialSetCalendarSyncMessage("error", tr("Не удалось запустить Google OAuth", "Unable to start Google OAuth"), [e?.message || tr("Проверьте настройки OAuth на сервере.", "Check OAuth server settings.")]);
     return null;
@@ -4490,3 +4537,5 @@ document.addEventListener("visibilitychange", () => {
 });
 
 socialMaybeStartHooks();
+
+

@@ -306,6 +306,73 @@ const TAB_TITLES = {
   admin: { ru: ["Админка", "Управление пользователями и модулями"], en: ["Admin", "Users and modules management"] },
 };
 
+const SUBTAB_TITLES = {
+  products: {
+    catalog: { ru: ["Товары", "Каталог, карточки и синхронизация остатков"], en: ["Products", "Catalog, product cards, and stock sync"] },
+    seo: { ru: ["SEO-задачи", "Генерация, проверка и применение SEO-описаний"], en: ["SEO Jobs", "Generate, review, and apply SEO descriptions"] },
+  },
+  reviews: {
+    reviews: { ru: ["Ответы на отзывы", "Отзывы WB и Ozon с AI-ответами"], en: ["Review Replies", "WB and Ozon reviews with AI replies"] },
+    questions: { ru: ["Ответы на вопросы", "Вопросы покупателей и быстрые ответы"], en: ["Question Replies", "Customer questions and quick answers"] },
+    returns: { ru: ["Возвраты", "Заявки на возврат WB и Ozon с понятными действиями"], en: ["Returns", "WB and Ozon return requests with clear actions"] },
+  },
+  accounting: {
+    overview: { ru: ["Бухгалтерия", "KPI, прибыль и экономика по периодам"], en: ["Accounting", "KPIs, profit, and period economics"] },
+    analysis: { ru: ["Аналитика прибыли", "Разбор доходов, расходов и маржи"], en: ["Profit Analysis", "Revenue, costs, and margin breakdown"] },
+    expenses: { ru: ["Расходы", "Учет расходов и распределение по категориям"], en: ["Expenses", "Expense tracking and category split"] },
+    settings: { ru: ["Настройки бухгалтерии", "Шаблоны, ставки и правила расчета"], en: ["Accounting Settings", "Templates, rates, and calculation rules"] },
+  },
+  ads: {
+    campaigns: { ru: ["Рекламные кампании", "Кампании WB с бюджетами, статусами и метриками"], en: ["Ad Campaigns", "WB campaigns with budgets, statuses, and metrics"] },
+    analytics: { ru: ["Аналитика рекламы", "Показы, клики, заказы и расходы по кампаниям"], en: ["Ads Analytics", "Views, clicks, orders, and spend by campaign"] },
+    recommendations: { ru: ["Рекомендации по рекламе", "Подсказки по ставкам и неэффективным кампаниям"], en: ["Ads Recommendations", "Bid and efficiency recommendations"] },
+    bidder: { ru: ["Бидер WB Ads", "Автоматическое управление ставками по правилам"], en: ["WB Ads Bidder", "Automatic bid management by rules"] },
+    ozon: { ru: ["Реклама Ozon", "Кампании и ставки Ozon"], en: ["Ozon Ads", "Ozon campaigns and bids"] },
+  },
+  social: {
+    chat: { ru: ["Чаты", "Командные и личные переписки"], en: ["Chats", "Team and direct conversations"] },
+    tasks: { ru: ["Задачи", "Командные задачи, дедлайны и контроль"], en: ["Tasks", "Team tasks, deadlines, and control"] },
+    calendar: { ru: ["Календарь", "События, дедлайны и синхронизация с Google"], en: ["Calendar", "Events, deadlines, and Google sync"] },
+    calculator: { ru: ["Калькулятор", "Быстрые расчеты и конвертация"], en: ["Calculator", "Quick calculations and conversion"] },
+    notes: { ru: ["Заметки", "Личные и командные заметки"], en: ["Notes", "Personal and team notes"] },
+    games: { ru: ["Игры", "Небольшая пауза внутри приложения"], en: ["Games", "A short break inside the app"] },
+  },
+  help: {
+    docs: { ru: ["Справка", "Документация по модулям и подсказки"], en: ["Help Center", "Module documentation and tips"] },
+    assistant: { ru: ["AI-помощник", "Ответы по работе сервиса и модулей"], en: ["AI Assistant", "Answers about the service and modules"] },
+    downloads: { ru: ["Загрузки", "APK, обновления и история релизов"], en: ["Downloads", "APK, updates, and release history"] },
+  },
+};
+
+function resolveSectionHeading(tab = currentTab) {
+  const safeTab = String(tab || "sales").trim().toLowerCase() || "sales";
+  const pick = (pack) => {
+    const fallback = TAB_TITLES[safeTab] || TAB_TITLES.sales;
+    const source = pack && typeof pack === "object" ? pack : fallback;
+    const pair = source[currentLang] || source.ru || fallback[currentLang] || fallback.ru || ["-", ""];
+    return {
+      title: String(pair[0] || "").trim(),
+      subtitle: String(pair[1] || "").trim(),
+    };
+  };
+  if (safeTab === "products") return pick(SUBTAB_TITLES.products?.[String(currentProductsSubtab || "catalog")]);
+  if (safeTab === "reviews") return pick(SUBTAB_TITLES.reviews?.[String(currentReviewsSubtab || "reviews")]);
+  if (safeTab === "accounting") return pick(SUBTAB_TITLES.accounting?.[String(currentAccountingSubtab || "overview")]);
+  if (safeTab === "ads") return pick(SUBTAB_TITLES.ads?.[String(currentAdsSubtab || "campaigns")]);
+  if (safeTab === "social") return pick(SUBTAB_TITLES.social?.[String(currentSocialSubtab || "chat")]);
+  if (safeTab === "help") return pick(SUBTAB_TITLES.help?.[String(currentHelpSubtab || "docs")]);
+  return pick(null);
+}
+
+function refreshSectionHeading(tab = currentTab) {
+  const titleNode = document.getElementById("sectionTitle");
+  const subtitleNode = document.getElementById("sectionSubtitle");
+  if (!titleNode || !subtitleNode) return;
+  const heading = resolveSectionHeading(tab);
+  titleNode.textContent = heading.title || "-";
+  subtitleNode.textContent = heading.subtitle || "";
+}
+
 const LEGACY_TAB_REDIRECT = {
   seo: { tab: "products", productsSubtab: "seo", reviewsSubtab: "", adsSubtab: "" },
   dashboard: { tab: "sales", reviewsSubtab: "", adsSubtab: "" },
@@ -1135,10 +1202,7 @@ function applyUiLanguage() {
 
   const helpModule = document.getElementById("helpModuleSelect");
   if (helpModule) delete helpModule.dataset.ready;
-  const titlePack = TAB_TITLES[currentTab] || TAB_TITLES.sales;
-  const [title, subtitle] = titlePack[lang] || titlePack.ru;
-  document.getElementById("sectionTitle").textContent = title;
-  document.getElementById("sectionSubtitle").textContent = subtitle;
+  refreshSectionHeading();
   updateReviewLoadStatus();
   updateQuestionLoadStatus();
   updateWbAdsLoadStatus();
@@ -1201,6 +1265,7 @@ function changeThemeFromDrawer() {
 window.changeUiLang = changeUiLang;
 window.changeUiLangFromDrawer = changeUiLangFromDrawer;
 window.changeThemeFromDrawer = changeThemeFromDrawer;
+window.refreshSectionHeading = refreshSectionHeading;
 
 async function requestJson(url, opts = {}) {
   const timeoutMs = Math.max(0, Number(opts.timeoutMs || 0));
@@ -1989,6 +2054,7 @@ function switchProductsSubtab(tab, preload = true) {
   document.getElementById("productsSubtabSeo")?.classList.toggle("hidden", showCatalog);
   document.getElementById("productsSubtabCatalogBtn")?.classList.toggle("active", showCatalog);
   document.getElementById("productsSubtabSeoBtn")?.classList.toggle("active", !showCatalog);
+  refreshSectionHeading("products");
   if (!preload) return;
   if (showCatalog) {
     trackUiActivity("ui_subtab_opened", "products", "subtab=catalog", { cooldownMs: 15000 });
@@ -2282,10 +2348,7 @@ function showTab(name, btn = null) {
   if (!tab) return;
   tab.classList.remove("hidden");
 
-  const pack = TAB_TITLES[targetTab] || TAB_TITLES.sales;
-  const [title, subtitle] = pack[currentLang] || pack.ru;
-  document.getElementById("sectionTitle").textContent = title;
-  document.getElementById("sectionSubtitle").textContent = subtitle;
+  refreshSectionHeading(targetTab);
 
   if (btn && btn.dataset.tab) {
     const mappedBtn = normalizeLegacyTabName(btn.dataset.tab);
@@ -2452,8 +2515,15 @@ function getMobileQuickNavOptions() {
     options.push({ value: "social_games", label: isEn ? "Games" : "Игры" });
   }
   if (has("wb_reviews_ai") || has("wb_questions_ai") || has("returns")) {
-    options.push({ value: "reviews_reviews", label: isEn ? "Review replies" : "Ответы на отзывы" });
-    options.push({ value: "reviews_questions", label: isEn ? "Question replies" : "Ответы на вопросы" });
+    if (has("wb_reviews_ai")) options.push({ value: "reviews_reviews", label: isEn ? "Review replies" : "Ответы на отзывы" });
+    if (has("wb_questions_ai")) options.push({ value: "reviews_questions", label: isEn ? "Question replies" : "Ответы на вопросы" });
+    if (has("returns")) options.push({ value: "reviews_returns", label: isEn ? "Returns" : "Возвраты" });
+  }
+  if (has("wb_ads") || has("wb_ads_analytics") || has("wb_ads_recommendations")) {
+    if (has("wb_ads")) options.push({ value: "ads_campaigns", label: isEn ? "Ad campaigns" : "Рекламные кампании" });
+    if (has("wb_ads_analytics")) options.push({ value: "ads_analytics", label: isEn ? "Ads analytics" : "Аналитика рекламы" });
+    if (has("wb_ads_recommendations")) options.push({ value: "ads_recommendations", label: isEn ? "Recommendations" : "Рекомендации" });
+    if (has("wb_ads")) options.push({ value: "ads_bidder", label: isEn ? "WB Ads bidder" : "Бидер WB Ads" });
   }
   options.push({ value: "profile_main", label: isEn ? "Profile" : "Профиль" });
   if (has("help_center")) {
@@ -2465,7 +2535,9 @@ function getMobileQuickNavOptions() {
 function getCurrentMobileQuickValue() {
   if (currentTab === "sales") return "sales_dashboard";
   if (currentTab === "ads") {
-    return "";
+    const allowed = new Set(["campaigns", "analytics", "recommendations", "bidder", "ozon"]);
+    const sub = allowed.has(String(currentAdsSubtab || "")) ? String(currentAdsSubtab || "campaigns") : "campaigns";
+    return `ads_${sub}`;
   }
   if (currentTab === "social") {
     const sub = ["games", "chat", "tasks", "notes", "calculator", "calendar"].includes(String(currentSocialSubtab || ""))
@@ -2474,7 +2546,9 @@ function getCurrentMobileQuickValue() {
     return `social_${sub}`;
   }
   if (currentTab === "reviews") {
-    return currentReviewsSubtab === "questions" ? "reviews_questions" : "reviews_reviews";
+    if (currentReviewsSubtab === "questions") return "reviews_questions";
+    if (currentReviewsSubtab === "returns") return "reviews_returns";
+    return "reviews_reviews";
   }
   if (currentTab === "profile") {
     return "profile_main";
@@ -2558,18 +2632,20 @@ function openMobileQuickNavValue(valueRaw) {
     return;
   }
   if (value.startsWith("ads_")) {
-    const sub = value.endsWith("_bidder") ? "bidder" : "campaigns";
+    const sub = value.replace(/^ads_/, "") || "campaigns";
+    const safeSub = ["campaigns", "analytics", "recommendations", "bidder", "ozon"].includes(sub) ? sub : "campaigns";
     showTab("ads", document.querySelector(".nav-btn[data-tab='ads']"));
     if (typeof switchAdsSubtab === "function") {
       setTimeout(() => {
-        try { switchAdsSubtab(sub, true); } catch (_) {}
+        try { switchAdsSubtab(safeSub, true); } catch (_) {}
       }, 120);
     }
     closeMobileNav();
     return;
   }
   if (value.startsWith("reviews_")) {
-    const sub = value.endsWith("_questions") ? "questions" : "reviews";
+    const suffix = value.replace(/^reviews_/, "") || "reviews";
+    const sub = suffix === "questions" ? "questions" : (suffix === "returns" ? "returns" : "reviews");
     showTab("reviews", document.querySelector(".nav-btn[data-tab='reviews']"));
     switchReviewsSubtab(sub, true);
     closeMobileNav();
@@ -3297,6 +3373,7 @@ function switchReviewsSubtab(tab, preload = true) {
   document.getElementById("reviewsSubtabReviewsBtn")?.classList.toggle("active", showReviews);
   document.getElementById("reviewsSubtabQuestionsBtn")?.classList.toggle("active", showQuestions);
   document.getElementById("reviewsSubtabReturnsBtn")?.classList.toggle("active", showReturns);
+  refreshSectionHeading("reviews");
   syncMobileQuickNavSelection();
   if (!preload) return;
   if (showReviews) {
@@ -3339,6 +3416,8 @@ function switchAdsSubtab(tab, preload = true) {
     document.getElementById(`adsSubtab${key[0].toUpperCase()}${key.slice(1)}`)?.classList.toggle("hidden", !active);
     document.getElementById(`adsSubtab${key[0].toUpperCase()}${key.slice(1)}Btn`)?.classList.toggle("active", active);
   }
+  refreshSectionHeading("ads");
+  syncMobileQuickNavSelection();
   if (!preload) return;
   if (next === "campaigns" && enabledModules.has("wb_ads")) {
     trackUiActivity("ui_subtab_opened", "wb_ads", "subtab=campaigns", { cooldownMs: 15000 });
@@ -3409,6 +3488,8 @@ function switchHelpSubtab(tab, preload = true) {
   document.getElementById("helpSubtabDocsBtn")?.classList.toggle("active", showDocs);
   document.getElementById("helpSubtabAssistantBtn")?.classList.toggle("active", showAssistant);
   document.getElementById("helpSubtabDownloadsBtn")?.classList.toggle("active", showDownloads);
+  refreshSectionHeading("help");
+  syncMobileQuickNavSelection();
   if (!preload) return;
   if (showDocs) {
     trackUiActivity("ui_subtab_opened", "help_center", "subtab=docs", { cooldownMs: 15000 });
@@ -4968,10 +5049,23 @@ function normalizeReturnRow(rawRow, marketplace, idx) {
       const text = normalizeFeedbackText(getValueByPath(rawRow, path));
       if (!text) continue;
       const low = String(text).trim().toLowerCase();
-      if (!low || low === "0" || low === "-" || low === "—" || low === "null" || low === "undefined") continue;
+      if (!low || low === "-" || low === "вЂ”" || low === "null" || low === "undefined") continue;
       return String(text).trim();
     }
     return "";
+  };
+  const joinLines = (...values) => {
+    const seen = new Set();
+    return values
+      .map((value) => String(value || "").trim())
+      .filter((value) => {
+        if (!value) return false;
+        const key = value.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .join("\n");
   };
   const rid = pickText(
     "id",
@@ -4998,6 +5092,7 @@ function normalizeReturnRow(rawRow, marketplace, idx) {
   row.status = pickText(
     "status",
     "state",
+    "status_ex",
     "claim_status",
     "claimState",
     "claim.status",
@@ -5007,10 +5102,39 @@ function normalizeReturnRow(rawRow, marketplace, idx) {
     "state.name",
     "raw.status",
     "raw.state",
+    "raw.status_ex",
     "raw.claim.status",
     "raw.return.status",
     "raw.status.name",
     "raw.state.name"
+  );
+  row.status_code = pickText(
+    "status_id",
+    "statusId",
+    "status.code",
+    "state.code",
+    "claim.status_id",
+    "return.status_id",
+    "raw.status_id",
+    "raw.statusId",
+    "raw.status.code",
+    "raw.state.code"
+  );
+  row.status_note = pickText(
+    "status_ex",
+    "statusEx",
+    "status_detail",
+    "statusDetail",
+    "decision_comment",
+    "rejectReason",
+    "reject_reason",
+    "raw.status_ex",
+    "raw.statusEx",
+    "raw.status_detail",
+    "raw.statusDetail",
+    "raw.decision_comment",
+    "raw.rejectReason",
+    "raw.reject_reason"
   );
   row.date = pickText(
     "date",
@@ -5018,6 +5142,9 @@ function normalizeReturnRow(rawRow, marketplace, idx) {
     "createdAt",
     "created_date",
     "createdDate",
+    "dt",
+    "order_dt",
+    "delivery_dt",
     "updated_at",
     "updatedAt",
     "claim.createdAt",
@@ -5027,6 +5154,9 @@ function normalizeReturnRow(rawRow, marketplace, idx) {
     "raw.createdAt",
     "raw.created_date",
     "raw.createdDate",
+    "raw.dt",
+    "raw.order_dt",
+    "raw.delivery_dt",
     "raw.updated_at",
     "raw.updatedAt",
     "raw.claim.createdAt",
@@ -5035,22 +5165,32 @@ function normalizeReturnRow(rawRow, marketplace, idx) {
   row.created_at = pickText(
     "created_at",
     "createdAt",
-    "date",
     "created_date",
     "createdDate",
+    "date",
+    "dt",
+    "order_dt",
     "updated_at",
     "updatedAt",
-    "claim.createdAt",
-    "return.createdAt",
     "raw.created_at",
     "raw.createdAt",
-    "raw.date",
     "raw.created_date",
     "raw.createdDate",
+    "raw.date",
+    "raw.dt",
+    "raw.order_dt",
+    "raw.updated_at",
+    "raw.updatedAt"
+  );
+  row.updated_at = pickText(
+    "updated_at",
+    "updatedAt",
+    "dt_update",
+    "delivery_dt",
     "raw.updated_at",
     "raw.updatedAt",
-    "raw.claim.createdAt",
-    "raw.return.createdAt"
+    "raw.dt_update",
+    "raw.delivery_dt"
   );
   row.product = pickText(
     "product",
@@ -5058,6 +5198,8 @@ function normalizeReturnRow(rawRow, marketplace, idx) {
     "productName",
     "name",
     "title",
+    "imt_name",
+    "imtName",
     "item.name",
     "item.title",
     "claim.item.name",
@@ -5069,12 +5211,13 @@ function normalizeReturnRow(rawRow, marketplace, idx) {
     "product.name",
     "product.title",
     "subjectName",
-    "imtName",
     "raw.product",
     "raw.product_name",
     "raw.productName",
     "raw.name",
     "raw.title",
+    "raw.imt_name",
+    "raw.imtName",
     "raw.item.name",
     "raw.item.title",
     "raw.claim.item.name",
@@ -5085,15 +5228,36 @@ function normalizeReturnRow(rawRow, marketplace, idx) {
     "raw.return.name",
     "raw.product.name",
     "raw.product.title",
-    "raw.subjectName",
-    "raw.imtName"
+    "raw.subjectName"
+  );
+  row.vendor_code = pickText(
+    "vendor_code",
+    "vendorCode",
+    "supplierVendorCode",
+    "origin_id_info.vendor_code",
+    "item.vendorCode",
+    "raw.vendor_code",
+    "raw.vendorCode",
+    "raw.supplierVendorCode",
+    "raw.origin_id_info.vendor_code",
+    "raw.item.vendorCode"
+  );
+  row.nm_id = pickText(
+    "nm_id",
+    "nmId",
+    "imt_id",
+    "imtId",
+    "item.nm_id",
+    "raw.nm_id",
+    "raw.nmId",
+    "raw.imt_id",
+    "raw.imtId",
+    "raw.item.nm_id"
   );
   row.article = pickText(
     "article",
     "offer_id",
     "offerId",
-    "nm_id",
-    "nmId",
     "vendorCode",
     "supplierVendorCode",
     "item.article",
@@ -5106,8 +5270,6 @@ function normalizeReturnRow(rawRow, marketplace, idx) {
     "raw.article",
     "raw.offer_id",
     "raw.offerId",
-    "raw.nm_id",
-    "raw.nmId",
     "raw.vendorCode",
     "raw.supplierVendorCode",
     "raw.item.article",
@@ -5119,7 +5281,7 @@ function normalizeReturnRow(rawRow, marketplace, idx) {
     "raw.return.item.article",
     "raw.return.item.offer_id",
     "raw.return.item.offerId"
-  );
+  ) || row.vendor_code || row.nm_id;
   row.barcode = pickText(
     "barcode",
     "item.barcode",
@@ -5130,7 +5292,59 @@ function normalizeReturnRow(rawRow, marketplace, idx) {
     "raw.claim.item.barcode",
     "raw.return.item.barcode"
   );
-  row.description = pickText(
+  row.quantity = pickText(
+    "quantity",
+    "count",
+    "itemsCount",
+    "qty",
+    "item.quantity",
+    "claim.item.quantity",
+    "return.item.quantity",
+    "raw.quantity",
+    "raw.count",
+    "raw.itemsCount",
+    "raw.qty",
+    "raw.item.quantity",
+    "raw.claim.item.quantity",
+    "raw.return.item.quantity"
+  );
+  row.amount = pickText(
+    "amount",
+    "sum",
+    "total",
+    "refundAmount",
+    "returnAmount",
+    "price",
+    "claim.amount",
+    "return.amount",
+    "raw.amount",
+    "raw.sum",
+    "raw.total",
+    "raw.refundAmount",
+    "raw.returnAmount",
+    "raw.price",
+    "raw.claim.amount",
+    "raw.return.amount"
+  );
+  row.customer_comment = pickText(
+    "user_comment",
+    "customer_comment",
+    "comment",
+    "reason",
+    "raw.user_comment",
+    "raw.customer_comment",
+    "raw.comment",
+    "raw.reason"
+  );
+  row.seller_comment = pickText(
+    "wb_comment",
+    "seller_comment",
+    "decision_comment",
+    "raw.wb_comment",
+    "raw.seller_comment",
+    "raw.decision_comment"
+  );
+  const baseDescription = pickText(
     "description",
     "reason",
     "comment",
@@ -5162,6 +5376,7 @@ function normalizeReturnRow(rawRow, marketplace, idx) {
     "raw.return.comment",
     "raw.return.rejectReason"
   );
+  row.description = joinLines(baseDescription, row.status_note, row.customer_comment, row.seller_comment);
   row.reason = row.description;
   const rawPhotos = normalizeFeedbackPhotos(
     rawRow.photos
@@ -5319,34 +5534,93 @@ function extractReturnDetailContext(detail, returnId = "") {
     raw.product,
     raw.result,
     raw.data,
+    raw.payload,
+    raw.response,
   ].filter((item) => item && typeof item === "object");
-  const pick = (...paths) => {
+  const normalizeScalar = (value, options = {}) => {
+    const text = String(normalizeProductDetailValue(value) || "").trim();
+    const low = text.toLowerCase();
+    if (!text || low === "-" || low === "�" || low === "—" || low === "null" || low === "undefined") return "";
+    if (!options.allowZero && (low === "0" || low === "0.0")) return "";
+    return text;
+  };
+  const pick = (paths, options = {}) => {
     for (const path of paths) {
       for (const container of containers) {
-        const val = normalizeProductDetailValue(getValueByPath(container, path));
-        if (!val) continue;
-        const low = String(val).trim().toLowerCase();
-        if (!low || low === "0" || low === "-" || low === "—" || low === "null" || low === "undefined") continue;
-        return val;
+        const val = normalizeScalar(getValueByPath(container, path), options);
+        if (val) return val;
       }
     }
     return "";
   };
-  const id = pick("id", "claimId", "claim_id", "returnId", "return_id", "claim.id", "return.id", "posting_number") || String(returnId || "");
-  const status = pick("status", "state", "claimStatus", "claim.status", "return.status", "return.state");
-  const createdAt = pick("created_at", "createdAt", "date", "createdDate", "claim.createdAt", "return.createdAt");
-  const updatedAt = pick("updated_at", "updatedAt", "claim.updatedAt", "return.updatedAt");
-  const article = pick(
+  const appendPhotos = (out, src, depth = 0) => {
+    if (!src || depth > 4) return;
+    if (Array.isArray(src)) {
+      src.forEach((item) => appendPhotos(out, item, depth + 1));
+      return;
+    }
+    if (typeof src === "string") {
+      const url = String(src || "").trim();
+      if (/^https?:\/\//i.test(url) && !out.includes(url)) out.push(url);
+      return;
+    }
+    if (typeof src === "object") {
+      const directUrl = normalizeFeedbackText(src.url || src.photo || src.src || src.link || src.href || src.path || "");
+      if (/^https?:\/\//i.test(directUrl) && !out.includes(directUrl)) out.push(directUrl);
+      Object.keys(src).forEach((key) => {
+        if (/photo|image|picture|attachment|file/i.test(String(key || ""))) {
+          appendPhotos(out, src[key], depth + 1);
+        }
+      });
+    }
+  };
+
+  const id = pick(["id", "claimId", "claim_id", "returnId", "return_id", "claim.id", "return.id", "posting_number"], { allowZero: true })
+    || String(returnId || "");
+  const marketplace = currentReturnsMarketplace === "ozon" ? "Ozon" : "WB";
+  const status = pick(["status", "state", "claimStatus", "claim.status", "return.status", "return.state"], { allowZero: true });
+  const statusNote = pick([
+    "status_note",
+    "statusComment",
+    "status_comment",
+    "statusDescription",
+    "status_description",
+    "claim.statusDescription",
+    "return.statusDescription",
+  ]);
+  const createdAt = pick(["created_at", "createdAt", "date", "createdDate", "claim.createdAt", "return.createdAt"], { allowZero: true });
+  const updatedAt = pick(["updated_at", "updatedAt", "claim.updatedAt", "return.updatedAt"], { allowZero: true });
+  const article = pick([
     "article",
     "supplierVendorCode",
+    "supplier_vendor_code",
     "vendorCode",
+    "vendor_code",
     "offerId",
     "offer_id",
     "item.article",
     "claim.item.article",
-    "return.item.article"
-  );
-  const product = pick(
+    "return.item.article",
+  ]);
+  const vendorCode = pick([
+    "vendor_code",
+    "vendorCode",
+    "supplierVendorCode",
+    "supplier_vendor_code",
+    "item.vendorCode",
+    "claim.item.vendorCode",
+    "return.item.vendorCode",
+  ]);
+  const nmId = pick([
+    "nm_id",
+    "nmId",
+    "nmID",
+    "sku",
+    "item.nmId",
+    "claim.item.nmId",
+    "return.item.nmId",
+  ], { allowZero: true });
+  const product = pick([
     "product",
     "productName",
     "name",
@@ -5354,65 +5628,73 @@ function extractReturnDetailContext(detail, returnId = "") {
     "imtName",
     "item.name",
     "claim.item.name",
-    "return.item.name"
-  );
-  const quantity = pick("quantity", "count", "itemsCount", "qty", "item.quantity", "claim.item.quantity", "return.item.quantity");
-  const amount = pick("amount", "sum", "total", "refundAmount", "returnAmount", "price", "claim.amount", "return.amount");
-  const reason = pick(
+    "return.item.name",
+  ]);
+  const quantity = pick(["quantity", "count", "itemsCount", "qty", "item.quantity", "claim.item.quantity", "return.item.quantity"], { allowZero: true });
+  const amount = pick(["amount", "sum", "total", "refundAmount", "returnAmount", "price", "claim.amount", "return.amount"], { allowZero: true });
+  const reason = pick([
     "reason",
-    "comment",
     "rejectReason",
-    "description",
-    "text",
+    "reject_reason",
     "claim.reason",
-    "claim.comment",
     "return.reason",
-    "return.comment"
-  );
+  ]);
+  const description = pick([
+    "description",
+    "comment",
+    "text",
+    "claim.comment",
+    "return.comment",
+    "claim.description",
+    "return.description",
+  ]);
+  const customerComment = pick([
+    "customer_comment",
+    "customerComment",
+    "buyerComment",
+    "buyer_comment",
+    "clientComment",
+    "client_comment",
+  ]);
+  const sellerComment = pick([
+    "seller_comment",
+    "sellerComment",
+    "merchantComment",
+    "merchant_comment",
+  ]);
+  const orderId = pick(["order_id", "orderId", "posting_number", "srid"], { allowZero: true });
+  const barcode = pick(["barcode", "barcodes.0", "item.barcode"], { allowZero: true });
+  const warehouse = pick(["warehouse", "warehouseName", "warehouse_name", "place", "place_name"]);
 
   const photos = [];
-  const appendPhotos = (src, depth = 0) => {
-    if (!src || depth > 3) return;
-    if (Array.isArray(src)) {
-      src.forEach((item) => appendPhotos(item, depth + 1));
-      return;
-    }
-    if (typeof src === "string") {
-      const url = String(src || "").trim();
-      if (/^https?:\/\//i.test(url) && !photos.includes(url)) photos.push(url);
-      return;
-    }
-    if (typeof src === "object") {
-      const url = normalizeFeedbackText(src.url || src.photo || src.src || src.link || src.href || src.path || "");
-      if (/^https?:\/\//i.test(url) && !photos.includes(url)) {
-        photos.push(url);
-      }
-      const keys = Object.keys(src);
-      for (const key of keys) {
-        if (/photo|image|picture|attachment|file/i.test(key)) {
-          appendPhotos(src[key], depth + 1);
-        }
-      }
-    }
-  };
   for (const container of containers) {
-    appendPhotos(container.photos);
-    appendPhotos(container.images);
-    appendPhotos(container.pictures);
-    appendPhotos(container.attachments);
-    appendPhotos(container.files);
+    appendPhotos(photos, container.photos);
+    appendPhotos(photos, container.images);
+    appendPhotos(photos, container.pictures);
+    appendPhotos(photos, container.attachments);
+    appendPhotos(photos, container.files);
   }
 
   return {
     id,
+    marketplace,
     status,
+    statusNote,
     createdAt,
     updatedAt,
     article,
+    vendorCode,
+    nmId,
     product,
     quantity,
     amount,
     reason,
+    description,
+    customerComment,
+    sellerComment,
+    orderId,
+    barcode,
+    warehouse,
     photos,
     raw,
   };
@@ -5430,36 +5712,58 @@ function renderReturnDetailModal(detail, returnId = "") {
 
   if (titleEl) {
     const rid = ctx.id || String(returnId || "-");
-    titleEl.textContent = `${tr("Детали возврата", "Return details")} #${rid}`;
+    titleEl.textContent = `${tr("������ ��������", "Return details")} #${rid}`;
   }
   if (summaryEl) {
     const parts = [
-      ctx.status ? `${tr("Статус", "Status")}: ${ctx.status}` : "",
-      ctx.createdAt ? `${tr("Создан", "Created")}: ${ctx.createdAt}` : "",
-      ctx.updatedAt ? `${tr("Обновлен", "Updated")}: ${ctx.updatedAt}` : "",
+      ctx.marketplace ? `${tr("�����������", "Marketplace")}: ${ctx.marketplace}` : "",
+      ctx.status ? `${tr("������", "Status")}: ${ctx.status}` : "",
+      ctx.createdAt ? `${tr("������", "Created")}: ${ctx.createdAt}` : "",
+      ctx.updatedAt ? `${tr("��������", "Updated")}: ${ctx.updatedAt}` : "",
     ].filter(Boolean);
-    summaryEl.textContent = parts.join(" • ") || tr("Карточка возврата загружена.", "Return card loaded.");
+    summaryEl.textContent = parts.join(" | ") || tr("�������� �������� ���������.", "Return card loaded.");
   }
   if (cardsEl) {
     cardsEl.innerHTML = renderProductInfoGrid(
       [
         { label: "id", value: ctx.id || "-" },
-        { label: tr("Статус", "Status"), value: ctx.status || "-" },
-        { label: tr("Товар", "Product"), value: ctx.product || "-" },
-        { label: tr("Артикул", "Article"), value: ctx.article || "-" },
-        { label: tr("Количество", "Quantity"), value: ctx.quantity || "-" },
-        { label: tr("Сумма", "Amount"), value: ctx.amount || "-" },
+        { label: tr("�����������", "Marketplace"), value: ctx.marketplace || "-" },
+        { label: tr("������", "Status"), value: ctx.status || "-" },
+        { label: tr("����������� � �������", "Status note"), value: ctx.statusNote || "-" },
+        { label: tr("�����", "Product"), value: ctx.product || "-" },
+        { label: tr("�������", "Article"), value: ctx.article || "-" },
+        { label: tr("Vendor code", "Vendor code"), value: ctx.vendorCode || "-" },
+        { label: tr("NM ID", "NM ID"), value: ctx.nmId || "-" },
+        { label: tr("����������", "Quantity"), value: ctx.quantity || "-" },
+        { label: tr("�����", "Amount"), value: ctx.amount || "-" },
+        { label: tr("�����", "Order"), value: ctx.orderId || "-" },
+        { label: tr("�����", "Warehouse"), value: ctx.warehouse || "-" },
       ],
-      tr("Ключевые поля отсутствуют.", "No key fields.")
+      tr("�������� ���� �����������.", "No key fields.")
     );
   }
   if (descEl) {
-    descEl.textContent = ctx.reason || tr("Описание отсутствует.", "Description is not available.");
+    const lines = [];
+    const addLine = (label, value) => {
+      const safe = String(value || "").trim();
+      if (!safe) return;
+      lines.push(`<p><b>${escapeHtml(label)}:</b> ${escapeHtml(safe)}</p>`);
+    };
+    addLine(tr("�������", "Reason"), ctx.reason);
+    if (String(ctx.description || "").trim() && String(ctx.description || "").trim() !== String(ctx.reason || "").trim()) {
+      addLine(tr("��������", "Description"), ctx.description);
+    }
+    addLine(tr("����������� ����������", "Customer comment"), ctx.customerComment);
+    addLine(tr("����������� ��������", "Seller comment"), ctx.sellerComment);
+    addLine(tr("��������", "Barcode"), ctx.barcode);
+    descEl.innerHTML = lines.length
+      ? lines.join("")
+      : `<div class="hint">${escapeHtml(tr("��������� �������� ���� �� ������ �� API.", "Detailed description is not available yet."))}</div>`;
   }
   if (photosEl) {
     photosEl.innerHTML = ctx.photos.length
       ? ctx.photos.map((url, idx) => `<img src="${escapeHtml(String(url))}" alt="return-photo-${idx + 1}" loading="lazy" class="product-detail-photo">`).join("")
-      : `<div class="hint">${escapeHtml(tr("Фото не прикреплены.", "No photos attached."))}</div>`;
+      : `<div class="hint">${escapeHtml(tr("���� �� �����������.", "No photos attached."))}</div>`;
     if (ctx.photos.length) {
       photosEl.querySelectorAll("img.product-detail-photo").forEach((imgEl, idx) => {
         imgEl.classList.add("clickable-photo");
@@ -5546,42 +5850,56 @@ function renderReturns() {
     return true;
   });
   if (!rows.length) {
-    setTableMessage("returnsTable", 6, tr("Заявки на возврат не найдены.", "No returns found."));
+    setTableMessage("returnsTable", 6, tr("������ �� ������� �� �������.", "No returns found."));
     return;
   }
   for (const row of rows) {
     const trEl = document.createElement("tr");
     const rid = String(row.id || "").trim();
     const photos = Array.isArray(row.photos) ? row.photos : [];
+    const statusValue = String(row.status || row.status_code || "-").trim() || "-";
+    const statusNote = String(row.status_note || "").trim();
     const photosHtml = photos.length
       ? photos.slice(0, 3).map((photo, idx) => (
         `<img src="${escapeHtml(photo)}" alt="return-photo-${idx + 1}" loading="lazy" class="review-photo-thumb clickable-photo" data-return-photo-idx="${idx}" data-return-id="${escapeHtml(rid)}">`
       )).join("")
       : `<span class="hint">-</span>`;
+    const productMeta = [row.article, row.vendor_code, row.nm_id].map((value) => String(value || "").trim()).filter(Boolean);
+    const descriptionMeta = [row.status_note, row.customer_comment, row.seller_comment].map((value) => String(value || "").trim()).filter(Boolean);
+    const dateParts = [row.date || row.created_at || "-", row.updated_at ? `${tr("���������", "updated")}: ${row.updated_at}` : ""].filter(Boolean);
+    const fallbackMeta = [];
+    if (String(row.quantity || "").trim()) fallbackMeta.push(`${tr("���-��", "Qty")}: ${row.quantity}`);
+    if (String(row.amount || "").trim()) fallbackMeta.push(`${tr("�����", "Amount")}: ${row.amount}`);
     const actionButtons = currentReturnsMarketplace === "wb"
       ? `
         <div class="review-actions">
-          <button type="button" class="btn-secondary icon-action-btn" data-tip="${escapeHtml(tr("Детали", "Details"))}" onclick="openReturnDetails('${escapeHtml(rid)}')">&#9432;</button>
-          <button type="button" class="btn-secondary icon-action-btn" data-tip="${escapeHtml(tr("Одобрить", "Approve"))}" onclick="actionReturn('${escapeHtml(rid)}', 'approve')">&#10003;</button>
-          <button type="button" class="btn-danger icon-action-btn" data-tip="${escapeHtml(tr("Отклонить", "Reject"))}" onclick="actionReturn('${escapeHtml(rid)}', 'reject')">&#10005;</button>
+          <button type="button" class="btn-secondary returns-action-btn" onclick="openReturnDetails('${escapeHtml(rid)}')">${escapeHtml(tr("������� ��������", "Open card"))}</button>
+          <button type="button" class="btn-secondary returns-action-btn" onclick="actionReturn('${escapeHtml(rid)}', 'approve')">${escapeHtml(tr("�������� �������", "Approve return"))}</button>
+          <button type="button" class="btn-danger returns-action-btn" onclick="actionReturn('${escapeHtml(rid)}', 'reject')">${escapeHtml(tr("��������� �������", "Reject return"))}</button>
         </div>
       `
       : `
         <div class="review-actions">
-          <button type="button" class="btn-secondary icon-action-btn" data-tip="${escapeHtml(tr("Детали", "Details"))}" onclick="openReturnDetails('${escapeHtml(rid)}')">&#9432;</button>
-          <button type="button" class="icon-action-btn" disabled data-tip="${escapeHtml(tr("Действия временно недоступны", "Actions are temporarily unavailable"))}">&#9888;</button>
+          <button type="button" class="btn-secondary returns-action-btn" onclick="openReturnDetails('${escapeHtml(rid)}')">${escapeHtml(tr("������� ��������", "Open card"))}</button>
+          <button type="button" class="returns-action-btn" disabled>${escapeHtml(tr("������ �������� (Ozon)", "Read only (Ozon)"))}</button>
         </div>
       `;
     trEl.innerHTML = `
-      <td data-label="${escapeHtml(tr("Статус", "Status"))}"><span class="review-type-pill return-status-pill">${escapeHtml(String(row.status || "-"))}</span></td>
-      <td data-label="${escapeHtml(tr("Дата", "Date"))}" class="cell-meta-small">${escapeHtml(String(row.date || row.created_at || "-"))}</td>
-      <td data-label="${escapeHtml(tr("Товар", "Product"))}">
-        <div class="cell-product-name">${escapeHtml(String(row.product || "-"))}</div>
-        <div class="cell-meta-small">${escapeHtml(String(row.article || "-"))}</div>
+      <td data-label="${escapeHtml(tr("������", "Status"))}">
+        <span class="review-type-pill return-status-pill">${escapeHtml(statusValue)}</span>
+        <div class="cell-meta-small">${escapeHtml(statusNote || "-")}</div>
       </td>
-      <td data-label="${escapeHtml(tr("Описание", "Description"))}"><div class="cell-main-text">${escapeHtml(String(row.description || row.reason || "-"))}</div></td>
-      <td data-label="${escapeHtml(tr("Фото", "Photos"))}"><div class="review-photo-list">${photosHtml}</div></td>
-      <td data-label="${escapeHtml(tr("Действия", "Actions"))}">${actionButtons}</td>
+      <td data-label="${escapeHtml(tr("����", "Date"))}" class="cell-meta-small">${escapeHtml(dateParts.join(" | "))}</td>
+      <td data-label="${escapeHtml(tr("�����", "Product"))}">
+        <div class="cell-product-name">${escapeHtml(String(row.product || "-"))}</div>
+        <div class="cell-meta-small">${escapeHtml(productMeta.join(" | ") || "-")}</div>
+      </td>
+      <td data-label="${escapeHtml(tr("������� / �����������", "Reason / comments"))}">
+        <div class="cell-main-text">${escapeHtml(String(row.description || row.reason || "-"))}</div>
+        <div class="cell-meta-small">${escapeHtml(descriptionMeta.join(" | ") || fallbackMeta.join(" | ") || "-")}</div>
+      </td>
+      <td data-label="${escapeHtml(tr("����", "Photos"))}"><div class="review-photo-list">${photosHtml}</div></td>
+      <td data-label="${escapeHtml(tr("��� �������", "Actions"))}">${actionButtons}</td>
     `;
     tbody.appendChild(trEl);
     if (photos.length) {
@@ -6129,6 +6447,7 @@ function renderWbCampaignRows() {
   if (!tbody) return;
   tbody.innerHTML = "";
   const rows = getFilteredCampaignRows();
+  refreshWbBidderCampaignHints();
 
   const meta = document.getElementById("wbAdsMeta");
   if (meta) {
@@ -6722,6 +7041,7 @@ async function loadAdsAnalytics() {
   }
 
   adsAnalyticsRows = mergedRows.slice().sort((a, b) => Number(b?.spent || 0) - Number(a?.spent || 0));
+  refreshWbBidderCampaignHints();
   adsAnalyticsMeta = {
     requested_count: mergedMeta.requested_count,
     summary_count: mergedMeta.summary_count,
@@ -7145,6 +7465,43 @@ function renderAdsRecommendationsRows() {
   }
 }
 
+function getCampaignLookupRow(campaignId) {
+  const key = String(campaignId || "").trim();
+  if (!key) return null;
+  return wbCampaignRows.find((row) => getCampaignRowId(row) === key)
+    || adsAnalyticsRows.find((row) => String(row?.campaign_id || row?.id || "").trim() === key)
+    || null;
+}
+
+function getCampaignLookupName(campaignId) {
+  const key = String(campaignId || "").trim();
+  if (!key) return "";
+  const row = getCampaignLookupRow(key);
+  if (!row || typeof row !== "object") return "";
+  const name = String(row?.name || row?.campaignName || row?.campaign_name || row?.subject || row?.title || "").trim();
+  if (!name || isPlaceholderCampaignName(name, key)) return "";
+  return name;
+}
+
+function refreshWbBidderCampaignHints() {
+  const host = document.getElementById("wbBidderCampaignHints");
+  if (!host) return;
+  const rows = [...wbCampaignRows, ...adsAnalyticsRows];
+  const seen = new Set();
+  const options = [];
+  for (const row of rows) {
+    const id = String(getCampaignRowId(row) || row?.campaign_id || row?.id || "").trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const name = getCampaignLookupName(id) || (currentLang === "en" ? `Campaign ${id}` : `�������� ${id}`);
+    const status = normalizeCampaignStatus(row?.status || row?.state || "-");
+    const type = normalizeCampaignType(row?.type || row?.adType || row?.campaignType || row?.typeId || "-");
+    const meta = [name, status, type].filter((part) => String(part || "").trim() && String(part || "").trim() !== "-");
+    options.push(`<option value="${escapeHtml(id)}" label="${escapeHtml(meta.join(" | "))}"></option>`);
+  }
+  host.innerHTML = options.join("");
+}
+
 function setWbBidderStatus(message = "-", tone = "") {
   const box = document.getElementById("wbBidderStatus");
   if (!box) return;
@@ -7274,6 +7631,11 @@ function bidderStatusBadge(status) {
 
 async function loadWbBidderWorkspace() {
   if (!enabledModules.has("wb_ads")) return;
+  refreshWbBidderCampaignHints();
+  if (!wbCampaignRows.length) {
+    await loadWbAdCampaigns();
+  }
+  refreshWbBidderCampaignHints();
   await loadWbBidderRules();
   await loadWbBidderRuns();
 }
@@ -7309,11 +7671,12 @@ function renderWbBidderRules() {
     return;
   }
   for (const row of wbBidderRules) {
+    const campaignName = getCampaignLookupName(row.campaign_id);
     const trEl = document.createElement("tr");
     trEl.innerHTML = `
       <td>${escapeHtml(String(row.id || "-"))}</td>
       <td>${row.is_active ? "✅" : "⏸️"}</td>
-      <td>${escapeHtml(String(row.campaign_id || "-"))}</td>
+      <td>${escapeHtml(String(row.campaign_id || "-"))}${campaignName ? `<div class="cell-meta-small">${escapeHtml(campaignName)}</div>` : ""}</td>
       <td>${escapeHtml(bidderRuleTargetText(row))}</td>
       <td>${escapeHtml(String(row.strategy || "-"))} · ${escapeHtml(String(row.placement || "-"))}</td>
       <td>${escapeHtml(String(row.min_bid || 0))} .. ${escapeHtml(String(row.max_bid || 0))} · step ${escapeHtml(String(row.step_bid || 0))}</td>
@@ -7473,11 +7836,12 @@ function renderWbBidderRuns() {
     return;
   }
   for (const row of wbBidderRuns) {
+    const campaignName = getCampaignLookupName(row.campaign_id);
     const trEl = document.createElement("tr");
     trEl.innerHTML = `
       <td>${escapeHtml(String(row.created_at || "-"))}</td>
       <td>#${escapeHtml(String(row.rule_id || "-"))}</td>
-      <td>${escapeHtml(String(row.campaign_id || "-"))}</td>
+      <td>${escapeHtml(String(row.campaign_id || "-"))}${campaignName ? `<div class="cell-meta-small">${escapeHtml(campaignName)}</div>` : ""}</td>
       <td>${escapeHtml(bidderRuleTargetText(row))}</td>
       <td>${escapeHtml(String(row.previous_bid || 0))} → ${escapeHtml(String(row.next_bid || 0))}</td>
       <td>${escapeHtml(String(row.avg_position || 0))}</td>

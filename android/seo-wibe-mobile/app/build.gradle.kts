@@ -1,4 +1,4 @@
-import java.io.File
+﻿import java.io.File
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.util.Locale
@@ -68,8 +68,8 @@ android {
     applicationId = "com.seowibe.mobile"
     minSdk = 24
     targetSdk = 34
-    versionCode = 18
-    versionName = "1.5.12"
+    versionCode = 20
+    versionName = "1.5.14"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
@@ -149,3 +149,4 @@ dependencies {
   implementation("com.google.android.material:material:1.12.0")
   implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 }
+
