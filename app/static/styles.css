@@ -7620,7 +7620,7 @@ body[data-theme="dark"] .landing-band .band-stats span {
 }
 
 .social-day.has-event b::after {
-  content: "вЂў";
+  content: "•";
   position: absolute;
   right: 0;
   top: -2px;
@@ -7628,7 +7628,7 @@ body[data-theme="dark"] .landing-band .band-stats span {
 }
 
 .social-day.has-task b::before {
-  content: "вЂў";
+  content: "•";
   position: absolute;
   right: 8px;
   top: -2px;
