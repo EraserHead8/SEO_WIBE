@@ -5246,7 +5246,7 @@ def get_help_releases(
             # Lightweight EN localization for release cards without splitting data model.
             version_key = str(item.get("version") or "").strip()
             item["summary"] = {
-                "0.4.9": "APK 1.5.14: WB Ads campaign enrichment is deeper, returns plus module headers are clearer in the APK, and Calendar now shows the per-user Google flow together with the server setup status.",
+                "0.4.9": "APK 1.5.15: APK chat now uses a cleaner Telegram-like header/composer flow, mojibake strings are fixed, and module headers no longer jump between background sections.",
                 "0.4.8": "APK 1.5.13: one-button Google Calendar connect now works per user account, WB Ads enrich is deeper, and the APK restores Bidder plus cleaner module headers.",
                 "0.4.7": "APK 1.5.12: reissued with a new stable release key, so users must uninstall the old app before installing this build.",
                 "0.4.6": "APK 1.5.11: calendar sync is stable, WB Ads now shows real names and metrics, and the mobile chat flow is fixed for the APK.",
@@ -5255,7 +5255,7 @@ def get_help_releases(
                 "0.4.3": "APK 1.5.8: Android update installation fixed, product details are faster, and WB Ads enrich now uses faster caching.",
             }.get(version_key, str(item.get("summary") or ""))
             item["notes"] = {
-                "0.4.9": "APK 1.5.14 installs over 1.5.12 and newer builds signed by the new release key. If the device still has an older pre-1.5.12 build, uninstall it once and then install APK 1.5.14.",
+                "0.4.9": "APK 1.5.15 installs over 1.5.12+ builds signed by the release key. If the device still has a pre-1.5.12 build, uninstall once and then install APK 1.5.15.",
                 "0.4.8": "APK 1.5.13 installs over 1.5.12 and newer builds signed by the new release key. If the device still has an older pre-1.5.12 build, uninstall it once and then install APK 1.5.13.",
                 "0.4.7": "APK 1.5.12 cannot install over the old app because the signing certificate changed. Uninstall the current SEO WIBE app first, then install APK 1.5.12 and sign in again.",
                 "0.4.6": "APK 1.5.11 installs over previous versions. After the update, open Social -> Calendar, Ads -> WB Ads Analytics, and any mobile chat to verify sync, real metrics, and the fixed back/reactions flow.",
