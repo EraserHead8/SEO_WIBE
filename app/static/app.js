@@ -1,4 +1,4 @@
-function sanitizeToken(raw) {
+﻿function sanitizeToken(raw) {
   let value = String(raw || "").trim();
   if (!value || value === "null" || value === "undefined") return "";
   if (value.toLowerCase().startsWith("bearer ")) {
@@ -641,7 +641,7 @@ function iconByButtonLabel(labelRaw) {
     [/отправ|send|reply/, "➤"],
     [/сменить|change|switch/, "⇄"],
     [/выбрать|select/, "☑"],
-    [/построить|build|report|recommend/, "◈"],
+    [/построить|build|report|recommend/, "◀"],
     [/статист|sales/, "◷"],
   ];
   for (const [pattern, icon] of rules) {
@@ -661,7 +661,7 @@ function applyNavIcons() {
     if (currentIcon === iconSrc && currentLabel === label) return;
     const iconHtml = iconSrc
       ? `<span class="nav-icon" aria-hidden="true"><img src="${iconSrc}" alt="" loading="eager" decoding="async" /></span>`
-      : `<span class="nav-icon" aria-hidden="true">•</span>`;
+      : `<span class="nav-icon" aria-hidden="true">вЂў</span>`;
     btn.innerHTML = `${iconHtml}<span class="nav-label">${escapeHtml(label)}</span>`;
   });
 }
@@ -824,7 +824,7 @@ function applyUiLanguage() {
   setText("#landingCard1Title", lang === "en" ? "Revenue control center" : "Центр управления выручкой");
   setText("#landingCard1Text", lang === "en" ? "Monitor orders, units, returns, penalties and ad costs in one timeline and quickly find growth bottlenecks." : "Контролируйте заказы, штуки, возвраты, штрафы и рекламные расходы в одной ленте, чтобы быстро находить точки роста.");
   setText("#landingCard2Title", lang === "en" ? "Catalog performance" : "Эффективность каталога");
-  setText("#landingCard2Text", lang === "en" ? "Sync WB/Ozon cards, enrich content, run SEO tasks and keep product visibility under control." : "Синхронизируйте карточки WB/Ozon, улучшайте контент, запускайте SEO-задачи и держите видимость товаров под контролем.");
+  setText("#landingCard2Text", lang === "en" ? "Sync WB/Ozon cards, enrich content, run SEO tasks and keep product visibility under control." : "Синхронизируйте карточки WB/Ozon, улучрайте контент, запускайте SEO-задачи и держите видимость товаров под контролем.");
   setText("#landingCard3Title", lang === "en" ? "Team productivity" : "Продуктивность команды");
   setText("#landingCard3Quote1", lang === "en" ? "Owner has full control, employees work only within assigned modules." : "«Владелец контролирует весь кабинет, сотрудники работают только в назначенных модулях»");
   setText("#landingCard3Meta1", lang === "en" ? "Granular permissions + action history" : "Гибкие права + история действий");
@@ -835,7 +835,7 @@ function applyUiLanguage() {
   setText("#landingCard4Item2", lang === "en" ? "Feedback: reviews, questions and returns in one operational queue." : "Обратная связь: отзывы, вопросы и возвраты в единой рабочей очереди.");
   setText("#landingCard4Item3", lang === "en" ? "Ads: campaign table, analytics and actionable recommendations." : "Реклама: кампании, аналитика и рекомендации для роста эффективности.");
   setText("#landingBandTitle", lang === "en" ? "Commercial outcome" : "Коммерческий результат");
-  setText("#landingBandText", lang === "en" ? "SEO WIBE shortens the cycle from data to action, reduces manual operations and helps teams scale marketplace turnover with less operational risk." : "SEO WIBE сокращает путь от данных к действию, уменьшает ручные операции и помогает командам масштабировать оборот на маркетплейсах с меньшими операционными рисками.");
+  setText("#landingBandText", lang === "en" ? "SEO WIBE shortens the cycle from data to action, reduces manual operations and helps teams scale marketplace turnover with less operational risk." : "SEO WIBE сокращает путь от данных к действию, уменьрает ручные операции и помогает командам масртабировать оборот на маркетплейсах с меньрими операционными рисками.");
 
   const isEn = lang === "en";
   setText("#sales .panel:nth-of-type(3) h3", isEn ? "Quick Actions" : "Быстрые действия");
@@ -864,9 +864,9 @@ function applyUiLanguage() {
   syncCategoryFilterState();
   setText("label[for='productPageSizeTop']", isEn ? "Rows per page" : "На странице");
   setText("label[for='productPageSizeBottom']", isEn ? "Rows per page" : "На странице");
-  setText("#productsPrevTopBtn", isEn ? "Prev" : "Назад");
+  setText("#productsPrevTopBtn", isEn ? "Prev" : "РќР°Р·Р°Рґ");
   setText("#productsNextTopBtn", isEn ? "Next" : "Далее");
-  setText("#productsPrevBottomBtn", isEn ? "Prev" : "Назад");
+  setText("#productsPrevBottomBtn", isEn ? "Prev" : "РќР°Р·Р°Рґ");
   setText("#productsNextBottomBtn", isEn ? "Next" : "Далее");
   setText("#seo .panel .grid-4 button:nth-of-type(4)", isEn ? "Select all products" : "Выбрать все товары");
   setText("#seo .panel .grid-5 button:nth-of-type(1)", isEn ? "Generate Selected" : "Сгенерировать для выбранных");
@@ -1061,7 +1061,7 @@ function applyUiLanguage() {
     isEn ? "4 ready to start" : "4 готова к запуску",
     isEn ? "5 scheduled (media)" : "5 запланирована (медиа)",
     isEn ? "6 running (media)" : "6 идут показы (медиа)",
-    isEn ? "7 completed" : "7 завершена",
+    isEn ? "7 completed" : "7 заверрена",
     isEn ? "8 canceled" : "8 отменена",
     isEn ? "9 active" : "9 активна",
     isEn ? "10 day-limit pause (media)" : "10 дневной лимит (медиа)",
@@ -1323,6 +1323,8 @@ async function requestJson(url, opts = {}) {
     return normalized.length > 280 ? `${normalized.slice(0, 277)}...` : normalized;
   };
 
+  const looksLikeHtmlPayload = (raw) => /<\s*(?:!doctype|html|head|body|center|title|h1)\b/i.test(String(raw || ""));
+
   const makeRequestError = (message, extra = {}) => {
     const err = new Error(String(message || (currentLang === "en" ? "Request error" : "Ошибка запроса")));
     err.kind = String(extra.kind || "http");
@@ -1416,8 +1418,12 @@ async function requestJson(url, opts = {}) {
       const detail = payload && typeof payload === "object"
         ? String(payload.detail || payload.message || "").trim()
         : "";
+      const responseLooksLikeHtml = looksLikeHtmlPayload(parsed.rawText);
+      const friendlyGatewayMessage = currentLang === "en"
+        ? `Server temporarily unavailable (${response.status}). Please retry.`
+        : `Сервер временно не ответил (${response.status}). Повторите чуть позже.`;
       const err = makeRequestError(
-        detail || parsed.rawText || (currentLang === "en" ? "Request error" : "Ошибка запроса"),
+        detail || ((Number(response.status || 0) >= 500 && responseLooksLikeHtml) ? friendlyGatewayMessage : parsed.rawText) || (currentLang === "en" ? "Request error" : "Ошибка запроса"),
         {
           kind: parsed.ok ? "http" : "parse",
           status: response.status,
@@ -1491,7 +1497,7 @@ async function requestJson(url, opts = {}) {
       { kind: "network", cause: lastError }
     );
   }
-  throw lastError || new Error(currentLang === "en" ? "Request error" : "РћС€РёР±РєР° Р·Р°РїСЂРѕСЃР°");
+  throw lastError || new Error(currentLang === "en" ? "Request error" : "Ошибка запроса");
 }
 function isNetworkError(err) {
   const msg = String(err?.message || "").toLowerCase();
@@ -1504,7 +1510,7 @@ function isNetworkError(err) {
     || msg.includes("timed out")
     || msg.includes("time out")
     || msg.includes("время ожидания")
-    || msg.includes("превышено время ожидания");
+    || msg.includes("превырено время ожидания");
 }
 
 function delay(ms) {
@@ -1552,7 +1558,7 @@ function escapeHtml(value) {
 
 function formatPositionValue(value) {
   const num = Number(value || 0);
-  if (!Number.isFinite(num) || num <= 0) return tr("н/д", "n/a");
+  if (!Number.isFinite(num) || num <= 0) return tr("РЅ/Рґ", "n/a");
   if (num > POSITION_LIMIT) return `${POSITION_LIMIT + 1}+`;
   return String(Math.round(num));
 }
@@ -1567,7 +1573,7 @@ const BUTTON_TIPS = {
     "Отправить": "Публикует ответ в маркетплейс.",
     "Обновить": "Обновляет ранее отправленный ответ в маркетплейсе.",
     "Загрузить кампании": "Загружает список рекламных кампаний из кабинета WB Ads.",
-    "Получить ставки": "Запрашивает ставки по выбранной рекламной кампании.",
+    "Получить ставки": "Запраривает ставки по выбранной рекламной кампании.",
     "Сбросить фильтры": "Сбрасывает фильтры и сортировку рекламных кампаний.",
     "Построить отчет": "Формирует аналитический отчет по WB Ads за выбранный период.",
     "Построить рекомендации": "Формирует список приоритетных действий по оптимизации рекламных кампаний.",
@@ -3193,7 +3199,7 @@ async function uploadAvatarFile(inputId, endpoint) {
     return null;
   }
   if (file.size > 4 * 1024 * 1024) {
-    alert(tr("Файл слишком большой (до 4 МБ).", "File is too large (max 4 MB)."));
+    alert(tr("Файл слирком больрой (до 4 МБ).", "File is too large (max 4 MB)."));
     return null;
   }
   const form = new FormData();
@@ -3787,7 +3793,7 @@ function buildLoadStatusHtml({ title = "", loaded = 0, total = 0, active = false
   const safeLoaded = Math.max(0, Math.min(safeTotal || Number(loaded || 0), Number(loaded || 0)));
   const ratio = safeTotal > 0 ? Math.max(0, Math.min(100, (safeLoaded / safeTotal) * 100)) : (active ? 8 : 0);
   const progressText = safeTotal > 0 ? `${safeLoaded} / ${safeTotal}` : (active ? tr("подготовка", "preparing") : "-");
-  const failedText = failed > 0 ? ` • ${tr("ошибок", "errors")}: ${failed}` : "";
+  const failedText = failed > 0 ? ` • ${tr("орибок", "errors")}: ${failed}` : "";
   return `
     <div class="status-wrap ${active ? "active" : "done"}">
       <div class="status-head">
@@ -3804,7 +3810,7 @@ function renderProductCellText(row) {
   const article = String(row?.article || "-");
   const barcode = String(row?.barcode || "").trim();
   if (!barcode) return `${name} (${article})`;
-  return `${name} (${article}; ${currentLang === "en" ? "barcode" : "штрихкод"}: ${barcode})`;
+  return `${name} (${article}; ${currentLang === "en" ? "barcode" : "ртрихкод"}: ${barcode})`;
 }
 
 function renderFeedbackProductCell(targetCell, row) {
@@ -4098,9 +4104,9 @@ async function loadWbReviews() {
     updateReviewLoadStatus(
       fastMsg
         ? tr(`Быстрая загрузка не удалась: ${fastMsg}`, `Fast load failed: ${fastMsg}`)
-        : tr("Быстрая загрузка не удалась, запускаем расширенный запрос...", "Fast load failed, running extended request...")
+        : tr("Быстрая загрузка не удалась, запускаем расриренный запрос...", "Fast load failed, running extended request...")
     );
-    setTableMessage("wbReviewsTable", 7, tr("Быстрый слой недоступен, выполняем расширенный запрос...", "Fast layer unavailable, running extended request..."));
+    setTableMessage("wbReviewsTable", 7, tr("Быстрый слой недоступен, выполняем расриренный запрос...", "Fast layer unavailable, running extended request..."));
     if (raw && fastMsg) raw.textContent = fastMsg;
     if (isMarketplaceKeyError(fastMsg)) {
       reviewLoadProgress.active = false;
@@ -4696,9 +4702,9 @@ async function loadWbQuestions() {
     updateQuestionLoadStatus(
       fastMsg
         ? tr(`Быстрая загрузка не удалась: ${fastMsg}`, `Fast load failed: ${fastMsg}`)
-        : tr("Быстрая загрузка не удалась, запускаем расширенный запрос...", "Fast load failed, running extended request...")
+        : tr("Быстрая загрузка не удалась, запускаем расриренный запрос...", "Fast load failed, running extended request...")
     );
-    setTableMessage("wbQuestionsTable", 6, tr("Быстрый слой недоступен, выполняем расширенный запрос...", "Fast layer unavailable, running extended request..."));
+    setTableMessage("wbQuestionsTable", 6, tr("Быстрый слой недоступен, выполняем расриренный запрос...", "Fast layer unavailable, running extended request..."));
     if (raw && fastMsg) raw.textContent = fastMsg;
     if (isMarketplaceKeyError(fastMsg)) {
       questionLoadProgress.active = false;
@@ -5049,7 +5055,7 @@ function normalizeReturnRow(rawRow, marketplace, idx) {
       const text = normalizeFeedbackText(getValueByPath(rawRow, path));
       if (!text) continue;
       const low = String(text).trim().toLowerCase();
-      if (!low || low === "-" || low === "вЂ”" || low === "null" || low === "undefined") continue;
+      if (!low || low === "-" || low === "—" || low === "null" || low === "undefined") continue;
       return String(text).trim();
     }
     return "";
@@ -5507,7 +5513,7 @@ async function loadReturns() {
     if (warnings.length) {
       const cleaned = formatReturnsWarnings(warnings);
       statusEl.textContent = cleaned.length
-        ? cleaned.join(" • ")
+        ? cleaned.join(" вЂў ")
         : tr("Возвраты загружены с предупреждениями.", "Returns loaded with warnings.");
     } else {
       statusEl.textContent = tr("Возвраты загружены", "Returns loaded");
@@ -5540,7 +5546,7 @@ function extractReturnDetailContext(detail, returnId = "") {
   const normalizeScalar = (value, options = {}) => {
     const text = String(normalizeProductDetailValue(value) || "").trim();
     const low = text.toLowerCase();
-    if (!text || low === "-" || low === "�" || low === "—" || low === "null" || low === "undefined") return "";
+    if (!text || low === "-" || low === "—" || low === "вЂ”" || low === "null" || low === "undefined") return "";
     if (!options.allowZero && (low === "0" || low === "0.0")) return "";
     return text;
   };
@@ -5712,34 +5718,34 @@ function renderReturnDetailModal(detail, returnId = "") {
 
   if (titleEl) {
     const rid = ctx.id || String(returnId || "-");
-    titleEl.textContent = `${tr("������ ��������", "Return details")} #${rid}`;
+    titleEl.textContent = `${tr("Детали возврата", "Return details")} #${rid}`;
   }
   if (summaryEl) {
     const parts = [
-      ctx.marketplace ? `${tr("�����������", "Marketplace")}: ${ctx.marketplace}` : "",
-      ctx.status ? `${tr("������", "Status")}: ${ctx.status}` : "",
-      ctx.createdAt ? `${tr("������", "Created")}: ${ctx.createdAt}` : "",
-      ctx.updatedAt ? `${tr("��������", "Updated")}: ${ctx.updatedAt}` : "",
+      ctx.marketplace ? `${tr("Маркетплейс", "Marketplace")}: ${ctx.marketplace}` : "",
+      ctx.status ? `${tr("Статус", "Status")}: ${ctx.status}` : "",
+      ctx.createdAt ? `${tr("Создан", "Created")}: ${ctx.createdAt}` : "",
+      ctx.updatedAt ? `${tr("Обновлен", "Updated")}: ${ctx.updatedAt}` : "",
     ].filter(Boolean);
-    summaryEl.textContent = parts.join(" | ") || tr("�������� �������� ���������.", "Return card loaded.");
+    summaryEl.textContent = parts.join(" | ") || tr("Карточка возврата загружена.", "Return card loaded.");
   }
   if (cardsEl) {
     cardsEl.innerHTML = renderProductInfoGrid(
       [
         { label: "id", value: ctx.id || "-" },
-        { label: tr("�����������", "Marketplace"), value: ctx.marketplace || "-" },
-        { label: tr("������", "Status"), value: ctx.status || "-" },
-        { label: tr("����������� � �������", "Status note"), value: ctx.statusNote || "-" },
-        { label: tr("�����", "Product"), value: ctx.product || "-" },
-        { label: tr("�������", "Article"), value: ctx.article || "-" },
+        { label: tr("Маркетплейс", "Marketplace"), value: ctx.marketplace || "-" },
+        { label: tr("Статус", "Status"), value: ctx.status || "-" },
+        { label: tr("Комментарий к статусу", "Status note"), value: ctx.statusNote || "-" },
+        { label: tr("Товар", "Product"), value: ctx.product || "-" },
+        { label: tr("Артикул", "Article"), value: ctx.article || "-" },
         { label: tr("Vendor code", "Vendor code"), value: ctx.vendorCode || "-" },
         { label: tr("NM ID", "NM ID"), value: ctx.nmId || "-" },
-        { label: tr("����������", "Quantity"), value: ctx.quantity || "-" },
-        { label: tr("�����", "Amount"), value: ctx.amount || "-" },
-        { label: tr("�����", "Order"), value: ctx.orderId || "-" },
-        { label: tr("�����", "Warehouse"), value: ctx.warehouse || "-" },
+        { label: tr("Количество", "Quantity"), value: ctx.quantity || "-" },
+        { label: tr("Сумма", "Amount"), value: ctx.amount || "-" },
+        { label: tr("Заказ", "Order"), value: ctx.orderId || "-" },
+        { label: tr("Склад", "Warehouse"), value: ctx.warehouse || "-" },
       ],
-      tr("�������� ���� �����������.", "No key fields.")
+      tr("Ключевые поля отсутствуют.", "No key fields.")
     );
   }
   if (descEl) {
@@ -5749,21 +5755,21 @@ function renderReturnDetailModal(detail, returnId = "") {
       if (!safe) return;
       lines.push(`<p><b>${escapeHtml(label)}:</b> ${escapeHtml(safe)}</p>`);
     };
-    addLine(tr("�������", "Reason"), ctx.reason);
+    addLine(tr("Причина", "Reason"), ctx.reason);
     if (String(ctx.description || "").trim() && String(ctx.description || "").trim() !== String(ctx.reason || "").trim()) {
-      addLine(tr("��������", "Description"), ctx.description);
+      addLine(tr("Описание", "Description"), ctx.description);
     }
-    addLine(tr("����������� ����������", "Customer comment"), ctx.customerComment);
-    addLine(tr("����������� ��������", "Seller comment"), ctx.sellerComment);
-    addLine(tr("��������", "Barcode"), ctx.barcode);
+    addLine(tr("Комментарий покупателя", "Customer comment"), ctx.customerComment);
+    addLine(tr("Комментарий продавца", "Seller comment"), ctx.sellerComment);
+    addLine(tr("Штрихкод", "Barcode"), ctx.barcode);
     descEl.innerHTML = lines.length
       ? lines.join("")
-      : `<div class="hint">${escapeHtml(tr("��������� �������� ���� �� ������ �� API.", "Detailed description is not available yet."))}</div>`;
+      : `<div class="hint">${escapeHtml(tr("Подробное описание пока не пришло от API.", "Detailed description is not available yet."))}</div>`;
   }
   if (photosEl) {
     photosEl.innerHTML = ctx.photos.length
       ? ctx.photos.map((url, idx) => `<img src="${escapeHtml(String(url))}" alt="return-photo-${idx + 1}" loading="lazy" class="product-detail-photo">`).join("")
-      : `<div class="hint">${escapeHtml(tr("���� �� �����������.", "No photos attached."))}</div>`;
+      : `<div class="hint">${escapeHtml(tr("Фото не прикреплены.", "No photos attached."))}</div>`;
     if (ctx.photos.length) {
       photosEl.querySelectorAll("img.product-detail-photo").forEach((imgEl, idx) => {
         imgEl.classList.add("clickable-photo");
@@ -5850,7 +5856,7 @@ function renderReturns() {
     return true;
   });
   if (!rows.length) {
-    setTableMessage("returnsTable", 6, tr("������ �� ������� �� �������.", "No returns found."));
+    setTableMessage("returnsTable", 6, tr("Заявки на возврат не найдены.", "No returns found."));
     return;
   }
   for (const row of rows) {
@@ -5866,40 +5872,40 @@ function renderReturns() {
       : `<span class="hint">-</span>`;
     const productMeta = [row.article, row.vendor_code, row.nm_id].map((value) => String(value || "").trim()).filter(Boolean);
     const descriptionMeta = [row.status_note, row.customer_comment, row.seller_comment].map((value) => String(value || "").trim()).filter(Boolean);
-    const dateParts = [row.date || row.created_at || "-", row.updated_at ? `${tr("���������", "updated")}: ${row.updated_at}` : ""].filter(Boolean);
+    const dateParts = [row.date || row.created_at || "-", row.updated_at ? `${tr("обновлено", "updated")}: ${row.updated_at}` : ""].filter(Boolean);
     const fallbackMeta = [];
-    if (String(row.quantity || "").trim()) fallbackMeta.push(`${tr("���-��", "Qty")}: ${row.quantity}`);
-    if (String(row.amount || "").trim()) fallbackMeta.push(`${tr("�����", "Amount")}: ${row.amount}`);
+    if (String(row.quantity || "").trim()) fallbackMeta.push(`${tr("Кол-во", "Qty")}: ${row.quantity}`);
+    if (String(row.amount || "").trim()) fallbackMeta.push(`${tr("Сумма", "Amount")}: ${row.amount}`);
     const actionButtons = currentReturnsMarketplace === "wb"
       ? `
         <div class="review-actions">
-          <button type="button" class="btn-secondary returns-action-btn" onclick="openReturnDetails('${escapeHtml(rid)}')">${escapeHtml(tr("������� ��������", "Open card"))}</button>
-          <button type="button" class="btn-secondary returns-action-btn" onclick="actionReturn('${escapeHtml(rid)}', 'approve')">${escapeHtml(tr("�������� �������", "Approve return"))}</button>
-          <button type="button" class="btn-danger returns-action-btn" onclick="actionReturn('${escapeHtml(rid)}', 'reject')">${escapeHtml(tr("��������� �������", "Reject return"))}</button>
+          <button type="button" class="btn-secondary returns-action-btn" onclick="openReturnDetails('${escapeHtml(rid)}')">${escapeHtml(tr("Открыть карточку", "Open card"))}</button>
+          <button type="button" class="btn-secondary returns-action-btn" onclick="actionReturn('${escapeHtml(rid)}', 'approve')">${escapeHtml(tr("Одобрить возврат", "Approve return"))}</button>
+          <button type="button" class="btn-danger returns-action-btn" onclick="actionReturn('${escapeHtml(rid)}', 'reject')">${escapeHtml(tr("Отклонить возврат", "Reject return"))}</button>
         </div>
       `
       : `
         <div class="review-actions">
-          <button type="button" class="btn-secondary returns-action-btn" onclick="openReturnDetails('${escapeHtml(rid)}')">${escapeHtml(tr("������� ��������", "Open card"))}</button>
-          <button type="button" class="returns-action-btn" disabled>${escapeHtml(tr("������ �������� (Ozon)", "Read only (Ozon)"))}</button>
+          <button type="button" class="btn-secondary returns-action-btn" onclick="openReturnDetails('${escapeHtml(rid)}')">${escapeHtml(tr("Открыть карточку", "Open card"))}</button>
+          <button type="button" class="returns-action-btn" disabled>${escapeHtml(tr("Только просмотр (Ozon)", "Read only (Ozon)"))}</button>
         </div>
       `;
     trEl.innerHTML = `
-      <td data-label="${escapeHtml(tr("������", "Status"))}">
+      <td data-label="${escapeHtml(tr("Статус", "Status"))}">
         <span class="review-type-pill return-status-pill">${escapeHtml(statusValue)}</span>
         <div class="cell-meta-small">${escapeHtml(statusNote || "-")}</div>
       </td>
-      <td data-label="${escapeHtml(tr("����", "Date"))}" class="cell-meta-small">${escapeHtml(dateParts.join(" | "))}</td>
-      <td data-label="${escapeHtml(tr("�����", "Product"))}">
+      <td data-label="${escapeHtml(tr("Дата", "Date"))}" class="cell-meta-small">${escapeHtml(dateParts.join(" | "))}</td>
+      <td data-label="${escapeHtml(tr("Товар", "Product"))}">
         <div class="cell-product-name">${escapeHtml(String(row.product || "-"))}</div>
         <div class="cell-meta-small">${escapeHtml(productMeta.join(" | ") || "-")}</div>
       </td>
-      <td data-label="${escapeHtml(tr("������� / �����������", "Reason / comments"))}">
+      <td data-label="${escapeHtml(tr("Причина / комментарий", "Reason / comments"))}">
         <div class="cell-main-text">${escapeHtml(String(row.description || row.reason || "-"))}</div>
         <div class="cell-meta-small">${escapeHtml(descriptionMeta.join(" | ") || fallbackMeta.join(" | ") || "-")}</div>
       </td>
-      <td data-label="${escapeHtml(tr("����", "Photos"))}"><div class="review-photo-list">${photosHtml}</div></td>
-      <td data-label="${escapeHtml(tr("��� �������", "Actions"))}">${actionButtons}</td>
+      <td data-label="${escapeHtml(tr("Фото", "Photos"))}"><div class="review-photo-list">${photosHtml}</div></td>
+      <td data-label="${escapeHtml(tr("Что сделать", "Actions"))}">${actionButtons}</td>
     `;
     tbody.appendChild(trEl);
     if (photos.length) {
@@ -5924,8 +5930,10 @@ async function loadWbAdCampaigns() {
     wbAdsLoadProgress = { active: true, total: 0, loaded: 0, failed: 0 };
     updateWbAdsLoadStatus(tr("Загрузка списка кампаний…", "Loading campaign list..."));
 
+    let loadedFastMode = true;
     let data = await requestJson("/api/wb/ads/campaigns?fast=1", { headers: authHeaders(), timeoutMs: 120000 }).catch(() => null);
     if (!data) {
+      loadedFastMode = false;
       data = await requestJson("/api/wb/ads/campaigns?fast=0", { headers: authHeaders(), timeoutMs: 120000 }).catch(() => null);
     }
     if (!data) {
@@ -5954,6 +5962,24 @@ async function loadWbAdCampaigns() {
       if (!cid || !statsMap[cid]) return row;
       return { ...row, ...statsMap[cid] };
     });
+    const missingAfterBase = () => wbCampaignRows.filter((row) => (
+      !campaignHasContext(row) || !campaignHasRealName(row) || !campaignHasStats(row)
+    )).length;
+    if (loadedFastMode && wbCampaignRows.length && missingAfterBase() >= Math.max(18, Math.ceil(wbCampaignRows.length * 0.25))) {
+      const hydratedData = await requestJson("/api/wb/ads/campaigns?fast=0", {
+        headers: authHeaders(),
+        timeoutMs: 120000,
+        maxRetries: 0,
+      }).catch(() => null);
+      if (hydratedData && Array.isArray(hydratedData.campaigns)) {
+        const hydratedStatsMap = (hydratedData && typeof hydratedData.stats === "object" && hydratedData.stats) ? hydratedData.stats : {};
+        wbCampaignRows = hydratedData.campaigns.map((row) => {
+          const cid = getCampaignRowId(row);
+          if (!cid || !hydratedStatsMap[cid]) return row;
+          return { ...row, ...hydratedStatsMap[cid] };
+        });
+      }
+    }
     const ids = wbCampaignRows.map((row) => Number(getCampaignRowId(row) || 0)).filter((id) => id > 0);
     wbAdsLoadProgress.total = ids.length;
     wbAdsLoadProgress.loaded = 0;
@@ -6061,8 +6087,8 @@ function updateWbAdsLoadStatus(message = "") {
     return;
   }
   const doneTitle = failed > 0
-    ? tr("Догрузка завершена частично", "Campaign load completed partially")
-    : tr("Догрузка кампаний завершена", "Campaign load complete");
+    ? tr("Догрузка заверрена частично", "Campaign load completed partially")
+    : tr("Догрузка кампаний заверрена", "Campaign load complete");
   holder.innerHTML = buildLoadStatusHtml({
     title: active
       ? tr("Догрузка кампаний", "Loading campaigns")
@@ -6093,7 +6119,7 @@ async function enrichWbCampaignRows(runToken) {
       .map((row) => Number(getCampaignRowId(row) || 0))
       .filter((id) => id > 0)
   )];
-  const pending = pendingRaw.slice(0, 1200);
+  const pending = pendingRaw.slice(0, 360);
   const deferredCount = Math.max(0, pendingRaw.length - pending.length);
   if (!pending.length) {
     wbAdsLoadProgress.active = false;
@@ -6109,8 +6135,8 @@ async function enrichWbCampaignRows(runToken) {
   wbAdsLoadProgress.failed = 0;
   updateWbAdsLoadStatus();
 
-  const batchSize = pending.length > 260 ? 12 : (pending.length > 120 ? 8 : 6);
-  const requestEnrichChunk = async (ids, timeoutMs = 120000) => requestJson("/api/wb/ads/campaigns/enrich", {
+  const batchSize = pending.length > 240 ? 18 : (pending.length > 96 ? 12 : 8);
+  const requestEnrichChunk = async (ids, timeoutMs = 45000) => requestJson("/api/wb/ads/campaigns/enrich", {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({ ids }),
@@ -6174,7 +6200,7 @@ async function enrichWbCampaignRows(runToken) {
       for (let j = 0; j < chunk.length; j += fallbackBatchSize) {
         if (runToken !== wbAdsLoadToken) return;
         const subChunk = chunk.slice(j, j + fallbackBatchSize);
-        const subPayload = await requestEnrichChunk(subChunk, 90000);
+        const subPayload = await requestEnrichChunk(subChunk, 30000);
         if (!subPayload) {
           hardTransportErrors += subChunk.length;
           continue;
@@ -6261,7 +6287,7 @@ function campaignStatusMeta(value) {
         "4": "готова к запуску",
         "5": "запланирована (медиа)",
         "6": "идут показы (медиа)",
-        "7": "завершена",
+        "7": "заверрена",
         "8": "отменена",
         "9": "активна",
         "10": "пауза по дневному лимиту (медиа)",
@@ -6629,10 +6655,10 @@ function renderCampaignDetail(data) {
     `${tr("Расход", "Spend")}: ${formatMoney(statTotals.spent)}`,
     `CTR: ${Number(ctr || 0).toFixed(2)}%`,
     `CPO: ${formatMoney(cpo)}`,
-    `${tr("Создана", "Created")}: ${summary.created_at || "-"}`,
+    `${tr("РЎРѕР·РґР°РЅР°", "Created")}: ${summary.created_at || "-"}`,
     `${tr("Обновлена", "Updated")}: ${summary.updated_at || "-"}`,
   ];
-  summaryEl.textContent = summaryRows.join(" • ");
+  summaryEl.textContent = summaryRows.join(" вЂў ");
 
   productsEl.innerHTML = "";
   const products = Array.isArray(data?.products) ? data.products : [];
@@ -6666,12 +6692,12 @@ function renderCampaignDetail(data) {
   if (keywordList.length) {
     ratesLines.push("");
     ratesLines.push(tr("Ключевые фразы:", "Keywords:"));
-    ratesLines.push(...keywordList.slice(0, 30).map((x) => `• ${x}`));
+    ratesLines.push(...keywordList.slice(0, 30).map((x) => `вЂў ${x}`));
   }
   if (minusList.length) {
     ratesLines.push("");
     ratesLines.push(tr("Минус-слова:", "Negative keywords:"));
-    ratesLines.push(...minusList.slice(0, 30).map((x) => `• ${x}`));
+    ratesLines.push(...minusList.slice(0, 30).map((x) => `вЂў ${x}`));
   }
   ratesEl.textContent = ratesLines.join("\n");
 
@@ -6715,7 +6741,7 @@ async function openCampaignDetailModal(campaignId) {
       const baseStatus = normalizeCampaignStatus(baseRow?.status || baseRow?.state || "-");
       const baseType = normalizeCampaignType(baseRow?.type || baseRow?.adType || baseRow?.campaignType || baseRow?.typeId || "-");
       summaryEl.textContent = tr(
-        `Кампания ${currentCampaignDetailId}: ${baseName || "-"} | ${baseStatus} | ${baseType}. Догружаем расширенные детали...`,
+        `Кампания ${currentCampaignDetailId}: ${baseName || "-"} | ${baseStatus} | ${baseType}. Догружаем расриренные детали...`,
         `Campaign ${currentCampaignDetailId}: ${baseName || "-"} | ${baseStatus} | ${baseType}. Loading extended details...`
       );
     } else {
@@ -6738,7 +6764,15 @@ async function openCampaignDetailModal(campaignId) {
       }),
       tr("Сбор деталей идет через несколько методов API WB.", "Details are fetched via several WB API methods.")
     ).catch((e) => {
-      alert(e.message);
+      const status = Number(e?.status || 0);
+      if (status >= 500) {
+        alert(tr(
+          "WB Ads временно не ответил. Попробуйте ещё раз чуть позже.",
+          "WB Ads is temporarily unavailable. Please try again a bit later."
+        ));
+      } else {
+        alert(e.message);
+      }
       return null;
     });
     if (!payload) {
@@ -6911,11 +6945,11 @@ function buildAdsAnalyticsMetaLines(meta) {
   if (Array.isArray(meta.summary_sources) && meta.summary_sources.length) sourceParts.push(`summary=${meta.summary_sources.join(",")}`);
   if (Array.isArray(meta.stats_sources) && meta.stats_sources.length) sourceParts.push(`stats=${meta.stats_sources.join(",")}`);
   if (sourceParts.length) {
-    lines.push(`${tr("Источники кэша", "Cache sources")}: ${sourceParts.join("; ")}`);
+    lines.push(`${tr("Источники кэра", "Cache sources")}: ${sourceParts.join("; ")}`);
   }
   const errors = Array.isArray(meta.errors) ? meta.errors.map((msg) => String(msg || "").trim()).filter(Boolean) : [];
   if (errors.length) {
-    lines.push(`${tr("Ошибки", "Errors")}: ${errors.join(" | ")}`);
+    lines.push(`${tr("Орибки", "Errors")}: ${errors.join(" | ")}`);
   }
   return lines;
 }
@@ -6947,7 +6981,7 @@ async function loadAdsAnalytics() {
   const totalBox = document.getElementById("adsAnalyticsTotals");
   const rawBox = document.getElementById("adsAnalyticsRaw");
   if (totalBox) totalBox.textContent = tr("Загружаем аналитику по кампаниям...", "Loading campaign analytics...");
-  if (rawBox) rawBox.textContent = tr("Запрашиваем данные...", "Requesting data...");
+  if (rawBox) rawBox.textContent = tr("Запрариваем данные...", "Requesting data...");
 
   const pageLimit = 80;
   let offset = 0;
@@ -7110,7 +7144,7 @@ function renderAdsAnalyticsRows() {
     const rowWarnings = [];
     if (row.summary_has_context === false) rowWarnings.push(currentLang === "en" ? "Name/status still partial" : "Название/статус ещё частичные");
     if (row.stat_has_context === false) rowWarnings.push(currentLang === "en" ? "Metrics not loaded for selected period" : "Метрики за период не загружены");
-    if (rowWarnings.length) rowEl.title = rowWarnings.join(" • ");
+    if (rowWarnings.length) rowEl.title = rowWarnings.join(" вЂў ");
     rowEl.innerHTML = `
       <td>${escapeHtml(row.campaign_id ?? "-")}</td>
       <td>${escapeHtml(row.name ?? "-")}</td>
@@ -7295,7 +7329,7 @@ async function loadAdsRecommendations() {
   renderAdsRecommendationsRows();
   renderAdsRecommendationsInsights();
   adsRecLoadProgress = { active: true, total: 0, loaded: 0 };
-  updateAdsRecLoadStatus(tr("Запрашиваем рекомендации...", "Requesting recommendations..."));
+  updateAdsRecLoadStatus(tr("Запрариваем рекомендации...", "Requesting recommendations..."));
 
   const pageLimit = 80;
   let offset = 0;
@@ -7414,7 +7448,7 @@ async function loadAdsRecommendations() {
     loaded: Math.max(0, scanned),
   };
   if (partialLoadWarning) {
-    updateAdsRecLoadStatus(tr("Загрузка завершена частично.", "Load completed partially."));
+    updateAdsRecLoadStatus(tr("Загрузка заверрена частично.", "Load completed partially."));
   } else {
     updateAdsRecLoadStatus();
   }
@@ -7493,7 +7527,7 @@ function refreshWbBidderCampaignHints() {
     const id = String(getCampaignRowId(row) || row?.campaign_id || row?.id || "").trim();
     if (!id || seen.has(id)) continue;
     seen.add(id);
-    const name = getCampaignLookupName(id) || (currentLang === "en" ? `Campaign ${id}` : `�������� ${id}`);
+    const name = getCampaignLookupName(id) || (currentLang === "en" ? `Campaign ${id}` : `Кампания ${id}`);
     const status = normalizeCampaignStatus(row?.status || row?.state || "-");
     const type = normalizeCampaignType(row?.type || row?.adType || row?.campaignType || row?.typeId || "-");
     const meta = [name, status, type].filter((part) => String(part || "").trim() && String(part || "").trim() !== "-");
@@ -7616,7 +7650,7 @@ function bidderRuleTargetText(row) {
   const kind = String(row?.target_kind || "").toLowerCase();
   const nm = Number(row?.nm_id || 0);
   if (kind === "normquery") {
-    return `nm:${nm} · ${String(row?.target_value || "-")}`;
+    return `nm:${nm} В· ${String(row?.target_value || "-")}`;
   }
   return `nm:${nm}`;
 }
@@ -7678,8 +7712,8 @@ function renderWbBidderRules() {
       <td>${row.is_active ? "✅" : "⏸️"}</td>
       <td>${escapeHtml(String(row.campaign_id || "-"))}${campaignName ? `<div class="cell-meta-small">${escapeHtml(campaignName)}</div>` : ""}</td>
       <td>${escapeHtml(bidderRuleTargetText(row))}</td>
-      <td>${escapeHtml(String(row.strategy || "-"))} · ${escapeHtml(String(row.placement || "-"))}</td>
-      <td>${escapeHtml(String(row.min_bid || 0))} .. ${escapeHtml(String(row.max_bid || 0))} · step ${escapeHtml(String(row.step_bid || 0))}</td>
+      <td>${escapeHtml(String(row.strategy || "-"))} В· ${escapeHtml(String(row.placement || "-"))}</td>
+      <td>${escapeHtml(String(row.min_bid || 0))} .. ${escapeHtml(String(row.max_bid || 0))} В· step ${escapeHtml(String(row.step_bid || 0))}</td>
       <td>${escapeHtml(String(row.target_pos_from || 0))} .. ${escapeHtml(String(row.target_pos_to || 0))}</td>
       <td>${escapeHtml(String(row.cooldown_sec || 0))}s</td>
       <td>${escapeHtml(String(row.last_run_at || "-"))}</td>
@@ -8468,7 +8502,7 @@ function extractProductDetailContext(details, fallbackProduct) {
     { label: tr("Категория", "Category"), value: category },
     { label: tr("Бренд", "Brand"), value: brand || "-" },
     { label: tr("Артикул", "Article"), value: article || "-" },
-    { label: tr("Внешний ID", "External ID"), value: externalId || "-" },
+    { label: tr("Внерний ID", "External ID"), value: externalId || "-" },
     { label: tr("Баркод", "Barcode"), value: barcode || "-" },
   ];
 
@@ -8587,7 +8621,7 @@ function extractProductDetailContext(details, fallbackProduct) {
     { label: tr("Ед. габаритов", "Dimension unit"), value: pickAny(pickAttr("dimension_unit"), pickRaw("dimension_unit")) || "-" },
     { label: tr("Упаковка: вес", "Package: weight"), value: pickAny(pickAttr("package_weight"), pickRaw("package_dimensions.weight")) || "-" },
     { label: tr("Упаковка: длина", "Package: depth"), value: pickAny(pickAttr("package_depth"), pickRaw("package_dimensions.depth")) || "-" },
-    { label: tr("Упаковка: ширина", "Package: width"), value: pickAny(pickAttr("package_width"), pickRaw("package_dimensions.width")) || "-" },
+    { label: tr("Упаковка: ририна", "Package: width"), value: pickAny(pickAttr("package_width"), pickRaw("package_dimensions.width")) || "-" },
     { label: tr("Упаковка: высота", "Package: height"), value: pickAny(pickAttr("package_height"), pickRaw("package_dimensions.height")) || "-" },
   ];
 
@@ -9248,7 +9282,7 @@ async function checkCurrentPositions(applyToAll) {
       body: JSON.stringify({ product_ids: [...selectedProducts], keywords, apply_to_all: applyToAll }),
       timeoutMs: 120000,
     }),
-    tr("Если проверка идет дольше 2 минут, сервис покажет ошибку таймаута.", "If check takes over 2 minutes, timeout error is shown.")
+    tr("Если проверка идет дольре 2 минут, сервис покажет орибку таймаута.", "If check takes over 2 minutes, timeout error is shown.")
   ).catch((e) => {
     alert(e.message);
     return null;
@@ -9257,16 +9291,16 @@ async function checkCurrentPositions(applyToAll) {
   invalidateModuleCache("products", "seo", "sales");
 
   const criterion = keywords.length
-    ? tr(`Критерий: позиции рассчитаны по вашим ключам (${keywords.join(", ")}).`, `Criteria: rankings calculated by your keywords (${keywords.join(", ")}).`)
+    ? tr(`Критерий: позиции рассчитаны по варим ключам (${keywords.join(", ")}).`, `Criteria: rankings calculated by your keywords (${keywords.join(", ")}).`)
     : tr("Критерий: позиции рассчитаны по автоядру ключей (название + описание + конкуренты).", "Criteria: rankings calculated by auto semantic core (title + description + competitors).");
   document.getElementById("positionCheckResult").textContent = `${criterion}\n\n${JSON.stringify(data, null, 2)}`;
   await loadProducts();
   await loadDashboard();
   const withoutPos = data.filter((x) => !x.best_position || x.best_position <= 0).length;
   if (withoutPos > 0) {
-    alert(tr(`Проверка завершена. Товаров: ${data.length}. Без достоверной позиции: ${withoutPos}.`, `Check completed. Products: ${data.length}. Without reliable rank: ${withoutPos}.`));
+    alert(tr(`Проверка заверрена. Товаров: ${data.length}. Без достоверной позиции: ${withoutPos}.`, `Check completed. Products: ${data.length}. Without reliable rank: ${withoutPos}.`));
   } else {
-    alert(tr(`Проверка завершена. Товаров: ${data.length}.`, `Check completed. Products: ${data.length}.`));
+    alert(tr(`Проверка заверрена. Товаров: ${data.length}.`, `Check completed. Products: ${data.length}.`));
   }
 }
 
@@ -9430,7 +9464,7 @@ async function applySeo() {
       body: JSON.stringify({ job_ids: [...selectedJobs] }),
       timeoutMs: 120000,
     }),
-    tr("Подождите завершения отправки обновлений.", "Wait for update publishing to finish.")
+    tr("Подождите заверрения отправки обновлений.", "Wait for update publishing to finish.")
   ).catch((e) => {
     alert(e.message);
     return null;
@@ -9494,7 +9528,7 @@ async function loadDashboard() {
     [tr("SEO задач", "SEO jobs"), d.total_jobs],
     [tr("Применено", "Applied"), d.applied_jobs],
     [tr("В работе", "In progress"), d.in_progress_jobs],
-    [tr("Топ-5", "Top-5"), d.top5_products],
+    [tr("РўРѕРї-5", "Top-5"), d.top5_products],
   ];
 
   const maxVal = Math.max(...stats.map((x) => x[1]), 1);
@@ -9952,7 +9986,7 @@ function renderSalesChart(points) {
   if (showWb) {
     series.push({
       key: "wb",
-      label: `WB • ${currentLabel}`,
+      label: `WB вЂў ${currentLabel}`,
       color: palette.wb.current,
       values: resolveMarketplaceSeries(chartPoints, currentMaps, "wb"),
     });
@@ -9960,7 +9994,7 @@ function renderSalesChart(points) {
   if (showOzon) {
     series.push({
       key: "ozon",
-      label: `Ozon • ${currentLabel}`,
+      label: `Ozon вЂў ${currentLabel}`,
       color: palette.ozon.current,
       values: resolveMarketplaceSeries(chartPoints, currentMaps, "ozon"),
     });
@@ -9974,7 +10008,7 @@ function renderSalesChart(points) {
     if (showWb) {
       series.push({
         key: "wb_prev",
-        label: `WB • ${compareLabel}`,
+        label: `WB вЂў ${compareLabel}`,
         color: palette.wb.previous,
         values: alignCompareValues("wb"),
       });
@@ -9982,7 +10016,7 @@ function renderSalesChart(points) {
     if (showOzon) {
       series.push({
         key: "ozon_prev",
-        label: `Ozon • ${compareLabel}`,
+        label: `Ozon вЂў ${compareLabel}`,
         color: palette.ozon.previous,
         values: alignCompareValues("ozon"),
       });
@@ -10089,7 +10123,7 @@ function renderSalesChart(points) {
       const total = item.values.reduce((acc, val) => acc + Number(val || 0), 0);
       return `<span class="trend-series-item" style="--series-color:${item.color}">${escapeHtml(item.label)} <b>${escapeHtml(formatValue(total))}</b></span>`;
     })
-    .join(" • ");
+    .join(" вЂў ");
   const topSeries = series[0] || { values: [] };
   const topValues = Array.isArray(topSeries.values) ? topSeries.values : [];
   const peak = topValues.length ? Math.max(...topValues) : 0;
@@ -10303,7 +10337,7 @@ function isSalesSourceWarningFatal(source, warnings = []) {
     if (source === "wb") {
       if (!warning.includes("wb")) return false;
       if (warning.includes("кампаний много")) return false;
-      if (warning.includes("показаны кэшированные данные")) return false;
+      if (warning.includes("показаны кэрированные данные")) return false;
       return (
         warning.includes("ключ") ||
         warning.includes("sales api") ||
@@ -10517,12 +10551,12 @@ async function loadSalesStats(retryAttempt = 0, forceRefresh = false) {
   if (meta) {
     const totalTxt = tr(
       `Заказы ${formatInt(totals.orders || 0)} • Штуки ${formatInt(totals.units || 0)} • Выкупы ${formatInt(totals.buyouts || 0)} • Выручка ${formatMoney(totals.revenue || 0)} • Отказы ${formatInt(totals.returns || 0)}`,
-      `Orders ${formatInt(totals.orders || 0)} • Units ${formatInt(totals.units || 0)} • Buyouts ${formatInt(totals.buyouts || 0)} • Revenue ${formatMoney(totals.revenue || 0)} • Returns ${formatInt(totals.returns || 0)}`
+      `Orders ${formatInt(totals.orders || 0)} вЂў Units ${formatInt(totals.units || 0)} вЂў Buyouts ${formatInt(totals.buyouts || 0)} вЂў Revenue ${formatMoney(totals.revenue || 0)} вЂў Returns ${formatInt(totals.returns || 0)}`
     );
     const byMarketText = market === "all"
       ? tr(
-        `WB: ${formatInt(totals.wb_orders || 0)} / ${formatMoney(totals.wb_revenue || 0)} • Ozon: ${formatInt(totals.ozon_orders || 0)} / ${formatMoney(totals.ozon_revenue || 0)}`,
-        `WB: ${formatInt(totals.wb_orders || 0)} / ${formatMoney(totals.wb_revenue || 0)} • Ozon: ${formatInt(totals.ozon_orders || 0)} / ${formatMoney(totals.ozon_revenue || 0)}`
+        `WB: ${formatInt(totals.wb_orders || 0)} / ${formatMoney(totals.wb_revenue || 0)} вЂў Ozon: ${formatInt(totals.ozon_orders || 0)} / ${formatMoney(totals.ozon_revenue || 0)}`,
+        `WB: ${formatInt(totals.wb_orders || 0)} / ${formatMoney(totals.wb_revenue || 0)} вЂў Ozon: ${formatInt(totals.ozon_orders || 0)} / ${formatMoney(totals.ozon_revenue || 0)}`
       )
       : "";
     let compareText = "";
@@ -10539,7 +10573,7 @@ async function loadSalesStats(retryAttempt = 0, forceRefresh = false) {
     const warnText = warnings.length
       ? tr(`Предупреждений: ${warnings.length}.`, `Warnings: ${warnings.length}.`)
       : "";
-    meta.textContent = [totalTxt, byMarketText, compareText, warnText].filter(Boolean).join(" • ");
+    meta.textContent = [totalTxt, byMarketText, compareText, warnText].filter(Boolean).join(" вЂў ");
   }
   const progress = resolveSalesLoadProgress(market, salesRows, warnings);
   salesLoadProgress = { active: false, total: progress.total, loaded: progress.loaded };
@@ -10757,13 +10791,13 @@ function renderProfileData(data) {
   const companySummary = document.getElementById("profileCompanySummary");
   if (companySummary) {
     const parts = [String(data.company_name || "").trim(), String(data.full_name || "").trim()].filter(Boolean);
-    companySummary.textContent = parts.join(" • ") || "-";
+    companySummary.textContent = parts.join(" вЂў ") || "-";
   }
   const planSummaryShort = document.getElementById("profilePlanSummaryShort");
   if (planSummaryShort) {
     const code = String(data.plan_code || "-").trim() || "-";
     const status = String(data.plan_status || "-").trim() || "-";
-    planSummaryShort.textContent = `${code} • ${status}`;
+    planSummaryShort.textContent = `${code} вЂў ${status}`;
   }
   const keysSummaryShort = document.getElementById("profileKeysSummaryShort");
   if (keysSummaryShort) {
@@ -10774,7 +10808,7 @@ function renderProfileData(data) {
   if (aiSummaryShort) {
     const effective = profileAiState?.effective || null;
     aiSummaryShort.textContent = effective
-      ? `${effective.provider || "-"} • ${effective.model || "-"}`
+      ? `${effective.provider || "-"} вЂў ${effective.model || "-"}`
       : tr("Не выбран", "Not selected");
   }
   const teamSummaryShort = document.getElementById("profileTeamSummaryShort");
@@ -10829,7 +10863,7 @@ function renderProfileAiState(data) {
   effectiveBox.textContent = `${tr("Эффективный AI", "Effective AI")}: ${effective.mode || "-"} | ${effective.provider || "-"} | ${effective.model || "-"} | ${effective.service_name || "-"}`;
   const aiSummaryShort = document.getElementById("profileAiSummaryShort");
   if (aiSummaryShort) {
-    aiSummaryShort.textContent = `${effective.provider || "-"} • ${effective.model || "-"}`;
+    aiSummaryShort.textContent = `${effective.provider || "-"} вЂў ${effective.model || "-"}`;
   }
 
   const merged = [...globalRows, ...userRows];
@@ -10928,7 +10962,7 @@ function applyTeamModalHeader(mode, row = null) {
       : (isSelfEmployee
         ? tr("Можно менять только свои ФИО, телефон, ник и фото.", "You can edit only your own name, phone, nickname and avatar.")
         : tr("Можно менять доступы и данные", "You can edit access and profile fields"));
-    metaEl.textContent = `#${Number(row.id || 0)} • ${metaText}`;
+    metaEl.textContent = `#${Number(row.id || 0)} вЂў ${metaText}`;
   }
   if (deleteBtn) deleteBtn.classList.toggle("hidden", Boolean(row.is_owner || isSelfEmployee));
 }
@@ -10992,7 +11026,7 @@ function renderTeamMembers() {
           <strong>${escapeHtml(String(row.full_name || row.nickname || row.email || "-"))}</strong>
           <div class="hint">${escapeHtml(String(row.email || "-"))}</div>
         </div>
-        <div class="team-member-role">${escapeHtml(roleMeta ? `${roleLabel} • ${roleMeta}` : roleLabel)}</div>
+        <div class="team-member-role">${escapeHtml(roleMeta ? `${roleLabel} вЂў ${roleMeta}` : roleLabel)}</div>
         <div class="team-member-access">
           <strong>${escapeHtml(access.title)}</strong>
           <div class="hint">${escapeHtml(access.details)}</div>
@@ -11537,7 +11571,7 @@ async function loadHelpDocs() {
       view.innerHTML = `<div class="help-empty">${
         lang === "en"
           ? "Help docs are disabled for your account."
-          : "Документация отключена для вашего доступа."
+          : "Документация отключена для варего доступа."
       }</div>`;
     }
     const downloadsCurrent = document.getElementById("helpDownloadsCurrent");
@@ -11546,7 +11580,7 @@ async function loadHelpDocs() {
       downloadsCurrent.innerHTML = `<div class="help-empty">${
         lang === "en"
           ? "Downloads are unavailable for your access."
-          : "Раздел загрузок недоступен для вашего доступа."
+          : "Раздел загрузок недоступен для варего доступа."
       }</div>`;
     }
     if (downloadsList) downloadsList.innerHTML = "";
@@ -11695,7 +11729,7 @@ async function loadHelpReleases() {
       <header class="help-card-head">
         <div>
           <h4>${lang === "en" ? "Current version" : "Текущая версия"} ${currentVersion}</h4>
-          <small>${releaseDate}${currentCode > 0 ? ` • code ${currentCode}` : ""}</small>
+          <small>${releaseDate}${currentCode > 0 ? ` вЂў code ${currentCode}` : ""}</small>
         </div>
         <div class="help-card-actions">
           <a class="btn-secondary help-open-btn" href="${escapeHtml(downloadUrl)}" target="_blank" rel="noopener noreferrer">
@@ -11710,7 +11744,7 @@ async function loadHelpReleases() {
           <p>${downloadName}</p>
           ${notesText ? `<p>${notesText}</p>` : ""}
         </section>
-        ${diffItems ? `<section class="help-block"><h5>${lang === "en" ? "Difference from previous version" : "Отличия от прошлой версии"}</h5><ul>${diffItems}</ul></section>` : ""}
+        ${diffItems ? `<section class="help-block"><h5>${lang === "en" ? "Difference from previous version" : "Отличия от прорлой версии"}</h5><ul>${diffItems}</ul></section>` : ""}
       </div>
     </article>
   `;
@@ -11728,7 +11762,7 @@ async function loadHelpReleases() {
         <header class="help-card-head">
           <div>
             <h4>${version}</h4>
-            <small>${date}${versionCode > 0 ? ` • code ${versionCode}` : ""}</small>
+            <small>${date}${versionCode > 0 ? ` вЂў code ${versionCode}` : ""}</small>
           </div>
         </header>
         <div class="help-card-body">
@@ -11786,7 +11820,7 @@ function formatHelpContent(text, lang = "ru") {
     if (first.startsWith("пример:") || first.startsWith("example:")) {
       return `<section class="help-callout example"><strong>${isRu ? "Пример" : "Example"}:</strong> ${escapeHtml(firstRaw.replace(/^пример:\s*/i, "").replace(/^example:\s*/i, ""))}</section>`;
     }
-    if (first.startsWith("важно:") || first.startsWith("important:")) {
+    if (first.startsWith("РІР°Р¶РЅРѕ:") || first.startsWith("important:")) {
       return `<section class="help-callout warn"><strong>${escapeHtml(firstRaw)}</strong></section>`;
     }
     return `<section class="help-block"><p>${lines.map((line) => escapeHtml(line)).join("<br>")}</p></section>`;
@@ -11836,7 +11870,7 @@ function renderHelpAssistantModuleOptions() {
   if (!enabledModules.has("ai_assistant")) {
     hint.textContent = currentLang === "en"
       ? "AI assistant is disabled for your access."
-      : "AI помощник отключен для вашего доступа.";
+      : "AI помощник отключен для варего доступа.";
     return;
   }
   const effective = profileAiState?.effective || {};
@@ -11861,7 +11895,7 @@ function renderHelpAssistantHistory() {
       if (item?.module_code) metaBits.push(`#${String(item.module_code)}`);
       if (item?.provider) metaBits.push(String(item.provider));
       if (item?.service_name) metaBits.push(String(item.service_name));
-      const meta = metaBits.join(" • ");
+      const meta = metaBits.join(" вЂў ");
       return `
         <article class="help-card selected">
           <header class="help-card-head">
@@ -12218,3 +12252,6 @@ window.closeMobileNav = closeMobileNav;
 window.handleMobileBackPress = handleMobileBackPress;
 window.onMobileQuickNavChanged = onMobileQuickNavChanged;
 window.syncMobileQuickNavSelection = syncMobileQuickNavSelection;
+
+
+

@@ -220,7 +220,7 @@ body {
 }
 
 body[data-theme="newyear"] .app-bg::before {
-  content: "рџЋ„ рџЋЃ рџ¦Њ вњЁ рџЋ„ рџЋ… вќ„ рџЋЃ вњЁ рџ¦Њ";
+  content: "🎄 🎁 🦌 ✨ 🎄 🎅 ❄ 🎁 ✨ 🦌";
   position: absolute;
   inset: 8% -20% auto;
   font-size: clamp(18px, 2.1vw, 34px);
@@ -241,7 +241,7 @@ body[data-theme="newyear"] .app-bg::after {
 }
 
 body[data-theme="japan"] .app-bg::before {
-  content: "в›© вњї в›© вњї в›© вњї";
+  content: "⛩ ✿ ⛩ ✿ ⛩ ✿";
   position: absolute;
   inset: 9% -20% auto;
   letter-spacing: 2.1vw;
@@ -252,7 +252,7 @@ body[data-theme="japan"] .app-bg::before {
 }
 
 body[data-theme="greenland"] .app-bg::before {
-  content: "вќ„ в—† вќ„ в—† вќ„ в—† вќ„";
+  content: "❄ ◆ ❄ ◆ ❄ ◆ ❄";
   position: absolute;
   inset: 8% -16% auto;
   letter-spacing: 2vw;
@@ -9345,6 +9345,10 @@ body.mobile-client-mode #social > .panel:first-child {
 }
 
 body.mobile-apk-mode #appSection .topbar {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
   background: linear-gradient(125deg, rgba(17, 192, 190, 0.22), rgba(27, 152, 206, 0.2));
   border-color: rgba(49, 201, 198, 0.4);
   padding: 10px 12px;
@@ -9355,6 +9359,7 @@ body.mobile-apk-mode #appSection .topbar-title {
   display: flex !important;
   min-width: 0;
   flex: 1 1 auto;
+  overflow: hidden;
 }
 
 body.mobile-apk-mode #appSection .topbar-title p {
@@ -9362,16 +9367,28 @@ body.mobile-apk-mode #appSection .topbar-title p {
 }
 
 body.mobile-apk-mode #appSection .topbar h1 {
-  font-size: 18px;
+  margin: 0;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 17px;
   line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 body.mobile-apk-mode #appSection .topbar-controls {
   width: auto !important;
   justify-content: flex-end;
   align-items: center;
+  gap: 8px;
   margin-left: auto !important;
   flex: 0 0 auto;
+}
+
+body.mobile-apk-mode #appSection .topbar-controls #mobileNavToggle {
+  min-width: 44px;
+  min-height: 44px;
 }
 
 body.mobile-apk-mode.social-thread-open #appSection .topbar-title,
