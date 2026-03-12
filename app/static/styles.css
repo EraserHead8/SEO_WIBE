@@ -285,6 +285,13 @@ body[data-theme="moon"] .app-bg::after {
   animation: snow-shift 22s linear infinite;
 }
 
+body[data-active-tab="social"][data-active-social-subtab="calendar"] .app-bg::before,
+body[data-active-tab="social"][data-active-social-subtab="calendar"] .app-bg::after {
+  content: none !important;
+  display: none !important;
+  animation: none !important;
+}
+
 .hidden { display: none !important; }
 
 body[data-theme="light"] .kpi,

@@ -863,6 +863,9 @@ function switchSocialSubtab(tab, loadNow = true) {
     : "chat";
   socialState.currentSubtab = safe;
   currentSocialSubtab = safe;
+  if (document && document.body) {
+    document.body.setAttribute("data-active-social-subtab", safe);
+  }
   if (typeof window.refreshSectionHeading === "function") {
     try { window.refreshSectionHeading("social"); } catch (_) {}
   }
@@ -4472,12 +4475,36 @@ function socialCalcVolume() {
   out.textContent = `${tr("Объем", "Volume")}: ${cm3.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} см³ - ${liters.toLocaleString("ru-RU", { maximumFractionDigits: 3 })} л - ${m3.toLocaleString("ru-RU", { maximumFractionDigits: 6 })} м³`;
 }
 
+function socialNormalizeNoteText(value) {
+  const raw = String(value || "");
+  if (!raw) return "";
+  if (typeof window.decodePossiblyMojibake === "function") {
+    try {
+      return String(window.decodePossiblyMojibake(raw) || "");
+    } catch (_) {
+      return raw;
+    }
+  }
+  return raw;
+}
+
+function socialNormalizeNoteRow(row) {
+  if (!row || typeof row !== "object") return row;
+  return {
+    ...row,
+    title: socialNormalizeNoteText(row.title || ""),
+    content: socialNormalizeNoteText(row.content || ""),
+  };
+}
+
 async function socialLoadNotes() {
   const rows = await socialRequest("/api/social/notes").catch((e) => {
     alert(e.message);
     return [];
   });
-  socialState.notes = Array.isArray(rows) ? rows : [];
+  socialState.notes = Array.isArray(rows)
+    ? rows.map((row) => socialNormalizeNoteRow(row)).filter(Boolean)
+    : [];
   if (!socialState.currentNoteId && socialState.notes.length) {
     socialState.currentNoteId = Number(socialState.notes[0].id || 0);
   }
@@ -4504,8 +4531,8 @@ function socialRenderCurrentNote() {
   const title = document.getElementById("socialNoteTitle");
   const content = document.getElementById("socialNoteContent");
   if (!title || !content) return;
-  title.value = note?.title || "";
-  content.value = note?.content || "";
+  title.value = socialNormalizeNoteText(note?.title || "");
+  content.value = socialNormalizeNoteText(note?.content || "");
   const autosave = document.getElementById("socialNoteAutosave");
   if (autosave) autosave.textContent = note ? tr("Автосохранение включено", "Autosave enabled") : tr("Выберите заметку", "Select note");
   socialRenderNoteFiles(note);

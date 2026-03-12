@@ -112,6 +112,8 @@ let currentCampaignDetailId = 0;
 let wbAdsLoadProgress = { active: false, total: 0, loaded: 0, failed: 0 };
 let wbAdsLoadToken = 0;
 let wbAdsLoadInflight = null;
+let wbAdsEnrichSignature = "";
+let wbAdsEnrichSignatureAt = 0;
 let adsAnalyticsRows = [];
 let adsAnalyticsMeta = {};
 let adsRecommendationRows = [];
@@ -478,8 +480,102 @@ function t(key, fallback = "") {
   return pack[key] || fallback || key;
 }
 
+function _mojibakeScore(text) {
+  const value = String(text || "");
+  if (!value) return 0;
+  const markerMatches = value.match(/(?:\u0420[\u0400-\u04FF]|\u0421[\u0400-\u04FF]|\u00d0.|\u00d1.)/g);
+  const markerScore = markerMatches ? markerMatches.length : 0;
+  const replacementScore = (value.match(/\uFFFD/g) || []).length * 3;
+  return markerScore + replacementScore;
+}
+
+function _cyrillicScore(text) {
+  const value = String(text || "");
+  if (!value) return 0;
+  const matches = value.match(/[\u0400-\u04FF]/g);
+  return matches ? matches.length : 0;
+}
+
+let _cp1251ReverseMap = null;
+const _mojibakeDecodeCache = new Map();
+
+function _cp1251DecodeUtf8(text) {
+  if (typeof TextDecoder === "undefined") return "";
+  if (!_cp1251ReverseMap) {
+    const decoder = new TextDecoder("windows-1251");
+    const map = new Map();
+    for (let i = 0; i < 256; i += 1) {
+      const ch = decoder.decode(new Uint8Array([i]));
+      if (!map.has(ch)) map.set(ch, i);
+    }
+    _cp1251ReverseMap = map;
+  }
+  const bytes = [];
+  for (const ch of String(text || "")) {
+    const byte = _cp1251ReverseMap.get(ch);
+    if (byte === undefined) return "";
+    bytes.push(byte);
+  }
+  try {
+    return new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(bytes));
+  } catch (_) {
+    return "";
+  }
+}
+
+function _latin1DecodeUtf8(text) {
+  const value = String(text || "");
+  if (!value) return "";
+  try {
+    return decodeURIComponent(escape(value));
+  } catch (_) {
+    return "";
+  }
+}
+
+function decodePossiblyMojibake(input) {
+  const raw = String(input ?? "");
+  if (!raw) return "";
+  const cached = _mojibakeDecodeCache.get(raw);
+  if (typeof cached === "string") return cached;
+
+  const baseScore = _mojibakeScore(raw);
+  if (!baseScore) {
+    _mojibakeDecodeCache.set(raw, raw);
+    if (_mojibakeDecodeCache.size > 4096) _mojibakeDecodeCache.clear();
+    return raw;
+  }
+
+  const candidates = [raw, _cp1251DecodeUtf8(raw), _latin1DecodeUtf8(raw)].filter(Boolean);
+  let best = raw;
+  let bestScore = baseScore;
+  let bestCyr = _cyrillicScore(raw);
+  for (const cand of candidates) {
+    const score = _mojibakeScore(cand);
+    const cyr = _cyrillicScore(cand);
+    const shouldUse = (
+      score < bestScore
+      || (score === bestScore && cyr > bestCyr + 1)
+      || (score <= bestScore - 2)
+    ) && !(score > bestScore && cyr <= bestCyr);
+    if (shouldUse) {
+      best = cand;
+      bestScore = score;
+      bestCyr = cyr;
+    }
+  }
+
+  _mojibakeDecodeCache.set(raw, best);
+  if (_mojibakeDecodeCache.size > 4096) _mojibakeDecodeCache.clear();
+  return best;
+}
+
+if (typeof window !== "undefined") {
+  window.decodePossiblyMojibake = decodePossiblyMojibake;
+}
+
 function tr(ru, en) {
-  return currentLang === "en" ? en : ru;
+  return decodePossiblyMojibake(currentLang === "en" ? en : ru);
 }
 
 function shouldTrackUiActivity(key, cooldownMs = 30000) {
@@ -2349,6 +2445,12 @@ function showTab(name, btn = null) {
   if (mapped.adsSubtab) currentAdsSubtab = mapped.adsSubtab;
   const targetTab = mapped.tab;
   currentTab = targetTab;
+  if (document && document.body) {
+    document.body.setAttribute("data-active-tab", String(targetTab || ""));
+    if (targetTab !== "social") {
+      document.body.setAttribute("data-active-social-subtab", "none");
+    }
+  }
   try {
     sessionStorage.setItem("seo_wibe_last_tab", String(targetTab || ""));
     sessionStorage.setItem("seo_wibe_last_products_subtab", String(currentProductsSubtab || ""));
@@ -5963,6 +6065,8 @@ async function loadWbAdCampaigns() {
       if (retry && Array.isArray(retry.campaigns)) data = retry;
     }
     wbCampaignRows = Array.isArray(data.campaigns) ? data.campaigns : [];
+    wbAdsEnrichSignature = "";
+    wbAdsEnrichSignatureAt = 0;
     const statsMap = (data && typeof data.stats === "object" && data.stats) ? data.stats : {};
     wbCampaignRows = wbCampaignRows.map((row) => {
       const cid = getCampaignRowId(row);
@@ -5993,8 +6097,8 @@ async function loadWbAdCampaigns() {
         renderWbCampaignRows();
       })
       .catch(() => null);
-    await enrichWbCampaignRows(runToken);
     markModuleLoaded("ads");
+    void enrichWbCampaignRows(runToken).catch(() => null);
   })();
 
   wbAdsLoadInflight = runTask.finally(() => {
@@ -6119,12 +6223,28 @@ async function enrichWbCampaignRows(runToken) {
     renderWbCampaignRows();
     return;
   }
+  const enrichSignature = pending.join(",");
+  const nowMs = Date.now();
+  if (
+    wbAdsEnrichSignature
+    && wbAdsEnrichSignature === enrichSignature
+    && (nowMs - Number(wbAdsEnrichSignatureAt || 0)) < 45000
+    && Number(wbAdsLoadProgress.loaded || 0) >= pending.length
+    && !wbAdsLoadProgress.active
+  ) {
+    updateWbAdsLoadStatus();
+    renderWbCampaignRows();
+    return;
+  }
+  wbAdsEnrichSignature = enrichSignature;
+  wbAdsEnrichSignatureAt = nowMs;
+
   wbAdsLoadProgress.total = pending.length;
   wbAdsLoadProgress.loaded = 0;
   wbAdsLoadProgress.failed = 0;
   updateWbAdsLoadStatus();
 
-  const batchSize = pending.length > 260 ? 12 : (pending.length > 120 ? 8 : 6);
+  const batchSize = pending.length > 320 ? 20 : (pending.length > 140 ? 12 : 8);
   const requestEnrichChunk = async (ids, timeoutMs = 120000) => requestJson("/api/wb/ads/campaigns/enrich", {
     method: "POST",
     headers: authHeaders(),

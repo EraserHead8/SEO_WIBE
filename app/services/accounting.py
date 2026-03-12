@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
+from concurrent.futures import ThreadPoolExecutor
 import json
 import math
+import re
 import time
 from typing import Any
 
@@ -17,6 +19,24 @@ WB_REPORT_DETAIL_LIMIT = 50_000
 WB_REPORT_DETAIL_MAX_PAGES = 3
 OZON_FINANCE_PAGE_SIZE = 500
 OZON_FINANCE_MAX_PAGES = 8
+
+
+def _adaptive_wb_detail_max_pages(date_from: date, date_to: date) -> int:
+    days = max(1, (date_to - date_from).days + 1)
+    if days <= 7:
+        return 1
+    if days <= 31:
+        return 2
+    return WB_REPORT_DETAIL_MAX_PAGES
+
+
+def _adaptive_ozon_finance_max_pages(date_from: date, date_to: date) -> int:
+    days = max(1, (date_to - date_from).days + 1)
+    if days <= 7:
+        return 3
+    if days <= 31:
+        return 5
+    return OZON_FINANCE_MAX_PAGES
 
 
 def build_accounting_payload(
@@ -52,22 +72,38 @@ def build_accounting_payload(
     sales_chart = list(report.get("chart") or [])
 
     product_rows: list[dict[str, Any]] = []
-    if selected_market in {"all", "wb"} and wb_api_key.strip():
-        wb_rows, wb_warn = _fetch_wb_product_finance_rows(
-            api_key=wb_api_key.strip(),
-            date_from=date_from,
-            date_to=date_to,
-        )
-        product_rows.extend(wb_rows)
-        warnings.extend(wb_warn)
-    if selected_market in {"all", "ozon"} and ozon_api_key.strip():
-        oz_rows, oz_warn = _fetch_ozon_product_finance_rows(
-            api_key=ozon_api_key.strip(),
-            date_from=date_from,
-            date_to=date_to,
-        )
-        product_rows.extend(oz_rows)
-        warnings.extend(oz_warn)
+    fetch_jobs: list[tuple[str, Any]] = []
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        if selected_market in {"all", "wb"} and wb_api_key.strip():
+            fetch_jobs.append((
+                "wb",
+                pool.submit(
+                    _fetch_wb_product_finance_rows,
+                    api_key=wb_api_key.strip(),
+                    date_from=date_from,
+                    date_to=date_to,
+                ),
+            ))
+        if selected_market in {"all", "ozon"} and ozon_api_key.strip():
+            fetch_jobs.append((
+                "ozon",
+                pool.submit(
+                    _fetch_ozon_product_finance_rows,
+                    api_key=ozon_api_key.strip(),
+                    date_from=date_from,
+                    date_to=date_to,
+                ),
+            ))
+
+        for source, future in fetch_jobs:
+            try:
+                fetched_rows, fetched_warnings = future.result()
+            except Exception:
+                fetched_rows, fetched_warnings = [], [
+                    "WB accounting API unavailable." if source == "wb" else "Ozon accounting API unavailable."
+                ]
+            product_rows.extend(list(fetched_rows or []))
+            warnings.extend(list(fetched_warnings or []))
 
     merged_rows = _merge_product_rows(product_rows, products)
     adjustments = _calc_adjustments(
@@ -118,7 +154,8 @@ def _fetch_wb_product_finance_rows(
     report_to = (date_to + timedelta(days=1)).isoformat()
     warnings: list[str] = []
 
-    for _ in range(WB_REPORT_DETAIL_MAX_PAGES):
+    max_pages = _adaptive_wb_detail_max_pages(date_from, date_to)
+    for _ in range(max_pages):
         params = {
             "dateFrom": report_from,
             "dateTo": report_to,
@@ -291,7 +328,8 @@ def _fetch_ozon_product_finance_rows(
     while chunk_from <= date_to:
         chunk_to = min(date_to, chunk_from + timedelta(days=30))
         page = 1
-        while page <= OZON_FINANCE_MAX_PAGES:
+        max_pages = _adaptive_ozon_finance_max_pages(chunk_from, chunk_to)
+        while page <= max_pages:
             payload = {
                 "filter": {
                     "date": {
@@ -951,10 +989,52 @@ def _filter_and_sort_rows(rows: list[dict[str, Any]], *, search: str, sort_by: s
     return out
 
 
+_MOJIBAKE_WARNING_RE = re.compile(r"(?:\u0420[\u0400-\u04FF]|\u0421[\u0400-\u04FF]|\u00d0.|\u00d1.)")
+
+
+def _mojibake_score(text: str) -> int:
+    value = str(text or "")
+    return len(_MOJIBAKE_WARNING_RE.findall(value)) + value.count("?") * 3
+
+
+def _cyrillic_score(text: str) -> int:
+    value = str(text or "")
+    return sum(1 for ch in value if "\u0400" <= ch <= "\u04FF")
+
+
+def _decode_mojibake_text(value: Any) -> str:
+    raw = str(value or "")
+    if not raw:
+        return ""
+    if _mojibake_score(raw) <= 0:
+        return raw
+
+    candidates = [raw]
+    for src_encoding in ("cp1251", "latin1", "cp1252"):
+        try:
+            candidate = raw.encode(src_encoding, errors="strict").decode("utf-8", errors="strict")
+        except Exception:
+            continue
+        if candidate:
+            candidates.append(candidate)
+
+    best = raw
+    best_score = _mojibake_score(raw)
+    best_cyr = _cyrillic_score(raw)
+    for candidate in candidates:
+        score = _mojibake_score(candidate)
+        cyr = _cyrillic_score(candidate)
+        if score < best_score or (score == best_score and cyr > best_cyr + 1):
+            best = candidate
+            best_score = score
+            best_cyr = cyr
+    return best
+
+
 def _normalize_accounting_warnings(warnings: list[Any]) -> list[str]:
     out: list[str] = []
     for raw in warnings or []:
-        text = str(raw or "").strip()
+        text = _decode_mojibake_text(raw).strip()
         if not text:
             continue
         low = text.lower()

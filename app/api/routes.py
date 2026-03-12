@@ -3963,7 +3963,7 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
                 module_code="wb_ads",
                 marketplace="wb",
                 cache_key=summaries_cache_key,
-                ttl_sec=max(90, _market_cache_ttl("wb_ads")),
+                ttl_sec=max(120, _market_cache_ttl("wb_ads")),
                 fetcher=lambda: fetch_wb_campaign_summaries(
                     wb_key,
                     summary_fetch_ids,
@@ -3971,7 +3971,7 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
                     detail_lookup_limit=0,
                 ),
                 stale_if_error_sec=45 * 60,
-                prefer_stale_sec=25 * 60,
+                prefer_stale_sec=60 * 60,
             )
             if isinstance(fresh_summaries, dict):
                 for key, value in fresh_summaries.items():
@@ -3998,10 +3998,10 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
                 module_code="wb_ads_analytics",
                 marketplace="wb",
                 cache_key=stats_cache_key,
-                ttl_sec=max(90, _market_cache_ttl("wb_ads_analytics")),
+                ttl_sec=max(120, _market_cache_ttl("wb_ads_analytics")),
                 fetcher=lambda: fetch_wb_campaign_stats_bulk(wb_key, stats_fetch_ids, date_from=None, date_to=None),
                 stale_if_error_sec=45 * 60,
-                prefer_stale_sec=25 * 60,
+                prefer_stale_sec=60 * 60,
             )
             if isinstance(fresh_stats, dict):
                 for key, value in fresh_stats.items():
@@ -4274,7 +4274,7 @@ def wb_ads_balance(user: User = Depends(get_current_user), db: Session = Depends
         module_code="wb_ads",
         marketplace="wb",
         cache_key=cache_key,
-        ttl_sec=max(90, _market_cache_ttl("wb_ads")),
+        ttl_sec=max(120, _market_cache_ttl("wb_ads")),
         fetcher=lambda: fetch_wb_ads_balance(wb_key),
         stale_if_error_sec=30 * 60,
     )
@@ -4625,7 +4625,7 @@ def wb_ads_analytics(
             module_code="wb_ads",
             marketplace="wb",
             cache_key=summary_key,
-            ttl_sec=max(90, _market_cache_ttl("wb_ads")),
+            ttl_sec=max(120, _market_cache_ttl("wb_ads")),
             fetcher=lambda: fetch_wb_campaign_summaries(
                 wb_key,
                 ids,
@@ -7411,6 +7411,7 @@ def accounting_data(
     tz: str = "UTC",
     q: str = "",
     sort_by: str = "net_profit_desc",
+    fast: bool = True,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -7511,6 +7512,66 @@ def accounting_data(
                 previous_same_key_payload = parsed_prev
         except Exception:
             previous_same_key_payload = None
+    if bool(fast):
+        quick_data: dict[str, Any] | None = None
+        quick_meta: dict[str, Any] = {}
+        if _accounting_payload_has_data(previous_same_key_payload):
+            quick_data = dict(previous_same_key_payload or {})
+            quick_meta = {"source": "db-same-key-fastpath", "age_sec": -1, "cache_key": cache_key}
+        else:
+            probe_data, probe_meta = _market_cache_latest_payload(
+                db,
+                user_id=int(user.id),
+                module_code="accounting",
+                marketplace=selected_market,
+                max_age_sec=14 * 24 * 60 * 60,
+                exclude_cache_keys={cache_key},
+                scan_limit=220,
+            )
+            if _accounting_payload_has_data(probe_data):
+                quick_data = dict(probe_data or {})
+                quick_meta = probe_meta or {"source": "db-latest-module-fastpath", "age_sec": -1}
+        if _accounting_payload_has_data(quick_data):
+            quick_warnings = [
+                _decode_mojibake_text(str(x or "")).strip()
+                for x in list((quick_data or {}).get("warnings") or [])
+                if str(x or "").strip()
+            ]
+            quick_warnings.append("Cached data is shown. Full refresh is running in background.")
+            quick_data["warnings"] = list(dict.fromkeys([x for x in quick_warnings if x]))
+            rows = list((quick_data or {}).get("analysis_rows") or [])
+            if len(rows) > 2000:
+                rows = rows[:2000]
+                quick_data.setdefault("warnings", []).append("Showing first 2000 analysis rows to keep UI responsive.")
+
+            _audit(
+                db,
+                user,
+                action="accounting_read",
+                details=(
+                    f"market={selected_market};from={left.isoformat()};to={right.isoformat()};"
+                    f"rows={len(rows)};granularity={gran};tz={tz_name};sort={sort_by};q_len={len(str(q or ''))};"
+                    f"source={quick_meta.get('source')}"
+                ),
+                module_code="accounting",
+                entity_type="accounting_report",
+                status="partial",
+            )
+            db.commit()
+            return AccountingDataOut(
+                marketplace=selected_market,
+                date_from=left.isoformat(),
+                date_to=right.isoformat(),
+                overview=(quick_data or {}).get("overview") or {},
+                chart=(quick_data or {}).get("chart") or [],
+                analysis_rows=rows,
+                warnings=[
+                    _decode_mojibake_text(str(x or "")).strip()
+                    for x in ((quick_data or {}).get("warnings") or [])
+                    if _decode_mojibake_text(str(x or "")).strip()
+                ],
+            )
+
     data, accounting_cache_meta = get_or_refresh_market_cache(
         db,
         user_id=int(user.id),
@@ -7604,7 +7665,7 @@ def accounting_data(
         overview=data.get("overview") or {},
         chart=data.get("chart") or [],
         analysis_rows=rows,
-        warnings=[str(x) for x in (data.get("warnings") or []) if str(x).strip()],
+        warnings=[_decode_mojibake_text(str(x)).strip() for x in (data.get("warnings") or []) if _decode_mojibake_text(str(x)).strip()],
     )
 
 
@@ -12556,16 +12617,16 @@ def _social_google_oauth_finish_response(public_base: str, *, return_target: str
     title = "SEO WIBE"
     message = "Возвращаем вас в приложение..." if connected else "Возвращаем вас в SEO WIBE..."
     html = f"""<!doctype html>
-<html lang=\"ru\">
+<html lang="ru">
 <head>
-  <meta charset=\"utf-8\">
-  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{title}</title>
 </head>
-<body style=\"font-family:system-ui,-apple-system,Segoe UI,sans-serif;padding:32px;color:#10233d;background:#f5f8fc;\">
-  <h1 style=\"margin:0 0 12px;font-size:22px;\">{title}</h1>
-  <p style=\"margin:0 0 18px;font-size:15px;\">{message}</p>
-  <p style=\"margin:0;font-size:14px;\"><a href={json.dumps(deep_link)} style=\"color:#0f7ad7;\">Открыть приложение</a></p>
+<body style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;padding:32px;color:#10233d;background:#f5f8fc;">
+  <h1 style="margin:0 0 12px;font-size:22px;">{title}</h1>
+  <p style="margin:0 0 18px;font-size:15px;">{message}</p>
+  <p style="margin:0;font-size:14px;"><a href={json.dumps(deep_link)} style="color:#0f7ad7;">Открыть приложение</a></p>
   <script>
     (function () {{
       var deepLink = {json.dumps(deep_link)};
@@ -13195,6 +13256,48 @@ def _social_note_guess_ext(filename: str, content_type: str) -> str:
     return ".bin"
 
 
+_MOJIBAKE_TEXT_RE = re.compile(r"(?:\u0420[\u0400-\u04FF]|\u0421[\u0400-\u04FF]|\u00d0.|\u00d1.)")
+
+
+def _mojibake_score(text: str) -> int:
+    value = str(text or "")
+    return len(_MOJIBAKE_TEXT_RE.findall(value)) + value.count("\ufffd") * 3
+
+
+def _cyrillic_score(text: str) -> int:
+    value = str(text or "")
+    return sum(1 for ch in value if ("\u0410" <= ch <= "\u044f") or ch in {"\u0401", "\u0451"})
+
+
+def _decode_mojibake_text(value: Any) -> str:
+    raw = str(value or "")
+    if not raw:
+        return ""
+    if _mojibake_score(raw) <= 0:
+        return raw
+
+    candidates = [raw]
+    for src_encoding in ("cp1251", "latin1", "cp1252"):
+        try:
+            candidate = raw.encode(src_encoding, errors="strict").decode("utf-8", errors="strict")
+        except Exception:
+            continue
+        if candidate:
+            candidates.append(candidate)
+
+    best = raw
+    best_score = _mojibake_score(raw)
+    best_cyr = _cyrillic_score(raw)
+    for candidate in candidates:
+        score = _mojibake_score(candidate)
+        cyr = _cyrillic_score(candidate)
+        if score < best_score or (score == best_score and cyr > best_cyr + 1):
+            best = candidate
+            best_score = score
+            best_cyr = cyr
+    return best
+
+
 def _social_note_delete_disk_file(url: str) -> None:
     safe = str(url or "").strip()
     prefix = "/static/uploads/social_notes/"
@@ -13230,8 +13333,8 @@ def _social_note_to_out(db: Session, row: SocialNote) -> SocialNoteOut:
     ).all()
     return SocialNoteOut(
         id=int(row.id),
-        title=str(row.title or ""),
-        content=str(row.content or ""),
+        title=_decode_mojibake_text(str(row.title or "")),
+        content=_decode_mojibake_text(str(row.content or "")),
         updated_at=row.updated_at.isoformat() if row.updated_at else "",
         files=[_social_note_file_to_out(x) for x in file_rows],
     )
@@ -13266,8 +13369,8 @@ def social_create_note(
     row = SocialNote(
         user_id=user.id,
         actor_key=actor_key,
-        title=str(payload.title or "").strip()[:255] or "Новая заметка",
-        content=str(payload.content or "")[:20000],
+        title=_decode_mojibake_text(payload.title or "").strip()[:255] or "Новая заметка",
+        content=_decode_mojibake_text(payload.content or "")[:20000],
     )
     db.add(row)
     db.flush()
@@ -13296,8 +13399,8 @@ def social_update_note(
     row = db.get(SocialNote, note_id)
     if not row or int(row.user_id) != int(user.id) or str(row.actor_key or "") != actor_key:
         raise HTTPException(status_code=404, detail="Заметка не найдена")
-    row.title = str(payload.title or "").strip()[:255] or "Без названия"
-    row.content = str(payload.content or "")[:20000]
+    row.title = _decode_mojibake_text(payload.title or "").strip()[:255] or "Без названия"
+    row.content = _decode_mojibake_text(payload.content or "")[:20000]
     _audit(
         db,
         user,

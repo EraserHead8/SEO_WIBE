@@ -289,7 +289,7 @@ def post_wb_review_reply(api_key: str, feedback_id: str, text: str) -> tuple[boo
     return False, "Не удалось авторизоваться в WB API"
 
 
-def post_wb_question_reply(api_key: str, question_id: str, text: str) -> tuple[bool, str]:
+def post_wb_question_reply(api_key: str, question_id: str, text: str, state: str = "") -> tuple[bool, str]:
     if not question_id.strip():
         return False, "Не указан ID вопроса"
     reply = " ".join(text.split())
@@ -298,41 +298,82 @@ def post_wb_question_reply(api_key: str, question_id: str, text: str) -> tuple[b
     if len(reply) > 3000:
         return False, "Ответ слишком длинный (максимум 3000 символов)"
 
-    requests_plan = [
-        ("PATCH", "https://feedbacks-api.wildberries.ru/api/v1/questions", {"id": question_id.strip(), "text": reply}),
-        ("PATCH", "https://feedbacks-api.wildberries.ru/api/v1/questions", {"questionId": question_id.strip(), "text": reply}),
-        ("POST", "https://feedbacks-api.wildberries.ru/api/v1/questions/answer", {"id": question_id.strip(), "text": reply}),
-        ("POST", "https://feedbacks-api.wildberries.ru/api/v1/question/answer", {"questionId": question_id.strip(), "text": reply}),
+    qid = question_id.strip()
+    state_value = str(state or "").strip()
+    payloads: list[dict[str, Any]] = [
+        {"id": qid, "text": reply},
+        {"questionId": qid, "text": reply},
     ]
+    if state_value:
+        payloads.extend(
+            [
+                {"id": qid, "text": reply, "state": state_value},
+                {"questionId": qid, "text": reply, "state": state_value},
+            ]
+        )
+
+    requests_plan = [
+        ("PATCH", "https://feedbacks-api.wildberries.ru/api/v1/questions"),
+        ("POST", "https://feedbacks-api.wildberries.ru/api/v1/questions/answer"),
+        ("POST", "https://feedbacks-api.wildberries.ru/api/v1/question/answer"),
+    ]
+
     last_error = "Не удалось отправить ответ в WB API"
-    for method, endpoint, payload in requests_plan:
-        for auth_value in (api_key.strip(), f"Bearer {api_key.strip()}"):
-            headers = {"Authorization": auth_value, "Content-Type": "application/json"}
-            for attempt in range(3):
-                response = None
-                try:
-                    with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
-                        response = client.request(method, endpoint, headers=headers, json=payload)
-                except Exception:
+    last_method = ""
+    last_endpoint = ""
+    last_status = 0
+
+    for method, endpoint in requests_plan:
+        for payload in payloads:
+            for auth_value in (api_key.strip(), f"Bearer {api_key.strip()}"):
+                headers = {"Authorization": auth_value, "Content-Type": "application/json"}
+                for attempt in range(3):
                     response = None
-                if response is None:
-                    if attempt < 2:
-                        time.sleep(0.35 * (attempt + 1))
+                    try:
+                        with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
+                            response = client.request(method, endpoint, headers=headers, json=payload)
+                    except Exception:
+                        response = None
+
+                    if response is None:
+                        if attempt < 2:
+                            time.sleep(0.35 * (attempt + 1))
+                            continue
+                        break
+
+                    status = int(response.status_code)
+                    last_method = method
+                    last_endpoint = endpoint.replace("https://feedbacks-api.wildberries.ru", "")
+                    last_status = status
+
+                    if status in {200, 204}:
+                        return True, "Ответ отправлен"
+
+                    if status in {401, 403}:
+                        last_error = "WB API отклонил ключ (401/403). Проверьте права feedbacks/questions."
+                        break
+
+                    if status in {404, 405}:
+                        body = _safe_response_text(response)
+                        if body:
+                            last_error = f"WB API вернул {status}: {body}"
+                        else:
+                            last_error = f"WB API вернул {status} на {last_endpoint}"
+                        break
+
+                    if status in {408, 425, 429, 500, 502, 503, 504} and attempt < 2:
+                        time.sleep(0.45 * (attempt + 1))
                         continue
+
+                    body = _safe_response_text(response)
+                    if body:
+                        last_error = f"WB API вернул {status}: {body}"
+                    else:
+                        last_error = f"WB API вернул {status}"
                     break
-                if response.status_code in {200, 204}:
-                    return True, "Ответ отправлен"
-                if response.status_code in {401, 403}:
-                    break
-                if response.status_code in {404, 405}:
-                    break
-                if response.status_code in {408, 425, 429, 500, 502, 503, 504} and attempt < 2:
-                    time.sleep(0.45 * (attempt + 1))
-                    continue
-                body = _safe_response_text(response)
-                if body:
-                    last_error = f"WB API вернул {response.status_code}: {body}"
-                break
+
+    if last_method and last_endpoint and last_status:
+        return False, f"{last_error} [{last_method} {last_endpoint} -> {last_status}]"
     return False, last_error
 
 def post_ozon_review_reply(api_key: str, review_id: str, text: str) -> tuple[bool, str]:

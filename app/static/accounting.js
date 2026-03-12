@@ -660,76 +660,110 @@ async function loadAccountingData(forceBusy = false, retryAttempt = 0) {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   qp.set("tz", tz);
 
-  accountingSetMeta("accountingWarnings", tr("Загружаем бухгалтерские данные...", "Loading accounting data..."));
+  const fastQp = new URLSearchParams(qp);
+  fastQp.set("fast", "1");
+  const fullQp = new URLSearchParams(qp);
+  fullQp.set("fast", "0");
 
-  const fetcher = () => requestJson(`/api/accounting/data?${qp.toString()}`, {
+  accountingSetMeta("accountingWarnings", tr("Загрузка данных бухгалтерии...", "Loading accounting data..."));
+
+  const fetchFast = () => requestJson(`/api/accounting/data?${fastQp.toString()}`, {
+    headers: authHeaders(),
+    timeoutMs: 90000,
+  });
+
+  const fetchFull = () => requestJson(`/api/accounting/data?${fullQp.toString()}`, {
     headers: authHeaders(),
     timeoutMs: 180000,
   });
 
-  const data = forceBusy
-    ? await withBusy(
-      tr("Обновляем модуль Бухгалтерия…", "Refreshing Accounting module..."),
-      fetcher,
+  const applyPayload = async (data, { allowRetry = true } = {}) => {
+    if (!data) return false;
+    if (runSeq !== accountingRequestSeq) return false;
+
+    const hasExpectedShape = Boolean(
+      data
+      && typeof data === "object"
+      && (
+        Object.prototype.hasOwnProperty.call(data, "overview")
+        || Object.prototype.hasOwnProperty.call(data, "analysis_rows")
+        || Object.prototype.hasOwnProperty.call(data, "chart")
+        || Object.prototype.hasOwnProperty.call(data, "warnings")
+      )
+    );
+    if (!hasExpectedShape) {
+      accountingSetMeta(
+        "accountingWarnings",
+        tr(
+          "Сервер вернул некорректные данные по бухгалтерии. Текущие данные сохранены, повторите обновление.",
+          "Server returned malformed accounting payload. Current data is kept, please retry refresh."
+        )
+      );
+      return false;
+    }
+
+    accountingOverview = data.overview || {};
+    accountingChartRows = Array.isArray(data.chart) ? data.chart : [];
+    accountingAnalysisRows = Array.isArray(data.analysis_rows) ? data.analysis_rows : [];
+    accountingWarnings = Array.isArray(data.warnings) ? data.warnings : [];
+
+    const hasWb429 = accountingWarnings.some((x) => {
+      const low = String(x || "").toLowerCase();
+      return low.includes("429") && low.includes("wb");
+    });
+
+    if (hasWb429 && (marketplace === "all" || marketplace === "wb") && allowRetry && retryAttempt < 3) {
+      accountingSetMeta(
+        "accountingWarnings",
+        tr(
+          "WB API ограничил запросы (429). Повторяем загрузку автоматически...",
+          "WB API rate-limited requests (429). Retrying automatically..."
+        )
+      );
+      await delay(1800 + retryAttempt * 1400);
+      if (runSeq !== accountingRequestSeq) return false;
+      return loadAccountingData(forceBusy, retryAttempt + 1);
+    }
+
+    renderAccountingWarnings();
+    renderAccountingOverview();
+    renderAccountingChart();
+    renderAccountingAnalysis();
+    markModuleLoaded("accounting");
+    return true;
+  };
+
+  if (forceBusy) {
+    const fullData = await withBusy(
+      tr("Обновляем модуль бухгалтерии...", "Refreshing Accounting module..."),
+      fetchFull,
       tr("Загрузка финансовых данных WB/Ozon может занять до 1-2 минут.", "WB/Ozon financial data load may take up to 1-2 minutes.")
     ).catch((e) => {
       alert(e.message);
       return null;
-    })
-    : await fetcher().catch((e) => {
+    });
+    return applyPayload(fullData, { allowRetry: true });
+  }
+
+  const fastData = await fetchFast().catch(() => null);
+  if (!fastData) {
+    const fullData = await fetchFull().catch((e) => {
       accountingSetMeta("accountingWarnings", e.message);
       return null;
     });
-
-  if (!data) return false;
-  if (runSeq !== accountingRequestSeq) return false;
-  const hasExpectedShape = Boolean(
-    data
-    && typeof data === "object"
-    && (
-      Object.prototype.hasOwnProperty.call(data, "overview")
-      || Object.prototype.hasOwnProperty.call(data, "analysis_rows")
-      || Object.prototype.hasOwnProperty.call(data, "chart")
-      || Object.prototype.hasOwnProperty.call(data, "warnings")
-    )
-  );
-  if (!hasExpectedShape) {
-    accountingSetMeta(
-      "accountingWarnings",
-      tr(
-        "Сервер вернул некорректный ответ по бухгалтерии. Данные сохранены в текущем состоянии, повторите обновление.",
-        "Server returned malformed accounting payload. Current data is kept, please retry refresh."
-      )
-    );
-    return false;
+    return applyPayload(fullData, { allowRetry: true });
   }
 
-  accountingOverview = data.overview || {};
-  accountingChartRows = Array.isArray(data.chart) ? data.chart : [];
-  accountingAnalysisRows = Array.isArray(data.analysis_rows) ? data.analysis_rows : [];
-  accountingWarnings = Array.isArray(data.warnings) ? data.warnings : [];
-  const hasWb429 = accountingWarnings.some((x) => {
-    const low = String(x || "").toLowerCase();
-    return low.includes("429") && low.includes("wb");
-  });
-  if (hasWb429 && (marketplace === "all" || marketplace === "wb") && retryAttempt < 3) {
-    accountingSetMeta(
-      "accountingWarnings",
-      tr(
-        "WB API ограничил запросы (429). Повторяем загрузку автоматически...",
-        "WB API rate-limited requests (429). Retrying automatically..."
-      )
-    );
-    await delay(1800 + retryAttempt * 1400);
-    if (runSeq !== accountingRequestSeq) return false;
-    return loadAccountingData(forceBusy, retryAttempt + 1);
-  }
+  const appliedFast = await applyPayload(fastData, { allowRetry: true });
+  if (!appliedFast || runSeq !== accountingRequestSeq) return appliedFast;
 
-  renderAccountingWarnings();
-  renderAccountingOverview();
-  renderAccountingChart();
-  renderAccountingAnalysis();
-  markModuleLoaded("accounting");
+  void (async () => {
+    const fullData = await fetchFull().catch(() => null);
+    if (!fullData) return;
+    if (runSeq !== accountingRequestSeq) return;
+    await applyPayload(fullData, { allowRetry: false });
+  })();
+
   return true;
 }
 
