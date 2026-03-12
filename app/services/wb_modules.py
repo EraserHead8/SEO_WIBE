@@ -289,16 +289,16 @@ def post_wb_review_reply(api_key: str, feedback_id: str, text: str) -> tuple[boo
     return False, "Не удалось авторизоваться в WB API"
 
 
-def post_wb_question_reply(api_key: str, question_id: str, text: str, state: str = "") -> tuple[bool, str]:
-    if not question_id.strip():
-        return False, "Не указан ID вопроса"
-    reply = " ".join(text.split())
+def post_wb_question_reply(api_key: str, question_id: str | int, text: str, state: str = "") -> tuple[bool, str]:
+    qid = str(question_id or "").strip()
+    if not qid:
+        return False, "\u041d\u0435 \u0443\u043a\u0430\u0437\u0430\u043d ID \u0432\u043e\u043f\u0440\u043e\u0441\u0430"
+    reply = " ".join(str(text or "").split())
     if len(reply) < 2:
-        return False, "Ответ слишком короткий"
+        return False, "\u041e\u0442\u0432\u0435\u0442 \u0441\u043b\u0438\u0448\u043a\u043e\u043c \u043a\u043e\u0440\u043e\u0442\u043a\u0438\u0439"
     if len(reply) > 3000:
-        return False, "Ответ слишком длинный (максимум 3000 символов)"
+        return False, "\u041e\u0442\u0432\u0435\u0442 \u0441\u043b\u0438\u0448\u043a\u043e\u043c \u0434\u043b\u0438\u043d\u043d\u044b\u0439 (\u043c\u0430\u043a\u0441\u0438\u043c\u0443\u043c 3000 \u0441\u0438\u043c\u0432\u043e\u043b\u043e\u0432)"
 
-    qid = question_id.strip()
     state_value = str(state or "").strip()
     payloads: list[dict[str, Any]] = [
         {"id": qid, "text": reply},

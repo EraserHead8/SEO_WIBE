@@ -2556,6 +2556,11 @@ function handleMobileBackPress() {
     return true;
   }
   if (String(currentTab || "") === "social") {
+    if (typeof window.socialHandleMobileBack === "function") {
+      try {
+        if (window.socialHandleMobileBack()) return true;
+      } catch (_) {}
+    }
     const subtab = String(currentSocialSubtab || window.socialState?.currentSubtab || "chat");
     const currentThreadId = Number(window.socialState?.currentThreadId || 0);
     const threadOpen = typeof window.socialIsThreadOpen === "function"

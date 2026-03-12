@@ -58,12 +58,18 @@ def fetch_products_from_marketplace(marketplace: str, api_key: str, articles: li
     Здесь добавляется реальная интеграция с WB/Ozon API.
     """
     if httpx and marketplace == "wb":
-        live = _fetch_wb_products(api_key, articles, import_all)
-        if live:
+        try:
+            live = _fetch_wb_products(api_key, articles, import_all)
+        except Exception:
+            live = None
+        if live is not None:
             return live
     if httpx and marketplace == "ozon":
-        live = _fetch_ozon_products(api_key, articles, import_all)
-        if live:
+        try:
+            live = _fetch_ozon_products(api_key, articles, import_all)
+        except Exception:
+            live = None
+        if live is not None:
             return live
 
     demo_names = [

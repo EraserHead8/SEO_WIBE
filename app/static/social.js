@@ -55,6 +55,7 @@
   chatContextThreadId: 0,
   chatContextX: 0,
   chatContextY: 0,
+  chatImageViewerOpen: false,
   keepEmojiOpenUntil: 0,
   emojiRecents: [],
   mobileThreadAutoSelectEnabled: true,
@@ -840,6 +841,7 @@ function resetSocialState() {
     chatContextThreadId: 0,
     chatContextX: 0,
     chatContextY: 0,
+    chatImageViewerOpen: false,
     keepEmojiOpenUntil: 0,
     emojiRecents: [],
     mobileThreadAutoSelectEnabled: !socialIsMobileClientShell(),
@@ -2195,6 +2197,7 @@ function socialCloseThread(opts = {}) {
   socialState.chatHasMore = true;
   socialClearReply();
   socialCloseMessageContext();
+  socialCloseImageViewer();
   const head = document.getElementById("socialChatHead");
   const sub = document.getElementById("socialChatHeadSubtitle");
   const avatar = document.getElementById("socialChatHeadAvatar");
@@ -2594,6 +2597,108 @@ function socialCloseMessageContext() {
   menu.innerHTML = "";
 }
 
+function socialGetImageViewerNode() {
+  let viewer = document.getElementById("socialChatImageViewer");
+  if (viewer) return viewer;
+  const root = document.body || document.documentElement;
+  if (!root) return null;
+  viewer = document.createElement("div");
+  viewer.id = "socialChatImageViewer";
+  viewer.className = "social-chat-image-viewer hidden";
+  viewer.setAttribute("aria-hidden", "true");
+  viewer.innerHTML = `
+    <button type="button" class="social-chat-image-close" aria-label="${escapeHtml(tr("\u0417\u0430\u043a\u0440\u044b\u0442\u044c", "Close"))}" onclick="return socialCloseImageViewer(event)">&#10005;</button>
+    <div class="social-chat-image-shell"><img id="socialChatImageViewerImg" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" /></div>
+  `;
+  viewer.addEventListener("click", (event) => {
+    if (event?.target === viewer) socialCloseImageViewer();
+  });
+  const shell = viewer.querySelector(".social-chat-image-shell");
+  if (shell) {
+    shell.addEventListener("click", (event) => {
+      if (event?.stopPropagation) event.stopPropagation();
+    });
+  }
+  root.appendChild(viewer);
+  return viewer;
+}
+
+function socialIsImageViewerOpen() {
+  const viewer = document.getElementById("socialChatImageViewer");
+  return Boolean(viewer && !viewer.classList.contains("hidden"));
+}
+
+function socialOpenImageViewer(url, alt = "") {
+  const safeUrl = String(url || "").trim();
+  if (!safeUrl) return false;
+  const viewer = socialGetImageViewerNode();
+  if (!viewer) return false;
+  const img = viewer.querySelector("#socialChatImageViewerImg");
+  if (!(img instanceof HTMLImageElement)) return false;
+  img.src = safeUrl;
+  img.alt = String(alt || "").trim();
+  viewer.classList.remove("hidden");
+  viewer.setAttribute("aria-hidden", "false");
+  socialState.chatImageViewerOpen = true;
+  document.body?.classList?.add("social-image-viewer-open");
+  return true;
+}
+
+function socialCloseImageViewer(event = null) {
+  if (event?.preventDefault) event.preventDefault();
+  if (event?.stopPropagation) event.stopPropagation();
+  const viewer = document.getElementById("socialChatImageViewer");
+  if (!viewer) return false;
+  const img = viewer.querySelector("#socialChatImageViewerImg");
+  if (img instanceof HTMLImageElement) {
+    img.removeAttribute("src");
+    img.alt = "";
+  }
+  viewer.classList.add("hidden");
+  viewer.setAttribute("aria-hidden", "true");
+  socialState.chatImageViewerOpen = false;
+  document.body?.classList?.remove("social-image-viewer-open");
+  return false;
+}
+
+function socialOpenImageFromAttachment(event) {
+  const target = event?.currentTarget || event?.target?.closest?.(".tg-attach-image");
+  if (!(target instanceof HTMLElement)) return true;
+  const href = String(target.getAttribute("href") || "").trim();
+  if (!href) return true;
+  const alt = String(target.getAttribute("data-image-alt") || target.querySelector("img")?.getAttribute("alt") || "");
+  const opened = socialOpenImageViewer(href, alt);
+  if (opened) {
+    if (event?.preventDefault) event.preventDefault();
+    if (event?.stopPropagation) event.stopPropagation();
+    socialCloseMessageContext();
+    return false;
+  }
+  return true;
+}
+
+function socialHandleMobileBack() {
+  if (socialIsImageViewerOpen()) {
+    socialCloseImageViewer();
+    return true;
+  }
+  const menu = document.getElementById("socialChatContextMenu");
+  if (menu && !menu.classList.contains("hidden")) {
+    socialCloseMessageContext();
+    return true;
+  }
+  const picker = document.getElementById("socialEmojiPicker");
+  if (picker && !picker.classList.contains("hidden")) {
+    socialToggleEmojiPicker(false);
+    return true;
+  }
+  if (Number(socialState.chatReplyTo?.id || 0) > 0) {
+    socialClearReply();
+    return true;
+  }
+  return false;
+}
+
 function socialOpenMessageContext(messageId, event) {
   const id = Number(messageId || 0);
   if (!id) return;
@@ -2620,8 +2725,8 @@ function socialOpenMessageContext(messageId, event) {
   `;
   menu.style.left = "0px";
   menu.style.top = "0px";
-  menu.style.maxWidth = "min(320px, calc(100vw - 24px))";
-  menu.style.maxHeight = "min(320px, calc(100dvh - 24px))";
+  menu.style.maxWidth = "min(260px, calc(100vw - 20px))";
+  menu.style.maxHeight = "min(220px, calc(100dvh - 20px))";
   menu.style.visibility = "hidden";
   menu.classList.remove("hidden");
   const menuRect = menu.getBoundingClientRect();
@@ -2697,7 +2802,7 @@ function socialMessageAttachmentsHtml(message) {
     const ctype = String(item?.content_type || "").toLowerCase();
     const isImage = ctype.startsWith("image/") || /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(url);
     if (isImage) {
-      return `<a class="tg-attach tg-attach-image" href="${escapeHtml(url)}" target="_blank" rel="noopener"><img src="${escapeHtml(url)}" alt="${escapeHtml(name)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" /></a>`;
+      return `<a class="tg-attach tg-attach-image" href="${escapeHtml(url)}" data-image-alt="${escapeHtml(name)}" onclick="return socialOpenImageFromAttachment(event)"><img src="${escapeHtml(url)}" alt="${escapeHtml(name)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" /></a>`;
     }
     return `<a class="tg-attach tg-attach-file" href="${escapeHtml(url)}" target="_blank" rel="noopener">📎 ${escapeHtml(name)}</a>`;
   }).join("");
@@ -4726,6 +4831,10 @@ window.socialClearReply = socialClearReply;
 window.socialOpenMessageContext = socialOpenMessageContext;
 window.socialContextReply = socialContextReply;
 window.socialContextReact = socialContextReact;
+window.socialOpenImageViewer = socialOpenImageViewer;
+window.socialCloseImageViewer = socialCloseImageViewer;
+window.socialOpenImageFromAttachment = socialOpenImageFromAttachment;
+window.socialHandleMobileBack = socialHandleMobileBack;
 window.socialToggleReaction = socialToggleReaction;
 window.socialLoadOlderMessages = socialLoadOlderMessages;
 window.socialOpenGroupAvatarModal = socialOpenGroupAvatarModal;

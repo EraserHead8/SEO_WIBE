@@ -2937,12 +2937,23 @@ def wb_reply_question(payload: WbReviewReplyIn, user: User = Depends(get_current
         item_type="question",
         item_external_id=str(payload.id or "").strip(),
     )
-    ok, message = post_wb_question_reply(
-        wb_key,
-        payload.id,
-        payload.text,
-        state=str(payload.state or "").strip(),
-    )
+    state_value = str(payload.state or "").strip()
+    try:
+        ok, message = post_wb_question_reply(
+            wb_key,
+            payload.id,
+            payload.text,
+            state=state_value,
+        )
+    except TypeError as exc:
+        # Backward-compatible fallback for older service signatures without `state`.
+        if "state" not in str(exc):
+            raise
+        ok, message = post_wb_question_reply(
+            wb_key,
+            payload.id,
+            payload.text,
+        )
     message_short = re.sub(r"\s+", " ", str(message or "")).strip()[:260]
     detail_payload = {
         "question_id": str(payload.id or ""),
@@ -13986,7 +13997,17 @@ def upsert_products(
     owner_member_id: int,
     actor_is_owner: bool,
 ) -> list[Product]:
-    data = fetch_products_from_marketplace(marketplace, api_key, articles, import_all)
+    try:
+        data = fetch_products_from_marketplace(marketplace, api_key, articles, import_all)
+    except Exception as exc:
+        safe_error = re.sub(r"\s+", " ", str(exc or "")).strip()[:220]
+        safe_marketplace = str(marketplace or "").upper() or "MP"
+        raise HTTPException(
+            status_code=502,
+            detail=f"\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0442\u043e\u0432\u0430\u0440\u044b \u0438\u0437 {safe_marketplace}: {safe_error or '\u0432\u043d\u0435\u0448\u043d\u0438\u0439 API \u0432\u0435\u0440\u043d\u0443\u043b \u043e\u0448\u0438\u0431\u043a\u0443'}",
+        ) from exc
+    if not isinstance(data, list):
+        data = []
     upserted: list[Product] = []
     for item in data:
         item_photos = _normalize_product_photo_list(getattr(item, "photos", []))
