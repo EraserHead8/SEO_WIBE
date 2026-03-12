@@ -241,7 +241,7 @@ body[data-theme="newyear"] .app-bg::after {
 }
 
 body[data-theme="japan"] .app-bg::before {
-  content: "🎄 🎁 🦊 ✨ 🎄 🎅 ❄ 🎁 ✨ 🦊";
+  content: "⛩️ 🌸 🏯 🍣 🗻 ✨";
   position: absolute;
   inset: 9% -20% auto;
   letter-spacing: 2.1vw;
@@ -252,7 +252,7 @@ body[data-theme="japan"] .app-bg::before {
 }
 
 body[data-theme="greenland"] .app-bg::before {
-  content: "🎄 🎁 🦊 ✨ 🎄 🎅 ❄ 🎁 ✨ 🦊";
+  content: "🌲 ❄️ 🧊 🐻‍❄️ ✨ 🌌";
   position: absolute;
   inset: 8% -16% auto;
   letter-spacing: 2vw;
@@ -263,7 +263,7 @@ body[data-theme="greenland"] .app-bg::before {
 }
 
 body[data-theme="moon"] .app-bg::before {
-  content: "🎄 🎁 🦊 ✨ 🎄 🎅 ❄ 🎁 ✨ 🦊";
+  content: "";
   position: absolute;
   inset: 0;
   background:
@@ -276,7 +276,7 @@ body[data-theme="moon"] .app-bg::before {
 }
 
 body[data-theme="moon"] .app-bg::after {
-  content: "🎄 🎁 🦊 ✨ 🎄 🎅 ❄ 🎁 ✨ 🦊";
+  content: "";
   position: absolute;
   inset: 0;
   background-image: radial-gradient(circle, rgba(236, 242, 255, 0.72) 1px, transparent 1.8px);
@@ -7720,7 +7720,7 @@ body[data-theme="dark"] .landing-band .band-stats span {
 }
 
 .social-day.today b::after {
-  content: "🎄 🎁 🦊 ✨ 🎄 🎅 ❄ 🎁 ✨ 🦊";
+  content: "";
   position: absolute;
   right: -4px;
   top: -4px;
@@ -7738,7 +7738,7 @@ body[data-theme="dark"] .landing-band .band-stats span {
 }
 
 .social-day.has-event b::after {
-  content: "🎄 🎁 🦊 ✨ 🎄 🎅 ❄ 🎁 ✨ 🦊";
+  content: "•";
   position: absolute;
   right: 0;
   top: -2px;
@@ -7746,7 +7746,7 @@ body[data-theme="dark"] .landing-band .band-stats span {
 }
 
 .social-day.has-task b::before {
-  content: "🎄 🎁 🦊 ✨ 🎄 🎅 ❄ 🎁 ✨ 🦊";
+  content: "•";
   position: absolute;
   right: 8px;
   top: -2px;
@@ -10512,6 +10512,7 @@ body.mobile-apk-mode #reviewsSubtabReturns .returns-hero > h3 {
     min-width: 0;
   }
 }
+
 
 
 

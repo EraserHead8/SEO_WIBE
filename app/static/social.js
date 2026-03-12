@@ -4494,7 +4494,7 @@ function socialRenderNotesList() {
         <b>${escapeHtml(row.title || tr("Без названия", "Untitled"))}</b>
         <small>${escapeHtml(String(row.updated_at || "").slice(0,16).replace("T", " "))}</small>
       </button>
-      <button class="btn-secondary social-note-delete" type="button" onclick="socialDeleteNote(${Number(row.id)})">вњ•</button>
+      <button class="btn-secondary social-note-delete" type="button" onclick="socialDeleteNote(${Number(row.id)})">✕</button>
     </div>
   `).join("") || `<div class="hint">${tr("Заметок пока нет", "No notes yet")}</div>`;
 }
@@ -4587,7 +4587,7 @@ function socialRenderNoteFiles(note) {
       <div class="social-note-file-row">
         <a href="${escapeHtml(file.url || "#")}" target="_blank" rel="noopener noreferrer">${escapeHtml(file.filename || "file")}</a>
         <small>${escapeHtml(socialFormatFileSize(file.size_bytes || 0))}</small>
-        <button class="btn-secondary" type="button" onclick="socialDeleteNoteFile(${Number(file.id || 0)})">вњ•</button>
+        <button class="btn-secondary" type="button" onclick="socialDeleteNoteFile(${Number(file.id || 0)})">✕</button>
       </div>
     `).join("")
     : `<div class="hint">${tr("Файлы пока не загружены", "No files uploaded yet")}</div>`;
@@ -4752,6 +4752,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 socialMaybeStartHooks();
+
 
 
 
