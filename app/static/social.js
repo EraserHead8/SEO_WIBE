@@ -1035,9 +1035,10 @@ function socialRenderGames() {
       { code: "snake", title: "Змейка" },
       { code: "tetris", title: "Тетрис" },
       { code: "2048", title: "2048" },
+      { code: "checkers", title: "Шашки" },
     ];
   host.innerHTML = games.map((game) => {
-    const icon = game.code === "snake" ? "🐍" : (game.code === "tetris" ? "🧩" : "🔢");
+    const icon = game.code === "snake" ? "🐍" : (game.code === "tetris" ? "🧩" : (game.code === "checkers" ? "♟" : "🔢"));
     return `
       <button class="social-game-card" type="button" ondblclick="socialOpenGameMenu('${escapeHtml(game.code)}')" onclick="socialOpenGameMenu('${escapeHtml(game.code)}')">
         <span class="social-game-icon" aria-hidden="true">${icon}</span>
@@ -1051,6 +1052,10 @@ function socialRenderGames() {
 async function socialOpenGameMenu(gameCode) {
   const code = String(gameCode || "").trim().toLowerCase();
   if (!code) return;
+  if (code === "checkers" && typeof window.socialCheckersOpenMenu === "function") {
+    window.socialCheckersOpenMenu();
+    return;
+  }
   socialState.currentGameCode = code;
   const lb = await socialRequest(`/api/social/games/leaderboard?game_code=${encodeURIComponent(code)}&limit=10`).catch(() => ({ my_best: 0, my_rank: null, top: [] }));
   socialState.gamesLeaderboardCache.set(code, lb || {});
@@ -1076,6 +1081,10 @@ async function socialOpenGameMenu(gameCode) {
 
 function socialShowGameTips(code) {
   const safe = String(code || "").toLowerCase();
+  if (safe === "checkers" && typeof window.socialCheckersShowTips === "function") {
+    window.socialCheckersShowTips();
+    return;
+  }
   const title = safe === "snake"
     ? tr("Как играть в Змейку", "How to play Snake")
     : (safe === "tetris" ? tr("Как играть в Тетрис", "How to play Tetris") : tr("Как играть в 2048", "How to play 2048"));
@@ -1089,6 +1098,10 @@ function socialShowGameTips(code) {
 
 async function socialShowLeaderboard(code) {
   const safe = String(code || "").toLowerCase();
+  if (safe === "checkers" && typeof window.socialCheckersShowLeaderboard === "function") {
+    window.socialCheckersShowLeaderboard();
+    return;
+  }
   const data = await socialRequest(`/api/social/games/leaderboard?game_code=${encodeURIComponent(safe)}&limit=100`).catch((e) => {
     alert(e.message);
     return null;
@@ -1197,6 +1210,10 @@ function socialGameControlsHtml(code) {
 
 function socialStartGame(code) {
   const safe = String(code || "").toLowerCase();
+  if (safe === "checkers" && typeof window.socialCheckersQuickStart === "function") {
+    window.socialCheckersQuickStart("medium");
+    return;
+  }
   const title = safe === "snake"
     ? tr("Змейка", "Snake")
     : (safe === "tetris" ? tr("Тетрис", "Tetris") : "2048");

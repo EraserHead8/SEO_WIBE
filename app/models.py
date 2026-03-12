@@ -505,6 +505,59 @@ class SocialGameScore(Base):
     user: Mapped["User"] = relationship()
 
 
+class SocialCheckersProfile(Base):
+    __tablename__ = "social_checkers_profiles"
+    __table_args__ = (
+        UniqueConstraint("actor_key", name="uq_social_checkers_profile_actor"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    member_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("team_members.id"), nullable=True, index=True)
+    actor_key: Mapped[str] = mapped_column(String(60), index=True)
+    actor_nick: Mapped[str] = mapped_column(String(120), default="")
+    rating: Mapped[int] = mapped_column(Integer, default=1200)
+    wins: Mapped[int] = mapped_column(Integer, default=0)
+    losses: Mapped[int] = mapped_column(Integer, default=0)
+    draws: Mapped[int] = mapped_column(Integer, default=0)
+    play_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped["User"] = relationship()
+    member: Mapped["TeamMember | None"] = relationship()
+
+
+class SocialCheckersRoom(Base):
+    __tablename__ = "social_checkers_rooms"
+    __table_args__ = (
+        UniqueConstraint("room_code", name="uq_social_checkers_room_code"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    game_code: Mapped[str] = mapped_column(String(40), default="checkers", index=True)
+    room_code: Mapped[str] = mapped_column(String(24), index=True)
+    title: Mapped[str] = mapped_column(String(120), default="")
+    owner_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    host_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    host_member_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("team_members.id"), nullable=True, index=True)
+    host_actor_key: Mapped[str] = mapped_column(String(60), index=True)
+    host_nick: Mapped[str] = mapped_column(String(120), default="")
+    guest_user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    guest_member_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("team_members.id"), nullable=True, index=True)
+    guest_actor_key: Mapped[str] = mapped_column(String(60), default="", index=True)
+    guest_nick: Mapped[str] = mapped_column(String(120), default="")
+    mode: Mapped[str] = mapped_column(String(20), default="human", index=True)
+    difficulty: Mapped[str] = mapped_column(String(20), default="medium")
+    is_public: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    status: Mapped[str] = mapped_column(String(20), default="waiting", index=True)
+    state_json: Mapped[str] = mapped_column(Text, default="{}")
+    stats_applied: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
+    last_move_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+
 class SocialChatThread(Base):
     __tablename__ = "social_chat_threads"
 

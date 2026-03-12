@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import base64
 import io
@@ -58,6 +58,8 @@ from app.models import (
     SocialChatThread,
     SocialChatThreadMember,
     SocialGameScore,
+    SocialCheckersProfile,
+    SocialCheckersRoom,
     SocialAnnouncement,
     SocialAnnouncementAck,
     SocialNote,
@@ -219,6 +221,18 @@ from app.services.ads_cache import (
     get_wb_snapshot_rows,
     is_wb_snapshot_stale,
     sync_wb_campaign_snapshots,
+)
+from app.services.social_checkers import (
+    CHECKERS_GAME_CODE,
+    apply_checkers_elo,
+    apply_checkers_move,
+    build_checkers_bot_identity,
+    create_checkers_room_code,
+    create_checkers_state,
+    get_checkers_difficulties,
+    get_checkers_legal_moves,
+    load_checkers_state,
+    pick_checkers_bot_move,
 )
 from app.services.marketplace import (
     enrich_ozon_category_names,
@@ -9476,7 +9490,10 @@ SOCIAL_GAMES: dict[str, str] = {
     "snake": "Змейка",
     "tetris": "Тетрис",
     "2048": "2048",
+    "checkers": "Шашки",
 }
+
+SOCIAL_SCORE_GAMES: set[str] = {"snake", "tetris", "2048"}
 
 _SOCIAL_MSG_REQUEST_CACHE: dict[str, tuple[int, float]] = {}
 _SOCIAL_MSG_REQUEST_CACHE_TTL_SEC = 15 * 60
@@ -10759,7 +10776,7 @@ def social_save_game_score(
 ):
     ensure_module_enabled(db, user, "social_hub")
     game_code = str(payload.game_code or "").strip().lower()
-    if game_code not in SOCIAL_GAMES:
+    if game_code not in SOCIAL_SCORE_GAMES:
         raise HTTPException(status_code=400, detail="Неизвестная игра")
     actor_key, actor_nick, _ = _social_actor_identity(db, user)
     score = max(0, int(payload.score or 0))
@@ -10817,7 +10834,7 @@ def social_leaderboard(
 ):
     ensure_module_enabled(db, user, "social_hub")
     safe_game = str(game_code or "").strip().lower()
-    if safe_game not in SOCIAL_GAMES:
+    if safe_game not in SOCIAL_SCORE_GAMES:
         raise HTTPException(status_code=400, detail="Неизвестная игра")
     safe_limit = max(5, min(int(limit or 50), 200))
     rows = db.scalars(
@@ -10862,6 +10879,612 @@ def social_leaderboard(
         my_best=my_best,
     )
 
+
+
+def _social_checkers_profile_row(
+    db: Session,
+    *,
+    actor_key: str,
+    actor_nick: str = "",
+    user_id: int | None = None,
+    member_id: int | None = None,
+) -> SocialCheckersProfile:
+    canonical = _social_canonical_actor_key(db, actor_key)
+    row = db.scalar(select(SocialCheckersProfile).where(SocialCheckersProfile.actor_key == canonical))
+    safe_user_id = int(user_id or 0)
+    safe_member_id = int(member_id or 0) or None
+    safe_nick = str(actor_nick or "").strip()
+    if safe_user_id <= 0 or not safe_nick:
+        try:
+            resolved_user_id, resolved_member_id, resolved_nick = _social_identity_by_key(db, canonical)
+            if safe_user_id <= 0:
+                safe_user_id = int(resolved_user_id or 0)
+            if not safe_member_id and resolved_member_id:
+                safe_member_id = int(resolved_member_id or 0)
+            if not safe_nick:
+                safe_nick = str(resolved_nick or "").strip()
+        except HTTPException:
+            pass
+    safe_nick = safe_nick or _social_current_nick_by_key(db, canonical) or canonical
+    if safe_user_id <= 0:
+        raise HTTPException(status_code=400, detail="Некорректный игрок для рейтинга")
+    if row:
+        row.user_id = safe_user_id
+        row.member_id = safe_member_id
+        row.actor_nick = safe_nick[:120]
+        row.updated_at = datetime.utcnow()
+        return row
+    row = SocialCheckersProfile(
+        user_id=safe_user_id,
+        member_id=safe_member_id,
+        actor_key=canonical[:60],
+        actor_nick=safe_nick[:120],
+        rating=1200,
+        wins=0,
+        losses=0,
+        draws=0,
+        play_count=0,
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def _social_checkers_my_profile(db: Session, user: User) -> tuple[str, str, int | None, SocialCheckersProfile]:
+    actor_key, actor_nick, member_id = _social_actor_identity(db, user)
+    row = _social_checkers_profile_row(
+        db,
+        actor_key=actor_key,
+        actor_nick=actor_nick,
+        user_id=int(user.id),
+        member_id=member_id,
+    )
+    return actor_key, actor_nick, member_id, row
+
+
+def _social_checkers_profile_out(row: SocialCheckersProfile, *, actor_key: str = "") -> dict[str, Any]:
+    return {
+        "actor_key": actor_key or str(row.actor_key or ""),
+        "nick": str(row.actor_nick or "") or actor_key,
+        "rating": int(row.rating or 1200),
+        "wins": int(row.wins or 0),
+        "losses": int(row.losses or 0),
+        "draws": int(row.draws or 0),
+        "play_count": int(row.play_count or 0),
+        "updated_at": _to_utc_iso(row.updated_at),
+    }
+
+
+def _social_checkers_public_player(db: Session, actor_key: str, fallback_nick: str = "", *, difficulty: str = "") -> dict[str, Any]:
+    key = str(actor_key or "").strip().lower()
+    if key.startswith("bot:"):
+        bot = build_checkers_bot_identity(difficulty or key.split(":", 1)[1])
+        return {
+            "actor_key": str(bot["actor_key"]),
+            "nick": str(bot["nick"]),
+            "rating": int(bot["rating"]),
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "play_count": 0,
+            "is_bot": True,
+            "avatar_url": "",
+        }
+    canonical = _social_canonical_actor_key(db, key)
+    profile_row = db.scalar(select(SocialCheckersProfile).where(SocialCheckersProfile.actor_key == canonical))
+    public_profile = _social_public_profile_by_key(db, canonical)
+    nick = str(public_profile.get("nick") or fallback_nick or canonical).strip()
+    return {
+        "actor_key": canonical,
+        "nick": nick[:120],
+        "rating": int(profile_row.rating or 1200) if profile_row else 1200,
+        "wins": int(profile_row.wins or 0) if profile_row else 0,
+        "losses": int(profile_row.losses or 0) if profile_row else 0,
+        "draws": int(profile_row.draws or 0) if profile_row else 0,
+        "play_count": int(profile_row.play_count or 0) if profile_row else 0,
+        "is_bot": False,
+        "avatar_url": str(public_profile.get("avatar_url") or ""),
+    }
+
+
+def _social_checkers_room_side(db: Session, room: SocialCheckersRoom, actor_key: str) -> str:
+    aliases = set(_social_actor_alias_keys(db, actor_key))
+    host_key = _social_canonical_actor_key(db, str(room.host_actor_key or ""))
+    guest_key = _social_canonical_actor_key(db, str(room.guest_actor_key or ""))
+    if host_key and host_key in aliases:
+        return "white"
+    if guest_key and guest_key in aliases:
+        return "black"
+    return ""
+
+
+def _social_checkers_room_visible(db: Session, room: SocialCheckersRoom, actor_key: str) -> bool:
+    if bool(room.is_public) and str(room.status or "") == "waiting":
+        return True
+    return bool(_social_checkers_room_side(db, room, actor_key))
+
+
+def _social_checkers_room_state(room: SocialCheckersRoom) -> dict[str, Any]:
+    try:
+        raw = json.loads(str(room.state_json or "{}"))
+    except Exception:
+        raw = {}
+    return load_checkers_state(raw)
+
+
+def _social_checkers_store_room_state(room: SocialCheckersRoom, state: dict[str, Any]) -> None:
+    room.state_json = json.dumps(load_checkers_state(state), ensure_ascii=False)
+
+
+def _social_checkers_note(room: SocialCheckersRoom, payload: dict[str, Any]) -> str:
+    status = str(payload.get("status") or room.status or "")
+    if status == "waiting":
+        return "Комната видна в общем лобби и ждет второго игрока."
+    if status == "active" and str(room.mode or "") == "bot":
+        return f"Уровень ИИ: {str(room.difficulty or 'medium')}"
+    if status == "active":
+        return "Игра идет в реальном времени. Позиция обновляется автоматически."
+    if status == "finished":
+        result = str(payload.get("result") or "")
+        winner = str(payload.get("winner") or "")
+        if result == "draw":
+            return "Партия завершилась ничьей."
+        if winner == "white":
+            return "Белые завершили партию победой."
+        if winner == "black":
+            return "Черные завершили партию победой."
+    if status == "cancelled":
+        return "Комната закрыта до старта или завершена вручную."
+    return ""
+
+
+def _social_checkers_room_payload(db: Session, room: SocialCheckersRoom, viewer_key: str) -> dict[str, Any]:
+    state = _social_checkers_room_state(room)
+    my_side = _social_checkers_room_side(db, room, viewer_key)
+    can_join = bool(room.is_public) and str(room.mode or "") == "human" and str(room.status or "") == "waiting" and not my_side and not str(room.guest_actor_key or "")
+    can_move = bool(my_side) and str(room.status or "") == "active" and str(state.get("turn") or "") == my_side and not str(state.get("winner") or "") and str(state.get("result") or "") != "draw"
+    white_player = _social_checkers_public_player(db, str(room.host_actor_key or ""), str(room.host_nick or ""), difficulty=str(room.difficulty or ""))
+    if str(room.mode or "") == "bot":
+        bot_meta = build_checkers_bot_identity(room.difficulty)
+        black_key = str(bot_meta.get("actor_key") or "bot:medium")
+        black_nick = str(bot_meta.get("nick") or "SEO WIBE AI")
+    else:
+        black_key = str(room.guest_actor_key or "")
+        black_nick = str(room.guest_nick or "")
+    black_player = _social_checkers_public_player(db, black_key, black_nick, difficulty=str(room.difficulty or ""))
+    legal_moves = get_checkers_legal_moves(state, my_side) if can_move else []
+    payload = {
+        "id": int(room.id or 0),
+        "room_code": str(room.room_code or ""),
+        "title": str(room.title or "").strip() or f"Комната {room.room_code}",
+        "mode": str(room.mode or "human"),
+        "difficulty": str(room.difficulty or "medium"),
+        "status": str(room.status or "waiting"),
+        "is_public": bool(room.is_public),
+        "turn": str(state.get("turn") or "white"),
+        "winner": str(state.get("winner") or ""),
+        "result": str(state.get("result") or ""),
+        "board": state.get("board") or [],
+        "last_move": state.get("last_move") or {},
+        "history": state.get("history") or [],
+        "players": {
+            "white": white_player,
+            "black": black_player,
+        },
+        "my_side": my_side,
+        "my_turn": bool(can_move),
+        "can_join": bool(can_join),
+        "can_move": bool(can_move),
+        "legal_moves": legal_moves,
+        "created_at": _to_utc_iso(room.created_at),
+        "updated_at": _to_utc_iso(room.updated_at),
+        "last_move_at": _to_utc_iso(room.last_move_at),
+        "finished_at": _to_utc_iso(room.finished_at),
+    }
+    payload["note"] = _social_checkers_note(room, payload)
+    return payload
+
+
+def _social_checkers_rank_rows(db: Session, viewer_key: str, limit: int = 100) -> tuple[list[dict[str, Any]], int | None, int]:
+    safe_limit = max(5, min(int(limit or 100), 200))
+    canonical = _social_canonical_actor_key(db, viewer_key)
+    rows = db.scalars(
+        select(SocialCheckersProfile)
+        .order_by(
+            SocialCheckersProfile.rating.desc(),
+            SocialCheckersProfile.wins.desc(),
+            SocialCheckersProfile.play_count.desc(),
+            SocialCheckersProfile.updated_at.asc(),
+            SocialCheckersProfile.id.asc(),
+        )
+        .limit(safe_limit)
+    ).all()
+    ordered_keys = db.scalars(
+        select(SocialCheckersProfile.actor_key).order_by(
+            SocialCheckersProfile.rating.desc(),
+            SocialCheckersProfile.wins.desc(),
+            SocialCheckersProfile.play_count.desc(),
+            SocialCheckersProfile.updated_at.asc(),
+            SocialCheckersProfile.id.asc(),
+        )
+    ).all()
+    my_rank = None
+    for idx, key in enumerate(ordered_keys, start=1):
+        if str(key or "") == canonical:
+            my_rank = idx
+            break
+    my_row = db.scalar(select(SocialCheckersProfile).where(SocialCheckersProfile.actor_key == canonical))
+    my_rating = int(my_row.rating or 1200) if my_row else 1200
+    data_rows: list[dict[str, Any]] = []
+    for idx, row in enumerate(rows, start=1):
+        data_rows.append(
+            {
+                "rank": idx,
+                "actor_key": str(row.actor_key or ""),
+                "nick": str(row.actor_nick or row.actor_key or ""),
+                "rating": int(row.rating or 1200),
+                "wins": int(row.wins or 0),
+                "losses": int(row.losses or 0),
+                "draws": int(row.draws or 0),
+                "play_count": int(row.play_count or 0),
+                "is_me": str(row.actor_key or "") == canonical,
+            }
+        )
+    return data_rows, my_rank, my_rating
+
+
+def _social_checkers_apply_stats(db: Session, room: SocialCheckersRoom, state: dict[str, Any]) -> None:
+    if bool(room.stats_applied):
+        return
+    result = str(state.get("result") or "")
+    winner = str(state.get("winner") or "")
+    if str(room.status or "") != "finished":
+        return
+    if str(room.mode or "") == "bot":
+        host_profile = _social_checkers_profile_row(
+            db,
+            actor_key=str(room.host_actor_key or ""),
+            actor_nick=str(room.host_nick or ""),
+            user_id=int(room.host_user_id or 0),
+            member_id=int(room.host_member_id or 0) or None,
+        )
+        bot_meta = build_checkers_bot_identity(room.difficulty)
+        if result == "draw":
+            host_profile.draws = int(host_profile.draws or 0) + 1
+            score_value = 0.5
+        elif winner == "white":
+            host_profile.wins = int(host_profile.wins or 0) + 1
+            score_value = 1.0
+        else:
+            host_profile.losses = int(host_profile.losses or 0) + 1
+            score_value = 0.0
+        host_profile.play_count = int(host_profile.play_count or 0) + 1
+        host_profile.rating, _ = apply_checkers_elo(int(host_profile.rating or 1200), int(bot_meta.get("rating") or 1200), score_value)
+        room.stats_applied = True
+        return
+    if not str(room.guest_actor_key or ""):
+        return
+    white_profile = _social_checkers_profile_row(
+        db,
+        actor_key=str(room.host_actor_key or ""),
+        actor_nick=str(room.host_nick or ""),
+        user_id=int(room.host_user_id or 0),
+        member_id=int(room.host_member_id or 0) or None,
+    )
+    black_profile = _social_checkers_profile_row(
+        db,
+        actor_key=str(room.guest_actor_key or ""),
+        actor_nick=str(room.guest_nick or ""),
+        user_id=int(room.guest_user_id or 0),
+        member_id=int(room.guest_member_id or 0) or None,
+    )
+    if result == "draw":
+        white_score = 0.5
+        black_score = 0.5
+        white_profile.draws = int(white_profile.draws or 0) + 1
+        black_profile.draws = int(black_profile.draws or 0) + 1
+    elif winner == "white":
+        white_score = 1.0
+        black_score = 0.0
+        white_profile.wins = int(white_profile.wins or 0) + 1
+        black_profile.losses = int(black_profile.losses or 0) + 1
+    else:
+        white_score = 0.0
+        black_score = 1.0
+        white_profile.losses = int(white_profile.losses or 0) + 1
+        black_profile.wins = int(black_profile.wins or 0) + 1
+    white_profile.play_count = int(white_profile.play_count or 0) + 1
+    black_profile.play_count = int(black_profile.play_count or 0) + 1
+    next_white, _ = apply_checkers_elo(int(white_profile.rating or 1200), int(black_profile.rating or 1200), white_score)
+    next_black, _ = apply_checkers_elo(int(black_profile.rating or 1200), int(white_profile.rating or 1200), black_score)
+    white_profile.rating = next_white
+    black_profile.rating = next_black
+    room.stats_applied = True
+
+
+@router.get("/social/games/checkers/overview", response_model=dict[str, Any])
+def social_checkers_overview(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, actor_nick, member_id, profile_row = _social_checkers_my_profile(db, user)
+    aliases = _social_actor_alias_keys(db, actor_key)
+    public_rooms = db.scalars(
+        select(SocialCheckersRoom)
+        .where(
+            SocialCheckersRoom.game_code == CHECKERS_GAME_CODE,
+            SocialCheckersRoom.mode == "human",
+            SocialCheckersRoom.is_public.is_(True),
+            SocialCheckersRoom.status == "waiting",
+        )
+        .order_by(SocialCheckersRoom.updated_at.desc(), SocialCheckersRoom.id.desc())
+        .limit(24)
+    ).all()
+    my_rooms = db.scalars(
+        select(SocialCheckersRoom)
+        .where(
+            SocialCheckersRoom.game_code == CHECKERS_GAME_CODE,
+            or_(
+                SocialCheckersRoom.host_actor_key.in_(aliases),
+                SocialCheckersRoom.guest_actor_key.in_(aliases),
+            ),
+            SocialCheckersRoom.status.in_(["waiting", "active", "finished", "cancelled"]),
+        )
+        .order_by(SocialCheckersRoom.updated_at.desc(), SocialCheckersRoom.id.desc())
+        .limit(12)
+    ).all()
+    leaderboard_rows, my_rank, my_rating = _social_checkers_rank_rows(db, actor_key, limit=20)
+    db.commit()
+    return {
+        "profile": {
+            **_social_checkers_profile_out(profile_row, actor_key=actor_key),
+            "nick": actor_nick,
+            "member_id": int(member_id or 0),
+        },
+        "leaderboard": {
+            "rows": leaderboard_rows,
+            "my_rank": my_rank,
+            "my_rating": my_rating,
+        },
+        "rooms": {
+            "public": [_social_checkers_room_payload(db, row, actor_key) for row in public_rooms],
+            "mine": [_social_checkers_room_payload(db, row, actor_key) for row in my_rooms],
+        },
+        "difficulties": get_checkers_difficulties(),
+    }
+
+
+@router.get("/social/games/checkers/leaderboard", response_model=dict[str, Any])
+def social_checkers_leaderboard(
+    limit: int = 100,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, _, _, profile_row = _social_checkers_my_profile(db, user)
+    rows, my_rank, my_rating = _social_checkers_rank_rows(db, actor_key, limit=limit)
+    db.commit()
+    return {
+        "rows": rows,
+        "my_rank": my_rank,
+        "my_rating": my_rating,
+        "my_profile": _social_checkers_profile_out(profile_row, actor_key=actor_key),
+    }
+
+
+@router.post("/social/games/checkers/rooms", response_model=dict[str, Any])
+def social_checkers_create_room(
+    payload: dict[str, Any],
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, actor_nick, member_id, _ = _social_checkers_my_profile(db, user)
+    mode = str((payload or {}).get("mode") or "human").strip().lower()
+    if mode not in {"human", "bot"}:
+        raise HTTPException(status_code=400, detail="Некорректный режим комнаты")
+    difficulty = str((payload or {}).get("difficulty") or "medium").strip().lower()
+    bot_meta = build_checkers_bot_identity(difficulty)
+    safe_title = str((payload or {}).get("title") or "").strip()[:120]
+    title = safe_title or (f"Комната {actor_nick}" if mode == "human" else f"Матч с {bot_meta['title']}")
+    is_public = bool((payload or {}).get("is_public", True)) if mode == "human" else False
+    existing_codes = set(db.scalars(select(SocialCheckersRoom.room_code)).all())
+    room = SocialCheckersRoom(
+        game_code=CHECKERS_GAME_CODE,
+        room_code=create_checkers_room_code(existing_codes),
+        title=title,
+        owner_user_id=int(user.id),
+        host_user_id=int(user.id),
+        host_member_id=int(member_id or 0) or None,
+        host_actor_key=_social_canonical_actor_key(db, actor_key),
+        host_nick=actor_nick[:120],
+        guest_user_id=None,
+        guest_member_id=None,
+        guest_actor_key=str(bot_meta["actor_key"]) if mode == "bot" else "",
+        guest_nick=str(bot_meta["nick"])[:120] if mode == "bot" else "",
+        mode=mode,
+        difficulty=str(bot_meta["difficulty"]),
+        is_public=bool(is_public),
+        status="active" if mode == "bot" else "waiting",
+        state_json=json.dumps(create_checkers_state(), ensure_ascii=False),
+        stats_applied=False,
+        last_move_at=None,
+        finished_at=None,
+    )
+    db.add(room)
+    db.flush()
+    _audit(
+        db,
+        user,
+        action="social_checkers_room_created",
+        details=json.dumps({"room_id": int(room.id), "mode": mode, "title": title}, ensure_ascii=False),
+        module_code="social_hub",
+        entity_type="checkers_room",
+        entity_id=str(room.id),
+        request=request,
+    )
+    db.commit()
+    db.refresh(room)
+    return _social_checkers_room_payload(db, room, actor_key)
+
+
+@router.get("/social/games/checkers/rooms/{room_id}", response_model=dict[str, Any])
+def social_checkers_get_room(
+    room_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, _, _, _ = _social_checkers_my_profile(db, user)
+    room = db.get(SocialCheckersRoom, int(room_id or 0))
+    if not room or str(room.game_code or "") != CHECKERS_GAME_CODE:
+        raise HTTPException(status_code=404, detail="Комната не найдена")
+    if not _social_checkers_room_visible(db, room, actor_key):
+        raise HTTPException(status_code=403, detail="Нет доступа к комнате")
+    db.commit()
+    return _social_checkers_room_payload(db, room, actor_key)
+
+@router.post("/social/games/checkers/rooms/{room_id}/join", response_model=dict[str, Any])
+def social_checkers_join_room(
+    room_id: int,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, actor_nick, member_id, _ = _social_checkers_my_profile(db, user)
+    room = db.get(SocialCheckersRoom, int(room_id or 0))
+    if not room or str(room.game_code or "") != CHECKERS_GAME_CODE:
+        raise HTTPException(status_code=404, detail="Комната не найдена")
+    if str(room.mode or "") != "human":
+        raise HTTPException(status_code=400, detail="К боту подключение не требуется")
+    if str(room.status or "") != "waiting":
+        raise HTTPException(status_code=409, detail="Комната уже занята")
+    if not bool(room.is_public):
+        raise HTTPException(status_code=403, detail="Комната закрыта для подключения")
+    if _social_checkers_room_side(db, room, actor_key) == "white":
+        raise HTTPException(status_code=400, detail="Нельзя подключиться к своей комнате")
+    room.guest_user_id = int(user.id)
+    room.guest_member_id = int(member_id or 0) or None
+    room.guest_actor_key = _social_canonical_actor_key(db, actor_key)
+    room.guest_nick = actor_nick[:120]
+    room.status = "active"
+    room.updated_at = datetime.utcnow()
+    _audit(
+        db,
+        user,
+        action="social_checkers_room_joined",
+        details=json.dumps({"room_id": int(room.id), "room_code": str(room.room_code or "")}, ensure_ascii=False),
+        module_code="social_hub",
+        entity_type="checkers_room",
+        entity_id=str(room.id),
+        request=request,
+    )
+    db.commit()
+    db.refresh(room)
+    return _social_checkers_room_payload(db, room, actor_key)
+
+
+@router.post("/social/games/checkers/rooms/{room_id}/move", response_model=dict[str, Any])
+def social_checkers_make_move(
+    room_id: int,
+    payload: dict[str, Any],
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, _, _, _ = _social_checkers_my_profile(db, user)
+    room = db.get(SocialCheckersRoom, int(room_id or 0))
+    if not room or str(room.game_code or "") != CHECKERS_GAME_CODE:
+        raise HTTPException(status_code=404, detail="Комната не найдена")
+    my_side = _social_checkers_room_side(db, room, actor_key)
+    if not my_side:
+        raise HTTPException(status_code=403, detail="Нет доступа к партии")
+    if str(room.status or "") != "active":
+        raise HTTPException(status_code=409, detail="Комната сейчас неактивна")
+    state = _social_checkers_room_state(room)
+    if str(state.get("turn") or "") != my_side:
+        raise HTTPException(status_code=409, detail="Сейчас ход другого игрока")
+    try:
+        next_state = apply_checkers_move(state, (payload or {}).get("path"))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if str(room.mode or "") == "bot" and not str(next_state.get("winner") or "") and str(next_state.get("result") or "") != "draw" and str(next_state.get("turn") or "") == "black":
+        bot_move = pick_checkers_bot_move(next_state, room.difficulty)
+        if bot_move and isinstance(bot_move, dict):
+            next_state = apply_checkers_move(next_state, bot_move.get("path"))
+    move_stamp = _to_utc_iso(datetime.utcnow())
+    if next_state.get("last_move"):
+        next_state["last_move"]["at"] = move_stamp
+    if next_state.get("history"):
+        next_state["history"][-1]["at"] = move_stamp
+    _social_checkers_store_room_state(room, next_state)
+    room.last_move_at = datetime.utcnow()
+    if str(next_state.get("winner") or "") or str(next_state.get("result") or "") == "draw":
+        room.status = "finished"
+        room.finished_at = datetime.utcnow()
+        _social_checkers_apply_stats(db, room, next_state)
+    _audit(
+        db,
+        user,
+        action="social_checkers_move",
+        details=json.dumps({"room_id": int(room.id), "side": my_side, "path": next_state.get("last_move", {}).get("path", [])}, ensure_ascii=False),
+        module_code="social_hub",
+        entity_type="checkers_room",
+        entity_id=str(room.id),
+        request=request,
+    )
+    db.commit()
+    db.refresh(room)
+    return _social_checkers_room_payload(db, room, actor_key)
+
+
+@router.post("/social/games/checkers/rooms/{room_id}/leave", response_model=dict[str, Any])
+def social_checkers_leave_room(
+    room_id: int,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, _, _, _ = _social_checkers_my_profile(db, user)
+    room = db.get(SocialCheckersRoom, int(room_id or 0))
+    if not room or str(room.game_code or "") != CHECKERS_GAME_CODE:
+        raise HTTPException(status_code=404, detail="Комната не найдена")
+    my_side = _social_checkers_room_side(db, room, actor_key)
+    if not my_side:
+        raise HTTPException(status_code=403, detail="Нет доступа к партии")
+    state = _social_checkers_room_state(room)
+    if str(room.status or "") == "waiting":
+        room.status = "cancelled"
+        state["result"] = "cancelled"
+        state["winner"] = ""
+    elif str(room.status or "") == "active":
+        winner = "black" if my_side == "white" else "white"
+        state["winner"] = winner
+        state["result"] = "resigned"
+        state["last_move"] = {"side": my_side, "path": [], "capture_count": 0, "promoted": False, "at": _to_utc_iso(datetime.utcnow())}
+        room.status = "finished"
+        room.finished_at = datetime.utcnow()
+        _social_checkers_apply_stats(db, room, state)
+    _social_checkers_store_room_state(room, state)
+    room.last_move_at = datetime.utcnow()
+    _audit(
+        db,
+        user,
+        action="social_checkers_room_left",
+        details=json.dumps({"room_id": int(room.id), "side": my_side, "status": str(room.status or "")}, ensure_ascii=False),
+        module_code="social_hub",
+        entity_type="checkers_room",
+        entity_id=str(room.id),
+        request=request,
+    )
+    db.commit()
+    db.refresh(room)
+    return _social_checkers_room_payload(db, room, actor_key)
 
 @router.get("/social/chat/threads", response_model=list[SocialChatThreadOut])
 def social_chat_threads(
@@ -15652,7 +16275,7 @@ def _audit(
     entity_type: str = "",
     entity_id: str = "",
     status: str = "ok",
-    request: Request | None = None,
+    request: Request,
 ) -> None:
     # High-frequency read events and UI pings create write contention on SQLite.
     # Keep mutating/security events, but skip noisy telemetry-grade records.
