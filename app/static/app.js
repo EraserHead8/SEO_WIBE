@@ -1,4 +1,4 @@
-function sanitizeToken(raw) {
+﻿function sanitizeToken(raw) {
   let value = String(raw || "").trim();
   if (!value || value === "null" || value === "undefined") return "";
   if (value.toLowerCase().startsWith("bearer ")) {
@@ -5064,7 +5064,7 @@ function normalizeReturnRow(rawRow, marketplace, idx) {
       const text = normalizeFeedbackText(getValueByPath(rawRow, path));
       if (!text) continue;
       const low = String(text).trim().toLowerCase();
-      if (!low || low === "-" || low === "вЂ”" || low === "null" || low === "undefined") continue;
+      if (!low || low === "-" || low === "—" || low === "null" || low === "undefined") continue;
       return String(text).trim();
     }
     return "";
@@ -5555,7 +5555,7 @@ function extractReturnDetailContext(detail, returnId = "") {
   const normalizeScalar = (value, options = {}) => {
     const text = String(normalizeProductDetailValue(value) || "").trim();
     const low = text.toLowerCase();
-    if (!text || low === "-" || low === "—" || low === "вЂ”" || low === "null" || low === "undefined") return "";
+    if (!text || low === "-" || low === "—" || low === "—" || low === "null" || low === "undefined") return "";
     if (!options.allowZero && (low === "0" || low === "0.0")) return "";
     return text;
   };
@@ -8294,7 +8294,7 @@ function normalizeProductDetailValue(value) {
   if (value === null || value === undefined) return "";
   if (typeof value === "string") {
     const text = value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
-    if (!text || text === "-" || text === "вЂ”") return "";
+    if (!text || text === "-" || text === "—") return "";
     return text;
   }
   if (typeof value === "number") {
@@ -11780,11 +11780,11 @@ function formatHelpContent(text, lang = "ru") {
     const first = firstRaw.toLowerCase();
 
     const numbered = lines.every((line) => /^\d+[).]\s+/.test(line));
-    const bullets = lines.every((line) => /^[-вЂ“вЂ”]\s+/.test(line));
-    const headerAndBullets = lines.length > 1 && /:\s*$/.test(firstRaw) && lines.slice(1).every((line) => /^[-вЂ“вЂ”]\s+/.test(line));
+    const bullets = lines.every((line) => /^[-–—]\s+/.test(line));
+    const headerAndBullets = lines.length > 1 && /:\s*$/.test(firstRaw) && lines.slice(1).every((line) => /^[-–—]\s+/.test(line));
 
     if (headerAndBullets) {
-      const items = lines.slice(1).map((line) => `<li>${escapeHtml(line.replace(/^[-вЂ“вЂ”]\s+/, ""))}</li>`).join("");
+      const items = lines.slice(1).map((line) => `<li>${escapeHtml(line.replace(/^[-–—]\s+/, ""))}</li>`).join("");
       return `<section class="help-block"><h5>${escapeHtml(firstRaw)}</h5><ul>${items}</ul></section>`;
     }
     if (numbered) {
@@ -11792,7 +11792,7 @@ function formatHelpContent(text, lang = "ru") {
       return `<section class="help-block"><ol>${items}</ol></section>`;
     }
     if (bullets) {
-      const items = lines.map((line) => `<li>${escapeHtml(line.replace(/^[-вЂ“вЂ”]\s+/, ""))}</li>`).join("");
+      const items = lines.map((line) => `<li>${escapeHtml(line.replace(/^[-–—]\s+/, ""))}</li>`).join("");
       return `<section class="help-block"><ul>${items}</ul></section>`;
     }
     if (first.startsWith("назначение:") || first.startsWith("purpose:")) {
