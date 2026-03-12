@@ -1,4 +1,4 @@
-﻿function sanitizeToken(raw) {
+function sanitizeToken(raw) {
   let value = String(raw || "").trim();
   if (!value || value === "null" || value === "undefined") return "";
   if (value.toLowerCase().startsWith("bearer ")) {
@@ -132,6 +132,8 @@ let salesCurrentLabel = "";
 let salesLoadProgress = { active: false, total: 0, loaded: 0 };
 let salesLoadState = "idle";
 let salesLoadToken = 0;
+let salesLastRequestSignature = "";
+let salesLastLoadedAt = 0;
 let salesAutoLoadTimer = null;
 let accountingOverview = null;
 let accountingChartRows = [];
@@ -1003,6 +1005,7 @@ function applyUiLanguage() {
   setText("#adsSubtabRecommendations .panel h3", isEn ? "WB Ads Recommendations" : "Рекомендации WB Ads");
   setText("#adsSubtabRecommendations .grid-4 button", isEn ? "Build Recommendations" : "Построить рекомендации");
   setText("#adsSubtabBidder .panel h3", isEn ? "WB Ads Bidder" : "Бидер WB Ads");
+  applyWbBidderFieldHints();
   setText("#adsSubtabOzon .panel h3", isEn ? "Ozon Ads (beta)" : "Реклама Ozon (бета)");
   setText("#profileCompanyHeader", isEn ? "Company Profile" : "Профиль компании");
   setText("#profileMainPanel h3", isEn ? "Company Profile" : "Профиль компании");
@@ -6046,29 +6049,86 @@ async function loadWbAdCampaigns() {
     wbAdsLoadProgress = { active: true, total: 0, loaded: 0, failed: 0 };
     updateWbAdsLoadStatus(tr("Загрузка списка кампаний…", "Loading campaign list..."));
 
-    let data = await requestJson("/api/wb/ads/campaigns?fast=1", { headers: authHeaders(), timeoutMs: 120000 }).catch(() => null);
-    if (!data) {
-      data = await requestJson("/api/wb/ads/campaigns?fast=0", { headers: authHeaders(), timeoutMs: 120000 }).catch(() => null);
+    const formatAdsLoadError = (err) => {
+      const status = Number(err?.status || 0);
+      const msg = String(err?.message || "").trim();
+      const low = msg.toLowerCase();
+      if (status === 400 && (low.includes("ключ") || low.includes("api key") || low.includes("token"))) {
+        return tr(
+          "Не удалось загрузить кампании: проверьте API-ключ WB Ads в профиле.",
+          "Unable to load campaigns: check WB Ads API key in profile."
+        );
+      }
+      if (status === 403) {
+        return tr(
+          "Нет доступа к модулю рекламы в этом кабинете.",
+          "No access to Ads module in this workspace."
+        );
+      }
+      if (status === 429) {
+        return tr(
+          "WB Ads временно ограничил запросы. Показаны последние доступные данные.",
+          "WB Ads temporarily rate-limited requests. Showing the latest available data."
+        );
+      }
+      return msg || tr(
+        "Не удалось обновить кампании сейчас. Повторим при следующем цикле загрузки.",
+        "Unable to refresh campaigns now. Will retry on next refresh cycle."
+      );
+    };
+
+    const requestCampaigns = async (fastMode, timeoutMs = 120000) => {
+      try {
+        const payload = await requestJson(`/api/wb/ads/campaigns?fast=${fastMode ? 1 : 0}`, {
+          headers: authHeaders(),
+          timeoutMs,
+        });
+        return { payload, error: null };
+      } catch (error) {
+        return { payload: null, error };
+      }
+    };
+
+    const fastResult = await requestCampaigns(true, 90000);
+    let data = fastResult.payload;
+    let lastError = fastResult.error;
+
+    if (data) {
+      const total = Array.isArray(data.campaigns) ? data.campaigns.length : 0;
+      const placeholderCount = Number(data?.meta?.placeholder_count || 0);
+      const shouldUpgrade = total > 0 && placeholderCount >= Math.max(8, Math.ceil(total * 0.35));
+      if (shouldUpgrade) {
+        const fullResult = await requestCampaigns(false, 150000);
+        if (fullResult.payload && Array.isArray(fullResult.payload.campaigns) && fullResult.payload.campaigns.length) {
+          data = fullResult.payload;
+        } else if (fullResult.error) {
+          lastError = fullResult.error;
+        }
+      }
+    } else {
+      const fullResult = await requestCampaigns(false, 150000);
+      data = fullResult.payload;
+      if (!data) {
+        lastError = fullResult.error || lastError;
+      }
     }
+
     if (!data) {
       wbAdsLoadProgress.active = false;
-      updateWbAdsLoadStatus(
-        tr(
-          "Не удалось обновить кампании сейчас. Повторим при следующем цикле загрузки.",
-          "Unable to refresh campaigns now. Will retry on next refresh cycle."
-        )
-      );
+      updateWbAdsLoadStatus(formatAdsLoadError(lastError));
       return;
     }
+
     if (!Array.isArray(data.campaigns) || !data.campaigns.length) {
       await requestJson("/api/wb/ads/campaigns/sync", {
         method: "POST",
         headers: authHeaders(),
         timeoutMs: 25000,
       }).catch(() => null);
-      const retry = await requestJson("/api/wb/ads/campaigns?fast=1", { headers: authHeaders(), timeoutMs: 120000 }).catch(() => null);
+      const retry = (await requestCampaigns(true, 120000)).payload;
       if (retry && Array.isArray(retry.campaigns)) data = retry;
     }
+
     wbCampaignRows = Array.isArray(data.campaigns) ? data.campaigns : [];
     wbAdsEnrichSignature = "";
     wbAdsEnrichSignatureAt = 0;
@@ -6078,9 +6138,48 @@ async function loadWbAdCampaigns() {
       if (!cid || !statsMap[cid]) return row;
       return { ...row, ...statsMap[cid] };
     });
+
     const ids = wbCampaignRows.map((row) => Number(getCampaignRowId(row) || 0)).filter((id) => id > 0);
     wbAdsLoadProgress.total = ids.length;
     wbAdsLoadProgress.loaded = 0;
+
+    const previewIds = [...new Set(
+      wbCampaignRows
+        .filter((row) => {
+          const cid = Number(getCampaignRowId(row) || 0);
+          if (cid <= 0) return false;
+          return !campaignHasContext(row) || !campaignHasRealName(row) || !campaignHasStats(row);
+        })
+        .map((row) => Number(getCampaignRowId(row) || 0))
+        .filter((id) => id > 0)
+        .slice(0, 24)
+    )];
+
+    if (previewIds.length) {
+      const previewPayload = await requestJson("/api/wb/ads/campaigns/enrich", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ ids: previewIds }),
+        timeoutMs: 90000,
+      }).catch(() => null);
+      if (runToken === wbAdsLoadToken && previewPayload && typeof previewPayload === "object") {
+        const summaries = previewPayload?.summaries && typeof previewPayload.summaries === "object"
+          ? previewPayload.summaries
+          : {};
+        const stats = previewPayload?.stats && typeof previewPayload.stats === "object"
+          ? previewPayload.stats
+          : {};
+        wbCampaignRows = wbCampaignRows.map((row) => {
+          const cid = getCampaignRowId(row);
+          if (!cid) return row;
+          const merged = mergeCampaignSummaryIntoRow(row, summaries[cid] || null);
+          if (stats[cid] && typeof stats[cid] === "object") return { ...merged, ...stats[cid] };
+          return merged;
+        });
+        wbAdsLoadProgress.loaded = Math.min(previewIds.length, wbAdsLoadProgress.total || previewIds.length);
+      }
+    }
+
     if (selectedWbCampaignId && !wbCampaignRows.some((x) => getCampaignRowId(x) === selectedWbCampaignId)) {
       selectedWbCampaignId = "";
     }
@@ -6094,6 +6193,7 @@ async function loadWbAdCampaigns() {
     } else {
       updateWbAdsLoadStatus();
     }
+
     renderWbCampaignRows();
     requestJson("/api/wb/ads/balance", { headers: authHeaders(), timeoutMs: 30000 })
       .then((payload) => {
@@ -6111,7 +6211,6 @@ async function loadWbAdCampaigns() {
   });
   return wbAdsLoadInflight;
 }
-
 function getCampaignRowId(row) {
   return String(row?.advertId || row?.advert_id || row?.campaignId || row?.campaign_id || row?.id || row?.adId || "");
 }
@@ -7652,20 +7751,85 @@ function setWbBidderStatus(message = "-", tone = "") {
   box.textContent = String(message || "-");
 }
 
+function applyWbBidderFieldHints() {
+  const isEn = currentLang === "en";
+  const setInputHint = (id, placeholder, title = "") => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (typeof placeholder === "string") el.placeholder = placeholder;
+    if (title) el.title = title;
+  };
+  const setOptionText = (id, map) => {
+    const el = document.getElementById(id);
+    if (!el || !map || typeof map !== "object") return;
+    [...el.options].forEach((opt) => {
+      const key = String(opt?.value || "").trim();
+      if (!key || !map[key]) return;
+      opt.textContent = map[key];
+    });
+  };
+
+  setInputHint(
+    "wbBidderCampaignId",
+    isEn ? "WB campaign ID from campaign list" : "ID кампании WB из списка кампаний",
+    isEn ? "Numeric campaign id from WB Ads campaigns table" : "Числовой ID кампании из таблицы рекламных кампаний"
+  );
+  setInputHint(
+    "wbBidderNmId",
+    isEn ? "Product nmID" : "nmID карточки товара",
+    isEn ? "nmID of the product card the rule controls" : "nmID карточки товара, для которой действует правило"
+  );
+  setInputHint("wbBidderTargetValue", isEn ? "Search phrase for normquery mode" : "Поисковая фраза для режима normquery");
+  setInputHint("wbBidderDesiredBid", isEn ? "Target bid, RUB" : "Целевая ставка, ₽");
+  setInputHint("wbBidderMinBid", isEn ? "Minimum bid, RUB" : "Минимальная ставка, ₽");
+  setInputHint("wbBidderMaxBid", isEn ? "Maximum bid, RUB" : "Максимальная ставка, ₽");
+  setInputHint("wbBidderStepBid", isEn ? "Bid change step, RUB" : "Шаг изменения ставки, ₽");
+  setInputHint("wbBidderPosFrom", isEn ? "Target position from" : "Целевая позиция от");
+  setInputHint("wbBidderPosTo", isEn ? "Target position to" : "Целевая позиция до");
+  setInputHint("wbBidderMinClicks", isEn ? "Min clicks before auto-step" : "Мин. кликов для автошага");
+  setInputHint("wbBidderCooldownSec", isEn ? "Cooldown between runs, sec" : "Интервал между пересчетами, сек");
+  setInputHint("wbBidderNotes", isEn ? "Rule note (optional)" : "Комментарий к правилу (опционально)");
+
+  setOptionText("wbBidderTargetKind", {
+    normquery: isEn ? "Search phrase (normquery)" : "Поисковая фраза (normquery)",
+    nm: isEn ? "Product card (nm)" : "Карточка товара (nm)",
+  });
+  setOptionText("wbBidderPlacement", {
+    search: isEn ? "Search only" : "Только поиск",
+    recommendations: isEn ? "Recommendations only" : "Только рекомендации",
+    combined: isEn ? "Search + recommendations" : "Поиск + рекомендации",
+  });
+  setOptionText("wbBidderStrategy", {
+    optimal: isEn ? "Optimal (auto balance)" : "Optimal (авто баланс)",
+    position: isEn ? "Position hold" : "Position (держать позицию)",
+    range: isEn ? "Range hold" : "Range (держать диапазон)",
+    hold: isEn ? "Hold fixed bid" : "Hold (фиксированная ставка)",
+  });
+
+  const hint = document.getElementById("wbBidderFieldsHint");
+  if (hint) {
+    hint.textContent = isEn
+      ? "campaign_id is ad campaign id, nmID is product card id, target phrase works only for normquery. Bid values are in RUB."
+      : "campaign_id — это ID рекламной кампании, nmID — ID карточки товара, фраза используется только в режиме normquery. Ставки указываются в рублях.";
+  }
+}
+
 function syncWbBidderTargetKindUi() {
+  applyWbBidderFieldHints();
   const kind = String(document.getElementById("wbBidderTargetKind")?.value || "normquery").trim().toLowerCase();
   const targetValueEl = document.getElementById("wbBidderTargetValue");
   if (!targetValueEl) return;
   if (kind === "nm") {
     targetValueEl.disabled = true;
-    targetValueEl.placeholder = tr("Для nm не используется", "Not used for nm");
+    targetValueEl.placeholder = tr("Для режима «Карточка (nm)» не используется", "Not used in product-card (nm) mode");
+    targetValueEl.title = tr("Поле фразы работает только для режима normquery.", "Phrase field is used only for normquery mode.");
     targetValueEl.value = "";
     return;
   }
   targetValueEl.disabled = false;
-  targetValueEl.placeholder = tr("Фраза (для normquery)", "Phrase (for normquery)");
+  targetValueEl.placeholder = tr("Поисковая фраза (режим normquery)", "Search phrase (normquery mode)");
+  targetValueEl.title = tr("Укажите фразу, по которой нужно держать ставку/позицию.", "Set phrase used to control bid/position.");
 }
-
 function resetWbBidderForm() {
   const defaults = [
     ["wbBidderRuleId", ""],
@@ -10559,10 +10723,34 @@ async function loadSalesStats(retryAttempt = 0, forceRefresh = false) {
   qp.set("granularity", "auto");
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   qp.set("tz", tz);
+  const requestSignature = `${market || "all"}|${date_from || ""}|${date_to || ""}|${tz}`;
   if (forceRefresh) qp.set("force_refresh", "1");
   if (date_from) qp.set("date_from", date_from);
   if (date_to) qp.set("date_to", date_to);
   const meta = document.getElementById("salesStatsMeta");
+  const hasRenderedSalesData = Boolean(
+    (Array.isArray(salesRows) && salesRows.length)
+    || (Array.isArray(salesChartRows) && salesChartRows.length)
+    || Number(salesTotalsData?.orders || 0) > 0
+    || Math.abs(Number(salesTotalsData?.revenue || 0)) > 0.000001
+  );
+  if (
+    retryAttempt === 0
+    && !forceRefresh
+    && hasRenderedSalesData
+    && salesLastRequestSignature === requestSignature
+    && (Date.now() - Number(salesLastLoadedAt || 0)) < 14000
+  ) {
+    if (meta) meta.textContent = tr(
+      "Показаны актуальные данные без повторного запроса к API.",
+      "Showing up-to-date data without another API request."
+    );
+    salesLoadState = "success";
+    salesLoadProgress = { active: false, total: market === "all" ? 2 : 1, loaded: market === "all" ? 2 : 1 };
+    updateSalesLoadStatus();
+    renderSalesStats();
+    return true;
+  }
   if (meta) meta.textContent = tr("Загрузка статистики продаж...", "Loading sales statistics...");
   salesRows = [];
   salesChartRows = [];
@@ -10692,6 +10880,10 @@ async function loadSalesStats(retryAttempt = 0, forceRefresh = false) {
   }
   updateSalesLoadStatus();
   renderSalesStats();
+  if (retryAttempt === 0) {
+    salesLastRequestSignature = requestSignature;
+    salesLastLoadedAt = Date.now();
+  }
   markModuleLoaded("sales");
   return true;
 }

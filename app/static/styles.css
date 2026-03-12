@@ -1,4 +1,4 @@
-﻿@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Unbounded:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Unbounded:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
 :root {
   --bg-1: #060a18;
@@ -10441,6 +10441,118 @@ body.mobile-apk-mode #reviewsSubtabReturns .returns-hero > h3 {
   font-size: 12px;
   line-height: 1.45;
 }
+.returns-table th {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.returns-table .cell-main-text {
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.returns-table .cell-meta-small {
+  max-height: 84px;
+  overflow-y: auto;
+}
+@media (min-width: 981px) {
+  .returns-table,
+  .returns-table thead,
+  .returns-table tbody,
+  .returns-table tr,
+  .returns-table th,
+  .returns-table td {
+    display: revert !important;
+  }
+
+  .returns-table {
+    width: 100%;
+    min-width: 1120px !important;
+    table-layout: fixed;
+  }
+
+  .returns-table thead {
+    display: table-header-group !important;
+  }
+
+  .returns-table tbody {
+    display: table-row-group !important;
+    width: auto !important;
+  }
+
+  .returns-table tr {
+    display: table-row !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+  }
+
+  .returns-table th,
+  .returns-table td {
+    display: table-cell !important;
+    border-bottom: 1px solid rgba(140, 170, 245, 0.24) !important;
+    padding: 8px 8px !important;
+    vertical-align: top;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .returns-table td::before {
+    content: none !important;
+    display: none !important;
+  }
+
+  .returns-table th:nth-child(1),
+  .returns-table td:nth-child(1) {
+    width: 132px !important;
+    min-width: 132px !important;
+  }
+
+  .returns-table th:nth-child(2),
+  .returns-table td:nth-child(2) {
+    width: 164px !important;
+    min-width: 164px !important;
+  }
+
+  .returns-table th:nth-child(3),
+  .returns-table td:nth-child(3) {
+    width: 220px !important;
+    min-width: 220px !important;
+  }
+
+  .returns-table th:nth-child(4),
+  .returns-table td:nth-child(4) {
+    width: 420px !important;
+    min-width: 420px !important;
+  }
+
+  .returns-table th:nth-child(5),
+  .returns-table td:nth-child(5) {
+    width: 122px !important;
+    min-width: 122px !important;
+  }
+
+  .returns-table th:nth-child(6),
+  .returns-table td:nth-child(6) {
+    width: 184px !important;
+    min-width: 184px !important;
+  }
+
+  .returns-table .review-actions {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+
+  .returns-table .review-actions .returns-action-btn {
+    width: 100%;
+    min-width: 0;
+  }
+}
 
 .social-calendar-connect-btn {
   width: 100%;
@@ -10468,6 +10580,17 @@ body.mobile-apk-mode #reviewsSubtabReturns .returns-hero > h3 {
   .returns-hero {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .returns-table {
+    min-width: 0 !important;
+    width: 100%;
+  }
+
+  .returns-table .review-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
   }
 
   .review-actions .returns-action-btn {

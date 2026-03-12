@@ -843,7 +843,7 @@
           <div id="returnsLoadStatus" class="hint load-status">-</div>
         </div>
         <div class="table-card">
-          <table class="reviews-table questions-table">
+          <table class="reviews-table questions-table returns-table">
             <thead>
               <tr><th>Статус</th><th>Дата</th><th>Товар</th><th>Причина / комментарий</th><th>Фото</th><th>Что сделать</th></tr>
             </thead>
@@ -1026,6 +1026,7 @@
           </div>
           <input id="wbBidderRuleId" type="hidden" />
           <datalist id="wbBidderCampaignHints"></datalist>
+          <p id="wbBidderFieldsHint" class="hint">campaign_id — ID кампании, nmID — ID карточки товара, фраза используется только для normquery.</p>
           <div class="grid-4 ads-bidder-actions">
             <button class="btn-secondary" type="button" onclick="loadWbBidderRules()">Обновить правила</button>
             <button class="btn-secondary" type="button" onclick="runWbBidder(false)">Запустить (очередь)</button>

@@ -1,6 +1,9 @@
 let accountingReloadTimer = null;
 let accountingExpenseEditId = 0;
 let accountingRequestSeq = 0;
+let accountingLastFullQuery = "";
+let accountingLastFullAt = 0;
+let accountingChartRerenderTimer = null;
 
 const ACCOUNTING_SUBTABS = ["overview", "analysis", "expenses", "settings"];
 const ACCOUNTING_RANGE_DAYS = {
@@ -271,6 +274,19 @@ function renderAccountingOverview() {
     .join("");
 }
 
+function scheduleAccountingChartRerender(delayMs = 120) {
+  if (accountingChartRerenderTimer) {
+    clearTimeout(accountingChartRerenderTimer);
+    accountingChartRerenderTimer = null;
+  }
+  accountingChartRerenderTimer = setTimeout(() => {
+    accountingChartRerenderTimer = null;
+    if (currentTab === "accounting" && currentAccountingSubtab === "overview") {
+      try { renderAccountingChart(); } catch (_) {}
+    }
+  }, Math.max(60, Number(delayMs || 0)));
+}
+
 function renderAccountingChart() {
   const host = document.getElementById("accountingProfitChart");
   const meta = document.getElementById("accountingOverviewMeta");
@@ -279,6 +295,15 @@ function renderAccountingChart() {
   if (!points.length) {
     clearChartHost(host);
     meta.textContent = tr("Нет данных по прибыли за выбранный период.", "No profit data for selected period.");
+    return;
+  }
+
+  const rect = typeof host.getBoundingClientRect === "function"
+    ? host.getBoundingClientRect()
+    : { width: Number(host.clientWidth || 0), height: Number(host.clientHeight || 0) };
+  const hiddenOrTiny = host.offsetParent === null || Number(rect.width || 0) < 220 || Number(rect.height || 0) < 150;
+  if (hiddenOrTiny) {
+    scheduleAccountingChartRerender(160);
     return;
   }
 
@@ -372,9 +397,16 @@ function renderAccountingChart() {
         },
         true
       );
-      try {
-        chart.resize();
-      } catch (_) {}
+      const safeResize = () => {
+        try { chart.resize(); } catch (_) {}
+      };
+      safeResize();
+      if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(() => {
+          safeResize();
+          requestAnimationFrame(() => safeResize());
+        });
+      }
     }
   } else {
     clearChartHost(host);
@@ -386,7 +418,6 @@ function renderAccountingChart() {
     `${tr("Мин", "Min")}: <b>${formatMoney(min)}</b>`,
   ].map((x) => `<span>${x}</span>`).join("");
 }
-
 function renderAccountingAnalysis() {
   const tbody = document.getElementById("accountingAnalysisTable");
   const meta = document.getElementById("accountingAnalysisMeta");
@@ -664,6 +695,8 @@ async function loadAccountingData(forceBusy = false, retryAttempt = 0) {
   fastQp.set("fast", "1");
   const fullQp = new URLSearchParams(qp);
   fullQp.set("fast", "0");
+  const requestSignature = fullQp.toString();
+  const skipBackgroundFull = !forceBusy && accountingLastFullQuery === requestSignature && (Date.now() - Number(accountingLastFullAt || 0)) < 45000;
 
   accountingSetMeta("accountingWarnings", tr("Загрузка данных бухгалтерии...", "Loading accounting data..."));
 
@@ -742,7 +775,12 @@ async function loadAccountingData(forceBusy = false, retryAttempt = 0) {
       alert(e.message);
       return null;
     });
-    return applyPayload(fullData, { allowRetry: true });
+    const applied = await applyPayload(fullData, { allowRetry: true });
+    if (applied) {
+      accountingLastFullQuery = requestSignature;
+      accountingLastFullAt = Date.now();
+    }
+    return applied;
   }
 
   const fastData = await fetchFast().catch(() => null);
@@ -751,22 +789,33 @@ async function loadAccountingData(forceBusy = false, retryAttempt = 0) {
       accountingSetMeta("accountingWarnings", e.message);
       return null;
     });
-    return applyPayload(fullData, { allowRetry: true });
+    const applied = await applyPayload(fullData, { allowRetry: true });
+    if (applied) {
+      accountingLastFullQuery = requestSignature;
+      accountingLastFullAt = Date.now();
+    }
+    return applied;
   }
 
   const appliedFast = await applyPayload(fastData, { allowRetry: true });
   if (!appliedFast || runSeq !== accountingRequestSeq) return appliedFast;
+  if (skipBackgroundFull) {
+    return true;
+  }
 
   void (async () => {
     const fullData = await fetchFull().catch(() => null);
     if (!fullData) return;
     if (runSeq !== accountingRequestSeq) return;
-    await applyPayload(fullData, { allowRetry: false });
+    const applied = await applyPayload(fullData, { allowRetry: false });
+    if (applied) {
+      accountingLastFullQuery = requestSignature;
+      accountingLastFullAt = Date.now();
+    }
   })();
 
   return true;
 }
-
 async function loadAccountingWorkspace() {
   if (modulesLoaded && enabledModules instanceof Set && !enabledModules.has("accounting")) {
     return false;
@@ -794,6 +843,9 @@ function switchAccountingSubtab(tab, preload = true) {
   try {
     sessionStorage.setItem("seo_wibe_last_accounting_subtab", String(next || "overview"));
   } catch (_) {}
+  if (next === "overview") {
+    scheduleAccountingChartRerender(80);
+  }
   if (!preload) return;
   if (next === "overview" || next === "analysis") {
     trackUiActivity("ui_subtab_opened", "accounting", `subtab=${next}`, { cooldownMs: 15000 });
