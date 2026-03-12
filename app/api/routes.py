@@ -16275,7 +16275,7 @@ def _audit(
     entity_type: str = "",
     entity_id: str = "",
     status: str = "ok",
-    request: Request,
+    request: Request | None = None,
 ) -> None:
     # High-frequency read events and UI pings create write contention on SQLite.
     # Keep mutating/security events, but skip noisy telemetry-grade records.
