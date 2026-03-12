@@ -4397,8 +4397,26 @@ def wb_ads_bidder_rules_update(
     raw_patch = payload.model_dump(exclude_unset=True)
     if not raw_patch:
         return WbBidderRuleOut(**serialize_bidder_rule(row))
+    current = {
+        "campaign_id": row.campaign_id,
+        "target_kind": row.target_kind,
+        "nm_id": row.nm_id,
+        "target_value": row.target_value,
+        "placement": row.placement,
+        "strategy": row.strategy,
+        "desired_bid": row.desired_bid,
+        "min_bid": row.min_bid,
+        "max_bid": row.max_bid,
+        "step_bid": row.step_bid,
+        "target_pos_from": row.target_pos_from,
+        "target_pos_to": row.target_pos_to,
+        "min_clicks": row.min_clicks,
+        "is_active": row.is_active,
+        "cooldown_sec": row.cooldown_sec,
+        "notes": row.notes,
+    }
     try:
-        normalized = normalize_rule_payload(raw_patch, partial=True)
+        normalized = normalize_rule_payload(raw_patch, partial=True, current=current)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     apply_rule_payload(row, normalized)

@@ -23,6 +23,20 @@ from app.services.wb_modules import (
 ALLOWED_TARGET_KINDS = {"normquery", "nm"}
 ALLOWED_PLACEMENTS = {"search", "recommendations", "combined"}
 ALLOWED_STRATEGIES = {"hold", "range", "position", "optimal"}
+NM_TARGET_SENTINEL_PREFIX = "__nm__:"
+
+
+def _nm_storage_target_value(placement: str) -> str:
+    return f"{NM_TARGET_SENTINEL_PREFIX}{_normalize_placement(placement)}"
+
+
+def _public_target_value(target_kind: str, value: Any) -> str:
+    text = str(value or "").strip()
+    if str(target_kind or "").strip().lower() != "nm":
+        return text
+    if text.startswith(NM_TARGET_SENTINEL_PREFIX):
+        return ""
+    return text
 
 
 def serialize_bidder_rule(rule: WbAdsBidderRule) -> dict[str, Any]:
@@ -31,7 +45,7 @@ def serialize_bidder_rule(rule: WbAdsBidderRule) -> dict[str, Any]:
         "campaign_id": int(rule.campaign_id or 0),
         "target_kind": str(rule.target_kind or "normquery"),
         "nm_id": int(rule.nm_id or 0),
-        "target_value": str(rule.target_value or ""),
+        "target_value": _public_target_value(rule.target_kind, rule.target_value),
         "placement": str(rule.placement or "search"),
         "strategy": str(rule.strategy or "optimal"),
         "desired_bid": int(rule.desired_bid or 0),
@@ -59,7 +73,7 @@ def serialize_bidder_run(row: WbAdsBidderRun) -> dict[str, Any]:
         "campaign_id": int(row.campaign_id or 0),
         "target_kind": str(row.target_kind or "normquery"),
         "nm_id": int(row.nm_id or 0),
-        "target_value": str(row.target_value or ""),
+        "target_value": _public_target_value(row.target_kind, row.target_value),
         "placement": str(row.placement or "search"),
         "previous_bid": int(row.previous_bid or 0),
         "next_bid": int(row.next_bid or 0),
@@ -97,11 +111,19 @@ def list_bidder_runs(db: Session, user_id: int, *, limit: int = 120) -> list[WbA
     )
 
 
-def normalize_rule_payload(payload: dict[str, Any], *, partial: bool = False) -> dict[str, Any]:
+def normalize_rule_payload(payload: dict[str, Any], *, partial: bool = False, current: dict[str, Any] | None = None) -> dict[str, Any]:
     out: dict[str, Any] = {}
+    current = dict(current or {})
 
     def _allow(field: str) -> bool:
         return not partial or field in payload
+
+    def _resolved(field: str, default: Any = "") -> Any:
+        if field in out:
+            return out.get(field)
+        if field in payload:
+            return payload.get(field)
+        return current.get(field, default)
 
     if _allow("campaign_id"):
         campaign_id = int(payload.get("campaign_id") or 0)
@@ -158,10 +180,15 @@ def normalize_rule_payload(payload: dict[str, Any], *, partial: bool = False) ->
     if _allow("notes"):
         out["notes"] = str(payload.get("notes") or "").strip()[:500]
 
-    target_kind = str(out.get("target_kind") or payload.get("target_kind") or "normquery").strip().lower()
-    nm_id = int(out.get("nm_id") if "nm_id" in out else payload.get("nm_id") or 0)
-    target_value = str(out.get("target_value") if "target_value" in out else payload.get("target_value") or "").strip()
-    if not partial or "target_kind" in out or "nm_id" in out or "target_value" in out:
+    current_target_kind = str(current.get("target_kind") or "").strip().lower()
+    target_kind = str(_resolved("target_kind", "normquery") or "normquery").strip().lower()
+    nm_id = int(_resolved("nm_id", 0) or 0)
+    target_raw = _resolved("target_value", "")
+    if "target_value" not in out and "target_value" not in payload and current_target_kind != target_kind:
+        target_raw = ""
+    target_value = str(target_raw or "").strip()
+    placement = _normalize_placement(str(_resolved("placement", "search") or "search").strip().lower())
+    if not partial or "target_kind" in out or "nm_id" in out or "target_value" in out or "placement" in out:
         if target_kind == "normquery":
             if nm_id <= 0:
                 raise ValueError("Для target_kind=normquery нужно указать nm_id > 0")
@@ -177,19 +204,19 @@ def normalize_rule_payload(payload: dict[str, Any], *, partial: bool = False) ->
             if nm_id <= 0:
                 raise ValueError("Для target_kind=nm нужно указать nm_id > 0")
             out["nm_id"] = nm_id
-            out["target_value"] = ""
+            out["target_value"] = _nm_storage_target_value(placement)
 
     if ("min_bid" in out or "max_bid" in out) and (not partial or "min_bid" in out or "max_bid" in out):
-        min_bid = int(out.get("min_bid") if "min_bid" in out else payload.get("min_bid") or 0)
-        max_bid = int(out.get("max_bid") if "max_bid" in out else payload.get("max_bid") or 0)
+        min_bid = int(_resolved("min_bid", 0) or 0)
+        max_bid = int(_resolved("max_bid", 0) or 0)
         if max_bid > 0 and min_bid > max_bid:
             min_bid, max_bid = max_bid, min_bid
         out["min_bid"] = max(0, min_bid)
         out["max_bid"] = max(0, max_bid)
 
     if ("target_pos_from" in out or "target_pos_to" in out) and (not partial or "target_pos_from" in out or "target_pos_to" in out):
-        left = float(out.get("target_pos_from") if "target_pos_from" in out else payload.get("target_pos_from") or 1.0)
-        right = float(out.get("target_pos_to") if "target_pos_to" in out else payload.get("target_pos_to") or 5.0)
+        left = float(_resolved("target_pos_from", 1.0) or 1.0)
+        right = float(_resolved("target_pos_to", 5.0) or 5.0)
         if left > right:
             left, right = right, left
         out["target_pos_from"] = left
@@ -264,7 +291,7 @@ def run_bidder_rules(
         campaign_id = int(rule.campaign_id or 0)
         nm_id = int(rule.nm_id or 0)
         target_kind = str(rule.target_kind or "normquery").strip().lower()
-        target_value = str(rule.target_value or "").strip()
+        target_value = _public_target_value(target_kind, rule.target_value)
         placement = _normalize_placement(rule.placement)
         strategy = str(rule.strategy or "optimal").strip().lower()
 
