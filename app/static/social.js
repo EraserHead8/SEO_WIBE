@@ -963,6 +963,7 @@ function socialSyncChatComposerState() {
   const attachBtn = document.getElementById("socialAttachBtn");
   const sendBtn = document.getElementById("socialSendIconBtn");
   if (!wrap || !input || !attachBtn || !sendBtn) return;
+  socialAutosizeChatInput(input);
   const hasThread = Number(socialState.currentThreadId || 0) > 0;
   const hasText = Boolean(String(input.value || "").trim()) && hasThread;
   wrap.classList.toggle("is-typing", hasText);
@@ -972,11 +973,25 @@ function socialSyncChatComposerState() {
   sendBtn.disabled = socialState.sendingMessage || !hasText;
 }
 
+function socialAutosizeChatInput(input = null) {
+  const node = input || document.getElementById("socialChatInput");
+  if (!node) return;
+  const minHeight = 40;
+  const maxHeight = 136;
+  node.style.height = "auto";
+  const nextHeight = Math.max(minHeight, Math.min(maxHeight, Number(node.scrollHeight || minHeight)));
+  node.style.height = `${nextHeight}px`;
+  node.style.overflowY = Number(node.scrollHeight || 0) > maxHeight ? "auto" : "hidden";
+}
 function socialBindChatComposer() {
   const input = document.getElementById("socialChatInput");
   if (!input || input.dataset.composeBind === "1") return;
   input.dataset.composeBind = "1";
-  const sync = () => socialSyncChatComposerState();
+  socialAutosizeChatInput(input);
+  const sync = () => {
+    socialAutosizeChatInput(input);
+    socialSyncChatComposerState();
+  };
   input.addEventListener("input", sync);
   input.addEventListener("change", sync);
   input.addEventListener("focus", sync);
@@ -2063,20 +2078,37 @@ function socialSyncMobileChatChrome(row = null) {
     && String(socialState.currentSubtab || "") === "chat";
   const activeThread = row || socialGetCurrentThread();
   const show = isApkShell && inSocialChat && Number(socialState.currentThreadId || 0) > 0 && Boolean(activeThread);
+  const textWrap = titleNode.closest(".mobile-chat-compact-text");
+  const openProfile = () => socialOpenCurrentParticipantProfile();
+  const bindProfileTap = (node) => {
+    if (!node || node.dataset.profileTapBound === "1") return;
+    node.dataset.profileTapBound = "1";
+    node.addEventListener("click", () => {
+      if (!node.classList.contains("is-clickable")) return;
+      openProfile();
+    });
+  };
+  bindProfileTap(avatarNode);
+  bindProfileTap(textWrap);
+  bindProfileTap(titleNode);
+  bindProfileTap(subtitleNode);
+  const setProfileInteractive = (enabled) => {
+    avatarNode.classList.toggle("is-clickable", enabled);
+    textWrap?.classList?.toggle("is-clickable", enabled);
+    titleNode.classList.toggle("is-clickable", enabled);
+    subtitleNode.classList.toggle("is-clickable", enabled);
+  };
   host.classList.toggle("hidden", !show);
   backBtn.classList.toggle("hidden", !show);
   body?.classList?.toggle("social-thread-open", show);
   shell?.classList?.toggle("social-thread-open", show);
   if (!show) {
-    titleNode.textContent = tr("\u0427\u0430\u0442\u044b", "Chats");
+    titleNode.textContent = tr("„аты", "Chats");
     subtitleNode.textContent = "";
     subtitleNode.classList.remove("online-now");
     avatarNode.classList.add("hidden");
     avatarNode.innerHTML = socialAvatarMarkup("", "--", "sm");
-    titleNode.classList.remove("is-clickable");
-    subtitleNode.classList.remove("is-clickable");
-    titleNode.onclick = null;
-    subtitleNode.onclick = null;
+    setProfileInteractive(false);
     if (typeof window.refreshSectionHeading === "function") {
       try { window.refreshSectionHeading("social"); } catch (_) {}
     }
@@ -2093,20 +2125,17 @@ function socialSyncMobileChatChrome(row = null) {
     const onlineNow = socialIsParticipantOnline(other);
     const lastSeen = socialFormatLastSeen(other?.last_seen_at || "");
     const stateText = onlineNow
-      ? tr("\u0432 \u0441\u0435\u0442\u0438", "online")
-      : (lastSeen ? `${tr("\u0431\u044b\u043b(\u0430)", "last seen")} ${lastSeen}` : tr("\u0431\u044b\u043b(\u0430) \u0434\u0430\u0432\u043d\u043e", "long ago"));
+      ? tr("в сети", "online")
+      : (lastSeen ? `${tr("был(а)", "last seen")} ${lastSeen}` : tr("был(а) давно", "long ago"));
     subtitle = stateText;
     subtitleOnline = onlineNow;
   } else {
-    subtitle = `${tr("\u0423\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u043e\u0432", "Members")}: ${participants.length}`;
+    subtitle = `${tr("”частников", "Members")}: ${participants.length}`;
   }
-  titleNode.textContent = String(display.title || tr("\u0427\u0430\u0442", "Chat"));
+  titleNode.textContent = String(display.title || tr("„ат", "Chat"));
   subtitleNode.textContent = subtitle;
   subtitleNode.classList.toggle("online-now", subtitleOnline);
-  titleNode.classList.remove("is-clickable");
-  subtitleNode.classList.remove("is-clickable");
-  titleNode.onclick = null;
-  subtitleNode.onclick = null;
+  setProfileInteractive(true);
 }
 
 function socialFilterThreads() {
@@ -4579,3 +4608,8 @@ document.addEventListener("visibilitychange", () => {
 });
 
 socialMaybeStartHooks();
+
+
+
+
+
