@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Unbounded:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+﻿@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Unbounded:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
 :root {
   --bg-1: #060a18;
@@ -220,7 +220,7 @@ body {
 }
 
 body[data-theme="newyear"] .app-bg::before {
-  content: "🎄 🎁 🦌 ✨ 🎄 🎅 ❄ 🎁 ✨ 🦌";
+  content: "рџЋ„ рџЋЃ рџ¦Њ вњЁ рџЋ„ рџЋ… вќ„ рџЋЃ вњЁ рџ¦Њ";
   position: absolute;
   inset: 8% -20% auto;
   font-size: clamp(18px, 2.1vw, 34px);
@@ -241,7 +241,7 @@ body[data-theme="newyear"] .app-bg::after {
 }
 
 body[data-theme="japan"] .app-bg::before {
-  content: "⛩ ✿ ⛩ ✿ ⛩ ✿";
+  content: "в›© вњї в›© вњї в›© вњї";
   position: absolute;
   inset: 9% -20% auto;
   letter-spacing: 2.1vw;
@@ -252,7 +252,7 @@ body[data-theme="japan"] .app-bg::before {
 }
 
 body[data-theme="greenland"] .app-bg::before {
-  content: "❄ ◆ ❄ ◆ ❄ ◆ ❄";
+  content: "вќ„ в—† вќ„ в—† вќ„ в—† вќ„";
   position: absolute;
   inset: 8% -16% auto;
   letter-spacing: 2vw;
@@ -7331,10 +7331,12 @@ body[data-theme="dark"] .landing-band .band-stats span {
   position: absolute;
   right: 0;
   bottom: calc(100% + 8px);
-  border: 1px solid var(--ds-border);
-  border-radius: 12px;
-  background: var(--ds-surface);
-  box-shadow: var(--ds-shadow);
+  width: min(332px, calc(100vw - 24px));
+  border: 1px solid color-mix(in oklab, var(--ds-border) 70%, #ffffff);
+  border-radius: 16px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.78), rgba(238, 247, 255, 0.6));
+  box-shadow: 0 14px 28px rgba(22, 56, 96, 0.2);
+  backdrop-filter: blur(18px) saturate(165%);
   padding: 8px;
   display: grid;
   gap: 8px;
@@ -7342,47 +7344,89 @@ body[data-theme="dark"] .landing-band .band-stats span {
 }
 
 .social-emoji-tabs {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
 }
 
 .social-emoji-tab {
-  border: 1px solid var(--ds-border);
+  border: 1px solid color-mix(in oklab, var(--ds-border) 72%, #ffffff);
   border-radius: 999px;
-  background: var(--ds-surface-soft);
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 700;
+  background: rgba(255, 255, 255, 0.56);
+  padding: 4px 0;
+  min-height: 34px;
+  display: grid;
+  place-items: center;
   cursor: pointer;
 }
 
+.social-emoji-tab-icon {
+  font-size: 17px;
+  line-height: 1;
+}
+
 .social-emoji-tab.active {
-  border-color: color-mix(in oklab, var(--ds-accent) 60%, var(--ds-border));
-  background: color-mix(in oklab, var(--ds-surface-soft) 80%, #ffffff);
-  color: var(--ds-text);
+  border-color: color-mix(in oklab, var(--ds-accent) 56%, var(--ds-border));
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84), 0 6px 12px rgba(31, 77, 126, 0.14);
+}
+
+.social-emoji-pane {
+  max-height: min(272px, 44vh);
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  padding-right: 2px;
+}
+
+.social-emoji-sections {
+  display: grid;
+  gap: 10px;
+}
+
+.social-emoji-section {
+  display: grid;
+  gap: 6px;
+}
+
+.social-emoji-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
 }
 
 .social-emoji-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(28px, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 6px;
 }
 
 .social-emoji-item {
-  border: 1px solid var(--ds-border);
-  border-radius: 8px;
-  background: var(--ds-surface-soft);
+  border: 1px solid color-mix(in oklab, var(--ds-border) 78%, #ffffff);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.66);
   cursor: pointer;
-  height: 30px;
+  height: 32px;
   font-size: 18px;
   display: grid;
   place-items: center;
 }
 
 .social-emoji-item:hover {
-  border-color: color-mix(in oklab, var(--ds-accent) 60%, var(--ds-border));
-  background: color-mix(in oklab, var(--ds-surface-soft) 86%, #ffffff);
+  border-color: color-mix(in oklab, var(--ds-accent) 58%, var(--ds-border));
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.social-emoji-empty {
+  padding: 10px 8px;
+  border-radius: 10px;
+  border: 1px dashed color-mix(in oklab, var(--ds-border) 74%, #ffffff);
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
 }
 
 
@@ -9420,29 +9464,36 @@ body.mobile-client-mode #social > .panel:first-child {
 
 body.mobile-apk-mode {
   --apk-topbar-bg:
-    linear-gradient(150deg, rgba(245, 251, 255, 0.92), rgba(231, 243, 255, 0.72));
-  --apk-topbar-border: rgba(155, 188, 224, 0.52);
-  --apk-topbar-shadow: 0 12px 26px rgba(41, 81, 122, 0.16);
-  --apk-topbar-text: #17324f;
+    linear-gradient(145deg, rgba(255, 255, 255, 0.22), rgba(225, 242, 255, 0.12));
+  --apk-topbar-border: rgba(178, 209, 236, 0.38);
+  --apk-topbar-shadow: 0 8px 22px rgba(29, 68, 108, 0.12);
+  --apk-topbar-text: #16324f;
 }
 
 body.mobile-apk-mode #appSection .topbar {
   display: grid !important;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
   align-items: center;
   gap: 10px;
+  position: relative;
   background: var(--apk-topbar-bg);
   border: 1px solid var(--apk-topbar-border);
-  border-radius: 16px;
+  border-radius: 18px;
   padding: 8px 10px;
   min-height: 58px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.74), var(--apk-topbar-shadow);
-  backdrop-filter: saturate(165%) blur(14px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), inset 0 -1px 0 rgba(255, 255, 255, 0.24), var(--apk-topbar-shadow);
+  backdrop-filter: saturate(195%) blur(24px);
+  -webkit-backdrop-filter: saturate(195%) blur(24px);
 }
 
 body.mobile-apk-mode #appSection .topbar-title {
   display: flex !important;
+  justify-content: center;
+  text-align: center;
+  width: 100%;
   min-width: 0;
+  padding: 0 52px;
   flex: 1 1 auto;
   overflow: hidden;
 }
@@ -9452,7 +9503,7 @@ body.mobile-apk-mode #appSection .topbar-title p {
 }
 
 body.mobile-apk-mode #appSection .topbar h1 {
-  margin: 0;
+  margin: 0 auto;
   min-width: 0;
   max-width: 100%;
   font-size: 18px;
@@ -9460,6 +9511,7 @@ body.mobile-apk-mode #appSection .topbar h1 {
   font-weight: 700;
   line-height: 1.2;
   color: var(--apk-topbar-text);
+  text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -9470,22 +9522,25 @@ body.mobile-apk-mode #appSection .topbar-controls {
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
-  margin-left: auto !important;
+  margin-left: 0 !important;
   flex: 0 0 auto;
-  position: relative;
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 body.mobile-apk-mode #appSection .topbar-controls #mobileNavToggle {
   min-width: 36px;
   min-height: 36px;
-  border: 0;
-  background: rgba(255, 255, 255, 0.52);
+  border: 1px solid rgba(171, 204, 236, 0.46);
+  background: rgba(255, 255, 255, 0.2);
   color: var(--apk-topbar-text);
   border-radius: 50%;
   padding: 0 4px;
   font-size: 24px;
   line-height: 1;
-  box-shadow: 0 4px 10px rgba(25, 67, 113, 0.12);
+  box-shadow: 0 4px 10px rgba(25, 67, 113, 0.08);
 }
 
 body.mobile-apk-mode #appSection .mobile-chat-compact-head {
@@ -9545,6 +9600,9 @@ body.mobile-apk-mode #appSection.social-thread-open .topbar-controls {
   align-items: center;
   justify-content: center;
   position: relative;
+  right: auto;
+  top: auto;
+  transform: none;
   min-height: 40px;
 }
 
@@ -9741,7 +9799,17 @@ body.mobile-apk-mode #ads .module-subtabs {
     color: rgba(93, 120, 151, 0.65);
   }
 
-  body.mobile-apk-mode #socialSubtabChat .social-emoji-btn,
+  body.mobile-apk-mode #socialSubtabChat .social-emoji-picker {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: min(360px, calc(100vw - 22px));
+}
+
+body.mobile-apk-mode #socialSubtabChat .social-emoji-grid {
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+}
+body.mobile-apk-mode #socialSubtabChat .social-emoji-btn,
   body.mobile-apk-mode #socialSubtabChat .social-attach-btn {
     min-width: 34px;
     height: 34px;
@@ -10444,6 +10512,8 @@ body.mobile-apk-mode #reviewsSubtabReturns .returns-hero > h3 {
     min-width: 0;
   }
 }
+
+
 
 
 
