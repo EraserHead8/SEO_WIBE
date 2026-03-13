@@ -11933,6 +11933,57 @@ def social_update_group_chat(
     return _social_thread_to_out(db, actor_key, thread, me_member)
 
 
+@router.delete("/social/chat/groups/{thread_id}", response_model=MessageOut)
+def social_delete_group_chat(
+    thread_id: int,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, _, _ = _social_actor_identity(db, user)
+    thread = db.get(SocialChatThread, int(thread_id or 0))
+    if not thread or str(thread.kind or "") != "group" or int(thread.owner_user_id or 0) != int(user.id):
+        raise HTTPException(status_code=404, detail="Группа не найдена")
+    me_member = db.scalar(
+        select(SocialChatThreadMember).where(
+            SocialChatThreadMember.thread_id == int(thread.id),
+            SocialChatThreadMember.actor_key == actor_key,
+        )
+    )
+    if not me_member:
+        raise HTTPException(status_code=403, detail="Нет доступа к группе")
+
+    deleted_messages = db.execute(
+        delete(SocialChatMessage).where(SocialChatMessage.thread_id == int(thread.id))
+    ).rowcount or 0
+    deleted_members = db.execute(
+        delete(SocialChatThreadMember).where(SocialChatThreadMember.thread_id == int(thread.id))
+    ).rowcount or 0
+
+    db.delete(thread)
+    _audit(
+        db,
+        user,
+        action="social_group_chat_deleted",
+        details=json.dumps(
+            {
+                "thread_id": int(thread.id),
+                "title": str(thread.title or ""),
+                "deleted_messages": int(deleted_messages),
+                "deleted_members": int(deleted_members),
+            },
+            ensure_ascii=False,
+        ),
+        module_code="social_hub",
+        entity_type="social_thread",
+        entity_id=str(thread.id),
+        request=request,
+    )
+    db.commit()
+    return MessageOut(message="Группа удалена")
+
+
 @router.get("/social/chat/actors", response_model=list[dict[str, Any]])
 def social_chat_actor_directory(
     q: str = "",

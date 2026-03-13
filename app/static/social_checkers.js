@@ -86,6 +86,31 @@
     return Array.isArray(pos) && pos.length === 2 ? `${Number(pos[0])}:${Number(pos[1])}` : "";
   }
 
+  function checkersBoardSize(room) {
+    const board = Array.isArray(room?.board) ? room.board : [];
+    const rowSize = board.length && Array.isArray(board[0]) ? Number(board[0].length || 0) : 0;
+    const size = Math.max(Number(board.length || 0), rowSize, 8);
+    return Math.max(8, size);
+  }
+
+  function checkersShouldFlipBoard(room) {
+    return String(room?.my_side || "").trim().toLowerCase() === "black";
+  }
+
+  function checkersDisplayToBoardCoords(room, displayRow, displayCol) {
+    const size = checkersBoardSize(room);
+    if (checkersShouldFlipBoard(room)) {
+      return {
+        row: size - 1 - Number(displayRow || 0),
+        col: size - 1 - Number(displayCol || 0),
+      };
+    }
+    return {
+      row: Number(displayRow || 0),
+      col: Number(displayCol || 0),
+    };
+  }
+
   function checkersDifficultyInfo(code) {
     const safeCode = String(code || "medium").trim().toLowerCase() || "medium";
     const rows = Array.isArray(socialCheckersState.overview?.difficulties) ? socialCheckersState.overview.difficulties : [];
@@ -593,11 +618,16 @@
     const lastPath = Array.isArray(room?.last_move?.path) ? room.last_move.path : [];
     const trail = new Set(lastPath.map((pos) => checkersPosKey(pos)));
     const board = Array.isArray(room.board) ? room.board : [];
-    const boardHtml = board.map((row, rowIndex) => {
-      const safeRow = Array.isArray(row) ? row : [];
-      return safeRow.map((piece, colIndex) => {
+    const boardSize = checkersBoardSize(room);
+    const boardHtml = Array.from({ length: boardSize }, (_, displayRow) => {
+      return Array.from({ length: boardSize }, (_, displayCol) => {
+        const coords = checkersDisplayToBoardCoords(room, displayRow, displayCol);
+        const rowIndex = Number(coords.row || 0);
+        const colIndex = Number(coords.col || 0);
+        const safeRow = Array.isArray(board[rowIndex]) ? board[rowIndex] : [];
+        const piece = safeRow[colIndex];
         const key = `${rowIndex}:${colIndex}`;
-        const dark = ((rowIndex + colIndex) % 2) === 1;
+        const dark = ((displayRow + displayCol) % 2) === 1;
         const selectable = room.can_move && selection.starts.has(key);
         const target = room.can_move && selection.targets.has(key);
         const selected = socialCheckersState.selectedKey === key;

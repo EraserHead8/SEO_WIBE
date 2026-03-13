@@ -1369,8 +1369,7 @@
                   <small class="hint">Личные и групповые</small>
                 </div>
                 <div class="social-chat-head-buttons">
-                  <button class="btn-secondary" type="button" onclick="socialOpenDirectPicker()">Личный чат</button>
-                  <button class="btn-secondary" type="button" onclick="socialOpenGroupEditor()">Группа</button>
+                  <button class="btn-secondary" type="button" onclick="socialOpenChatQuickMenu()">Действия</button>
                 </div>
               </div>
               <div class="social-chat-search">
@@ -1394,6 +1393,8 @@
                 <div class="social-chat-head-actions">
                   <button id="socialChatGroupBtn" class="btn-secondary hidden" type="button" onclick="socialOpenGroupEditor(true)">Участники</button>
                   <button id="socialChatAvatarBtn" class="btn-secondary hidden" type="button" onclick="socialOpenGroupAvatarModal()">Аватар</button>
+                  <button id="socialChatHeadCollapseBtn" class="btn-secondary hidden" type="button" onclick="socialToggleChatHeadCollapsed()" aria-pressed="false" title="Свернуть шапку">-</button>
+                  <button id="socialChatMenuBtn" class="btn-secondary hidden" type="button" onclick="socialOpenChatActionsMenu()">⋯</button>
                 </div>
               </div>
               <div id="socialChatMessages" class="social-chat-messages"></div>
