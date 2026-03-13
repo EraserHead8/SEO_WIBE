@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Unbounded:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+﻿@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Unbounded:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
 :root {
   --bg-1: #060a18;
@@ -220,7 +220,7 @@ body {
 }
 
 body[data-theme="newyear"] .app-bg::before {
-  content: "🎄 🎁 🦊 ✨ 🎄 🎅 ❄ 🎁 ✨ 🦊";
+  content: "рџЋ„ рџЋЃ рџ¦Љ вњЁ рџЋ„ рџЋ… вќ„ рџЋЃ вњЁ рџ¦Љ";
   position: absolute;
   inset: 8% -20% auto;
   font-size: clamp(18px, 2.1vw, 34px);
@@ -231,7 +231,7 @@ body[data-theme="newyear"] .app-bg::before {
 }
 
 body[data-theme="newyear"] .app-bg::after {
-  content: "🎄 🎁 🦊 ✨ 🎄 🎅 ❄ 🎁 ✨ 🦊";
+  content: "рџЋ„ рџЋЃ рџ¦Љ вњЁ рџЋ„ рџЋ… вќ„ рџЋЃ вњЁ рџ¦Љ";
   position: absolute;
   inset: 0;
   background-image: radial-gradient(circle, rgba(255, 255, 255, 0.95) 1px, transparent 1.6px);
@@ -241,7 +241,7 @@ body[data-theme="newyear"] .app-bg::after {
 }
 
 body[data-theme="japan"] .app-bg::before {
-  content: "⛩️ 🌸 🏯 🍣 🗻 ✨";
+  content: "в›©пёЏ рџЊё рџЏЇ рџЌЈ рџ—» вњЁ";
   position: absolute;
   inset: 9% -20% auto;
   letter-spacing: 2.1vw;
@@ -252,7 +252,7 @@ body[data-theme="japan"] .app-bg::before {
 }
 
 body[data-theme="greenland"] .app-bg::before {
-  content: "🌲 ❄️ 🧊 🐻‍❄️ ✨ 🌌";
+  content: "рџЊІ вќ„пёЏ рџ§Љ рџђ»вЂЌвќ„пёЏ вњЁ рџЊЊ";
   position: absolute;
   inset: 8% -16% auto;
   letter-spacing: 2vw;
@@ -6753,7 +6753,27 @@ body[data-theme="dark"] .landing-band .band-stats span {
 
 .social-chat-head-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.social-chat-head-actions > .btn-secondary {
+  min-width: 38px;
+}
+
+.social-chat-main.chat-head-collapsed .social-chat-head-main,
+.social-chat-main.chat-head-collapsed .social-chat-head-meta {
+  display: none;
+}
+
+.social-chat-main.chat-head-collapsed .social-chat-head {
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.social-chat-main.chat-head-collapsed .social-chat-head-actions {
+  margin-left: auto;
 }
 
 .social-chat-messages {
@@ -6852,6 +6872,27 @@ body[data-theme="dark"] .landing-band .band-stats span {
   font-weight: 700;
   color: var(--tg-user-accent);
   margin-bottom: 2px;
+}
+
+.social-chat-actions-menu {
+  display: grid;
+  gap: 8px;
+}
+
+.social-chat-actions-menu button {
+  width: 100%;
+  text-align: left;
+}
+
+.social-group-participants-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.social-group-participants-actions button {
+  width: 100%;
 }
 
 .social-participant-list {
@@ -7803,7 +7844,7 @@ body.social-image-viewer-open {
 }
 
 .social-day.has-event b::after {
-  content: "•";
+  content: "вЂў";
   position: absolute;
   right: 0;
   top: -2px;
@@ -7811,7 +7852,7 @@ body.social-image-viewer-open {
 }
 
 .social-day.has-task b::before {
-  content: "•";
+  content: "вЂў";
   position: absolute;
   right: 8px;
   top: -2px;
@@ -8219,6 +8260,15 @@ body[data-theme="light"] .social-calc-eq {
   .social-chat-head-meta {
     flex: 1 1 100%;
     margin-left: 0;
+  }
+
+  .social-chat-head-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .social-group-participants-actions {
+    grid-template-columns: 1fr;
   }
 
   .social-chat-layout {
@@ -9765,11 +9815,29 @@ body.mobile-apk-mode #ads .module-subtabs {
   }
 
   body.mobile-apk-mode #socialSubtabChat .social-chat-main {
-    grid-template-rows: minmax(0, 1fr) auto !important;
+    grid-template-rows: auto minmax(0, 1fr) auto !important;
   }
 
   body.mobile-apk-mode #socialSubtabChat .social-chat-head {
-    display: none !important;
+    display: flex !important;
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  body.mobile-apk-mode #socialSubtabChat .social-chat-head-title {
+    max-width: 56vw;
+  }
+
+  body.mobile-apk-mode #socialSubtabChat .social-chat-head-subtitle {
+    max-width: 56vw;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  body.mobile-apk-mode #socialSubtabChat .social-chat-head-actions {
+    margin-left: auto;
+    gap: 6px;
   }
 
   body.mobile-apk-mode #socialSubtabChat .social-chat-messages {
@@ -11374,3 +11442,5 @@ body.mobile-client-mode .social-checkers-shell {
 body.mobile-client-mode .social-checkers-board-wrap {
   width: min(100%, 92vw);
 }
+
+

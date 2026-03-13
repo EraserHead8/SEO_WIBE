@@ -61,6 +61,7 @@
   mobileThreadAutoSelectEnabled: true,
   pollClientId: `poll-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`,
   fileUploadInFlight: false,
+  chatHeadCollapsed: false,
   notificationsPollInFlight: false,
   pendingAnnouncementsInFlight: false,
   globalHooksStarted: false,
@@ -1019,6 +1020,7 @@ function resetSocialState() {
     emojiRecents: [],
     mobileThreadAutoSelectEnabled: !socialIsMobileClientShell(),
     fileUploadInFlight: false,
+    chatHeadCollapsed: false,
     notificationsPollInFlight: false,
     pendingAnnouncementsInFlight: false,
     globalHooksStarted: false,
@@ -1062,6 +1064,7 @@ function switchSocialSubtab(tab, loadNow = true) {
     if (btn) btn.classList.toggle("active", key === safe);
   });
   socialSyncMobileChatChrome();
+  socialApplyChatHeadCollapsed();
   if (!loadNow) return;
   if (safe !== "chat") socialSetChatView(false);
   if (safe === "games") socialRenderGames();
@@ -1117,6 +1120,7 @@ async function loadSocialWorkspace() {
   switchSocialSubtab(currentSocialSubtab || socialState.currentSubtab || "chat", true);
   socialStartGlobalHooks();
   socialSyncMobileChatChrome();
+  socialApplyChatHeadCollapsed();
 }
 
 function socialBindChatInputEnter() {
@@ -2350,6 +2354,26 @@ function socialSetChatView(open) {
   layout.classList.toggle("chat-open", nextOpen);
   layout.dataset.threadOpen = nextOpen ? "1" : "0";
   socialSyncMobileChatChrome();
+  socialApplyChatHeadCollapsed();
+}
+
+function socialApplyChatHeadCollapsed() {
+  const main = document.querySelector("#socialSubtabChat .social-chat-main");
+  const collapseBtn = document.getElementById("socialChatHeadCollapseBtn");
+  const collapsed = Boolean(socialState.chatHeadCollapsed);
+  if (main) main.classList.toggle("chat-head-collapsed", collapsed);
+  if (collapseBtn) {
+    collapseBtn.setAttribute("aria-pressed", collapsed ? "true" : "false");
+    collapseBtn.textContent = collapsed ? "+" : "-";
+    collapseBtn.title = collapsed
+      ? tr("Развернуть шапку", "Expand header")
+      : tr("Свернуть шапку", "Collapse header");
+  }
+}
+
+function socialToggleChatHeadCollapsed() {
+  socialState.chatHeadCollapsed = !Boolean(socialState.chatHeadCollapsed);
+  socialApplyChatHeadCollapsed();
 }
 
 function socialIsThreadOpen() {
@@ -2385,6 +2409,7 @@ function socialCloseThread(opts = {}) {
   socialState.chatMessages = [];
   socialState.chatOldestId = 0;
   socialState.chatHasMore = true;
+  socialState.chatHeadCollapsed = false;
   socialClearReply();
   socialCloseMessageContext();
   socialCloseImageViewer();
@@ -2393,6 +2418,9 @@ function socialCloseThread(opts = {}) {
   const avatar = document.getElementById("socialChatHeadAvatar");
   const meta = document.getElementById("socialChatHeadMeta");
   const avatarBtn = document.getElementById("socialChatAvatarBtn");
+  const groupBtn = document.getElementById("socialChatGroupBtn");
+  const menuBtn = document.getElementById("socialChatMenuBtn");
+  const collapseBtn = document.getElementById("socialChatHeadCollapseBtn");
   const host = document.getElementById("socialChatMessages");
   if (head) head.textContent = tr("\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0447\u0430\u0442", "Select chat");
   if (sub) sub.textContent = "-";
@@ -2402,10 +2430,14 @@ function socialCloseThread(opts = {}) {
     meta.classList.add("hidden");
   }
   if (avatarBtn) avatarBtn.classList.add("hidden");
+  if (groupBtn) groupBtn.classList.add("hidden");
+  if (menuBtn) menuBtn.classList.add("hidden");
+  if (collapseBtn) collapseBtn.classList.add("hidden");
   if (host) host.innerHTML = "";
   socialRenderThreads();
   socialSetChatView(false);
   socialSyncMobileChatChrome(null);
+  socialApplyChatHeadCollapsed();
   socialSyncChatComposerState();
 }
 function socialRenderThreads() {
@@ -2494,6 +2526,8 @@ function socialSetChatHeader(row, opts = {}) {
   const meta = document.getElementById("socialChatHeadMeta");
   const avatarBtn = document.getElementById("socialChatAvatarBtn");
   const groupBtn = document.getElementById("socialChatGroupBtn");
+  const menuBtn = document.getElementById("socialChatMenuBtn");
+  const collapseBtn = document.getElementById("socialChatHeadCollapseBtn");
   if (!row) {
     socialState.chatHeaderSignature = "";
     if (head) head.textContent = tr("\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0447\u0430\u0442", "Select chat");
@@ -2505,7 +2539,10 @@ function socialSetChatHeader(row, opts = {}) {
     }
     if (avatarBtn) avatarBtn.classList.add("hidden");
     if (groupBtn) groupBtn.classList.add("hidden");
+    if (menuBtn) menuBtn.classList.add("hidden");
+    if (collapseBtn) collapseBtn.classList.add("hidden");
     socialSyncMobileChatChrome(null);
+    socialApplyChatHeadCollapsed();
     return;
   }
   const display = socialThreadDisplay(row);
@@ -2534,6 +2571,7 @@ function socialSetChatHeader(row, opts = {}) {
   ].join("|");
   if (!force && headerSig && String(socialState.chatHeaderSignature || "") === headerSig) {
     socialSyncMobileChatChrome(row);
+    socialApplyChatHeadCollapsed();
     return;
   }
   socialState.chatHeaderSignature = headerSig;
@@ -2560,13 +2598,12 @@ function socialSetChatHeader(row, opts = {}) {
       meta.classList.add("hidden");
     }
   }
-  if (avatarBtn) {
-    avatarBtn.classList.toggle("hidden", String(row.kind || "") === "direct");
-  }
-  if (groupBtn) {
-    groupBtn.classList.toggle("hidden", String(row.kind || "") !== "group");
-  }
+  if (avatarBtn) avatarBtn.classList.add("hidden");
+  if (groupBtn) groupBtn.classList.add("hidden");
+  if (menuBtn) menuBtn.classList.remove("hidden");
+  if (collapseBtn) collapseBtn.classList.remove("hidden");
   socialSyncMobileChatChrome(row);
+  socialApplyChatHeadCollapsed();
 }
 
 function socialCurrentDirectPeer(thread = null) {
@@ -2586,6 +2623,128 @@ function socialOpenCurrentParticipantProfile() {
   const peer = socialCurrentDirectPeer(row);
   if (!peer || !peer.actor_key) return;
   socialOpenParticipantProfile(peer.actor_key, Number(row.id || 0));
+}
+
+function socialOpenChatActionsMenu() {
+  const row = socialGetCurrentThread();
+  if (!row) return;
+  const isGroup = String(row.kind || "") === "group";
+  const collapsed = Boolean(socialState.chatHeadCollapsed);
+  const actions = [];
+  actions.push(`
+    <button type="button" class="btn-secondary" data-chat-action="toggle_header">
+      ${escapeHtml(collapsed ? tr("Развернуть шапку", "Expand header") : tr("Свернуть шапку", "Collapse header"))}
+    </button>
+  `);
+  if (isGroup) {
+    actions.push(`
+      <button type="button" data-chat-action="participants">${escapeHtml(tr("Участники", "Participants"))}</button>
+      <button type="button" data-chat-action="manage_group">${escapeHtml(tr("Изменить состав", "Edit members"))}</button>
+      <button type="button" class="btn-secondary" data-chat-action="group_avatar">${escapeHtml(tr("Аватар группы", "Group avatar"))}</button>
+      <button type="button" class="btn-danger" data-chat-action="delete_group">${escapeHtml(tr("Удалить группу", "Delete group"))}</button>
+    `);
+  } else {
+    actions.push(`
+      <button type="button" data-chat-action="profile">${escapeHtml(tr("Открыть профиль", "Open profile"))}</button>
+    `);
+  }
+  actions.push(`
+    <button type="button" class="btn-secondary" data-chat-action="direct">${escapeHtml(tr("Личный чат", "Direct chat"))}</button>
+    <button type="button" class="btn-secondary" data-chat-action="new_group">${escapeHtml(tr("Новая группа", "New group"))}</button>
+  `);
+  socialOpenModal(
+    tr("Действия чата", "Chat actions"),
+    `<div class="social-chat-actions-menu">${actions.join("")}</div>`
+  );
+  document.querySelectorAll("[data-chat-action]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const action = String(btn.getAttribute("data-chat-action") || "").trim();
+      socialCloseModal();
+      if (action === "toggle_header") {
+        socialToggleChatHeadCollapsed();
+        return;
+      }
+      if (action === "participants") {
+        socialOpenGroupParticipants();
+        return;
+      }
+      if (action === "manage_group") {
+        socialOpenGroupEditor(true);
+        return;
+      }
+      if (action === "group_avatar") {
+        socialOpenGroupAvatarModal();
+        return;
+      }
+      if (action === "delete_group") {
+        await socialDeleteCurrentGroupThread();
+        return;
+      }
+      if (action === "profile") {
+        socialOpenCurrentParticipantProfile();
+        return;
+      }
+      if (action === "direct") {
+        socialOpenDirectPicker();
+        return;
+      }
+      if (action === "new_group") {
+        socialOpenGroupEditor();
+      }
+    });
+  });
+}
+
+async function socialDeleteCurrentGroupThread() {
+  const row = socialGetCurrentThread();
+  const threadId = Number(row?.id || 0);
+  if (!threadId || String(row?.kind || "") !== "group") return;
+  const title = String(row?.title || tr("эту группу", "this group")).trim();
+  const ok = confirm(tr(`Удалить группу "${title}"? Это действие необратимо.`, `Delete group "${title}"? This action cannot be undone.`));
+  if (!ok) return;
+  const result = await socialRequest(`/api/social/chat/groups/${threadId}`, {
+    method: "DELETE",
+    retryOnPost: false,
+    maxRetries: 0,
+  }).catch((e) => {
+    alert(e?.message || tr("Не удалось удалить группу", "Failed to delete group"));
+    return null;
+  });
+  if (!result) return;
+  socialCloseThread({ keepAutoSelect: false });
+  await socialLoadThreads({ silent: true });
+  if (typeof socialShowToast === "function") {
+    socialShowToast(tr("Группа удалена", "Group deleted"), tr("Чат удален из списка.", "The chat was removed from the list."));
+  }
+}
+
+function socialOpenChatQuickMenu() {
+  const hasThread = Number(socialState.currentThreadId || 0) > 0;
+  const html = `
+    <div class="social-chat-actions-menu">
+      <button type="button" data-chat-quick="direct">${escapeHtml(tr("Личный чат", "Direct chat"))}</button>
+      <button type="button" data-chat-quick="group">${escapeHtml(tr("Новая группа", "New group"))}</button>
+      ${hasThread ? `<button type="button" class="btn-secondary" data-chat-quick="actions">${escapeHtml(tr("Действия текущего чата", "Current chat actions"))}</button>` : ""}
+    </div>
+  `;
+  socialOpenModal(tr("Чаты", "Chats"), html);
+  document.querySelectorAll("[data-chat-quick]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const action = String(btn.getAttribute("data-chat-quick") || "").trim();
+      socialCloseModal();
+      if (action === "direct") {
+        socialOpenDirectPicker();
+        return;
+      }
+      if (action === "group") {
+        socialOpenGroupEditor();
+        return;
+      }
+      if (action === "actions") {
+        socialOpenChatActionsMenu();
+      }
+    });
+  });
 }
 
 function socialOpenGroupParticipants() {
@@ -2614,6 +2773,10 @@ function socialOpenGroupParticipants() {
   socialOpenModal(
     tr("\u0423\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0438 \u0433\u0440\u0443\u043f\u043f\u044b", "Group participants"),
     `
+      <div class="actions social-group-participants-actions">
+        <button type="button" onclick="socialOpenGroupEditor(true)">${escapeHtml(tr("Изменить состав", "Edit members"))}</button>
+        <button type="button" class="btn-danger" onclick="socialDeleteCurrentGroupThread()">${escapeHtml(tr("Удалить группу", "Delete group"))}</button>
+      </div>
       <div class="social-participant-list">
         ${listHtml || `<div class="hint">${escapeHtml(tr("\u0421\u043f\u0438\u0441\u043e\u043a \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u043e\u0432 \u043f\u0443\u0441\u0442.", "No participants yet."))}</div>`}
       </div>
@@ -5042,6 +5205,10 @@ window.socialGameRetry = socialGameRetry;
 window.socialOpenDirectPicker = socialOpenDirectPicker;
 window.socialOpenGroupEditor = socialOpenGroupEditor;
 window.socialOpenGroupParticipants = socialOpenGroupParticipants;
+window.socialOpenChatActionsMenu = socialOpenChatActionsMenu;
+window.socialDeleteCurrentGroupThread = socialDeleteCurrentGroupThread;
+window.socialOpenChatQuickMenu = socialOpenChatQuickMenu;
+window.socialToggleChatHeadCollapsed = socialToggleChatHeadCollapsed;
 window.socialOpenCurrentParticipantProfile = socialOpenCurrentParticipantProfile;
 window.socialOpenParticipantProfile = socialOpenParticipantProfile;
 window.socialSaveGroupEditor = socialSaveGroupEditor;
@@ -5114,6 +5281,12 @@ document.addEventListener("visibilitychange", () => {
 });
 
 socialMaybeStartHooks();
+
+
+
+
+
+
 
 
 
