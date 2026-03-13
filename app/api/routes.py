@@ -1101,7 +1101,7 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
             "- Recheck выбранных: повторная проверка метрик/позиций по задачам.\n"
             "- Recheck просроченных: массовая актуализация задач с истекрей датой.\n"
             "- Выбрать все: выделение всех задач в текущем списке.\n"
-            "- РЀРґР°Р»РёС‚СЊ РІС‹Р±СЂР°РЅРЅС‹Рµ / РћС‡РёСЃС‚РёС‚СЊ РІСЃРµ SEO Р·Р°РґР°С‡Рё: СѓРґР°Р»РµРЅРёРµ Р·Р°РґР°С‡.\n\n"
+            "- Удалить выбранные / Очистить все SEO задачи: удаление задач.\n\n"
             "Жизненный цикл задачи:\n"
             "1) generated: текст сгенерирован и доступен для просмотра.\n"
             "2) in_progress: задача проверяется или дорабатывается.\n"
@@ -1147,7 +1147,7 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
             "- Обновить вопросы: загружает вопросы из WB/Ozon.\n"
             "- Сохранить AI-настройки: сохраняет режим и промпт.\n"
             "- Загрузить в базу знаний: добавляет документ для контекста AI.\n"
-            "- РЀРґР°Р»РёС‚СЊ РІС‹Р±СЂР°РЅРЅС‹Р№ РґРѕРєСѓРјРµРЅС‚: СѓРґР°Р»СЏРµС‚ РґРѕРєСѓРјРµРЅС‚ РёР· Р±Р°Р·С‹ Р·РЅР°РЅРёР№.\n"
+            "- Удалить выбранный документ: удаляет документ из базы знаний.\n"
             "- Иконка AI в строке: генерирует ответ на вопрос.\n"
             "- Иконка отправки: публикует/обновляет ответ.\n\n"
             "Важно:\n"
@@ -1165,7 +1165,7 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
     "wb_ads": {
         "title": "Реклама WB",
         "content": (
-            "РќР°Р·РЅР°С‡РµРЅРёРµ: РјРѕРЅРёС‚РѕСЂРёРЅРі Рё РѕРїРµСЂР°С‚РёРІРЅРѕРµ СѓРїСЂР°РІР»РµРЅРёРµ СЂРµРєР»Р°РјРЅС‹РјРё кампанияРјРё WB.\n\n"
+            "Назначение: мониторинг и оперативное управление рекламными кампаниями WB.\n\n"
             "Кнопки и функции:\n"
             "- Загрузить кампании: быстрая загрузка списка кампаний.\n"
             "- Получить ставки: запрос ставок по campaign_id.\n"
@@ -1184,7 +1184,7 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
             "  position: удерживать позицию в диапазоне,\n"
             "  range: удерживать ставку в коридоре min/max,\n"
             "  hold: фиксировать текущую логику без агрессивных рагов.\n"
-            "- РЀРєР°Р¶РёС‚Рµ min/max/step Рё cooldown (СЃРµРєСѓРЅРґС‹ РјРµР¶РґСѓ Р·Р°РїСѓСЃРєР°РјРё РїСЂР°РІРёР»Р°).\n"
+            "- Укажите min/max/step и cooldown (секунды между запусками правила).\n"
             "- Нажмите «Сохранить правило».\n"
             "- Для ручного запуска: «Запустить сейчас».\n"
             "- Для фонового режима: оставьте «Активно», воркер будет запускать правило по cooldown.\n\n"
@@ -1194,7 +1194,7 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
             "3) Для normquery обязательно заполните фразу target_value.\n"
             "4) Стартовые настройки: step=50..100, cooldown=300, min_bid/max_bid в безопасном диапазоне.\n"
             "5) Нажмите «Сохранить правило», затем «Запустить сейчас» и проверьте строку в логах.\n"
-            "6) Р•СЃР»Рё Р»РѕРі ok/skipped Р±РµР· РѕС€РёР±РѕРє — РІРєР»СЋС‡Р°Р№С‚Рµ С„РѕРЅРѕРІС‹Р№ СЂРµР¶РёРј.\n\n"
+            "6) Если лог ok/skipped без ошибок — включайте фоновый режим.\n\n"
             "Как читать логи биддера:\n"
             "- ok: ставка применена или подтверждена.\n"
             "- skipped: запуск пропущен по условиям (cooldown/нет данных/лимиты).\n"
@@ -1202,10 +1202,10 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
             "- Причина всегда пирется в колонке «Причина» и в статусе правила.\n\n"
             "Если правило не работает:\n"
             "- Проверьте, что ключ WB Ads активен и у пользователя есть доступ к модулю «Реклама WB/Ozon».\n"
-            "- РЀР±РµРґРёС‚РµСЃСЊ, С‡С‚Рѕ campaign_id/nm_id РёР· РѕРґРЅРѕР№ РєР°РјРїР°РЅРёРё, Р° РЅРµ РёР· СЂР°Р·РЅС‹С… РєР°Р±РёРЅРµС‚РѕРІ.\n"
+            "- Убедитесь, что campaign_id/nm_id из одной кампании, а не из разных кабинетов.\n"
             "- Для normquery проверьте точное совпадение фразы (без лирних пробелов).\n"
-            "- Р•СЃР»Рё С‡Р°СЃС‚Рѕ skipped(cooldown) — СѓРјРµРЅСЊС€РёС‚Рµ С‡Р°СЃС‚РѕС‚Сѓ Р·Р°РїСѓСЃРєР° РІСЂСѓС‡РЅСѓСЋ Рё СѓРІРµР»РёС‡СЊС‚Рµ cooldown.\n"
-            "- Р•СЃР»Рё error 401/403 — РїРµСЂРµСѓСЃС‚Р°РЅРѕРІРёС‚Рµ WB Ads РєР»СЋС‡ РІ РїСЂРѕС„РёР»Рµ.\n\n"
+            "- Если часто skipped(cooldown) — уменьшите частоту запуска вручную и увеличьте cooldown.\n"
+            "- Если error 401/403 — переустановите WB Ads ключ в профиле.\n\n"
             "Практика настройки:\n"
             "- Начинайте с консервативного рага (50-100), чтобы не раскачать расход.\n"
             "- Ставьте cooldown не меньше 180-300 секунд для стабильных кампаний.\n"
@@ -1223,7 +1223,7 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
             "- campaign_id (опционально): выбор одной кампании.\n"
             "- Построить отчет: формирует таблицу и агрегированные totals.\n"
             "- Метрики: показы, клики, CTR, заказы, расход, CPC, CPO.\n\n"
-            "РџСЂРёРјРµСЂ: СѓРєР°Р¶РёС‚Рµ РїРѕСЃР»РµРґРЅРёРµ 7 РґРЅРµР№ Рё СЃСЂР°РІРЅРёС‚Рµ CPO РјРµР¶РґСѓ кампанияРјРё, С‡С‚РѕР±С‹ РЅР°Р№С‚Рё РЅРµСЌС„С„РµРєС‚РёРІРЅС‹Рµ."
+            "Пример: укажите последние 7 дней и сравните CPO между кампаниями, чтобы найти неэффективные."
         ),
     },
     "wb_ads_recommendations": {
@@ -1245,7 +1245,7 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
             "Где открыть:\n"
             "- Модуль «Реклама WB/Ozon» → вкладка «Бидер».\n\n"
             "Как создать правило:\n"
-            "1) РЀРєР°Р¶РёС‚Рµ campaign_id Рё nm_id.\n"
+            "1) Укажите campaign_id и nm_id.\n"
             "2) Выберите target_type: normquery или nm.\n"
             "3) Для normquery заполните target_value (фразу).\n"
             "4) Выберите стратегию (optimal/position/range/hold).\n"
@@ -1265,7 +1265,7 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
             "Где открыть:\n"
             "- Модуль «Реклама WB/Ozon» → вкладка «Бидер».\n\n"
             "Как создать правило:\n"
-            "1) РЀРєР°Р¶РёС‚Рµ campaign_id Рё nm_id.\n"
+            "1) Укажите campaign_id и nm_id.\n"
             "2) Выберите target_type: normquery или nm.\n"
             "3) Для normquery заполните target_value (фразу).\n"
             "4) Выберите стратегию (optimal/position/range/hold).\n"
@@ -1306,7 +1306,7 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
             "Как считается прибыль:\n"
             "- Берем данные продаж и финансовых операций WB/Ozon.\n"
             "- Закупочные цены берутся из общей таблицы товаров (Product), без отдельного дублирующего каталога.\n"
-            "- РЀС‡РёС‚С‹РІР°РµРј РєРѕРјРёСЃСЃРёРё, Р»РѕРіРёСЃС‚РёРєСѓ, С…СЂР°РЅРµРЅРёРµ, СѓРґРµСЂР¶Р°РЅРёСЏ, С€С‚СЂР°С„С‹, СЂРµРєР»Р°РјСѓ.\n"
+            "- Учитываем комиссии, логистику, хранение, удержания, штрафы, рекламу.\n"
             "- Вычитаем себестоимость (закупочная цена * выкупленные ртуки).\n"
             "- Применяем пользовательские расходы, НДС/налоговые параметры.\n"
             "- Получаем чистую прибыль и маржу.\n\n"
@@ -1392,7 +1392,7 @@ HELP_DOCS_RU: dict[str, dict[str, str]] = {
             "Как использовать:\n"
             "- Откройте вкладку «Справка» -> «AI помощник».\n"
             "- Задайте вопрос простым языком.\n"
-            "- РЀС‚РѕС‡РЅРёС‚Рµ РјР°СЂРєРµС‚РїР»РµР№СЃ, РїРµСЂРёРѕРґ Рё РјРѕРґСѓР»СЊ, РµСЃР»Рё РЅСѓР¶РµРЅ С‚РѕС‡РЅС‹Р№ РѕС‚РІРµС‚.\n\n"
+            "- Уточните маркетплейс, период и модуль, если нужен точный ответ.\n\n"
             "Важно:\n"
             "- Ответы строятся на выбранном AI-провайдере (профиль/админка).\n"
             "- При смене провайдера ответ может отличаться по стилю и детализации.\n"
@@ -1942,7 +1942,7 @@ HELP_RELEASES: list[dict[str, Any]] = [
             "WB Ads: расширена догрузка кампаний (больше лимиты enrichment + дополнительный fallback по summary/stat).",
             "WB Returns: добавлены fallback-варианты параметров is_archive и постраничный сбор списков заявок.",
             "В редактор товара добавлена загрузка фото файлами (multiple upload) + запись в локальную карточку.",
-            "РЀР»СѓС‡С€РµРЅР° СѓСЃС‚РѕР№С‡РёРІРѕСЃС‚СЊ СЃРµСЃСЃРёРё: РїСЂРё РєСЂР°С‚РєРѕРІСЂРµРјРµРЅРЅС‹С… 401/403 РїСЂРёР»РѕР¶РµРЅРёРµ РЅРµ РІС‹Р±СЂР°СЃС‹РІР°РµС‚ РІ Р°РІС‚РѕСЂРёР·Р°С†РёСЋ РїСЂРµР¶РґРµРІСЂРµРјРµРЅРЅРѕ.",
+            "Улучшена устойчивость сессии: при кратковременных 401/403 приложение не выбрасывает в авторизацию преждевременно.",
             "Снижена нагрузка при очереди: worker агрессивнее отбрасывает устареврие warmup/snapshot/bidder задачи.",
         ],
         "changes": [
@@ -2023,7 +2023,7 @@ HELP_RELEASES: list[dict[str, Any]] = [
         "android_download_url": "/static/downloads/seo-wibe-mobile-latest.apk",
         "android_download_name": "SEO WIBE Android (.apk)",
         "app_entry_url": "/mobile",
-        "notes": "APK 1.5.3 РїСЂРѕРІРµСЂСЏРµС‚ РѕР±РЅРѕРІР»РµРЅРёСЏ РїСЂРё Р·Р°РїСѓСЃРєРµ Рё РїСЂРµРґР»Р°РіР°РµС‚ В«РЀСЃС‚Р°РЅРѕРІРёС‚СЊ / РџРѕР·Р¶РµВ». РџРѕСЃР»Рµ Р·Р°РіСЂСѓР·РєРё РѕС‚РєСЂС‹РІР°РµС‚СЃСЏ СЃРёСЃС‚РµРјРЅС‹Р№ СѓСЃС‚Р°РЅРѕРІС‰РёРє Android.",
+        "notes": "APK 1.5.3 проверяет обновления при запуске и предлагает «Установить / Позже». После загрузки открывается системный установщик Android.",
     },
     {
         "version": "0.3.7",
@@ -2047,7 +2047,7 @@ HELP_RELEASES: list[dict[str, Any]] = [
         "android_download_url": "/static/downloads/seo-wibe-mobile-latest.apk",
         "android_download_name": "SEO WIBE Android (.apk)",
         "app_entry_url": "/mobile",
-        "notes": "APK РїСЂРѕРІРµСЂСЏРµС‚ РѕР±РЅРѕРІР»РµРЅРёСЏ РїСЂРё Р·Р°РїСѓСЃРєРµ Рё РїСЂРµРґР»Р°РіР°РµС‚ В«РЀСЃС‚Р°РЅРѕРІРёС‚СЊ / РџРѕР·Р¶РµВ». РџРѕСЃР»Рµ Р·Р°РіСЂСѓР·РєРё РѕС‚РєСЂС‹РІР°РµС‚СЃСЏ СЃРёСЃС‚РµРјРЅС‹Р№ СѓСЃС‚Р°РЅРѕРІС‰РёРє Android. РЀРІРµРґРѕРјР»РµРЅРёСЏ РІ С€С‚РѕСЂРєРµ РїРѕРґРґРµСЂР¶РёРІР°СЋС‚ Р±С‹СЃС‚СЂС‹Р№ РѕС‚РІРµС‚.",
+        "notes": "APK проверяет обновления при запуске и предлагает «Установить / Позже». После загрузки открывается системный установщик Android. Уведомления в шторке поддерживают быстрый ответ.",
     },
     {
         "version": "0.3.0",
@@ -2069,7 +2069,7 @@ HELP_RELEASES: list[dict[str, Any]] = [
         "android_download_url": "/static/downloads/seo-wibe-mobile-latest.apk",
         "android_download_name": "SEO WIBE Mobile Android (.apk)",
         "app_entry_url": "/mobile",
-        "notes": "РЀСЃС‚Р°РЅРѕРІРєР° РЅР° Android: СЃРєР°С‡Р°Р№С‚Рµ .apk, РѕС‚РєСЂРѕР№С‚Рµ С„Р°Р№Р» Рё РїРѕРґС‚РІРµСЂРґРёС‚Рµ СѓСЃС‚Р°РЅРѕРІРєСѓ РёР· РЅРµРёР·РІРµСЃС‚РЅРѕРіРѕ РёСЃС‚РѕС‡РЅРёРєР°.",
+        "notes": "Установка на Android: скачайте .apk, откройте файл и подтвердите установку из неизвестного источника.",
     },
     {
         "version": "0.2.1",
@@ -2098,11 +2098,11 @@ HELP_RELEASES: list[dict[str, Any]] = [
         "summary": "Стабилизация модулей товаров, отзывов/вопросов, рекламы и чата.",
         "diff_from_previous": [
             "Добавлены bulk-операции в товарах и улучрения в рекламном enrich.",
-            "РЀСЃРєРѕСЂРµРЅС‹ СЃС†РµРЅР°СЂРёРё РіРµРЅРµСЂР°С†РёРё Рё РѕС‚РїСЂР°РІРєРё РѕС‚РІРµС‚РѕРІ.",
+            "Ускорены сценарии генерации и отправки ответов.",
         ],
         "changes": [
             "Исправлены мобильные UI-регрессии и обработка direct-чатов.",
-            "РЀР»СѓС‡С€РµРЅС‹ СЃС‚Р°С‚СѓСЃС‹ Р·Р°РіСЂСѓР·РєРё СЂРµРєР»Р°РјРЅС‹С… РєР°РјРїР°РЅРёР№.",
+            "Улучшены статусы загрузки рекламных кампаний.",
         ],
         "android_download_url": "/static/downloads/seo-wibe-mobile-latest.apk",
         "android_download_name": "SEO WIBE Mobile Android (.apk)",
@@ -4998,11 +4998,11 @@ def wb_ads_recommendations(
         if clicks_v > 0 and orders_v <= 0:
             return ("Проверить карточку и семантику", "medium", "optimize_listing", "Есть клики, но нет заказов.")
         if orders_v > 0 and cpo_v > 0 and cpo_v <= 1200:
-            return ("РџРѕРґРґРµСЂР¶РёРІР°С‚СЊ Рё РјР°СЃС€С‚Р°Р±РёСЂРѕРІР°С‚СЊ", "low", "scale", "Кампания РїСЂРёРЅРѕСЃРёС‚ Р·Р°РєР°Р·С‹ СЃ РїСЂРёРµРјР»РµРјС‹Рј CPO.")
+            return ("Поддерживать и масштабировать", "low", "scale", "Кампания приносит заказы с приемлемым CPO.")
         if orders_v > 0 and cpo_v > 1200:
             return ("Оптимизировать расходы", "medium", "decrease_bids", "Заказы есть, но CPO выре целевого.")
         if (not is_running_v) and (views_v > 0 or clicks_v > 0):
-            return ("РџСЂРѕРІРµСЂРёС‚СЊ Рё РІРѕР·РѕР±РЅРѕРІРёС‚СЊ", "low", "start", "Кампания СЃРµР№С‡Р°СЃ РЅРµ Р°РєС‚РёРІРЅР°, РЅРѕ РїРѕ РЅРµР№ Р±С‹Р»Р° Р°РєС‚РёРІРЅРѕСЃС‚СЊ.")
+            return ("Проверить и возобновить", "low", "start", "Кампания сейчас не активна, но по ней была активность.")
         if ctr_v < 0.3 and views_v > 0:
             return ("Обновить креатив и заголовки", "medium", "refresh", "CTR низкий для текущего объема показов.")
         return ("Ручной аудит", "low", "audit", "Недостаточно данных для автоматического сценария.")
@@ -5059,12 +5059,12 @@ def wb_ads_recommendations(
             recommendation = "Снизить ставки"
             priority = "medium"
             action = "decrease_bids"
-            reason = "Р’С‹СЃРѕРєРёР№ CPO, кампания РЅРµСЌС„С„РµРєС‚РёРІРЅР°."
+            reason = "Высокий CPO, кампания неэффективна."
         elif (not is_running) and orders >= 2 and cpo > 0 and cpo <= 900:
             recommendation = "Возобновить показы"
             priority = "low"
             action = "start"
-            reason = "Кампания РЅР° РїР°СѓР·Рµ/Р·Р°РІРµСЂС€РµРЅР°, РЅРѕ РјРµС‚СЂРёРєРё Р±С‹Р»Рё СЂР°Р±РѕС‡РёРµ."
+            reason = "Кампания на паузе/завершена, но метрики были рабочие."
 
         if not recommendation:
             fallback_candidates.append(base_payload)
@@ -5640,7 +5640,7 @@ def list_products(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    placeholder_categories = {"", "-", "—", "n/a", "na", "none", "null", "РЅРµС‚", "unknown"}
+    placeholder_categories = {"", "-", "—", "n/a", "na", "none", "null", "нет", "unknown"}
 
     def _normalize_category_value(value: str) -> str:
         text = str(value or "").replace("\u00a0", " ")
@@ -6382,9 +6382,9 @@ def delete_products_local_bulk(payload: ProductBulkDeleteIn, user: User = Depend
     db.commit()
     return MessageOut(
         message=(
-            f"РЀРґР°Р»РµРЅРѕ РёР· Р»РѕРєР°Р»СЊРЅРѕР№ Р±Р°Р·С‹: {deleted_count}"
+            f"Удалено из локальной базы: {deleted_count}"
             if missing_count <= 0
-            else f"РЀРґР°Р»РµРЅРѕ РёР· Р»РѕРєР°Р»СЊРЅРѕР№ Р±Р°Р·С‹: {deleted_count} (РЅРµ РЅР°Р№РґРµРЅРѕ: {missing_count})"
+            else f"Удалено из локальной базы: {deleted_count} (не найдено: {missing_count})"
         )
     )
 
@@ -6714,7 +6714,7 @@ def delete_seo_jobs(payload: SeoDeleteRequest, user: User = Depends(get_current_
         ).all()
     else:
         if not payload.job_ids:
-            raise HTTPException(status_code=400, detail="РЀРєР°Р¶РёС‚Рµ Р·Р°РґР°С‡Рё РґР»СЏ СѓРґР°Р»РµРЅРёСЏ")
+            raise HTTPException(status_code=400, detail="Укажите задачи для удаления")
         jobs = db.scalars(
             select(SeoJob).where(
                 SeoJob.user_id == user.id,
@@ -6737,7 +6737,7 @@ def delete_seo_jobs(payload: SeoDeleteRequest, user: User = Depends(get_current_
         entity_type="seo_job",
     )
     db.commit()
-    return MessageOut(message=f"РЀРґР°Р»РµРЅРѕ SEO Р·Р°РґР°С‡: {deleted}")
+    return MessageOut(message=f"Удалено SEO задач: {deleted}")
 
 
 @router.post("/seo/delete", response_model=MessageOut)
@@ -7346,7 +7346,7 @@ def accounting_expense_create(payload: AccountingExpenseIn, user: User = Depends
     _require_owner_actor(user)
     category = " ".join(str(payload.category or "").split()).strip()
     if not category:
-        raise HTTPException(status_code=400, detail="РЀРєР°Р¶РёС‚Рµ РєР°С‚РµРіРѕСЂРёСЋ СЂР°СЃС…РѕРґР°")
+        raise HTTPException(status_code=400, detail="Укажите категорию расхода")
     amount = max(0.0, _to_money(payload.amount))
     start_date = _parse_datetime_or_none(payload.start_date)
     end_date = _parse_datetime_or_none(payload.end_date)
@@ -7396,7 +7396,7 @@ def accounting_expense_update(
         raise HTTPException(status_code=404, detail="Расход не найден")
     category = " ".join(str(payload.category or "").split()).strip()
     if not category:
-        raise HTTPException(status_code=400, detail="РЀРєР°Р¶РёС‚Рµ РєР°С‚РµРіРѕСЂРёСЋ СЂР°СЃС…РѕРґР°")
+        raise HTTPException(status_code=400, detail="Укажите категорию расхода")
     row.marketplace = _normalize_accounting_marketplace(payload.marketplace)
     row.category = category[:120]
     row.amount = max(0.0, _to_money(payload.amount))
@@ -9581,7 +9581,7 @@ def _social_identity_by_key(db: Session, actor_key: str) -> tuple[int, int | Non
         member_id = _to_int_safe(key.split(":", 1)[1])
         member = db.get(TeamMember, member_id) if member_id else None
         if not member or not member.is_active:
-            raise HTTPException(status_code=404, detail="РЀС‡Р°СЃС‚РЅРёРє РЅРµ РЅР°Р№РґРµРЅ")
+            raise HTTPException(status_code=404, detail="Участник не найден")
         nick = str((member.nickname or member.full_name or member.email).strip() or f"member-{member.id}")
         return int(member.user_id), int(member.id), nick[:120]
     if key.startswith("u:"):
@@ -11587,7 +11587,7 @@ def social_chat_participant_profile(
         )
     )
     if not target_row:
-        raise HTTPException(status_code=404, detail="РЀС‡Р°СЃС‚РЅРёРє РЅРµ РЅР°Р№РґРµРЅ")
+        raise HTTPException(status_code=404, detail="Участник не найден")
 
     target_key = _social_canonical_actor_key(db, str(target_row.actor_key or "").strip().lower())
     profile_payload = _social_public_profile_by_key(db, target_key)
@@ -11818,7 +11818,7 @@ def social_create_group_chat(
     actor_key, actor_nick, _ = _social_actor_identity(db, user)
     title = str(payload.title or "").strip()[:255]
     if len(title) < 2:
-        raise HTTPException(status_code=400, detail="РЀРєР°Р¶РёС‚Рµ РЅР°Р·РІР°РЅРёРµ РіСЂСѓРїРїС‹")
+        raise HTTPException(status_code=400, detail="Укажите название группы")
     member_keys = _social_clean_group_member_keys(
         db,
         user_id=int(user.id),
@@ -11883,7 +11883,7 @@ def social_update_group_chat(
         raise HTTPException(status_code=403, detail="Нет доступа к группе")
     title = str(payload.title or "").strip()[:255] if payload.title is not None else str(thread.title or "")
     if len(title) < 2:
-        raise HTTPException(status_code=400, detail="РЀРєР°Р¶РёС‚Рµ РЅР°Р·РІР°РЅРёРµ РіСЂСѓРїРїС‹")
+        raise HTTPException(status_code=400, detail="Укажите название группы")
     thread.title = title
     if payload.avatar_url is not None:
         thread.avatar_url = str(payload.avatar_url or "").strip()[:500]
@@ -12500,7 +12500,7 @@ def social_create_project(
     actor_key, actor_nick, _ = _social_actor_identity(db, user)
     title = str(payload.title or "").strip()
     if not title:
-        raise HTTPException(status_code=400, detail="РЀРєР°Р¶РёС‚Рµ РЅР°Р·РІР°РЅРёРµ РїСЂРѕРµРєС‚Р°")
+        raise HTTPException(status_code=400, detail="Укажите название проекта")
     row = SocialTaskProject(
         user_id=user.id,
         title=title[:255],
@@ -12596,7 +12596,7 @@ def social_tasks_list(
             kind="task_reminder",
             dedupe_key=f"task_overdue:{task.id}:{now.date().isoformat()}",
             title="Задача просрочена",
-            body=f"{task.title[:120]} — РґРµРґР»Р°Р№РЅ РёСЃС‚РµРє.",
+            body=f"{task.title[:120]} — дедлайн истек.",
             payload={"task_id": int(task.id), "assignee": actor_nick},
         )
     db.commit()
@@ -12614,7 +12614,7 @@ def social_create_task(
     actor_key, actor_nick, _ = _social_actor_identity(db, user)
     title = str(payload.title or "").strip()
     if not title:
-        raise HTTPException(status_code=400, detail="РЀРєР°Р¶РёС‚Рµ РЅР°Р·РІР°РЅРёРµ Р·Р°РґР°С‡Рё")
+        raise HTTPException(status_code=400, detail="Укажите название задачи")
     assignee_key = str(payload.assignee_key or actor_key).strip().lower()
     if not assignee_key:
         assignee_key = actor_key
@@ -14477,7 +14477,7 @@ def admin_create_announcement(
 ):
     title = str(payload.title or "").strip()
     if not title:
-        raise HTTPException(status_code=400, detail="РЀРєР°Р¶РёС‚Рµ Р·Р°РіРѕР»РѕРІРѕРє РѕР±СЉСЏРІР»РµРЅРёСЏ")
+        raise HTTPException(status_code=400, detail="Укажите заголовок объявления")
     starts_at = _social_parse_dt(payload.starts_at)
     if not starts_at:
         raise HTTPException(status_code=400, detail="Некорректная дата/время публикации")
@@ -14531,7 +14531,7 @@ def admin_update_announcement(
         raise HTTPException(status_code=404, detail="Объявление не найдено")
     title = str(payload.title or "").strip()
     if not title:
-        raise HTTPException(status_code=400, detail="РЀРєР°Р¶РёС‚Рµ Р·Р°РіРѕР»РѕРІРѕРє РѕР±СЉСЏРІР»РµРЅРёСЏ")
+        raise HTTPException(status_code=400, detail="Укажите заголовок объявления")
     starts_at = _social_parse_dt(payload.starts_at)
     if not starts_at:
         raise HTTPException(status_code=400, detail="Некорректная дата/время публикации")
@@ -14762,7 +14762,7 @@ def upsert_products(
 def build_seo_job_out(db: Session, job: SeoJob) -> SeoJobOut:
     product = db.get(Product, job.product_id)
     article = product.article if product else "-"
-    name = product.name if product else "РЀРґР°Р»РµРЅРЅС‹Р№ С‚РѕРІР°СЂ"
+    name = product.name if product else "Удаленный товар"
     barcode = product.barcode if product else ""
     competitor_items: list[dict] = []
     competitor_snapshot = job.competitor_snapshot
@@ -15280,7 +15280,7 @@ def _ensure_team_email_is_available(
 ) -> None:
     candidate = (email or "").strip().lower()
     if not candidate:
-        raise HTTPException(status_code=400, detail="РЀРєР°Р¶РёС‚Рµ email СЃРѕС‚СЂСѓРґРЅРёРєР°")
+        raise HTTPException(status_code=400, detail="Укажите email сотрудника")
 
     owner_user = db.scalar(select(User).where(User.email == candidate))
     if owner_user and owner_user.id != user_id:
@@ -15297,7 +15297,7 @@ def _validate_team_member_password(raw_password: str, *, required: bool) -> str:
     password = str(raw_password or "")
     if not password:
         if required:
-            raise HTTPException(status_code=400, detail="РЀРєР°Р¶РёС‚Рµ РїР°СЂРѕР»СЊ СЃРѕС‚СЂСѓРґРЅРёРєР° (РјРёРЅРёРјСѓРј 8 СЃРёРјРІРѕР»РѕРІ)")
+            raise HTTPException(status_code=400, detail="Укажите пароль сотрудника (минимум 8 символов)")
         return ""
     if len(password) < 8:
         raise HTTPException(status_code=400, detail="Пароль сотрудника должен быть минимум 8 символов")

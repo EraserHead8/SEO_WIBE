@@ -725,7 +725,7 @@ def generate_help_assistant_reply(
     if len(ctx) > 24000:
         ctx = ctx[:24000]
     fallback = (
-        "РЇ РїРѕРјРѕРіСѓ СЃ СЌС‚РёРј РІРѕРїСЂРѕСЃРѕРј. РЀС‚РѕС‡РЅРёС‚Рµ РјРѕРґСѓР»СЊ Рё Р¶РµР»Р°РµРјС‹Р№ СЂРµР·СѓР»СЊС‚Р°С‚, "
+        "Я помогу с этим вопросом. Уточните модуль и желаемый результат, "
         "и я дам пораговый ответ с учетом варей базы знаний."
     )
     token = str(api_key or settings.openai_api_key or "").strip()
@@ -3744,7 +3744,7 @@ def _fallback_question_reply(question_text: str, product_name: str, reviewer_nam
     greeting = _build_greeting(reviewer_name)
     q = " ".join((question_text or "").split())
     if not q:
-        return f"{greeting} РЎРїР°СЃРёР±Рѕ Р·Р° РІРѕРїСЂРѕСЃ РїРѕ С‚РѕРІР°СЂСѓ {clean_product}. РЀС‚РѕС‡РЅРёС‚Рµ, РїРѕР¶Р°Р»СѓР№СЃС‚Р°, РґРµС‚Р°Р»Рё, Рё РјС‹ РїРѕРґСЃРєР°Р¶РµРј С‚РѕС‡РЅРµРµ."
+        return f"{greeting} Спасибо за вопрос по товару {clean_product}. Уточните, пожалуйста, детали, и мы подскажем точнее."
     return (
         f"{greeting} Спасибо за вопрос по товару {clean_product}. "
         "Проверим по варей ситуации и подскажем точные параметры. "
