@@ -3351,6 +3351,8 @@ function socialOpenGroupAvatarModal() {
           </div>
         </div>
         <div class="actions">
+          <button id="socialGroupAvatarUploadBtn" class="btn-secondary" type="button">${tr("Загрузить файл", "Upload file")}</button>
+          <input id="socialGroupAvatarFileInput" type="file" accept="image/*" class="hidden" />
           <button id="socialGroupAvatarSave" type="button">${tr("Сохранить", "Save")}</button>
           <button id="socialGroupAvatarClear" class="btn-secondary" type="button">${tr("Удалить", "Clear")}</button>
         </div>
@@ -3391,6 +3393,63 @@ function socialOpenGroupAvatarModal() {
       el.classList.remove("active");
     });
   });
+  const uploadBtn = document.getElementById("socialGroupAvatarUploadBtn");
+  const uploadInput = document.getElementById("socialGroupAvatarFileInput");
+  uploadBtn?.addEventListener("click", () => {
+    uploadInput?.click();
+  });
+  uploadInput?.addEventListener("change", async () => {
+    const file = uploadInput?.files?.[0] || null;
+    if (!file) return;
+    const prevText = String(uploadBtn?.textContent || "");
+    if (uploadBtn) {
+      uploadBtn.disabled = true;
+      uploadBtn.textContent = tr("Загрузка...", "Uploading...");
+    }
+    try {
+      const updated = await socialUploadGroupAvatarFile(file);
+      if (updated && input) {
+        input.value = String(updated.avatar_url || "").trim();
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      document.querySelectorAll("#socialGroupAvatarPicker .avatar-chip").forEach((el) => {
+        el.classList.remove("active");
+      });
+    } finally {
+      if (uploadBtn) {
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = prevText || tr("Загрузить файл", "Upload file");
+      }
+      if (uploadInput) uploadInput.value = "";
+    }
+  });
+}
+
+async function socialUploadGroupAvatarFile(file) {
+  const thread = socialGetCurrentThread();
+  if (!thread || !file) return null;
+  const type = String(file?.type || "").toLowerCase();
+  if (type && !type.startsWith("image/")) {
+    alert(tr("Нужно выбрать изображение", "Please choose an image file"));
+    return null;
+  }
+  const form = new FormData();
+  form.append("file", file, String(file.name || "group-avatar"));
+  const updated = await socialRequest(`/api/social/chat/groups/${Number(thread.id)}/avatar/upload`, {
+    method: "POST",
+    body: form,
+    retryOnPost: false,
+    maxRetries: 0,
+  }).catch((e) => {
+    if (e?.message) alert(e.message);
+    return null;
+  });
+  if (!updated || typeof updated !== "object") return null;
+  const idx = socialState.chatThreads.findIndex((x) => Number(x.id) === Number(updated.id));
+  if (idx >= 0) socialState.chatThreads[idx] = updated;
+  socialSetChatHeader(updated, { force: true });
+  socialRenderThreads();
+  return updated;
 }
 
 async function socialSaveGroupAvatar() {

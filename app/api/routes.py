@@ -12777,6 +12777,46 @@ def social_chat_thread_avatar(
     return _social_thread_to_out(db, actor_key, thread, member_row)
 
 
+@router.post("/social/chat/groups/{thread_id}/avatar/upload", response_model=SocialChatThreadOut)
+def social_chat_group_avatar_upload(
+    thread_id: int,
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, actor_nick, member_id = _social_actor_identity(db, user)
+    thread = db.get(SocialChatThread, int(thread_id or 0))
+    if not thread:
+        raise HTTPException(status_code=404, detail="Чат не найден")
+    if thread.kind != "group":
+        raise HTTPException(status_code=400, detail="Загрузка аватара доступна только для групп")
+    if int(thread.owner_user_id or 0) != int(user.id):
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+    member_row = db.scalar(
+        select(SocialChatThreadMember).where(
+            SocialChatThreadMember.thread_id == int(thread.id),
+            SocialChatThreadMember.actor_key == actor_key,
+        )
+    )
+    if not member_row:
+        raise HTTPException(status_code=403, detail="Нет доступа к группе")
+    url = _save_avatar_upload(file, user_id=user.id, prefix=f"group{int(thread.id)}")
+    thread.avatar_url = str(url or "")
+    thread.updated_at = datetime.utcnow()
+    _audit(
+        db,
+        user,
+        action="social_group_avatar_uploaded",
+        details=json.dumps({"thread_id": int(thread.id), "avatar_url": str(url or "")}, ensure_ascii=False),
+        module_code="social_hub",
+        entity_type="social_thread",
+        entity_id=str(thread.id),
+    )
+    db.commit()
+    return _social_thread_to_out(db, actor_key, thread, member_row)
+
+
 @router.get("/social/currency/rates", response_model=SocialCurrencyRatesOut)
 def social_currency_rates(
     user: User = Depends(get_current_user),
