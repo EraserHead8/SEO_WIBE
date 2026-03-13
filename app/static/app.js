@@ -6039,8 +6039,26 @@ function renderReturns() {
   applyButtonTooltips();
 }
 
-async function loadWbAdCampaigns() {
+async function loadWbAdCampaigns(options = {}) {
   if (!enabledModules.has("wb_ads")) return;
+  const force = Boolean(options && typeof options === "object" && options.force);
+  if (!force && wbCampaignRows.length && hasFreshModuleLoad("ads", 45000)) {
+    wbAdsLoadProgress = {
+      active: false,
+      total: wbCampaignRows.length,
+      loaded: wbCampaignRows.length,
+      failed: 0,
+    };
+    updateWbAdsLoadStatus(
+      tr(
+        "Показаны свежие данные из кеша. Для полного обновления нажмите «Загрузить кампании».",
+        "Showing fresh cached campaigns. Press \"Load campaigns\" to force refresh."
+      )
+    );
+    renderWbCampaignRows();
+    refreshWbBidderCampaignHints();
+    return;
+  }
   if (wbAdsLoadInflight) return wbAdsLoadInflight;
 
   const runTask = (async () => {
@@ -6156,28 +6174,33 @@ async function loadWbAdCampaigns() {
     )];
 
     if (previewIds.length) {
-      const previewPayload = await requestJson("/api/wb/ads/campaigns/enrich", {
+      void requestJson("/api/wb/ads/campaigns/enrich", {
         method: "POST",
         headers: authHeaders(),
         body: JSON.stringify({ ids: previewIds }),
         timeoutMs: 90000,
-      }).catch(() => null);
-      if (runToken === wbAdsLoadToken && previewPayload && typeof previewPayload === "object") {
-        const summaries = previewPayload?.summaries && typeof previewPayload.summaries === "object"
-          ? previewPayload.summaries
-          : {};
-        const stats = previewPayload?.stats && typeof previewPayload.stats === "object"
-          ? previewPayload.stats
-          : {};
-        wbCampaignRows = wbCampaignRows.map((row) => {
-          const cid = getCampaignRowId(row);
-          if (!cid) return row;
-          const merged = mergeCampaignSummaryIntoRow(row, summaries[cid] || null);
-          if (stats[cid] && typeof stats[cid] === "object") return { ...merged, ...stats[cid] };
-          return merged;
-        });
-        wbAdsLoadProgress.loaded = Math.min(previewIds.length, wbAdsLoadProgress.total || previewIds.length);
-      }
+      })
+        .then((previewPayload) => {
+          if (runToken !== wbAdsLoadToken) return;
+          if (!previewPayload || typeof previewPayload !== "object") return;
+          const summaries = previewPayload?.summaries && typeof previewPayload.summaries === "object"
+            ? previewPayload.summaries
+            : {};
+          const stats = previewPayload?.stats && typeof previewPayload.stats === "object"
+            ? previewPayload.stats
+            : {};
+          wbCampaignRows = wbCampaignRows.map((row) => {
+            const cid = getCampaignRowId(row);
+            if (!cid) return row;
+            const merged = mergeCampaignSummaryIntoRow(row, summaries[cid] || null);
+            if (stats[cid] && typeof stats[cid] === "object") return { ...merged, ...stats[cid] };
+            return merged;
+          });
+          wbAdsLoadProgress.loaded = Math.min(previewIds.length, wbAdsLoadProgress.total || previewIds.length);
+          updateWbAdsLoadStatus();
+          renderWbCampaignRows();
+        })
+        .catch(() => null);
     }
 
     if (selectedWbCampaignId && !wbCampaignRows.some((x) => getCampaignRowId(x) === selectedWbCampaignId)) {
@@ -7768,6 +7791,38 @@ function applyWbBidderFieldHints() {
       opt.textContent = map[key];
     });
   };
+  const ensureFieldCard = (id, titleText, noteText = "") => {
+    const input = document.getElementById(id);
+    if (!input) return;
+    let card = input.closest(".ads-bidder-field");
+    if (!card) {
+      card = document.createElement("div");
+      card.className = "ads-bidder-field";
+      if (input.parentNode) {
+        input.parentNode.insertBefore(card, input);
+      }
+      card.appendChild(input);
+    }
+    let titleEl = card.querySelector(".ads-bidder-field-title");
+    if (!titleEl) {
+      titleEl = document.createElement("div");
+      titleEl.className = "ads-bidder-field-title";
+      card.insertBefore(titleEl, input);
+    }
+    titleEl.textContent = titleText;
+    let noteEl = card.querySelector(".ads-bidder-field-note");
+    const safeNote = String(noteText || "").trim();
+    if (safeNote) {
+      if (!noteEl) {
+        noteEl = document.createElement("div");
+        noteEl.className = "ads-bidder-field-note";
+        card.appendChild(noteEl);
+      }
+      noteEl.textContent = safeNote;
+    } else if (noteEl) {
+      noteEl.remove();
+    }
+  };
 
   setInputHint(
     "wbBidderCampaignId",
@@ -7806,11 +7861,27 @@ function applyWbBidderFieldHints() {
     hold: isEn ? "Hold fixed bid" : "Hold (фиксированная ставка)",
   });
 
+  ensureFieldCard("wbBidderCampaignId", isEn ? "Campaign ID" : "ID кампании", isEn ? "Select from campaign list to avoid mismatch." : "Выбирайте ID из списка кампаний, чтобы не ошибиться.");
+  ensureFieldCard("wbBidderNmId", isEn ? "Product nmID" : "nmID карточки товара", isEn ? "Use nmID from the same campaign." : "Укажите nmID из этой же кампании.");
+  ensureFieldCard("wbBidderTargetKind", isEn ? "Target type" : "Тип цели");
+  ensureFieldCard("wbBidderTargetValue", isEn ? "Search phrase (for normquery)" : "Поисковая фраза (для normquery)", isEn ? "Used only in normquery mode." : "Используется только в режиме normquery.");
+  ensureFieldCard("wbBidderPlacement", isEn ? "Placement" : "Площадка");
+  ensureFieldCard("wbBidderStrategy", isEn ? "Strategy" : "Стратегия");
+  ensureFieldCard("wbBidderDesiredBid", isEn ? "Target bid, RUB" : "Целевая ставка, ₽");
+  ensureFieldCard("wbBidderMinBid", isEn ? "Minimum bid, RUB" : "Минимальная ставка, ₽");
+  ensureFieldCard("wbBidderMaxBid", isEn ? "Maximum bid, RUB" : "Максимальная ставка, ₽");
+  ensureFieldCard("wbBidderStepBid", isEn ? "Bid step, RUB" : "Шаг изменения ставки, ₽", isEn ? "How much to increase/decrease bid per step." : "На сколько рублей повышать/понижать ставку за шаг.");
+  ensureFieldCard("wbBidderPosFrom", isEn ? "Target position from" : "Целевая позиция от", isEn ? "Lower bound of desired position range." : "Нижняя граница желаемого диапазона позиции.");
+  ensureFieldCard("wbBidderPosTo", isEn ? "Target position to" : "Целевая позиция до", isEn ? "Upper bound of desired position range." : "Верхняя граница желаемого диапазона позиции.");
+  ensureFieldCard("wbBidderMinClicks", isEn ? "Minimum clicks" : "Минимум кликов", isEn ? "0 means no clicks threshold." : "0 = без порога по кликам.");
+  ensureFieldCard("wbBidderCooldownSec", isEn ? "Cooldown, sec" : "Интервал пересчета, сек", isEn ? "Pause between auto-runs for one rule." : "Пауза между автозапусками одного правила.");
+  ensureFieldCard("wbBidderNotes", isEn ? "Comment" : "Комментарий", isEn ? "Optional note for your team." : "Опциональная пометка для команды.");
+
   const hint = document.getElementById("wbBidderFieldsHint");
   if (hint) {
     hint.textContent = isEn
-      ? "campaign_id is ad campaign id, nmID is product card id, target phrase works only for normquery. Bid values are in RUB."
-      : "campaign_id — это ID рекламной кампании, nmID — ID карточки товара, фраза используется только в режиме normquery. Ставки указываются в рублях.";
+      ? "campaign_id = campaign ID, nmID = product card ID. Step/position/clicks/cooldown are optimization controls. Bid values are in RUB."
+      : "campaign_id = ID кампании, nmID = ID карточки товара. Поля шаг/позиция/клики/cooldown — это параметры оптимизации. Ставки указываются в рублях.";
   }
 }
 
@@ -7916,13 +7987,30 @@ function collectWbBidderPayload() {
   };
 }
 
+function bidderPlacementLabel(value) {
+  const key = String(value || "").trim().toLowerCase();
+  if (key === "search") return tr("Поиск", "Search");
+  if (key === "recommendations") return tr("Рекомендации", "Recommendations");
+  if (key === "combined") return tr("Поиск + рекомендации", "Search + recommendations");
+  return key || "-";
+}
+
+function bidderStrategyLabel(value) {
+  const key = String(value || "").trim().toLowerCase();
+  if (key === "optimal") return tr("Optimal (авто баланс)", "Optimal (auto balance)");
+  if (key === "position") return tr("Position (держать позицию)", "Position hold");
+  if (key === "range") return tr("Range (держать диапазон)", "Range hold");
+  if (key === "hold") return tr("Hold (фиксированная ставка)", "Hold fixed bid");
+  return key || "-";
+}
+
 function bidderRuleTargetText(row) {
   const kind = String(row?.target_kind || "").toLowerCase();
   const nm = Number(row?.nm_id || 0);
   if (kind === "normquery") {
-    return `nm:${nm} · ${String(row?.target_value || "-")}`;
+    return `${tr("nmID", "nmID")}: ${nm} · ${String(row?.target_value || "-")}`;
   }
-  return `nm:${nm}`;
+  return `${tr("Карточка nmID", "nmID card")}: ${nm}`;
 }
 
 function bidderStatusBadge(status) {
@@ -7936,12 +8024,12 @@ function bidderStatusBadge(status) {
 async function loadWbBidderWorkspace() {
   if (!enabledModules.has("wb_ads")) return;
   refreshWbBidderCampaignHints();
+  const tasks = [loadWbBidderRules(), loadWbBidderRuns()];
   if (!wbCampaignRows.length) {
-    await loadWbAdCampaigns();
+    tasks.push(loadWbAdCampaigns());
   }
+  await Promise.all(tasks);
   refreshWbBidderCampaignHints();
-  await loadWbBidderRules();
-  await loadWbBidderRuns();
 }
 
 async function loadWbBidderRules() {
@@ -7982,7 +8070,7 @@ function renderWbBidderRules() {
       <td>${row.is_active ? "✅" : "⏸️"}</td>
       <td>${escapeHtml(String(row.campaign_id || "-"))}${campaignName ? `<div class="cell-meta-small">${escapeHtml(campaignName)}</div>` : ""}</td>
       <td>${escapeHtml(bidderRuleTargetText(row))}</td>
-      <td>${escapeHtml(String(row.strategy || "-"))} · ${escapeHtml(String(row.placement || "-"))}</td>
+      <td>${escapeHtml(bidderStrategyLabel(row.strategy))} · ${escapeHtml(bidderPlacementLabel(row.placement))}</td>
       <td>${escapeHtml(String(row.min_bid || 0))} .. ${escapeHtml(String(row.max_bid || 0))} · step ${escapeHtml(String(row.step_bid || 0))}</td>
       <td>${escapeHtml(String(row.target_pos_from || 0))} .. ${escapeHtml(String(row.target_pos_to || 0))}</td>
       <td>${escapeHtml(String(row.cooldown_sec || 0))}s</td>

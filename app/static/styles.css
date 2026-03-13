@@ -1229,6 +1229,32 @@ body[data-theme="light"] .review-type-pill {
   grid-template-columns: repeat(6, minmax(120px, 1fr));
 }
 
+.ads-bidder-field {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  align-content: start;
+}
+
+.ads-bidder-field-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+.ads-bidder-field-note {
+  font-size: 11px;
+  color: var(--muted);
+  opacity: 0.88;
+  line-height: 1.25;
+}
+
+.ads-bidder-field > input,
+.ads-bidder-field > select {
+  margin: 0;
+}
+
 .ads-bidder-actions {
   grid-template-columns: repeat(4, minmax(140px, 1fr));
 }
