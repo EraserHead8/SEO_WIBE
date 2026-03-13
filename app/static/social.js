@@ -1,4 +1,4 @@
-﻿let socialState = {
+let socialState = {
   boot: null,
   currentSubtab: "chat",
   gamesLeaderboardCache: new Map(),
@@ -2164,6 +2164,7 @@ async function socialLoadThreads(opts = {}) {
   const rows = data
     .filter((row) => row && typeof row === "object")
     .filter((row) => Number(row.id || 0) > 0)
+    .filter((row) => String(row.kind || "").trim().toLowerCase() !== "global")
     .map((row) => mergeThreadRow(row, prevMap.get(Number(row.id || 0))))
     .filter((row) => hasThreadContent(row));
   const nextSig = signatureOf(rows);
@@ -2686,7 +2687,8 @@ function socialCurrentDirectPeer(thread = null) {
 function socialOpenCurrentParticipantProfile() {
   const row = socialGetCurrentThread();
   if (!row) return;
-  if (String(row.kind || "") === "group") {
+  const kind = String(row.kind || "").trim().toLowerCase();
+  if (kind === "group" || kind === "company") {
     socialOpenGroupParticipants();
     return;
   }
@@ -2698,7 +2700,10 @@ function socialOpenCurrentParticipantProfile() {
 function socialOpenChatActionsMenu() {
   const row = socialGetCurrentThread();
   if (!row) return;
-  const isGroup = String(row.kind || "") === "group";
+  const kind = String(row.kind || "").trim().toLowerCase();
+  const isGroup = kind === "group";
+  const isCompany = kind === "company";
+  const isTeamThread = isGroup || isCompany;
   const collapsed = Boolean(socialState.chatHeadCollapsed);
   const actions = [];
   actions.push(`
@@ -2706,13 +2711,22 @@ function socialOpenChatActionsMenu() {
       ${escapeHtml(collapsed ? tr("Развернуть шапку", "Expand header") : tr("Свернуть шапку", "Collapse header"))}
     </button>
   `);
-  if (isGroup) {
+  if (isTeamThread) {
     actions.push(`
       <button type="button" data-chat-action="participants">${escapeHtml(tr("Участники", "Participants"))}</button>
-      <button type="button" data-chat-action="manage_group">${escapeHtml(tr("Изменить состав", "Edit members"))}</button>
-      <button type="button" class="btn-secondary" data-chat-action="group_avatar">${escapeHtml(tr("Аватар группы", "Group avatar"))}</button>
-      <button type="button" class="btn-danger" data-chat-action="delete_group">${escapeHtml(tr("Удалить группу", "Delete group"))}</button>
+      <button type="button" class="btn-secondary" data-chat-action="group_avatar">${escapeHtml(tr("Аватар чата", "Chat avatar"))}</button>
     `);
+    if (isGroup) {
+      actions.push(`
+        <button type="button" data-chat-action="manage_group">${escapeHtml(tr("Изменить состав", "Edit members"))}</button>
+        <button type="button" class="btn-danger" data-chat-action="delete_group">${escapeHtml(tr("Удалить группу", "Delete group"))}</button>
+      `);
+    }
+    if (isCompany) {
+      actions.push(`
+        <button type="button" data-chat-action="manage_company">${escapeHtml(tr("Переименовать чат", "Rename chat"))}</button>
+      `);
+    }
   } else {
     actions.push(`
       <button type="button" data-chat-action="profile">${escapeHtml(tr("Открыть профиль", "Open profile"))}</button>
@@ -2742,6 +2756,10 @@ function socialOpenChatActionsMenu() {
         socialOpenGroupEditor(true);
         return;
       }
+      if (action === "manage_company") {
+        socialOpenCompanyChatEditor();
+        return;
+      }
       if (action === "group_avatar") {
         socialOpenGroupAvatarModal();
         return;
@@ -2764,7 +2782,6 @@ function socialOpenChatActionsMenu() {
     });
   });
 }
-
 async function socialDeleteCurrentGroupThread() {
   const row = socialGetCurrentThread();
   const threadId = Number(row?.id || 0);
@@ -2823,29 +2840,46 @@ function socialOpenThreadMenu() {
   if (!inSocialChat || !socialIsThreadOpen()) return false;
   const row = socialGetCurrentThread();
   if (!row) return false;
-  const isGroup = String(row.kind || "") === "group";
+  const kind = String(row.kind || "").trim().toLowerCase();
+  const isGroup = kind === "group";
+  const isCompany = kind === "company";
+  const isTeamThread = isGroup || isCompany;
   const items = [];
-  if (isGroup) {
+  if (isTeamThread) {
+    if (isGroup) {
+      items.push({
+        label: tr("Управление группой", "Manage group"),
+        run: () => socialOpenGroupEditor(true),
+      });
+    }
+    if (isCompany) {
+      items.push({
+        label: tr("Настройки чата компании", "Company chat settings"),
+        run: () => socialOpenCompanyChatEditor(),
+      });
+    }
     items.push({
-      label: tr("\u0423\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435 \u0433\u0440\u0443\u043f\u043f\u043e\u0439", "Manage group"),
-      run: () => socialOpenGroupEditor(true),
-    });
-    items.push({
-      label: tr("\u0423\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0438 \u0433\u0440\u0443\u043f\u043f\u044b", "Group members"),
+      label: tr("Участники", "Participants"),
       run: () => socialOpenGroupParticipants(),
     });
     items.push({
-      label: tr("\u0410\u0432\u0430\u0442\u0430\u0440 \u0433\u0440\u0443\u043f\u043f\u044b", "Group avatar"),
+      label: tr("Аватар чата", "Chat avatar"),
       run: () => socialOpenGroupAvatarModal(),
     });
+    if (isGroup) {
+      items.push({
+        label: tr("Удалить группу", "Delete group"),
+        run: () => socialDeleteCurrentGroupThread(),
+      });
+    }
   } else {
     items.push({
-      label: tr("\u041f\u0440\u043e\u0444\u0438\u043b\u044c \u0441\u043e\u0431\u0435\u0441\u0435\u0434\u043d\u0438\u043a\u0430", "Open profile"),
+      label: tr("Профиль собеседника", "Open profile"),
       run: () => socialOpenCurrentParticipantProfile(),
     });
   }
   items.push({
-    label: tr("\u0417\u0430\u043a\u0440\u044b\u0442\u044c \u0447\u0430\u0442", "Close chat"),
+    label: tr("Закрыть чат", "Close chat"),
     run: () => socialCloseThread({ keepAutoSelect: false }),
   });
   const itemsHtml = items.map((item, index) => `
@@ -2854,7 +2888,7 @@ function socialOpenThreadMenu() {
     </button>
   `).join("");
   socialOpenModal(
-    tr("\u041c\u0435\u043d\u044e \u0447\u0430\u0442\u0430", "Chat menu"),
+    tr("Меню чата", "Chat menu"),
     `<div class="social-thread-menu-list">${itemsHtml}</div>`
   );
   document.querySelectorAll("[data-social-thread-menu-item]").forEach((btn) => {
@@ -2870,10 +2904,12 @@ function socialOpenThreadMenu() {
   });
   return true;
 }
-
 function socialOpenGroupParticipants() {
   const row = socialGetCurrentThread();
-  if (!row || String(row.kind || "") !== "group") return;
+  const kind = String(row?.kind || "").trim().toLowerCase();
+  const isGroup = kind === "group";
+  const isCompany = kind === "company";
+  if (!row || (!isGroup && !isCompany)) return;
   const threadId = Number(row.id || 0);
   const participants = Array.isArray(row.participants) ? row.participants : [];
   const listHtml = participants.map((p) => {
@@ -2881,8 +2917,8 @@ function socialOpenGroupParticipants() {
     const nick = String(p?.nick || actorKey || "-").trim() || "-";
     const online = socialIsParticipantOnline(p);
     const state = online
-      ? tr("\u043e\u043d\u043b\u0430\u0439\u043d", "online now")
-      : (socialFormatLastSeen(p?.last_seen_at || "") || tr("\u043d\u0435\u0442 \u0434\u0430\u043d\u043d\u044b\u0445", "unknown"));
+      ? tr("онлайн", "online now")
+      : (socialFormatLastSeen(p?.last_seen_at || "") || tr("нет данных", "unknown"));
     return `
       <button type="button" class="social-participant-row" data-social-profile-actor="${escapeHtml(actorKey)}">
         <span class="social-participant-avatar">${socialAvatarMarkup(p?.avatar_url || "", nick, "xs")}</span>
@@ -2894,15 +2930,24 @@ function socialOpenGroupParticipants() {
       </button>
     `;
   }).join("");
-  socialOpenModal(
-    tr("\u0423\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0438 \u0433\u0440\u0443\u043f\u043f\u044b", "Group participants"),
-    `
+  const actionsHtml = isGroup
+    ? `
       <div class="actions social-group-participants-actions">
         <button type="button" onclick="socialOpenGroupEditor(true)">${escapeHtml(tr("Изменить состав", "Edit members"))}</button>
         <button type="button" class="btn-danger" onclick="socialDeleteCurrentGroupThread()">${escapeHtml(tr("Удалить группу", "Delete group"))}</button>
       </div>
+    `
+    : `
+      <div class="actions social-group-participants-actions">
+        <button type="button" onclick="socialOpenCompanyChatEditor()">${escapeHtml(tr("Настройки чата", "Chat settings"))}</button>
+      </div>
+    `;
+  socialOpenModal(
+    isCompany ? tr("Участники чата компании", "Company chat members") : tr("Участники группы", "Group participants"),
+    `
+      ${actionsHtml}
       <div class="social-participant-list">
-        ${listHtml || `<div class="hint">${escapeHtml(tr("\u0421\u043f\u0438\u0441\u043e\u043a \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u043e\u0432 \u043f\u0443\u0441\u0442.", "No participants yet."))}</div>`}
+        ${listHtml || `<div class="hint">${escapeHtml(tr("Список участников пуст.", "No participants yet."))}</div>`}
       </div>
     `
   );
@@ -2914,7 +2959,6 @@ function socialOpenGroupParticipants() {
     });
   });
 }
-
 async function socialOpenParticipantProfile(actorKey, threadId = 0) {
   const safeActorKey = String(actorKey || "").trim();
   const safeThreadId = Number(threadId || socialState.currentThreadId || 0);
@@ -3435,7 +3479,7 @@ async function socialUploadGroupAvatarFile(file) {
   }
   const form = new FormData();
   form.append("file", file, String(file.name || "group-avatar"));
-  const updated = await socialRequest(`/api/social/chat/groups/${Number(thread.id)}/avatar/upload`, {
+  const updated = await socialRequest(`/api/social/chat/threads/${Number(thread.id)}/avatar/upload`, {
     method: "POST",
     body: form,
     retryOnPost: false,
@@ -3926,6 +3970,62 @@ function socialCurrentGroupThread() {
   const thread = socialGetCurrentThread();
   if (!thread || String(thread.kind || "") !== "group") return null;
   return thread;
+}
+
+function socialCurrentCompanyThread() {
+  const thread = socialGetCurrentThread();
+  if (!thread || String(thread.kind || "") !== "company") return null;
+  return thread;
+}
+
+function socialOpenCompanyChatEditor() {
+  const thread = socialCurrentCompanyThread();
+  if (!thread) {
+    alert(tr("Сначала откройте чат компании.", "Open company chat first."));
+    return;
+  }
+  socialOpenModal(
+    tr("Настройки чата компании", "Company chat settings"),
+    `
+      <div class="social-group-editor">
+        <label>
+          <span>${tr("Название чата", "Chat title")}</span>
+          <input id="socialCompanyChatTitleInput" value="${escapeHtml(String(thread.title || "").trim())}" placeholder="${escapeHtml(tr("Введите название", "Enter title"))}" />
+        </label>
+        <div class="hint">${escapeHtml(tr("Все сотрудники компании добавляются в чат автоматически.", "All company employees are added automatically."))}</div>
+        <div class="actions">
+          <button type="button" onclick="socialSaveCompanyChatEditor()">${tr("Сохранить", "Save")}</button>
+        </div>
+      </div>
+    `
+  );
+}
+
+async function socialSaveCompanyChatEditor() {
+  const thread = socialCurrentCompanyThread();
+  if (!thread) return;
+  const title = String(document.getElementById("socialCompanyChatTitleInput")?.value || "").trim();
+  if (title.length < 2) {
+    alert(tr("Введите название чата.", "Enter chat title."));
+    return;
+  }
+  const row = await socialRequest(`/api/social/chat/company/${Number(thread.id || 0)}`, {
+    method: "PUT",
+    body: JSON.stringify({ title }),
+    retryOnPost: true,
+    maxRetries: 1,
+  }).catch((e) => {
+    alert(e?.message || tr("Ошибка сохранения чата", "Failed to save chat"));
+    return null;
+  });
+  if (!row) return;
+  const idx = socialState.chatThreads.findIndex((x) => Number(x?.id || 0) === Number(row.id || 0));
+  if (idx >= 0) {
+    socialState.chatThreads[idx] = row;
+  }
+  socialSetChatHeader(row, { force: true });
+  socialRenderThreads();
+  socialCloseModal();
 }
 
 function socialOpenGroupEditor(editCurrent = false) {
@@ -5466,6 +5566,11 @@ document.addEventListener("visibilitychange", () => {
 });
 
 socialMaybeStartHooks();
+
+
+
+
+
 
 
 

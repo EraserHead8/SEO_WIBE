@@ -1045,6 +1045,11 @@ class SocialChatThreadAvatarIn(BaseModel):
     avatar_url: str = ""
 
 
+class SocialChatCompanyUpdateIn(BaseModel):
+    title: str | None = None
+    avatar_url: str | None = None
+
+
 class SocialChatThreadOut(BaseModel):
     id: int
     kind: str
@@ -1252,3 +1257,4 @@ class SocialAnnouncementPublicOut(BaseModel):
     body: str = ""
     starts_at: str
     ends_at: str | None = None
+

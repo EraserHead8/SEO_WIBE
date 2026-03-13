@@ -157,6 +157,7 @@ from app.schemas import (
     SocialChatDirectStartIn,
     SocialChatGroupIn,
     SocialChatGroupUpdateIn,
+    SocialChatCompanyUpdateIn,
     SocialChatMessageIn,
     SocialChatMessageOut,
     SocialChatReactionIn,
@@ -10738,23 +10739,13 @@ def social_bootstrap(
     db: Session = Depends(get_db),
 ):
     ensure_module_enabled(db, user, "social_hub")
-    actor_key, actor_nick, actor_member_id = _social_actor_identity(db, user)
-    global_thread = _social_ensure_global_thread(db)
+    actor_key, actor_nick, _ = _social_actor_identity(db, user)
     company_thread = _social_ensure_company_thread(db, user.id)
-    _social_ensure_thread_member(
+    _social_sync_company_thread_members(
         db,
-        thread_id=global_thread.id,
+        thread=company_thread,
+        user_id=int(user.id),
         actor_key=actor_key,
-        user_id=user.id,
-        member_id=actor_member_id,
-        actor_nick=actor_nick,
-    )
-    _social_ensure_thread_member(
-        db,
-        thread_id=company_thread.id,
-        actor_key=actor_key,
-        user_id=user.id,
-        member_id=actor_member_id,
         actor_nick=actor_nick,
     )
     company_actors = db.scalars(
@@ -12616,22 +12607,12 @@ def social_chat_threads(
 ):
     ensure_module_enabled(db, user, "social_hub")
     actor_key, actor_nick, member_id = _social_actor_identity(db, user)
-    global_thread = _social_ensure_global_thread(db)
     company_thread = _social_ensure_company_thread(db, user.id)
-    _social_ensure_thread_member(
+    _social_sync_company_thread_members(
         db,
-        thread_id=global_thread.id,
+        thread=company_thread,
+        user_id=int(user.id),
         actor_key=actor_key,
-        user_id=user.id,
-        member_id=member_id,
-        actor_nick=actor_nick,
-    )
-    _social_ensure_thread_member(
-        db,
-        thread_id=company_thread.id,
-        actor_key=actor_key,
-        user_id=user.id,
-        member_id=member_id,
         actor_nick=actor_nick,
     )
     actor_aliases = _social_actor_alias_keys(db, actor_key)
@@ -12671,6 +12652,8 @@ def social_chat_threads(
     for member_row in mine:
         thread = db.get(SocialChatThread, member_row.thread_id)
         if not thread:
+            continue
+        if str(thread.kind or "") == "global":
             continue
         if thread.kind in {"company", "group"} and int(thread.owner_user_id or 0) != int(user.id):
             continue
@@ -12739,7 +12722,7 @@ def social_chat_thread_avatar(
         raise HTTPException(status_code=400, detail="Аватар доступен только для групповых чатов")
     if thread.kind == "global" and user.role != "admin":
         raise HTTPException(status_code=403, detail="Недостаточно прав")
-    if thread.kind == "company" and not _actor_is_owner(user) and user.role != "admin":
+    if thread.kind == "company" and int(thread.owner_user_id or 0) != int(user.id) and user.role != "admin":
         raise HTTPException(status_code=403, detail="Недостаточно прав")
     if thread.kind == "group":
         if int(thread.owner_user_id or 0) != int(user.id):
@@ -12752,6 +12735,14 @@ def social_chat_thread_avatar(
         )
         if not member_row:
             raise HTTPException(status_code=403, detail="Нет доступа к группе")
+    elif thread.kind == "company":
+        member_row = _social_sync_company_thread_members(
+            db,
+            thread=thread,
+            user_id=int(user.id),
+            actor_key=actor_key,
+            actor_nick=actor_nick,
+        )
     else:
         member_row = _social_ensure_thread_member(
             db,
@@ -12777,6 +12768,79 @@ def social_chat_thread_avatar(
     return _social_thread_to_out(db, actor_key, thread, member_row)
 
 
+def _social_chat_upload_thread_avatar(
+    *,
+    thread_id: int,
+    file: UploadFile,
+    user: User,
+    db: Session,
+) -> SocialChatThreadOut:
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, actor_nick, _ = _social_actor_identity(db, user)
+    thread = db.get(SocialChatThread, int(thread_id or 0))
+    if not thread:
+        raise HTTPException(status_code=404, detail="Чат не найден")
+    kind = str(thread.kind or "")
+    if kind not in {"group", "company"}:
+        raise HTTPException(status_code=400, detail="Загрузка аватара доступна только для чата компании и групп")
+
+    if kind == "group":
+        if int(thread.owner_user_id or 0) != int(user.id):
+            raise HTTPException(status_code=403, detail="Недостаточно прав")
+        member_row = db.scalar(
+            select(SocialChatThreadMember).where(
+                SocialChatThreadMember.thread_id == int(thread.id),
+                SocialChatThreadMember.actor_key == actor_key,
+            )
+        )
+        if not member_row:
+            raise HTTPException(status_code=403, detail="Нет доступа к группе")
+        prefix = f"group{int(thread.id)}"
+        audit_action = "social_group_avatar_uploaded"
+    else:
+        if int(thread.owner_user_id or 0) != int(user.id) and user.role != "admin":
+            raise HTTPException(status_code=403, detail="Недостаточно прав")
+        member_row = _social_sync_company_thread_members(
+            db,
+            thread=thread,
+            user_id=int(user.id),
+            actor_key=actor_key,
+            actor_nick=actor_nick,
+        )
+        prefix = f"company{int(thread.id)}"
+        audit_action = "social_company_chat_avatar_uploaded"
+
+    url = _save_avatar_upload(file, user_id=user.id, prefix=prefix)
+    thread.avatar_url = str(url or "")
+    thread.updated_at = datetime.utcnow()
+    _audit(
+        db,
+        user,
+        action=audit_action,
+        details=json.dumps({"thread_id": int(thread.id), "avatar_url": str(url or "")}, ensure_ascii=False),
+        module_code="social_hub",
+        entity_type="social_thread",
+        entity_id=str(thread.id),
+    )
+    db.commit()
+    return _social_thread_to_out(db, actor_key, thread, member_row)
+
+
+@router.post("/social/chat/threads/{thread_id}/avatar/upload", response_model=SocialChatThreadOut)
+def social_chat_thread_avatar_upload(
+    thread_id: int,
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return _social_chat_upload_thread_avatar(
+        thread_id=thread_id,
+        file=file,
+        user=user,
+        db=db,
+    )
+
+
 @router.post("/social/chat/groups/{thread_id}/avatar/upload", response_model=SocialChatThreadOut)
 def social_chat_group_avatar_upload(
     thread_id: int,
@@ -12784,34 +12848,62 @@ def social_chat_group_avatar_upload(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    ensure_module_enabled(db, user, "social_hub")
-    actor_key, actor_nick, member_id = _social_actor_identity(db, user)
-    thread = db.get(SocialChatThread, int(thread_id or 0))
-    if not thread:
-        raise HTTPException(status_code=404, detail="Чат не найден")
-    if thread.kind != "group":
-        raise HTTPException(status_code=400, detail="Загрузка аватара доступна только для групп")
-    if int(thread.owner_user_id or 0) != int(user.id):
-        raise HTTPException(status_code=403, detail="Недостаточно прав")
-    member_row = db.scalar(
-        select(SocialChatThreadMember).where(
-            SocialChatThreadMember.thread_id == int(thread.id),
-            SocialChatThreadMember.actor_key == actor_key,
-        )
+    return _social_chat_upload_thread_avatar(
+        thread_id=thread_id,
+        file=file,
+        user=user,
+        db=db,
     )
-    if not member_row:
-        raise HTTPException(status_code=403, detail="Нет доступа к группе")
-    url = _save_avatar_upload(file, user_id=user.id, prefix=f"group{int(thread.id)}")
-    thread.avatar_url = str(url or "")
+
+
+@router.put("/social/chat/company/{thread_id}", response_model=SocialChatThreadOut)
+def social_update_company_chat(
+    thread_id: int,
+    payload: SocialChatCompanyUpdateIn,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    actor_key, actor_nick, _ = _social_actor_identity(db, user)
+    thread = db.get(SocialChatThread, int(thread_id or 0))
+    if not thread or str(thread.kind or "") != "company":
+        raise HTTPException(status_code=404, detail="Чат компании не найден")
+    if int(thread.owner_user_id or 0) != int(user.id) and user.role != "admin":
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+    member_row = _social_sync_company_thread_members(
+        db,
+        thread=thread,
+        user_id=int(user.id),
+        actor_key=actor_key,
+        actor_nick=actor_nick,
+    )
+
+    if payload.title is not None:
+        title = str(payload.title or "").strip()[:255]
+        if len(title) < 2:
+            raise HTTPException(status_code=400, detail="Укажите название чата")
+        thread.title = title
+    if payload.avatar_url is not None:
+        thread.avatar_url = str(payload.avatar_url or "").strip()[:500]
+
     thread.updated_at = datetime.utcnow()
     _audit(
         db,
         user,
-        action="social_group_avatar_uploaded",
-        details=json.dumps({"thread_id": int(thread.id), "avatar_url": str(url or "")}, ensure_ascii=False),
+        action="social_company_chat_updated",
+        details=json.dumps(
+            {
+                "thread_id": int(thread.id),
+                "title": str(thread.title or ""),
+                "avatar_url": str(thread.avatar_url or ""),
+            },
+            ensure_ascii=False,
+        ),
         module_code="social_hub",
         entity_type="social_thread",
         entity_id=str(thread.id),
+        request=request,
     )
     db.commit()
     return _social_thread_to_out(db, actor_key, thread, member_row)
@@ -12968,6 +13060,44 @@ def _social_sync_group_members(
         )
     thread.updated_at = datetime.utcnow()
     return me_row
+
+
+def _social_company_member_keys(
+    db: Session,
+    *,
+    user_id: int,
+    actor_key: str,
+) -> list[str]:
+    allowed = sorted(_social_company_allowed_actor_keys(db, int(user_id)))
+    return _social_clean_group_member_keys(
+        db,
+        user_id=int(user_id),
+        actor_key=actor_key,
+        member_keys=allowed,
+    )
+
+
+def _social_sync_company_thread_members(
+    db: Session,
+    *,
+    thread: SocialChatThread,
+    user_id: int,
+    actor_key: str,
+    actor_nick: str,
+) -> SocialChatThreadMember:
+    member_keys = _social_company_member_keys(
+        db,
+        user_id=int(user_id),
+        actor_key=actor_key,
+    )
+    return _social_sync_group_members(
+        db,
+        thread=thread,
+        user_id=int(user_id),
+        actor_key=actor_key,
+        actor_nick=actor_nick,
+        member_keys=member_keys,
+    )
 
 
 @router.post("/social/chat/groups", response_model=SocialChatThreadOut)
@@ -13227,16 +13357,32 @@ def social_chat_messages(
     db: Session = Depends(get_db),
 ):
     ensure_module_enabled(db, user, "social_hub")
-    actor_key, _, _ = _social_actor_identity(db, user)
+    actor_key, actor_nick, _ = _social_actor_identity(db, user)
     actor_aliases = _social_actor_alias_keys(db, actor_key)
-    member_row = db.scalar(
-        select(SocialChatThreadMember).where(
-            SocialChatThreadMember.thread_id == thread_id,
-            SocialChatThreadMember.actor_key.in_(actor_aliases),
-        ).order_by(SocialChatThreadMember.id.asc())
-    )
-    if not member_row:
+    thread = db.get(SocialChatThread, int(thread_id or 0))
+    if not thread:
+        raise HTTPException(status_code=404, detail="Чат не найден")
+    if str(thread.kind or "") == "global":
+        raise HTTPException(status_code=410, detail="Глобальный чат отключен")
+    if str(thread.kind or "") in {"company", "group"} and int(thread.owner_user_id or 0) != int(user.id):
         raise HTTPException(status_code=403, detail="Нет доступа к чату")
+    if str(thread.kind or "") == "company":
+        member_row = _social_sync_company_thread_members(
+            db,
+            thread=thread,
+            user_id=int(user.id),
+            actor_key=actor_key,
+            actor_nick=actor_nick,
+        )
+    else:
+        member_row = db.scalar(
+            select(SocialChatThreadMember).where(
+                SocialChatThreadMember.thread_id == int(thread.id),
+                SocialChatThreadMember.actor_key.in_(actor_aliases),
+            ).order_by(SocialChatThreadMember.id.asc())
+        )
+        if not member_row:
+            raise HTTPException(status_code=403, detail="Нет доступа к чату")
     safe_limit = max(20, min(int(limit or 80), 200))
     query = select(SocialChatMessage).where(SocialChatMessage.thread_id == thread_id)
     if int(before_id or 0) > 0:
@@ -13264,16 +13410,27 @@ def social_chat_send_message(
     thread = db.get(SocialChatThread, int(thread_id or 0))
     if not thread:
         raise HTTPException(status_code=404, detail="Чат не найден")
+    if str(thread.kind or "") == "global":
+        raise HTTPException(status_code=410, detail="Глобальный чат отключен")
     if str(thread.kind or "") in {"company", "group"} and int(thread.owner_user_id or 0) != int(user.id):
         raise HTTPException(status_code=403, detail="Нет доступа к чату")
-    member_row = db.scalar(
-        select(SocialChatThreadMember).where(
-            SocialChatThreadMember.thread_id == thread_id,
-            SocialChatThreadMember.actor_key.in_(actor_aliases),
-        ).order_by(SocialChatThreadMember.id.asc())
-    )
-    if not member_row:
-        raise HTTPException(status_code=403, detail="Нет доступа к чату")
+    if str(thread.kind or "") == "company":
+        member_row = _social_sync_company_thread_members(
+            db,
+            thread=thread,
+            user_id=int(user.id),
+            actor_key=actor_key,
+            actor_nick=actor_nick,
+        )
+    else:
+        member_row = db.scalar(
+            select(SocialChatThreadMember).where(
+                SocialChatThreadMember.thread_id == thread_id,
+                SocialChatThreadMember.actor_key.in_(actor_aliases),
+            ).order_by(SocialChatThreadMember.id.asc())
+        )
+        if not member_row:
+            raise HTTPException(status_code=403, detail="Нет доступа к чату")
     text_msg = str(payload.text or "").strip()
     if not text_msg:
         raise HTTPException(status_code=400, detail="Сообщение пустое")
@@ -13369,16 +13526,27 @@ def social_chat_send_file(
     thread = db.get(SocialChatThread, int(thread_id or 0))
     if not thread:
         raise HTTPException(status_code=404, detail="Чат не найден")
+    if str(thread.kind or "") == "global":
+        raise HTTPException(status_code=410, detail="Глобальный чат отключен")
     if str(thread.kind or "") in {"company", "group"} and int(thread.owner_user_id or 0) != int(user.id):
         raise HTTPException(status_code=403, detail="Нет доступа к чату")
-    member_row = db.scalar(
-        select(SocialChatThreadMember).where(
-            SocialChatThreadMember.thread_id == int(thread_id),
-            SocialChatThreadMember.actor_key.in_(actor_aliases),
-        ).order_by(SocialChatThreadMember.id.asc())
-    )
-    if not member_row:
-        raise HTTPException(status_code=403, detail="Нет доступа к чату")
+    if str(thread.kind or "") == "company":
+        member_row = _social_sync_company_thread_members(
+            db,
+            thread=thread,
+            user_id=int(user.id),
+            actor_key=actor_key,
+            actor_nick=actor_nick,
+        )
+    else:
+        member_row = db.scalar(
+            select(SocialChatThreadMember).where(
+                SocialChatThreadMember.thread_id == int(thread_id),
+                SocialChatThreadMember.actor_key.in_(actor_aliases),
+            ).order_by(SocialChatThreadMember.id.asc())
+        )
+        if not member_row:
+            raise HTTPException(status_code=403, detail="Нет доступа к чату")
     if not file or not file.filename:
         raise HTTPException(status_code=400, detail="Файл не выбран")
     raw = file.file.read()
@@ -13570,16 +13738,32 @@ def social_mark_chat_read(
     db: Session = Depends(get_db),
 ):
     ensure_module_enabled(db, user, "social_hub")
-    actor_key, _, _ = _social_actor_identity(db, user)
+    actor_key, actor_nick, _ = _social_actor_identity(db, user)
     actor_aliases = _social_actor_alias_keys(db, actor_key)
-    member_row = db.scalar(
-        select(SocialChatThreadMember).where(
-            SocialChatThreadMember.thread_id == thread_id,
-            SocialChatThreadMember.actor_key.in_(actor_aliases),
-        ).order_by(SocialChatThreadMember.id.asc())
-    )
-    if not member_row:
+    thread = db.get(SocialChatThread, int(thread_id or 0))
+    if not thread:
+        raise HTTPException(status_code=404, detail="Чат не найден")
+    if str(thread.kind or "") == "global":
+        raise HTTPException(status_code=410, detail="Глобальный чат отключен")
+    if str(thread.kind or "") in {"company", "group"} and int(thread.owner_user_id or 0) != int(user.id):
         raise HTTPException(status_code=403, detail="Нет доступа к чату")
+    if str(thread.kind or "") == "company":
+        member_row = _social_sync_company_thread_members(
+            db,
+            thread=thread,
+            user_id=int(user.id),
+            actor_key=actor_key,
+            actor_nick=actor_nick,
+        )
+    else:
+        member_row = db.scalar(
+            select(SocialChatThreadMember).where(
+                SocialChatThreadMember.thread_id == int(thread.id),
+                SocialChatThreadMember.actor_key.in_(actor_aliases),
+            ).order_by(SocialChatThreadMember.id.asc())
+        )
+        if not member_row:
+            raise HTTPException(status_code=403, detail="Нет доступа к чату")
     last_id = db.scalar(
         select(func.max(SocialChatMessage.id)).where(SocialChatMessage.thread_id == thread_id)
     ) or 0
@@ -17948,6 +18132,15 @@ def mask_key(api_key: str) -> str:
     if len(api_key) <= 8:
         return "*" * len(api_key)
     return f"{api_key[:4]}...{api_key[-4:]}"
+
+
+
+
+
+
+
+
+
 
 
 
