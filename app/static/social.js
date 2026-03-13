@@ -2323,6 +2323,7 @@ function socialSyncMobileChatChrome(row = null) {
   const avatarNode = document.getElementById("mobileChatCompactAvatar");
   const titleNode = document.getElementById("mobileChatCompactTitle");
   const subtitleNode = document.getElementById("mobileChatCompactSubtitle");
+  const chatHead = document.querySelector("#socialSubtabChat .social-chat-head");
   if (!host || !backBtn || !avatarNode || !titleNode || !subtitleNode) return;
   const body = document.body;
   const shell = document.getElementById("appSection");
@@ -2356,6 +2357,8 @@ function socialSyncMobileChatChrome(row = null) {
   backBtn.classList.toggle("hidden", !show);
   body?.classList?.toggle("social-thread-open", show);
   shell?.classList?.toggle("social-thread-open", show);
+  chatHead?.classList?.toggle("hidden", show);
+  socialSyncTopMenuButtonMode();
   if (!show) {
     titleNode.textContent = tr("\u0427\u0430\u0442\u044b", "Chats");
     subtitleNode.textContent = "";
@@ -2394,6 +2397,20 @@ function socialSyncMobileChatChrome(row = null) {
   setProfileInteractive(true);
 }
 
+function socialSyncTopMenuButtonMode() {
+  const btn = document.getElementById("mobileNavToggle");
+  if (!btn) return;
+  const inSocialChat = String(currentTab || "") === "social"
+    && String(socialState.currentSubtab || "") === "chat";
+  const threadMode = socialIsMobileClientShell() && inSocialChat && socialIsThreadOpen();
+  btn.dataset.menuMode = threadMode ? "thread" : "modules";
+  const label = threadMode
+    ? tr("\u041c\u0435\u043d\u044e \u0447\u0430\u0442\u0430", "Chat menu")
+    : tr("\u041c\u0435\u043d\u044e \u043c\u043e\u0434\u0443\u043b\u0435\u0439", "Modules menu");
+  btn.title = label;
+  btn.setAttribute("aria-label", label);
+}
+
 function socialFilterThreads() {
   socialState.chatSearch = String(document.getElementById("socialChatSearch")?.value || "").trim().toLowerCase();
   socialRenderThreads();
@@ -2407,6 +2424,7 @@ function socialSetChatView(open) {
   layout.dataset.threadOpen = nextOpen ? "1" : "0";
   socialSyncMobileChatChrome();
   socialApplyChatHeadCollapsed();
+  socialSyncTopMenuButtonMode();
 }
 
 function socialApplyChatHeadCollapsed() {
@@ -2797,6 +2815,60 @@ function socialOpenChatQuickMenu() {
       }
     });
   });
+}
+
+function socialOpenThreadMenu() {
+  const inSocialChat = String(currentTab || "") === "social"
+    && String(socialState.currentSubtab || "") === "chat";
+  if (!inSocialChat || !socialIsThreadOpen()) return false;
+  const row = socialGetCurrentThread();
+  if (!row) return false;
+  const isGroup = String(row.kind || "") === "group";
+  const items = [];
+  if (isGroup) {
+    items.push({
+      label: tr("\u0423\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435 \u0433\u0440\u0443\u043f\u043f\u043e\u0439", "Manage group"),
+      run: () => socialOpenGroupEditor(true),
+    });
+    items.push({
+      label: tr("\u0423\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0438 \u0433\u0440\u0443\u043f\u043f\u044b", "Group members"),
+      run: () => socialOpenGroupParticipants(),
+    });
+    items.push({
+      label: tr("\u0410\u0432\u0430\u0442\u0430\u0440 \u0433\u0440\u0443\u043f\u043f\u044b", "Group avatar"),
+      run: () => socialOpenGroupAvatarModal(),
+    });
+  } else {
+    items.push({
+      label: tr("\u041f\u0440\u043e\u0444\u0438\u043b\u044c \u0441\u043e\u0431\u0435\u0441\u0435\u0434\u043d\u0438\u043a\u0430", "Open profile"),
+      run: () => socialOpenCurrentParticipantProfile(),
+    });
+  }
+  items.push({
+    label: tr("\u0417\u0430\u043a\u0440\u044b\u0442\u044c \u0447\u0430\u0442", "Close chat"),
+    run: () => socialCloseThread({ keepAutoSelect: false }),
+  });
+  const itemsHtml = items.map((item, index) => `
+    <button type="button" class="btn-secondary social-thread-menu-btn" data-social-thread-menu-item="${index}">
+      ${escapeHtml(item.label)}
+    </button>
+  `).join("");
+  socialOpenModal(
+    tr("\u041c\u0435\u043d\u044e \u0447\u0430\u0442\u0430", "Chat menu"),
+    `<div class="social-thread-menu-list">${itemsHtml}</div>`
+  );
+  document.querySelectorAll("[data-social-thread-menu-item]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const index = Number(btn.getAttribute("data-social-thread-menu-item") || -1);
+      const action = index >= 0 ? items[index] : null;
+      socialCloseModal();
+      if (!action || typeof action.run !== "function") return;
+      setTimeout(() => {
+        try { action.run(); } catch (_) {}
+      }, 0);
+    });
+  });
+  return true;
 }
 
 function socialOpenGroupParticipants() {
@@ -5323,6 +5395,8 @@ window.socialDeleteNoteFile = socialDeleteNoteFile;
 window.socialStartGlobalHooks = socialStartGlobalHooks;
 window.socialStopGlobalHooks = socialStopGlobalHooks;
 window.socialSyncMobileChatChrome = socialSyncMobileChatChrome;
+window.socialSyncTopMenuButtonMode = socialSyncTopMenuButtonMode;
+window.socialOpenThreadMenu = socialOpenThreadMenu;
 window.socialIsThreadOpen = socialIsThreadOpen;
 window.resetSocialState = resetSocialState;
 

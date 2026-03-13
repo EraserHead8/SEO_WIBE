@@ -2601,6 +2601,23 @@ function handleMobileBackPress() {
   }
   return true;
 }
+function handleTopMenuButton() {
+  if (mobileClientMode && String(currentTab || "") === "social") {
+    const subtab = String(currentSocialSubtab || window.socialState?.currentSubtab || "chat");
+    const currentThreadId = Number(window.socialState?.currentThreadId || 0);
+    const threadOpen = typeof window.socialIsThreadOpen === "function"
+      ? Boolean(window.socialIsThreadOpen())
+      : currentThreadId > 0;
+    if (subtab === "chat" && (threadOpen || currentThreadId > 0) && typeof window.socialOpenThreadMenu === "function") {
+      try {
+        const opened = window.socialOpenThreadMenu();
+        if (opened !== false) return;
+      } catch (_) {}
+    }
+  }
+  toggleMobileNav();
+}
+
 function toggleMobileNav() {
   const shell = document.getElementById("appSection");
   if (!shell) return;
@@ -12633,6 +12650,7 @@ window.uploadProfileAvatar = uploadProfileAvatar;
 window.triggerTeamAvatarUpload = triggerTeamAvatarUpload;
 window.uploadTeamAvatar = uploadTeamAvatar;
 window.toggleFeedbackPrompt = toggleFeedbackPrompt;
+window.handleTopMenuButton = handleTopMenuButton;
 window.toggleMobileNav = toggleMobileNav;
 window.closeMobileNav = closeMobileNav;
 window.handleMobileBackPress = handleMobileBackPress;

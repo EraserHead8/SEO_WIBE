@@ -6788,6 +6788,17 @@ body[data-theme="dark"] .landing-band .band-stats span {
   min-width: 38px;
 }
 
+.social-thread-menu-list {
+  display: grid;
+  gap: 8px;
+}
+
+.social-thread-menu-btn {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+}
+
 .social-chat-main.chat-head-collapsed .social-chat-head-main,
 .social-chat-main.chat-head-collapsed .social-chat-head-meta {
   display: none;
@@ -8291,6 +8302,10 @@ body[data-theme="light"] .social-calc-eq {
   .social-chat-head-actions {
     width: 100%;
     justify-content: flex-end;
+  }
+
+  body.mobile-client-mode #socialSubtabChat .social-chat-head-actions {
+    display: none;
   }
 
   .social-group-participants-actions {
