@@ -10405,7 +10405,7 @@ def _social_emit_due_reminders(db: Session, *, user_id: int, actor_key: str, act
             kind="calendar_reminder",
             dedupe_key=f"calendar_due:{int(row.id)}:{start_iso}:{safe_actor_key}",
             title="Напоминание календаря",
-            body=f"{str(row.title or '')[:140]} вЂў {start_iso.replace('T', ' ')} UTC",
+            body=f"{str(row.title or '')[:140]} • {start_iso.replace('T', ' ')} UTC",
             payload={"event_id": int(row.id), "kind": "calendar"},
         )
     _social_emit_due_announcements(db, user_id=safe_user_id, actor_key=safe_actor_key)
