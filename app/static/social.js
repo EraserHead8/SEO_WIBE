@@ -1046,6 +1046,21 @@ function resetSocialState() {
   socialSyncChatComposerState();
 }
 
+function socialEnsureChatListToolbar() {
+  const head = document.querySelector("#socialSubtabChat .social-chat-sidebar-head");
+  if (!head) return;
+  if (head.dataset.toolbarReady === "1") return;
+  const modulesLabel = tr("\u041c\u0435\u043d\u044e \u043c\u043e\u0434\u0443\u043b\u0435\u0439", "Modules menu");
+  const actionsLabel = tr("\u0414\u0435\u0439\u0441\u0442\u0432\u0438\u044f \u0447\u0430\u0442\u043e\u0432", "Chat actions");
+  head.classList.add("social-chat-sidebar-toolbar");
+  head.dataset.toolbarReady = "1";
+  head.innerHTML = `
+    <button id="socialChatModulesBtn" class="chip-btn social-chat-toolbar-btn" type="button" onclick="socialOpenModulesMenu()" aria-label="${escapeHtml(modulesLabel)}" title="${escapeHtml(modulesLabel)}">&#9776;</button>
+    <h3>${escapeHtml(tr("\u0427\u0430\u0442\u044b", "Chats"))}</h3>
+    <button id="socialChatListActionsBtn" class="chip-btn social-chat-toolbar-btn" type="button" onclick="socialOpenChatQuickMenu()" aria-label="${escapeHtml(actionsLabel)}" title="${escapeHtml(actionsLabel)}">&#8942;</button>
+  `;
+}
+
 function switchSocialSubtab(tab, loadNow = true) {
   const safe = ["games", "chat", "tasks", "calendar", "calculator", "notes"].includes(String(tab || ""))
     ? String(tab)
@@ -1075,6 +1090,7 @@ function switchSocialSubtab(tab, loadNow = true) {
     const btn = document.getElementById(`socialSubtab${key.charAt(0).toUpperCase()}${key.slice(1)}Btn`);
     if (btn) btn.classList.toggle("active", key === safe);
   });
+  if (safe === "chat") socialEnsureChatListToolbar();
   socialSyncMobileChatChrome();
   socialApplyChatHeadCollapsed();
   if (!loadNow) return;
@@ -1125,6 +1141,7 @@ async function loadSocialWorkspace() {
   socialState.moduleLoaded = true;
   socialState.mobileThreadAutoSelectEnabled = !socialIsMobileClientShell();
   socialState.actors = Array.isArray(boot.company_actors) ? boot.company_actors : [];
+  socialEnsureChatListToolbar();
   socialBindChatInputEnter();
   socialBindChatComposer();
   socialSyncChatComposerState();
@@ -5639,6 +5656,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 socialMaybeStartHooks();
+
 
 
 
