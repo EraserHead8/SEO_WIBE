@@ -39,14 +39,17 @@ def get_or_refresh_market_cache(
     fetcher: Callable[[], Any],
     stale_if_error_sec: int = 20 * 60,
     prefer_stale_sec: int = 0,
+    force_refresh: bool = False,
 ) -> tuple[Any, dict[str, Any]]:
+    force_live = bool(force_refresh)
     now = datetime.utcnow()
     row = _get_cache_row(db, user_id=user_id, module_code=module_code, marketplace=marketplace, cache_key=cache_key)
     cached = _safe_json_loads(str(row.payload_json or "")) if row else None
-    if row and cached is not None and row.expires_at and row.expires_at > now:
+    if (not force_live) and row and cached is not None and row.expires_at and row.expires_at > now:
         return cached, _cache_meta("db-hit", now=now, row=row)
     if (
-        row
+        (not force_live)
+        and row
         and cached is not None
         and row.fetched_at
         and int(prefer_stale_sec or 0) > 0
@@ -59,10 +62,11 @@ def get_or_refresh_market_cache(
         now = datetime.utcnow()
         row = _get_cache_row(db, user_id=user_id, module_code=module_code, marketplace=marketplace, cache_key=cache_key)
         cached = _safe_json_loads(str(row.payload_json or "")) if row else None
-        if row and cached is not None and row.expires_at and row.expires_at > now:
+        if (not force_live) and row and cached is not None and row.expires_at and row.expires_at > now:
             return cached, _cache_meta("db-hit-race", now=now, row=row)
         if (
-            row
+            (not force_live)
+            and row
             and cached is not None
             and row.fetched_at
             and int(prefer_stale_sec or 0) > 0
@@ -76,7 +80,8 @@ def get_or_refresh_market_cache(
             if row and cached is not None and row.fetched_at:
                 age_sec = max(0, int((now - row.fetched_at).total_seconds()))
                 if age_sec <= max(60, int(stale_if_error_sec or 0)):
-                    return cached, _cache_meta("db-stale-fallback", now=now, row=row, stale=True, error=str(exc or ""))
+                    source = "db-stale-fallback-force" if force_live else "db-stale-fallback"
+                    return cached, _cache_meta(source, now=now, row=row, stale=True, error=str(exc or ""))
             raise
 
         _upsert_cache_row(
@@ -90,12 +95,12 @@ def get_or_refresh_market_cache(
             ttl_sec=ttl_sec,
         )
         return payload, {
-            "source": "api-live",
+            "source": "api-live-force" if force_live else "api-live",
             "stale": False,
             "age_sec": 0,
             "ttl_sec": max(30, int(ttl_sec or 0)),
+            "force_refresh": force_live,
         }
-
 
 def get_market_cache_stats(
     db: Session,

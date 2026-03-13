@@ -7067,6 +7067,10 @@ def sales_stats(
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     ozon_key = _get_active_marketplace_api_key(db, user.id, "ozon")
     key_rev = _secret_revision(wb_key, ozon_key)
+    live_window = bool(left <= datetime.now(ZoneInfo(tz_name)).date() <= right)
+    live_market = selected_market in {"all", "wb"}
+    use_live_mode = bool(live_window and live_market)
+    sales_ttl_sec = max(45, min(_market_cache_ttl("sales_stats"), 60)) if use_live_mode else _market_cache_ttl("sales_stats")
     sales_cache_key = build_market_cache_key(
         {
             "marketplace": selected_market,
@@ -7078,7 +7082,13 @@ def sales_stats(
         }
     )
 
-    def _load_sales_payload(period_from: date, period_to: date) -> dict[str, Any]:
+    def _load_sales_payload(
+        period_from: date,
+        period_to: date,
+        *,
+        prefer_live: bool = False,
+        force_fresh_wb: bool = False,
+    ) -> dict[str, Any]:
         return build_sales_report(
             marketplace=selected_market,
             date_from=period_from,
@@ -7087,65 +7097,49 @@ def sales_stats(
             ozon_api_key=ozon_key,
             granularity=gran,
             timezone=tz_name,
+            prefer_live=prefer_live,
+            force_fresh_wb=force_fresh_wb,
         )
 
-    if force_refresh:
-        try:
-            payload = _load_sales_payload(left, right)
-            sales_cache_meta = {"source": "api-live-force", "age_sec": 0, "stale": False, "ttl_sec": 0}
-        except Exception as exc:
-            sales_cache_meta = {"source": "error", "age_sec": -1}
-            payload = {
-                "rows": [],
-                "chart": [],
-                "totals": {
-                    "orders": 0,
-                    "units": 0,
-                    "buyouts": 0,
-                    "revenue": 0.0,
-                    "returns": 0,
-                    "ad_spend": 0.0,
-                    "penalties": 0.0,
-                    "days": 0,
-                    "gross_profit": 0.0,
-                },
-                "warnings": [f"Ошибка загрузки статистики: {str(exc or '')[:220]}"],
-                "granularity": "day",
-                "timezone": tz_name,
-            }
-    else:
-        try:
-            payload, sales_cache_meta = get_or_refresh_market_cache(
-                db,
-                user_id=int(user.id),
-                module_code="sales_stats",
-                marketplace=selected_market,
-                cache_key=sales_cache_key,
-                ttl_sec=_market_cache_ttl("sales_stats"),
-                fetcher=lambda: _load_sales_payload(left, right),
-                stale_if_error_sec=20 * 60,
-                prefer_stale_sec=0,
-            )
-        except Exception as exc:
-            sales_cache_meta = {"source": "error", "age_sec": -1}
-            payload = {
-                "rows": [],
-                "chart": [],
-                "totals": {
-                    "orders": 0,
-                    "units": 0,
-                    "buyouts": 0,
-                    "revenue": 0.0,
-                    "returns": 0,
-                    "ad_spend": 0.0,
-                    "penalties": 0.0,
-                    "days": 0,
-                    "gross_profit": 0.0,
-                },
-                "warnings": [f"Ошибка загрузки статистики: {str(exc or '')[:220]}"],
-                "granularity": "day",
-                "timezone": tz_name,
-            }
+    try:
+        payload, sales_cache_meta = get_or_refresh_market_cache(
+            db,
+            user_id=int(user.id),
+            module_code="sales_stats",
+            marketplace=selected_market,
+            cache_key=sales_cache_key,
+            ttl_sec=sales_ttl_sec,
+            fetcher=lambda: _load_sales_payload(
+                left,
+                right,
+                prefer_live=use_live_mode,
+                force_fresh_wb=bool(force_refresh),
+            ),
+            stale_if_error_sec=20 * 60,
+            prefer_stale_sec=0,
+            force_refresh=bool(force_refresh),
+        )
+    except Exception as exc:
+        sales_cache_meta = {"source": "error", "age_sec": -1}
+        payload = {
+            "rows": [],
+            "chart": [],
+            "totals": {
+                "orders": 0,
+                "units": 0,
+                "buyouts": 0,
+                "revenue": 0.0,
+                "returns": 0,
+                "ad_spend": 0.0,
+                "penalties": 0.0,
+                "days": 0,
+                "gross_profit": 0.0,
+            },
+            "warnings": [f"Sales stats load failed: {str(exc or '')[:220]}"],
+            "granularity": "day",
+            "timezone": tz_name,
+        }
+
     rows = payload.get("rows") if isinstance(payload, dict) else []
     chart = payload.get("chart") if isinstance(payload, dict) else []
     totals = payload.get("totals") if isinstance(payload, dict) else {}
@@ -7216,7 +7210,7 @@ def sales_stats(
                 marketplace=selected_market,
                 cache_key=prev_cache_key,
                 ttl_sec=_market_cache_ttl("sales_stats"),
-                fetcher=lambda: _load_sales_payload(prev_from, prev_to),
+                fetcher=lambda: _load_sales_payload(prev_from, prev_to, prefer_live=False, force_fresh_wb=False),
                 stale_if_error_sec=45 * 60,
                 prefer_stale_sec=2 * 60 * 60,
             )

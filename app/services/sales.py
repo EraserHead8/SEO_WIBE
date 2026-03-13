@@ -13,6 +13,7 @@ from app.services.wb_modules import fetch_wb_campaign_stats_bulk, fetch_wb_campa
 SALES_TIMEOUT = httpx.Timeout(connect=6.0, read=25.0, write=25.0, pool=25.0)
 WB_SALES_TIMEOUT = httpx.Timeout(connect=4.0, read=12.0, write=12.0, pool=12.0)
 WB_SALES_CACHE_TTL_SEC = 180
+WB_SALES_CACHE_TTL_LIVE_SEC = 60
 _WB_SALES_CACHE: dict[tuple[str, str, str], tuple[float, list[dict[str, Any]], list[str]]] = {}
 WB_SALES_MAX_PAGES = 3
 WB_SALES_CONTINUATION_THRESHOLD = 79_500
@@ -21,6 +22,7 @@ WB_REPORT_DETAIL_LIMIT = 50_000
 WB_REPORT_DETAIL_MAX_PAGES = 3
 WB_ADS_TIMEOUT = httpx.Timeout(connect=4.0, read=9.0, write=9.0, pool=9.0)
 WB_AD_SPEND_CACHE_TTL_SEC = 180
+WB_AD_SPEND_CACHE_TTL_LIVE_SEC = 60
 WB_ADS_MAX_CAMPAIGNS = 120
 WB_ADS_MAX_CAMPAIGNS_LONG_RANGE = 60
 WB_ADS_MAX_STATS_CHUNKS = 3
@@ -38,6 +40,8 @@ def build_sales_report(
     ozon_api_key: str = "",
     granularity: str = "auto",
     timezone: str = "UTC",
+    prefer_live: bool = False,
+    force_fresh_wb: bool = False,
 ) -> dict[str, Any]:
     selected = (marketplace or "all").strip().lower()
     if selected not in {"all", "wb", "ozon"}:
@@ -45,10 +49,18 @@ def build_sales_report(
 
     collected: list[dict[str, Any]] = []
     warnings: list[str] = []
+    wb_sales_cache_ttl_sec = WB_SALES_CACHE_TTL_LIVE_SEC if prefer_live else WB_SALES_CACHE_TTL_SEC
+    wb_ads_cache_ttl_sec = WB_AD_SPEND_CACHE_TTL_LIVE_SEC if prefer_live else WB_AD_SPEND_CACHE_TTL_SEC
 
     if selected in {"all", "wb"}:
         if wb_api_key.strip():
-            wb_rows, wb_warn = _fetch_wb_sales_rows(wb_api_key.strip(), date_from=date_from, date_to=date_to)
+            wb_rows, wb_warn = _fetch_wb_sales_rows(
+                wb_api_key.strip(),
+                date_from=date_from,
+                date_to=date_to,
+                ignore_cache=bool(force_fresh_wb),
+                cache_ttl_sec=wb_sales_cache_ttl_sec,
+            )
             collected.extend(wb_rows)
             warnings.extend(wb_warn)
             wb_orders_rows, wb_orders_warn = _fetch_wb_orders_rows(wb_api_key.strip(), date_from=date_from, date_to=date_to)
@@ -81,7 +93,13 @@ def build_sales_report(
 
     wb_ad_spend_by_day: dict[str, float] = {}
     if selected in {"all", "wb"} and wb_api_key.strip():
-        spent_total, spent_warn = _fetch_wb_ad_spent_total(wb_api_key.strip(), date_from=date_from, date_to=date_to)
+        spent_total, spent_warn = _fetch_wb_ad_spent_total(
+            wb_api_key.strip(),
+            date_from=date_from,
+            date_to=date_to,
+            ignore_cache=bool(force_fresh_wb),
+            cache_ttl_sec=wb_ads_cache_ttl_sec,
+        )
         warnings.extend(spent_warn)
         if spent_total > 0:
             days = list(_iter_days(date_from, date_to))
@@ -145,11 +163,19 @@ def _build_sales_totals(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return totals
 
 
-def _fetch_wb_sales_rows(api_key: str, date_from: date, date_to: date) -> tuple[list[dict[str, Any]], list[str]]:
+def _fetch_wb_sales_rows(
+    api_key: str,
+    date_from: date,
+    date_to: date,
+    *,
+    ignore_cache: bool = False,
+    cache_ttl_sec: int = WB_SALES_CACHE_TTL_SEC,
+) -> tuple[list[dict[str, Any]], list[str]]:
     cache_key = (api_key[-12:], date_from.isoformat(), date_to.isoformat())
     cached = _WB_SALES_CACHE.get(cache_key)
     now = time.monotonic()
-    if cached and now - cached[0] <= WB_SALES_CACHE_TTL_SEC:
+    safe_cache_ttl = max(0, int(cache_ttl_sec or 0))
+    if cached and (not ignore_cache) and now - cached[0] <= safe_cache_ttl:
         return list(cached[1]), list(cached[2])
     period_days = max(1, (date_to - date_from).days + 1)
     max_pages = 1 if period_days >= WB_SALES_LONG_RANGE_DAYS else WB_SALES_MAX_PAGES
@@ -700,11 +726,19 @@ def _row_to_hour_bucket(item: dict[str, Any], tzinfo: ZoneInfo) -> int:
     return int(local.hour)
 
 
-def _fetch_wb_ad_spent_total(api_key: str, date_from: date, date_to: date) -> tuple[float, list[str]]:
+def _fetch_wb_ad_spent_total(
+    api_key: str,
+    date_from: date,
+    date_to: date,
+    *,
+    ignore_cache: bool = False,
+    cache_ttl_sec: int = WB_AD_SPEND_CACHE_TTL_SEC,
+) -> tuple[float, list[str]]:
     cache_key = (api_key[-12:], date_from.isoformat(), date_to.isoformat())
     cached = _WB_AD_SPEND_CACHE.get(cache_key)
     now = time.monotonic()
-    if cached and now - cached[0] <= WB_AD_SPEND_CACHE_TTL_SEC:
+    safe_cache_ttl = max(0, int(cache_ttl_sec or 0))
+    if cached and (not ignore_cache) and now - cached[0] <= safe_cache_ttl:
         return float(cached[1]), list(cached[2])
 
     warnings: list[str] = []
