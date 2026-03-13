@@ -9881,6 +9881,13 @@ body.mobile-apk-mode #ads .module-subtabs {
     gap: 6px;
   }
 
+  body.mobile-apk-mode.social-thread-open #socialSubtabChat .social-chat-head,
+  body.mobile-apk-mode #appSection.social-thread-open #socialSubtabChat .social-chat-head,
+  body.mobile-client-mode.social-thread-open #socialSubtabChat .social-chat-head,
+  body.mobile-client-mode #appSection.social-thread-open #socialSubtabChat .social-chat-head {
+    display: none !important;
+  }
+
   body.mobile-apk-mode #socialSubtabChat .social-chat-messages {
     padding: 12px 10px 10px;
     gap: 6px;
