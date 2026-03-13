@@ -74,6 +74,12 @@ const SOCIAL_POLL_SHARED_STATE_KEY = "seo_wibe_social_poll_shared_v1";
 const SOCIAL_POLL_LEASE_MS = 22000;
 const SOCIAL_UPLOAD_DEDUPE_TTL_MS = 120000;
 const SOCIAL_UPLOAD_REQUEST_CACHE = new Map();
+const SOCIAL_CHAT_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
+const SOCIAL_CHAT_IMAGE_TARGET_BYTES = 9 * 1024 * 1024;
+const SOCIAL_CHAT_IMAGE_FORCE_TARGET_BYTES = 7 * 1024 * 1024;
+const SOCIAL_CHAT_IMAGE_COMPRESS_MIN_BYTES = Math.floor(1.5 * 1024 * 1024);
+const SOCIAL_CHAT_IMAGE_MAX_DIMENSION = 2560;
+const SOCIAL_CHAT_IMAGE_FORCE_MAX_DIMENSION = 1920;
 
 function socialIsMobileClientShell() {
   try {
@@ -91,6 +97,173 @@ function socialIsMobileApkShell() {
   return false;
 }
 
+function socialIsImageFile(file) {
+  const type = String(file?.type || "").toLowerCase();
+  if (type.startsWith("image/")) return true;
+  const name = String(file?.name || "").toLowerCase();
+  return /\.(jpg|jpeg|png|webp|gif|bmp|heic|heif|avif)$/i.test(name);
+}
+
+function socialReplaceFileExtension(name, newExt) {
+  const safeName = String(name || "photo").trim() || "photo";
+  const ext = String(newExt || "").trim();
+  if (!ext) return safeName;
+  return safeName.replace(/\.[^.]+$/, "") + ext;
+}
+
+function socialCanvasToBlob(canvas, mimeType, quality) {
+  return new Promise((resolve) => {
+    try {
+      canvas.toBlob((blob) => resolve(blob || null), mimeType, quality);
+    } catch (_) {
+      resolve(null);
+    }
+  });
+}
+
+function socialLoadImageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("image_decode_failed"));
+    };
+    img.src = url;
+  });
+}
+
+async function socialCompressImageForChat(file, { force = false } = {}) {
+  if (!socialIsImageFile(file)) {
+    return { file, compressed: false, reason: "not-image" };
+  }
+  const originalSize = Number(file?.size || 0);
+  if (!force && originalSize > 0 && originalSize < SOCIAL_CHAT_IMAGE_COMPRESS_MIN_BYTES) {
+    return { file, compressed: false, reason: "small-image" };
+  }
+  if (typeof document === "undefined") {
+    return { file, compressed: false, reason: "no-dom" };
+  }
+  let image = null;
+  try {
+    image = await socialLoadImageFromFile(file);
+  } catch (_) {
+    return { file, compressed: false, reason: "decode-failed" };
+  }
+  const sourceW = Math.max(1, Number(image.naturalWidth || image.width || 1));
+  const sourceH = Math.max(1, Number(image.naturalHeight || image.height || 1));
+  const maxDimension = force ? SOCIAL_CHAT_IMAGE_FORCE_MAX_DIMENSION : SOCIAL_CHAT_IMAGE_MAX_DIMENSION;
+  const scale = Math.min(1, maxDimension / Math.max(sourceW, sourceH));
+  const width = Math.max(1, Math.round(sourceW * scale));
+  const height = Math.max(1, Math.round(sourceH * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d", { alpha: false });
+  if (!ctx) {
+    return { file, compressed: false, reason: "no-canvas" };
+  }
+  ctx.drawImage(image, 0, 0, width, height);
+
+  const mimePriority = String(file?.type || "").toLowerCase() === "image/png"
+    ? ["image/webp", "image/jpeg"]
+    : ["image/jpeg", "image/webp"];
+  const qualitySteps = force
+    ? [0.86, 0.76, 0.68, 0.6, 0.52, 0.46, 0.4]
+    : [0.92, 0.84, 0.76, 0.68, 0.6, 0.52, 0.45];
+  const targetBytes = force ? SOCIAL_CHAT_IMAGE_FORCE_TARGET_BYTES : SOCIAL_CHAT_IMAGE_TARGET_BYTES;
+
+  let bestBlob = null;
+  let bestType = "";
+  for (const mimeType of mimePriority) {
+    for (const quality of qualitySteps) {
+      const blob = await socialCanvasToBlob(canvas, mimeType, quality);
+      if (!blob || !Number(blob.size)) continue;
+      if (!bestBlob || blob.size < bestBlob.size) {
+        bestBlob = blob;
+        bestType = mimeType;
+      }
+      if (blob.size <= targetBytes) {
+        bestBlob = blob;
+        bestType = mimeType;
+        break;
+      }
+    }
+    if (bestBlob && bestBlob.size <= targetBytes) break;
+  }
+  if (!bestBlob) {
+    return { file, compressed: false, reason: "compress-failed" };
+  }
+  if (bestBlob.size >= originalSize * 0.97 && !force) {
+    return { file, compressed: false, reason: "no-gain" };
+  }
+  const outExt = bestType === "image/webp" ? ".webp" : ".jpg";
+  const outName = socialReplaceFileExtension(String(file?.name || "photo"), outExt);
+  const compressedFile = new File([bestBlob], outName, { type: bestType, lastModified: Date.now() });
+  return {
+    file: compressedFile,
+    compressed: true,
+    originalSize,
+    compressedSize: Number(compressedFile.size || 0),
+    forced: force,
+  };
+}
+
+function socialBuildUploadLargeError(file, limitBytes) {
+  const fileName = String(file?.name || "").trim();
+  const isImage = socialIsImageFile(file);
+  const sizeInfo = `${socialFormatFileSize(file?.size || 0)} / ${socialFormatFileSize(limitBytes)}`;
+  if (isImage) {
+    return tr(
+      `Фото слишком большое для отправки (${sizeInfo}). Сожмите его в галерее или выберите другой размер.`,
+      `Image is too large to send (${sizeInfo}). Compress it in your gallery app or choose a smaller size.`
+    );
+  }
+  const suffix = fileName ? ` (${fileName})` : "";
+  return tr(
+    `Файл${suffix} превышает лимит ${socialFormatFileSize(limitBytes)}.`,
+    `File${suffix} exceeds the ${socialFormatFileSize(limitBytes)} limit.`
+  );
+}
+
+function socialBuildUploadErrorMessage(err, fallbackFile) {
+  const status = Number(err?.status || 0);
+  const message = String(err?.message || "").trim();
+  const lower = message.toLowerCase();
+  if (status === 413 || lower.includes("request entity too large")) {
+    const limit = socialFormatFileSize(SOCIAL_CHAT_UPLOAD_MAX_BYTES);
+    const details = fallbackFile ? socialBuildUploadLargeError(fallbackFile, SOCIAL_CHAT_UPLOAD_MAX_BYTES) : "";
+    return details || tr(
+      `Файл слишком большой для отправки. Лимит: ${limit}.`,
+      `The file is too large to upload. Limit: ${limit}.`
+    );
+  }
+  if (/(<html|<body|gateway time-?out|internal server error|bad gateway|traceback)/i.test(message)) {
+    return tr(
+      "Сервер временно занят. Повторите отправку через несколько секунд.",
+      "The server is temporarily busy. Please retry in a few seconds."
+    );
+  }
+  return message || tr("Ошибка загрузки файла", "File upload error");
+}
+
+async function socialSendChatFile(threadId, file, text, replyId, requestId) {
+  const form = new FormData();
+  form.append("file", file);
+  if (text) form.append("text", text);
+  if (replyId) form.append("reply_to_message_id", String(replyId));
+  return socialRequest(`/api/social/chat/messages/${threadId}/files`, {
+    method: "POST",
+    body: form,
+    headers: { "X-Request-ID": requestId },
+    retryOnPost: true,
+    maxRetries: 1,
+  });
+}
 function socialBuildFileUploadFingerprint(file, threadId, text, replyId) {
   const safeName = String(file?.name || "").trim().toLowerCase();
   const safeSize = Number(file?.size || 0);
@@ -3297,39 +3470,75 @@ async function socialUploadChatFiles(fileList) {
   if (textInput) textInput.value = "";
   socialSyncChatComposerState();
   try {
-    for (const file of files) {
-      const fingerprint = socialBuildFileUploadFingerprint(file, threadId, text, replyId || 0);
-      const requestId = socialGetUploadRequestId(fingerprint);
-      const form = new FormData();
-      form.append("file", file);
-      if (text) form.append("text", text);
-      if (replyId) form.append("reply_to_message_id", String(replyId));
-      const row = await socialRequest(`/api/social/chat/messages/${threadId}/files`, {
-        method: "POST",
-        body: form,
-        headers: { "X-Request-ID": requestId },
-        retryOnPost: true,
-        maxRetries: 1,
-      }).catch((e) => {
-        alert(e?.message || tr("Ошибка загрузки файла", "File upload error"));
-        return null;
-      });
-      if (!row) {
-        await socialLoadMessages(threadId, { silent: true });
+    let hasSuccess = false;
+    for (const sourceFile of files) {
+      let prep = { file: sourceFile, compressed: false };
+      if (socialIsImageFile(sourceFile)) {
+        prep = await socialCompressImageForChat(sourceFile).catch(() => ({ file: sourceFile, compressed: false }));
+      }
+      let uploadFile = prep?.file || sourceFile;
+      if (Number(uploadFile?.size || 0) > SOCIAL_CHAT_UPLOAD_MAX_BYTES) {
+        alert(socialBuildUploadLargeError(uploadFile, SOCIAL_CHAT_UPLOAD_MAX_BYTES));
         continue;
       }
+      if (prep?.compressed && typeof socialShowToast === "function") {
+        const before = socialFormatFileSize(prep.originalSize || sourceFile.size || 0);
+        const after = socialFormatFileSize(prep.compressedSize || uploadFile.size || 0);
+        socialShowToast(
+          tr("Фото оптимизировано", "Image optimized"),
+          tr(`Размер уменьшен: ${before} -> ${after}.`, `Size reduced: ${before} -> ${after}.`)
+        );
+      }
+
+      let requestId = socialGetUploadRequestId(socialBuildFileUploadFingerprint(uploadFile, threadId, text, replyId || 0));
+      let row = null;
+      let uploadError = null;
+      try {
+        row = await socialSendChatFile(threadId, uploadFile, text, replyId, requestId);
+      } catch (e) {
+        uploadError = e;
+      }
+
+      if (!row && uploadError && Number(uploadError?.status || 0) === 413 && socialIsImageFile(sourceFile) && !prep?.compressed) {
+        const forcedPrep = await socialCompressImageForChat(sourceFile, { force: true }).catch(() => ({ file: sourceFile, compressed: false }));
+        if (forcedPrep?.compressed && forcedPrep.file) {
+          uploadFile = forcedPrep.file;
+          requestId = socialGetUploadRequestId(socialBuildFileUploadFingerprint(uploadFile, threadId, text, replyId || 0));
+          try {
+            row = await socialSendChatFile(threadId, uploadFile, text, replyId, requestId);
+            uploadError = null;
+            if (typeof socialShowToast === "function") {
+              const before = socialFormatFileSize(sourceFile.size || 0);
+              const after = socialFormatFileSize(uploadFile.size || 0);
+              socialShowToast(
+                tr("Фото дополнительно сжато", "Image compressed more"),
+                tr(`Отправили после дополнительного сжатия: ${before} -> ${after}.`, `Sent after additional compression: ${before} -> ${after}.`)
+              );
+            }
+          } catch (retryErr) {
+            uploadError = retryErr;
+          }
+        }
+      }
+
+      if (!row) {
+        alert(socialBuildUploadErrorMessage(uploadError, uploadFile));
+        continue;
+      }
+      hasSuccess = true;
     }
     socialClearReply();
     if (input) input.value = "";
-    await socialLoadMessages(threadId, { silent: true });
-    await socialLoadThreads({ silent: true });
+    if (hasSuccess || files.length) {
+      await socialLoadMessages(threadId, { silent: true });
+      await socialLoadThreads({ silent: true });
+    }
   } finally {
     socialState.fileUploadInFlight = false;
     if (attachBtn) attachBtn.disabled = false;
     socialSyncChatComposerState();
   }
 }
-
 async function socialOpenDirectPicker() {
   socialOpenModal(
     tr("\u041b\u0438\u0447\u043d\u044b\u0439 \u0447\u0430\u0442", "Direct chat"),

@@ -12170,9 +12170,10 @@ def social_chat_send_file(
     raw = file.file.read()
     if not raw:
         raise HTTPException(status_code=400, detail="Файл пустой")
-    max_size = 12 * 1024 * 1024
+    max_size = 25 * 1024 * 1024
     if len(raw) > max_size:
-        raise HTTPException(status_code=400, detail="Файл слирком больрой (до 12 МБ)")
+        limit_mb = max_size // (1024 * 1024)
+        raise HTTPException(status_code=400, detail=f"File is too large (max {limit_mb} MB)")
     original_name = _social_chat_clean_filename(file.filename or "file")
     ext = _social_chat_guess_ext(original_name, str(file.content_type or ""))
     reply_id = int(reply_to_message_id or 0) if reply_to_message_id else 0
