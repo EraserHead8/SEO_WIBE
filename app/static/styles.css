@@ -11442,3 +11442,107 @@ body.mobile-client-mode .social-checkers-shell {
 body.mobile-client-mode .social-checkers-board-wrap {
   width: min(100%, 92vw);
 }
+
+
+.social-chess-piece {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: min(80%, 46px);
+  height: min(80%, 46px);
+  border-radius: 50%;
+  font-size: clamp(18px, 2.4vw, 30px);
+  line-height: 1;
+  font-weight: 700;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.social-chess-piece.white {
+  color: #f8fbff;
+  background: radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.98), rgba(185, 207, 243, 0.95));
+  box-shadow: 0 4px 14px rgba(59, 91, 145, 0.28);
+}
+
+.social-chess-piece.black {
+  color: #08142b;
+  background: radial-gradient(circle at 30% 25%, rgba(232, 242, 255, 0.95), rgba(82, 125, 190, 0.95));
+  box-shadow: 0 4px 14px rgba(10, 24, 52, 0.42);
+}
+
+.social-battle-boards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.social-battle-board {
+  display: grid;
+  gap: 8px;
+}
+
+.social-battle-board h6 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #16366f;
+}
+
+.social-battle-board-grid {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 2px;
+  border-radius: 14px;
+  border: 1px solid rgba(120, 156, 214, 0.4);
+  background: rgba(210, 228, 253, 0.58);
+  padding: 6px;
+}
+
+.social-battle-cell {
+  aspect-ratio: 1 / 1;
+  border: 0;
+  border-radius: 6px;
+  cursor: default;
+  font-size: 14px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #153770;
+  background: rgba(236, 245, 255, 0.9);
+}
+
+.social-battle-cell.water,
+.social-battle-cell.fog {
+  background: rgba(228, 240, 255, 0.9);
+}
+
+.social-battle-cell.ship {
+  background: linear-gradient(135deg, rgba(116, 154, 214, 0.95), rgba(58, 104, 181, 0.95));
+  color: #f7fbff;
+}
+
+.social-battle-cell.hit {
+  background: linear-gradient(135deg, rgba(255, 131, 121, 0.95), rgba(235, 71, 71, 0.95));
+  color: #ffffff;
+}
+
+.social-battle-cell.miss {
+  background: rgba(199, 217, 244, 0.95);
+  color: #395e99;
+}
+
+.social-battle-cell.target {
+  cursor: pointer;
+  box-shadow: inset 0 0 0 2px rgba(45, 136, 255, 0.55);
+}
+
+.social-battle-cell.target:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+}
+
+@media (max-width: 960px) {
+  .social-battle-boards {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1213,9 +1213,19 @@ function socialRenderGames() {
       { code: "tetris", title: "Тетрис" },
       { code: "2048", title: "2048" },
       { code: "checkers", title: "Шашки" },
+      { code: "chess", title: "Шахматы" },
+      { code: "battleship", title: "Морской бой" },
     ];
   host.innerHTML = games.map((game) => {
-    const icon = game.code === "snake" ? "🐍" : (game.code === "tetris" ? "🧩" : (game.code === "checkers" ? "♟" : "🔢"));
+    const icon = game.code === "snake"
+      ? "🐍"
+      : (game.code === "tetris"
+        ? "🧩"
+        : (game.code === "checkers"
+          ? "♟"
+          : (game.code === "chess"
+            ? "♜"
+            : (game.code === "battleship" ? "⚓" : "🔢"))));
     return `
       <button class="social-game-card" type="button" ondblclick="socialOpenGameMenu('${escapeHtml(game.code)}')" onclick="socialOpenGameMenu('${escapeHtml(game.code)}')">
         <span class="social-game-icon" aria-hidden="true">${icon}</span>
@@ -1233,12 +1243,26 @@ async function socialOpenGameMenu(gameCode) {
     window.socialCheckersOpenMenu();
     return;
   }
+  if (code === "chess" && typeof window.socialChessOpenMenu === "function") {
+    window.socialChessOpenMenu();
+    return;
+  }
+  if (code === "battleship" && typeof window.socialBattleshipOpenMenu === "function") {
+    window.socialBattleshipOpenMenu();
+    return;
+  }
   socialState.currentGameCode = code;
   const lb = await socialRequest(`/api/social/games/leaderboard?game_code=${encodeURIComponent(code)}&limit=10`).catch(() => ({ my_best: 0, my_rank: null, top: [] }));
   socialState.gamesLeaderboardCache.set(code, lb || {});
   const title = code === "snake"
     ? tr("Змейка", "Snake")
-    : (code === "tetris" ? tr("Тетрис", "Tetris") : "2048");
+    : (code === "tetris"
+      ? tr("Тетрис", "Tetris")
+      : (code === "2048"
+        ? "2048"
+        : (code === "chess"
+          ? tr("Шахматы", "Chess")
+          : (code === "battleship" ? tr("Морской бой", "Battleship") : code))));
   const myBest = Number(lb?.my_best || 0);
   const myRank = lb?.my_rank ? `#${lb.my_rank}` : "—";
   socialOpenModal(
@@ -1262,9 +1286,19 @@ function socialShowGameTips(code) {
     window.socialCheckersShowTips();
     return;
   }
+  if (safe === "chess" && typeof window.socialChessShowTips === "function") {
+    window.socialChessShowTips();
+    return;
+  }
+  if (safe === "battleship" && typeof window.socialBattleshipShowTips === "function") {
+    window.socialBattleshipShowTips();
+    return;
+  }
   const title = safe === "snake"
     ? tr("Как играть в Змейку", "How to play Snake")
-    : (safe === "tetris" ? tr("Как играть в Тетрис", "How to play Tetris") : tr("Как играть в 2048", "How to play 2048"));
+    : (safe === "tetris"
+      ? tr("Как играть в Тетрис", "How to play Tetris")
+      : (safe === "2048" ? tr("Как играть в 2048", "How to play 2048") : tr("Как играть", "How to play")));
   const body = safe === "snake"
     ? tr("Управление: стрелки. Ешьте еду, не врезайтесь в стену и в себя. Каждые 5 очков скорость растет.", "Controls: arrows. Eat food and avoid walls or your body. Speed increases every 5 points.")
     : (safe === "tetris"
@@ -1277,6 +1311,14 @@ async function socialShowLeaderboard(code) {
   const safe = String(code || "").toLowerCase();
   if (safe === "checkers" && typeof window.socialCheckersShowLeaderboard === "function") {
     window.socialCheckersShowLeaderboard();
+    return;
+  }
+  if (safe === "chess" && typeof window.socialChessShowLeaderboard === "function") {
+    window.socialChessShowLeaderboard();
+    return;
+  }
+  if (safe === "battleship" && typeof window.socialBattleshipShowLeaderboard === "function") {
+    window.socialBattleshipShowLeaderboard();
     return;
   }
   const data = await socialRequest(`/api/social/games/leaderboard?game_code=${encodeURIComponent(safe)}&limit=100`).catch((e) => {
@@ -1391,9 +1433,19 @@ function socialStartGame(code) {
     window.socialCheckersQuickStart("medium");
     return;
   }
+  if (safe === "chess" && typeof window.socialChessQuickStart === "function") {
+    window.socialChessQuickStart("medium");
+    return;
+  }
+  if (safe === "battleship" && typeof window.socialBattleshipQuickStart === "function") {
+    window.socialBattleshipQuickStart("medium");
+    return;
+  }
   const title = safe === "snake"
     ? tr("Змейка", "Snake")
-    : (safe === "tetris" ? tr("Тетрис", "Tetris") : "2048");
+    : (safe === "tetris"
+      ? tr("Тетрис", "Tetris")
+      : (safe === "2048" ? "2048" : safe));
   const hint = safe === "snake"
     ? tr("Управление: стрелки, свайпы и тап по стороне от змейки. Ешьте еду и не врезайтесь.", "Controls: arrows, swipes, and tap around snake direction. Eat food and avoid collisions.")
     : (safe === "tetris"
