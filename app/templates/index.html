@@ -1363,17 +1363,13 @@
         <div id="socialSubtabChat">
           <div class="panel social-chat-layout">
             <aside class="social-chat-sidebar">
-              <div class="social-chat-sidebar-head">
-                <div>
-                  <h3>Р§Р°С‚С‹</h3>
-                  <small class="hint">Р›РёС‡РЅС‹Рµ Рё РіСЂСѓРїРїРѕРІС‹Рµ</small>
-                </div>
-                <div class="social-chat-head-buttons">
-                  <button class="btn-secondary" type="button" onclick="socialOpenChatQuickMenu()">Р”РµР№СЃС‚РІРёСЏ</button>
-                </div>
+              <div class="social-chat-sidebar-head social-chat-sidebar-toolbar">
+                <button id="socialChatModulesBtn" class="chip-btn social-chat-toolbar-btn" type="button" onclick="socialOpenModulesMenu()" aria-label="Открыть меню модулей" title="Меню модулей">&#9776;</button>
+                <h3>Чаты</h3>
+                <button id="socialChatListActionsBtn" class="chip-btn social-chat-toolbar-btn" type="button" onclick="socialOpenChatQuickMenu()" aria-label="Действия чатов" title="Действия">&#8942;</button>
               </div>
               <div class="social-chat-search">
-                <input id="socialChatSearch" type="text" placeholder="РџРѕРёСЃРє" oninput="socialFilterThreads()" />
+                <input id="socialChatSearch" type="text" placeholder="Поиск" oninput="socialFilterThreads()" />
               </div>
               <div id="socialChatThreads" class="social-chat-threads"></div>
             </aside>
@@ -1822,3 +1818,4 @@
   <script src="/static/social_battleship.js?v={{ static_v('social_battleship.js') }}"></script>
 </body>
 </html>
+

@@ -13277,6 +13277,76 @@ def social_delete_group_chat(
     return MessageOut(message="Группа удалена")
 
 
+@router.get("/social/chat/search", response_model=dict[str, Any])
+def social_chat_search(
+    q: str = "",
+    limit_threads: int = 250,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    search = str(q or "").strip().lower()
+    if len(search) < 2:
+        return {"query": search, "thread_ids": [], "limited": False}
+
+    actor_key, _, _ = _social_actor_identity(db, user)
+    actor_aliases = _social_actor_alias_keys(db, actor_key)
+    allowed_rows = db.scalars(
+        select(SocialChatThread.id)
+        .join(SocialChatThreadMember, SocialChatThreadMember.thread_id == SocialChatThread.id)
+        .where(
+            SocialChatThreadMember.actor_key.in_(actor_aliases),
+            SocialChatThread.kind != "global",
+            or_(
+                ~SocialChatThread.kind.in_(["company", "group"]),
+                SocialChatThread.owner_user_id == int(user.id),
+            ),
+        )
+        .order_by(SocialChatThread.updated_at.desc(), SocialChatThread.id.desc())
+        .limit(4000)
+    ).all()
+
+    allowed_thread_ids: list[int] = []
+    seen_thread_ids: set[int] = set()
+    for raw_tid in allowed_rows:
+        tid = int(raw_tid or 0)
+        if tid <= 0 or tid in seen_thread_ids:
+            continue
+        seen_thread_ids.add(tid)
+        allowed_thread_ids.append(tid)
+
+    if not allowed_thread_ids:
+        return {"query": search, "thread_ids": [], "limited": False}
+
+    safe_limit = max(20, min(int(limit_threads or 250), 600))
+    search_pattern = f"%{search}%"
+    match_rows = db.scalars(
+        select(SocialChatMessage.thread_id)
+        .where(
+            SocialChatMessage.thread_id.in_(allowed_thread_ids),
+            func.lower(cast(SocialChatMessage.text, String)).like(search_pattern),
+        )
+        .order_by(SocialChatMessage.id.desc())
+        .limit(12000)
+    ).all()
+
+    matched_thread_ids: list[int] = []
+    seen_matched_ids: set[int] = set()
+    for raw_tid in match_rows:
+        tid = int(raw_tid or 0)
+        if tid <= 0 or tid in seen_matched_ids:
+            continue
+        seen_matched_ids.add(tid)
+        matched_thread_ids.append(tid)
+        if len(matched_thread_ids) >= safe_limit:
+            break
+
+    return {
+        "query": search,
+        "thread_ids": matched_thread_ids,
+        "limited": len(matched_thread_ids) >= safe_limit,
+    }
+
 @router.get("/social/chat/actors", response_model=list[dict[str, Any]])
 def social_chat_actor_directory(
     q: str = "",
@@ -18132,6 +18202,7 @@ def mask_key(api_key: str) -> str:
     if len(api_key) <= 8:
         return "*" * len(api_key)
     return f"{api_key[:4]}...{api_key[-4:]}"
+
 
 
 

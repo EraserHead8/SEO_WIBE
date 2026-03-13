@@ -14,6 +14,10 @@ let socialState = {
   chatHasMore: true,
   chatRefreshTimer: null,
   chatSearch: "",
+  chatSearchMessageThreadIds: [],
+  chatSearchMessageQuery: "",
+  chatSearchRequestSeq: 0,
+  chatSearchTimer: null,
   chatThreadsSignature: "",
   chatHeaderSignature: "",
   chatMessagesSignatureByThread: {},
@@ -950,6 +954,10 @@ function socialStopGlobalHooks() {
     clearInterval(socialState.chatRefreshTimer);
     socialState.chatRefreshTimer = null;
   }
+  if (socialState.chatSearchTimer) {
+    clearTimeout(socialState.chatSearchTimer);
+    socialState.chatSearchTimer = null;
+  }
   if (socialState.currencyRatesTimer) {
     clearInterval(socialState.currencyRatesTimer);
     socialState.currencyRatesTimer = null;
@@ -995,6 +1003,10 @@ function resetSocialState() {
     lastSoundAtByKind: {},
     moduleLoaded: false,
     chatSearch: "",
+    chatSearchMessageThreadIds: [],
+    chatSearchMessageQuery: "",
+    chatSearchRequestSeq: 0,
+    chatSearchTimer: null,
     chatThreadsSignature: "",
     chatHeaderSignature: "",
     chatMessagesSignatureByThread: {},
@@ -1116,6 +1128,10 @@ async function loadSocialWorkspace() {
   socialBindChatInputEnter();
   socialBindChatComposer();
   socialSyncChatComposerState();
+  const chatSearchInput = document.getElementById("socialChatSearch");
+  if (chatSearchInput) {
+    chatSearchInput.placeholder = tr("\u041f\u043e\u0438\u0441\u043a \u043f\u043e \u0447\u0430\u0442\u0430\u043c \u0438 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u044f\u043c", "Search chats and messages");
+  }
   socialRenderGames();
   switchSocialSubtab(currentSocialSubtab || socialState.currentSubtab || "chat", true);
   socialStartGlobalHooks();
@@ -2413,7 +2429,42 @@ function socialSyncTopMenuButtonMode() {
 }
 
 function socialFilterThreads() {
-  socialState.chatSearch = String(document.getElementById("socialChatSearch")?.value || "").trim().toLowerCase();
+  const query = String(document.getElementById("socialChatSearch")?.value || "").trim().toLowerCase();
+  socialState.chatSearch = query;
+  if (socialState.chatSearchTimer) {
+    clearTimeout(socialState.chatSearchTimer);
+    socialState.chatSearchTimer = null;
+  }
+  if (!query || query.length < 2) {
+    socialState.chatSearchMessageQuery = "";
+    socialState.chatSearchMessageThreadIds = [];
+    socialRenderThreads();
+    return;
+  }
+  socialState.chatSearchMessageQuery = "";
+  socialState.chatSearchMessageThreadIds = [];
+  const requestSeq = Number(socialState.chatSearchRequestSeq || 0) + 1;
+  socialState.chatSearchRequestSeq = requestSeq;
+  socialRenderThreads();
+  socialState.chatSearchTimer = setTimeout(() => {
+    socialState.chatSearchTimer = null;
+    socialFetchThreadSearchMatches(query, requestSeq).catch(() => null);
+  }, 220);
+}
+
+async function socialFetchThreadSearchMatches(query, requestSeq) {
+  const safeQuery = String(query || "").trim().toLowerCase();
+  if (!safeQuery || safeQuery.length < 2) return;
+  const payload = await socialRequest(`/api/social/chat/search?q=${encodeURIComponent(safeQuery)}`, {
+    timeoutMs: 12000,
+  }).catch(() => null);
+  if (Number(requestSeq || 0) !== Number(socialState.chatSearchRequestSeq || 0)) return;
+  if (safeQuery !== String(socialState.chatSearch || "").trim().toLowerCase()) return;
+  const ids = Array.isArray(payload?.thread_ids) ? payload.thread_ids : [];
+  socialState.chatSearchMessageQuery = safeQuery;
+  socialState.chatSearchMessageThreadIds = ids
+    .map((x) => Number(x || 0))
+    .filter((x) => x > 0);
   socialRenderThreads();
 }
 
@@ -2515,11 +2566,25 @@ function socialRenderThreads() {
   const host = document.getElementById("socialChatThreads");
   if (!host) return;
   const query = String(socialState.chatSearch || "").trim().toLowerCase();
-  const rows = query
+  const hasQuery = Boolean(query);
+  const messageMatchSet = (
+    query.length >= 2
+    && String(socialState.chatSearchMessageQuery || "") === query
+  )
+    ? new Set(
+      (Array.isArray(socialState.chatSearchMessageThreadIds) ? socialState.chatSearchMessageThreadIds : [])
+        .map((x) => Number(x || 0))
+        .filter((x) => x > 0)
+    )
+    : null;
+  const rows = hasQuery
     ? socialState.chatThreads.filter((thread) => {
       const participants = Array.isArray(thread?.participants) ? thread.participants : [];
-      const hay = `${thread?.title || ""} ${thread?.kind || ""} ${participants.map((p) => p?.nick || "").join(" ")}`.toLowerCase();
-      return hay.includes(query);
+      const lastText = String(thread?.last_message?.text || "");
+      const hay = `${thread?.title || ""} ${thread?.kind || ""} ${lastText} ${participants.map((p) => p?.nick || "").join(" ")}`.toLowerCase();
+      if (hay.includes(query)) return true;
+      if (!messageMatchSet) return false;
+      return messageMatchSet.has(Number(thread?.id || 0));
     })
     : socialState.chatThreads;
   const existing = new Map();
@@ -2803,6 +2868,13 @@ async function socialDeleteCurrentGroupThread() {
   if (typeof socialShowToast === "function") {
     socialShowToast(tr("Группа удалена", "Group deleted"), tr("Чат удален из списка.", "The chat was removed from the list."));
   }
+}
+
+function socialOpenModulesMenu() {
+  const shell = document.getElementById("appSection");
+  if (shell) shell.classList.add("nav-open");
+  const btn = document.getElementById("mobileNavToggle");
+  if (btn) btn.setAttribute("aria-expanded", "true");
 }
 
 function socialOpenChatQuickMenu() {
@@ -5490,6 +5562,7 @@ window.socialOpenGroupEditor = socialOpenGroupEditor;
 window.socialOpenGroupParticipants = socialOpenGroupParticipants;
 window.socialOpenChatActionsMenu = socialOpenChatActionsMenu;
 window.socialDeleteCurrentGroupThread = socialDeleteCurrentGroupThread;
+window.socialOpenModulesMenu = socialOpenModulesMenu;
 window.socialOpenChatQuickMenu = socialOpenChatQuickMenu;
 window.socialToggleChatHeadCollapsed = socialToggleChatHeadCollapsed;
 window.socialOpenCurrentParticipantProfile = socialOpenCurrentParticipantProfile;
@@ -5566,6 +5639,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 socialMaybeStartHooks();
+
 
 
 
