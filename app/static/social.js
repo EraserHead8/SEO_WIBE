@@ -2367,11 +2367,22 @@ function socialSyncMobileChatChrome(row = null) {
     && String(currentTab || "") === "social"
     && String(socialState.currentSubtab || "") === "chat";
   const activeThread = row || socialGetCurrentThread();
+  const layout = document.querySelector("#socialSubtabChat .social-chat-layout");
+  const sidebar = layout?.querySelector(".social-chat-sidebar");
+  const layoutOpen = Boolean(layout?.classList?.contains("chat-open"))
+    || String(layout?.dataset?.threadOpen || "") === "1";
+  let sidebarVisible = false;
+  try {
+    sidebarVisible = Boolean(sidebar) && window.getComputedStyle(sidebar).display !== "none";
+  } catch (_) {
+    sidebarVisible = Boolean(sidebar);
+  }
   const threadOpen = isMobileShell
     && inSocialChat
     && Number(socialState.currentThreadId || 0) > 0
     && Boolean(activeThread)
-    && socialIsThreadOpen();
+    && layoutOpen
+    && !sidebarVisible;
   const show = isApkShell && threadOpen;
   const listMode = isMobileShell && inSocialChat && !threadOpen;
   const textWrap = titleNode.closest(".mobile-chat-compact-text");
@@ -2446,7 +2457,9 @@ function socialSyncTopMenuButtonMode() {
   const inSocialChat = String(currentTab || "") === "social"
     && String(socialState.currentSubtab || "") === "chat";
   const mobileShell = socialIsMobileClientShell() || socialIsMobileApkShell();
-  const threadMode = mobileShell && inSocialChat && socialIsThreadOpen();
+  const threadMode = mobileShell
+    && inSocialChat
+    && Boolean(document.body?.classList?.contains("social-thread-open"));
   btn.dataset.menuMode = threadMode ? "thread" : "modules";
   btn.classList.toggle("is-thread-menu", threadMode);
   btn.textContent = threadMode ? "\u22EE" : "\u2630";

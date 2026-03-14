@@ -7061,10 +7061,11 @@ body[data-theme="dark"] .landing-band .band-stats span {
 }
 
 .tg-msg-reply {
-  border-left: 3px solid color-mix(in oklab, var(--tg-user-accent) 70%, transparent);
-  border-radius: 8px;
-  background: color-mix(in oklab, var(--panel-bg) 82%, #ffffff);
-  padding: 5px 8px;
+  border-left: 3px solid color-mix(in oklab, var(--tg-user-accent) 78%, #7bb5ff);
+  border: 1px solid color-mix(in oklab, var(--tg-user-accent) 24%, var(--line));
+  border-radius: 9px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(235, 246, 255, 0.94));
+  padding: 6px 8px;
   margin-bottom: 6px;
   display: grid;
   gap: 2px;
@@ -7073,17 +7074,32 @@ body[data-theme="dark"] .landing-band .band-stats span {
 
 .tg-msg-reply b {
   font-size: 11px;
-  color: var(--tg-user-accent);
+  color: color-mix(in oklab, var(--tg-user-accent) 68%, #1f4f84);
   line-height: 1.2;
 }
 
 .tg-msg-reply span {
   font-size: 11px;
-  color: var(--text-muted);
+  color: #2a4a74;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.tg-msg-row.mine .tg-msg-reply {
+  border-left-color: #b9dcff;
+  border-color: rgba(146, 190, 242, 0.72);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(228, 242, 255, 0.91));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.44);
+}
+
+.tg-msg-row.mine .tg-msg-reply b {
+  color: #1b5ba3;
+}
+
+.tg-msg-row.mine .tg-msg-reply span {
+  color: rgba(25, 55, 96, 0.96);
 }
 
 .tg-msg-attachments {
