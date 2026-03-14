@@ -2361,12 +2361,19 @@ function socialSyncMobileChatChrome(row = null) {
   if (!host || !backBtn || !avatarNode || !titleNode || !subtitleNode) return;
   const body = document.body;
   const shell = document.getElementById("appSection");
+  const isMobileShell = socialIsMobileClientShell() || socialIsMobileApkShell();
   const isApkShell = socialIsMobileApkShell();
   const inSocialChat = typeof currentTab !== "undefined"
     && String(currentTab || "") === "social"
     && String(socialState.currentSubtab || "") === "chat";
   const activeThread = row || socialGetCurrentThread();
-  const show = isApkShell && inSocialChat && Number(socialState.currentThreadId || 0) > 0 && Boolean(activeThread);
+  const threadOpen = isMobileShell
+    && inSocialChat
+    && Number(socialState.currentThreadId || 0) > 0
+    && Boolean(activeThread)
+    && socialIsThreadOpen();
+  const show = isApkShell && threadOpen;
+  const listMode = isMobileShell && inSocialChat && !threadOpen;
   const textWrap = titleNode.closest(".mobile-chat-compact-text");
   const openProfile = () => socialOpenCurrentParticipantProfile();
   const bindProfileTap = (node) => {
@@ -2389,9 +2396,11 @@ function socialSyncMobileChatChrome(row = null) {
   };
   host.classList.toggle("hidden", !show);
   backBtn.classList.toggle("hidden", !show);
-  body?.classList?.toggle("social-thread-open", show);
-  shell?.classList?.toggle("social-thread-open", show);
-  chatHead?.classList?.toggle("hidden", show);
+  body?.classList?.toggle("social-thread-open", threadOpen);
+  shell?.classList?.toggle("social-thread-open", threadOpen);
+  body?.classList?.toggle("social-chat-list-mode", listMode);
+  shell?.classList?.toggle("social-chat-list-mode", listMode);
+  chatHead?.classList?.toggle("hidden", threadOpen);
   socialSyncTopMenuButtonMode();
   if (!show) {
     titleNode.textContent = tr("\u0427\u0430\u0442\u044b", "Chats");

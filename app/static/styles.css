@@ -9849,6 +9849,13 @@ body.mobile-apk-mode #ads .module-subtabs {
 }
 
 @media (max-width: 980px) {
+  body.mobile-client-mode.social-chat-list-mode #appSection > .workspace > .topbar,
+  body.mobile-client-mode #appSection.social-chat-list-mode > .workspace > .topbar,
+  body.mobile-apk-mode.social-chat-list-mode #appSection > .workspace > .topbar,
+  body.mobile-apk-mode #appSection.social-chat-list-mode > .workspace > .topbar {
+    display: none !important;
+  }
+
   body.mobile-client-mode #appSection > .workspace > .topbar {
     position: sticky !important;
     top: 6px !important;
