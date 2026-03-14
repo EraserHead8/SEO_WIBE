@@ -9627,9 +9627,25 @@ body.mobile-client-mode #appSection .topbar-controls > :not(#mobileNavToggle) {
   display: none !important;
 }
 
+body.mobile-client-mode #appSection .topbar {
+  position: relative;
+  justify-content: center;
+}
+
+body.mobile-client-mode #appSection .topbar-title {
+  width: 100%;
+  text-align: center;
+  padding: 0 52px;
+}
+
 body.mobile-client-mode #appSection .topbar-controls {
   width: auto !important;
-  margin-left: auto;
+  margin-left: 0 !important;
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
 }
 
 body.mobile-client-mode #appSection .topbar-title p {
@@ -9698,13 +9714,14 @@ body.mobile-apk-mode #appSection .topbar h1 {
 
 body.mobile-apk-mode #appSection .topbar-controls {
   width: auto !important;
-  justify-content: flex-end;
+  justify-content: flex-start;
   align-items: center;
   gap: 8px;
   margin-left: 0 !important;
   flex: 0 0 auto;
   position: absolute;
-  right: 10px;
+  left: 10px;
+  right: auto;
   top: 50%;
   transform: translateY(-50%);
 }
@@ -9788,6 +9805,7 @@ body.mobile-apk-mode #appSection.social-thread-open .topbar-controls {
 body.mobile-apk-mode.social-thread-open #appSection .topbar-controls #mobileNavToggle,
 body.mobile-apk-mode #appSection.social-thread-open .topbar-controls #mobileNavToggle {
   position: absolute;
+  left: auto;
   right: 0;
   top: 50%;
   transform: translateY(-50%);

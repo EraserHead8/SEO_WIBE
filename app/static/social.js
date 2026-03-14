@@ -2445,8 +2445,11 @@ function socialSyncTopMenuButtonMode() {
   if (!btn) return;
   const inSocialChat = String(currentTab || "") === "social"
     && String(socialState.currentSubtab || "") === "chat";
-  const threadMode = socialIsMobileClientShell() && inSocialChat && socialIsThreadOpen();
+  const mobileShell = socialIsMobileClientShell() || socialIsMobileApkShell();
+  const threadMode = mobileShell && inSocialChat && socialIsThreadOpen();
   btn.dataset.menuMode = threadMode ? "thread" : "modules";
+  btn.classList.toggle("is-thread-menu", threadMode);
+  btn.textContent = threadMode ? "\u22EE" : "\u2630";
   const label = threadMode
     ? tr("\u041c\u0435\u043d\u044e \u0447\u0430\u0442\u0430", "Chat menu")
     : tr("\u041c\u0435\u043d\u044e \u043c\u043e\u0434\u0443\u043b\u0435\u0439", "Modules menu");
