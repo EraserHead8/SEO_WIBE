@@ -7070,7 +7070,8 @@ def sales_stats(
     live_window = bool(left <= datetime.now(ZoneInfo(tz_name)).date() <= right)
     live_market = selected_market in {"all", "wb"}
     use_live_mode = bool(live_window and live_market)
-    sales_ttl_sec = max(45, min(_market_cache_ttl("sales_stats"), 60)) if use_live_mode else _market_cache_ttl("sales_stats")
+    sales_ttl_sec = max(90, min(_market_cache_ttl("sales_stats"), 180)) if use_live_mode else _market_cache_ttl("sales_stats")
+    sales_prefer_stale_sec = 3 * 60 if use_live_mode and not force_refresh else 0
     sales_cache_key = build_market_cache_key(
         {
             "marketplace": selected_market,
@@ -7116,7 +7117,7 @@ def sales_stats(
                 force_fresh_wb=bool(force_refresh),
             ),
             stale_if_error_sec=20 * 60,
-            prefer_stale_sec=0,
+            prefer_stale_sec=sales_prefer_stale_sec,
             force_refresh=bool(force_refresh),
         )
     except Exception as exc:
@@ -7212,7 +7213,7 @@ def sales_stats(
                 ttl_sec=_market_cache_ttl("sales_stats"),
                 fetcher=lambda: _load_sales_payload(prev_from, prev_to, prefer_live=False, force_fresh_wb=False),
                 stale_if_error_sec=45 * 60,
-                prefer_stale_sec=2 * 60 * 60,
+                prefer_stale_sec=12 * 60 * 60,
             )
             prev_totals = prev_payload.get("totals") if isinstance(prev_payload, dict) else {}
             prev_totals = prev_totals if isinstance(prev_totals, dict) else {}

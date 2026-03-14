@@ -15,6 +15,12 @@ WB_SALES_TIMEOUT = httpx.Timeout(connect=4.0, read=12.0, write=12.0, pool=12.0)
 WB_SALES_CACHE_TTL_SEC = 180
 WB_SALES_CACHE_TTL_LIVE_SEC = 60
 _WB_SALES_CACHE: dict[tuple[str, str, str], tuple[float, list[dict[str, Any]], list[str]]] = {}
+WB_ORDERS_CACHE_TTL_SEC = 180
+WB_ORDERS_CACHE_TTL_LIVE_SEC = 60
+_WB_ORDERS_CACHE: dict[tuple[str, str, str], tuple[float, list[dict[str, Any]], list[str]]] = {}
+WB_REPORT_DETAIL_CACHE_TTL_SEC = 180
+WB_REPORT_DETAIL_CACHE_TTL_LIVE_SEC = 60
+_WB_REPORT_DETAIL_CACHE: dict[tuple[str, str, str], tuple[float, list[dict[str, Any]], str]] = {}
 WB_SALES_MAX_PAGES = 3
 WB_SALES_CONTINUATION_THRESHOLD = 79_500
 WB_SALES_LONG_RANGE_DAYS = 10
@@ -51,6 +57,8 @@ def build_sales_report(
     warnings: list[str] = []
     wb_sales_cache_ttl_sec = WB_SALES_CACHE_TTL_LIVE_SEC if prefer_live else WB_SALES_CACHE_TTL_SEC
     wb_ads_cache_ttl_sec = WB_AD_SPEND_CACHE_TTL_LIVE_SEC if prefer_live else WB_AD_SPEND_CACHE_TTL_SEC
+    wb_orders_cache_ttl_sec = WB_ORDERS_CACHE_TTL_LIVE_SEC if prefer_live else WB_ORDERS_CACHE_TTL_SEC
+    wb_report_detail_cache_ttl_sec = WB_REPORT_DETAIL_CACHE_TTL_LIVE_SEC if prefer_live else WB_REPORT_DETAIL_CACHE_TTL_SEC
 
     if selected in {"all", "wb"}:
         if wb_api_key.strip():
@@ -63,13 +71,21 @@ def build_sales_report(
             )
             collected.extend(wb_rows)
             warnings.extend(wb_warn)
-            wb_orders_rows, wb_orders_warn = _fetch_wb_orders_rows(wb_api_key.strip(), date_from=date_from, date_to=date_to)
+            wb_orders_rows, wb_orders_warn = _fetch_wb_orders_rows(
+                wb_api_key.strip(),
+                date_from=date_from,
+                date_to=date_to,
+                ignore_cache=bool(force_fresh_wb),
+                cache_ttl_sec=wb_orders_cache_ttl_sec,
+            )
             collected.extend(wb_orders_rows)
             warnings.extend(wb_orders_warn)
             wb_finance_rows, wb_finance_warn = _fetch_wb_financial_rows_report_detail(
                 wb_api_key.strip(),
                 date_from=date_from,
                 date_to=date_to,
+                ignore_cache=bool(force_fresh_wb),
+                cache_ttl_sec=wb_report_detail_cache_ttl_sec,
             )
             collected.extend(wb_finance_rows)
             warnings.extend(wb_finance_warn)
@@ -309,7 +325,13 @@ def _fetch_wb_sales_rows(
             )
 
     if not rows and not response_pages:
-        fallback_rows, fallback_warning = _fetch_wb_sales_rows_report_detail(api_key=api_key, date_from=date_from, date_to=date_to)
+        fallback_rows, fallback_warning = _fetch_wb_sales_rows_report_detail(
+            api_key=api_key,
+            date_from=date_from,
+            date_to=date_to,
+            ignore_cache=ignore_cache,
+            cache_ttl_sec=WB_REPORT_DETAIL_CACHE_TTL_LIVE_SEC if cache_ttl_sec <= WB_SALES_CACHE_TTL_LIVE_SEC else WB_REPORT_DETAIL_CACHE_TTL_SEC,
+        )
         if fallback_rows:
             if fallback_warning:
                 warnings.append(fallback_warning)
@@ -805,7 +827,21 @@ def _campaign_id_from_any(row: Any) -> int:
     return 0
 
 
-def _fetch_wb_report_detail_source_rows(api_key: str, date_from: date, date_to: date) -> tuple[list[dict[str, Any]], str]:
+def _fetch_wb_report_detail_source_rows(
+    api_key: str,
+    date_from: date,
+    date_to: date,
+    *,
+    ignore_cache: bool = False,
+    cache_ttl_sec: int = WB_REPORT_DETAIL_CACHE_TTL_SEC,
+) -> tuple[list[dict[str, Any]], str]:
+    cache_key = (api_key[-12:], date_from.isoformat(), date_to.isoformat())
+    cached = _WB_REPORT_DETAIL_CACHE.get(cache_key)
+    now = time.monotonic()
+    safe_cache_ttl = max(0, int(cache_ttl_sec or 0))
+    if cached and (not ignore_cache) and now - cached[0] <= safe_cache_ttl:
+        return list(cached[1]), str(cached[2] or "")
+
     endpoint = "https://statistics-api.wildberries.ru/api/v5/supplier/reportDetailByPeriod"
     rrdid = 0
     source_rows: list[dict[str, Any]] = []
@@ -820,6 +856,8 @@ def _fetch_wb_report_detail_source_rows(api_key: str, date_from: date, date_to: 
         }
         payload, status = _request_wb_sales_payload(api_key=api_key, endpoint=endpoint, params=params)
         if payload is None:
+            if cached:
+                return list(cached[1]), "cached-stale"
             return [], status
         if not payload:
             break
@@ -830,10 +868,12 @@ def _fetch_wb_report_detail_source_rows(api_key: str, date_from: date, date_to: 
         if not next_rrdid or next_rrdid <= rrdid:
             break
         rrdid = next_rrdid
-    if not source_rows:
-        return [], ""
-    return source_rows, "ok"
-
+    if source_rows:
+        _WB_REPORT_DETAIL_CACHE[cache_key] = (time.monotonic(), list(source_rows), "ok")
+        return source_rows, "ok"
+    if cached:
+        return list(cached[1]), "cached-stale"
+    return [], ""
 
 def _wb_report_detail_day(item: dict[str, Any]) -> date | None:
     return _parse_any_date(
@@ -870,8 +910,14 @@ def _wb_report_detail_sale_amount(item: dict[str, Any]) -> float:
     return abs(float(round(raw, 2)))
 
 
-def _fetch_wb_sales_rows_report_detail(api_key: str, date_from: date, date_to: date) -> tuple[list[dict[str, Any]], str]:
-    source_rows, status = _fetch_wb_report_detail_source_rows(api_key=api_key, date_from=date_from, date_to=date_to)
+def _fetch_wb_sales_rows_report_detail(api_key: str, date_from: date, date_to: date, *, ignore_cache: bool = False, cache_ttl_sec: int = WB_REPORT_DETAIL_CACHE_TTL_SEC) -> tuple[list[dict[str, Any]], str]:
+    source_rows, status = _fetch_wb_report_detail_source_rows(
+        api_key=api_key,
+        date_from=date_from,
+        date_to=date_to,
+        ignore_cache=ignore_cache,
+        cache_ttl_sec=cache_ttl_sec,
+    )
     if not source_rows:
         return [], status if status != "ok" else ""
 
@@ -951,8 +997,14 @@ def _fetch_wb_sales_rows_report_detail(api_key: str, date_from: date, date_to: d
     return rows, "WB sales: использован fallback API reportDetailByPeriod."
 
 
-def _fetch_wb_financial_rows_report_detail(api_key: str, date_from: date, date_to: date) -> tuple[list[dict[str, Any]], list[str]]:
-    source_rows, status = _fetch_wb_report_detail_source_rows(api_key=api_key, date_from=date_from, date_to=date_to)
+def _fetch_wb_financial_rows_report_detail(api_key: str, date_from: date, date_to: date, *, ignore_cache: bool = False, cache_ttl_sec: int = WB_REPORT_DETAIL_CACHE_TTL_SEC) -> tuple[list[dict[str, Any]], list[str]]:
+    source_rows, status = _fetch_wb_report_detail_source_rows(
+        api_key=api_key,
+        date_from=date_from,
+        date_to=date_to,
+        ignore_cache=ignore_cache,
+        cache_ttl_sec=cache_ttl_sec,
+    )
     if not source_rows:
         if status and status != "ok":
             return [], [f"WB finance API недоступен ({status})."]
@@ -1028,7 +1080,21 @@ def _fetch_wb_financial_rows_report_detail(api_key: str, date_from: date, date_t
     return rows, []
 
 
-def _fetch_wb_orders_rows(api_key: str, date_from: date, date_to: date) -> tuple[list[dict[str, Any]], list[str]]:
+def _fetch_wb_orders_rows(
+    api_key: str,
+    date_from: date,
+    date_to: date,
+    *,
+    ignore_cache: bool = False,
+    cache_ttl_sec: int = WB_ORDERS_CACHE_TTL_SEC,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    cache_key = (api_key[-12:], date_from.isoformat(), date_to.isoformat())
+    cached = _WB_ORDERS_CACHE.get(cache_key)
+    now = time.monotonic()
+    safe_cache_ttl = max(0, int(cache_ttl_sec or 0))
+    if cached and (not ignore_cache) and now - cached[0] <= safe_cache_ttl:
+        return list(cached[1]), list(cached[2])
+
     endpoint = "https://statistics-api.wildberries.ru/api/v1/supplier/orders"
     cursor = date_from.isoformat()
     warnings: list[str] = []
@@ -1042,6 +1108,8 @@ def _fetch_wb_orders_rows(api_key: str, date_from: date, date_to: date) -> tuple
                 warnings.append("WB orders API вернул 429, показана частичная статистика.")
                 break
             if page_idx == 0:
+                if cached:
+                    return list(cached[1]), list(cached[2]) + ["WB orders API unavailable, showing cached snapshot."]
                 return [], [status]
             warnings.append("WB orders API недоступен, показана частичная статистика.")
             break
@@ -1123,6 +1191,7 @@ def _fetch_wb_orders_rows(api_key: str, date_from: date, date_to: date) -> tuple
                 "other_expense": 0.0,
             }
         )
+    _WB_ORDERS_CACHE[cache_key] = (time.monotonic(), list(rows), list(warnings))
     if not rows:
         return [], warnings
     return rows, warnings

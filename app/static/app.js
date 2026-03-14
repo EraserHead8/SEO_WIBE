@@ -132,6 +132,7 @@ let salesCurrentLabel = "";
 let salesLoadProgress = { active: false, total: 0, loaded: 0 };
 let salesLoadState = "idle";
 let salesLoadToken = 0;
+let salesLoadInflightKey = "";
 let salesLastRequestSignature = "";
 let salesLastLoadedAt = 0;
 let salesAutoLoadTimer = null;
@@ -10827,12 +10828,12 @@ async function loadSalesStats(retryAttempt = 0, forceRefresh = false) {
     salesComparisonData = {};
     salesLoadProgress = { active: false, total: 0, loaded: 0 };
     salesLoadState = "idle";
+    salesLoadInflightKey = "";
     updateSalesLoadStatus();
     renderSalesStats();
     return false;
   }
-  salesLoadToken += 1;
-  const runToken = salesLoadToken;
+  let runToken = salesLoadToken;
   initSalesPeriodDefaults();
   const market = (document.getElementById("salesMarketplace")?.value || "all").trim().toLowerCase();
   const date_from = (document.getElementById("salesDateFrom")?.value || "").trim();
@@ -10867,6 +10868,13 @@ async function loadSalesStats(retryAttempt = 0, forceRefresh = false) {
   qp.set("marketplace", market || "all");
   qp.set("granularity", "auto");
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const requestKey = `${market || "all"}|${date_from || ""}|${date_to || ""}|${tz}|${forceRefresh ? 1 : 0}`;
+  if (!forceRefresh && retryAttempt === 0 && salesLoadState === "loading" && salesLoadInflightKey === requestKey) {
+    return true;
+  }
+  salesLoadInflightKey = requestKey;
+  salesLoadToken += 1;
+  runToken = salesLoadToken;
   qp.set("tz", tz);
   const requestSignature = `${market || "all"}|${date_from || ""}|${date_to || ""}|${tz}`;
   if (forceRefresh) qp.set("force_refresh", "1");
@@ -10894,16 +10902,11 @@ async function loadSalesStats(retryAttempt = 0, forceRefresh = false) {
     salesLoadProgress = { active: false, total: market === "all" ? 2 : 1, loaded: market === "all" ? 2 : 1 };
     updateSalesLoadStatus();
     renderSalesStats();
+    salesLoadInflightKey = "";
     return true;
   }
   if (meta) meta.textContent = tr("Загрузка статистики продаж...", "Loading sales statistics...");
-  salesRows = [];
-  salesChartRows = [];
-  salesCompareRows = [];
-  salesCompareChartRows = [];
-  salesTotalsData = {};
-  salesComparisonData = {};
-  renderSalesStats();
+  
   salesLoadState = "loading";
   salesLoadProgress = { active: true, total: market === "all" ? 2 : 1, loaded: 0 };
   updateSalesLoadStatus();
@@ -10926,22 +10929,22 @@ async function loadSalesStats(retryAttempt = 0, forceRefresh = false) {
   }
   if (!data) {
     if (runToken !== salesLoadToken) return;
-    salesRows = [];
-    salesChartRows = [];
-    salesCompareRows = [];
-    salesCompareChartRows = [];
-    salesTotalsData = {};
-    salesComparisonData = {};
     salesLoadState = "error";
     salesLoadProgress = { active: false, total: market === "all" ? 2 : 1, loaded: 0 };
+    salesLoadInflightKey = "";
     updateSalesLoadStatus();
-    renderSalesStats();
-    if (meta) meta.textContent = tr("Ошибка загрузки статистики. Проверьте API-ключи и период.", "Sales loading failed. Check API keys and period.");
-    if (lastError) alert(lastError);
+    if (meta) {
+      const hasLastData = Array.isArray(salesRows) && salesRows.length > 0;
+      const baseText = tr("Sales loading failed. Check API keys and period.", "Sales loading failed. Check API keys and period.");
+      meta.textContent = hasLastData
+        ? `${baseText} ${tr("Showing last loaded data.", "Showing last loaded data.")}`
+        : baseText;
+    }
+    scheduleSalesLiveRefresh();
     return false;
   }
-  if (runToken !== salesLoadToken) return;
 
+  if (runToken !== salesLoadToken) return;
   const rawRows = Array.isArray(data.rows) ? data.rows : [];
   salesRows = rawRows.filter((row) => {
     const mp = String(row?.marketplace || "").toLowerCase();
@@ -11030,6 +11033,7 @@ async function loadSalesStats(retryAttempt = 0, forceRefresh = false) {
     salesLastLoadedAt = Date.now();
   }
   markModuleLoaded("sales");
+  salesLoadInflightKey = "";
   return true;
 }
 
