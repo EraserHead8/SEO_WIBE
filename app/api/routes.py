@@ -3700,7 +3700,7 @@ def wb_ads_campaigns(
                 status = str(summary.get("status") or "").strip()
                 ctype = str(summary.get("type") or "").strip()
                 budget = str(summary.get("budget") or "").strip()
-                if name and not (name.lower().startswith("кампания ") or name.lower().startswith("campaign ")):
+                if name and not _campaign_name_is_placeholder(name, cid):
                     row["name"] = name
                 if status and status not in {"-", "—"}:
                     row["status"] = status
@@ -3711,7 +3711,7 @@ def wb_ads_campaigns(
     ids = sorted({_to_int_safe(_campaign_id_from_any(row)) for row in rows if _to_int_safe(_campaign_id_from_any(row)) > 0})
     hydrated_stats: dict[str, dict[str, Any]] = {}
     hydrated_summaries: dict[str, dict[str, Any]] = {}
-    hydrate_ids = ids[:360]
+    hydrate_ids = ids[:600]
     if (not fast) and hydrate_ids:
         summary_hydrate_key = build_market_cache_key(
             {
@@ -3740,7 +3740,7 @@ def wb_ads_campaigns(
                 fetcher=lambda: fetch_wb_campaign_summaries(
                     wb_key,
                     hydrate_ids,
-                    fallback_limit=max(8, min(28, len(hydrate_ids) // 4 + 6)),
+                    fallback_limit=max(12, min(64, len(hydrate_ids) // 3 + 8)),
                 ),
                 stale_if_error_sec=45 * 60,
                 prefer_stale_sec=20 * 60,
@@ -4015,8 +4015,8 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
                 fetcher=lambda: fetch_wb_campaign_summaries(
                     wb_key,
                     summary_fetch_ids,
-                    fallback_limit=0,
-                    detail_lookup_limit=0,
+                    fallback_limit=max(16, min(180, len(summary_fetch_ids) // 2 + 12)),
+                    detail_lookup_limit=max(10, min(90, len(summary_fetch_ids) // 3 + 8)),
                 ),
                 stale_if_error_sec=45 * 60,
                 prefer_stale_sec=60 * 60,
@@ -4083,7 +4083,7 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
         )
     ]
     if unresolved_summary_ids:
-        retry_limit = 0 if len(ids) > 36 else (4 if len(ids) > 16 else 8)
+        retry_limit = 10 if len(ids) > 240 else (16 if len(ids) > 96 else (10 if len(ids) > 24 else 14))
         for cid in unresolved_summary_ids[:retry_limit]:
             if (time.monotonic() - started_at) >= fallback_deadline_sec:
                 warnings.append("summary_retry_timeout")
@@ -16475,11 +16475,45 @@ def _campaign_name_is_placeholder(name: str, campaign_id: int) -> bool:
     text = str(name or "").strip().lower()
     if not text:
         return True
-    if re.fullmatch(r"(кампания|campaign)\s*\d+", text):
+    compact = re.sub(r"\s+", " ", text).strip()
+    if re.fullmatch(r"\d{4,}", compact):
         return True
+
+    ru_campaign_root = "\u043a\u0430\u043c\u043f\u0430\u043d"
+    ru_ad_root = "\u0440\u0435\u043a\u043b\u0430\u043c"
+    generic_re = rf"(campaign|camp|advert|advertising|ads?|{ru_ad_root}[\w\u0400-\u04ff]*|{ru_campaign_root}[\w\u0400-\u04ff]*)"
+    if re.fullmatch(rf"{generic_re}\s*[#№:\-]?\s*\d+", compact):
+        return True
+    if re.fullmatch(rf"{generic_re}\s+{generic_re}\s*[#№:\-]?\s*\d+", compact):
+        return True
+
     cid = int(campaign_id or 0)
-    if cid > 0 and text in {f"кампания {cid}", f"campaign {cid}"}:
-        return True
+    if cid > 0:
+        cid_text = str(cid)
+        if compact == cid_text:
+            return True
+        if re.search(rf"\b{re.escape(cid_text)}\b", compact):
+            reduced = re.sub(rf"\b{re.escape(cid_text)}\b", " ", compact)
+            reduced = re.sub(r"[#№:;,_\-.()\[\]/]+", " ", reduced)
+            reduced = re.sub(r"\s+", " ", reduced).strip()
+            if not reduced:
+                return True
+            words = re.findall(r"[a-z\u0400-\u04ff]+", reduced)
+            if words:
+                generic_words = {
+                    "campaign",
+                    "camp",
+                    "advert",
+                    "advertising",
+                    "ad",
+                    "ads",
+                    "\u043a\u0430\u043c\u043f\u0430\u043d\u0438\u044f",
+                    "\u043a\u0430\u043c\u043f\u0430\u043d\u0438\u0438",
+                    "\u0440\u0435\u043a\u043b\u0430\u043c\u0430",
+                    "\u0440\u0435\u043a\u043b\u0430\u043c\u043d\u0430\u044f",
+                }
+                if all(word in generic_words or word.startswith(ru_campaign_root) or word.startswith(ru_ad_root) for word in words):
+                    return True
     return False
 
 

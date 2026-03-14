@@ -6131,7 +6131,9 @@ async function loadWbAdCampaigns(options = {}) {
     if (data) {
       const total = Array.isArray(data.campaigns) ? data.campaigns.length : 0;
       const placeholderCount = Number(data?.meta?.placeholder_count || 0);
-      const shouldUpgrade = total > 0 && placeholderCount >= Math.max(8, Math.ceil(total * 0.35));
+      const summaryHydrated = Number(data?.meta?.summary_hydrated || 0);
+      const statsHydrated = Number(data?.meta?.stats_hydrated || 0);
+      const shouldUpgrade = total > 0 && (placeholderCount > 0 || summaryHydrated < Math.min(total, 24) || statsHydrated < Math.min(total, 24));
       if (shouldUpgrade) {
         const fullResult = await requestCampaigns(false, 150000);
         if (fullResult.payload && Array.isArray(fullResult.payload.campaigns) && fullResult.payload.campaigns.length) {
@@ -6160,7 +6162,7 @@ async function loadWbAdCampaigns(options = {}) {
         headers: authHeaders(),
         timeoutMs: 25000,
       }).catch(() => null);
-      const retry = (await requestCampaigns(true, 120000)).payload;
+      const retry = (await requestCampaigns(false, 150000)).payload || (await requestCampaigns(true, 120000)).payload;
       if (retry && Array.isArray(retry.campaigns)) data = retry;
     }
 
@@ -6267,9 +6269,47 @@ function isPlaceholderCampaignName(name, campaignId = "") {
   const text = String(name || "").trim();
   if (!text) return true;
   const low = text.toLowerCase();
-  if (/^(кампания|campaign)\s*\d+$/.test(low)) return true;
-  const cid = String(campaignId || "").trim().toLowerCase();
-  if (cid && (low === `кампания ${cid}` || low === `campaign ${cid}`)) return true;
+  const compact = low.replace(/\s+/g, " ").trim();
+  if (/^\d{4,}$/.test(compact)) return true;
+
+  const ruCampaignRoot = "\u043a\u0430\u043c\u043f\u0430\u043d";
+  const ruAdRoot = "\u0440\u0435\u043a\u043b\u0430\u043c";
+  const genericWords = new Set([
+    "campaign",
+    "camp",
+    "advert",
+    "advertising",
+    "ad",
+    "ads",
+    "\u043a\u0430\u043c\u043f\u0430\u043d\u0438\u044f",
+    "\u043a\u0430\u043c\u043f\u0430\u043d\u0438\u0438",
+    "\u0440\u0435\u043a\u043b\u0430\u043c\u0430",
+    "\u0440\u0435\u043a\u043b\u0430\u043c\u043d\u0430\u044f",
+  ]);
+  const compactSingle = new RegExp(`^(?:campaign|camp|advert|advertising|ads?|${ruAdRoot}[a-z\u0400-\u04ff0-9_]*|${ruCampaignRoot}[a-z\u0400-\u04ff0-9_]*)\\s*[#№:\\-]?\\s*\\d+$`, "iu");
+  const compactDouble = new RegExp(`^(?:${ruAdRoot}[a-z\u0400-\u04ff0-9_]*|advert|advertising|ads?|campaign|camp)\\s+(?:${ruCampaignRoot}[a-z\u0400-\u04ff0-9_]*|campaign|camp)\\s*[#№:\\-]?\\s*\\d+$`, "iu");
+  if (compactSingle.test(compact) || compactDouble.test(compact)) return true;
+
+  const cidRaw = String(campaignId || "").trim();
+  const cidMatch = cidRaw.match(/\d+/);
+  const cid = cidMatch ? cidMatch[0] : "";
+  if (cid) {
+    const cidRe = new RegExp(`\\b${cid}\\b`);
+    if (compact === cid || cidRe.test(compact)) {
+      let reduced = compact.replace(new RegExp(`\\b${cid}\\b`, "g"), " ");
+      reduced = reduced.replace(/[#№:;,_\-.()\[\]/]+/g, " ").replace(/\s+/g, " ").trim();
+      if (!reduced) return true;
+      const words = reduced.match(/[a-z\u0400-\u04ff]+/gi) || [];
+      if (words.length && words.every((word) => {
+        const normalized = String(word || "").toLowerCase();
+        return genericWords.has(normalized)
+          || normalized.startsWith(ruCampaignRoot)
+          || normalized.startsWith(ruAdRoot);
+      })) {
+        return true;
+      }
+    }
+  }
   return false;
 }
 
@@ -6356,7 +6396,7 @@ async function enrichWbCampaignRows(runToken) {
       .map((row) => Number(getCampaignRowId(row) || 0))
       .filter((id) => id > 0)
   )];
-  const pending = pendingRaw.slice(0, 1200);
+  const pending = pendingRaw.slice(0, 2400);
   const deferredCount = Math.max(0, pendingRaw.length - pending.length);
   if (!pending.length) {
     wbAdsLoadProgress.active = false;
@@ -6388,7 +6428,7 @@ async function enrichWbCampaignRows(runToken) {
   wbAdsLoadProgress.failed = 0;
   updateWbAdsLoadStatus();
 
-  const batchSize = pending.length > 320 ? 20 : (pending.length > 140 ? 12 : 8);
+  const batchSize = pending.length > 700 ? 30 : (pending.length > 320 ? 22 : (pending.length > 140 ? 14 : 8));
   const requestEnrichChunk = async (ids, timeoutMs = 120000) => requestJson("/api/wb/ads/campaigns/enrich", {
     method: "POST",
     headers: authHeaders(),
@@ -6449,7 +6489,7 @@ async function enrichWbCampaignRows(runToken) {
 
     if (!payload) {
       partialFallback = true;
-      const fallbackBatchSize = chunk.length > 6 ? 3 : 1;
+      const fallbackBatchSize = chunk.length > 8 ? 4 : (chunk.length > 3 ? 2 : 1);
       for (let j = 0; j < chunk.length; j += fallbackBatchSize) {
         if (runToken !== wbAdsLoadToken) return;
         const subChunk = chunk.slice(j, j + fallbackBatchSize);

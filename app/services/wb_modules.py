@@ -1358,6 +1358,52 @@ def fetch_wb_campaigns(
     return _enrich_wb_campaign_rows(api_key, [{"advertId": cid} for cid in ids])
 
 
+def _campaign_name_is_placeholder(value: Any, campaign_id: int | None = None) -> bool:
+    text = str(value or "").strip().lower()
+    if not text or text in {"-", "—"}:
+        return True
+    compact = re.sub(r"\s+", " ", text).strip()
+    if re.fullmatch(r"\d{4,}", compact):
+        return True
+
+    ru_campaign_root = "\u043a\u0430\u043c\u043f\u0430\u043d"
+    ru_ad_root = "\u0440\u0435\u043a\u043b\u0430\u043c"
+    generic_re = rf"(campaign|camp|advert|advertising|ads?|{ru_ad_root}[\w\u0400-\u04ff]*|{ru_campaign_root}[\w\u0400-\u04ff]*)"
+    if re.fullmatch(rf"{generic_re}\s*[#№:\-]?\s*\d+", compact):
+        return True
+    if re.fullmatch(rf"{generic_re}\s+{generic_re}\s*[#№:\-]?\s*\d+", compact):
+        return True
+
+    cid = int(campaign_id or 0)
+    if cid > 0:
+        cid_text = str(cid)
+        if compact == cid_text:
+            return True
+        if re.search(rf"\b{re.escape(cid_text)}\b", compact):
+            reduced = re.sub(rf"\b{re.escape(cid_text)}\b", " ", compact)
+            reduced = re.sub(r"[#№:;,_\-.()\[\]/]+", " ", reduced)
+            reduced = re.sub(r"\s+", " ", reduced).strip()
+            if not reduced:
+                return True
+            words = re.findall(r"[a-z\u0400-\u04ff]+", reduced)
+            if words:
+                generic_words = {
+                    "campaign",
+                    "camp",
+                    "advert",
+                    "advertising",
+                    "ad",
+                    "ads",
+                    "\u043a\u0430\u043c\u043f\u0430\u043d\u0438\u044f",
+                    "\u043a\u0430\u043c\u043f\u0430\u043d\u0438\u0438",
+                    "\u0440\u0435\u043a\u043b\u0430\u043c\u0430",
+                    "\u0440\u0435\u043a\u043b\u0430\u043c\u043d\u0430\u044f",
+                }
+                if all(word in generic_words or word.startswith(ru_campaign_root) or word.startswith(ru_ad_root) for word in words):
+                    return True
+    return False
+
+
 def _summary_needs_enrichment(summary: dict[str, Any] | None, campaign_id: int) -> bool:
     if not isinstance(summary, dict):
         return True
@@ -1367,9 +1413,7 @@ def _summary_needs_enrichment(summary: dict[str, Any] | None, campaign_id: int) 
     budget = str(summary.get("budget") or "").strip()
     if not text:
         return True
-    if text in {f"кампания {int(campaign_id or 0)}", "campaign", "advert", "ad"}:
-        return True
-    if text.startswith("кампания ") or text.startswith("campaign "):
+    if _campaign_name_is_placeholder(text, campaign_id):
         return True
     if status not in {"", "-", "—"}:
         return False
@@ -2138,10 +2182,8 @@ def _merge_detail_rows(base: dict[str, Any] | None, extra: dict[str, Any] | None
 
 def _merge_campaign_summary(base: dict[str, Any], extra: dict[str, Any]) -> dict[str, Any]:
     def _is_placeholder_name(value: Any) -> bool:
-        text = str(value or "").strip().lower()
-        if not text or text == "-":
-            return True
-        return text.startswith("кампания ") or text.startswith("campaign ")
+        cid = _to_int(base.get("campaign_id") or extra.get("campaign_id"))
+        return _campaign_name_is_placeholder(value, cid if cid and cid > 0 else None)
 
     merged = dict(base)
     for key, value in extra.items():
@@ -3267,12 +3309,8 @@ def _has_campaign_context(row: dict[str, Any]) -> bool:
         return text
 
     def _is_placeholder_name(value: Any) -> bool:
-        text = _clean_text(value).lower()
-        if not text:
-            return True
-        if text in {"campaign", "advert", "ad"}:
-            return True
-        return text.startswith("campaign ") or text.startswith("кампания ")
+        cid = _to_int(_campaign_id_from_row(row))
+        return _campaign_name_is_placeholder(_clean_text(value), cid if cid and cid > 0 else None)
 
     candidate_nodes: list[dict[str, Any]] = [row]
     for key in ("settings", "advert", "campaign", "summary", "params"):
