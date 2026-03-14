@@ -10565,6 +10565,8 @@ def _social_push_notification(
     key = str(dedupe_key or "").strip()[:120]
     if not key:
         return
+    safe_title = (_decode_mojibake_text(title or "") or str(title or "")).strip()
+    safe_body = _decode_mojibake_text(body or "")
     existing = db.scalar(
         select(SocialNotification).where(
             SocialNotification.user_id == int(user_id),
@@ -10581,8 +10583,8 @@ def _social_push_notification(
             recipient_key=recipient_key[:60],
             kind=kind[:40],
             dedupe_key=key,
-            title=title[:255],
-            body=body[:5000],
+            title=safe_title[:255],
+            body=safe_body[:5000],
             payload_json=json.dumps(payload or {}, ensure_ascii=False),
             is_read=False,
         )
@@ -15371,12 +15373,29 @@ def _social_note_guess_ext(filename: str, content_type: str) -> str:
     return ".bin"
 
 
-_MOJIBAKE_TEXT_RE = re.compile(r"(?:\u0420[\u0400-\u04FF]|\u0421[\u0400-\u04FF]|\u00d0.|\u00d1.)")
+_MOJIBAKE_TEXT_RE = re.compile(r"(?:\u0420[\u0400-\u04FF]|\u0421[\u0400-\u04FF]|\u0440[\u0450-\u045f]|\u0441[\u0400-\u040f\u0450-\u045f]|\u0432[\u0400-\u040f]|\u00d0.|\u00d1.)")
+_KNOWN_MOJIBAKE_REPLACEMENTS: dict[str, str] = {
+    "Р СњР С•Р Р†Р С•Р Вµ РЎРѓР С•Р С•Р В±РЎвЂ°Р ВµР Р…Р С‘Р Вµ": "Новое сообщение",
+    "СЂСџвЂњР‹": "📎",
+    "рџ“Ћ": "📎",
+}
+
+
+def _apply_known_mojibake_replacements(text: str) -> str:
+    fixed = str(text or "")
+    for bad, good in _KNOWN_MOJIBAKE_REPLACEMENTS.items():
+        fixed = fixed.replace(bad, good)
+    return fixed
 
 
 def _mojibake_score(text: str) -> int:
     value = str(text or "")
-    return len(_MOJIBAKE_TEXT_RE.findall(value)) + value.count("\ufffd") * 3
+    rare = sum(
+        1
+        for ch in value
+        if (("\u0400" <= ch <= "\u040f") or ("\u0450" <= ch <= "\u045f")) and ch not in {"\u0401", "\u0451"}
+    )
+    return len(_MOJIBAKE_TEXT_RE.findall(value)) + value.count("\ufffd") * 3 + rare
 
 
 def _cyrillic_score(text: str) -> int:
@@ -15385,32 +15404,58 @@ def _cyrillic_score(text: str) -> int:
 
 
 def _decode_mojibake_text(value: Any) -> str:
-    raw = str(value or "")
+    raw = _apply_known_mojibake_replacements(str(value or ""))
     if not raw:
         return ""
     if _mojibake_score(raw) <= 0:
         return raw
 
+    def _decode_once(text: str) -> list[str]:
+        out: list[str] = []
+        for src_encoding in ("cp1251", "latin1", "cp1252"):
+            for mode in ("strict", "ignore"):
+                try:
+                    candidate = text.encode(src_encoding, errors=mode).decode("utf-8", errors=mode)
+                except Exception:
+                    continue
+                if not candidate or candidate == text:
+                    continue
+                if len(candidate) < max(4, int(len(text) * 0.6)):
+                    continue
+                out.append(candidate)
+        return out
+
     candidates = [raw]
-    for src_encoding in ("cp1251", "latin1", "cp1252"):
-        try:
-            candidate = raw.encode(src_encoding, errors="strict").decode("utf-8", errors="strict")
-        except Exception:
-            continue
-        if candidate:
-            candidates.append(candidate)
+    seen = {raw}
+    frontier = [raw]
+    for _ in range(3):
+        next_frontier: list[str] = []
+        for item in frontier:
+            for candidate in _decode_once(item):
+                if candidate in seen:
+                    continue
+                seen.add(candidate)
+                candidates.append(candidate)
+                next_frontier.append(candidate)
+        if not next_frontier:
+            break
+        frontier = next_frontier
+
+    def _signal_score(text: str) -> int:
+        emoji = sum(1 for ch in text if 0x1F300 <= ord(ch) <= 0x1FAFF)
+        return _cyrillic_score(text) + emoji * 2
 
     best = raw
     best_score = _mojibake_score(raw)
-    best_cyr = _cyrillic_score(raw)
+    best_signal = _signal_score(raw)
     for candidate in candidates:
         score = _mojibake_score(candidate)
-        cyr = _cyrillic_score(candidate)
-        if score < best_score or (score == best_score and cyr > best_cyr + 1):
+        signal = _signal_score(candidate)
+        if score < best_score or (score == best_score and signal > best_signal + 1):
             best = candidate
             best_score = score
-            best_cyr = cyr
-    return best
+            best_signal = signal
+    return _apply_known_mojibake_replacements(best)
 
 
 def _social_note_delete_disk_file(url: str) -> None:
@@ -15701,8 +15746,8 @@ def social_notifications(
             SocialNotificationOut(
                 id=int(row.id),
                 kind=str(row.kind or ""),
-                title=str(row.title or ""),
-                body=str(row.body or ""),
+                title=_decode_mojibake_text(str(row.title or "")),
+                body=_decode_mojibake_text(str(row.body or "")),
                 payload=payload,
                 created_at=_to_utc_iso(row.created_at),
             ).model_dump()
