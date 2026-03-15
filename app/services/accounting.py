@@ -16,6 +16,8 @@ WB_TIMEOUT = httpx.Timeout(connect=5.0, read=18.0, write=18.0, pool=18.0)
 OZON_TIMEOUT = httpx.Timeout(connect=6.0, read=22.0, write=22.0, pool=22.0)
 WB_REPORT_DETAIL_LIMIT = 50_000
 WB_REPORT_DETAIL_MAX_PAGES = 3
+WB_REPORT_DETAIL_BACKFILL_MAX_PAGES = 8
+WB_MONTHLY_BACKFILL_MONTHS = 4
 OZON_FINANCE_PAGE_SIZE = 500
 OZON_FINANCE_MAX_PAGES = 8
 
@@ -117,6 +119,7 @@ def _fetch_wb_product_finance_rows(
     date_from: date,
     date_to: date,
     aggregate: bool = True,
+    max_pages: int | None = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     endpoint = "https://statistics-api.wildberries.ru/api/v5/supplier/reportDetailByPeriod"
     rrdid = 0
@@ -125,7 +128,8 @@ def _fetch_wb_product_finance_rows(
     report_to = (date_to + timedelta(days=1)).isoformat()
     warnings: list[str] = []
 
-    for _ in range(WB_REPORT_DETAIL_MAX_PAGES):
+    page_limit = max(1, int(max_pages or WB_REPORT_DETAIL_MAX_PAGES))
+    for _ in range(page_limit):
         params = {
             "dateFrom": report_from,
             "dateTo": report_to,
@@ -307,6 +311,7 @@ def _fetch_ozon_product_finance_rows(
     with httpx.Client(timeout=OZON_TIMEOUT, follow_redirects=True) as client:
         while chunk_from <= date_to:
             # Ozon v3 finance validates date window by calendar month.
+            chunk_label = f"{chunk_from.year:04d}-{chunk_from.month:02d}"
             chunk_to = min(date_to, _ozon_month_chunk_end(chunk_from))
             page = 1
             while page <= OZON_FINANCE_MAX_PAGES:
@@ -331,14 +336,14 @@ def _fetch_ozon_product_finance_rows(
                         if request_attempt < 4:
                             time.sleep(0.35 * (request_attempt + 1))
                             continue
-                        warnings.append("Ozon accounting API недоступен.")
+                        warnings.append(f"Ozon accounting API недоступен ({chunk_label}).")
                         break
                     status_code = int(response.status_code)
                     if status_code == 429:
                         if request_attempt < 4:
                             time.sleep(min(8.0, 1.1 * (request_attempt + 1)))
                             continue
-                        warnings.append("Ozon accounting API временно ограничил запросы (429).")
+                        warnings.append(f"Ozon accounting API временно ограничил запросы (429) ({chunk_label}).")
                         response = None
                         break
                     if status_code >= 500 and request_attempt < 3:
@@ -355,9 +360,9 @@ def _fetch_ozon_product_finance_rows(
                         raw_text = ""
                     lowered = raw_text.lower()
                     if int(response.status_code) == 400 and ("too long period" in lowered or "one month allowed" in lowered):
-                        warnings.append("Ozon accounting API: период запроса должен быть в пределах одного месяца.")
+                        warnings.append(f"Ozon accounting API: период запроса должен быть в пределах одного месяца ({chunk_label}).")
                     else:
-                        warnings.append(f"Ozon accounting API error {response.status_code}.")
+                        warnings.append(f"Ozon accounting API error {response.status_code} ({chunk_label}).")
                     break
                 try:
                     data = response.json()
@@ -370,7 +375,7 @@ def _fetch_ozon_product_finance_rows(
                     try:
                         data = json.loads(raw_text.lstrip("\ufeff"))
                     except Exception:
-                        warnings.append("Ozon accounting API вернул некорректный ответ.")
+                        warnings.append(f"Ozon accounting API вернул некорректный ответ ({chunk_label}).")
                         break
                 result = data.get("result") if isinstance(data, dict) else {}
                 operations = result.get("operations") if isinstance(result, dict) else []
@@ -404,35 +409,62 @@ def _fetch_ozon_product_finance_rows(
                         or ""
                     ).strip().lower()
                     amount = float(round(_to_float(op.get("amount") or op.get("operation_amount") or 0.0), 2))
-                    commission = abs(
-                        _to_float(
-                            op.get("sale_commission")
-                            or op.get("commission")
-                            or op.get("commission_amount")
-                            or op.get("services_commission")
-                            or 0.0
-                        )
-                    )
-                    logistics = (
-                        abs(_to_float(op.get("delivery_charge") or op.get("delivery_amount") or op.get("delivery_service") or 0.0))
-                        + abs(_to_float(op.get("return_delivery_charge") or op.get("return_delivery_amount") or 0.0))
-                    )
-                    storage = 0.0
-                    deductions = 0.0
-                    acceptance = 0.0
-                    penalties = 0.0
-                    if "хранен" in op_name or "storage" in op_name:
-                        storage = max(storage, abs(amount))
-                    if "штраф" in op_name or "penalty" in op_name or "неустой" in op_name:
-                        penalties = max(penalties, abs(amount))
-                    if "удерж" in op_name or "deduct" in op_name or "коррект" in op_name:
-                        deductions = max(deductions, abs(amount))
-                    if "приемк" in op_name or "accept" in op_name:
-                        acceptance = max(acceptance, abs(amount))
                     income = max(0.0, amount)
                     expense = max(0.0, -amount)
-                    components = commission + logistics + storage + deductions + acceptance + penalties
-                    other_expense = max(0.0, expense - components)
+
+                    base_breakdown = {
+                        "commission": abs(
+                            _to_float(
+                                op.get("sale_commission")
+                                or op.get("commission")
+                                or op.get("commission_amount")
+                                or op.get("services_commission")
+                                or 0.0
+                            )
+                        ),
+                        "logistics": (
+                            abs(_to_float(op.get("delivery_charge") or op.get("delivery_amount") or op.get("delivery_service") or 0.0))
+                            + abs(_to_float(op.get("return_delivery_charge") or op.get("return_delivery_amount") or 0.0))
+                        ),
+                        "storage": 0.0,
+                        "deductions": 0.0,
+                        "acceptance": 0.0,
+                        "penalties": 0.0,
+                        "acquiring": abs(_to_float(op.get("acquiring") or op.get("acquiring_amount") or op.get("acquiringFee") or 0.0)),
+                        "ad_spend": 0.0,
+                        "other_expenses": 0.0,
+                    }
+                    if ("хранен" in op_name or "storage" in op_name) and expense > 0:
+                        base_breakdown["storage"] = max(base_breakdown["storage"], expense)
+                    if ("штраф" in op_name or "penalty" in op_name or "неустой" in op_name) and expense > 0:
+                        base_breakdown["penalties"] = max(base_breakdown["penalties"], expense)
+                    if ("удерж" in op_name or "deduct" in op_name or "коррект" in op_name) and expense > 0:
+                        base_breakdown["deductions"] = max(base_breakdown["deductions"], expense)
+                    if ("приемк" in op_name or "accept" in op_name) and expense > 0:
+                        base_breakdown["acceptance"] = max(base_breakdown["acceptance"], expense)
+                    if _ozon_operation_is_ad(op_name) and expense > 0:
+                        base_breakdown["ad_spend"] = max(base_breakdown["ad_spend"], expense)
+
+                    service_breakdown, has_service_breakdown = _classify_ozon_service_expenses(
+                        services=_extract_ozon_services(op),
+                        operation_name=op_name,
+                    )
+                    if has_service_breakdown:
+                        for key, value in service_breakdown.items():
+                            if value > 0:
+                                base_breakdown[key] = float(round(value, 2))
+
+                    balanced = _rebalance_expense_breakdown(expense_total=expense, breakdown=base_breakdown)
+                    commission = float(round(_to_float(balanced.get("commission") or 0.0), 2))
+                    logistics = float(round(_to_float(balanced.get("logistics") or 0.0), 2))
+                    storage = float(round(_to_float(balanced.get("storage") or 0.0), 2))
+                    deductions = float(round(_to_float(balanced.get("deductions") or 0.0), 2))
+                    acceptance = float(round(_to_float(balanced.get("acceptance") or 0.0), 2))
+                    penalties = float(round(_to_float(balanced.get("penalties") or 0.0), 2))
+                    acquiring = float(round(_to_float(balanced.get("acquiring") or 0.0), 2))
+                    ad_spend = float(round(_to_float(balanced.get("ad_spend") or 0.0), 2))
+                    other_expense = float(round(_to_float(balanced.get("other_expenses") or 0.0), 2))
+
                     is_return = bool("возврат" in op_name or "return" in op_name)
                     is_sale = bool("продаж" in op_name or "sale" in op_name or "realization" in op_name)
                     item_rows = _extract_ozon_items(op)
@@ -465,13 +497,14 @@ def _fetch_ozon_product_finance_rows(
                                 "income": float(round(income * share, 2)),
                                 "expense": float(round(expense * share, 2)),
                                 "commission": float(round(commission * share, 2)),
+                                "acquiring": float(round(acquiring * share, 2)),
                                 "logistics": float(round(logistics * share, 2)),
                                 "storage": float(round(storage * share, 2)),
                                 "deductions": float(round(deductions * share, 2)),
                                 "acceptance": float(round(acceptance * share, 2)),
                                 "penalties": float(round(penalties * share, 2)),
                                 "other_expense": float(round(other_expense * share, 2)),
-                                "ad_spend": 0.0,
+                                "ad_spend": float(round(ad_spend * share, 2)),
                             }
                         )
                 if len(operations) < OZON_FINANCE_PAGE_SIZE:
@@ -512,6 +545,256 @@ def _extract_ozon_items(op: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
     return out
+
+def _product_finance_row_signature(row: dict[str, Any]) -> str:
+    if not isinstance(row, dict):
+        return ""
+    markers = [
+        str(row.get("marketplace") or "").strip().lower(),
+        str(row.get("date") or "").strip(),
+        str(row.get("article") or "").strip().lower(),
+        str(row.get("external_id") or "").strip().lower(),
+        str(row.get("name") or "").strip().lower(),
+        str(int(_to_int(row.get("sold_units") or 0))),
+        str(int(_to_int(row.get("returns") or 0))),
+    ]
+    for key in (
+        "revenue",
+        "income",
+        "expense",
+        "commission",
+        "acquiring",
+        "logistics",
+        "storage",
+        "deductions",
+        "acceptance",
+        "penalties",
+        "other_expense",
+        "ad_spend",
+    ):
+        markers.append(f"{float(round(_to_float(row.get(key) or 0.0), 2)):.2f}")
+    return "|".join(markers)
+
+
+def _merge_product_finance_rows(primary: list[dict[str, Any]], extra: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for batch in (primary or [], extra or []):
+        for row in batch:
+            if not isinstance(row, dict):
+                continue
+            key = _product_finance_row_signature(row)
+            if not key:
+                continue
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(row)
+    return out
+
+
+def _monthly_product_probe(rows: list[dict[str, Any]], *, marketplace: str) -> dict[str, dict[str, float]]:
+    market = str(marketplace or "").strip().lower()
+    out: dict[str, dict[str, float]] = {}
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        mp = str(row.get("marketplace") or "").strip().lower()
+        if mp != market:
+            continue
+        day = _parse_any_date(row.get("date"))
+        if day is None:
+            continue
+        month_key = f"{day.year:04d}-{day.month:02d}"
+        slot = out.setdefault(month_key, {"turnover": 0.0, "expense": 0.0})
+        slot["turnover"] = float(round(float(slot.get("turnover") or 0.0) + max(0.0, _to_float(row.get("revenue") or 0.0)), 2))
+        slot["expense"] = float(
+            round(
+                float(slot.get("expense") or 0.0)
+                + max(0.0, _to_float(row.get("commission") or 0.0))
+                + max(0.0, _to_float(row.get("acquiring") or 0.0))
+                + max(0.0, _to_float(row.get("logistics") or 0.0))
+                + max(0.0, _to_float(row.get("storage") or 0.0))
+                + max(0.0, _to_float(row.get("penalties") or 0.0))
+                + max(0.0, _to_float(row.get("ad_spend") or 0.0))
+                + max(0.0, _to_float(row.get("other_expense") or 0.0))
+                + max(0.0, _to_float(row.get("deductions") or 0.0))
+                + max(0.0, _to_float(row.get("acceptance") or 0.0)),
+                2,
+            )
+        )
+    return out
+
+
+def _needs_wb_backfill(
+    *,
+    period: dict[str, Any],
+    monthly_raw: dict[str, dict[str, dict[str, Any]]],
+    wb_probe: dict[str, dict[str, float]],
+) -> bool:
+    month_key = str(period.get("month_key") or "")
+    if not month_key:
+        return False
+    sales_turnover = _to_float((monthly_raw.get(month_key, {}).get("wb") or {}).get("turnover") or 0.0)
+    probe_info = wb_probe.get(month_key) or {}
+    probe_turnover = _to_float(probe_info.get("turnover") or 0.0)
+    turnover = max(sales_turnover, probe_turnover)
+    if turnover <= 0:
+        return False
+    expense = _to_float(probe_info.get("expense") or 0.0)
+    return expense <= 0.01
+
+
+def _ozon_norm_token(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return ""
+    return "".join(ch for ch in raw if ch.isalnum())
+
+
+def _ozon_operation_is_ad(operation_name: str) -> bool:
+    token = _ozon_norm_token(operation_name)
+    if not token:
+        return False
+    ad_tokens = (
+        "реклам",
+        "продвиж",
+        "клик",
+        "выводвтоп",
+        "медийн",
+        "brand",
+        "stars",
+        "premium",
+        "cpc",
+        "top",
+        "advert",
+        "performance",
+        "campaign",
+    )
+    return any(part in token for part in ad_tokens)
+
+
+def _ozon_classify_service(service_name: str, operation_name: str) -> str:
+    token = _ozon_norm_token(f"{service_name} {operation_name}")
+    if not token:
+        return "other_expenses"
+    if any(part in token for part in ("acquiring", "эквайр", "redistributionofacquiring")):
+        return "acquiring"
+    if _ozon_operation_is_ad(token):
+        return "ad_spend"
+    if any(part in token for part in ("logistic", "delivery", "lastmile", "dropoff", "directflow", "returnflow", "достав", "логист", "перевоз")):
+        return "logistics"
+    if any(part in token for part in ("storage", "temporarystorage", "хранен", "склад")):
+        return "storage"
+    if any(part in token for part in ("penalty", "fine", "штраф", "неустой", "утилиз", "ошиб")):
+        return "penalties"
+    if any(part in token for part in ("deduct", "adjust", "удерж", "коррект")):
+        return "deductions"
+    if any(part in token for part in ("accept", "приемк", "приёмк")):
+        return "acceptance"
+    if any(part in token for part in ("commission", "комис", "вознагражд", "агент")):
+        return "commission"
+    return "other_expenses"
+
+
+def _extract_ozon_services(op: dict[str, Any]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    direct = op.get("services")
+    if isinstance(direct, list):
+        out.extend([x for x in direct if isinstance(x, dict)])
+    for key in ("service", "service_list", "serviceList", "additional_services"):
+        value = op.get(key)
+        if isinstance(value, list):
+            out.extend([x for x in value if isinstance(x, dict)])
+    return out
+
+
+def _classify_ozon_service_expenses(*, services: list[dict[str, Any]], operation_name: str) -> tuple[dict[str, float], bool]:
+    signed = {
+        "commission": 0.0,
+        "logistics": 0.0,
+        "storage": 0.0,
+        "deductions": 0.0,
+        "acceptance": 0.0,
+        "penalties": 0.0,
+        "acquiring": 0.0,
+        "ad_spend": 0.0,
+        "other_expenses": 0.0,
+    }
+    seen_value = False
+    for service in services or []:
+        if not isinstance(service, dict):
+            continue
+        raw_value = _to_float(
+            service.get("price")
+            or service.get("amount")
+            or service.get("sum")
+            or service.get("total")
+            or service.get("value")
+            or 0.0
+        )
+        if abs(raw_value) < 1e-9:
+            continue
+        seen_value = True
+        service_name = str(service.get("name") or service.get("service_name") or service.get("title") or "")
+        category = _ozon_classify_service(service_name, operation_name)
+        signed[category] = float(round(float(signed.get(category) or 0.0) + raw_value, 6))
+
+    if not seen_value:
+        return {}, False
+
+    out: dict[str, float] = {}
+    for key, value in signed.items():
+        out[key] = float(round(max(0.0, -value), 2))
+    return out, True
+
+
+def _rebalance_expense_breakdown(*, expense_total: float, breakdown: dict[str, Any]) -> dict[str, float]:
+    keys = (
+        "commission",
+        "logistics",
+        "storage",
+        "deductions",
+        "acceptance",
+        "penalties",
+        "acquiring",
+        "ad_spend",
+        "other_expenses",
+    )
+    out = {key: float(round(max(0.0, _to_float((breakdown or {}).get(key) or 0.0)), 2)) for key in keys}
+    expense = float(round(max(0.0, _to_float(expense_total or 0.0)), 2))
+    if expense <= 0:
+        return {key: 0.0 for key in keys}
+
+    known = float(round(sum(out.values()), 2))
+    if known <= 0:
+        out["other_expenses"] = expense
+        return out
+
+    if known > expense * 1.25:
+        ratio = expense / known
+        for key in keys:
+            out[key] = float(round(out[key] * ratio, 2))
+        known = float(round(sum(out.values()), 2))
+
+    if known < expense:
+        out["other_expenses"] = float(round(out["other_expenses"] + (expense - known), 2))
+        return out
+
+    if known > expense:
+        overflow = known - expense
+        reducible = known - out["other_expenses"]
+        if reducible > 0 and overflow > 0:
+            ratio = max(0.0, (reducible - overflow) / reducible)
+            for key in keys:
+                if key == "other_expenses":
+                    continue
+                out[key] = float(round(out[key] * ratio, 2))
+        known = float(round(sum(out.values()), 2))
+        if known > expense:
+            out["other_expenses"] = float(round(max(0.0, out["other_expenses"] - (known - expense)), 2))
+    return out
+
 
 
 def _merge_product_rows(rows: list[dict[str, Any]], products: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1081,6 +1364,7 @@ def build_accounting_monthly_summary(
     product_rows: list[dict[str, Any]] = []
     wb_rows: list[dict[str, Any]] = []
     ozon_rows: list[dict[str, Any]] = []
+    today_utc = datetime.utcnow().date()
     if wb_api_key.strip():
         wb_rows, wb_warn = _fetch_wb_product_finance_rows(
             api_key=wb_api_key.strip(),
@@ -1088,8 +1372,36 @@ def build_accounting_monthly_summary(
             date_to=right,
             aggregate=False,
         )
-        product_rows.extend(wb_rows)
         warnings.extend(wb_warn)
+
+        wb_probe = _monthly_product_probe(wb_rows, marketplace="wb")
+        for period in periods[:WB_MONTHLY_BACKFILL_MONTHS]:
+            if not _needs_wb_backfill(period=period, monthly_raw=monthly_raw, wb_probe=wb_probe):
+                continue
+            backfill_from = period["date_from"]
+            backfill_to = min(period["date_to"], today_utc)
+            if backfill_from > backfill_to:
+                continue
+            backfill_rows, backfill_warn = _fetch_wb_product_finance_rows(
+                api_key=wb_api_key.strip(),
+                date_from=backfill_from,
+                date_to=backfill_to,
+                aggregate=False,
+                max_pages=WB_REPORT_DETAIL_BACKFILL_MAX_PAGES,
+            )
+            if backfill_rows:
+                wb_rows = _merge_product_finance_rows(wb_rows, backfill_rows)
+                wb_probe = _monthly_product_probe(wb_rows, marketplace="wb")
+            if backfill_warn:
+                warnings.extend(
+                    [
+                        f"WB backfill {period['month_key']}: {str(msg).strip()}"
+                        for msg in backfill_warn
+                        if str(msg or "").strip()
+                    ]
+                )
+        product_rows.extend(wb_rows)
+
     if ozon_api_key.strip():
         ozon_rows, ozon_warn = _fetch_ozon_product_finance_rows(
             api_key=ozon_api_key.strip(),
