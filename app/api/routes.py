@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import base64
 import io
@@ -15640,11 +15640,11 @@ def _social_note_guess_ext(filename: str, content_type: str) -> str:
 
 _MOJIBAKE_TEXT_RE = re.compile(r"(?:\u0420[\u0400-\u04FF]|\u0421[\u0400-\u04FF]|\u0440[\u0450-\u045f]|\u0441[\u0400-\u040f\u0450-\u045f]|\u0432[\u0400-\u040f]|\u00d0.|\u00d1.)")
 _KNOWN_MOJIBAKE_REPLACEMENTS: dict[str, str] = {
-    "\u0420\u045c\u0420\u0455\u0420\u0406\u0420\u0455\u0420\xb5 \u0421\u0403\u0420\u0455\u0420\u0455\u0420\xb1\u0421\u2030\u0420\xb5\u0420\u0405\u0420\u0451\u0420\xb5": "\u041d\u043e\u0432\u043e\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435",    "Р СњР С•Р Р†Р С•Р Вµ РЎРѓР С•Р С•Р В±РЎвЂ°Р ВµР Р…Р С‘Р Вµ": "Новое сообщение",
-    "СЂСџвЂњР‹": "📎",
-    "рџ“Ћ": "📎",
+    "\u0420\u045c\u0420\u0455\u0420\u0406\u0420\u0455\u0420\xb5 \u0421\u0403\u0420\u0455\u0420\u0455\u0420\xb1\u0421\u2030\u0420\xb5\u0420\u0405\u0420\u0451\u0420\xb5": "\u041d\u043e\u0432\u043e\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435",
+    "\u0420\xa0\u0421\u045a\u0420\xa0\u0421\u2022\u0420\xa0\u0420\u2020\u0420\xa0\u0421\u2022\u0420\xa0\u0412\xb5 \u0420\u040e\u0420\u0453\u0420\xa0\u0421\u2022\u0420\xa0\u0421\u2022\u0420\xa0\u0412\xb1\u0420\u040e\u0432\u0402\xb0\u0420\xa0\u0412\xb5\u0420\xa0\u0420\u2026\u0420\xa0\u0421\u2018\u0420\xa0\u0412\xb5": "Новое сообщение",
+    "\u0421\u0402\u0421\u045f\u0432\u0402\u045a\u0420\u2039": "📎",
+    "\u0440\u045f\u201c\u040b": "📎",
 }
-
 
 def _apply_known_mojibake_replacements(text: str) -> str:
     fixed = str(text or "")
@@ -18540,6 +18540,8 @@ def mask_key(api_key: str) -> str:
     if len(api_key) <= 8:
         return "*" * len(api_key)
     return f"{api_key[:4]}...{api_key[-4:]}"
+
+
 
 
 

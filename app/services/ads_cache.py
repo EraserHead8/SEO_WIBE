@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import hashlib
 import json
@@ -130,14 +130,22 @@ def sync_wb_campaign_snapshots(db: Session, user_id: int, wb_api_key: str) -> di
             row.synced_at = ts
             changed += 1
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        return {
+            "ok": False,
+            "count": len(seen_ids),
+            "changed": changed,
+            "error": str(exc),
+        }
     return {
         "ok": True,
         "count": len(seen_ids),
         "changed": changed,
         "synced_at": ts.isoformat(),
     }
-
 
 def _hydrate_campaign_rows_with_summaries(wb_api_key: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ids = sorted({_campaign_id_from_row(row) for row in rows if _campaign_id_from_row(row) > 0})
@@ -348,4 +356,6 @@ def _safe_json_loads(raw: str) -> Any:
         return json.loads(raw or "")
     except Exception:
         return None
+
+
 
