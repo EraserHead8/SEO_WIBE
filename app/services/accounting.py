@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 import json
@@ -20,6 +20,9 @@ OZON_FINANCE_PAGE_SIZE = 500
 OZON_FINANCE_MAX_PAGES = 8
 
 RU_MONTH_NAMES = ('', 'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь')
+def _ozon_month_chunk_end(day: date) -> date:
+    next_month = (day.replace(day=28) + timedelta(days=4)).replace(day=1)
+    return next_month - timedelta(days=1)
 
 
 def build_accounting_payload(
@@ -287,6 +290,13 @@ def _fetch_ozon_product_finance_rows(
     creds = _parse_ozon_credentials(api_key)
     if not creds:
         return [], ["Ozon ключ должен быть в формате client_id:api_key."]
+    if date_from > date_to:
+        date_from, date_to = date_to, date_from
+    today = datetime.utcnow().date()
+    if date_to > today:
+        date_to = today
+    if date_from > date_to:
+        return [], []
     client_id, token = creds
     headers = {"Client-Id": client_id, "Api-Key": token, "Content-Type": "application/json"}
     endpoint = "https://api-seller.ozon.ru/v3/finance/transaction/list"
@@ -294,155 +304,181 @@ def _fetch_ozon_product_finance_rows(
     rows: list[dict[str, Any]] = []
     warnings: list[str] = []
     chunk_from = date_from
-    while chunk_from <= date_to:
-        chunk_to = min(date_to, chunk_from + timedelta(days=30))
-        page = 1
-        while page <= OZON_FINANCE_MAX_PAGES:
-            payload = {
-                "filter": {
-                    "date": {
-                        "from": f"{chunk_from.isoformat()}T00:00:00.000Z",
-                        "to": f"{chunk_to.isoformat()}T23:59:59.999Z",
+    with httpx.Client(timeout=OZON_TIMEOUT, follow_redirects=True) as client:
+        while chunk_from <= date_to:
+            # Ozon v3 finance validates date window by calendar month.
+            chunk_to = min(date_to, _ozon_month_chunk_end(chunk_from))
+            page = 1
+            while page <= OZON_FINANCE_MAX_PAGES:
+                payload = {
+                    "filter": {
+                        "date": {
+                            "from": f"{chunk_from.isoformat()}T00:00:00.000Z",
+                            "to": f"{chunk_to.isoformat()}T23:59:59.999Z",
+                        },
+                        "transaction_type": "all",
                     },
-                    "transaction_type": "all",
-                },
-                "page": page,
-                "page_size": OZON_FINANCE_PAGE_SIZE,
-            }
-            response = None
-            try:
-                with httpx.Client(timeout=OZON_TIMEOUT, follow_redirects=True) as client:
-                    response = client.post(endpoint, headers=headers, json=payload)
-            except Exception:
+                    "page": page,
+                    "page_size": OZON_FINANCE_PAGE_SIZE,
+                }
                 response = None
-            if response is None:
-                warnings.append("Ozon accounting API недоступен.")
-                break
-            if response.status_code >= 400:
-                if int(response.status_code) == 429:
-                    warnings.append("Ozon accounting API временно ограничил запросы (429).")
-                else:
-                    warnings.append(f"Ozon accounting API error {response.status_code}.")
-                break
-            try:
-                data = response.json()
-            except Exception:
-                raw_text = ""
+                for request_attempt in range(5):
+                    try:
+                        response = client.post(endpoint, headers=headers, json=payload)
+                    except Exception:
+                        response = None
+                    if response is None:
+                        if request_attempt < 4:
+                            time.sleep(0.35 * (request_attempt + 1))
+                            continue
+                        warnings.append("Ozon accounting API недоступен.")
+                        break
+                    status_code = int(response.status_code)
+                    if status_code == 429:
+                        if request_attempt < 4:
+                            time.sleep(min(8.0, 1.1 * (request_attempt + 1)))
+                            continue
+                        warnings.append("Ozon accounting API временно ограничил запросы (429).")
+                        response = None
+                        break
+                    if status_code >= 500 and request_attempt < 3:
+                        time.sleep(min(6.0, 0.8 * (request_attempt + 1)))
+                        continue
+                    break
+                if response is None:
+                    break
+                if response.status_code >= 400:
+                    raw_text = ""
+                    try:
+                        raw_text = str(response.text or "")
+                    except Exception:
+                        raw_text = ""
+                    lowered = raw_text.lower()
+                    if int(response.status_code) == 400 and ("too long period" in lowered or "one month allowed" in lowered):
+                        warnings.append("Ozon accounting API: период запроса должен быть в пределах одного месяца.")
+                    else:
+                        warnings.append(f"Ozon accounting API error {response.status_code}.")
+                    break
                 try:
-                    raw_text = str(response.text or "")
+                    data = response.json()
                 except Exception:
                     raw_text = ""
-                try:
-                    data = json.loads(raw_text.lstrip("\ufeff"))
-                except Exception:
-                    warnings.append("Ozon accounting API вернул некорректный ответ.")
+                    try:
+                        raw_text = str(response.text or "")
+                    except Exception:
+                        raw_text = ""
+                    try:
+                        data = json.loads(raw_text.lstrip("\ufeff"))
+                    except Exception:
+                        warnings.append("Ozon accounting API вернул некорректный ответ.")
+                        break
+                result = data.get("result") if isinstance(data, dict) else {}
+                operations = result.get("operations") if isinstance(result, dict) else []
+                if not isinstance(operations, list):
+                    operations = []
+                if not operations and isinstance(result, dict):
+                    for key in ("items", "rows", "list", "transactions"):
+                        candidate = result.get(key)
+                        if isinstance(candidate, list):
+                            operations = candidate
+                            break
+                if not operations and isinstance(data, dict):
+                    for key in ("operations", "items", "rows", "list", "transactions"):
+                        candidate = data.get(key)
+                        if isinstance(candidate, list):
+                            operations = candidate
+                            break
+                if not isinstance(operations, list) or not operations:
                     break
-            result = data.get("result") if isinstance(data, dict) else {}
-            operations = result.get("operations") if isinstance(result, dict) else []
-            if not isinstance(operations, list):
-                operations = []
-            if not operations and isinstance(result, dict):
-                for key in ("items", "rows", "list", "transactions"):
-                    candidate = result.get(key)
-                    if isinstance(candidate, list):
-                        operations = candidate
-                        break
-            if not operations and isinstance(data, dict):
-                for key in ("operations", "items", "rows", "list", "transactions"):
-                    candidate = data.get(key)
-                    if isinstance(candidate, list):
-                        operations = candidate
-                        break
-            if not isinstance(operations, list) or not operations:
-                break
-            for op in operations:
-                if not isinstance(op, dict):
-                    continue
-                day = _parse_any_date(op.get("operation_date") or op.get("operationDate") or op.get("date"))
-                if not day or day < date_from or day > date_to:
-                    continue
-                op_name = str(
-                    op.get("operation_type_name")
-                    or op.get("operationTypeName")
-                    or op.get("type_name")
-                    or op.get("type")
-                    or ""
-                ).strip().lower()
-                amount = float(round(_to_float(op.get("amount") or op.get("operation_amount") or 0.0), 2))
-                commission = abs(
-                    _to_float(
-                        op.get("sale_commission")
-                        or op.get("commission")
-                        or op.get("commission_amount")
-                        or op.get("services_commission")
-                        or 0.0
+                for op in operations:
+                    if not isinstance(op, dict):
+                        continue
+                    day = _parse_any_date(op.get("operation_date") or op.get("operationDate") or op.get("date"))
+                    if not day or day < date_from or day > date_to:
+                        continue
+                    op_name = str(
+                        op.get("operation_type_name")
+                        or op.get("operationTypeName")
+                        or op.get("type_name")
+                        or op.get("type")
+                        or ""
+                    ).strip().lower()
+                    amount = float(round(_to_float(op.get("amount") or op.get("operation_amount") or 0.0), 2))
+                    commission = abs(
+                        _to_float(
+                            op.get("sale_commission")
+                            or op.get("commission")
+                            or op.get("commission_amount")
+                            or op.get("services_commission")
+                            or 0.0
+                        )
                     )
-                )
-                logistics = (
-                    abs(_to_float(op.get("delivery_charge") or op.get("delivery_amount") or op.get("delivery_service") or 0.0))
-                    + abs(_to_float(op.get("return_delivery_charge") or op.get("return_delivery_amount") or 0.0))
-                )
-                storage = 0.0
-                deductions = 0.0
-                acceptance = 0.0
-                penalties = 0.0
-                if "хранен" in op_name or "storage" in op_name:
-                    storage = max(storage, abs(amount))
-                if "штраф" in op_name or "penalty" in op_name or "неустой" in op_name:
-                    penalties = max(penalties, abs(amount))
-                if "удерж" in op_name or "deduct" in op_name or "коррект" in op_name:
-                    deductions = max(deductions, abs(amount))
-                if "приемк" in op_name or "accept" in op_name:
-                    acceptance = max(acceptance, abs(amount))
-                income = max(0.0, amount)
-                expense = max(0.0, -amount)
-                components = commission + logistics + storage + deductions + acceptance + penalties
-                other_expense = max(0.0, expense - components)
-                is_return = bool("возврат" in op_name or "return" in op_name)
-                is_sale = bool("продаж" in op_name or "sale" in op_name or "realization" in op_name)
-                item_rows = _extract_ozon_items(op)
-                if not item_rows:
-                    item_rows = [
-                        {
-                            "article": str(op.get("posting_number") or op.get("postingNumber") or op.get("operation_id") or "ozon-unassigned"),
-                            "external_id": str(op.get("sku") or op.get("offer_id") or op.get("offerId") or ""),
-                            "name": str(op.get("operation_type_name") or "Ozon операция"),
-                            "quantity": 1,
-                        }
-                    ]
-                total_qty = sum(max(1, int(_to_int(x.get("quantity") or 1))) for x in item_rows)
-                for item in item_rows:
-                    qty = max(1, int(_to_int(item.get("quantity") or 1)))
-                    share = float(qty) / float(total_qty or 1)
-                    sold_units = qty if is_sale and not is_return and income > 0 else 0
-                    returned = qty if is_return else 0
-                    revenue = max(0.0, income * share) if is_sale and not is_return else 0.0
-                    rows.append(
-                        {
-                            "date": day.isoformat(),
-                            "marketplace": "ozon",
-                            "article": str(item.get("article") or "").strip(),
-                            "external_id": str(item.get("external_id") or "").strip(),
-                            "name": str(item.get("name") or "Ozon товар").strip(),
-                            "sold_units": sold_units,
-                            "returns": returned,
-                            "revenue": float(round(revenue, 2)),
-                            "income": float(round(income * share, 2)),
-                            "expense": float(round(expense * share, 2)),
-                            "commission": float(round(commission * share, 2)),
-                            "logistics": float(round(logistics * share, 2)),
-                            "storage": float(round(storage * share, 2)),
-                            "deductions": float(round(deductions * share, 2)),
-                            "acceptance": float(round(acceptance * share, 2)),
-                            "penalties": float(round(penalties * share, 2)),
-                            "other_expense": float(round(other_expense * share, 2)),
-                            "ad_spend": 0.0,
-                        }
+                    logistics = (
+                        abs(_to_float(op.get("delivery_charge") or op.get("delivery_amount") or op.get("delivery_service") or 0.0))
+                        + abs(_to_float(op.get("return_delivery_charge") or op.get("return_delivery_amount") or 0.0))
                     )
-            if len(operations) < OZON_FINANCE_PAGE_SIZE:
-                break
-            page += 1
-        chunk_from = chunk_to + timedelta(days=1)
+                    storage = 0.0
+                    deductions = 0.0
+                    acceptance = 0.0
+                    penalties = 0.0
+                    if "хранен" in op_name or "storage" in op_name:
+                        storage = max(storage, abs(amount))
+                    if "штраф" in op_name or "penalty" in op_name or "неустой" in op_name:
+                        penalties = max(penalties, abs(amount))
+                    if "удерж" in op_name or "deduct" in op_name or "коррект" in op_name:
+                        deductions = max(deductions, abs(amount))
+                    if "приемк" in op_name or "accept" in op_name:
+                        acceptance = max(acceptance, abs(amount))
+                    income = max(0.0, amount)
+                    expense = max(0.0, -amount)
+                    components = commission + logistics + storage + deductions + acceptance + penalties
+                    other_expense = max(0.0, expense - components)
+                    is_return = bool("возврат" in op_name or "return" in op_name)
+                    is_sale = bool("продаж" in op_name or "sale" in op_name or "realization" in op_name)
+                    item_rows = _extract_ozon_items(op)
+                    if not item_rows:
+                        item_rows = [
+                            {
+                                "article": str(op.get("posting_number") or op.get("postingNumber") or op.get("operation_id") or "ozon-unassigned"),
+                                "external_id": str(op.get("sku") or op.get("offer_id") or op.get("offerId") or ""),
+                                "name": str(op.get("operation_type_name") or "Ozon операция"),
+                                "quantity": 1,
+                            }
+                        ]
+                    total_qty = sum(max(1, int(_to_int(x.get("quantity") or 1))) for x in item_rows)
+                    for item in item_rows:
+                        qty = max(1, int(_to_int(item.get("quantity") or 1)))
+                        share = float(qty) / float(total_qty or 1)
+                        sold_units = qty if is_sale and not is_return and income > 0 else 0
+                        returned = qty if is_return else 0
+                        revenue = max(0.0, income * share) if is_sale and not is_return else 0.0
+                        rows.append(
+                            {
+                                "date": day.isoformat(),
+                                "marketplace": "ozon",
+                                "article": str(item.get("article") or "").strip(),
+                                "external_id": str(item.get("external_id") or "").strip(),
+                                "name": str(item.get("name") or "Ozon товар").strip(),
+                                "sold_units": sold_units,
+                                "returns": returned,
+                                "revenue": float(round(revenue, 2)),
+                                "income": float(round(income * share, 2)),
+                                "expense": float(round(expense * share, 2)),
+                                "commission": float(round(commission * share, 2)),
+                                "logistics": float(round(logistics * share, 2)),
+                                "storage": float(round(storage * share, 2)),
+                                "deductions": float(round(deductions * share, 2)),
+                                "acceptance": float(round(acceptance * share, 2)),
+                                "penalties": float(round(penalties * share, 2)),
+                                "other_expense": float(round(other_expense * share, 2)),
+                                "ad_spend": 0.0,
+                            }
+                        )
+                if len(operations) < OZON_FINANCE_PAGE_SIZE:
+                    break
+                page += 1
+            chunk_from = chunk_to + timedelta(days=1)
+            time.sleep(0.08)
     return (_aggregate_rows(rows) if aggregate else rows), list(dict.fromkeys(warnings))
 
 
@@ -1667,8 +1703,3 @@ def _to_int(value: Any) -> int:
         return int(float(str(value).replace(",", ".").strip()))
     except Exception:
         return 0
-
-
-
-
-
