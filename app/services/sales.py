@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 import math
@@ -347,6 +347,8 @@ def _fetch_ozon_sales_rows(api_key: str, date_from: date, date_to: date) -> tupl
     creds = _parse_ozon_credentials(api_key)
     if not creds:
         return [], ["Ozon ключ должен быть в формате client_id:api_key."]
+    if date_from > date_to:
+        date_from, date_to = date_to, date_from
     client_id, token = creds
     headers = {
         "Client-Id": client_id,
@@ -355,80 +357,158 @@ def _fetch_ozon_sales_rows(api_key: str, date_from: date, date_to: date) -> tupl
     }
 
     endpoint = "https://api-seller.ozon.ru/v1/analytics/data"
-    payload_variants = [
-        {
-            "date_from": date_from.isoformat(),
-            "date_to": date_to.isoformat(),
-            "metrics": ["ordered_units", "revenue", "orders"],
-            "dimension": ["day"],
-            "limit": 1000,
-            "offset": 0,
-        },
-        {
-            "date_from": date_from.isoformat(),
-            "date_to": date_to.isoformat(),
-            "metrics": ["ordered_units", "revenue"],
-            "dimensions": ["day"],
-            "limit": 1000,
-            "offset": 0,
-        },
-    ]
+    limit = 1000
+    empty_chunks = 0
+    chunk_from = date_from
 
-    parsed_rows: list[dict[str, Any]] = []
-    for payload in payload_variants:
-        try:
-            with httpx.Client(timeout=SALES_TIMEOUT, follow_redirects=True) as client:
-                response = client.post(endpoint, headers=headers, json=payload)
-            if response.status_code >= 400:
-                continue
-            data = response.json()
-        except Exception:
-            continue
-        parsed_rows = _extract_ozon_analytics_rows(data)
-        if parsed_rows:
-            break
+    while chunk_from <= date_to:
+        chunk_to = min(date_to, chunk_from + timedelta(days=30))
+        chunk_rows: list[dict[str, Any]] = []
+        chunk_warning = ""
 
-    if not parsed_rows:
-        return [], ["Ozon analytics API не вернул данные продаж."]
-
-    for item in parsed_rows:
-        day = _parse_any_date(item.get("date") or item.get("day"))
-        if not day or day < date_from or day > date_to:
-            continue
-        units = int(round(_to_float(item.get("units") or item.get("ordered_units") or 0.0)))
-        orders = int(round(_to_float(item.get("orders") or units)))
-        revenue = float(round(_to_float(item.get("revenue") or 0.0), 2))
-        if units < 0:
-            units = 0
-        if orders < 0:
-            orders = 0
-        rows.append(
+        payload_variants = [
             {
-                "date": day.isoformat(),
-                "occurred_at": str(item.get("date") or item.get("day") or ""),
-                "marketplace": "ozon",
-                "orders": orders,
-                "units": units,
-                "buyouts": units,
-                "order_amount": 0.0,
-                "buyout_amount": revenue,
-                "revenue": revenue,
-                "returns": 0,
-                "ad_spend": 0.0,
-                "penalties": 0.0,
-                "income": revenue,
-                "expense": 0.0,
-                "net": revenue,
-                "commission": 0.0,
-                "logistics": 0.0,
-                "storage": 0.0,
-                "deductions": 0.0,
-                "acceptance": 0.0,
-                "other_expense": 0.0,
-            }
-        )
-    return rows, warnings
+                "date_from": chunk_from.isoformat(),
+                "date_to": chunk_to.isoformat(),
+                "metrics": ["ordered_units", "revenue", "orders"],
+                "dimension": ["day"],
+                "limit": limit,
+                "offset": 0,
+            },
+            {
+                "date_from": chunk_from.isoformat(),
+                "date_to": chunk_to.isoformat(),
+                "metrics": ["ordered_units", "revenue"],
+                "dimension": ["day"],
+                "limit": limit,
+                "offset": 0,
+            },
+            {
+                "date_from": chunk_from.isoformat(),
+                "date_to": chunk_to.isoformat(),
+                "metrics": ["ordered_units", "revenue", "orders"],
+                "dimensions": ["day"],
+                "limit": limit,
+                "offset": 0,
+            },
+            {
+                "date_from": chunk_from.isoformat(),
+                "date_to": chunk_to.isoformat(),
+                "metrics": ["ordered_units", "revenue"],
+                "dimensions": ["day"],
+                "limit": limit,
+                "offset": 0,
+            },
+        ]
 
+        for payload_template in payload_variants:
+            variant_rows: list[dict[str, Any]] = []
+            offset = 0
+            page_guard = 0
+            while page_guard < 8:
+                payload = dict(payload_template)
+                payload["offset"] = offset
+                response = None
+                for request_attempt in range(4):
+                    try:
+                        with httpx.Client(timeout=SALES_TIMEOUT, follow_redirects=True) as client:
+                            response = client.post(endpoint, headers=headers, json=payload)
+                    except Exception:
+                        response = None
+                    if response is None:
+                        if request_attempt < 3:
+                            time.sleep(0.35 * (request_attempt + 1))
+                            continue
+                        chunk_warning = "Ozon analytics API недоступен."
+                        variant_rows = []
+                        break
+                    if int(response.status_code) == 429:
+                        if request_attempt < 3:
+                            time.sleep(min(6.0, 0.8 * (request_attempt + 1)))
+                            continue
+                        chunk_warning = "Ozon analytics API временно ограничил запросы (429)."
+                        variant_rows = []
+                        break
+                    if response.status_code >= 400:
+                        chunk_warning = f"Ozon analytics API error {response.status_code}."
+                        variant_rows = []
+                        break
+                    break
+                if response is None:
+                    break
+                if response.status_code >= 400:
+                    break
+                try:
+                    data = response.json()
+                except Exception:
+                    chunk_warning = "Ozon analytics API вернул некорректный ответ."
+                    variant_rows = []
+                    break
+                batch_rows = _extract_ozon_analytics_rows(data)
+                if not batch_rows:
+                    break
+                variant_rows.extend(batch_rows)
+                if len(batch_rows) < limit:
+                    break
+                page_guard += 1
+                offset += limit
+
+            if variant_rows:
+                chunk_rows = variant_rows
+                break
+
+        if not chunk_rows:
+            empty_chunks += 1
+            if chunk_warning:
+                warnings.append(chunk_warning)
+            chunk_from = chunk_to + timedelta(days=1)
+            continue
+
+        for item in chunk_rows:
+            day = _parse_any_date(item.get("date") or item.get("day"))
+            if not day or day < date_from or day > date_to:
+                continue
+            units = int(round(_to_float(item.get("units") or item.get("ordered_units") or 0.0)))
+            orders = int(round(_to_float(item.get("orders") or units)))
+            revenue = float(round(_to_float(item.get("revenue") or 0.0), 2))
+            if units < 0:
+                units = 0
+            if orders < 0:
+                orders = 0
+            rows.append(
+                {
+                    "date": day.isoformat(),
+                    "occurred_at": str(item.get("date") or item.get("day") or ""),
+                    "marketplace": "ozon",
+                    "orders": orders,
+                    "units": units,
+                    "buyouts": units,
+                    "order_amount": 0.0,
+                    "buyout_amount": revenue,
+                    "revenue": revenue,
+                    "returns": 0,
+                    "ad_spend": 0.0,
+                    "penalties": 0.0,
+                    "income": revenue,
+                    "expense": 0.0,
+                    "net": revenue,
+                    "commission": 0.0,
+                    "logistics": 0.0,
+                    "storage": 0.0,
+                    "deductions": 0.0,
+                    "acceptance": 0.0,
+                    "other_expense": 0.0,
+                }
+            )
+
+        chunk_from = chunk_to + timedelta(days=1)
+
+    if not rows and not warnings:
+        warnings.append("Ozon analytics API не вернул данные продаж.")
+    elif rows and empty_chunks > 0:
+        warnings.append(f"Ozon analytics API вернул пустые данные для части периодов ({empty_chunks}).")
+
+    return rows, list(dict.fromkeys(warnings))
 
 def _aggregate_rows(rows: list[dict[str, Any]], wb_ad_spend_by_day: dict[str, float] | None = None) -> list[dict[str, Any]]:
     bucket: dict[tuple[str, str], dict[str, Any]] = {}
@@ -1601,3 +1681,6 @@ def _to_int(value: Any) -> int:
         return int(str(value).strip())
     except Exception:
         return 0
+
+
+

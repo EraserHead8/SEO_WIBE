@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 import json
@@ -113,6 +113,7 @@ def _fetch_wb_product_finance_rows(
     api_key: str,
     date_from: date,
     date_to: date,
+    aggregate: bool = True,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     endpoint = "https://statistics-api.wildberries.ru/api/v5/supplier/reportDetailByPeriod"
     rrdid = 0
@@ -273,7 +274,7 @@ def _fetch_wb_product_finance_rows(
                 "ad_spend": 0.0,
             }
         )
-    return _aggregate_rows(rows), warnings
+    return (_aggregate_rows(rows) if aggregate else rows), warnings
 
 
 def _fetch_ozon_product_finance_rows(
@@ -281,6 +282,7 @@ def _fetch_ozon_product_finance_rows(
     api_key: str,
     date_from: date,
     date_to: date,
+    aggregate: bool = True,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     creds = _parse_ozon_credentials(api_key)
     if not creds:
@@ -441,7 +443,7 @@ def _fetch_ozon_product_finance_rows(
                 break
             page += 1
         chunk_from = chunk_to + timedelta(days=1)
-    return _aggregate_rows(rows), list(dict.fromkeys(warnings))
+    return (_aggregate_rows(rows) if aggregate else rows), list(dict.fromkeys(warnings))
 
 
 def _extract_ozon_items(op: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1042,15 +1044,30 @@ def build_accounting_monthly_summary(
 
     product_rows: list[dict[str, Any]] = []
     wb_rows: list[dict[str, Any]] = []
+    ozon_rows: list[dict[str, Any]] = []
     if wb_api_key.strip():
-        wb_rows, wb_warn = _fetch_wb_product_finance_rows(api_key=wb_api_key.strip(), date_from=left, date_to=right)
+        wb_rows, wb_warn = _fetch_wb_product_finance_rows(
+            api_key=wb_api_key.strip(),
+            date_from=left,
+            date_to=right,
+            aggregate=False,
+        )
         product_rows.extend(wb_rows)
         warnings.extend(wb_warn)
     if ozon_api_key.strip():
-        ozon_rows, ozon_warn = _fetch_ozon_product_finance_rows(api_key=ozon_api_key.strip(), date_from=left, date_to=right)
+        ozon_rows, ozon_warn = _fetch_ozon_product_finance_rows(
+            api_key=ozon_api_key.strip(),
+            date_from=left,
+            date_to=right,
+            aggregate=False,
+        )
         product_rows.extend(ozon_rows)
         warnings.extend(ozon_warn)
 
+    product_monthly: dict[str, dict[str, dict[str, Any]]] = {
+        str(period["month_key"]): {"wb": _new_monthly_kpi(), "ozon": _new_monthly_kpi()}
+        for period in periods
+    }
     price_index = _build_purchase_price_index(products)
     wb_acquiring_has_field = False
     for row in product_rows:
@@ -1063,11 +1080,40 @@ def build_accounting_monthly_summary(
         if day is None:
             continue
         month_key = f"{day.year:04d}-{day.month:02d}"
-        slot = monthly_raw.get(month_key)
+        slot = product_monthly.get(month_key)
         if not isinstance(slot, dict):
             continue
         kpi = slot[mp]
+
+        revenue = max(0.0, _to_float(row.get("revenue") or 0.0))
+        if revenue > 0:
+            kpi["turnover"] = float(round(float(kpi.get("turnover") or 0.0) + revenue, 2))
+
         sold_units = max(0, int(_to_int(row.get("sold_units") or 0)))
+        if sold_units > 0:
+            kpi["units"] = int(_to_int(kpi.get("units") or 0)) + sold_units
+            kpi["buyouts"] = int(_to_int(kpi.get("buyouts") or 0)) + sold_units
+
+        kpi["commission"] = float(round(float(kpi.get("commission") or 0.0) + max(0.0, _to_float(row.get("commission") or 0.0)), 2))
+        kpi["logistics"] = float(round(float(kpi.get("logistics") or 0.0) + max(0.0, _to_float(row.get("logistics") or 0.0)), 2))
+        kpi["storage"] = float(round(float(kpi.get("storage") or 0.0) + max(0.0, _to_float(row.get("storage") or 0.0)), 2))
+        kpi["penalties"] = float(round(float(kpi.get("penalties") or 0.0) + max(0.0, _to_float(row.get("penalties") or 0.0)), 2))
+        kpi["ad_spend"] = float(round(float(kpi.get("ad_spend") or 0.0) + max(0.0, _to_float(row.get("ad_spend") or 0.0)), 2))
+        extra_mp = (
+            max(0.0, _to_float(row.get("other_expense") or 0.0))
+            + max(0.0, _to_float(row.get("deductions") or 0.0))
+            + max(0.0, _to_float(row.get("acceptance") or 0.0))
+        )
+        if extra_mp > 0:
+            kpi["other_expenses"] = float(round(float(kpi.get("other_expenses") or 0.0) + extra_mp, 2))
+
+        if "acquiring" in row:
+            acquiring = max(0.0, _to_float(row.get("acquiring") or 0.0))
+            if acquiring > 0:
+                if mp == "wb":
+                    wb_acquiring_has_field = True
+                kpi["acquiring"] = float(round(float(kpi.get("acquiring") or 0.0) + acquiring, 2))
+
         if sold_units > 0:
             purchase_price = _resolve_purchase_price(
                 price_index,
@@ -1078,9 +1124,6 @@ def build_accounting_monthly_summary(
             )
             if purchase_price > 0:
                 kpi["cogs"] = float(round(float(kpi.get("cogs") or 0.0) + (purchase_price * sold_units), 2))
-        if mp == "wb" and "acquiring" in row:
-            wb_acquiring_has_field = True
-            kpi["acquiring"] = float(round(float(kpi.get("acquiring") or 0.0) + max(0.0, _to_float(row.get("acquiring") or 0.0)), 2))
 
     if wb_api_key.strip() and wb_rows and not wb_acquiring_has_field:
         warnings.append("WB API did not provide a separate acquiring field for this period, acquiring is set to 0.")
@@ -1095,6 +1138,10 @@ def build_accounting_monthly_summary(
         month_key = str(period["month_key"])
         wb_kpi = dict(monthly_raw.get(month_key, {}).get("wb") or _new_monthly_kpi())
         ozon_kpi = dict(monthly_raw.get(month_key, {}).get("ozon") or _new_monthly_kpi())
+        wb_product_kpi = dict(product_monthly.get(month_key, {}).get("wb") or _new_monthly_kpi())
+        ozon_product_kpi = dict(product_monthly.get(month_key, {}).get("ozon") or _new_monthly_kpi())
+        _apply_monthly_fallback_from_product(wb_kpi, wb_product_kpi)
+        _apply_monthly_fallback_from_product(ozon_kpi, ozon_product_kpi)
 
         if float(wb_kpi.get("acquiring") or 0.0) > 0 and float(wb_kpi.get("commission") or 0.0) > 0:
             wb_kpi["commission"] = float(round(max(0.0, float(wb_kpi.get("commission") or 0.0) - float(wb_kpi.get("acquiring") or 0.0)), 2))
@@ -1240,6 +1287,31 @@ def _sum_monthly_kpi(left: dict[str, Any], right: dict[str, Any]) -> dict[str, A
         out[key] = float(round(_to_float(left.get(key) or 0.0) + _to_float(right.get(key) or 0.0), 2))
     return out
 
+
+def _apply_monthly_fallback_from_product(target: dict[str, Any], source: dict[str, Any]) -> None:
+    if not isinstance(target, dict) or not isinstance(source, dict):
+        return
+
+    for key in ("turnover", "commission", "acquiring", "logistics", "storage", "penalties", "ad_spend", "other_expenses", "cogs"):
+        src_value = max(0.0, _to_float(source.get(key) or 0.0))
+        if src_value <= 0:
+            continue
+        dst_value = _to_float(target.get(key) or 0.0)
+        if dst_value <= 0:
+            target[key] = float(round(src_value, 2))
+
+    src_units = max(0, int(_to_int(source.get("units") or 0)))
+    src_buyouts = max(0, int(_to_int(source.get("buyouts") or src_units)))
+    src_orders = max(0, int(_to_int(source.get("orders") or 0)))
+
+    if int(_to_int(target.get("units") or 0)) <= 0 and src_units > 0:
+        target["units"] = src_units
+    if int(_to_int(target.get("buyouts") or 0)) <= 0 and src_buyouts > 0:
+        target["buyouts"] = src_buyouts
+    if int(_to_int(target.get("orders") or 0)) <= 0:
+        fallback_orders = src_orders if src_orders > 0 else src_units
+        if fallback_orders > 0:
+            target["orders"] = fallback_orders
 
 def _finalize_monthly_kpi(kpi: dict[str, Any], *, tax_rate: float, vat_rate: float) -> None:
     turnover = float(round(_to_float(kpi.get("turnover") or 0.0), 2))
@@ -1595,3 +1667,8 @@ def _to_int(value: Any) -> int:
         return int(float(str(value).replace(",", ".").strip()))
     except Exception:
         return 0
+
+
+
+
+
