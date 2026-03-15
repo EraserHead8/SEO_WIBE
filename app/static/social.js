@@ -5590,6 +5590,115 @@ async function socialDeleteNote(noteId) {
   await socialLoadNotes();
 }
 
+
+function socialGetChatContextBoundsSafe() {
+  const main = document.querySelector("#socialSubtabChat .social-chat-main");
+  const mainRect = main?.getBoundingClientRect ? main.getBoundingClientRect() : null;
+  const vv = window.visualViewport;
+  const viewportLeft = Number(vv?.offsetLeft || 0);
+  const viewportTop = Number(vv?.offsetTop || 0);
+  const viewportWidth = Number(vv?.width || window.innerWidth || document.documentElement.clientWidth || 0);
+  const viewportHeight = Number(vv?.height || window.innerHeight || document.documentElement.clientHeight || 0);
+  const viewportRight = viewportLeft + viewportWidth;
+  const viewportBottom = viewportTop + viewportHeight;
+
+  if (!mainRect || mainRect.width <= 0 || mainRect.height <= 0) {
+    return {
+      container: null,
+      left: viewportLeft,
+      top: viewportTop,
+      width: viewportWidth,
+      height: viewportHeight,
+    };
+  }
+
+  const left = Math.max(mainRect.left, viewportLeft);
+  const top = Math.max(mainRect.top, viewportTop);
+  const right = Math.min(mainRect.right, viewportRight);
+  const bottom = Math.min(mainRect.bottom, viewportBottom);
+  if (right - left < 120 || bottom - top < 120) {
+    return {
+      container: main,
+      left: mainRect.left,
+      top: mainRect.top,
+      width: Math.max(0, mainRect.width),
+      height: Math.max(0, mainRect.height),
+    };
+  }
+  return {
+    container: main,
+    left,
+    top,
+    width: Math.max(0, right - left),
+    height: Math.max(0, bottom - top),
+  };
+}
+
+function socialOpenMessageContextSafe(messageId, event) {
+  const id = Number(messageId || 0);
+  if (!id) return;
+  const row = (socialState.chatMessages || []).find((x) => Number(x.id) === id);
+  if (!row) return;
+  const menu = document.getElementById("socialChatContextMenu");
+  if (!menu) return;
+  if (event?.preventDefault) event.preventDefault();
+  if (event?.stopPropagation) event.stopPropagation();
+  socialState.chatContextMessageId = id;
+  socialState.chatContextThreadId = Number(socialState.currentThreadId || 0);
+
+  const bubble = event?.target?.closest?.(".tg-msg-bubble") || event?.currentTarget?.closest?.(".tg-msg-bubble") || event?.target || null;
+  const rect = bubble?.getBoundingClientRect ? bubble.getBoundingClientRect() : null;
+  const fallbackX = Number(event?.clientX || 0) || Number(rect?.left || 0) + Math.max(18, Math.min(42, Number(rect?.width || 0) * 0.6));
+  const fallbackY = Number(event?.clientY || 0) || Number(rect?.top || 0) + Math.max(18, Math.min(30, Number(rect?.height || 0) * 0.45));
+  socialState.chatContextX = fallbackX;
+  socialState.chatContextY = fallbackY;
+
+  const quick = ["\u{1F44D}", "\u{1F525}", "\u2764\uFE0F", "\u{1F602}", "\u{1F64F}", "\u2705"];
+  menu.innerHTML = `
+    <button type="button" class="social-chat-context-btn" onclick="socialContextReply()">${tr("\u041E\u0442\u0432\u0435\u0442\u0438\u0442\u044C", "Reply")}</button>
+    <div class="social-chat-context-reactions">
+      ${quick.map((emoji) => `<button type="button" class="social-chat-context-emoji" onclick="socialContextReact('${escapeHtml(emoji)}')">${emoji}</button>`).join("")}
+    </div>
+  `;
+
+  const bounds = socialGetChatContextBoundsSafe();
+  if (bounds.container && menu.parentElement !== bounds.container) {
+    bounds.container.appendChild(menu);
+  }
+
+  menu.style.position = bounds.container ? "absolute" : "fixed";
+  menu.style.left = "0px";
+  menu.style.top = "0px";
+  const safe = 10;
+  const usableWidth = Math.max(120, Number(bounds.width || 0));
+  const usableHeight = Math.max(120, Number(bounds.height || 0));
+  menu.style.maxWidth = `${Math.max(160, Math.min(300, usableWidth - safe * 2))}px`;
+  menu.style.maxHeight = `${Math.max(120, Math.min(240, usableHeight - safe * 2))}px`;
+  menu.style.visibility = "hidden";
+  menu.classList.remove("hidden");
+
+  const menuRect = menu.getBoundingClientRect();
+  const anchorLeft = Number(rect?.left || fallbackX);
+  const anchorRight = Number(rect?.right || fallbackX);
+  const anchorTop = Number(rect?.top || fallbackY);
+  const anchorBottom = Number(rect?.bottom || fallbackY);
+  let nextX = (anchorLeft - Number(bounds.left || 0)) + 8;
+  let nextY = (anchorBottom - Number(bounds.top || 0)) + 8;
+  if (nextX + menuRect.width + safe > usableWidth) {
+    nextX = (anchorRight - Number(bounds.left || 0)) - menuRect.width;
+  }
+  if (nextY + menuRect.height + safe > usableHeight) {
+    nextY = (anchorTop - Number(bounds.top || 0)) - menuRect.height - 8;
+  }
+  const clampedX = Math.max(safe, Math.min(nextX, Math.max(safe, usableWidth - menuRect.width - safe)));
+  const clampedY = Math.max(safe, Math.min(nextY, Math.max(safe, usableHeight - menuRect.height - safe)));
+  menu.style.left = `${Math.round(clampedX)}px`;
+  menu.style.top = `${Math.round(clampedY)}px`;
+  menu.style.visibility = "visible";
+}
+
+socialOpenMessageContext = socialOpenMessageContextSafe;
+
 window.loadSocialWorkspace = loadSocialWorkspace;
 window.switchSocialSubtab = switchSocialSubtab;
 window.socialOpenGameMenu = socialOpenGameMenu;
