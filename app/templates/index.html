@@ -510,6 +510,7 @@
           <div class="module-subtabs">
             <button class="chip-btn active" id="accountingSubtabOverviewBtn" type="button" onclick="switchAccountingSubtab('overview')">Обзор</button>
             <button class="chip-btn" id="accountingSubtabAnalysisBtn" type="button" onclick="switchAccountingSubtab('analysis')">Анализ</button>
+            <button class="chip-btn" id="accountingSubtabMonthlyBtn" type="button" onclick="switchAccountingSubtab('monthly')">Прибыль по месяцам</button>
             <button class="chip-btn" id="accountingSubtabExpensesBtn" type="button" onclick="switchAccountingSubtab('expenses')">Расходы</button>
             <button class="chip-btn" id="accountingSubtabSettingsBtn" type="button" onclick="switchAccountingSubtab('settings')">Налоги и параметры</button>
           </div>
@@ -609,7 +610,13 @@
             </table>
           </div>
         </div>
-
+        <div id="accountingSubtabMonthly" class="hidden">
+          <div class="panel">
+            <h3>Прибыль по месяцам (WB и Ozon)</h3>
+            <div id="accountingMonthlyStatus" class="hint load-status">-</div>
+          </div>
+          <div id="accountingMonthlyTable" class="accounting-monthly-table"></div>
+        </div>
         <div id="accountingSubtabExpenses" class="hidden">
           <div class="panel">
             <h3>Учет расходов</h3>

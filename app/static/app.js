@@ -324,6 +324,7 @@ const SUBTAB_TITLES = {
   accounting: {
     overview: { ru: ["Бухгалтерия", "KPI, прибыль и экономика по периодам"], en: ["Accounting", "KPIs, profit, and period economics"] },
     analysis: { ru: ["Аналитика прибыли", "Разбор доходов, расходов и маржи"], en: ["Profit Analysis", "Revenue, costs, and margin breakdown"] },
+    monthly: { ru: ["Помесячная прибыль", "Сравнение WB и Ozon по месяцам за 12 периодов"], en: ["Monthly Profit", "WB and Ozon comparison across the last 12 months"] },
     expenses: { ru: ["Расходы", "Учет расходов и распределение по категориям"], en: ["Expenses", "Expense tracking and category split"] },
     settings: { ru: ["Настройки бухгалтерии", "Шаблоны, ставки и правила расчета"], en: ["Accounting Settings", "Templates, rates, and calculation rules"] },
   },
@@ -3128,7 +3129,7 @@ async function ensureAuth(allowFallback = true) {
         const storedAdsSubtab = String(sessionStorage.getItem("seo_wibe_last_ads_subtab") || "").trim();
         if (["campaigns", "analytics", "recommendations", "bidder", "ozon"].includes(storedAdsSubtab)) currentAdsSubtab = storedAdsSubtab;
         const storedAccountingSubtab = String(sessionStorage.getItem("seo_wibe_last_accounting_subtab") || "").trim();
-        if (["overview", "analysis", "expenses", "settings"].includes(storedAccountingSubtab)) currentAccountingSubtab = storedAccountingSubtab;
+        if (["overview", "analysis", "monthly", "expenses", "settings"].includes(storedAccountingSubtab)) currentAccountingSubtab = storedAccountingSubtab;
         const storedHelpSubtab = String(sessionStorage.getItem("seo_wibe_last_help_subtab") || "").trim();
         if (["docs", "assistant", "downloads"].includes(storedHelpSubtab)) currentHelpSubtab = storedHelpSubtab;
         const storedSocialSubtab = String(sessionStorage.getItem("seo_wibe_last_social_subtab") || "").trim();

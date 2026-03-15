@@ -9557,6 +9557,131 @@ button,
   background: color-mix(in oklab, #20cf9c 9%, transparent);
 }
 
+.accounting-monthly-table {
+  display: grid;
+  gap: 12px;
+}
+
+.accounting-month-row {
+  border: 1px solid color-mix(in oklab, var(--line) 82%, var(--accent) 18%);
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--card) 92%, var(--panel-bg) 8%);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.accounting-month-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.accounting-month-row-head h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.accounting-month-row-head span {
+  color: color-mix(in oklab, var(--fg) 70%, var(--muted));
+  font-size: 12px;
+}
+
+.accounting-month-row-summary {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.accounting-month-total,
+.accounting-month-delta {
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--line) 70%, var(--accent) 30%);
+  background: color-mix(in oklab, var(--panel-bg) 85%, var(--accent) 15%);
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.accounting-month-total-positive,
+.accounting-month-delta-positive {
+  border-color: color-mix(in oklab, #17b26a 64%, var(--line));
+  color: color-mix(in oklab, #0c8a4a 82%, var(--fg));
+}
+
+.accounting-month-total-negative,
+.accounting-month-delta-negative {
+  border-color: color-mix(in oklab, #e5484d 66%, var(--line));
+  color: color-mix(in oklab, #cb2f3a 80%, var(--fg));
+}
+
+.accounting-month-row-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.accounting-month-card {
+  border: 1px solid color-mix(in oklab, var(--line) 72%, var(--accent) 28%);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--panel-bg) 90%, var(--card) 10%);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.accounting-month-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.accounting-month-card header h4 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.accounting-month-card header span {
+  font-size: 12px;
+  color: color-mix(in oklab, var(--fg) 70%, var(--muted));
+}
+
+.accounting-month-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.accounting-month-metric {
+  border: 1px solid color-mix(in oklab, var(--line) 72%, transparent);
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--panel-bg) 80%, transparent);
+  padding: 7px 8px;
+  display: grid;
+  gap: 3px;
+}
+
+.accounting-month-metric b {
+  font-size: 11px;
+  color: color-mix(in oklab, var(--fg) 72%, var(--muted));
+  font-weight: 600;
+}
+
+.accounting-month-metric strong {
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.accounting-month-metric-profit strong {
+  color: color-mix(in oklab, #17b26a 74%, var(--fg));
+}
+
+.accounting-month-metric-expense strong {
+  color: color-mix(in oklab, #e5484d 74%, var(--fg));
+}
 #accountingExpensesTable .row-actions {
   display: inline-flex;
   gap: 6px;
@@ -9575,6 +9700,21 @@ button,
   }
 }
 
+@media (max-width: 980px) {
+  .accounting-month-row-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .accounting-month-row-summary {
+    justify-content: flex-start;
+  }
+
+  .accounting-month-row-grid,
+  .accounting-month-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+}
 @media (max-width: 1200px) and (min-width: 981px) {
   #appSection.app-shell {
     grid-template-columns: var(--sidebar-width) minmax(0, 1fr) !important;
@@ -10803,6 +10943,7 @@ body.mobile-apk-mode #reviewsSubtabReturns .returns-hero > h3 {
   body.mobile-apk-mode #appSection #adsSubtabBidder .panel,
   body.mobile-apk-mode #appSection #accountingSubtabOverview .panel,
   body.mobile-apk-mode #appSection #accountingSubtabAnalysis .panel,
+  body.mobile-apk-mode #appSection #accountingSubtabMonthly .panel,
   body.mobile-apk-mode #appSection #accountingSubtabExpenses .panel,
   body.mobile-apk-mode #appSection #accountingSubtabSettings .panel,
   body.mobile-apk-mode #appSection #productsSubtabCatalog .panel,

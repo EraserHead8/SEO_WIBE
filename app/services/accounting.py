@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
-from concurrent.futures import ThreadPoolExecutor
 import json
 import math
-import re
 import time
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -20,23 +19,7 @@ WB_REPORT_DETAIL_MAX_PAGES = 3
 OZON_FINANCE_PAGE_SIZE = 500
 OZON_FINANCE_MAX_PAGES = 8
 
-
-def _adaptive_wb_detail_max_pages(date_from: date, date_to: date) -> int:
-    days = max(1, (date_to - date_from).days + 1)
-    if days <= 7:
-        return 1
-    if days <= 31:
-        return 2
-    return WB_REPORT_DETAIL_MAX_PAGES
-
-
-def _adaptive_ozon_finance_max_pages(date_from: date, date_to: date) -> int:
-    days = max(1, (date_to - date_from).days + 1)
-    if days <= 7:
-        return 3
-    if days <= 31:
-        return 5
-    return OZON_FINANCE_MAX_PAGES
+RU_MONTH_NAMES = ('', 'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь')
 
 
 def build_accounting_payload(
@@ -72,38 +55,22 @@ def build_accounting_payload(
     sales_chart = list(report.get("chart") or [])
 
     product_rows: list[dict[str, Any]] = []
-    fetch_jobs: list[tuple[str, Any]] = []
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        if selected_market in {"all", "wb"} and wb_api_key.strip():
-            fetch_jobs.append((
-                "wb",
-                pool.submit(
-                    _fetch_wb_product_finance_rows,
-                    api_key=wb_api_key.strip(),
-                    date_from=date_from,
-                    date_to=date_to,
-                ),
-            ))
-        if selected_market in {"all", "ozon"} and ozon_api_key.strip():
-            fetch_jobs.append((
-                "ozon",
-                pool.submit(
-                    _fetch_ozon_product_finance_rows,
-                    api_key=ozon_api_key.strip(),
-                    date_from=date_from,
-                    date_to=date_to,
-                ),
-            ))
-
-        for source, future in fetch_jobs:
-            try:
-                fetched_rows, fetched_warnings = future.result()
-            except Exception:
-                fetched_rows, fetched_warnings = [], [
-                    "WB accounting API unavailable." if source == "wb" else "Ozon accounting API unavailable."
-                ]
-            product_rows.extend(list(fetched_rows or []))
-            warnings.extend(list(fetched_warnings or []))
+    if selected_market in {"all", "wb"} and wb_api_key.strip():
+        wb_rows, wb_warn = _fetch_wb_product_finance_rows(
+            api_key=wb_api_key.strip(),
+            date_from=date_from,
+            date_to=date_to,
+        )
+        product_rows.extend(wb_rows)
+        warnings.extend(wb_warn)
+    if selected_market in {"all", "ozon"} and ozon_api_key.strip():
+        oz_rows, oz_warn = _fetch_ozon_product_finance_rows(
+            api_key=ozon_api_key.strip(),
+            date_from=date_from,
+            date_to=date_to,
+        )
+        product_rows.extend(oz_rows)
+        warnings.extend(oz_warn)
 
     merged_rows = _merge_product_rows(product_rows, products)
     adjustments = _calc_adjustments(
@@ -154,8 +121,7 @@ def _fetch_wb_product_finance_rows(
     report_to = (date_to + timedelta(days=1)).isoformat()
     warnings: list[str] = []
 
-    max_pages = _adaptive_wb_detail_max_pages(date_from, date_to)
-    for _ in range(max_pages):
+    for _ in range(WB_REPORT_DETAIL_MAX_PAGES):
         params = {
             "dateFrom": report_from,
             "dateTo": report_to,
@@ -253,11 +219,11 @@ def _fetch_wb_product_finance_rows(
             )
         )
         additional_payment = float(round(_to_float(item.get("additional_payment") or item.get("additionalPayment") or 0.0), 2))
+        acquiring = abs(_to_float(item.get("acquiring_fee") or item.get("acquiringFee") or 0.0))
         commission = (
             abs(_to_float(item.get("ppvz_sales_commission") or item.get("ppvzSalesCommission") or 0.0))
             + abs(_to_float(item.get("ppvz_vw") or item.get("ppvzVw") or 0.0))
             + abs(_to_float(item.get("ppvz_vw_nds") or item.get("ppvzVwNds") or 0.0))
-            + abs(_to_float(item.get("acquiring_fee") or item.get("acquiringFee") or 0.0))
             + abs(_to_float(item.get("commission") or item.get("commission_amount") or item.get("commissionAmount") or 0.0))
         )
         logistics = (
@@ -283,7 +249,7 @@ def _fetch_wb_product_finance_rows(
             income += revenue
         if additional_payment > 0:
             income += additional_payment
-        expense = commission + logistics + storage + deductions + acceptance + penalties + other_expense
+        expense = commission + acquiring + logistics + storage + deductions + acceptance + penalties + other_expense
         rows.append(
             {
                 "date": day.isoformat(),
@@ -297,6 +263,7 @@ def _fetch_wb_product_finance_rows(
                 "income": float(round(income, 2)),
                 "expense": float(round(expense, 2)),
                 "commission": float(round(commission, 2)),
+                "acquiring": float(round(acquiring, 2)),
                 "logistics": float(round(logistics, 2)),
                 "storage": float(round(storage, 2)),
                 "deductions": float(round(deductions, 2)),
@@ -328,8 +295,7 @@ def _fetch_ozon_product_finance_rows(
     while chunk_from <= date_to:
         chunk_to = min(date_to, chunk_from + timedelta(days=30))
         page = 1
-        max_pages = _adaptive_ozon_finance_max_pages(chunk_from, chunk_to)
-        while page <= max_pages:
+        while page <= OZON_FINANCE_MAX_PAGES:
             payload = {
                 "filter": {
                     "date": {
@@ -545,6 +511,7 @@ def _merge_product_rows(rows: list[dict[str, Any]], products: list[dict[str, Any
         revenue = float(round(_to_float(row.get("revenue") or 0.0), 2))
         ad_spend = float(round(_to_float(row.get("ad_spend") or 0.0), 2))
         commission = float(round(_to_float(row.get("commission") or 0.0), 2))
+        acquiring = float(round(_to_float(row.get("acquiring") or 0.0), 2))
         logistics = float(round(_to_float(row.get("logistics") or 0.0), 2))
         storage = float(round(_to_float(row.get("storage") or 0.0), 2))
         deductions = float(round(_to_float(row.get("deductions") or 0.0), 2))
@@ -553,7 +520,7 @@ def _merge_product_rows(rows: list[dict[str, Any]], products: list[dict[str, Any
         other_expense = float(round(_to_float(row.get("other_expense") or 0.0), 2))
         marketplace_expense = float(
             round(
-                ad_spend + commission + logistics + storage + deductions + acceptance + penalties + other_expense,
+                ad_spend + commission + acquiring + logistics + storage + deductions + acceptance + penalties + other_expense,
                 2,
             )
         )
@@ -574,6 +541,7 @@ def _merge_product_rows(rows: list[dict[str, Any]], products: list[dict[str, Any
                 "purchase_price": purchase_price,
                 "cogs": cogs,
                 "commission": commission,
+                "acquiring": acquiring,
                 "logistics": logistics,
                 "storage": storage,
                 "deductions": deductions,
@@ -617,6 +585,7 @@ def _aggregate_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "purchase_price": 0.0,
                 "cogs": 0.0,
                 "commission": 0.0,
+                "acquiring": 0.0,
                 "logistics": 0.0,
                 "storage": 0.0,
                 "deductions": 0.0,
@@ -643,6 +612,7 @@ def _aggregate_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "revenue",
             "cogs",
             "commission",
+            "acquiring",
             "logistics",
             "storage",
             "deductions",
@@ -734,6 +704,7 @@ def _apply_profit_math(
     marketplace_expense_total = float(
         round(
             _component_total("commission")
+            + _component_total("acquiring")
             + _component_total("logistics")
             + _component_total("storage")
             + _component_total("deductions")
@@ -807,6 +778,7 @@ def _build_overview_payload(
     marketplace_expense = float(
         round(
             _component_total("commission")
+            + _component_total("acquiring")
             + _component_total("logistics")
             + _component_total("storage")
             + _component_total("deductions")
@@ -834,6 +806,7 @@ def _build_overview_payload(
         market_exp_mp = float(
             round(
                 _component_total_by_market("commission", code)
+                + _component_total_by_market("acquiring", code)
                 + _component_total_by_market("logistics", code)
                 + _component_total_by_market("storage", code)
                 + _component_total_by_market("deductions", code)
@@ -854,6 +827,7 @@ def _build_overview_payload(
             "returns": int(_to_int(sales_totals.get(f"{code}_returns") or 0)),
             "revenue": revenue_mp,
             "cogs": cogs_mp,
+            "acquiring": float(round(_component_total_by_market("acquiring", code), 2)),
             "marketplace_expense": market_exp_mp,
             "gross_profit": gross_mp,
             "operating_profit": operating_mp,
@@ -877,6 +851,7 @@ def _build_overview_payload(
         "net_profit": net_profit,
         "margin": margin,
         "commission": float(round(_component_total("commission"), 2)),
+        "acquiring": float(round(_component_total("acquiring"), 2)),
         "logistics": float(round(_component_total("logistics"), 2)),
         "storage": float(round(_component_total("storage"), 2)),
         "deductions": float(round(_component_total("deductions"), 2)),
@@ -922,6 +897,7 @@ def _build_profit_chart(
         market_expense = float(
             round(
                 _to_float(point.get("commission") or 0.0)
+                + _to_float(point.get("acquiring") or 0.0)
                 + _to_float(point.get("logistics") or 0.0)
                 + _to_float(point.get("storage") or 0.0)
                 + _to_float(point.get("deductions") or 0.0)
@@ -989,85 +965,448 @@ def _filter_and_sort_rows(rows: list[dict[str, Any]], *, search: str, sort_by: s
     return out
 
 
-_MOJIBAKE_WARNING_RE = re.compile(r"(?:\u0420[\u0400-\u04FF]|\u0421[\u0400-\u04FF]|\u00d0.|\u00d1.)")
+def build_accounting_monthly_summary(
+    *,
+    months: int = 12,
+    tz_name: str = "Europe/Moscow",
+    wb_api_key: str,
+    ozon_api_key: str,
+    products: list[dict[str, Any]],
+    expenses: list[dict[str, Any]],
+    settings: dict[str, Any],
+) -> dict[str, Any]:
+    month_count = max(1, min(12, int(months or 12)))
+    tz_code = str(tz_name or "Europe/Moscow").strip() or "Europe/Moscow"
+    try:
+        tzinfo = ZoneInfo(tz_code)
+    except Exception:
+        tz_code = "UTC"
+        tzinfo = ZoneInfo("UTC")
 
+    periods = _build_month_periods(month_count, tzinfo=tzinfo)
+    if not periods:
+        return {
+            "months": [],
+            "meta": {
+                "source": "live",
+                "partial": False,
+                "warnings": [],
+                "generated_at": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+            },
+        }
 
-def _mojibake_score(text: str) -> int:
-    value = str(text or "")
-    return len(_MOJIBAKE_WARNING_RE.findall(value)) + value.count("?") * 3
+    left = periods[-1]["date_from"]
+    right = periods[0]["date_to"]
+    sales_report = build_sales_report(
+        marketplace="all",
+        date_from=left,
+        date_to=right,
+        wb_api_key=wb_api_key,
+        ozon_api_key=ozon_api_key,
+        granularity="day",
+        timezone=tz_code,
+    )
+    warnings: list[str] = list(sales_report.get("warnings") or []) if isinstance(sales_report, dict) else []
+    sales_rows = list(sales_report.get("rows") or []) if isinstance(sales_report, dict) else []
 
+    monthly_raw: dict[str, dict[str, dict[str, Any]]] = {
+        str(period["month_key"]): {"wb": _new_monthly_kpi(), "ozon": _new_monthly_kpi()}
+        for period in periods
+    }
 
-def _cyrillic_score(text: str) -> int:
-    value = str(text or "")
-    return sum(1 for ch in value if "\u0400" <= ch <= "\u04FF")
-
-
-def _decode_mojibake_text(value: Any) -> str:
-    raw = str(value or "")
-    if not raw:
-        return ""
-    if _mojibake_score(raw) <= 0:
-        return raw
-
-    candidates = [raw]
-    for src_encoding in ("cp1251", "latin1", "cp1252"):
-        try:
-            candidate = raw.encode(src_encoding, errors="strict").decode("utf-8", errors="strict")
-        except Exception:
+    for row in sales_rows:
+        if not isinstance(row, dict):
             continue
-        if candidate:
-            candidates.append(candidate)
+        mp = str(row.get("marketplace") or "").strip().lower()
+        if mp not in {"wb", "ozon"}:
+            continue
+        day = _parse_any_date(row.get("date") or row.get("occurred_at"))
+        if day is None:
+            continue
+        month_key = f"{day.year:04d}-{day.month:02d}"
+        slot = monthly_raw.get(month_key)
+        if not isinstance(slot, dict):
+            continue
+        kpi = slot[mp]
+        kpi["turnover"] = float(round(float(kpi.get("turnover") or 0.0) + _to_float(row.get("revenue") or 0.0), 2))
+        kpi["orders"] = int(_to_int(kpi.get("orders") or 0)) + int(_to_int(row.get("orders") or 0))
+        kpi["units"] = int(_to_int(kpi.get("units") or 0)) + int(_to_int(row.get("units") or 0))
+        kpi["buyouts"] = int(_to_int(kpi.get("buyouts") or 0)) + int(_to_int(row.get("buyouts") or 0))
+        kpi["commission"] = float(round(float(kpi.get("commission") or 0.0) + _to_float(row.get("commission") or 0.0), 2))
+        kpi["logistics"] = float(round(float(kpi.get("logistics") or 0.0) + _to_float(row.get("logistics") or 0.0), 2))
+        kpi["storage"] = float(round(float(kpi.get("storage") or 0.0) + _to_float(row.get("storage") or 0.0), 2))
+        kpi["penalties"] = float(round(float(kpi.get("penalties") or 0.0) + _to_float(row.get("penalties") or 0.0), 2))
+        kpi["ad_spend"] = float(round(float(kpi.get("ad_spend") or 0.0) + _to_float(row.get("ad_spend") or 0.0), 2))
+        extra_mp = _to_float(row.get("other_expense") or 0.0) + _to_float(row.get("deductions") or 0.0) + _to_float(row.get("acceptance") or 0.0)
+        kpi["other_expenses"] = float(round(float(kpi.get("other_expenses") or 0.0) + extra_mp, 2))
 
-    best = raw
-    best_score = _mojibake_score(raw)
-    best_cyr = _cyrillic_score(raw)
-    for candidate in candidates:
-        score = _mojibake_score(candidate)
-        cyr = _cyrillic_score(candidate)
-        if score < best_score or (score == best_score and cyr > best_cyr + 1):
-            best = candidate
-            best_score = score
-            best_cyr = cyr
-    return best
+    product_rows: list[dict[str, Any]] = []
+    wb_rows: list[dict[str, Any]] = []
+    if wb_api_key.strip():
+        wb_rows, wb_warn = _fetch_wb_product_finance_rows(api_key=wb_api_key.strip(), date_from=left, date_to=right)
+        product_rows.extend(wb_rows)
+        warnings.extend(wb_warn)
+    if ozon_api_key.strip():
+        ozon_rows, ozon_warn = _fetch_ozon_product_finance_rows(api_key=ozon_api_key.strip(), date_from=left, date_to=right)
+        product_rows.extend(ozon_rows)
+        warnings.extend(ozon_warn)
 
+    price_index = _build_purchase_price_index(products)
+    wb_acquiring_has_field = False
+    for row in product_rows:
+        if not isinstance(row, dict):
+            continue
+        mp = str(row.get("marketplace") or "").strip().lower()
+        if mp not in {"wb", "ozon"}:
+            continue
+        day = _parse_any_date(row.get("date"))
+        if day is None:
+            continue
+        month_key = f"{day.year:04d}-{day.month:02d}"
+        slot = monthly_raw.get(month_key)
+        if not isinstance(slot, dict):
+            continue
+        kpi = slot[mp]
+        sold_units = max(0, int(_to_int(row.get("sold_units") or 0)))
+        if sold_units > 0:
+            purchase_price = _resolve_purchase_price(
+                price_index,
+                marketplace=mp,
+                article=str(row.get("article") or "").strip(),
+                external_id=str(row.get("external_id") or "").strip(),
+                barcode=str(row.get("barcode") or "").strip(),
+            )
+            if purchase_price > 0:
+                kpi["cogs"] = float(round(float(kpi.get("cogs") or 0.0) + (purchase_price * sold_units), 2))
+        if mp == "wb" and "acquiring" in row:
+            wb_acquiring_has_field = True
+            kpi["acquiring"] = float(round(float(kpi.get("acquiring") or 0.0) + max(0.0, _to_float(row.get("acquiring") or 0.0)), 2))
+
+    if wb_api_key.strip() and wb_rows and not wb_acquiring_has_field:
+        warnings.append("WB API did not provide a separate acquiring field for this period, acquiring is set to 0.")
+
+    vat_rate = max(0.0, _to_float(settings.get("vat_rate") or 0.0))
+    tax_rate = max(0.0, _to_float(settings.get("tax_rate") or 0.0))
+    additional_rate = max(0.0, _to_float(settings.get("additional_rate") or 0.0))
+    fixed_cost_per_month = max(0.0, _to_float(settings.get("fixed_cost_per_month") or 0.0))
+
+    months_out: list[dict[str, Any]] = []
+    for period in periods:
+        month_key = str(period["month_key"])
+        wb_kpi = dict(monthly_raw.get(month_key, {}).get("wb") or _new_monthly_kpi())
+        ozon_kpi = dict(monthly_raw.get(month_key, {}).get("ozon") or _new_monthly_kpi())
+
+        if float(wb_kpi.get("acquiring") or 0.0) > 0 and float(wb_kpi.get("commission") or 0.0) > 0:
+            wb_kpi["commission"] = float(round(max(0.0, float(wb_kpi.get("commission") or 0.0) - float(wb_kpi.get("acquiring") or 0.0)), 2))
+
+        expense_breakdown = _calc_monthly_custom_expense_breakdown(
+            expenses=expenses,
+            date_from=period["date_from"],
+            date_to=period["date_to"],
+        )
+        wb_turnover = float(wb_kpi.get("turnover") or 0.0)
+        ozon_turnover = float(ozon_kpi.get("turnover") or 0.0)
+        turnover_total = wb_turnover + ozon_turnover
+
+        wb_weight = 0.5
+        if turnover_total > 0:
+            wb_weight = wb_turnover / turnover_total
+        else:
+            wb_activity = int(wb_kpi.get("orders") or 0) + int(wb_kpi.get("units") or 0) + int(wb_kpi.get("buyouts") or 0)
+            ozon_activity = int(ozon_kpi.get("orders") or 0) + int(ozon_kpi.get("units") or 0) + int(ozon_kpi.get("buyouts") or 0)
+            activity_total = wb_activity + ozon_activity
+            if activity_total > 0:
+                wb_weight = wb_activity / activity_total
+
+        shared_expense_wb, shared_expense_ozon = _split_amount_by_share(float(expense_breakdown.get("all") or 0.0), wb_weight)
+        dynamic_total = float(turnover_total) * additional_rate / 100.0
+        dynamic_wb, dynamic_ozon = _split_amount_by_share(dynamic_total, wb_weight)
+        fixed_wb, fixed_ozon = _split_amount_by_share(float(fixed_cost_per_month), wb_weight)
+
+        wb_custom = float(expense_breakdown.get("wb") or 0.0) + shared_expense_wb + dynamic_wb + fixed_wb
+        ozon_custom = float(expense_breakdown.get("ozon") or 0.0) + shared_expense_ozon + dynamic_ozon + fixed_ozon
+
+        wb_kpi["custom_expenses"] = float(round(wb_custom, 2))
+        ozon_kpi["custom_expenses"] = float(round(ozon_custom, 2))
+        _finalize_monthly_kpi(wb_kpi, tax_rate=tax_rate, vat_rate=vat_rate)
+        _finalize_monthly_kpi(ozon_kpi, tax_rate=tax_rate, vat_rate=vat_rate)
+
+        total_kpi = _sum_monthly_kpi(wb_kpi, ozon_kpi)
+        explicit_custom_total = float(expense_breakdown.get("all") or 0.0) + float(expense_breakdown.get("wb") or 0.0) + float(expense_breakdown.get("ozon") or 0.0)
+        total_kpi["custom_expenses"] = float(round(explicit_custom_total + dynamic_total + float(fixed_cost_per_month), 2))
+        _finalize_monthly_kpi(total_kpi, tax_rate=tax_rate, vat_rate=vat_rate)
+
+        months_out.append(
+            {
+                "month_key": month_key,
+                "label": str(period.get("label") or month_key),
+                "date_from": period["date_from"].isoformat(),
+                "date_to": period["date_to"].isoformat(),
+                "wb": wb_kpi,
+                "ozon": ozon_kpi,
+                "total": total_kpi,
+            }
+        )
+
+    normalized_warnings = _normalize_accounting_warnings([str(x or "") for x in warnings if str(x or "").strip()])
+    return {
+        "months": months_out,
+        "meta": {
+            "source": "live",
+            "partial": bool(normalized_warnings),
+            "warnings": normalized_warnings,
+            "generated_at": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+        },
+    }
+
+
+def _build_month_periods(months: int, *, tzinfo: ZoneInfo) -> list[dict[str, Any]]:
+    today = datetime.now(tzinfo).date()
+    start = date(today.year, today.month, 1)
+    out: list[dict[str, Any]] = []
+    for idx in range(max(1, int(months or 1))):
+        month_start = _shift_month_start(start, -idx)
+        month_end = _month_end_date(month_start)
+        key = f"{month_start.year:04d}-{month_start.month:02d}"
+        out.append(
+            {
+                "month_key": key,
+                "label": _format_month_label(month_start),
+                "date_from": month_start,
+                "date_to": month_end,
+            }
+        )
+    return out
+
+
+def _format_month_label(month_start: date) -> str:
+    month_num = int(month_start.month)
+    if 1 <= month_num <= 12:
+        return f"{RU_MONTH_NAMES[month_num]} {month_start.year}"
+    return f"{month_start.year:04d}-{month_num:02d}"
+
+def _shift_month_start(month_start: date, month_delta: int) -> date:
+    current = (month_start.year * 12 + (month_start.month - 1)) + int(month_delta)
+    year = current // 12
+    month = (current % 12) + 1
+    return date(year, month, 1)
+
+
+def _month_end_date(month_start: date) -> date:
+    next_month = _shift_month_start(month_start, 1)
+    return next_month - timedelta(days=1)
+
+
+def _new_monthly_kpi() -> dict[str, Any]:
+    return {
+        "turnover": 0.0,
+        "orders": 0,
+        "units": 0,
+        "buyouts": 0,
+        "cogs": 0.0,
+        "commission": 0.0,
+        "acquiring": 0.0,
+        "logistics": 0.0,
+        "storage": 0.0,
+        "penalties": 0.0,
+        "ad_spend": 0.0,
+        "marketplace_expense": 0.0,
+        "custom_expenses": 0.0,
+        "other_expenses": 0.0,
+        "tax_amount": 0.0,
+        "vat_amount": 0.0,
+        "tax_total": 0.0,
+        "operating_profit": 0.0,
+        "net_profit": 0.0,
+        "margin": 0.0,
+    }
+
+
+def _sum_monthly_kpi(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
+    out = _new_monthly_kpi()
+    for key in ("orders", "units", "buyouts"):
+        out[key] = int(_to_int(left.get(key) or 0)) + int(_to_int(right.get(key) or 0))
+    for key in (
+        "turnover",
+        "cogs",
+        "commission",
+        "acquiring",
+        "logistics",
+        "storage",
+        "penalties",
+        "ad_spend",
+        "other_expenses",
+    ):
+        out[key] = float(round(_to_float(left.get(key) or 0.0) + _to_float(right.get(key) or 0.0), 2))
+    return out
+
+
+def _finalize_monthly_kpi(kpi: dict[str, Any], *, tax_rate: float, vat_rate: float) -> None:
+    turnover = float(round(_to_float(kpi.get("turnover") or 0.0), 2))
+    cogs = float(round(_to_float(kpi.get("cogs") or 0.0), 2))
+    commission = float(round(_to_float(kpi.get("commission") or 0.0), 2))
+    acquiring = float(round(_to_float(kpi.get("acquiring") or 0.0), 2))
+    logistics = float(round(_to_float(kpi.get("logistics") or 0.0), 2))
+    storage = float(round(_to_float(kpi.get("storage") or 0.0), 2))
+    penalties = float(round(_to_float(kpi.get("penalties") or 0.0), 2))
+    ad_spend = float(round(_to_float(kpi.get("ad_spend") or 0.0), 2))
+    other_expenses = float(round(_to_float(kpi.get("other_expenses") or 0.0), 2))
+    custom_expenses = float(round(_to_float(kpi.get("custom_expenses") or 0.0), 2))
+
+    marketplace_expense = float(round(commission + acquiring + logistics + storage + penalties + ad_spend + other_expenses, 2))
+    operating_profit = float(round(turnover - cogs - marketplace_expense - custom_expenses, 2))
+    vat_amount = float(round(max(0.0, turnover) * max(0.0, vat_rate) / 100.0, 2))
+    tax_amount = float(round(max(0.0, operating_profit) * max(0.0, tax_rate) / 100.0, 2))
+    tax_total = float(round(vat_amount + tax_amount, 2))
+    net_profit = float(round(operating_profit - tax_total, 2))
+    margin = round((net_profit / turnover) * 100.0, 2) if abs(turnover) > 1e-9 else 0.0
+
+    kpi["turnover"] = turnover
+    kpi["orders"] = int(_to_int(kpi.get("orders") or 0))
+    kpi["units"] = int(_to_int(kpi.get("units") or 0))
+    kpi["buyouts"] = int(_to_int(kpi.get("buyouts") or 0))
+    kpi["cogs"] = cogs
+    kpi["commission"] = commission
+    kpi["acquiring"] = acquiring
+    kpi["logistics"] = logistics
+    kpi["storage"] = storage
+    kpi["penalties"] = penalties
+    kpi["ad_spend"] = ad_spend
+    kpi["other_expenses"] = other_expenses
+    kpi["custom_expenses"] = custom_expenses
+    kpi["marketplace_expense"] = marketplace_expense
+    kpi["operating_profit"] = operating_profit
+    kpi["vat_amount"] = vat_amount
+    kpi["tax_amount"] = tax_amount
+    kpi["tax_total"] = tax_total
+    kpi["net_profit"] = net_profit
+    kpi["margin"] = margin
+
+
+def _build_purchase_price_index(products: list[dict[str, Any]]) -> dict[tuple[str, str], float]:
+    index: dict[tuple[str, str], float] = {}
+    for row in products or []:
+        if not isinstance(row, dict):
+            continue
+        mp = str(row.get("marketplace") or "").strip().lower()
+        if mp not in {"wb", "ozon"}:
+            continue
+        price = max(0.0, float(round(_to_float(row.get("purchase_price") or 0.0), 2)))
+        article = _norm_key(row.get("article"))
+        external_id = _norm_key(row.get("external_id"))
+        barcode = _norm_key(row.get("barcode"))
+        for key in (article, external_id, barcode):
+            if key:
+                index[(mp, key)] = price
+    return index
+
+
+def _resolve_purchase_price(
+    index: dict[tuple[str, str], float],
+    *,
+    marketplace: str,
+    article: str,
+    external_id: str,
+    barcode: str = "",
+) -> float:
+    mp = str(marketplace or "").strip().lower()
+    for raw in (article, external_id, barcode):
+        key = _norm_key(raw)
+        if not key:
+            continue
+        value = index.get((mp, key))
+        if value is None:
+            continue
+        return max(0.0, float(round(_to_float(value), 2)))
+    return 0.0
+
+
+def _split_amount_by_share(total: float, primary_share: float) -> tuple[float, float]:
+    value = float(round(_to_float(total), 2))
+    if abs(value) < 1e-9:
+        return 0.0, 0.0
+    share = min(1.0, max(0.0, float(primary_share or 0.0)))
+    primary = float(round(value * share, 2))
+    secondary = float(round(value - primary, 2))
+    return primary, secondary
+
+
+def _calc_monthly_custom_expense_breakdown(
+    *,
+    expenses: list[dict[str, Any]],
+    date_from: date,
+    date_to: date,
+) -> dict[str, float]:
+    totals = {"all": 0.0, "wb": 0.0, "ozon": 0.0}
+    for row in expenses or []:
+        if not row or not bool(row.get("is_active", True)):
+            continue
+        row_market = str(row.get("marketplace") or "all").strip().lower()
+        if row_market not in {"all", "wb", "ozon"}:
+            row_market = "all"
+        totals[row_market] = float(
+            round(
+                float(totals.get(row_market) or 0.0)
+                + _expense_amount_for_period(row=row, date_from=date_from, date_to=date_to),
+                2,
+            )
+        )
+    return totals
+
+def _calc_monthly_custom_expenses(
+    *,
+    expenses: list[dict[str, Any]],
+    date_from: date,
+    date_to: date,
+    marketplace: str,
+) -> float:
+    selected_market = str(marketplace or "all").strip().lower()
+    if selected_market not in {"all", "wb", "ozon"}:
+        selected_market = "all"
+    total = 0.0
+    for row in expenses or []:
+        if not row or not bool(row.get("is_active", True)):
+            continue
+        row_market = str(row.get("marketplace") or "all").strip().lower()
+        if row_market not in {"all", "wb", "ozon"}:
+            row_market = "all"
+        if selected_market in {"wb", "ozon"} and row_market not in {"all", selected_market}:
+            continue
+        total += _expense_amount_for_period(row=row, date_from=date_from, date_to=date_to)
+    return float(round(total, 2))
 
 def _normalize_accounting_warnings(warnings: list[Any]) -> list[str]:
     out: list[str] = []
     for raw in warnings or []:
-        text = _decode_mojibake_text(raw).strip()
+        text = str(raw or "").strip()
         if not text:
             continue
         low = text.lower()
         if "429" in low and "wb" in low:
-            out.append("WB API ограничил запросы (429), показана доступная часть данных.")
+            out.append("WB API is rate limited (429); showing available partial data.")
             continue
         if "429" in low and "ozon" in low:
-            out.append("Ozon API ограничил запросы (429), показана доступная часть данных.")
+            out.append("Ozon API is rate limited (429); showing available partial data.")
             continue
         if "bad_json" in low and "wb" in low:
-            out.append("WB API вернул нестабильный ответ, применена частичная статистика.")
+            out.append("WB API returned unstable JSON; partial statistics are applied.")
             continue
-        if "wb finance api недоступен" in low and (
-            "wb sales api вернул некорректный ответ" in low
-            or "wb sales api вернул неожиданный формат" in low
-            or "bad_json" in low
-        ):
-            out.append("WB API вернул нестабильный ответ, применена частичная статистика.")
+        if ("wb finance api" in low and "unavailable" in low) and ("wb sales api" in low or "bad_json" in low):
+            out.append("WB API returned unstable data; partial statistics are applied.")
             continue
-        if "ads api недоступен" in low or "рекламные расходы временно недоступны" in low:
-            out.append("Рекламные расходы временно недоступны в API. Остальные показатели рассчитаны.")
+        if ("ads api" in low and "unavailable" in low) or ("ad spend" in low and "unavailable" in low):
+            out.append("Ads spend is temporarily unavailable from API. Other metrics are calculated.")
             continue
-        if "некорректный ответ" in low and "ozon" in low:
-            out.append("Ozon accounting API вернул нестандартный ответ, показаны доступные данные.")
+        if "ozon" in low and ("unexpected format" in low or "bad_json" in low or "invalid" in low):
+            out.append("Ozon accounting API returned a non-standard response; available data is shown.")
             continue
-        if "api недоступен" in low or "api unavailable" in low:
+        if "api unavailable" in low:
             out.append(text)
             continue
-        if "ключ" in low or "unauthorized" in low:
-            out.append("Проверьте корректность API-ключей WB/Ozon.")
+        if "unauthorized" in low or "forbidden" in low:
+            out.append("Please verify WB/Ozon API keys.")
             continue
         out.append(text)
-    # Stable order without duplicates.
     return list(dict.fromkeys(out))
 
 

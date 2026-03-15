@@ -888,6 +888,51 @@ class AccountingDataOut(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class AccountingMonthlyKpiOut(BaseModel):
+    turnover: float = 0.0
+    orders: int = 0
+    units: int = 0
+    buyouts: int = 0
+    cogs: float = 0.0
+    commission: float = 0.0
+    acquiring: float = 0.0
+    logistics: float = 0.0
+    storage: float = 0.0
+    penalties: float = 0.0
+    ad_spend: float = 0.0
+    marketplace_expense: float = 0.0
+    custom_expenses: float = 0.0
+    other_expenses: float = 0.0
+    tax_amount: float = 0.0
+    vat_amount: float = 0.0
+    tax_total: float = 0.0
+    operating_profit: float = 0.0
+    net_profit: float = 0.0
+    margin: float = 0.0
+
+
+class AccountingMonthlyRowOut(BaseModel):
+    month_key: str
+    label: str
+    date_from: str
+    date_to: str
+    wb: AccountingMonthlyKpiOut = Field(default_factory=AccountingMonthlyKpiOut)
+    ozon: AccountingMonthlyKpiOut = Field(default_factory=AccountingMonthlyKpiOut)
+    total: AccountingMonthlyKpiOut = Field(default_factory=AccountingMonthlyKpiOut)
+
+
+class AccountingMonthlyMetaOut(BaseModel):
+    source: str = "live"
+    partial: bool = False
+    warnings: list[str] = Field(default_factory=list)
+    generated_at: str = ""
+
+
+class AccountingMonthlySummaryOut(BaseModel):
+    months: list[AccountingMonthlyRowOut] = Field(default_factory=list)
+    meta: AccountingMonthlyMetaOut = Field(default_factory=AccountingMonthlyMetaOut)
+
+
 class AccountingExpenseListOut(BaseModel):
     rows: list[AccountingExpenseOut] = Field(default_factory=list)
 

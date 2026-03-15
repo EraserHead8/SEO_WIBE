@@ -1,11 +1,12 @@
 let accountingReloadTimer = null;
 let accountingExpenseEditId = 0;
 let accountingRequestSeq = 0;
-let accountingLastFullQuery = "";
-let accountingLastFullAt = 0;
-let accountingChartRerenderTimer = null;
+let accountingMonthlyRequestSeq = 0;
+let accountingMonthlyLiveRefreshInFlight = false;
+let accountingMonthlyState = { months: [], meta: {} };
+let accountingMonthlyLastGoodState = null;
 
-const ACCOUNTING_SUBTABS = ["overview", "analysis", "expenses", "settings"];
+const ACCOUNTING_SUBTABS = ["overview", "analysis", "monthly", "expenses", "settings"];
 const ACCOUNTING_RANGE_DAYS = {
   day: 0,
   week: 6,
@@ -274,19 +275,6 @@ function renderAccountingOverview() {
     .join("");
 }
 
-function scheduleAccountingChartRerender(delayMs = 120) {
-  if (accountingChartRerenderTimer) {
-    clearTimeout(accountingChartRerenderTimer);
-    accountingChartRerenderTimer = null;
-  }
-  accountingChartRerenderTimer = setTimeout(() => {
-    accountingChartRerenderTimer = null;
-    if (currentTab === "accounting" && currentAccountingSubtab === "overview") {
-      try { renderAccountingChart(); } catch (_) {}
-    }
-  }, Math.max(60, Number(delayMs || 0)));
-}
-
 function renderAccountingChart() {
   const host = document.getElementById("accountingProfitChart");
   const meta = document.getElementById("accountingOverviewMeta");
@@ -295,15 +283,6 @@ function renderAccountingChart() {
   if (!points.length) {
     clearChartHost(host);
     meta.textContent = tr("Нет данных по прибыли за выбранный период.", "No profit data for selected period.");
-    return;
-  }
-
-  const rect = typeof host.getBoundingClientRect === "function"
-    ? host.getBoundingClientRect()
-    : { width: Number(host.clientWidth || 0), height: Number(host.clientHeight || 0) };
-  const hiddenOrTiny = host.offsetParent === null || Number(rect.width || 0) < 220 || Number(rect.height || 0) < 150;
-  if (hiddenOrTiny) {
-    scheduleAccountingChartRerender(160);
     return;
   }
 
@@ -397,16 +376,9 @@ function renderAccountingChart() {
         },
         true
       );
-      const safeResize = () => {
-        try { chart.resize(); } catch (_) {}
-      };
-      safeResize();
-      if (typeof requestAnimationFrame === "function") {
-        requestAnimationFrame(() => {
-          safeResize();
-          requestAnimationFrame(() => safeResize());
-        });
-      }
+      try {
+        chart.resize();
+      } catch (_) {}
     }
   } else {
     clearChartHost(host);
@@ -418,6 +390,7 @@ function renderAccountingChart() {
     `${tr("Мин", "Min")}: <b>${formatMoney(min)}</b>`,
   ].map((x) => `<span>${x}</span>`).join("");
 }
+
 function renderAccountingAnalysis() {
   const tbody = document.getElementById("accountingAnalysisTable");
   const meta = document.getElementById("accountingAnalysisMeta");
@@ -666,6 +639,260 @@ async function saveAccountingExpense() {
   accountingSetMeta("accountingExpensesMeta", id > 0 ? tr("Расход обновлен.", "Expense updated.") : tr("Расход добавлен.", "Expense created."));
 }
 
+function accountingNormalizeMonthlyKpi(raw) {
+  const src = raw && typeof raw === "object" ? raw : {};
+  const toNum = (key) => {
+    const num = Number(src[key] || 0);
+    return Number.isFinite(num) ? num : 0;
+  };
+  return {
+    turnover: toNum("turnover"),
+    orders: Math.round(toNum("orders")),
+    units: Math.round(toNum("units")),
+    buyouts: Math.round(toNum("buyouts")),
+    cogs: toNum("cogs"),
+    commission: toNum("commission"),
+    acquiring: toNum("acquiring"),
+    logistics: toNum("logistics"),
+    storage: toNum("storage"),
+    penalties: toNum("penalties"),
+    ad_spend: toNum("ad_spend"),
+    marketplace_expense: toNum("marketplace_expense"),
+    custom_expenses: toNum("custom_expenses"),
+    other_expenses: toNum("other_expenses"),
+    tax_amount: toNum("tax_amount"),
+    vat_amount: toNum("vat_amount"),
+    tax_total: toNum("tax_total"),
+    operating_profit: toNum("operating_profit"),
+    net_profit: toNum("net_profit"),
+    margin: toNum("margin"),
+  };
+}
+
+function accountingNormalizeMonthlyPayload(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const sourceRows = Array.isArray(raw.months) ? raw.months : [];
+  const rows = sourceRows.slice(0, 12).map((row) => {
+    const item = row && typeof row === "object" ? row : {};
+    return {
+      month_key: String(item.month_key || ""),
+      label: String(item.label || item.month_key || ""),
+      date_from: String(item.date_from || ""),
+      date_to: String(item.date_to || ""),
+      wb: accountingNormalizeMonthlyKpi(item.wb),
+      ozon: accountingNormalizeMonthlyKpi(item.ozon),
+      total: accountingNormalizeMonthlyKpi(item.total),
+    };
+  });
+  const metaSrc = raw.meta && typeof raw.meta === "object" ? raw.meta : {};
+  return {
+    months: rows,
+    meta: {
+      source: String(metaSrc.source || "live"),
+      partial: Boolean(metaSrc.partial),
+      warnings: Array.isArray(metaSrc.warnings) ? metaSrc.warnings.map((x) => String(x || "").trim()).filter(Boolean) : [],
+      generated_at: String(metaSrc.generated_at || ""),
+    },
+  };
+}
+
+function accountingMonthlyMetric(label, value, tone = "neutral") {
+  const toneCls = tone ? ` accounting-month-metric-${tone}` : "";
+  return `<span class="accounting-month-metric${toneCls}"><b>${escapeHtml(label)}</b><strong>${escapeHtml(String(value))}</strong></span>`;
+}
+
+function renderAccountingMonthlySummary() {
+  const host = document.getElementById("accountingMonthlyTable");
+  if (!host) return;
+
+  try {
+    const state = accountingMonthlyState && typeof accountingMonthlyState === "object"
+      ? accountingMonthlyState
+      : { months: [], meta: {} };
+    const rows = Array.isArray(state.months) ? state.months : [];
+    const meta = state.meta && typeof state.meta === "object" ? state.meta : {};
+    const warnings = Array.isArray(meta.warnings)
+      ? [...new Set(meta.warnings.map((x) => normalizeAccountingWarning(x)).filter(Boolean))]
+      : [];
+
+    const statusParts = [];
+    if (String(meta.source || "").trim()) {
+      const sourceLabel = String(meta.source || "").toLowerCase().includes("cache")
+        ? tr("Источник: кэш", "Source: cache")
+        : tr("Источник: live", "Source: live");
+      statusParts.push(sourceLabel);
+    }
+    if (meta.generated_at) {
+      const parsed = Date.parse(String(meta.generated_at));
+      if (Number.isFinite(parsed)) {
+        statusParts.push(`${tr("Сформировано", "Generated")}: ${new Date(parsed).toLocaleString()}`);
+      }
+    }
+    if (warnings.length) {
+      statusParts.push(warnings.slice(0, 2).join(" | "));
+      if (warnings.length > 2) statusParts.push(`(+ ${warnings.length - 2} more)`);
+    }
+    accountingSetMeta("accountingMonthlyStatus", statusParts.join(" | ") || tr("Помесячная сводка загружена.", "Monthly summary loaded."));
+
+    if (!rows.length) {
+      host.innerHTML = `<div class="panel"><div class="hint">${escapeHtml(tr("Нет данных за последние 12 месяцев.", "No data for the last 12 months."))}</div></div>`;
+      return;
+    }
+
+    host.innerHTML = rows.map((row) => {
+      const wb = row.wb || accountingNormalizeMonthlyKpi({});
+      const ozon = row.ozon || accountingNormalizeMonthlyKpi({});
+      const total = row.total || accountingNormalizeMonthlyKpi({});
+      const deltaNet = Number(wb.net_profit || 0) - Number(ozon.net_profit || 0);
+      const deltaClass = deltaNet > 0 ? "accounting-month-delta-positive" : (deltaNet < 0 ? "accounting-month-delta-negative" : "");
+      const totalNetClass = Number(total.net_profit || 0) >= 0 ? "accounting-month-total-positive" : "accounting-month-total-negative";
+
+      const buildCard = (title, data, code) => `
+        <article class="accounting-month-card accounting-month-card-${code}">
+          <header>
+            <h4>${escapeHtml(title)}</h4>
+            <span>${escapeHtml(`${tr("Orders", "Orders")}: ${formatInt(data.orders || 0)} | ${tr("Units", "Units")}: ${formatInt(data.units || 0)}`)}</span>
+          </header>
+          <div class="accounting-month-metrics-grid">
+            ${accountingMonthlyMetric(tr("Оборот", "Turnover"), formatMoney(data.turnover || 0), "neutral")}
+            ${accountingMonthlyMetric(tr("Комиссия", "Commission"), formatMoney(data.commission || 0), "expense")}
+            ${accountingMonthlyMetric(tr("Реклама", "Ad spend"), formatMoney(data.ad_spend || 0), "expense")}
+            ${accountingMonthlyMetric(tr("Логистика", "Logistics"), formatMoney(data.logistics || 0), "expense")}
+            ${accountingMonthlyMetric(tr("Хранение", "Storage"), formatMoney(data.storage || 0), "expense")}
+            ${accountingMonthlyMetric(tr("Штрафы", "Penalties"), formatMoney(data.penalties || 0), "expense")}
+            ${accountingMonthlyMetric(tr("Эквайринг", "Acquiring"), formatMoney(data.acquiring || 0), "expense")}
+            ${accountingMonthlyMetric(tr("Себестоимость", "COGS"), formatMoney(data.cogs || 0), "expense")}
+            ${accountingMonthlyMetric(tr("Налоги", "Taxes"), formatMoney(data.tax_total || 0), "expense")}
+            ${accountingMonthlyMetric(tr("Чистая прибыль", "Net profit"), formatMoney(data.net_profit || 0), Number(data.net_profit || 0) >= 0 ? "profit" : "expense")}
+          </div>
+        </article>
+      `;
+
+      return `
+        <section class="accounting-month-row">
+          <header class="accounting-month-row-head">
+            <div>
+              <h3>${escapeHtml(row.label || row.month_key || "-")}</h3>
+              <span>${escapeHtml(`${row.date_from || ""} - ${row.date_to || ""}`)}</span>
+            </div>
+            <div class="accounting-month-row-summary">
+              <span class="accounting-month-total ${totalNetClass}">${escapeHtml(`${tr("Итого net", "Total net")}: ${formatMoney(total.net_profit || 0)}`)}</span>
+              <span class="accounting-month-total">${escapeHtml(`${tr("Итого оборот", "Total turnover")}: ${formatMoney(total.turnover || 0)}`)}</span>
+              <span class="accounting-month-delta ${deltaClass}">${escapeHtml(`${tr("Delta net WB-Ozon", "Delta net WB-Ozon")}: ${formatMoney(deltaNet)}`)}</span>
+            </div>
+          </header>
+          <div class="accounting-month-row-grid">
+            ${buildCard("WB", wb, "wb")}
+            ${buildCard("Ozon", ozon, "ozon")}
+          </div>
+        </section>
+      `;
+    }).join("");
+  } catch (err) {
+    if (accountingMonthlyLastGoodState) {
+      accountingMonthlyState = accountingMonthlyLastGoodState;
+    }
+    accountingSetMeta(
+      "accountingMonthlyStatus",
+      tr(
+        "Ошибка отображения monthly-сводки. Показаны последние сохраненные данные.",
+        "Monthly summary render error. Showing last saved data."
+      )
+    );
+  }
+}
+
+async function loadAccountingMonthlySummary(forceBusy = false) {
+  if (modulesLoaded && enabledModules instanceof Set && !enabledModules.has("accounting")) {
+    accountingSetMeta("accountingMonthlyStatus", tr("Модуль бухгалтерии отключен администратором.", "Accounting module is disabled by admin."));
+    return false;
+  }
+
+  accountingMonthlyRequestSeq += 1;
+  const runSeq = accountingMonthlyRequestSeq;
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Moscow";
+  const fastQp = new URLSearchParams();
+  fastQp.set("months", "12");
+  fastQp.set("tz", tz);
+  fastQp.set("fast", "1");
+
+  accountingSetMeta("accountingMonthlyStatus", tr("Загружаем помесячную прибыль...", "Loading monthly profit summary..."));
+
+  const fastFetcher = () => requestJson(`/api/accounting/monthly-summary?${fastQp.toString()}`, {
+    headers: authHeaders(),
+    timeoutMs: 180000,
+  });
+
+  const fastPayload = forceBusy
+    ? await withBusy(
+      tr("Обновляем помесячную прибыль...", "Refreshing monthly profit summary..."),
+      fastFetcher
+    ).catch(() => null)
+    : await fastFetcher().catch(() => null);
+
+  if (!fastPayload) {
+    if (accountingMonthlyLastGoodState) {
+      accountingMonthlyState = accountingMonthlyLastGoodState;
+      renderAccountingMonthlySummary();
+      accountingSetMeta("accountingMonthlyStatus", tr("network: показаны последние доступные данные", "network: showing last available data"));
+    } else {
+      accountingSetMeta("accountingMonthlyStatus", tr("network: не удалось загрузить monthly-сводку", "network: failed to load monthly summary"));
+    }
+    return false;
+  }
+  if (runSeq !== accountingMonthlyRequestSeq) return false;
+
+  const normalizedFast = accountingNormalizeMonthlyPayload(fastPayload);
+  if (!normalizedFast) {
+    if (accountingMonthlyLastGoodState) {
+      accountingMonthlyState = accountingMonthlyLastGoodState;
+      renderAccountingMonthlySummary();
+      accountingSetMeta("accountingMonthlyStatus", tr("bad_payload: показаны последние доступные данные", "bad_payload: showing last available data"));
+    } else {
+      accountingSetMeta("accountingMonthlyStatus", tr("bad_payload: сервер вернул некорректный ответ", "bad_payload: server returned malformed response"));
+    }
+    return false;
+  }
+
+  accountingMonthlyState = normalizedFast;
+  accountingMonthlyLastGoodState = normalizedFast;
+  renderAccountingMonthlySummary();
+
+  const source = String(normalizedFast.meta?.source || "").toLowerCase();
+  const fromCache = source.includes("cache") || source.includes("db-") || source.includes("fastpath") || source.includes("stale");
+  if (!fromCache || accountingMonthlyLiveRefreshInFlight) {
+    return true;
+  }
+
+  accountingMonthlyLiveRefreshInFlight = true;
+  const liveQp = new URLSearchParams(fastQp.toString());
+  liveQp.set("fast", "0");
+  requestJson(`/api/accounting/monthly-summary?${liveQp.toString()}`, {
+    headers: authHeaders(),
+    timeoutMs: 180000,
+  })
+    .then((livePayload) => {
+      if (runSeq !== accountingMonthlyRequestSeq) return;
+      const normalizedLive = accountingNormalizeMonthlyPayload(livePayload);
+      if (!normalizedLive) {
+        accountingSetMeta("accountingMonthlyStatus", tr("partial: live-обновление вернуло неполный ответ", "partial: live refresh returned partial payload"));
+        return;
+      }
+      accountingMonthlyState = normalizedLive;
+      accountingMonthlyLastGoodState = normalizedLive;
+      renderAccountingMonthlySummary();
+    })
+    .catch(() => {
+      if (runSeq !== accountingMonthlyRequestSeq) return;
+      accountingSetMeta("accountingMonthlyStatus", tr("upstream-limited: оставлены кэшированные данные", "upstream-limited: cached data kept"));
+    })
+    .finally(() => {
+      accountingMonthlyLiveRefreshInFlight = false;
+    });
+
+  return true;
+}
+
 async function loadAccountingData(forceBusy = false, retryAttempt = 0) {
   if (modulesLoaded && enabledModules instanceof Set && !enabledModules.has("accounting")) {
     accountingSetMeta("accountingWarnings", tr("Модуль бухгалтерии отключен администратором.", "Accounting module is disabled by admin."));
@@ -691,131 +918,79 @@ async function loadAccountingData(forceBusy = false, retryAttempt = 0) {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   qp.set("tz", tz);
 
-  const fastQp = new URLSearchParams(qp);
-  fastQp.set("fast", "1");
-  const fullQp = new URLSearchParams(qp);
-  fullQp.set("fast", "0");
-  const requestSignature = fullQp.toString();
-  const skipBackgroundFull = !forceBusy && accountingLastFullQuery === requestSignature && (Date.now() - Number(accountingLastFullAt || 0)) < 45000;
+  accountingSetMeta("accountingWarnings", tr("Загружаем бухгалтерские данные...", "Loading accounting data..."));
 
-  accountingSetMeta("accountingWarnings", tr("Загрузка данных бухгалтерии...", "Loading accounting data..."));
-
-  const fetchFast = () => requestJson(`/api/accounting/data?${fastQp.toString()}`, {
-    headers: authHeaders(),
-    timeoutMs: 90000,
-  });
-
-  const fetchFull = () => requestJson(`/api/accounting/data?${fullQp.toString()}`, {
+  const fetcher = () => requestJson(`/api/accounting/data?${qp.toString()}`, {
     headers: authHeaders(),
     timeoutMs: 180000,
   });
 
-  const applyPayload = async (data, { allowRetry = true } = {}) => {
-    if (!data) return false;
-    if (runSeq !== accountingRequestSeq) return false;
-
-    const hasExpectedShape = Boolean(
-      data
-      && typeof data === "object"
-      && (
-        Object.prototype.hasOwnProperty.call(data, "overview")
-        || Object.prototype.hasOwnProperty.call(data, "analysis_rows")
-        || Object.prototype.hasOwnProperty.call(data, "chart")
-        || Object.prototype.hasOwnProperty.call(data, "warnings")
-      )
-    );
-    if (!hasExpectedShape) {
-      accountingSetMeta(
-        "accountingWarnings",
-        tr(
-          "Сервер вернул некорректные данные по бухгалтерии. Текущие данные сохранены, повторите обновление.",
-          "Server returned malformed accounting payload. Current data is kept, please retry refresh."
-        )
-      );
-      return false;
-    }
-
-    accountingOverview = data.overview || {};
-    accountingChartRows = Array.isArray(data.chart) ? data.chart : [];
-    accountingAnalysisRows = Array.isArray(data.analysis_rows) ? data.analysis_rows : [];
-    accountingWarnings = Array.isArray(data.warnings) ? data.warnings : [];
-
-    const hasWb429 = accountingWarnings.some((x) => {
-      const low = String(x || "").toLowerCase();
-      return low.includes("429") && low.includes("wb");
-    });
-
-    if (hasWb429 && (marketplace === "all" || marketplace === "wb") && allowRetry && retryAttempt < 3) {
-      accountingSetMeta(
-        "accountingWarnings",
-        tr(
-          "WB API ограничил запросы (429). Повторяем загрузку автоматически...",
-          "WB API rate-limited requests (429). Retrying automatically..."
-        )
-      );
-      await delay(1800 + retryAttempt * 1400);
-      if (runSeq !== accountingRequestSeq) return false;
-      return loadAccountingData(forceBusy, retryAttempt + 1);
-    }
-
-    renderAccountingWarnings();
-    renderAccountingOverview();
-    renderAccountingChart();
-    renderAccountingAnalysis();
-    markModuleLoaded("accounting");
-    return true;
-  };
-
-  if (forceBusy) {
-    const fullData = await withBusy(
-      tr("Обновляем модуль бухгалтерии...", "Refreshing Accounting module..."),
-      fetchFull,
+  const data = forceBusy
+    ? await withBusy(
+      tr("Обновляем модуль Бухгалтерия…", "Refreshing Accounting module..."),
+      fetcher,
       tr("Загрузка финансовых данных WB/Ozon может занять до 1-2 минут.", "WB/Ozon financial data load may take up to 1-2 minutes.")
     ).catch((e) => {
       alert(e.message);
       return null;
-    });
-    const applied = await applyPayload(fullData, { allowRetry: true });
-    if (applied) {
-      accountingLastFullQuery = requestSignature;
-      accountingLastFullAt = Date.now();
-    }
-    return applied;
-  }
-
-  const fastData = await fetchFast().catch(() => null);
-  if (!fastData) {
-    const fullData = await fetchFull().catch((e) => {
+    })
+    : await fetcher().catch((e) => {
       accountingSetMeta("accountingWarnings", e.message);
       return null;
     });
-    const applied = await applyPayload(fullData, { allowRetry: true });
-    if (applied) {
-      accountingLastFullQuery = requestSignature;
-      accountingLastFullAt = Date.now();
-    }
-    return applied;
+
+  if (!data) return false;
+  if (runSeq !== accountingRequestSeq) return false;
+  const hasExpectedShape = Boolean(
+    data
+    && typeof data === "object"
+    && (
+      Object.prototype.hasOwnProperty.call(data, "overview")
+      || Object.prototype.hasOwnProperty.call(data, "analysis_rows")
+      || Object.prototype.hasOwnProperty.call(data, "chart")
+      || Object.prototype.hasOwnProperty.call(data, "warnings")
+    )
+  );
+  if (!hasExpectedShape) {
+    accountingSetMeta(
+      "accountingWarnings",
+      tr(
+        "Сервер вернул некорректный ответ по бухгалтерии. Данные сохранены в текущем состоянии, повторите обновление.",
+        "Server returned malformed accounting payload. Current data is kept, please retry refresh."
+      )
+    );
+    return false;
   }
 
-  const appliedFast = await applyPayload(fastData, { allowRetry: true });
-  if (!appliedFast || runSeq !== accountingRequestSeq) return appliedFast;
-  if (skipBackgroundFull) {
-    return true;
+  accountingOverview = data.overview || {};
+  accountingChartRows = Array.isArray(data.chart) ? data.chart : [];
+  accountingAnalysisRows = Array.isArray(data.analysis_rows) ? data.analysis_rows : [];
+  accountingWarnings = Array.isArray(data.warnings) ? data.warnings : [];
+  const hasWb429 = accountingWarnings.some((x) => {
+    const low = String(x || "").toLowerCase();
+    return low.includes("429") && low.includes("wb");
+  });
+  if (hasWb429 && (marketplace === "all" || marketplace === "wb") && retryAttempt < 3) {
+    accountingSetMeta(
+      "accountingWarnings",
+      tr(
+        "WB API ограничил запросы (429). Повторяем загрузку автоматически...",
+        "WB API rate-limited requests (429). Retrying automatically..."
+      )
+    );
+    await delay(1800 + retryAttempt * 1400);
+    if (runSeq !== accountingRequestSeq) return false;
+    return loadAccountingData(forceBusy, retryAttempt + 1);
   }
 
-  void (async () => {
-    const fullData = await fetchFull().catch(() => null);
-    if (!fullData) return;
-    if (runSeq !== accountingRequestSeq) return;
-    const applied = await applyPayload(fullData, { allowRetry: false });
-    if (applied) {
-      accountingLastFullQuery = requestSignature;
-      accountingLastFullAt = Date.now();
-    }
-  })();
-
+  renderAccountingWarnings();
+  renderAccountingOverview();
+  renderAccountingChart();
+  renderAccountingAnalysis();
+  markModuleLoaded("accounting");
   return true;
 }
+
 async function loadAccountingWorkspace() {
   if (modulesLoaded && enabledModules instanceof Set && !enabledModules.has("accounting")) {
     return false;
@@ -829,6 +1004,9 @@ async function loadAccountingWorkspace() {
     loadAccountingData(),
   ]);
   switchAccountingSubtab(currentAccountingSubtab || "overview", false);
+  if ((currentAccountingSubtab || "overview") === "monthly") {
+    await loadAccountingMonthlySummary();
+  }
   return true;
 }
 
@@ -843,13 +1021,16 @@ function switchAccountingSubtab(tab, preload = true) {
   try {
     sessionStorage.setItem("seo_wibe_last_accounting_subtab", String(next || "overview"));
   } catch (_) {}
-  if (next === "overview") {
-    scheduleAccountingChartRerender(80);
+  if (typeof window.refreshSectionHeading === "function") {
+    try { window.refreshSectionHeading("accounting"); } catch (_) {}
   }
   if (!preload) return;
   if (next === "overview" || next === "analysis") {
     trackUiActivity("ui_subtab_opened", "accounting", `subtab=${next}`, { cooldownMs: 15000 });
     loadAccountingData();
+  } else if (next === "monthly") {
+    trackUiActivity("ui_subtab_opened", "accounting", "subtab=monthly", { cooldownMs: 15000 });
+    loadAccountingMonthlySummary();
   } else if (next === "expenses") {
     trackUiActivity("ui_subtab_opened", "accounting", "subtab=expenses", { cooldownMs: 15000 });
     loadAccountingExpenses();
@@ -985,9 +1166,11 @@ function applyAccountingUiLanguage() {
   };
   setText("#accountingSubtabOverviewBtn", isEn ? "Overview" : "Обзор");
   setText("#accountingSubtabAnalysisBtn", isEn ? "Analysis" : "Анализ");
+  setText("#accountingSubtabMonthlyBtn", isEn ? "Monthly profit" : "Прибыль по месяцам");
   setText("#accountingSubtabExpensesBtn", isEn ? "Expenses" : "Расходы");
   setText("#accountingSubtabSettingsBtn", isEn ? "Taxes & settings" : "Налоги и параметры");
   setText("#accountingSubtabOverview .panel h3", isEn ? "Profit overview" : "Прибыль и обзор");
+  setText("#accountingSubtabMonthly .panel h3", isEn ? "Monthly profit by marketplaces" : "Прибыль по месяцам (WB и Ozon)");
   setText("#accountingSubtabOverview .grid-6 button:nth-of-type(1)", isEn ? "Refresh data" : "Обновить данные");
   setText("#accountingSubtabOverview .grid-6 button:nth-of-type(2)", isEn ? "Reload all" : "Обновить все");
   const templateMarketSel = document.getElementById("accountingTemplateMarketplace");
@@ -1045,6 +1228,7 @@ function applyAccountingUiLanguage() {
 window.switchAccountingSubtab = switchAccountingSubtab;
 window.loadAccountingWorkspace = loadAccountingWorkspace;
 window.loadAccountingData = loadAccountingData;
+window.loadAccountingMonthlySummary = loadAccountingMonthlySummary;
 window.setAccountingRange = setAccountingRange;
 window.onAccountingPeriodChanged = onAccountingPeriodChanged;
 window.onAccountingDateChanged = onAccountingDateChanged;
