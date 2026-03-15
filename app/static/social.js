@@ -1,4 +1,4 @@
-let socialState = {
+﻿let socialState = {
   boot: null,
   currentSubtab: "chat",
   gamesLeaderboardCache: new Map(),
@@ -3327,6 +3327,11 @@ function socialHandleMobileBack() {
     socialToggleEmojiPicker(false);
     return true;
   }
+  const modal = document.getElementById("socialModal");
+  if (modal && !modal.classList.contains("hidden")) {
+    socialCloseModal();
+    return true;
+  }
   if (Number(socialState.chatReplyTo?.id || 0) > 0) {
     socialClearReply();
     return true;
@@ -5790,6 +5795,8 @@ document.addEventListener("visibilitychange", () => {
 });
 
 socialMaybeStartHooks();
+
+
 
 
 
