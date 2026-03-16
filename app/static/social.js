@@ -28,6 +28,10 @@
   actors: [],
   projects: [],
   tasks: [],
+  tasksAll: [],
+  tasksCacheKey: "",
+  tasksCacheLoadedAt: 0,
+  tasksLoadSeq: 0,
   calendarEvents: [],
   calendarDate: new Date(),
   calendarSelectedDay: "",
@@ -844,6 +848,7 @@ function socialEnsureNotificationCenter() {
     if (panel.contains(target)) return;
     if (bell && bell.contains(target)) return;
     if (drawerBell && drawerBell.contains(target)) return;
+    if (target?.closest?.("#socialBellBtn, #mobileDrawerBellBtn, .icon-bell-btn")) return;
     socialCloseNotificationCenter();
   }, true);
 
@@ -864,8 +869,15 @@ function socialRenderNotificationCenter() {
     const id = Number(row?.id || 0);
     const kindClass = socialNotificationKindClass(row?.kind || "");
     const isRead = Boolean(row?.is_read);
-    const title = String(row?.title || tr("Уведомление", "Notification"));
-    const body = String(row?.body || "");
+    const decodeText = (value) => {
+      const raw = String(value || "");
+      if (typeof decodePossiblyMojibake === "function") {
+        try { return decodePossiblyMojibake(raw); } catch (_) {}
+      }
+      return raw;
+    };
+    const title = decodeText(row?.title || tr("Уведомление", "Notification")).replace(/\s+/g, " ").trim();
+    const body = decodeText(row?.body || "").replace(/\s+/g, " ").trim();
     const created = String(row?.created_at || "").replace("T", " ").slice(0, 16);
     return `
       <button type="button" class="social-notif-item ${isRead ? "is-read" : "is-unread"} kind-${escapeHtml(kindClass)}" onclick="socialOpenNotificationFromCenter(${id})">
@@ -901,8 +913,17 @@ async function socialLoadNotificationCenterFeed(force = false) {
   try {
     const data = await socialRequest('/api/social/notifications?limit=80').catch(() => null);
     const rows = Array.isArray(data?.rows) ? data.rows : [];
+    const decodeText = (value) => {
+      const raw = String(value || "");
+      if (typeof decodePossiblyMojibake === "function") {
+        try { return decodePossiblyMojibake(raw); } catch (_) {}
+      }
+      return raw;
+    };
     socialState.notificationsFeed = rows.map((row) => ({
       ...row,
+      title: decodeText(row?.title || ""),
+      body: decodeText(row?.body || ""),
       is_read: Boolean(row?.is_read),
     }));
     socialState.unreadCount = Number(data?.unread || 0);
@@ -924,7 +945,7 @@ async function socialToggleNotificationCenter(event = null) {
     return true;
   }
 
-  const anchor = event?.currentTarget || document.getElementById('socialBellBtn') || document.getElementById('mobileDrawerBellBtn');
+  const anchor = event?.currentTarget || event?.target?.closest?.('#socialBellBtn, #mobileDrawerBellBtn, .icon-bell-btn') || document.getElementById('socialBellBtn') || document.getElementById('mobileDrawerBellBtn');
   await socialLoadNotificationCenterFeed(true);
   socialRenderNotificationCenter();
 
@@ -1053,7 +1074,14 @@ async function socialPollNotifications() {
     const rows = Array.isArray(data.rows) ? data.rows : [];
     if (!Array.isArray(socialState.notificationsFeed)) socialState.notificationsFeed = [];
     for (const srcRow of rows) {
-      const row = { ...srcRow, is_read: Boolean(srcRow?.is_read) };
+      const decodeText = (value) => {
+        const raw = String(value || "");
+        if (typeof decodePossiblyMojibake === "function") {
+          try { return decodePossiblyMojibake(raw); } catch (_) {}
+        }
+        return raw;
+      };
+      const row = { ...srcRow, title: decodeText(srcRow?.title || ""), body: decodeText(srcRow?.body || ""), is_read: Boolean(srcRow?.is_read) };
       const rowId = Number(row.id || 0);
       if (rowId > 0) {
         const idx = socialState.notificationsFeed.findIndex((x) => Number(x?.id || 0) === rowId);
@@ -1183,6 +1211,10 @@ function resetSocialState() {
     actors: [],
     projects: [],
     tasks: [],
+    tasksAll: [],
+    tasksCacheKey: "",
+    tasksCacheLoadedAt: 0,
+    tasksLoadSeq: 0,
     calendarEvents: [],
     calendarDate: new Date(),
     calendarSelectedDay: "",
@@ -4524,19 +4556,82 @@ async function socialLoadProjects() {
   if ([...select.options].some((x) => x.value === keep)) select.value = keep;
 }
 
-async function socialLoadTasks() {
+function socialTaskIncludeDoneEnabled() {
+  return Boolean(document.getElementById("socialTaskIncludeDone")?.checked);
+}
+
+function socialFilterTaskRows(rows, includeDone = false) {
+  const source = Array.isArray(rows) ? rows : [];
+  if (includeDone) return source.slice();
+  return source.filter((row) => String(row?.status || "todo").trim().toLowerCase() !== "done");
+}
+
+function socialApplyTaskRowsFromCache() {
+  const includeDone = socialTaskIncludeDoneEnabled();
+  const allRows = Array.isArray(socialState.tasksAll) ? socialState.tasksAll : [];
+  socialState.tasks = socialFilterTaskRows(allRows, includeDone);
+}
+
+async function socialLoadTasks(options = {}) {
+  const force = Boolean(options && options.force);
   const projectId = document.getElementById("socialTaskProjectFilter")?.value || "";
   const kind = String(document.getElementById("socialTaskKindFilter")?.value || "all").trim().toLowerCase();
-  const includeDone = Boolean(document.getElementById("socialTaskIncludeDone")?.checked);
+  const cacheKey = `${projectId || ""}|${kind || "all"}`;
+  const cachedRows = Array.isArray(socialState.tasksAll) ? socialState.tasksAll : [];
+  const hasCacheForKey = String(socialState.tasksCacheKey || "") === cacheKey
+    && (cachedRows.length > 0 || Number(socialState.tasksCacheLoadedAt || 0) > 0);
+  const cacheAgeMs = Date.now() - Number(socialState.tasksCacheLoadedAt || 0);
+  const cacheFresh = hasCacheForKey && cacheAgeMs < 60000;
+
+  if (!force && cacheFresh) {
+    socialApplyTaskRowsFromCache();
+    socialRenderTasks();
+    return;
+  }
+
   const qp = new URLSearchParams();
   if (projectId) qp.set("project_id", projectId);
   if (kind && kind !== "all") qp.set("task_kind", kind);
-  if (includeDone) qp.set("include_done", "1");
+  qp.set("include_done", "1");
+
+  const requestSeq = Number(socialState.tasksLoadSeq || 0) + 1;
+  socialState.tasksLoadSeq = requestSeq;
+
   const rows = await socialRequest(`/api/social/tasks${qp.toString() ? `?${qp.toString()}` : ""}`).catch((e) => {
     alert(e.message);
-    return [];
+    return null;
   });
-  socialState.tasks = Array.isArray(rows) ? rows : [];
+
+  if (requestSeq !== Number(socialState.tasksLoadSeq || 0)) return;
+
+  if (!Array.isArray(rows)) {
+    if (hasCacheForKey) {
+      socialApplyTaskRowsFromCache();
+      socialRenderTasks();
+    }
+    return;
+  }
+
+  const decodeText = (value) => {
+    const raw = String(value ?? "");
+    if (typeof decodePossiblyMojibake === "function") {
+      try { return decodePossiblyMojibake(raw); } catch (_) {}
+    }
+    return raw;
+  };
+
+  socialState.tasksAll = rows.map((row) => ({
+    ...row,
+    title: decodeText(row?.title || ""),
+    description: decodeText(row?.description || ""),
+    assignee_nick: decodeText(row?.assignee_nick || ""),
+    creator_nick: decodeText(row?.creator_nick || ""),
+    project_title: decodeText(row?.project_title || ""),
+  }));
+  socialState.tasksCacheKey = cacheKey;
+  socialState.tasksCacheLoadedAt = Date.now();
+
+  socialApplyTaskRowsFromCache();
   socialRenderTasks();
 }
 
@@ -4570,6 +4665,28 @@ function socialTaskPendingHint(taskId) {
   return tr("5с: повторный клик отменит возврат", "5s: click again to cancel restore");
 }
 
+function socialFormatTaskDateTime(iso) {
+  const raw = String(iso || "").trim();
+  if (!raw) return "";
+  const dt = socialParseDateSafe(raw);
+  if (!(dt instanceof Date) || Number.isNaN(dt.getTime())) {
+    return raw.slice(0, 16).replace("T", ", ");
+  }
+  const locale = currentLang === "en" ? "en-GB" : "ru-RU";
+  try {
+    return dt.toLocaleString(locale, {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).replace(".", ".");
+  } catch (_) {
+    return raw.slice(0, 16).replace("T", ", ");
+  }
+}
+
 function socialRenderTasks() {
   const host = document.getElementById("socialTasksBoard");
   if (!host) return;
@@ -4590,7 +4707,8 @@ function socialRenderTasks() {
           ? tr("Новые", "To do")
           : (status === "in_progress" ? tr("В работе", "In progress") : tr("Готово", "Done"));
         const priority = String(task?.priority || "normal");
-        const due = task?.due_date ? String(task.due_date).slice(0, 16).replace("T", ", ") : "";
+        const due = socialFormatTaskDateTime(task?.due_date);
+        const created = socialFormatTaskDateTime(task?.created_at);
         const dueDt = task?.due_date ? socialParseDateSafe(String(task.due_date || "")) : null;
         const isDone = status === "done";
         const isOverdue = !isDone && dueDt instanceof Date && !Number.isNaN(dueDt.getTime()) && dueDt.getTime() < Date.now();
@@ -4599,12 +4717,14 @@ function socialRenderTasks() {
         const kindLabel = kind === "personal" ? tr("ЛИЧНАЯ", "PERSONAL") : project;
         const isMine = myActorKey && String(task?.assignee_key || "") === myActorKey;
         const canToggle = Boolean(task?.can_complete || isMine || isOwner);
-        const canClose = Boolean(canToggle && statusRaw !== "done");
+        const canDelete = Boolean(task?.can_delete || isOwner);
         const pendingText = socialTaskPendingHint(id);
         const mineBadge = isMine ? `<span class="social-task-tag">${tr("Ваша задача", "Your task")}</span>` : "";
+        const assigneeNick = String(task?.assignee_nick || "-");
+        const avatar = socialAvatarMarkup(String(task?.assignee_avatar_url || ""), assigneeNick, "xs");
         return `
           <article class="social-task-row ${isMine ? "is-assignee" : ""} ${isDone ? "is-done" : ""} ${isOverdue ? "is-overdue" : ""}" ondblclick="socialOpenTaskModal(${id})">
-            <button class="social-task-check ${isDone ? "is-done" : ""}" type="button" onclick="socialToggleTaskDone(${id}); event.stopPropagation();" title="${tr("Отметить выполненной", "Toggle done")}" ${canToggle ? "" : "disabled"}>${isDone ? "✓" : ""}</button>
+            <button class="social-task-check ${isDone ? "is-done" : ""}" type="button" onclick="socialToggleTaskDone(${id}); event.stopPropagation();" title="${tr("Переключить выполнение", "Toggle done")}" ${canToggle ? "" : "disabled"}>✓</button>
             <div class="social-task-main" onclick="socialOpenTaskModal(${id})">
               <div class="social-task-title">
                 <b>${escapeHtml(task?.title || "-")}</b>
@@ -4614,14 +4734,14 @@ function socialRenderTasks() {
                 <span class="social-priority ${escapeHtml(priority)}">${escapeHtml(priority)}</span>
               </div>
               <div class="social-task-meta">
-                <span>${tr("Исполнитель", "Assignee")}: <b>${escapeHtml(task?.assignee_nick || "-")}</b></span>
-                <span>${due ? `${tr("Дедлайн", "Deadline")}: ${escapeHtml(due)}` : tr("Без дедлайна", "No deadline")}</span>
+                <span class="social-task-assignee">${avatar}<span class="social-task-assignee-name">${escapeHtml(assigneeNick)}</span></span>
+                <span>${tr("Дата создания", "Created")}: ${escapeHtml(created || "-")}</span>
+                <span>${tr("Дедлайн", "Deadline")}: ${escapeHtml(due || tr("Без дедлайна", "No deadline"))}</span>
               </div>
               ${pendingText ? `<div class="social-task-pending-hint">${escapeHtml(pendingText)}</div>` : ""}
             </div>
             <div class="social-task-actions">
-              <button type="button" onclick="socialOpenTaskModal(${id}); event.stopPropagation();">${tr("Открыть", "Open")}</button>
-              ${canClose ? `<button class="btn-secondary" type="button" onclick="socialToggleTaskDone(${id}); event.stopPropagation();">${tr("Закрыть", "Done")}</button>` : ""}
+              ${canDelete ? `<button class="btn-danger" type="button" onclick="socialDeleteTask(${id}); event.stopPropagation();">${tr("Удалить", "Delete")}</button>` : ""}
             </div>
           </article>
         `;
@@ -4633,8 +4753,11 @@ function socialRenderTasks() {
 async function socialToggleTaskDone(taskId) {
   const id = Number(taskId || 0);
   if (!id) return;
-  const row = (socialState.tasks || []).find((x) => Number(x.id || 0) === id) || null;
+  const row = (socialState.tasksAll || []).find((x) => Number(x?.id || 0) === id)
+    || (socialState.tasks || []).find((x) => Number(x?.id || 0) === id)
+    || null;
   if (!row) return;
+
   const myActorKey = String(socialState.boot?.actor?.actor_key || "").trim();
   const isOwner = Boolean(socialState.boot?.actor?.is_owner);
   const isMine = myActorKey && String(row.assignee_key || "") === myActorKey;
@@ -4653,16 +4776,38 @@ async function socialToggleTaskDone(taskId) {
   }
 
   const currentStatus = String(row.status || "todo").toLowerCase();
-  const targetStatus = currentStatus === "done" ? "todo" : "done";
+
+  if (currentStatus !== "done") {
+    const previousStatus = currentStatus;
+    row.status = "done";
+    row.completed_at = new Date().toISOString();
+    socialApplyTaskRowsFromCache();
+    socialRenderTasks();
+
+    try {
+      await socialRequest(`/api/social/tasks/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ status: "done" }),
+      });
+      await socialLoadTasks({ force: true });
+    } catch (e) {
+      row.status = previousStatus;
+      row.completed_at = null;
+      socialApplyTaskRowsFromCache();
+      socialRenderTasks();
+      alert(e?.message || tr("Не удалось обновить статус задачи", "Failed to update task status"));
+    }
+    return;
+  }
 
   const timerId = setTimeout(async () => {
     try {
       await socialRequest(`/api/social/tasks/${id}`, {
         method: "PUT",
-        body: JSON.stringify({ status: targetStatus }),
+        body: JSON.stringify({ status: "todo" }),
       });
       socialTaskPendingStatus.delete(id);
-      await socialLoadTasks();
+      await socialLoadTasks({ force: true });
     } catch (e) {
       socialTaskPendingStatus.delete(id);
       socialRenderTasks();
@@ -4671,7 +4816,7 @@ async function socialToggleTaskDone(taskId) {
   }, 5000);
 
   socialTaskPendingStatus.set(id, {
-    targetStatus,
+    targetStatus: "todo",
     timerId,
     startedAt: Date.now(),
   });
@@ -4755,7 +4900,7 @@ async function socialSaveTask(taskId = 0) {
     : socialRequest("/api/social/tasks", { method: "POST", body: JSON.stringify(payload) });
   await req.catch((e) => alert(e.message));
   socialCloseModal();
-  await socialLoadTasks();
+  await socialLoadTasks({ force: true });
 }
 
 async function socialAddTaskComment(taskId) {
@@ -4768,12 +4913,43 @@ async function socialAddTaskComment(taskId) {
     method: "POST",
     body: JSON.stringify({ text }),
   }).catch((e) => alert(e.message));
-  await socialLoadTasks();
+  await socialLoadTasks({ force: true });
   socialOpenTaskModal(id);
 }
 
 async function socialQuickDone(taskId) {
   return socialToggleTaskDone(taskId);
+}
+
+async function socialDeleteTask(taskId) {
+  const id = Number(taskId || 0);
+  if (!id) return;
+  const row = (socialState.tasksAll || []).find((x) => Number(x?.id || 0) === id)
+    || (socialState.tasks || []).find((x) => Number(x?.id || 0) === id)
+    || null;
+  if (!row) return;
+  const canDelete = Boolean(row?.can_delete || socialState.boot?.actor?.is_owner);
+  if (!canDelete) {
+    alert(tr("Удалять задачу может только создатель или владелец.", "Only creator or owner can delete task."));
+    return;
+  }
+  if (!confirm(tr("Удалить задачу?", "Delete task?"))) return;
+
+  const previousAll = Array.isArray(socialState.tasksAll) ? socialState.tasksAll.slice() : [];
+  socialTaskPendingStatus.delete(id);
+  socialState.tasksAll = previousAll.filter((item) => Number(item?.id || 0) !== id);
+  socialApplyTaskRowsFromCache();
+  socialRenderTasks();
+
+  try {
+    await socialRequest(`/api/social/tasks/${id}`, { method: "DELETE" });
+    await socialLoadTasks({ force: true });
+  } catch (e) {
+    socialState.tasksAll = previousAll;
+    socialApplyTaskRowsFromCache();
+    socialRenderTasks();
+    alert(e?.message || tr("Не удалось удалить задачу", "Failed to delete task"));
+  }
 }
 
 async function socialLoadGoogleCalendarStatus() {
@@ -6031,6 +6207,7 @@ window.socialSaveTask = socialSaveTask;
 window.socialAddTaskComment = socialAddTaskComment;
 window.socialQuickDone = socialQuickDone;
 window.socialToggleTaskDone = socialToggleTaskDone;
+window.socialDeleteTask = socialDeleteTask;
 window.socialOpenCalendarModal = socialOpenCalendarModal;
 window.socialSaveEvent = socialSaveEvent;
 window.socialDeleteEvent = socialDeleteEvent;

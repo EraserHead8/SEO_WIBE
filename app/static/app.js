@@ -2525,10 +2525,10 @@ function showTab(name, btn = null) {
   }, 0);
 }
 
-function openSocialChatFromBell(event = null) {
+async function openSocialChatFromBell(event = null) {
   if (typeof window.socialToggleNotificationCenter === "function") {
     try {
-      const opened = window.socialToggleNotificationCenter(event || null);
+      const opened = await window.socialToggleNotificationCenter(event || null);
       if (opened !== false) return;
     } catch (_) {}
   }
