@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import time
 from pathlib import Path
 
@@ -8,7 +8,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.auth import create_access_token, decode_access_token_payload
-from app.api.routes import router
+try:
+    from app.api.routes import router
+except Exception:
+    from routes import router
 from app.background import marketplace_cache_warmup_loop, seo_recheck_loop, wb_ads_bidder_loop, wb_ads_snapshot_sync_loop
 from app.db import Base, engine, ensure_admin_emails, run_lightweight_migrations
 from app.config import settings
@@ -178,3 +181,6 @@ def apple_touch_icon():
 @app.get("/site.webmanifest", include_in_schema=False)
 def site_webmanifest():
     return FileResponse(STATIC_DIR / "site.webmanifest", media_type="application/manifest+json")
+
+
+

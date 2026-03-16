@@ -1145,6 +1145,18 @@ class SocialTaskProjectOut(BaseModel):
     created_at: str
 
 
+class SocialTaskProjectMemberOut(BaseModel):
+    actor_key: str
+    nick: str
+    avatar_url: str = ""
+    is_owner: bool = False
+    in_project: bool = False
+
+
+class SocialTaskProjectMembersUpdateIn(BaseModel):
+    actor_keys: list[str] = Field(default_factory=list)
+
+
 class SocialTaskIn(BaseModel):
     project_id: int | None = None
     title: str
@@ -1152,6 +1164,7 @@ class SocialTaskIn(BaseModel):
     priority: str = "normal"
     due_date: str | None = None
     assignee_key: str = ""
+    task_kind: str = "company"
 
 
 class SocialTaskUpdateIn(BaseModel):
@@ -1162,10 +1175,22 @@ class SocialTaskUpdateIn(BaseModel):
     priority: str | None = None
     due_date: str | None = None
     assignee_key: str | None = None
+    task_kind: str | None = None
 
 
 class SocialTaskCommentIn(BaseModel):
     text: str
+
+
+class SocialTaskReorderItemIn(BaseModel):
+    task_id: int
+    bucket: str = ""
+    to_index: int | None = None
+    before_task_id: int | None = None
+
+
+class SocialTaskReorderIn(BaseModel):
+    items: list[SocialTaskReorderItemIn] = Field(default_factory=list)
 
 
 class SocialTaskOut(BaseModel):
@@ -1179,12 +1204,19 @@ class SocialTaskOut(BaseModel):
     due_date: str | None = None
     assignee_key: str = ""
     assignee_nick: str = ""
+    assignee_avatar_url: str = ""
     creator_key: str = ""
     creator_nick: str = ""
+    task_kind: str = "company"
+    bucket: str = "upcoming"
+    can_edit: bool = False
+    can_delete: bool = False
+    can_complete: bool = False
+    sort_order: int = 0
+    completed_at: str | None = None
     comments: list[dict[str, Any]] = Field(default_factory=list)
     created_at: str
     updated_at: str
-
 
 class SocialCalendarEventIn(BaseModel):
     title: str

@@ -1,4 +1,4 @@
-import json
+﻿import json
 import logging
 import time
 
@@ -255,6 +255,102 @@ def run_lightweight_migrations():
                     )
                 )
 
+            task_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(social_tasks)"))}
+            if task_cols:
+                if "task_kind" not in task_cols:
+                    conn.execute(text("ALTER TABLE social_tasks ADD COLUMN task_kind VARCHAR(20) DEFAULT 'company'"))
+                    deferred_backfills.append(
+                        (
+                            "social_tasks_task_kind",
+                            """
+                            UPDATE social_tasks
+                            SET task_kind = CASE
+                                WHEN task_kind IS NULL OR trim(task_kind) = '' THEN 'company'
+                                ELSE lower(trim(task_kind))
+                            END
+                            """,
+                        )
+                    )
+                if "sort_order" not in task_cols:
+                    conn.execute(text("ALTER TABLE social_tasks ADD COLUMN sort_order INTEGER DEFAULT 0"))
+                    deferred_backfills.append(
+                        (
+                            "social_tasks_sort_order",
+                            """
+                            UPDATE social_tasks
+                            SET sort_order = COALESCE(sort_order, id, 0)
+                            WHERE sort_order IS NULL OR sort_order = 0
+                            """,
+                        )
+                    )
+                if "completed_at" not in task_cols:
+                    conn.execute(text("ALTER TABLE social_tasks ADD COLUMN completed_at DATETIME"))
+                    deferred_backfills.append(
+                        (
+                            "social_tasks_completed_at",
+                            """
+                            UPDATE social_tasks
+                            SET completed_at = COALESCE(completed_at, closed_at, updated_at, created_at)
+                            WHERE lower(COALESCE(status, '')) = 'done' AND completed_at IS NULL
+                            """,
+                        )
+                    )
+
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS social_task_project_members (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        project_id INTEGER NOT NULL,
+                        actor_key VARCHAR(60) NOT NULL,
+                        added_by_key VARCHAR(60) DEFAULT '',
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY(project_id) REFERENCES social_task_projects (id)
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_social_task_project_member "
+                    "ON social_task_project_members(project_id, actor_key)"
+                )
+            )
+            deferred_backfills.append(
+                (
+                    "social_task_project_members_backfill_active",
+                    """
+                    INSERT OR IGNORE INTO social_task_project_members (project_id, actor_key, added_by_key, created_at)
+                    SELECT
+                        p.id,
+                        CASE
+                            WHEN COALESCE(tm.is_owner, 0) = 1 THEN ('u:' || CAST(p.user_id AS TEXT))
+                            ELSE ('m:' || CAST(tm.id AS TEXT))
+                        END AS actor_key,
+                        COALESCE(NULLIF(trim(p.created_by_key), ''), ('u:' || CAST(p.user_id AS TEXT))),
+                        CURRENT_TIMESTAMP
+                    FROM social_task_projects p
+                    JOIN team_members tm
+                        ON tm.user_id = p.user_id
+                       AND COALESCE(tm.is_active, 0) = 1
+                    """,
+                )
+            )
+            deferred_backfills.append(
+                (
+                    "social_task_project_members_backfill_creator",
+                    """
+                    INSERT OR IGNORE INTO social_task_project_members (project_id, actor_key, added_by_key, created_at)
+                    SELECT
+                        p.id,
+                        trim(p.created_by_key),
+                        trim(p.created_by_key),
+                        CURRENT_TIMESTAMP
+                    FROM social_task_projects p
+                    WHERE trim(COALESCE(p.created_by_key, '')) <> ''
+                    """,
+                )
+            )
             team_member_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(team_members)"))}
             if team_member_cols:
                 if "city" not in team_member_cols:
@@ -334,6 +430,24 @@ def run_lightweight_migrations():
             )
             conn.execute(
                 text(
+                    "CREATE INDEX IF NOT EXISTS ix_social_tasks_user_kind_status_due "
+                    "ON social_tasks(user_id, task_kind, status, due_date)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_social_tasks_project_sort "
+                    "ON social_tasks(project_id, sort_order, due_date)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_social_task_project_members_project_actor "
+                    "ON social_task_project_members(project_id, actor_key)"
+                )
+            )
+            conn.execute(
+                text(
                     "CREATE INDEX IF NOT EXISTS ix_wb_ads_snapshots_user_deleted_campaign "
                     "ON wb_ads_campaign_snapshots(user_id, is_deleted, campaign_id DESC)"
                 )
@@ -394,3 +508,4 @@ def ensure_admin_emails():
             logger.warning("Skipped ensure_admin_emails during startup because database is locked")
             return
         raise
+
