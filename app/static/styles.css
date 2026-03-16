@@ -1,4 +1,4 @@
-﻿@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Unbounded:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Unbounded:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
 :root {
   --bg-1: #060a18;
@@ -220,7 +220,7 @@ body {
 }
 
 body[data-theme="newyear"] .app-bg::before {
-  content: "рџЋ„ рџЋЃ рџ¦Љ вњЁ рџЋ„ рџЋ… вќ„ рџЋЃ вњЁ рџ¦Љ";
+  content: "🎄 🎁 🦊 ✨ 🎄 🎅 ❄ 🎁 ✨ 🦊";
   position: absolute;
   inset: 8% -20% auto;
   font-size: clamp(18px, 2.1vw, 34px);
@@ -231,7 +231,7 @@ body[data-theme="newyear"] .app-bg::before {
 }
 
 body[data-theme="newyear"] .app-bg::after {
-  content: "рџЋ„ рџЋЃ рџ¦Љ вњЁ рџЋ„ рџЋ… вќ„ рџЋЃ вњЁ рџ¦Љ";
+  content: "🎄 🎁 🦊 ✨ 🎄 🎅 ❄ 🎁 ✨ 🦊";
   position: absolute;
   inset: 0;
   background-image: radial-gradient(circle, rgba(255, 255, 255, 0.95) 1px, transparent 1.6px);
@@ -241,7 +241,7 @@ body[data-theme="newyear"] .app-bg::after {
 }
 
 body[data-theme="japan"] .app-bg::before {
-  content: "в›©пёЏ рџЊё рџЏЇ рџЌЈ рџ—» вњЁ";
+  content: "⛩️ 🌸 🏯 🍣 🗻 ✨";
   position: absolute;
   inset: 9% -20% auto;
   letter-spacing: 2.1vw;
@@ -252,7 +252,7 @@ body[data-theme="japan"] .app-bg::before {
 }
 
 body[data-theme="greenland"] .app-bg::before {
-  content: "рџЊІ вќ„пёЏ рџ§Љ рџђ»вЂЌвќ„пёЏ вњЁ рџЊЊ";
+  content: "🌲 ❄️ 🧊 🐻‍❄️ ✨ 🌌";
   position: absolute;
   inset: 8% -16% auto;
   letter-spacing: 2vw;
@@ -7925,7 +7925,7 @@ body.social-image-viewer-open {
 }
 
 .social-day.has-event b::after {
-  content: "вЂў";
+  content: "•";
   position: absolute;
   right: 0;
   top: -2px;
@@ -7933,7 +7933,7 @@ body.social-image-viewer-open {
 }
 
 .social-day.has-task b::before {
-  content: "вЂў";
+  content: "•";
   position: absolute;
   right: 8px;
   top: -2px;
@@ -9331,21 +9331,6 @@ button,
 }
 
 /* 2026-03 compact topbar + readable sidebar labels on narrow screens */
-@media (max-width: 980px) {
-  .accounting-month-row-head {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .accounting-month-row-summary {
-    justify-content: flex-start;
-  }
-
-  .accounting-month-row-grid,
-  .accounting-month-metrics-grid {
-    grid-template-columns: 1fr;
-  }
-}
 @media (max-width: 1200px) and (min-width: 981px) {
   #appSection.app-shell {
     grid-template-columns: minmax(220px, 248px) minmax(0, 1fr);
@@ -11828,7 +11813,6 @@ body.mobile-client-mode .social-checkers-board-wrap {
   }
 }
 
-
 .social-task-toolbar--v2 {
   display: flex;
   justify-content: space-between;
@@ -12043,4 +12027,3 @@ body.mobile-client-mode .social-checkers-board-wrap {
   gap: 8px;
   padding: 6px 4px;
 }
-
