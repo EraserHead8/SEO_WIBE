@@ -16550,6 +16550,7 @@ def social_notifications(
                 title=_decode_mojibake_text(str(row.title or "")),
                 body=_decode_mojibake_text(str(row.body or "")),
                 payload=payload,
+                is_read=bool(getattr(row, "is_read", False)),
                 created_at=_to_utc_iso(row.created_at),
             ).model_dump()
         )

@@ -1279,6 +1279,7 @@ class SocialNotificationOut(BaseModel):
     title: str
     body: str
     payload: dict[str, Any] = Field(default_factory=dict)
+    is_read: bool = False
     created_at: str
 
 

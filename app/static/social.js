@@ -609,15 +609,23 @@ function socialOpenNotificationTarget(row) {
   if (!row || typeof row !== "object") return;
   const kind = String(row.kind || "").trim().toLowerCase();
   const payload = row.payload && typeof row.payload === "object" ? row.payload : {};
-  if (kind === "chat_message" || kind === "chat_reaction") {
-    if (typeof openSocialChatFromBell === "function") openSocialChatFromBell();
-    const threadId = Number(payload.thread_id || 0);
-    if (threadId && typeof socialSelectThread === "function") {
-      setTimeout(() => socialSelectThread(threadId), 180);
-    }
+
+  if (kind.startsWith("chat_")) {
+    currentSocialSubtab = "chat";
+    const socialBtn = document.querySelector(".nav-btn[data-tab='social']");
+    if (typeof showTab === "function") showTab("social", socialBtn || null);
+    const openThread = () => {
+      if (typeof switchSocialSubtab === "function") switchSocialSubtab("chat", true);
+      const threadId = Number(payload.thread_id || 0);
+      if (threadId && typeof socialSelectThread === "function") {
+        setTimeout(() => socialSelectThread(threadId), 180);
+      }
+    };
+    setTimeout(openThread, 120);
     return;
   }
-  if (kind === "task_reminder") {
+
+  if (kind.startsWith("task_")) {
     currentSocialSubtab = "tasks";
     const socialBtn = document.querySelector(".nav-btn[data-tab='social']");
     if (typeof showTab === "function") showTab("social", socialBtn || null);
@@ -626,7 +634,8 @@ function socialOpenNotificationTarget(row) {
     }, 140);
     return;
   }
-  if (kind === "calendar_reminder") {
+
+  if (kind.startsWith("calendar_")) {
     currentSocialSubtab = "calendar";
     const socialBtn = document.querySelector(".nav-btn[data-tab='social']");
     if (typeof showTab === "function") showTab("social", socialBtn || null);
@@ -635,6 +644,7 @@ function socialOpenNotificationTarget(row) {
     }, 140);
     return;
   }
+
   if (kind === "announcement") {
     socialOpenAnnouncementModal({
       id: Number(payload.announcement_id || 0),
@@ -649,7 +659,13 @@ async function socialMarkNotificationsReadAll(syncLocal = true) {
   socialState.markReadInFlight = true;
   if (syncLocal) {
     socialState.unreadCount = 0;
+    if (Array.isArray(socialState.notificationsFeed)) {
+      socialState.notificationsFeed = socialState.notificationsFeed.map((row) => ({ ...row, is_read: true }));
+    }
     socialSetBell(0);
+    if (typeof socialRenderNotificationCenter === "function") {
+      try { socialRenderNotificationCenter(); } catch (_) {}
+    }
     socialWriteSharedPollState({
       unread: 0,
       last_notification_id: Number(socialState.lastNotificationId || 0),
@@ -776,6 +792,174 @@ function socialSetBell(unread) {
   });
 }
 
+function socialNotificationKindTitle(kind) {
+  const code = String(kind || "").trim().toLowerCase();
+  if (code.startsWith("chat_")) return tr("Чат", "Chat");
+  if (code.startsWith("task_")) return tr("Задачи", "Tasks");
+  if (code.startsWith("calendar_")) return tr("Календарь", "Calendar");
+  return tr("Система", "System");
+}
+
+function socialNotificationKindClass(kind) {
+  const code = String(kind || "").trim().toLowerCase();
+  if (code.startsWith("chat_")) return "chat";
+  if (code.startsWith("task_")) return "task";
+  if (code.startsWith("calendar_")) return "calendar";
+  return "system";
+}
+
+function socialEnsureNotificationCenter() {
+  let root = document.getElementById("socialNotificationCenter");
+  if (root) return root;
+  root = document.createElement("div");
+  root.id = "socialNotificationCenter";
+  root.className = "social-notif-center hidden";
+  root.innerHTML = `
+    <div class="social-notif-head">
+      <strong>${escapeHtml(tr("Уведомления", "Notifications"))}</strong>
+      <button type="button" class="btn-secondary" onclick="socialCloseNotificationCenter()">✕</button>
+    </div>
+    <div id="socialNotificationCenterList" class="social-notif-list"></div>
+  `;
+  document.body.appendChild(root);
+
+  const list = root.querySelector("#socialNotificationCenterList");
+  if (list) {
+    list.addEventListener("scroll", () => {
+      if (socialState.notificationCenterMarkOnScrollDone) return;
+      if (list.scrollTop > 4) {
+        socialState.notificationCenterMarkOnScrollDone = true;
+        socialMarkNotificationsReadAll(true).catch(() => null);
+      }
+    }, { passive: true });
+  }
+
+  document.addEventListener("click", (event) => {
+    if (!socialState.notificationCenterOpen) return;
+    const panel = document.getElementById("socialNotificationCenter");
+    if (!panel) return;
+    const bell = document.getElementById("socialBellBtn");
+    const drawerBell = document.getElementById("mobileDrawerBellBtn");
+    const target = event.target;
+    if (panel.contains(target)) return;
+    if (bell && bell.contains(target)) return;
+    if (drawerBell && drawerBell.contains(target)) return;
+    socialCloseNotificationCenter();
+  }, true);
+
+  return root;
+}
+
+function socialRenderNotificationCenter() {
+  const root = socialEnsureNotificationCenter();
+  const list = root.querySelector("#socialNotificationCenterList");
+  if (!list) return;
+  const rows = Array.isArray(socialState.notificationsFeed) ? [...socialState.notificationsFeed] : [];
+  rows.sort((a, b) => Number(b?.id || 0) - Number(a?.id || 0));
+  if (!rows.length) {
+    list.innerHTML = `<div class="hint">${escapeHtml(tr("Пока нет уведомлений", "No notifications yet"))}</div>`;
+    return;
+  }
+  list.innerHTML = rows.map((row) => {
+    const id = Number(row?.id || 0);
+    const kindClass = socialNotificationKindClass(row?.kind || "");
+    const isRead = Boolean(row?.is_read);
+    const title = String(row?.title || tr("Уведомление", "Notification"));
+    const body = String(row?.body || "");
+    const created = String(row?.created_at || "").replace("T", " ").slice(0, 16);
+    return `
+      <button type="button" class="social-notif-item ${isRead ? "is-read" : "is-unread"} kind-${escapeHtml(kindClass)}" onclick="socialOpenNotificationFromCenter(${id})">
+        <div class="social-notif-item-head">
+          <span class="social-notif-kind">${escapeHtml(socialNotificationKindTitle(row?.kind || ""))}</span>
+          <small>${escapeHtml(created || "")}</small>
+        </div>
+        <b>${escapeHtml(title)}</b>
+        <p>${escapeHtml(body || "-")}</p>
+      </button>
+    `;
+  }).join("");
+}
+
+function socialCloseNotificationCenter(silent = false) {
+  const root = document.getElementById("socialNotificationCenter");
+  if (!root || root.classList.contains("hidden")) return false;
+  root.classList.add("hidden");
+  socialState.notificationCenterOpen = false;
+  socialState.notificationCenterAnchorId = "";
+  if (!silent && socialState.notificationCenterMarkOnScrollDone) {
+    socialState.notificationCenterMarkOnScrollDone = false;
+  }
+  return true;
+}
+
+async function socialLoadNotificationCenterFeed(force = false) {
+  if (!force && Array.isArray(socialState.notificationsFeed) && socialState.notificationsFeed.length) {
+    return socialState.notificationsFeed;
+  }
+  if (socialState.notificationCenterLoading) return socialState.notificationsFeed || [];
+  socialState.notificationCenterLoading = true;
+  try {
+    const data = await socialRequest('/api/social/notifications?limit=80').catch(() => null);
+    const rows = Array.isArray(data?.rows) ? data.rows : [];
+    socialState.notificationsFeed = rows.map((row) => ({
+      ...row,
+      is_read: Boolean(row?.is_read),
+    }));
+    socialState.unreadCount = Number(data?.unread || 0);
+    socialSetBell(socialState.unreadCount);
+    return socialState.notificationsFeed;
+  } finally {
+    socialState.notificationCenterLoading = false;
+  }
+}
+
+async function socialToggleNotificationCenter(event = null) {
+  if (event?.preventDefault) event.preventDefault();
+  if (event?.stopPropagation) event.stopPropagation();
+  const root = socialEnsureNotificationCenter();
+  if (!root) return false;
+
+  if (socialState.notificationCenterOpen) {
+    socialCloseNotificationCenter();
+    return true;
+  }
+
+  const anchor = event?.currentTarget || document.getElementById('socialBellBtn') || document.getElementById('mobileDrawerBellBtn');
+  await socialLoadNotificationCenterFeed(true);
+  socialRenderNotificationCenter();
+
+  const safeTop = 10 + Number(window.visualViewport?.offsetTop || 0);
+  if (anchor?.getBoundingClientRect) {
+    const rect = anchor.getBoundingClientRect();
+    const top = Math.max(safeTop, Number(rect.bottom || 0) + 8);
+    const right = Math.max(8, (window.innerWidth || document.documentElement.clientWidth || 0) - Number(rect.right || 0));
+    root.style.top = `${Math.round(top)}px`;
+    root.style.right = `${Math.round(right)}px`;
+  } else {
+    root.style.top = `${Math.round(safeTop + 56)}px`;
+    root.style.right = `12px`;
+  }
+
+  socialState.notificationCenterOpen = true;
+  socialState.notificationCenterMarkOnScrollDone = false;
+  root.classList.remove('hidden');
+  return true;
+}
+
+function socialOpenNotificationFromCenter(notificationId) {
+  const id = Number(notificationId || 0);
+  if (!id) return;
+  const rows = Array.isArray(socialState.notificationsFeed) ? socialState.notificationsFeed : [];
+  const row = rows.find((x) => Number(x?.id || 0) === id) || null;
+  if (!row) return;
+  row.is_read = true;
+  if (typeof socialOpenNotificationTarget === 'function') {
+    socialOpenNotificationTarget(row);
+  }
+  socialMarkNotificationsReadAll(true).catch(() => null);
+  socialCloseNotificationCenter();
+}
+
 function socialNowMs() {
   return Date.now();
 }
@@ -867,7 +1051,16 @@ async function socialPollNotifications() {
     socialState.unreadCount = Number(data.unread || 0);
     socialSetBell(socialState.unreadCount);
     const rows = Array.isArray(data.rows) ? data.rows : [];
-    for (const row of rows) {
+    if (!Array.isArray(socialState.notificationsFeed)) socialState.notificationsFeed = [];
+    for (const srcRow of rows) {
+      const row = { ...srcRow, is_read: Boolean(srcRow?.is_read) };
+      const rowId = Number(row.id || 0);
+      if (rowId > 0) {
+        const idx = socialState.notificationsFeed.findIndex((x) => Number(x?.id || 0) === rowId);
+        if (idx >= 0) socialState.notificationsFeed[idx] = { ...socialState.notificationsFeed[idx], ...row };
+        else socialState.notificationsFeed.push(row);
+      }
+
       const id = Number(row.id || 0);
       if (id > socialState.lastNotificationId) socialState.lastNotificationId = id;
       if (!id || socialState.toastsSeen.has(id)) continue;
@@ -894,6 +1087,12 @@ async function socialPollNotifications() {
           body: row.body || "",
         });
       }
+    }
+    if (Array.isArray(socialState.notificationsFeed) && socialState.notificationsFeed.length > 200) {
+      socialState.notificationsFeed = socialState.notificationsFeed.slice(-200);
+    }
+    if (socialState.notificationCenterOpen) {
+      try { socialRenderNotificationCenter(); } catch (_) {}
     }
     socialWriteSharedPollState({
       unread: Number(socialState.unreadCount || 0),
@@ -994,6 +1193,11 @@ function resetSocialState() {
     announcementsTimer: null,
     lastNotificationId: 0,
     unreadCount: 0,
+    notificationsFeed: [],
+    notificationCenterOpen: false,
+    notificationCenterLoading: false,
+    notificationCenterMarkOnScrollDone: false,
+    notificationCenterAnchorId: "",
     markReadInFlight: false,
     notificationSettings: null,
     announcementModalId: 0,
@@ -3317,6 +3521,9 @@ function socialHandleMobileBack() {
     socialCloseImageViewer();
     return true;
   }
+  if (typeof socialCloseNotificationCenter === "function" && socialCloseNotificationCenter(true)) {
+    return true;
+  }
   const menu = document.getElementById("socialChatContextMenu");
   if (menu && !menu.classList.contains("hidden")) {
     socialCloseMessageContext();
@@ -4319,10 +4526,12 @@ async function socialLoadProjects() {
 
 async function socialLoadTasks() {
   const projectId = document.getElementById("socialTaskProjectFilter")?.value || "";
-  const status = document.getElementById("socialTaskStatusFilter")?.value || "";
+  const kind = String(document.getElementById("socialTaskKindFilter")?.value || "all").trim().toLowerCase();
+  const includeDone = Boolean(document.getElementById("socialTaskIncludeDone")?.checked);
   const qp = new URLSearchParams();
   if (projectId) qp.set("project_id", projectId);
-  if (status) qp.set("status", status);
+  if (kind && kind !== "all") qp.set("task_kind", kind);
+  if (includeDone) qp.set("include_done", "1");
   const rows = await socialRequest(`/api/social/tasks${qp.toString() ? `?${qp.toString()}` : ""}`).catch((e) => {
     alert(e.message);
     return [];
@@ -4331,6 +4540,7 @@ async function socialLoadTasks() {
   socialRenderTasks();
 }
 
+const socialTaskPendingStatus = new Map();
 
 function socialTaskProjectTitle(task) {
   const direct = String(task?.project_title || task?.project || "").trim();
@@ -4342,6 +4552,22 @@ function socialTaskProjectTitle(task) {
     if (title) return title;
   }
   return tr("Без проекта", "No project");
+}
+
+function socialTaskVisualStatus(task) {
+  const id = Number(task?.id || 0);
+  const pending = socialTaskPendingStatus.get(id);
+  if (pending && pending.targetStatus) return String(pending.targetStatus);
+  return String(task?.status || "todo");
+}
+
+function socialTaskPendingHint(taskId) {
+  const pending = socialTaskPendingStatus.get(Number(taskId || 0));
+  if (!pending) return "";
+  if (String(pending.targetStatus) === "done") {
+    return tr("5с: повторный клик отменит завершение", "5s: click again to cancel complete");
+  }
+  return tr("5с: повторный клик отменит возврат", "5s: click again to cancel restore");
 }
 
 function socialRenderTasks() {
@@ -4357,37 +4583,45 @@ function socialRenderTasks() {
   host.innerHTML = `
     <div class="social-task-list">
       ${rows.map((task) => {
-        const status = String(task.status || "todo");
+        const id = Number(task?.id || 0);
+        const statusRaw = String(task?.status || "todo");
+        const status = socialTaskVisualStatus(task);
         const statusLabel = status === "todo"
           ? tr("Новые", "To do")
           : (status === "in_progress" ? tr("В работе", "In progress") : tr("Готово", "Done"));
-        const priority = String(task.priority || "normal");
-        const due = task.due_date ? String(task.due_date).slice(0, 10) : "";
-        const dueDt = task.due_date ? socialParseDateSafe(String(task.due_date || "")) : null;
+        const priority = String(task?.priority || "normal");
+        const due = task?.due_date ? String(task.due_date).slice(0, 16).replace("T", ", ") : "";
+        const dueDt = task?.due_date ? socialParseDateSafe(String(task.due_date || "")) : null;
         const isDone = status === "done";
         const isOverdue = !isDone && dueDt instanceof Date && !Number.isNaN(dueDt.getTime()) && dueDt.getTime() < Date.now();
         const project = socialTaskProjectTitle(task);
-        const isMine = myActorKey && String(task.assignee_key || "") === myActorKey;
-        const canClose = Boolean(isMine || isOwner);
+        const kind = String(task?.task_kind || "company").toLowerCase();
+        const kindLabel = kind === "personal" ? tr("ЛИЧНАЯ", "PERSONAL") : project;
+        const isMine = myActorKey && String(task?.assignee_key || "") === myActorKey;
+        const canToggle = Boolean(task?.can_complete || isMine || isOwner);
+        const canClose = Boolean(canToggle && statusRaw !== "done");
+        const pendingText = socialTaskPendingHint(id);
         const mineBadge = isMine ? `<span class="social-task-tag">${tr("Ваша задача", "Your task")}</span>` : "";
         return `
-          <article class="social-task-row ${isMine ? "is-assignee" : ""} ${isDone ? "is-done" : ""} ${isOverdue ? "is-overdue" : ""}" ondblclick="socialOpenTaskModal(${Number(task.id || 0)})">
-            <div class="social-task-main">
+          <article class="social-task-row ${isMine ? "is-assignee" : ""} ${isDone ? "is-done" : ""} ${isOverdue ? "is-overdue" : ""}" ondblclick="socialOpenTaskModal(${id})">
+            <button class="social-task-check ${isDone ? "is-done" : ""}" type="button" onclick="socialToggleTaskDone(${id}); event.stopPropagation();" title="${tr("Отметить выполненной", "Toggle done")}" ${canToggle ? "" : "disabled"}>${isDone ? "✓" : ""}</button>
+            <div class="social-task-main" onclick="socialOpenTaskModal(${id})">
               <div class="social-task-title">
-                <b>${escapeHtml(task.title || "-")}</b>
+                <b>${escapeHtml(task?.title || "-")}</b>
+                <span class="social-task-kind-badge ${escapeHtml(kind)}">${escapeHtml(kindLabel || tr("ПРОЕКТ", "PROJECT"))}</span>
                 ${mineBadge}
                 <span class="social-status ${escapeHtml(status)}">${escapeHtml(statusLabel)}</span>
                 <span class="social-priority ${escapeHtml(priority)}">${escapeHtml(priority)}</span>
               </div>
               <div class="social-task-meta">
-                <span>${escapeHtml(project)}</span>
-                <span>${tr("Исполнитель", "Assignee")}: <b>${escapeHtml(task.assignee_nick || "-")}</b></span>
+                <span>${tr("Исполнитель", "Assignee")}: <b>${escapeHtml(task?.assignee_nick || "-")}</b></span>
                 <span>${due ? `${tr("Дедлайн", "Deadline")}: ${escapeHtml(due)}` : tr("Без дедлайна", "No deadline")}</span>
               </div>
+              ${pendingText ? `<div class="social-task-pending-hint">${escapeHtml(pendingText)}</div>` : ""}
             </div>
             <div class="social-task-actions">
-              <button type="button" onclick="socialOpenTaskModal(${Number(task.id || 0)})">${tr("Открыть", "Open")}</button>
-              ${status !== "done" && canClose ? `<button class="btn-secondary" type="button" onclick="socialQuickDone(${Number(task.id || 0)})">${tr("Закрыть", "Done")}</button>` : ""}
+              <button type="button" onclick="socialOpenTaskModal(${id}); event.stopPropagation();">${tr("Открыть", "Open")}</button>
+              ${canClose ? `<button class="btn-secondary" type="button" onclick="socialToggleTaskDone(${id}); event.stopPropagation();">${tr("Закрыть", "Done")}</button>` : ""}
             </div>
           </article>
         `;
@@ -4396,7 +4630,56 @@ function socialRenderTasks() {
   `;
 }
 
+async function socialToggleTaskDone(taskId) {
+  const id = Number(taskId || 0);
+  if (!id) return;
+  const row = (socialState.tasks || []).find((x) => Number(x.id || 0) === id) || null;
+  if (!row) return;
+  const myActorKey = String(socialState.boot?.actor?.actor_key || "").trim();
+  const isOwner = Boolean(socialState.boot?.actor?.is_owner);
+  const isMine = myActorKey && String(row.assignee_key || "") === myActorKey;
+  const canToggle = Boolean(row?.can_complete || isMine || isOwner);
+  if (!canToggle) {
+    alert(tr("Сотрудник может менять статус только своих задач.", "Employees can update only their own tasks."));
+    return;
+  }
+
+  const pending = socialTaskPendingStatus.get(id);
+  if (pending) {
+    try { clearTimeout(pending.timerId); } catch (_) {}
+    socialTaskPendingStatus.delete(id);
+    socialRenderTasks();
+    return;
+  }
+
+  const currentStatus = String(row.status || "todo").toLowerCase();
+  const targetStatus = currentStatus === "done" ? "todo" : "done";
+
+  const timerId = setTimeout(async () => {
+    try {
+      await socialRequest(`/api/social/tasks/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ status: targetStatus }),
+      });
+      socialTaskPendingStatus.delete(id);
+      await socialLoadTasks();
+    } catch (e) {
+      socialTaskPendingStatus.delete(id);
+      socialRenderTasks();
+      alert(e?.message || tr("Не удалось обновить статус задачи", "Failed to update task status"));
+    }
+  }, 5000);
+
+  socialTaskPendingStatus.set(id, {
+    targetStatus,
+    timerId,
+    startedAt: Date.now(),
+  });
+  socialRenderTasks();
+}
+
 function socialBuildTaskForm(task = null) {
+
   const actors = socialState.actors || [];
   const projects = socialState.projects || [];
   const status = task?.status || "todo";
@@ -4490,22 +4773,7 @@ async function socialAddTaskComment(taskId) {
 }
 
 async function socialQuickDone(taskId) {
-  const id = Number(taskId || 0);
-  if (!id) return;
-  const row = (socialState.tasks || []).find((x) => Number(x.id || 0) === id) || null;
-  if (!row) return;
-  const myActorKey = String(socialState.boot?.actor?.actor_key || "").trim();
-  const isOwner = Boolean(socialState.boot?.actor?.is_owner);
-  const isMine = myActorKey && String(row.assignee_key || "") === myActorKey;
-  if (!isOwner && !isMine) {
-    alert(tr("Сотрудник может закрывать только свои задачи.", "Employee can close only own tasks."));
-    return;
-  }
-  await socialRequest(`/api/social/tasks/${id}`, {
-    method: "PUT",
-    body: JSON.stringify({ status: "done" }),
-  }).catch((e) => alert(e.message));
-  await socialLoadTasks();
+  return socialToggleTaskDone(taskId);
 }
 
 async function socialLoadGoogleCalendarStatus() {
@@ -5762,6 +6030,7 @@ window.socialOpenTaskModal = socialOpenTaskModal;
 window.socialSaveTask = socialSaveTask;
 window.socialAddTaskComment = socialAddTaskComment;
 window.socialQuickDone = socialQuickDone;
+window.socialToggleTaskDone = socialToggleTaskDone;
 window.socialOpenCalendarModal = socialOpenCalendarModal;
 window.socialSaveEvent = socialSaveEvent;
 window.socialDeleteEvent = socialDeleteEvent;
@@ -5773,6 +6042,9 @@ window.socialRenderCalendar = socialRenderCalendar;
 window.socialShowDay = socialShowDay;
 window.socialSetBell = socialSetBell;
 window.socialMarkNotificationsReadAll = socialMarkNotificationsReadAll;
+window.socialToggleNotificationCenter = socialToggleNotificationCenter;
+window.socialCloseNotificationCenter = socialCloseNotificationCenter;
+window.socialOpenNotificationFromCenter = socialOpenNotificationFromCenter;
 window.socialMaybeStartHooks = socialMaybeStartHooks;
 window.socialToggleEmojiPicker = socialToggleEmojiPicker;
 window.socialInsertEmoji = socialInsertEmoji;
@@ -6107,6 +6379,7 @@ socialMaybeStartHooks();
   }
 
   function onTaskTouchStart(event) {
+    if (typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell()) return;
     if (String(window.socialState?.currentSubtab || "") !== "tasks") return;
     if (!event.touches || event.touches.length !== 1) return;
     const item = event.target.closest(".social-task-item");
@@ -6126,6 +6399,7 @@ socialMaybeStartHooks();
   }
 
   function onTaskTouchMove(event) {
+    if (typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell()) return;
     if (!touchDrag.taskId) return;
     if (!event.touches || event.touches.length !== 1) return;
     const point = event.touches[0];
@@ -6150,6 +6424,10 @@ socialMaybeStartHooks();
   }
 
   async function onTaskTouchEnd() {
+    if (typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell()) {
+      resetTouchDrag();
+      return;
+    }
     if (!touchDrag.taskId) return;
     const shouldCommit = Boolean(touchDrag.moved && touchDrag.targetBucket);
     const pendingTaskId = touchDrag.taskId;
@@ -6200,6 +6478,7 @@ socialMaybeStartHooks();
   }
 
   window.socialTaskDrop = async function socialTaskDropEnhanced(event, bucket) {
+    if (typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell()) return false;
     if (event?.preventDefault) event.preventDefault();
     let id = 0;
     try {
