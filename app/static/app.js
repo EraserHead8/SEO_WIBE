@@ -299,54 +299,54 @@ const authHeadersStrict = () => {
 };
 
 const TAB_TITLES = {
-  products: { ru: ["РўРѕРІР°СЂС‹", "РРјРїРѕСЂС‚, РѕР±РЅРѕРІР»РµРЅРёРµ Рё РїСЂРѕРІРµСЂРєР° РїРѕР·РёС†РёР№"], en: ["Products", "Import, refresh and ranking checks"] },
-  sales: { ru: ["РЎС‚Р°С‚РёСЃС‚РёРєР° Рё РґР°С€Р±РѕСЂРґ", "РџСЂРѕРґР°Р¶Рё, KPI Рё РґРёРЅР°РјРёРєР° РІ РѕРґРЅРѕРј РјРѕРґСѓР»Рµ"], en: ["Statistics & Dashboard", "Sales, KPIs and trends in one module"] },
-  reviews: { ru: ["РћС‚Р·С‹РІС‹/Р’РѕРїСЂРѕСЃС‹", "Р•РґРёРЅС‹Р№ РјРѕРґСѓР»СЊ РѕР±СЂР°С‚РЅРѕР№ СЃРІСЏР·Рё"], en: ["Reviews/Questions", "Unified customer feedback module"] },
-  accounting: { ru: ["Р‘СѓС…РіР°Р»С‚РµСЂРёСЏ", "РџСЂРёР±С‹Р»СЊ, СЂР°СЃС…РѕРґС‹ Рё СЌРєРѕРЅРѕРјРёРєР° WB/Ozon"], en: ["Accounting", "Profit, costs, and WB/Ozon economics"] },
-  ads: { ru: ["Р РµРєР»Р°РјР° WB/Ozon", "РљР°РјРїР°РЅРёРё, Р°РЅР°Р»РёС‚РёРєР° Рё СЂРµРєРѕРјРµРЅРґР°С†РёРё"], en: ["WB/Ozon Ads", "Campaigns, analytics and recommendations"] },
-  social: { ru: ["РЎРѕС†РёР°Р»СЊРЅС‹Р№", "РџР°СѓР·Р°, РІР·Р°РёРјРѕРґРµР№СЃС‚РІРёРµ Рё РєРѕРјР°РЅРґРЅР°СЏ СЂР°Р±РѕС‚Р°"], en: ["Social Hub", "Break, communication and teamwork"] },
-  profile: { ru: ["РџСЂРѕС„РёР»СЊ", "РџСЂРѕС„РёР»СЊ РєРѕРјРїР°РЅРёРё, РґРѕСЃС‚СѓРїС‹ РєРѕРјР°РЅРґС‹ Рё РёРЅС‚РµРіСЂР°С†РёРё"], en: ["Profile", "Company profile, team access and integrations"] },
-  billing: { ru: ["Р‘РёР»Р»РёРЅРі", "РўР°СЂРёС„С‹, Р»РёРјРёС‚С‹, РїСЂРѕРґР»РµРЅРёРµ Рё РёСЃС‚РѕСЂРёСЏ РѕРїРµСЂР°С†РёР№"], en: ["Billing", "Plans, limits, renewals and history"] },
-  help: { ru: ["РЎРїСЂР°РІРєР°", "Р”РѕРєСѓРјРµРЅС‚Р°С†РёСЏ РїРѕ РјРѕРґСѓР»СЏРј"], en: ["Help Center", "Module usage documentation"] },
-  admin: { ru: ["РђРґРјРёРЅРєР°", "РЈРїСЂР°РІР»РµРЅРёРµ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏРјРё Рё РјРѕРґСѓР»СЏРјРё"], en: ["Admin", "Users and modules management"] },
+  products: { ru: ["Товары", "Импорт, обновление и проверка позиций"], en: ["Products", "Import, refresh and ranking checks"] },
+  sales: { ru: ["Статистика и дашборд", "Продажи, KPI и динамика в одном модуле"], en: ["Statistics & Dashboard", "Sales, KPIs and trends in one module"] },
+  reviews: { ru: ["Отзывы/Вопросы", "Единый модуль обратной связи"], en: ["Reviews/Questions", "Unified customer feedback module"] },
+  accounting: { ru: ["Бухгалтерия", "Прибыль, расходы и экономика WB/Ozon"], en: ["Accounting", "Profit, costs, and WB/Ozon economics"] },
+  ads: { ru: ["Реклама WB/Ozon", "Кампании, аналитика и рекомендации"], en: ["WB/Ozon Ads", "Campaigns, analytics and recommendations"] },
+  social: { ru: ["Социальный", "Пауза, взаимодействие и командная работа"], en: ["Social Hub", "Break, communication and teamwork"] },
+  profile: { ru: ["Профиль", "Профиль компании, доступы команды и интеграции"], en: ["Profile", "Company profile, team access and integrations"] },
+  billing: { ru: ["Биллинг", "Тарифы, лимиты, продление и история операций"], en: ["Billing", "Plans, limits, renewals and history"] },
+  help: { ru: ["Справка", "Документация по модулям"], en: ["Help Center", "Module usage documentation"] },
+  admin: { ru: ["Админка", "Управление пользователями и модулями"], en: ["Admin", "Users and modules management"] },
 };
 
 const SUBTAB_TITLES = {
   products: {
-    catalog: { ru: ["РўРѕРІР°СЂС‹", "РљР°С‚Р°Р»РѕРі, РєР°СЂС‚РѕС‡РєРё Рё СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ РѕСЃС‚Р°С‚РєРѕРІ"], en: ["Products", "Catalog, product cards, and stock sync"] },
-    seo: { ru: ["SEO-Р·Р°РґР°С‡Рё", "Р“РµРЅРµСЂР°С†РёСЏ, РїСЂРѕРІРµСЂРєР° Рё РїСЂРёРјРµРЅРµРЅРёРµ SEO-РѕРїРёСЃР°РЅРёР№"], en: ["SEO Jobs", "Generate, review, and apply SEO descriptions"] },
+    catalog: { ru: ["Товары", "Каталог, карточки и синхронизация остатков"], en: ["Products", "Catalog, product cards, and stock sync"] },
+    seo: { ru: ["SEO-задачи", "Генерация, проверка и применение SEO-описаний"], en: ["SEO Jobs", "Generate, review, and apply SEO descriptions"] },
   },
   reviews: {
-    reviews: { ru: ["РћС‚РІРµС‚С‹ РЅР° РѕС‚Р·С‹РІС‹", "РћС‚Р·С‹РІС‹ WB Рё Ozon СЃ AI-РѕС‚РІРµС‚Р°РјРё"], en: ["Review Replies", "WB and Ozon reviews with AI replies"] },
-    questions: { ru: ["РћС‚РІРµС‚С‹ РЅР° РІРѕРїСЂРѕСЃС‹", "Р’РѕРїСЂРѕСЃС‹ РїРѕРєСѓРїР°С‚РµР»РµР№ Рё Р±С‹СЃС‚СЂС‹Рµ РѕС‚РІРµС‚С‹"], en: ["Question Replies", "Customer questions and quick answers"] },
-    returns: { ru: ["Р’РѕР·РІСЂР°С‚С‹", "Р—Р°СЏРІРєРё РЅР° РІРѕР·РІСЂР°С‚ WB Рё Ozon СЃ РїРѕРЅСЏС‚РЅС‹РјРё РґРµР№СЃС‚РІРёСЏРјРё"], en: ["Returns", "WB and Ozon return requests with clear actions"] },
+    reviews: { ru: ["Ответы на отзывы", "Отзывы WB и Ozon с AI-ответами"], en: ["Review Replies", "WB and Ozon reviews with AI replies"] },
+    questions: { ru: ["Ответы на вопросы", "Вопросы покупателей и быстрые ответы"], en: ["Question Replies", "Customer questions and quick answers"] },
+    returns: { ru: ["Возвраты", "Заявки на возврат WB и Ozon с понятными действиями"], en: ["Returns", "WB and Ozon return requests with clear actions"] },
   },
   accounting: {
-    overview: { ru: ["Р‘СѓС…РіР°Р»С‚РµСЂРёСЏ", "KPI, РїСЂРёР±С‹Р»СЊ Рё СЌРєРѕРЅРѕРјРёРєР° РїРѕ РїРµСЂРёРѕРґР°Рј"], en: ["Accounting", "KPIs, profit, and period economics"] },
-    analysis: { ru: ["РђРЅР°Р»РёС‚РёРєР° РїСЂРёР±С‹Р»Рё", "Р Р°Р·Р±РѕСЂ РґРѕС…РѕРґРѕРІ, СЂР°СЃС…РѕРґРѕРІ Рё РјР°СЂР¶Рё"], en: ["Profit Analysis", "Revenue, costs, and margin breakdown"] },
-    monthly: { ru: ["РџРѕРјРµСЃСЏС‡РЅР°СЏ РїСЂРёР±С‹Р»СЊ", "РЎСЂР°РІРЅРµРЅРёРµ WB Рё Ozon РїРѕ РјРµСЃСЏС†Р°Рј Р·Р° 12 РїРµСЂРёРѕРґРѕРІ"], en: ["Monthly Profit", "WB and Ozon comparison across the last 12 months"] },
-    expenses: { ru: ["Р Р°СЃС…РѕРґС‹", "РЈС‡РµС‚ СЂР°СЃС…РѕРґРѕРІ Рё СЂР°СЃРїСЂРµРґРµР»РµРЅРёРµ РїРѕ РєР°С‚РµРіРѕСЂРёСЏРј"], en: ["Expenses", "Expense tracking and category split"] },
-    settings: { ru: ["РќР°СЃС‚СЂРѕР№РєРё Р±СѓС…РіР°Р»С‚РµСЂРёРё", "РЁР°Р±Р»РѕРЅС‹, СЃС‚Р°РІРєРё Рё РїСЂР°РІРёР»Р° СЂР°СЃС‡РµС‚Р°"], en: ["Accounting Settings", "Templates, rates, and calculation rules"] },
+    overview: { ru: ["Бухгалтерия", "KPI, прибыль и экономика по периодам"], en: ["Accounting", "KPIs, profit, and period economics"] },
+    analysis: { ru: ["Аналитика прибыли", "Разбор доходов, расходов и маржи"], en: ["Profit Analysis", "Revenue, costs, and margin breakdown"] },
+    monthly: { ru: ["Помесячная прибыль", "Сравнение WB и Ozon по месяцам за 12 периодов"], en: ["Monthly Profit", "WB and Ozon comparison across the last 12 months"] },
+    expenses: { ru: ["Расходы", "Учет расходов и распределение по категориям"], en: ["Expenses", "Expense tracking and category split"] },
+    settings: { ru: ["Настройки бухгалтерии", "Шаблоны, ставки и правила расчета"], en: ["Accounting Settings", "Templates, rates, and calculation rules"] },
   },
   ads: {
-    campaigns: { ru: ["Р РµРєР»Р°РјРЅС‹Рµ РєР°РјРїР°РЅРёРё", "РљР°РјРїР°РЅРёРё WB СЃ Р±СЋРґР¶РµС‚Р°РјРё, СЃС‚Р°С‚СѓСЃР°РјРё Рё РјРµС‚СЂРёРєР°РјРё"], en: ["Ad Campaigns", "WB campaigns with budgets, statuses, and metrics"] },
-    analytics: { ru: ["РђРЅР°Р»РёС‚РёРєР° СЂРµРєР»Р°РјС‹", "РџРѕРєР°Р·С‹, РєР»РёРєРё, Р·Р°РєР°Р·С‹ Рё СЂР°СЃС…РѕРґС‹ РїРѕ РєР°РјРїР°РЅРёСЏРј"], en: ["Ads Analytics", "Views, clicks, orders, and spend by campaign"] },
-    recommendations: { ru: ["Р РµРєРѕРјРµРЅРґР°С†РёРё РїРѕ СЂРµРєР»Р°РјРµ", "РџРѕРґСЃРєР°Р·РєРё РїРѕ СЃС‚Р°РІРєР°Рј Рё РЅРµСЌС„С„РµРєС‚РёРІРЅС‹Рј РєР°РјРїР°РЅРёСЏРј"], en: ["Ads Recommendations", "Bid and efficiency recommendations"] },
-    bidder: { ru: ["Р‘РёРґРµСЂ WB Ads", "РђРІС‚РѕРјР°С‚РёС‡РµСЃРєРѕРµ СѓРїСЂР°РІР»РµРЅРёРµ СЃС‚Р°РІРєР°РјРё РїРѕ РїСЂР°РІРёР»Р°Рј"], en: ["WB Ads Bidder", "Automatic bid management by rules"] },
-    ozon: { ru: ["Р РµРєР»Р°РјР° Ozon", "РљР°РјРїР°РЅРёРё Рё СЃС‚Р°РІРєРё Ozon"], en: ["Ozon Ads", "Ozon campaigns and bids"] },
+    campaigns: { ru: ["Рекламные кампании", "Кампании WB с бюджетами, статусами и метриками"], en: ["Ad Campaigns", "WB campaigns with budgets, statuses, and metrics"] },
+    analytics: { ru: ["Аналитика рекламы", "Показы, клики, заказы и расходы по кампаниям"], en: ["Ads Analytics", "Views, clicks, orders, and spend by campaign"] },
+    recommendations: { ru: ["Рекомендации по рекламе", "Подсказки по ставкам и неэффективным кампаниям"], en: ["Ads Recommendations", "Bid and efficiency recommendations"] },
+    bidder: { ru: ["Бидер WB Ads", "Автоматическое управление ставками по правилам"], en: ["WB Ads Bidder", "Automatic bid management by rules"] },
+    ozon: { ru: ["Реклама Ozon", "Кампании и ставки Ozon"], en: ["Ozon Ads", "Ozon campaigns and bids"] },
   },
   social: {
-    chat: { ru: ["Р§Р°С‚С‹", "РљРѕРјР°РЅРґРЅС‹Рµ Рё Р»РёС‡РЅС‹Рµ РїРµСЂРµРїРёСЃРєРё"], en: ["Chats", "Team and direct conversations"] },
-    tasks: { ru: ["Р—Р°РґР°С‡Рё", "РљРѕРјР°РЅРґРЅС‹Рµ Р·Р°РґР°С‡Рё, РґРµРґР»Р°Р№РЅС‹ Рё РєРѕРЅС‚СЂРѕР»СЊ"], en: ["Tasks", "Team tasks, deadlines, and control"] },
-    calendar: { ru: ["РљР°Р»РµРЅРґР°СЂСЊ", "РЎРѕР±С‹С‚РёСЏ, РґРµРґР»Р°Р№РЅС‹ Рё СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ СЃ Google"], en: ["Calendar", "Events, deadlines, and Google sync"] },
-    calculator: { ru: ["РљР°Р»СЊРєСѓР»СЏС‚РѕСЂ", "Р‘С‹СЃС‚СЂС‹Рµ СЂР°СЃС‡РµС‚С‹ Рё РєРѕРЅРІРµСЂС‚Р°С†РёСЏ"], en: ["Calculator", "Quick calculations and conversion"] },
-    notes: { ru: ["Р—Р°РјРµС‚РєРё", "Р›РёС‡РЅС‹Рµ Рё РєРѕРјР°РЅРґРЅС‹Рµ Р·Р°РјРµС‚РєРё"], en: ["Notes", "Personal and team notes"] },
-    games: { ru: ["РРіСЂС‹", "РќРµР±РѕР»СЊС€Р°СЏ РїР°СѓР·Р° РІРЅСѓС‚СЂРё РїСЂРёР»РѕР¶РµРЅРёСЏ"], en: ["Games", "A short break inside the app"] },
+    chat: { ru: ["Чаты", "Командные и личные переписки"], en: ["Chats", "Team and direct conversations"] },
+    tasks: { ru: ["Задачи", "Командные задачи, дедлайны и контроль"], en: ["Tasks", "Team tasks, deadlines, and control"] },
+    calendar: { ru: ["Календарь", "События, дедлайны и синхронизация с Google"], en: ["Calendar", "Events, deadlines, and Google sync"] },
+    calculator: { ru: ["Калькулятор", "Быстрые расчеты и конвертация"], en: ["Calculator", "Quick calculations and conversion"] },
+    notes: { ru: ["Заметки", "Личные и командные заметки"], en: ["Notes", "Personal and team notes"] },
+    games: { ru: ["Игры", "Небольшая пауза внутри приложения"], en: ["Games", "A short break inside the app"] },
   },
   help: {
-    docs: { ru: ["РЎРїСЂР°РІРєР°", "Р”РѕРєСѓРјРµРЅС‚Р°С†РёСЏ РїРѕ РјРѕРґСѓР»СЏРј Рё РїРѕРґСЃРєР°Р·РєРё"], en: ["Help Center", "Module documentation and tips"] },
-    assistant: { ru: ["AI-РїРѕРјРѕС‰РЅРёРє", "РћС‚РІРµС‚С‹ РїРѕ СЂР°Р±РѕС‚Рµ СЃРµСЂРІРёСЃР° Рё РјРѕРґСѓР»РµР№"], en: ["AI Assistant", "Answers about the service and modules"] },
-    downloads: { ru: ["Р—Р°РіСЂСѓР·РєРё", "APK, РѕР±РЅРѕРІР»РµРЅРёСЏ Рё РёСЃС‚РѕСЂРёСЏ СЂРµР»РёР·РѕРІ"], en: ["Downloads", "APK, updates, and release history"] },
+    docs: { ru: ["Справка", "Документация по модулям и подсказки"], en: ["Help Center", "Module documentation and tips"] },
+    assistant: { ru: ["AI-помощник", "Ответы по работе сервиса и модулей"], en: ["AI Assistant", "Answers about the service and modules"] },
+    downloads: { ru: ["Загрузки", "APK, обновления и история релизов"], en: ["Downloads", "APK, updates, and release history"] },
   },
 };
 
@@ -434,26 +434,26 @@ const NAV_BUTTON_ICONS = {
 
 const UI_TEXT = {
   ru: {
-    nav_products: "РўРѕРІР°СЂС‹",
-    nav_sales: "РЎС‚Р°С‚РёСЃС‚РёРєР° Рё РґР°С€Р±РѕСЂРґ",
-    nav_reviews: "РћС‚Р·С‹РІС‹/Р’РѕРїСЂРѕСЃС‹",
-    nav_accounting: "Р‘СѓС…РіР°Р»С‚РµСЂРёСЏ",
-    nav_ads: "Р РµРєР»Р°РјР° WB/Ozon",
-    nav_social: "РЎРѕС†РёР°Р»СЊРЅС‹Р№",
-    nav_profile: "РџСЂРѕС„РёР»СЊ",
-    nav_help: "РЎРїСЂР°РІРєР°",
-    logout: "Р’С‹Р№С‚Рё",
-    theme_classic: "РљР»Р°СЃСЃРёРєР°",
-    theme_dark: "РўРµРјРЅР°СЏ",
-    theme_light: "РЎРІРµС‚Р»Р°СЏ",
-    theme_moon: "Р›СѓРЅР°",
-    theme_newyear: "РќРѕРІРѕРіРѕРґРЅСЏСЏ",
-    theme_summer: "Р›РµС‚Рѕ",
-    theme_autumn: "РћСЃРµРЅСЊ",
-    theme_winter: "Р—РёРјР°",
-    theme_spring: "Р’РµСЃРЅР°",
-    theme_japan: "РЇРїРѕРЅРёСЏ",
-    theme_greenland: "Р“СЂРµРЅР»Р°РЅРґРёСЏ",
+    nav_products: "Товары",
+    nav_sales: "Статистика и дашборд",
+    nav_reviews: "Отзывы/Вопросы",
+    nav_accounting: "Бухгалтерия",
+    nav_ads: "Реклама WB/Ozon",
+    nav_social: "Социальный",
+    nav_profile: "Профиль",
+    nav_help: "Справка",
+    logout: "Выйти",
+    theme_classic: "Классика",
+    theme_dark: "Темная",
+    theme_light: "Светлая",
+    theme_moon: "Луна",
+    theme_newyear: "Новогодняя",
+    theme_summer: "Лето",
+    theme_autumn: "Осень",
+    theme_winter: "Зима",
+    theme_spring: "Весна",
+    theme_japan: "Япония",
+    theme_greenland: "Гренландия",
   },
   en: {
     nav_products: "Products",
@@ -616,22 +616,22 @@ async function trackUiActivity(action, moduleCode = "", details = "", options = 
 function moduleLabel(code) {
   const key = String(code || "").trim().toLowerCase();
   const labels = {
-    products: tr("РўРѕРІР°СЂС‹", "Products"),
-    seo_generation: tr("SEO Р·Р°РґР°С‡Рё", "SEO Jobs"),
-    sales_stats: tr("РЎС‚Р°С‚РёСЃС‚РёРєР° РїСЂРѕРґР°Р¶", "Sales Statistics"),
-    accounting: tr("Р‘СѓС…РіР°Р»С‚РµСЂРёСЏ", "Accounting"),
-    wb_reviews_ai: tr("РћС‚Р·С‹РІС‹", "Reviews"),
-    wb_questions_ai: tr("Р’РѕРїСЂРѕСЃС‹", "Questions"),
-    returns: tr("Р’РѕР·РІСЂР°С‚С‹", "Returns"),
-    wb_ads: tr("Р РµРєР»Р°РјР°", "Ads"),
-    ads_campaigns: tr("Р РµРєР»Р°РјРЅС‹Рµ РєР°РјРїР°РЅРёРё", "Ad Campaigns"),
-    ads_bidder: tr("Р‘РёРґРµСЂ WB", "WB Bidder"),
-    wb_ads_analytics: tr("РђРЅР°Р»РёС‚РёРєР° Ads", "Ads Analytics"),
-    wb_ads_recommendations: tr("Р РµРєРѕРјРµРЅРґР°С†РёРё Ads", "Ads Recommendations"),
-    user_profile: tr("РџСЂРѕС„РёР»СЊ", "Profile"),
-    help_center: tr("РЎРїСЂР°РІРєР°", "Help"),
-    ai_assistant: tr("AI РїРѕРјРѕС‰РЅРёРє", "AI Assistant"),
-    social_hub: tr("РЎРѕС†РёР°Р»СЊРЅС‹Р№", "Social Hub"),
+    products: tr("Товары", "Products"),
+    seo_generation: tr("SEO задачи", "SEO Jobs"),
+    sales_stats: tr("Статистика продаж", "Sales Statistics"),
+    accounting: tr("Бухгалтерия", "Accounting"),
+    wb_reviews_ai: tr("Отзывы", "Reviews"),
+    wb_questions_ai: tr("Вопросы", "Questions"),
+    returns: tr("Возвраты", "Returns"),
+    wb_ads: tr("Реклама", "Ads"),
+    ads_campaigns: tr("Рекламные кампании", "Ad Campaigns"),
+    ads_bidder: tr("Бидер WB", "WB Bidder"),
+    wb_ads_analytics: tr("Аналитика Ads", "Ads Analytics"),
+    wb_ads_recommendations: tr("Рекомендации Ads", "Ads Recommendations"),
+    user_profile: tr("Профиль", "Profile"),
+    help_center: tr("Справка", "Help"),
+    ai_assistant: tr("AI помощник", "AI Assistant"),
+    social_hub: tr("Социальный", "Social Hub"),
   };
   return labels[key] || key;
 }
@@ -725,11 +725,11 @@ function toolbarIconSvg(name) {
 
 function applyProductToolbarIcons(isEn) {
   const items = [
-    { id: "productsImportBtn", icon: toolbarIconSvg("import"), ru: "РРјРїРѕСЂС‚", en: "Import" },
-    { id: "productsReloadBtn", icon: toolbarIconSvg("refresh"), ru: "РџРµСЂРµР·Р°РіСЂСѓР·РёС‚СЊ Р±Р°Р·Сѓ", en: "Reload Catalog" },
-    { id: "productsSelectAllBtn", icon: toolbarIconSvg("select"), ru: "Р’С‹Р±СЂР°С‚СЊ РІСЃРµ", en: "Select All" },
-    { id: "productsCheckSelectedBtn", icon: toolbarIconSvg("search"), ru: "РџСЂРѕРІРµСЂРёС‚СЊ РІС‹Р±СЂР°РЅРЅС‹Рµ", en: "Check Selected" },
-    { id: "productsCheckAllBtn", icon: toolbarIconSvg("rocket"), ru: "РџСЂРѕРІРµСЂРёС‚СЊ РІСЃРµ", en: "Check All" },
+    { id: "productsImportBtn", icon: toolbarIconSvg("import"), ru: "Импорт", en: "Import" },
+    { id: "productsReloadBtn", icon: toolbarIconSvg("refresh"), ru: "Перезагрузить базу", en: "Reload Catalog" },
+    { id: "productsSelectAllBtn", icon: toolbarIconSvg("select"), ru: "Выбрать все", en: "Select All" },
+    { id: "productsCheckSelectedBtn", icon: toolbarIconSvg("search"), ru: "Проверить выбранные", en: "Check Selected" },
+    { id: "productsCheckAllBtn", icon: toolbarIconSvg("rocket"), ru: "Проверить все", en: "Check All" },
   ];
   for (const item of items) {
     const btn = document.getElementById(item.id);
@@ -746,18 +746,18 @@ function iconByButtonLabel(labelRaw) {
   const label = String(labelRaw || "").trim().toLowerCase();
   if (!label) return "";
   const rules = [
-    [/РѕР±РЅРѕРІ|refresh|reload|renew/, "в†»"],
-    [/Р·Р°РіСЂСѓР·|load|import/, "в‡©"],
-    [/СЃРѕС…СЂР°РЅ|save/, "вЋ"],
-    [/СѓРґР°Р»|delete|clear/, "вњ–"],
-    [/РїСЂРёРјРµРЅ|apply|publish/, "вњ“"],
-    [/РїСЂРѕРІРµСЂ|check|test|audit/, "вЊ•"],
-    [/РіРµРЅРµСЂ|generate|ai/, "вљЎ"],
-    [/РѕС‚РїСЂР°РІ|send|reply/, "вћ¤"],
-    [/СЃРјРµРЅРёС‚СЊ|change|switch/, "в‡„"],
-    [/РІС‹Р±СЂР°С‚СЊ|select/, "в‘"],
-    [/РїРѕСЃС‚СЂРѕРёС‚СЊ|build|report|recommend/, "в—€"],
-    [/СЃС‚Р°С‚РёСЃС‚|sales/, "в—·"],
+    [/обнов|refresh|reload|renew/, "↻"],
+    [/загруз|load|import/, "⇩"],
+    [/сохран|save/, "⎘"],
+    [/удал|delete|clear/, "✖"],
+    [/примен|apply|publish/, "✓"],
+    [/провер|check|test|audit/, "⌕"],
+    [/генер|generate|ai/, "⚡"],
+    [/отправ|send|reply/, "➤"],
+    [/сменить|change|switch/, "⇄"],
+    [/выбрать|select/, "☑"],
+    [/построить|build|report|recommend/, "◈"],
+    [/статист|sales/, "◷"],
   ];
   for (const [pattern, icon] of rules) {
     if (pattern.test(label)) return icon;
@@ -776,7 +776,7 @@ function applyNavIcons() {
     if (currentIcon === iconSrc && currentLabel === label) return;
     const iconHtml = iconSrc
       ? `<span class="nav-icon" aria-hidden="true"><img src="${iconSrc}" alt="" loading="eager" decoding="async" /></span>`
-      : `<span class="nav-icon" aria-hidden="true">вЂў</span>`;
+      : `<span class="nav-icon" aria-hidden="true">•</span>`;
     btn.innerHTML = `${iconHtml}<span class="nav-label">${escapeHtml(label)}</span>`;
   });
 }
@@ -791,10 +791,10 @@ function applySidebarMode() {
   if (shell) shell.classList.toggle("sidebar-compact", compact);
   const toggle = sidebar.querySelector(".sidebar-toggle");
   if (toggle) {
-    toggle.textContent = compact ? "в°" : "в‡„";
+    toggle.textContent = compact ? "☰" : "⇄";
     toggle.dataset.tip = compact
-      ? tr("РџРѕРєР°Р·Р°С‚СЊ РїРѕРґРїРёСЃРё", "Show labels")
-      : tr("РЎРєСЂС‹С‚СЊ РїРѕРґРїРёСЃРё", "Hide labels");
+      ? tr("Показать подписи", "Show labels")
+      : tr("Скрыть подписи", "Hide labels");
     toggle.title = toggle.dataset.tip;
   }
 }
@@ -904,65 +904,65 @@ function applyUiLanguage() {
   setText(".nav-btn[data-tab='social']", t("nav_social"));
   setText(".nav-btn[data-tab='profile']", t("nav_profile"));
   setText(".nav-btn[data-tab='help']", t("nav_help"));
-  setText("#topbarOpenProfileBtn", lang === "en" ? "Open profile" : "РћС‚РєСЂС‹С‚СЊ РїСЂРѕС„РёР»СЊ");
+  setText("#topbarOpenProfileBtn", lang === "en" ? "Open profile" : "Открыть профиль");
   applyNavIcons();
   applySidebarMode();
   setText(".btn-danger.full", t("logout"));
-  setText("#authToolbarSubtitle", lang === "en" ? "Marketplace Seller OS" : "РЎРµСЂРІРёСЃ РґР»СЏ РјР°СЂРєРµС‚РїР»РµР№СЃРѕРІ");
-  setText("#authToolbarLoginBtn", lang === "en" ? "Login" : "Р’С…РѕРґ");
-  setText("#authToolbarRegisterBtn", lang === "en" ? "Sign up" : "Р РµРіРёСЃС‚СЂР°С†РёСЏ");
-  setText("#authModeLoginBtn", lang === "en" ? "Login" : "Р’С…РѕРґ");
-  setText("#authModeRegisterBtn", lang === "en" ? "Sign up" : "Р РµРіРёСЃС‚СЂР°С†РёСЏ");
-  setText("#authLoginTitle", lang === "en" ? "Login" : "Р’С…РѕРґ");
-  setText("#authLoginHint", lang === "en" ? "Use owner or employee email to enter workspace." : "РСЃРїРѕР»СЊР·СѓР№С‚Рµ email РІР»Р°РґРµР»СЊС†Р° РёР»Рё СЃРѕС‚СЂСѓРґРЅРёРєР°.");
-  setText("#authRegisterTitle", lang === "en" ? "Registration" : "Р РµРіРёСЃС‚СЂР°С†РёСЏ");
-  setText("#authRegisterHint", lang === "en" ? "Create owner account first. Team members are added in profile." : "РЎРѕР·РґР°Р№С‚Рµ РєР°Р±РёРЅРµС‚ РІР»Р°РґРµР»СЊС†Р°. РЎРѕС‚СЂСѓРґРЅРёРєРѕРІ РґРѕР±Р°РІРёС‚Рµ РїРѕР·Р¶Рµ РІ РїСЂРѕС„РёР»Рµ.");
-  setText("#authLoginSubmitBtn", lang === "en" ? "Sign In" : "Р’РѕР№С‚Рё РІ РєР°Р±РёРЅРµС‚");
-  setText("#authRegisterSubmitBtn", lang === "en" ? "Create Account" : "РЎРѕР·РґР°С‚СЊ Р°РєРєР°СѓРЅС‚");
-  setText("#authToRegisterBtn", lang === "en" ? "No account? Sign up" : "РќРµС‚ Р°РєРєР°СѓРЅС‚Р°? Р РµРіРёСЃС‚СЂР°С†РёСЏ");
-  setText("#authToLoginBtn", lang === "en" ? "Already have account? Login" : "РЈР¶Рµ РµСЃС‚СЊ Р°РєРєР°СѓРЅС‚? Р’С…РѕРґ");
-  setText("#authLeadText", lang === "en" ? "Marketplace operations center for WB/Ozon: sales, catalog, ads, support and team workflows in one interface." : "РћРїРµСЂР°С†РёРѕРЅРЅС‹Р№ С†РµРЅС‚СЂ РїСЂРѕРґР°РІС†Р° WB/Ozon: РїСЂРѕРґР°Р¶Рё, РєР°С‚Р°Р»РѕРі, СЂРµРєР»Р°РјР°, РїРѕРґРґРµСЂР¶РєР° Рё РєРѕРјР°РЅРґРЅС‹Рµ РїСЂРѕС†РµСЃСЃС‹ РІ РѕРґРЅРѕРј РёРЅС‚РµСЂС„РµР№СЃРµ.");
-  setText("#authWhatTitle", lang === "en" ? "What you get" : "Р§С‚Рѕ РґР°РµС‚ СЃРµСЂРІРёСЃ");
-  setText("#authWhatItem1", lang === "en" ? "One timeline for revenue, ad costs, returns and penalties." : "РћРґРЅР° Р»РµРЅС‚Р° РґР»СЏ РІС‹СЂСѓС‡РєРё, СЂРµРєР»Р°РјРЅС‹С… СЂР°СЃС…РѕРґРѕРІ, РІРѕР·РІСЂР°С‚РѕРІ Рё С€С‚СЂР°С„РѕРІ.");
-  setText("#authWhatItem2", lang === "en" ? "Bulk card updates and SEO routines without manual chaos." : "РњР°СЃСЃРѕРІС‹Рµ РѕР±РЅРѕРІР»РµРЅРёСЏ РєР°СЂС‚РѕС‡РµРє Рё SEO-СЂСѓС‚РёРЅС‹ Р±РµР· СЂСѓС‡РЅРѕРіРѕ С…Р°РѕСЃР°.");
-  setText("#authWhatItem3", lang === "en" ? "AI-assisted review/question handling with predictable quality." : "AI-РѕР±СЂР°Р±РѕС‚РєР° РѕС‚Р·С‹РІРѕРІ Рё РІРѕРїСЂРѕСЃРѕРІ СЃ РїСЂРµРґСЃРєР°Р·СѓРµРјС‹Рј РєР°С‡РµСЃС‚РІРѕРј.");
-  setText("#authStartTitle", lang === "en" ? "How to start quickly" : "РљР°Рє Р±С‹СЃС‚СЂРѕ СЃС‚Р°СЂС‚РѕРІР°С‚СЊ");
-  setText("#authStartItem1", lang === "en" ? "Sign in as owner or create a new workspace." : "Р’РѕР№РґРёС‚Рµ РєР°Рє РІР»Р°РґРµР»РµС† РёР»Рё СЃРѕР·РґР°Р№С‚Рµ РЅРѕРІС‹Р№ РєР°Р±РёРЅРµС‚.");
+  setText("#authToolbarSubtitle", lang === "en" ? "Marketplace Seller OS" : "Сервис для маркетплейсов");
+  setText("#authToolbarLoginBtn", lang === "en" ? "Login" : "Вход");
+  setText("#authToolbarRegisterBtn", lang === "en" ? "Sign up" : "Регистрация");
+  setText("#authModeLoginBtn", lang === "en" ? "Login" : "Вход");
+  setText("#authModeRegisterBtn", lang === "en" ? "Sign up" : "Регистрация");
+  setText("#authLoginTitle", lang === "en" ? "Login" : "Вход");
+  setText("#authLoginHint", lang === "en" ? "Use owner or employee email to enter workspace." : "Используйте email владельца или сотрудника.");
+  setText("#authRegisterTitle", lang === "en" ? "Registration" : "Регистрация");
+  setText("#authRegisterHint", lang === "en" ? "Create owner account first. Team members are added in profile." : "Создайте кабинет владельца. Сотрудников добавите позже в профиле.");
+  setText("#authLoginSubmitBtn", lang === "en" ? "Sign In" : "Войти в кабинет");
+  setText("#authRegisterSubmitBtn", lang === "en" ? "Create Account" : "Создать аккаунт");
+  setText("#authToRegisterBtn", lang === "en" ? "No account? Sign up" : "Нет аккаунта? Регистрация");
+  setText("#authToLoginBtn", lang === "en" ? "Already have account? Login" : "Уже есть аккаунт? Вход");
+  setText("#authLeadText", lang === "en" ? "Marketplace operations center for WB/Ozon: sales, catalog, ads, support and team workflows in one interface." : "Операционный центр продавца WB/Ozon: продажи, каталог, реклама, поддержка и командные процессы в одном интерфейсе.");
+  setText("#authWhatTitle", lang === "en" ? "What you get" : "Что дает сервис");
+  setText("#authWhatItem1", lang === "en" ? "One timeline for revenue, ad costs, returns and penalties." : "Одна лента для выручки, рекламных расходов, возвратов и штрафов.");
+  setText("#authWhatItem2", lang === "en" ? "Bulk card updates and SEO routines without manual chaos." : "Массовые обновления карточек и SEO-рутины без ручного хаоса.");
+  setText("#authWhatItem3", lang === "en" ? "AI-assisted review/question handling with predictable quality." : "AI-обработка отзывов и вопросов с предсказуемым качеством.");
+  setText("#authStartTitle", lang === "en" ? "How to start quickly" : "Как быстро стартовать");
+  setText("#authStartItem1", lang === "en" ? "Sign in as owner or create a new workspace." : "Войдите как владелец или создайте новый кабинет.");
   setText(
     "#authStartItem2",
     mobileApkMode
-      ? (lang === "en" ? "Open your workspace module and start right away." : "РћС‚РєСЂРѕР№С‚Рµ РЅСѓР¶РЅС‹Р№ РјРѕРґСѓР»СЊ Рё СЃСЂР°Р·Сѓ РЅР°С‡РёРЅР°Р№С‚Рµ СЂР°Р±РѕС‚Сѓ.")
-      : (lang === "en" ? "Connect WB/Ozon API keys in Profile." : "РџРѕРґРєР»СЋС‡РёС‚Рµ API-РєР»СЋС‡Рё WB/Ozon РІ РїСЂРѕС„РёР»Рµ.")
+      ? (lang === "en" ? "Open your workspace module and start right away." : "Откройте нужный модуль и сразу начинайте работу.")
+      : (lang === "en" ? "Connect WB/Ozon API keys in Profile." : "Подключите API-ключи WB/Ozon в профиле.")
   );
-  setText("#authStartItem3", lang === "en" ? "Open a module and run the first workflow." : "РћС‚РєСЂРѕР№С‚Рµ РјРѕРґСѓР»СЊ Рё Р·Р°РїСѓСЃС‚РёС‚Рµ РїРµСЂРІС‹Р№ СЂР°Р±РѕС‡РёР№ СЃС†РµРЅР°СЂРёР№.");
-  setText("#authPitchNote", lang === "en" ? "Designed for teams from solo operators to multi-role departments with strict access boundaries." : "РџРѕРґС…РѕРґРёС‚ РєР°Рє РґР»СЏ СЃРѕР»Рѕ-РїСЂРѕРґР°РІС†РѕРІ, С‚Р°Рє Рё РґР»СЏ РјРЅРѕРіРѕСѓСЂРѕРІРЅРµРІС‹С… РєРѕРјР°РЅРґ СЃРѕ СЃС‚СЂРѕРіРёРјРё РіСЂР°РЅРёС†Р°РјРё РґРѕСЃС‚СѓРїР°.");
-  setText("#landingCard1Title", lang === "en" ? "Revenue control center" : "Р¦РµРЅС‚СЂ СѓРїСЂР°РІР»РµРЅРёСЏ РІС‹СЂСѓС‡РєРѕР№");
-  setText("#landingCard1Text", lang === "en" ? "Monitor orders, units, returns, penalties and ad costs in one timeline and quickly find growth bottlenecks." : "РљРѕРЅС‚СЂРѕР»РёСЂСѓР№С‚Рµ Р·Р°РєР°Р·С‹, С€С‚СѓРєРё, РІРѕР·РІСЂР°С‚С‹, С€С‚СЂР°С„С‹ Рё СЂРµРєР»Р°РјРЅС‹Рµ СЂР°СЃС…РѕРґС‹ РІ РѕРґРЅРѕР№ Р»РµРЅС‚Рµ, С‡С‚РѕР±С‹ Р±С‹СЃС‚СЂРѕ РЅР°С…РѕРґРёС‚СЊ С‚РѕС‡РєРё СЂРѕСЃС‚Р°.");
-  setText("#landingCard2Title", lang === "en" ? "Catalog performance" : "Р­С„С„РµРєС‚РёРІРЅРѕСЃС‚СЊ РєР°С‚Р°Р»РѕРіР°");
-  setText("#landingCard2Text", lang === "en" ? "Sync WB/Ozon cards, enrich content, run SEO tasks and keep product visibility under control." : "РЎРёРЅС…СЂРѕРЅРёР·РёСЂСѓР№С‚Рµ РєР°СЂС‚РѕС‡РєРё WB/Ozon, СѓР»СѓС‡С€Р°Р№С‚Рµ РєРѕРЅС‚РµРЅС‚, Р·Р°РїСѓСЃРєР°Р№С‚Рµ SEO-Р·Р°РґР°С‡Рё Рё РґРµСЂР¶РёС‚Рµ РІРёРґРёРјРѕСЃС‚СЊ С‚РѕРІР°СЂРѕРІ РїРѕРґ РєРѕРЅС‚СЂРѕР»РµРј.");
-  setText("#landingCard3Title", lang === "en" ? "Team productivity" : "РџСЂРѕРґСѓРєС‚РёРІРЅРѕСЃС‚СЊ РєРѕРјР°РЅРґС‹");
-  setText("#landingCard3Quote1", lang === "en" ? "Owner has full control, employees work only within assigned modules." : "В«Р’Р»Р°РґРµР»РµС† РєРѕРЅС‚СЂРѕР»РёСЂСѓРµС‚ РІРµСЃСЊ РєР°Р±РёРЅРµС‚, СЃРѕС‚СЂСѓРґРЅРёРєРё СЂР°Р±РѕС‚Р°СЋС‚ С‚РѕР»СЊРєРѕ РІ РЅР°Р·РЅР°С‡РµРЅРЅС‹С… РјРѕРґСѓР»СЏС…В»");
-  setText("#landingCard3Meta1", lang === "en" ? "Granular permissions + action history" : "Р“РёР±РєРёРµ РїСЂР°РІР° + РёСЃС‚РѕСЂРёСЏ РґРµР№СЃС‚РІРёР№");
-  setText("#landingCard3Quote2", lang === "en" ? "AI keeps response quality high while reducing routine workload." : "В«AI СЃРѕС…СЂР°РЅСЏРµС‚ РєР°С‡РµСЃС‚РІРѕ РѕС‚РІРµС‚РѕРІ Рё СЃРЅРёР¶Р°РµС‚ СЂСѓС‚РёРЅРЅСѓСЋ РЅР°РіСЂСѓР·РєСѓ РєРѕРјР°РЅРґС‹В»");
-  setText("#landingCard3Meta2", lang === "en" ? "Reply templates + knowledge snippets" : "РЁР°Р±Р»РѕРЅС‹ РѕС‚РІРµС‚РѕРІ + Р±Р°Р·Р° Р·РЅР°РЅРёР№");
-  setText("#landingCard4Title", lang === "en" ? "Execution modules" : "Р Р°Р±РѕС‡РёРµ РјРѕРґСѓР»Рё");
-  setText("#landingCard4Item1", lang === "en" ? "Products: import, editing, media and ranking checkpoints." : "РўРѕРІР°СЂС‹: РёРјРїРѕСЂС‚, СЂРµРґР°РєС‚РёСЂРѕРІР°РЅРёРµ, РјРµРґРёР° Рё РєРѕРЅС‚СЂРѕР»СЊ РїРѕР·РёС†РёР№.");
-  setText("#landingCard4Item2", lang === "en" ? "Feedback: reviews, questions and returns in one operational queue." : "РћР±СЂР°С‚РЅР°СЏ СЃРІСЏР·СЊ: РѕС‚Р·С‹РІС‹, РІРѕРїСЂРѕСЃС‹ Рё РІРѕР·РІСЂР°С‚С‹ РІ РµРґРёРЅРѕР№ СЂР°Р±РѕС‡РµР№ РѕС‡РµСЂРµРґРё.");
-  setText("#landingCard4Item3", lang === "en" ? "Ads: campaign table, analytics and actionable recommendations." : "Р РµРєР»Р°РјР°: РєР°РјРїР°РЅРёРё, Р°РЅР°Р»РёС‚РёРєР° Рё СЂРµРєРѕРјРµРЅРґР°С†РёРё РґР»СЏ СЂРѕСЃС‚Р° СЌС„С„РµРєС‚РёРІРЅРѕСЃС‚Рё.");
-  setText("#landingBandTitle", lang === "en" ? "Commercial outcome" : "РљРѕРјРјРµСЂС‡РµСЃРєРёР№ СЂРµР·СѓР»СЊС‚Р°С‚");
-  setText("#landingBandText", lang === "en" ? "SEO WIBE shortens the cycle from data to action, reduces manual operations and helps teams scale marketplace turnover with less operational risk." : "SEO WIBE СЃРѕРєСЂР°С‰Р°РµС‚ РїСѓС‚СЊ РѕС‚ РґР°РЅРЅС‹С… Рє РґРµР№СЃС‚РІРёСЋ, СѓРјРµРЅСЊС€Р°РµС‚ СЂСѓС‡РЅС‹Рµ РѕРїРµСЂР°С†РёРё Рё РїРѕРјРѕРіР°РµС‚ РєРѕРјР°РЅРґР°Рј РјР°СЃС€С‚Р°Р±РёСЂРѕРІР°С‚СЊ РѕР±РѕСЂРѕС‚ РЅР° РјР°СЂРєРµС‚РїР»РµР№СЃР°С… СЃ РјРµРЅСЊС€РёРјРё РѕРїРµСЂР°С†РёРѕРЅРЅС‹РјРё СЂРёСЃРєР°РјРё.");
+  setText("#authStartItem3", lang === "en" ? "Open a module and run the first workflow." : "Откройте модуль и запустите первый рабочий сценарий.");
+  setText("#authPitchNote", lang === "en" ? "Designed for teams from solo operators to multi-role departments with strict access boundaries." : "Подходит как для соло-продавцов, так и для многоуровневых команд со строгими границами доступа.");
+  setText("#landingCard1Title", lang === "en" ? "Revenue control center" : "Центр управления выручкой");
+  setText("#landingCard1Text", lang === "en" ? "Monitor orders, units, returns, penalties and ad costs in one timeline and quickly find growth bottlenecks." : "Контролируйте заказы, штуки, возвраты, штрафы и рекламные расходы в одной ленте, чтобы быстро находить точки роста.");
+  setText("#landingCard2Title", lang === "en" ? "Catalog performance" : "Эффективность каталога");
+  setText("#landingCard2Text", lang === "en" ? "Sync WB/Ozon cards, enrich content, run SEO tasks and keep product visibility under control." : "Синхронизируйте карточки WB/Ozon, улучшайте контент, запускайте SEO-задачи и держите видимость товаров под контролем.");
+  setText("#landingCard3Title", lang === "en" ? "Team productivity" : "Продуктивность команды");
+  setText("#landingCard3Quote1", lang === "en" ? "Owner has full control, employees work only within assigned modules." : "«Владелец контролирует весь кабинет, сотрудники работают только в назначенных модулях»");
+  setText("#landingCard3Meta1", lang === "en" ? "Granular permissions + action history" : "Гибкие права + история действий");
+  setText("#landingCard3Quote2", lang === "en" ? "AI keeps response quality high while reducing routine workload." : "«AI сохраняет качество ответов и снижает рутинную нагрузку команды»");
+  setText("#landingCard3Meta2", lang === "en" ? "Reply templates + knowledge snippets" : "Шаблоны ответов + база знаний");
+  setText("#landingCard4Title", lang === "en" ? "Execution modules" : "Рабочие модули");
+  setText("#landingCard4Item1", lang === "en" ? "Products: import, editing, media and ranking checkpoints." : "Товары: импорт, редактирование, медиа и контроль позиций.");
+  setText("#landingCard4Item2", lang === "en" ? "Feedback: reviews, questions and returns in one operational queue." : "Обратная связь: отзывы, вопросы и возвраты в единой рабочей очереди.");
+  setText("#landingCard4Item3", lang === "en" ? "Ads: campaign table, analytics and actionable recommendations." : "Реклама: кампании, аналитика и рекомендации для роста эффективности.");
+  setText("#landingBandTitle", lang === "en" ? "Commercial outcome" : "Коммерческий результат");
+  setText("#landingBandText", lang === "en" ? "SEO WIBE shortens the cycle from data to action, reduces manual operations and helps teams scale marketplace turnover with less operational risk." : "SEO WIBE сокращает путь от данных к действию, уменьшает ручные операции и помогает командам масштабировать оборот на маркетплейсах с меньшими операционными рисками.");
 
   const isEn = lang === "en";
-  setText("#sales .panel:nth-of-type(3) h3", isEn ? "Quick Actions" : "Р‘С‹СЃС‚СЂС‹Рµ РґРµР№СЃС‚РІРёСЏ");
-  setText("#sales .panel:nth-of-type(3) .quick-actions button:nth-of-type(1)", isEn ? "Import Products" : "РРјРїРѕСЂС‚РёСЂРѕРІР°С‚СЊ С‚РѕРІР°СЂС‹");
-  setText("#sales .panel:nth-of-type(3) .quick-actions button:nth-of-type(2)", isEn ? "Run SEO Generation" : "Р—Р°РїСѓСЃС‚РёС‚СЊ SEO-РіРµРЅРµСЂР°С†РёСЋ");
-  setText("#sales .panel:nth-of-type(3) .quick-actions button:nth-of-type(3)", isEn ? "Check All Rankings" : "РџСЂРѕРІРµСЂРёС‚СЊ РїРѕР·РёС†РёРё РІСЃРµС…");
+  setText("#sales .panel:nth-of-type(3) h3", isEn ? "Quick Actions" : "Быстрые действия");
+  setText("#sales .panel:nth-of-type(3) .quick-actions button:nth-of-type(1)", isEn ? "Import Products" : "Импортировать товары");
+  setText("#sales .panel:nth-of-type(3) .quick-actions button:nth-of-type(2)", isEn ? "Run SEO Generation" : "Запустить SEO-генерацию");
+  setText("#sales .panel:nth-of-type(3) .quick-actions button:nth-of-type(3)", isEn ? "Check All Rankings" : "Проверить позиции всех");
   applyProductToolbarIcons(isEn);
   const importMarketplace = document.getElementById("importMarketplace");
   if (importMarketplace) {
     const currentValue = String(importMarketplace.value || "all");
     importMarketplace.innerHTML = `
-      <option value="all">${isEn ? "All marketplaces" : "Р’СЃРµ РјР°СЂРєРµС‚РїР»РµР№СЃС‹"}</option>
+      <option value="all">${isEn ? "All marketplaces" : "Все маркетплейсы"}</option>
       <option value="wb">WB</option>
       <option value="ozon">Ozon</option>
     `;
@@ -973,7 +973,7 @@ function applyUiLanguage() {
   const categoryFilter = document.getElementById("productCategoryFilter");
   if (categoryFilter && categoryFilter.options.length) {
     if (categoryFilter.options[0]?.value === "all") {
-      categoryFilter.options[0].textContent = isEn ? "All categories" : "Р’СЃРµ РєР°С‚РµРіРѕСЂРёРё";
+      categoryFilter.options[0].textContent = isEn ? "All categories" : "Все категории";
     }
   }
   syncCategoryFilterState();
@@ -983,208 +983,208 @@ function applyUiLanguage() {
   setText("#productsNextTopBtn", isEn ? "Next" : "\u0414\u0430\u043b\u0435\u0435");
   setText("#productsPrevBottomBtn", isEn ? "Prev" : "\u041d\u0430\u0437\u0430\u0434");
   setText("#productsNextBottomBtn", isEn ? "Next" : "\u0414\u0430\u043b\u0435\u0435");
-  setText("#seo .panel .grid-4 button:nth-of-type(4)", isEn ? "Select all products" : "Р’С‹Р±СЂР°С‚СЊ РІСЃРµ С‚РѕРІР°СЂС‹");
-  setText("#seo .panel .grid-5 button:nth-of-type(1)", isEn ? "Generate Selected" : "РЎРіРµРЅРµСЂРёСЂРѕРІР°С‚СЊ РґР»СЏ РІС‹Р±СЂР°РЅРЅС‹С…");
-  setText("#seo .panel .grid-5 button:nth-of-type(2)", isEn ? "Generate All" : "РЎРіРµРЅРµСЂРёСЂРѕРІР°С‚СЊ РґР»СЏ РІСЃРµС…");
-  setText("#seo .panel .grid-5 button:nth-of-type(3)", isEn ? "Apply" : "РџСЂРёРјРµРЅРёС‚СЊ");
-  setText("#sales .panel:nth-of-type(4) h3", isEn ? "Sales Statistics" : "РЎС‚Р°С‚РёСЃС‚РёРєР° РїСЂРѕРґР°Р¶");
-  setText("#sales .panel:nth-of-type(4) .grid-4 button", isEn ? "Load Stats" : "Р—Р°РіСЂСѓР·РёС‚СЊ СЃС‚Р°С‚РёСЃС‚РёРєСѓ");
-  setText("#sales [data-sales-range='day']", isEn ? "Day" : "Р”РµРЅСЊ");
-  setText("#sales [data-sales-range='week']", isEn ? "Week" : "РќРµРґРµР»СЏ");
-  setText("#sales [data-sales-range='month']", isEn ? "Month" : "РњРµСЃСЏС†");
-  setText("#sales [data-sales-range='quarter']", isEn ? "Quarter" : "РљРІР°СЂС‚Р°Р»");
-  setText("#sales [data-sales-range='halfyear']", isEn ? "6 months" : "6 РјРµСЃСЏС†РµРІ");
-  setText("#sales [data-sales-range='year']", isEn ? "Year" : "Р“РѕРґ");
-  setText("#salesExtraHint", isEn ? "Additional metrics" : "Р”РѕРїРѕР»РЅРёС‚РµР»СЊРЅС‹Рµ РјРµС‚СЂРёРєРё");
-  setText("#reviews .panel h3", isEn ? "Reviews WB/Ozon" : "РћС‚Р·С‹РІС‹ WB/Ozon");
-  setText("#reviewsSubtabQuestions .panel h3", isEn ? "Questions & Replies WB/Ozon" : "Р’РѕРїСЂРѕСЃС‹ Рё РѕС‚РІРµС‚С‹ WB/Ozon");
-  setText("#ads .panel h3", isEn ? "WB Ad Campaigns" : "Р РµРєР»Р°РјРЅС‹Рµ РєР°РјРїР°РЅРёРё WB");
-  setText("#ads .grid-4 button:nth-of-type(1)", isEn ? "Load Campaigns" : "Р—Р°РіСЂСѓР·РёС‚СЊ РєР°РјРїР°РЅРёРё");
-  setText("#ads .grid-4 button:nth-of-type(2)", isEn ? "Get Rates" : "РџРѕР»СѓС‡РёС‚СЊ СЃС‚Р°РІРєРё");
-  setText("#ads .grid-3 button", isEn ? "Reset Filters" : "РЎР±СЂРѕСЃРёС‚СЊ С„РёР»СЊС‚СЂС‹");
-  setText("#adsSubtabAnalytics .panel h3", isEn ? "WB Ads Analytics" : "РђРЅР°Р»РёС‚РёРєР° СЂРµРєР»Р°РјС‹ WB");
-  setText("#adsSubtabAnalytics .grid-4 button", isEn ? "Build Report" : "РџРѕСЃС‚СЂРѕРёС‚СЊ РѕС‚С‡РµС‚");
-  setText("#adsSubtabRecommendations .panel h3", isEn ? "WB Ads Recommendations" : "Р РµРєРѕРјРµРЅРґР°С†РёРё WB Ads");
-  setText("#adsSubtabRecommendations .grid-4 button", isEn ? "Build Recommendations" : "РџРѕСЃС‚СЂРѕРёС‚СЊ СЂРµРєРѕРјРµРЅРґР°С†РёРё");
-  setText("#adsSubtabBidder .panel h3", isEn ? "WB Ads Bidder" : "Р‘РёРґРµСЂ WB Ads");
+  setText("#seo .panel .grid-4 button:nth-of-type(4)", isEn ? "Select all products" : "Выбрать все товары");
+  setText("#seo .panel .grid-5 button:nth-of-type(1)", isEn ? "Generate Selected" : "Сгенерировать для выбранных");
+  setText("#seo .panel .grid-5 button:nth-of-type(2)", isEn ? "Generate All" : "Сгенерировать для всех");
+  setText("#seo .panel .grid-5 button:nth-of-type(3)", isEn ? "Apply" : "Применить");
+  setText("#sales .panel:nth-of-type(4) h3", isEn ? "Sales Statistics" : "Статистика продаж");
+  setText("#sales .panel:nth-of-type(4) .grid-4 button", isEn ? "Load Stats" : "Загрузить статистику");
+  setText("#sales [data-sales-range='day']", isEn ? "Day" : "День");
+  setText("#sales [data-sales-range='week']", isEn ? "Week" : "Неделя");
+  setText("#sales [data-sales-range='month']", isEn ? "Month" : "Месяц");
+  setText("#sales [data-sales-range='quarter']", isEn ? "Quarter" : "Квартал");
+  setText("#sales [data-sales-range='halfyear']", isEn ? "6 months" : "6 месяцев");
+  setText("#sales [data-sales-range='year']", isEn ? "Year" : "Год");
+  setText("#salesExtraHint", isEn ? "Additional metrics" : "Дополнительные метрики");
+  setText("#reviews .panel h3", isEn ? "Reviews WB/Ozon" : "Отзывы WB/Ozon");
+  setText("#reviewsSubtabQuestions .panel h3", isEn ? "Questions & Replies WB/Ozon" : "Вопросы и ответы WB/Ozon");
+  setText("#ads .panel h3", isEn ? "WB Ad Campaigns" : "Рекламные кампании WB");
+  setText("#ads .grid-4 button:nth-of-type(1)", isEn ? "Load Campaigns" : "Загрузить кампании");
+  setText("#ads .grid-4 button:nth-of-type(2)", isEn ? "Get Rates" : "Получить ставки");
+  setText("#ads .grid-3 button", isEn ? "Reset Filters" : "Сбросить фильтры");
+  setText("#adsSubtabAnalytics .panel h3", isEn ? "WB Ads Analytics" : "Аналитика рекламы WB");
+  setText("#adsSubtabAnalytics .grid-4 button", isEn ? "Build Report" : "Построить отчет");
+  setText("#adsSubtabRecommendations .panel h3", isEn ? "WB Ads Recommendations" : "Рекомендации WB Ads");
+  setText("#adsSubtabRecommendations .grid-4 button", isEn ? "Build Recommendations" : "Построить рекомендации");
+  setText("#adsSubtabBidder .panel h3", isEn ? "WB Ads Bidder" : "Бидер WB Ads");
   applyWbBidderFieldHints();
-  setText("#adsSubtabOzon .panel h3", isEn ? "Ozon Ads (beta)" : "Р РµРєР»Р°РјР° Ozon (Р±РµС‚Р°)");
-  setText("#profileCompanyHeader", isEn ? "Company Profile" : "РџСЂРѕС„РёР»СЊ РєРѕРјРїР°РЅРёРё");
-  setText("#profileMainPanel h3", isEn ? "Company Profile" : "РџСЂРѕС„РёР»СЊ РєРѕРјРїР°РЅРёРё");
-  setText("#profileMenuCompanyTitle", isEn ? "Company" : "РљРѕРјРїР°РЅРёСЏ");
-  setText("#profileMenuCompanyMeta", isEn ? "Company legal details and owner identity" : "Р РµРєРІРёР·РёС‚С‹ Рё РґР°РЅРЅС‹Рµ РґРёСЂРµРєС‚РѕСЂР°/РРџ");
-  setText("#profileMenuPlanTitle", isEn ? "Plan" : "РўР°СЂРёС„");
-  setText("#profileMenuPlanMeta", isEn ? "Subscription, renewal and status" : "РџР»Р°РЅ, РїСЂРѕРґР»РµРЅРёРµ Рё СЃС‚Р°С‚СѓСЃ");
-  setText("#profileMenuKeysTitle", isEn ? "API Keys" : "API РєР»СЋС‡Рё");
-  setText("#profileMenuKeysMeta", isEn ? "WB/Ozon integration keys" : "РџРѕРґРєР»СЋС‡РµРЅРёРµ WB Рё Ozon");
-  setText("#profileMenuAiTitle", isEn ? "AI Services" : "AI СЃРµСЂРІРёСЃС‹");
-  setText("#profileMenuAiMeta", isEn ? "AI source and custom providers" : "РСЃС‚РѕС‡РЅРёРє AI Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊСЃРєРёРµ СЃРµСЂРІРёСЃС‹");
-  setText("#profileMenuTeamTitle", isEn ? "Employees" : "РЎРѕС‚СЂСѓРґРЅРёРєРё");
-  setText("#profileMenuTeamMeta", isEn ? "Roles and module access" : "Р”РѕСЃС‚СѓРїС‹ Рё СЂРѕР»Рё РєРѕРјР°РЅРґС‹");
-  setText("#profileSectionsIntroTitle", isEn ? "User profile settings" : "РќР°СЃС‚СЂРѕР№РєРё РїСЂРѕС„РёР»СЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ");
-  setText("#profileSectionsIntroLabel", isEn ? "Current user:" : "РўРµРєСѓС‰РёР№ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ:");
-  setText("#profileMainPanel .grid-3 button:nth-of-type(1)", isEn ? "Save Profile" : "РЎРѕС…СЂР°РЅРёС‚СЊ РїСЂРѕС„РёР»СЊ");
-  setText("#profileMainPanel .grid-3 button:nth-of-type(2)", isEn ? "Refresh Profile" : "РћР±РЅРѕРІРёС‚СЊ РїСЂРѕС„РёР»СЊ");
-  setText("#profileAvatarUploadBtn", isEn ? "Upload photo" : "Р—Р°РіСЂСѓР·РёС‚СЊ С„РѕС‚Рѕ");
-  setText("#teamAvatarUploadBtn", isEn ? "Upload photo" : "Р—Р°РіСЂСѓР·РёС‚СЊ С„РѕС‚Рѕ");
-  setText("#profilePlanPanel h3", isEn ? "Plan" : "РўР°СЂРёС„");
-  setText("#profilePlanPanel .grid-4 button:nth-of-type(1)", isEn ? "Change Plan" : "РЎРјРµРЅРёС‚СЊ С‚Р°СЂРёС„");
-  setText("#profilePlanPanel .grid-4 button:nth-of-type(2)", isEn ? "Renew for 30 days" : "РџСЂРѕРґР»РёС‚СЊ РЅР° 30 РґРЅРµР№");
-  setText("#profilePlanPanel .grid-4 button:nth-of-type(3)", isEn ? "Refresh" : "РћР±РЅРѕРІРёС‚СЊ");
-  setText("#profileKeysPanel h3", isEn ? "API Keys" : "API РєР»СЋС‡Рё");
-  setText("#profileAiPanel h3", isEn ? "AI Services" : "AI СЃРµСЂРІРёСЃС‹");
-  setText("#profileAiPanel .grid-4 button:nth-of-type(1)", isEn ? "Save AI Selection" : "РЎРѕС…СЂР°РЅРёС‚СЊ РІС‹Р±РѕСЂ AI");
-  setText("#profileAiPanel .grid-4 button:nth-of-type(2)", isEn ? "Refresh AI" : "РћР±РЅРѕРІРёС‚СЊ AI");
-  setText("#profileAiPanel .grid-6 button", isEn ? "Add AI Service" : "Р”РѕР±Р°РІРёС‚СЊ AI СЃРµСЂРІРёСЃ");
-  setText("#profileTeamPanel h3", isEn ? "Workspace Team" : "РЎРѕС‚СЂСѓРґРЅРёРєРё РєР°Р±РёРЅРµС‚Р°");
-  setText("#teamPanelHint", isEn ? "Add or edit employees via popup window." : "Р”РѕР±Р°РІР»РµРЅРёРµ Рё СЂРµРґР°РєС‚РёСЂРѕРІР°РЅРёРµ СЃРѕС‚СЂСѓРґРЅРёРєР° РІС‹РїРѕР»РЅСЏРµС‚СЃСЏ С‡РµСЂРµР· pop-up РѕРєРЅРѕ.");
-  setText("#teamAddMemberBtn", isEn ? "Add employee" : "Р”РѕР±Р°РІРёС‚СЊ СЃРѕС‚СЂСѓРґРЅРёРєР°");
-  setText("#helpSubtabDocs .panel h3", isEn ? "Module Help Center" : "РЎРїСЂР°РІРєР° РїРѕ РјРѕРґСѓР»СЏРј");
-  setText("#helpSubtabDocs .grid-2 button", isEn ? "Refresh Help" : "РћР±РЅРѕРІРёС‚СЊ СЃРїСЂР°РІРєСѓ");
-  setText("#helpSubtabAssistant .panel h3", isEn ? "AI assistant (any question)" : "AI РїРѕРјРѕС‰РЅРёРє (Р»СЋР±РѕР№ РІРѕРїСЂРѕСЃ)");
-  setText("#helpSubtabAssistant .grid-3 button", isEn ? "Ask" : "РЎРїСЂРѕСЃРёС‚СЊ");
-  setText("#helpSubtabDownloads .panel h3", isEn ? "Android APK versions" : "Android APK РІРµСЂСЃРёРё");
-  setText("#teamModalSaveBtn", isEn ? "Save" : "РЎРѕС…СЂР°РЅРёС‚СЊ");
-  setText("#teamModalDeleteBtn", isEn ? "Delete" : "РЈРґР°Р»РёС‚СЊ");
-  setText("#teamMemberEditModal .actions .btn-secondary", isEn ? "Cancel" : "РћС‚РјРµРЅР°");
-  setText("#helpSubtabDocsBtn", isEn ? "Help" : "РЎРїСЂР°РІРєР°");
-  setText("#helpSubtabAssistantBtn", isEn ? "AI assistant" : "AI РїРѕРјРѕС‰РЅРёРє");
-  setText("#helpSubtabDownloadsBtn", isEn ? "Downloads" : "Р—Р°РіСЂСѓР·РєРё");
-  setText("#mobileDrawerQuickNavLabel", isEn ? "Section" : "Р Р°Р·РґРµР»");
-  setText("#reviewsSubtabReviewsBtn", isEn ? "Reviews" : "РћС‚Р·С‹РІС‹");
-  setText("#reviewsSubtabQuestionsBtn", isEn ? "Questions" : "Р’РѕРїСЂРѕСЃС‹");
-  setText("#reviewsSubtabReturnsBtn", isEn ? "Returns" : "Р’РѕР·РІСЂР°С‚С‹");
-  setText("#productsSubtabCatalogBtn", isEn ? "Products" : "РўРѕРІР°СЂС‹");
-  setText("#productsSubtabSeoBtn", isEn ? "SEO Jobs" : "SEO Р·Р°РґР°С‡Рё");
-  setText("#adsSubtabCampaignsBtn", isEn ? "Campaigns" : "РљР°РјРїР°РЅРёРё");
-  setText("#adsSubtabAnalyticsBtn", isEn ? "Analytics" : "РђРЅР°Р»РёС‚РёРєР°");
-  setText("#adsSubtabRecommendationsBtn", isEn ? "Recommendations" : "Р РµРєРѕРјРµРЅРґР°С†РёРё");
-  setText("#adsSubtabBidderBtn", isEn ? "Bidder" : "Р‘РёРґРµСЂ");
-  setText("#adsSubtabOzonBtn", isEn ? "Ozon Ads" : "Р РµРєР»Р°РјР° Ozon");
-  setText("#socialSubtabGamesBtn", isEn ? "Games" : "РРіСЂС‹");
-  setText("#socialSubtabChatBtn", isEn ? "Chat" : "Р§Р°С‚");
-  setText("#socialSubtabTasksBtn", isEn ? "Tasks" : "Р—Р°РґР°С‡Рё");
-  setText("#socialSubtabCalendarBtn", isEn ? "Calendar" : "РљР°Р»РµРЅРґР°СЂСЊ");
-  setText("#socialSubtabCalculatorBtn", isEn ? "Calculator" : "РљР°Р»СЊРєСѓР»СЏС‚РѕСЂ");
-  setText("#socialSubtabNotesBtn", isEn ? "Notes" : "Р—Р°РјРµС‚РєРё");
-  setText("#reviews .grid-6 button.btn-secondary", isEn ? "Refresh Reviews" : "РћР±РЅРѕРІРёС‚СЊ РѕС‚Р·С‹РІС‹");
-  setText("#reviews .grid-2 button", isEn ? "Save AI Settings" : "РЎРѕС…СЂР°РЅРёС‚СЊ AI-РЅР°СЃС‚СЂРѕР№РєРё");
-  setText("#reviewsSubtabQuestions .grid-6 button.btn-secondary", isEn ? "Refresh Questions" : "РћР±РЅРѕРІРёС‚СЊ РІРѕРїСЂРѕСЃС‹");
-  setText("#reviewsSubtabQuestions .grid-2 button", isEn ? "Save AI Settings" : "РЎРѕС…СЂР°РЅРёС‚СЊ AI-РЅР°СЃС‚СЂРѕР№РєРё");
-  setText("#reviewsSubtabQuestions .grid-4 button:nth-of-type(1)", isEn ? "Upload to Knowledge Base" : "Р—Р°РіСЂСѓР·РёС‚СЊ РІ Р±Р°Р·Сѓ Р·РЅР°РЅРёР№");
-  setText("#reviewsSubtabQuestions .grid-4 button:nth-of-type(2)", isEn ? "Delete Selected Document" : "РЈРґР°Р»РёС‚СЊ РІС‹Р±СЂР°РЅРЅС‹Р№ РґРѕРєСѓРјРµРЅС‚");
-  setText("#campaignDetailModal .campaign-modal-head h3", isEn ? "WB Campaign Details" : "Р”РµС‚Р°Р»Рё РєР°РјРїР°РЅРёРё WB");
-  setText("#campaignDetailModal .actions button:nth-of-type(1)", isEn ? "Start" : "Р—Р°РїСѓСЃС‚РёС‚СЊ");
-  setText("#campaignDetailModal .actions button:nth-of-type(2)", isEn ? "Pause" : "РџР°СѓР·Р°");
-  setText("#campaignDetailModal .actions button:nth-of-type(3)", isEn ? "Stop" : "РћСЃС‚Р°РЅРѕРІРёС‚СЊ");
-  setText("#campaignDetailModal .actions button:nth-of-type(4)", isEn ? "Refresh details" : "РћР±РЅРѕРІРёС‚СЊ РґРµС‚Р°Р»Рё");
-  setText("#productViewRefreshBtn", isEn ? "Refresh from API" : "РћР±РЅРѕРІРёС‚СЊ РёР· API");
-  setText("#productViewEditBtn", isEn ? "Edit" : "Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ");
-  setText("#productEditPhotoAddBtn", isEn ? "Add photo" : "Р”РѕР±Р°РІРёС‚СЊ С„РѕС‚Рѕ");
-  setText("#productEditPhotoAddUrlBtn", isEn ? "Add URL" : "Р”РѕР±Р°РІРёС‚СЊ URL");
-  setText("#productEditPhotoPickBtn", isEn ? "Choose files" : "Р’С‹Р±СЂР°С‚СЊ С„Р°Р№Р»С‹");
-  setText("#reviews thead th:nth-child(1)", isEn ? "Status" : "РЎС‚Р°С‚СѓСЃ");
-  setText("#reviews thead th:nth-child(2)", isEn ? "Date" : "Р”Р°С‚Р°");
-  setText("#reviews thead th:nth-child(3)", isEn ? "Product" : "РўРѕРІР°СЂ");
-  setText("#reviews thead th:nth-child(4)", isEn ? "Rating" : "РћС†РµРЅРєР°");
-  setText("#reviews thead th:nth-child(5)", isEn ? "Review" : "РћС‚Р·С‹РІ");
-  setText("#reviews thead th:nth-child(6)", isEn ? "Reply" : "РћС‚РІРµС‚");
-  setText("#reviews thead th:nth-child(7)", isEn ? "Actions" : "Р”РµР№СЃС‚РІРёСЏ");
-  setText("#reviewsSubtabQuestions thead th:nth-child(1)", isEn ? "Status" : "РЎС‚Р°С‚СѓСЃ");
-  setText("#reviewsSubtabQuestions thead th:nth-child(2)", isEn ? "Date" : "Р”Р°С‚Р°");
-  setText("#reviewsSubtabQuestions thead th:nth-child(3)", isEn ? "Product" : "РўРѕРІР°СЂ");
-  setText("#reviewsSubtabQuestions thead th:nth-child(4)", isEn ? "Question" : "Р’РѕРїСЂРѕСЃ");
-  setText("#reviewsSubtabQuestions thead th:nth-child(5)", isEn ? "Reply" : "РћС‚РІРµС‚");
-  setText("#reviewsSubtabQuestions thead th:nth-child(6)", isEn ? "Actions" : "Р”РµР№СЃС‚РІРёСЏ");
+  setText("#adsSubtabOzon .panel h3", isEn ? "Ozon Ads (beta)" : "Реклама Ozon (бета)");
+  setText("#profileCompanyHeader", isEn ? "Company Profile" : "Профиль компании");
+  setText("#profileMainPanel h3", isEn ? "Company Profile" : "Профиль компании");
+  setText("#profileMenuCompanyTitle", isEn ? "Company" : "Компания");
+  setText("#profileMenuCompanyMeta", isEn ? "Company legal details and owner identity" : "Реквизиты и данные директора/ИП");
+  setText("#profileMenuPlanTitle", isEn ? "Plan" : "Тариф");
+  setText("#profileMenuPlanMeta", isEn ? "Subscription, renewal and status" : "План, продление и статус");
+  setText("#profileMenuKeysTitle", isEn ? "API Keys" : "API ключи");
+  setText("#profileMenuKeysMeta", isEn ? "WB/Ozon integration keys" : "Подключение WB и Ozon");
+  setText("#profileMenuAiTitle", isEn ? "AI Services" : "AI сервисы");
+  setText("#profileMenuAiMeta", isEn ? "AI source and custom providers" : "Источник AI и пользовательские сервисы");
+  setText("#profileMenuTeamTitle", isEn ? "Employees" : "Сотрудники");
+  setText("#profileMenuTeamMeta", isEn ? "Roles and module access" : "Доступы и роли команды");
+  setText("#profileSectionsIntroTitle", isEn ? "User profile settings" : "Настройки профиля пользователя");
+  setText("#profileSectionsIntroLabel", isEn ? "Current user:" : "Текущий пользователь:");
+  setText("#profileMainPanel .grid-3 button:nth-of-type(1)", isEn ? "Save Profile" : "Сохранить профиль");
+  setText("#profileMainPanel .grid-3 button:nth-of-type(2)", isEn ? "Refresh Profile" : "Обновить профиль");
+  setText("#profileAvatarUploadBtn", isEn ? "Upload photo" : "Загрузить фото");
+  setText("#teamAvatarUploadBtn", isEn ? "Upload photo" : "Загрузить фото");
+  setText("#profilePlanPanel h3", isEn ? "Plan" : "Тариф");
+  setText("#profilePlanPanel .grid-4 button:nth-of-type(1)", isEn ? "Change Plan" : "Сменить тариф");
+  setText("#profilePlanPanel .grid-4 button:nth-of-type(2)", isEn ? "Renew for 30 days" : "Продлить на 30 дней");
+  setText("#profilePlanPanel .grid-4 button:nth-of-type(3)", isEn ? "Refresh" : "Обновить");
+  setText("#profileKeysPanel h3", isEn ? "API Keys" : "API ключи");
+  setText("#profileAiPanel h3", isEn ? "AI Services" : "AI сервисы");
+  setText("#profileAiPanel .grid-4 button:nth-of-type(1)", isEn ? "Save AI Selection" : "Сохранить выбор AI");
+  setText("#profileAiPanel .grid-4 button:nth-of-type(2)", isEn ? "Refresh AI" : "Обновить AI");
+  setText("#profileAiPanel .grid-6 button", isEn ? "Add AI Service" : "Добавить AI сервис");
+  setText("#profileTeamPanel h3", isEn ? "Workspace Team" : "Сотрудники кабинета");
+  setText("#teamPanelHint", isEn ? "Add or edit employees via popup window." : "Добавление и редактирование сотрудника выполняется через pop-up окно.");
+  setText("#teamAddMemberBtn", isEn ? "Add employee" : "Добавить сотрудника");
+  setText("#helpSubtabDocs .panel h3", isEn ? "Module Help Center" : "Справка по модулям");
+  setText("#helpSubtabDocs .grid-2 button", isEn ? "Refresh Help" : "Обновить справку");
+  setText("#helpSubtabAssistant .panel h3", isEn ? "AI assistant (any question)" : "AI помощник (любой вопрос)");
+  setText("#helpSubtabAssistant .grid-3 button", isEn ? "Ask" : "Спросить");
+  setText("#helpSubtabDownloads .panel h3", isEn ? "Android APK versions" : "Android APK версии");
+  setText("#teamModalSaveBtn", isEn ? "Save" : "Сохранить");
+  setText("#teamModalDeleteBtn", isEn ? "Delete" : "Удалить");
+  setText("#teamMemberEditModal .actions .btn-secondary", isEn ? "Cancel" : "Отмена");
+  setText("#helpSubtabDocsBtn", isEn ? "Help" : "Справка");
+  setText("#helpSubtabAssistantBtn", isEn ? "AI assistant" : "AI помощник");
+  setText("#helpSubtabDownloadsBtn", isEn ? "Downloads" : "Загрузки");
+  setText("#mobileDrawerQuickNavLabel", isEn ? "Section" : "Раздел");
+  setText("#reviewsSubtabReviewsBtn", isEn ? "Reviews" : "Отзывы");
+  setText("#reviewsSubtabQuestionsBtn", isEn ? "Questions" : "Вопросы");
+  setText("#reviewsSubtabReturnsBtn", isEn ? "Returns" : "Возвраты");
+  setText("#productsSubtabCatalogBtn", isEn ? "Products" : "Товары");
+  setText("#productsSubtabSeoBtn", isEn ? "SEO Jobs" : "SEO задачи");
+  setText("#adsSubtabCampaignsBtn", isEn ? "Campaigns" : "Кампании");
+  setText("#adsSubtabAnalyticsBtn", isEn ? "Analytics" : "Аналитика");
+  setText("#adsSubtabRecommendationsBtn", isEn ? "Recommendations" : "Рекомендации");
+  setText("#adsSubtabBidderBtn", isEn ? "Bidder" : "Бидер");
+  setText("#adsSubtabOzonBtn", isEn ? "Ozon Ads" : "Реклама Ozon");
+  setText("#socialSubtabGamesBtn", isEn ? "Games" : "Игры");
+  setText("#socialSubtabChatBtn", isEn ? "Chat" : "Чат");
+  setText("#socialSubtabTasksBtn", isEn ? "Tasks" : "Задачи");
+  setText("#socialSubtabCalendarBtn", isEn ? "Calendar" : "Календарь");
+  setText("#socialSubtabCalculatorBtn", isEn ? "Calculator" : "Калькулятор");
+  setText("#socialSubtabNotesBtn", isEn ? "Notes" : "Заметки");
+  setText("#reviews .grid-6 button.btn-secondary", isEn ? "Refresh Reviews" : "Обновить отзывы");
+  setText("#reviews .grid-2 button", isEn ? "Save AI Settings" : "Сохранить AI-настройки");
+  setText("#reviewsSubtabQuestions .grid-6 button.btn-secondary", isEn ? "Refresh Questions" : "Обновить вопросы");
+  setText("#reviewsSubtabQuestions .grid-2 button", isEn ? "Save AI Settings" : "Сохранить AI-настройки");
+  setText("#reviewsSubtabQuestions .grid-4 button:nth-of-type(1)", isEn ? "Upload to Knowledge Base" : "Загрузить в базу знаний");
+  setText("#reviewsSubtabQuestions .grid-4 button:nth-of-type(2)", isEn ? "Delete Selected Document" : "Удалить выбранный документ");
+  setText("#campaignDetailModal .campaign-modal-head h3", isEn ? "WB Campaign Details" : "Детали кампании WB");
+  setText("#campaignDetailModal .actions button:nth-of-type(1)", isEn ? "Start" : "Запустить");
+  setText("#campaignDetailModal .actions button:nth-of-type(2)", isEn ? "Pause" : "Пауза");
+  setText("#campaignDetailModal .actions button:nth-of-type(3)", isEn ? "Stop" : "Остановить");
+  setText("#campaignDetailModal .actions button:nth-of-type(4)", isEn ? "Refresh details" : "Обновить детали");
+  setText("#productViewRefreshBtn", isEn ? "Refresh from API" : "Обновить из API");
+  setText("#productViewEditBtn", isEn ? "Edit" : "Редактировать");
+  setText("#productEditPhotoAddBtn", isEn ? "Add photo" : "Добавить фото");
+  setText("#productEditPhotoAddUrlBtn", isEn ? "Add URL" : "Добавить URL");
+  setText("#productEditPhotoPickBtn", isEn ? "Choose files" : "Выбрать файлы");
+  setText("#reviews thead th:nth-child(1)", isEn ? "Status" : "Статус");
+  setText("#reviews thead th:nth-child(2)", isEn ? "Date" : "Дата");
+  setText("#reviews thead th:nth-child(3)", isEn ? "Product" : "Товар");
+  setText("#reviews thead th:nth-child(4)", isEn ? "Rating" : "Оценка");
+  setText("#reviews thead th:nth-child(5)", isEn ? "Review" : "Отзыв");
+  setText("#reviews thead th:nth-child(6)", isEn ? "Reply" : "Ответ");
+  setText("#reviews thead th:nth-child(7)", isEn ? "Actions" : "Действия");
+  setText("#reviewsSubtabQuestions thead th:nth-child(1)", isEn ? "Status" : "Статус");
+  setText("#reviewsSubtabQuestions thead th:nth-child(2)", isEn ? "Date" : "Дата");
+  setText("#reviewsSubtabQuestions thead th:nth-child(3)", isEn ? "Product" : "Товар");
+  setText("#reviewsSubtabQuestions thead th:nth-child(4)", isEn ? "Question" : "Вопрос");
+  setText("#reviewsSubtabQuestions thead th:nth-child(5)", isEn ? "Reply" : "Ответ");
+  setText("#reviewsSubtabQuestions thead th:nth-child(6)", isEn ? "Actions" : "Действия");
   setText("#ads thead th:nth-child(1)", "ID");
-  setText("#ads thead th:nth-child(2)", isEn ? "Name" : "РќР°Р·РІР°РЅРёРµ");
-  setText("#ads thead th:nth-child(3)", isEn ? "Status" : "РЎС‚Р°С‚СѓСЃ");
-  setText("#ads thead th:nth-child(4)", isEn ? "Type" : "РўРёРї");
-  setText("#ads thead th:nth-child(5)", isEn ? "Budget" : "Р‘СЋРґР¶РµС‚");
-  setText("#ads thead th:nth-child(6)", isEn ? "Running" : "Р Р°Р±РѕС‚Р°РµС‚");
-  setText("#ads thead th:nth-child(7)", isEn ? "Views" : "РџРѕРєР°Р·С‹");
-  setText("#ads thead th:nth-child(8)", isEn ? "Clicks" : "РљР»РёРєРё");
+  setText("#ads thead th:nth-child(2)", isEn ? "Name" : "Название");
+  setText("#ads thead th:nth-child(3)", isEn ? "Status" : "Статус");
+  setText("#ads thead th:nth-child(4)", isEn ? "Type" : "Тип");
+  setText("#ads thead th:nth-child(5)", isEn ? "Budget" : "Бюджет");
+  setText("#ads thead th:nth-child(6)", isEn ? "Running" : "Работает");
+  setText("#ads thead th:nth-child(7)", isEn ? "Views" : "Показы");
+  setText("#ads thead th:nth-child(8)", isEn ? "Clicks" : "Клики");
   setText("#ads thead th:nth-child(9)", "CTR");
-  setText("#ads thead th:nth-child(10)", isEn ? "Orders" : "Р—Р°РєР°Р·С‹");
-  setText("#ads thead th:nth-child(11)", isEn ? "Spend" : "Р Р°СЃС…РѕРґ");
+  setText("#ads thead th:nth-child(10)", isEn ? "Orders" : "Заказы");
+  setText("#ads thead th:nth-child(11)", isEn ? "Spend" : "Расход");
   setText("#adsSubtabRecommendations thead th:nth-child(1)", "ID");
-  setText("#adsSubtabRecommendations thead th:nth-child(2)", isEn ? "Name" : "РќР°Р·РІР°РЅРёРµ");
-  setText("#adsSubtabRecommendations thead th:nth-child(3)", isEn ? "Status" : "РЎС‚Р°С‚СѓСЃ");
-  setText("#adsSubtabRecommendations thead th:nth-child(4)", isEn ? "Type" : "РўРёРї");
-  setText("#adsSubtabRecommendations thead th:nth-child(5)", isEn ? "Views" : "РџРѕРєР°Р·С‹");
-  setText("#adsSubtabRecommendations thead th:nth-child(6)", isEn ? "Clicks" : "РљР»РёРєРё");
+  setText("#adsSubtabRecommendations thead th:nth-child(2)", isEn ? "Name" : "Название");
+  setText("#adsSubtabRecommendations thead th:nth-child(3)", isEn ? "Status" : "Статус");
+  setText("#adsSubtabRecommendations thead th:nth-child(4)", isEn ? "Type" : "Тип");
+  setText("#adsSubtabRecommendations thead th:nth-child(5)", isEn ? "Views" : "Показы");
+  setText("#adsSubtabRecommendations thead th:nth-child(6)", isEn ? "Clicks" : "Клики");
   setText("#adsSubtabRecommendations thead th:nth-child(7)", "CTR");
-  setText("#adsSubtabRecommendations thead th:nth-child(8)", isEn ? "Orders" : "Р—Р°РєР°Р·С‹");
-  setText("#adsSubtabRecommendations thead th:nth-child(9)", isEn ? "Spend" : "Р Р°СЃС…РѕРґ");
+  setText("#adsSubtabRecommendations thead th:nth-child(8)", isEn ? "Orders" : "Заказы");
+  setText("#adsSubtabRecommendations thead th:nth-child(9)", isEn ? "Spend" : "Расход");
   setText("#adsSubtabRecommendations thead th:nth-child(10)", "CPC");
   setText("#adsSubtabRecommendations thead th:nth-child(11)", "CPO");
-  setText("#adsSubtabRecommendations thead th:nth-child(12)", isEn ? "Priority" : "РџСЂРёРѕСЂРёС‚РµС‚");
-  setText("#adsSubtabRecommendations thead th:nth-child(13)", isEn ? "Recommendation" : "Р РµРєРѕРјРµРЅРґР°С†РёСЏ");
-  setText("#adsSubtabRecommendations thead th:nth-child(14)", isEn ? "Reason" : "РџСЂРёС‡РёРЅР°");
-  setText("#sales thead th:nth-child(1)", isEn ? "Date" : "Р”Р°С‚Р°");
-  setText("#sales thead th:nth-child(2)", isEn ? "Marketplace" : "РњРџ");
-  setText("#sales thead th:nth-child(3)", isEn ? "Orders" : "Р—Р°РєР°Р·С‹");
-  setText("#sales thead th:nth-child(4)", isEn ? "Units" : "РЁС‚.");
-  setText("#sales thead th:nth-child(5)", isEn ? "Buyouts" : "Р’С‹РєСѓРїС‹");
-  setText("#sales thead th:nth-child(6)", isEn ? "Revenue" : "Р’С‹СЂСѓС‡РєР°");
-  setText("#sales thead th:nth-child(7)", isEn ? "Returns" : "РћС‚РєР°Р·С‹");
-  setText("#sales thead th:nth-child(8)", isEn ? "Ads Spend" : "Р РµРєР»Р°РјР°");
-  setText("#sales thead th:nth-child(9)", isEn ? "Penalties" : "РЁС‚СЂР°С„С‹");
+  setText("#adsSubtabRecommendations thead th:nth-child(12)", isEn ? "Priority" : "Приоритет");
+  setText("#adsSubtabRecommendations thead th:nth-child(13)", isEn ? "Recommendation" : "Рекомендация");
+  setText("#adsSubtabRecommendations thead th:nth-child(14)", isEn ? "Reason" : "Причина");
+  setText("#sales thead th:nth-child(1)", isEn ? "Date" : "Дата");
+  setText("#sales thead th:nth-child(2)", isEn ? "Marketplace" : "МП");
+  setText("#sales thead th:nth-child(3)", isEn ? "Orders" : "Заказы");
+  setText("#sales thead th:nth-child(4)", isEn ? "Units" : "Шт.");
+  setText("#sales thead th:nth-child(5)", isEn ? "Buyouts" : "Выкупы");
+  setText("#sales thead th:nth-child(6)", isEn ? "Revenue" : "Выручка");
+  setText("#sales thead th:nth-child(7)", isEn ? "Returns" : "Отказы");
+  setText("#sales thead th:nth-child(8)", isEn ? "Ads Spend" : "Реклама");
+  setText("#sales thead th:nth-child(9)", isEn ? "Penalties" : "Штрафы");
   setText("#profileKeysPanel .cols-2 > div:nth-of-type(1) h3", "WB");
   setText("#profileKeysPanel .cols-2 > div:nth-of-type(2) h3", "Ozon");
-  setTextAll("#profileKeysPanel .actions button:nth-of-type(1)", isEn ? "Save" : "РЎРѕС…СЂР°РЅРёС‚СЊ");
-  setTextAll("#profileKeysPanel .actions button:nth-of-type(2)", isEn ? "Test" : "РџСЂРѕРІРµСЂРёС‚СЊ");
-  setTextAll("#profileKeysPanel .actions button:nth-of-type(3)", isEn ? "Delete" : "РЈРґР°Р»РёС‚СЊ");
+  setTextAll("#profileKeysPanel .actions button:nth-of-type(1)", isEn ? "Save" : "Сохранить");
+  setTextAll("#profileKeysPanel .actions button:nth-of-type(2)", isEn ? "Test" : "Проверить");
+  setTextAll("#profileKeysPanel .actions button:nth-of-type(3)", isEn ? "Delete" : "Удалить");
 
   setOptions("#reviewStarsFilter", [
-    isEn ? "All ratings" : "Р’СЃРµ РѕС†РµРЅРєРё",
+    isEn ? "All ratings" : "Все оценки",
     "5", "4", "3", "2", "1",
   ]);
   setOptions("#reviewStatusFilter", [
-    isEn ? "All" : "Р’СЃРµ",
-    isEn ? "New" : "РќРѕРІС‹Рµ",
-    isEn ? "Unanswered" : "РќРµРѕС‚РІРµС‡РµРЅРЅС‹Рµ",
-    isEn ? "Answered" : "РћС‚РІРµС‡РµРЅРЅС‹Рµ",
+    isEn ? "All" : "Все",
+    isEn ? "New" : "Новые",
+    isEn ? "Unanswered" : "Неотвеченные",
+    isEn ? "Answered" : "Отвеченные",
   ]);
   setOptions("#reviewDateSort", [
-    isEn ? "Newest first" : "РЎРЅР°С‡Р°Р»Р° РЅРѕРІС‹Рµ",
-    isEn ? "Oldest first" : "РЎРЅР°С‡Р°Р»Р° СЃС‚Р°СЂС‹Рµ",
+    isEn ? "Newest first" : "Сначала новые",
+    isEn ? "Oldest first" : "Сначала старые",
   ]);
   setOptions("#questionStatusFilter", [
-    isEn ? "All" : "Р’СЃРµ",
-    isEn ? "New" : "РќРѕРІС‹Рµ",
-    isEn ? "Unanswered" : "РќРµРѕС‚РІРµС‡РµРЅРЅС‹Рµ",
-    isEn ? "Answered" : "РћС‚РІРµС‡РµРЅРЅС‹Рµ",
+    isEn ? "All" : "Все",
+    isEn ? "New" : "Новые",
+    isEn ? "Unanswered" : "Неотвеченные",
+    isEn ? "Answered" : "Отвеченные",
   ]);
   setOptions("#questionDateSort", [
-    isEn ? "Newest first" : "РЎРЅР°С‡Р°Р»Р° РЅРѕРІС‹Рµ",
-    isEn ? "Oldest first" : "РЎРЅР°С‡Р°Р»Р° СЃС‚Р°СЂС‹Рµ",
+    isEn ? "Newest first" : "Сначала новые",
+    isEn ? "Oldest first" : "Сначала старые",
   ]);
   setOptions("#reviewAiMode", ["manual", "suggest", "auto"]);
   setOptions("#questionAiMode", ["manual", "suggest", "auto"]);
   setOptions("#profileAiSourceSelect", [
-    isEn ? "Global default (admin)" : "Р“Р»РѕР±Р°Р»СЊРЅС‹Р№ default (Р°РґРјРёРЅ)",
-    isEn ? "Built-in OpenAI" : "Р’СЃС‚СЂРѕРµРЅРЅС‹Р№ OpenAI",
-    isEn ? "Global service" : "Р“Р»РѕР±Р°Р»СЊРЅС‹Р№ СЃРµСЂРІРёСЃ",
-    isEn ? "My service" : "РњРѕР№ СЃРµСЂРІРёСЃ",
+    isEn ? "Global default (admin)" : "Глобальный default (админ)",
+    isEn ? "Built-in OpenAI" : "Встроенный OpenAI",
+    isEn ? "Global service" : "Глобальный сервис",
+    isEn ? "My service" : "Мой сервис",
   ]);
   setOptions("#wbAdsStatusFilter", [
-    isEn ? "All statuses" : "Р’СЃРµ СЃС‚Р°С‚СѓСЃС‹",
-    isEn ? "-1 deleted" : "-1 СѓРґР°Р»РµРЅР°",
-    isEn ? "1 draft (media)" : "1 С‡РµСЂРЅРѕРІРёРє (РјРµРґРёР°)",
-    isEn ? "2 moderation (media)" : "2 РјРѕРґРµСЂР°С†РёСЏ (РјРµРґРёР°)",
-    isEn ? "3 rejected (media)" : "3 РѕС‚РєР»РѕРЅРµРЅР° (РјРµРґРёР°)",
-    isEn ? "4 ready to start" : "4 РіРѕС‚РѕРІР° Рє Р·Р°РїСѓСЃРєСѓ",
-    isEn ? "5 scheduled (media)" : "5 Р·Р°РїР»Р°РЅРёСЂРѕРІР°РЅР° (РјРµРґРёР°)",
-    isEn ? "6 running (media)" : "6 РёРґСѓС‚ РїРѕРєР°Р·С‹ (РјРµРґРёР°)",
-    isEn ? "7 completed" : "7 Р·Р°РІРµСЂС€РµРЅР°",
-    isEn ? "8 canceled" : "8 РѕС‚РјРµРЅРµРЅР°",
-    isEn ? "9 active" : "9 Р°РєС‚РёРІРЅР°",
-    isEn ? "10 day-limit pause (media)" : "10 РґРЅРµРІРЅРѕР№ Р»РёРјРёС‚ (РјРµРґРёР°)",
-    isEn ? "11 paused" : "11 РїР°СѓР·Р°",
+    isEn ? "All statuses" : "Все статусы",
+    isEn ? "-1 deleted" : "-1 удалена",
+    isEn ? "1 draft (media)" : "1 черновик (медиа)",
+    isEn ? "2 moderation (media)" : "2 модерация (медиа)",
+    isEn ? "3 rejected (media)" : "3 отклонена (медиа)",
+    isEn ? "4 ready to start" : "4 готова к запуску",
+    isEn ? "5 scheduled (media)" : "5 запланирована (медиа)",
+    isEn ? "6 running (media)" : "6 идут показы (медиа)",
+    isEn ? "7 completed" : "7 завершена",
+    isEn ? "8 canceled" : "8 отменена",
+    isEn ? "9 active" : "9 активна",
+    isEn ? "10 day-limit pause (media)" : "10 дневной лимит (медиа)",
+    isEn ? "11 paused" : "11 пауза",
   ]);
   setOptions("#wbAdsTypeFilter", [
-    isEn ? "All types" : "Р’СЃРµ С‚РёРїС‹",
+    isEn ? "All types" : "Все типы",
     "4 search",
     "5 catalog",
     "6 cards",
@@ -1197,41 +1197,41 @@ function applyUiLanguage() {
     "auto-cpm",
   ]);
   setOptions("#wbAdsWorkingFilter", [
-    isEn ? "Running: all" : "Р Р°Р±РѕС‚Р°РµС‚: РІСЃРµ",
-    isEn ? "Only running" : "РўРѕР»СЊРєРѕ СЂР°Р±РѕС‚Р°РµС‚",
-    isEn ? "Only stopped" : "РўРѕР»СЊРєРѕ РЅРµ СЂР°Р±РѕС‚Р°РµС‚",
+    isEn ? "Running: all" : "Работает: все",
+    isEn ? "Only running" : "Только работает",
+    isEn ? "Only stopped" : "Только не работает",
   ]);
   setOptions("#wbAdsSortBy", [
-    isEn ? "ID: newest first" : "ID: РЅРѕРІС‹Рµ СЃРІРµСЂС…Сѓ",
-    isEn ? "ID: oldest first" : "ID: СЃС‚Р°СЂС‹Рµ СЃРІРµСЂС…Сѓ",
-    isEn ? "Budget: high to low" : "Р‘СЋРґР¶РµС‚: Р±РѕР»СЊС€Рµ -> РјРµРЅСЊС€Рµ",
-    isEn ? "Budget: low to high" : "Р‘СЋРґР¶РµС‚: РјРµРЅСЊС€Рµ -> Р±РѕР»СЊС€Рµ",
-    isEn ? "Name: A -> Z" : "РќР°Р·РІР°РЅРёРµ: Рђ -> РЇ",
-    isEn ? "Name: Z -> A" : "РќР°Р·РІР°РЅРёРµ: РЇ -> Рђ",
-    isEn ? "Status: code asc" : "РЎС‚Р°С‚СѓСЃ: РїРѕ РєРѕРґСѓ в†‘",
-    isEn ? "Status: code desc" : "РЎС‚Р°С‚СѓСЃ: РїРѕ РєРѕРґСѓ в†“",
+    isEn ? "ID: newest first" : "ID: новые сверху",
+    isEn ? "ID: oldest first" : "ID: старые сверху",
+    isEn ? "Budget: high to low" : "Бюджет: больше -> меньше",
+    isEn ? "Budget: low to high" : "Бюджет: меньше -> больше",
+    isEn ? "Name: A -> Z" : "Название: А -> Я",
+    isEn ? "Name: Z -> A" : "Название: Я -> А",
+    isEn ? "Status: code asc" : "Статус: по коду ↑",
+    isEn ? "Status: code desc" : "Статус: по коду ↓",
   ]);
   setOptions("#salesMarketplace", [
-    isEn ? "All marketplaces" : "Р’СЃРµ РјР°СЂРєРµС‚РїР»РµР№СЃС‹",
+    isEn ? "All marketplaces" : "Все маркетплейсы",
     "WB",
     "Ozon",
   ]);
   setOptions("#accountingTemplateMarketplace", [
-    isEn ? "Template: WB + Ozon" : "РЁР°Р±Р»РѕРЅ: WB + Ozon",
-    isEn ? "Template: WB only" : "РЁР°Р±Р»РѕРЅ: С‚РѕР»СЊРєРѕ WB",
-    isEn ? "Template: Ozon only" : "РЁР°Р±Р»РѕРЅ: С‚РѕР»СЊРєРѕ Ozon",
+    isEn ? "Template: WB + Ozon" : "Шаблон: WB + Ozon",
+    isEn ? "Template: WB only" : "Шаблон: только WB",
+    isEn ? "Template: Ozon only" : "Шаблон: только Ozon",
   ]);
   setOptions("#salesMetricMode", [
-    isEn ? "Units" : "РЁС‚СѓРєРё",
-    isEn ? "Buyouts" : "Р’С‹РєСѓРїС‹",
-    isEn ? "Revenue" : "Р’С‹СЂСѓС‡РєР°",
-    isEn ? "Income" : "РџСЂРёС…РѕРґ",
-    isEn ? "Expense" : "Р Р°СЃС…РѕРґ",
-    isEn ? "Net" : "РР·РјРµРЅРµРЅРёРµ Р±Р°Р»Р°РЅСЃР°",
-    isEn ? "Orders" : "Р—Р°РєР°Р·С‹",
-    isEn ? "Returns" : "РћС‚РєР°Р·С‹",
-    isEn ? "Ads Spend" : "Р РµРєР»Р°РјР°",
-    isEn ? "Penalties" : "РЁС‚СЂР°С„С‹",
+    isEn ? "Units" : "Штуки",
+    isEn ? "Buyouts" : "Выкупы",
+    isEn ? "Revenue" : "Выручка",
+    isEn ? "Income" : "Приход",
+    isEn ? "Expense" : "Расход",
+    isEn ? "Net" : "Изменение баланса",
+    isEn ? "Orders" : "Заказы",
+    isEn ? "Returns" : "Отказы",
+    isEn ? "Ads Spend" : "Реклама",
+    isEn ? "Penalties" : "Штрафы",
   ]);
   setCheckLabel("#sales .sales-chart-controls label:nth-of-type(1)", "WB");
   setCheckLabel("#sales .sales-chart-controls label:nth-of-type(2)", "Ozon");
@@ -1239,44 +1239,44 @@ function applyUiLanguage() {
   const placeholders = [
     ["#loginEmail", "Email"],
     ["#regEmail", "Email"],
-    ["#loginPassword", isEn ? "Password" : "РџР°СЂРѕР»СЊ"],
-    ["#regPassword", isEn ? "Password (>=8)" : "РџР°СЂРѕР»СЊ (>=8)"],
-    ["#productFilter", isEn ? "Filter by article/name" : "Р¤РёР»СЊС‚СЂ: Р°СЂС‚РёРєСѓР»/РЅР°Р·РІР°РЅРёРµ"],
-    ["#positionKeywords", isEn ? "Ranking keywords (optional)" : "РљР»СЋС‡Рё РґР»СЏ РїСЂРѕРІРµСЂРєРё (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ)"],
-    ["#extraKeywords", isEn ? "Extra keywords (optional)" : "Р”РѕРї. РєР»СЋС‡Рё (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ)"],
-    ["#seoFilter", isEn ? "Filter: article/product/status" : "Р¤РёР»СЊС‚СЂ: Р°СЂС‚РёРєСѓР»/С‚РѕРІР°СЂ/СЃС‚Р°С‚СѓСЃ"],
-    ["#wbAdsSearch", isEn ? "Search by ID/name" : "РџРѕРёСЃРє РїРѕ ID/РЅР°Р·РІР°РЅРёСЋ"],
-    ["#wbAdsBudgetMin", isEn ? "Budget from" : "Р‘СЋРґР¶РµС‚ РѕС‚"],
-    ["#wbAdsBudgetMax", isEn ? "Budget to" : "Р‘СЋРґР¶РµС‚ РґРѕ"],
-    ["#questionAiPrompt", isEn ? "Optional prompt for question replies" : "РџСЂРѕРјРїС‚ РґР»СЏ РіРµРЅРµСЂР°С†РёРё РѕС‚РІРµС‚РѕРІ РЅР° РІРѕРїСЂРѕСЃС‹ (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ)"],
-    ["#reviewAiPrompt", isEn ? "Optional prompt for review replies" : "РџСЂРѕРјРїС‚ РґР»СЏ РіРµРЅРµСЂР°С†РёРё РѕС‚РІРµС‚РѕРІ (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ)"],
-    ["#adsAnalyticsCampaignId", isEn ? "campaign_id (optional)" : "campaign_id (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ)"],
-    ["#adsRecMinSpent", isEn ? "Min spend" : "РњРёРЅ. СЂР°СЃС…РѕРґ"],
-    ["#profileFullName", isEn ? "Director / Sole proprietor full name" : "Р¤РРћ РґРёСЂРµРєС‚РѕСЂР°/РРџ"],
-    ["#profilePositionTitle", isEn ? "Position title" : "Р”РѕР»Р¶РЅРѕСЃС‚СЊ"],
-    ["#profileCompanyName", isEn ? "Company name" : "РќР°Р·РІР°РЅРёРµ РєРѕРјРїР°РЅРёРё"],
-    ["#profileCity", isEn ? "City" : "Р“РѕСЂРѕРґ"],
-    ["#profileLegalName", isEn ? "Legal entity name" : "Р®СЂРёРґРёС‡РµСЃРєРѕРµ РЅР°РёРјРµРЅРѕРІР°РЅРёРµ"],
-    ["#profileLegalAddress", isEn ? "Legal address" : "Р®СЂРёРґРёС‡РµСЃРєРёР№ Р°РґСЂРµСЃ"],
-    ["#profileTaxId", isEn ? "Tax ID" : "РРќРќ"],
-    ["#profileTaxRate", isEn ? "Tax rate, %" : "РќР°Р»РѕРіРѕРІР°СЏ СЃС‚Р°РІРєР°, %"],
-    ["#profilePhone", isEn ? "Phone" : "РўРµР»РµС„РѕРЅ"],
-    ["#profileTeamSize", isEn ? "Team size" : "РЎРѕСЃС‚Р°РІ РєРѕРјРїР°РЅРёРё, С‡РµР»."],
-    ["#profileAvatarUrl", isEn ? "Avatar URL" : "РЎСЃС‹Р»РєР° РЅР° Р°РІР°С‚Р°СЂ"],
-    ["#profileCompanyStructure", isEn ? "Team structure, roles, departments" : "РЎС‚СЂСѓРєС‚СѓСЂР° РєРѕРјРїР°РЅРёРё, СЂРѕР»Рё, РѕС‚РґРµР»С‹"],
-    ["#teamModalEmail", isEn ? "Employee email" : "Email СЃРѕС‚СЂСѓРґРЅРёРєР°"],
-    ["#teamModalPassword", isEn ? "New password (optional)" : "РќРѕРІС‹Р№ РїР°СЂРѕР»СЊ (РѕРїС†.)"],
-    ["#teamModalPhone", isEn ? "Phone" : "РўРµР»РµС„РѕРЅ"],
-    ["#teamModalFullName", isEn ? "Full name" : "Р¤РРћ"],
-    ["#teamModalCity", isEn ? "City" : "Р“РѕСЂРѕРґ"],
-    ["#teamModalPosition", isEn ? "Position title" : "Р”РѕР»Р¶РЅРѕСЃС‚СЊ"],
-    ["#teamModalNickname", isEn ? "Nickname" : "РќРёРє"],
-    ["#teamModalAvatar", isEn ? "Avatar URL" : "РЎСЃС‹Р»РєР° РЅР° Р°РІР°С‚Р°СЂ"],
-    ["#profileAiName", isEn ? "AI service name" : "РќР°Р·РІР°РЅРёРµ AI СЃРµСЂРІРёСЃР°"],
-    ["#profileAiModel", isEn ? "Model (e.g. gpt-4o-mini)" : "РњРѕРґРµР»СЊ (РЅР°РїСЂРёРјРµСЂ gpt-4o-mini)"],
-    ["#profileAiBaseUrl", isEn ? "Base URL (optional)" : "Base URL (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ)"],
-    ["#profileAiApiKey", isEn ? "Service API key" : "API key СЃРµСЂРІРёСЃР°"],
-    ["#helpAssistantQuestion", isEn ? "Ask any question" : "Р—Р°РґР°Р№С‚Рµ Р»СЋР±РѕР№ РІРѕРїСЂРѕСЃ"],
+    ["#loginPassword", isEn ? "Password" : "Пароль"],
+    ["#regPassword", isEn ? "Password (>=8)" : "Пароль (>=8)"],
+    ["#productFilter", isEn ? "Filter by article/name" : "Фильтр: артикул/название"],
+    ["#positionKeywords", isEn ? "Ranking keywords (optional)" : "Ключи для проверки (опционально)"],
+    ["#extraKeywords", isEn ? "Extra keywords (optional)" : "Доп. ключи (опционально)"],
+    ["#seoFilter", isEn ? "Filter: article/product/status" : "Фильтр: артикул/товар/статус"],
+    ["#wbAdsSearch", isEn ? "Search by ID/name" : "Поиск по ID/названию"],
+    ["#wbAdsBudgetMin", isEn ? "Budget from" : "Бюджет от"],
+    ["#wbAdsBudgetMax", isEn ? "Budget to" : "Бюджет до"],
+    ["#questionAiPrompt", isEn ? "Optional prompt for question replies" : "Промпт для генерации ответов на вопросы (опционально)"],
+    ["#reviewAiPrompt", isEn ? "Optional prompt for review replies" : "Промпт для генерации ответов (опционально)"],
+    ["#adsAnalyticsCampaignId", isEn ? "campaign_id (optional)" : "campaign_id (опционально)"],
+    ["#adsRecMinSpent", isEn ? "Min spend" : "Мин. расход"],
+    ["#profileFullName", isEn ? "Director / Sole proprietor full name" : "ФИО директора/ИП"],
+    ["#profilePositionTitle", isEn ? "Position title" : "Должность"],
+    ["#profileCompanyName", isEn ? "Company name" : "Название компании"],
+    ["#profileCity", isEn ? "City" : "Город"],
+    ["#profileLegalName", isEn ? "Legal entity name" : "Юридическое наименование"],
+    ["#profileLegalAddress", isEn ? "Legal address" : "Юридический адрес"],
+    ["#profileTaxId", isEn ? "Tax ID" : "ИНН"],
+    ["#profileTaxRate", isEn ? "Tax rate, %" : "Налоговая ставка, %"],
+    ["#profilePhone", isEn ? "Phone" : "Телефон"],
+    ["#profileTeamSize", isEn ? "Team size" : "Состав компании, чел."],
+    ["#profileAvatarUrl", isEn ? "Avatar URL" : "Ссылка на аватар"],
+    ["#profileCompanyStructure", isEn ? "Team structure, roles, departments" : "Структура компании, роли, отделы"],
+    ["#teamModalEmail", isEn ? "Employee email" : "Email сотрудника"],
+    ["#teamModalPassword", isEn ? "New password (optional)" : "Новый пароль (опц.)"],
+    ["#teamModalPhone", isEn ? "Phone" : "Телефон"],
+    ["#teamModalFullName", isEn ? "Full name" : "ФИО"],
+    ["#teamModalCity", isEn ? "City" : "Город"],
+    ["#teamModalPosition", isEn ? "Position title" : "Должность"],
+    ["#teamModalNickname", isEn ? "Nickname" : "Ник"],
+    ["#teamModalAvatar", isEn ? "Avatar URL" : "Ссылка на аватар"],
+    ["#profileAiName", isEn ? "AI service name" : "Название AI сервиса"],
+    ["#profileAiModel", isEn ? "Model (e.g. gpt-4o-mini)" : "Модель (например gpt-4o-mini)"],
+    ["#profileAiBaseUrl", isEn ? "Base URL (optional)" : "Base URL (опционально)"],
+    ["#profileAiApiKey", isEn ? "Service API key" : "API key сервиса"],
+    ["#helpAssistantQuestion", isEn ? "Ask any question" : "Задайте любой вопрос"],
   ];
   for (const [selector, text] of placeholders) {
     const el = document.querySelector(selector);
@@ -1440,7 +1440,7 @@ async function requestJson(url, opts = {}) {
   };
 
   const makeRequestError = (message, extra = {}) => {
-    const err = new Error(String(message || (currentLang === "en" ? "Request error" : "РћС€РёР±РєР° Р·Р°РїСЂРѕСЃР°")));
+    const err = new Error(String(message || (currentLang === "en" ? "Request error" : "Ошибка запроса")));
     err.kind = String(extra.kind || "http");
     err.url = String(extra.url || url || "");
     if (Number.isFinite(Number(extra.status)) && Number(extra.status) > 0) {
@@ -1517,7 +1517,7 @@ async function requestJson(url, opts = {}) {
         if (!parsed.hasBody) return {};
         if (parsed.ok) return parsed.payload;
         throw makeRequestError(
-          currentLang === "en" ? "Server returned an invalid response." : "РЎРµСЂРІРµСЂ РІРµСЂРЅСѓР» РЅРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ РѕС‚РІРµС‚.",
+          currentLang === "en" ? "Server returned an invalid response." : "Сервер вернул некорректный ответ.",
           {
             kind: "parse",
             status: response.status,
@@ -1533,7 +1533,7 @@ async function requestJson(url, opts = {}) {
         ? String(payload.detail || payload.message || "").trim()
         : "";
       const err = makeRequestError(
-        detail || parsed.rawText || (currentLang === "en" ? "Request error" : "РћС€РёР±РєР° Р·Р°РїСЂРѕСЃР°"),
+        detail || parsed.rawText || (currentLang === "en" ? "Request error" : "Ошибка запроса"),
         {
           kind: parsed.ok ? "http" : "parse",
           status: response.status,
@@ -1578,13 +1578,13 @@ async function requestJson(url, opts = {}) {
       }
       if (isAbort) {
         throw makeRequestError(
-          currentLang === "en" ? "Request timed out. Please retry." : "РџСЂРµРІС‹С€РµРЅРѕ РІСЂРµРјСЏ РѕР¶РёРґР°РЅРёСЏ. РџРѕРІС‚РѕСЂРёС‚Рµ Р·Р°РїСЂРѕСЃ.",
+          currentLang === "en" ? "Request timed out. Please retry." : "Превышено время ожидания. Повторите запрос.",
           { kind: "timeout", cause: e }
         );
       }
       if (isFetchNetwork) {
         throw makeRequestError(
-          currentLang === "en" ? "Network error. Check connection and retry." : "РЎРµС‚РµРІР°СЏ РѕС€РёР±РєР°. РџСЂРѕРІРµСЂСЊС‚Рµ СЃРѕРµРґРёРЅРµРЅРёРµ Рё РїРѕРІС‚РѕСЂРёС‚Рµ.",
+          currentLang === "en" ? "Network error. Check connection and retry." : "Сетевая ошибка. Проверьте соединение и повторите.",
           { kind: "network", cause: e }
         );
       }
@@ -1597,30 +1597,30 @@ async function requestJson(url, opts = {}) {
 
   if (lastError?.name === "AbortError") {
     throw makeRequestError(
-      currentLang === "en" ? "Request timed out. Please retry." : "РџСЂРµРІС‹С€РµРЅРѕ РІСЂРµРјСЏ РѕР¶РёРґР°РЅРёСЏ. РџРѕРІС‚РѕСЂРёС‚Рµ Р·Р°РїСЂРѕСЃ.",
+      currentLang === "en" ? "Request timed out. Please retry." : "Превышено время ожидания. Повторите запрос.",
       { kind: "timeout", cause: lastError }
     );
   }
   if (isNetworkError(lastError)) {
     throw makeRequestError(
-      currentLang === "en" ? "Network error. Check connection and retry." : "РЎРµС‚РµРІР°СЏ РѕС€РёР±РєР°. РџСЂРѕРІРµСЂСЊС‚Рµ СЃРѕРµРґРёРЅРµРЅРёРµ Рё РїРѕРІС‚РѕСЂРёС‚Рµ.",
+      currentLang === "en" ? "Network error. Check connection and retry." : "Сетевая ошибка. Проверьте соединение и повторите.",
       { kind: "network", cause: lastError }
     );
   }
-  throw lastError || new Error(currentLang === "en" ? "Request error" : "РћС€РёР±РєР° Р·Р°РїСЂРѕСЃР°");
+  throw lastError || new Error(currentLang === "en" ? "Request error" : "Ошибка запроса");
 }
 function isNetworkError(err) {
   const msg = String(err?.message || "").toLowerCase();
   return msg.includes("network error")
-    || msg.includes("СЃРµС‚РµРІР°СЏ РѕС€РёР±РєР°")
+    || msg.includes("сетевая ошибка")
     || msg.includes("failed to fetch")
     || msg.includes("load failed")
     || msg.includes("networkerror")
     || msg.includes("timeout")
     || msg.includes("timed out")
     || msg.includes("time out")
-    || msg.includes("РІСЂРµРјСЏ РѕР¶РёРґР°РЅРёСЏ")
-    || msg.includes("РїСЂРµРІС‹С€РµРЅРѕ РІСЂРµРјСЏ РѕР¶РёРґР°РЅРёСЏ");
+    || msg.includes("время ожидания")
+    || msg.includes("превышено время ожидания");
 }
 
 function delay(ms) {
@@ -1630,8 +1630,8 @@ function delay(ms) {
 function setBusy(label = "", active = false, hint = "") {
   const overlay = document.getElementById("busyOverlay");
   if (!overlay) return;
-  const defaultLabel = currentLang === "en" ? "ProcessingвЂ¦" : "Р’С‹РїРѕР»РЅСЏРµРј РѕРїРµСЂР°С†РёСЋвЂ¦";
-  const defaultHint = currentLang === "en" ? "Usually it takes around 20-40 seconds." : "РћР±С‹С‡РЅРѕ СЌС‚Рѕ Р·Р°РЅРёРјР°РµС‚ РґРѕ 20-40 СЃРµРєСѓРЅРґ.";
+  const defaultLabel = currentLang === "en" ? "Processing…" : "Выполняем операцию…";
+  const defaultHint = currentLang === "en" ? "Usually it takes around 20-40 seconds." : "Обычно это занимает до 20-40 секунд.";
   document.getElementById("busyTitle").textContent = label || defaultLabel;
   document.getElementById("busyHint").textContent = hint || defaultHint;
   overlay.classList.toggle("hidden", !active);
@@ -1656,7 +1656,7 @@ async function tryRequestChain(requests) {
     if (res !== null) return res;
   }
   if (lastError) throw lastError;
-  throw new Error(tr("РћС€РёР±РєР° Р·Р°РїСЂРѕСЃР°", "Request error"));
+  throw new Error(tr("Ошибка запроса", "Request error"));
 }
 
 function escapeHtml(value) {
@@ -1668,34 +1668,34 @@ function escapeHtml(value) {
 
 function formatPositionValue(value) {
   const num = Number(value || 0);
-  if (!Number.isFinite(num) || num <= 0) return tr("РЅ/Рґ", "n/a");
+  if (!Number.isFinite(num) || num <= 0) return tr("н/д", "n/a");
   if (num > POSITION_LIMIT) return `${POSITION_LIMIT + 1}+`;
   return String(Math.round(num));
 }
 
 const BUTTON_TIPS = {
   ru: {
-    "РРјРїРѕСЂС‚": "РРјРїРѕСЂС‚РёСЂСѓРµС‚ С‚РѕРІР°СЂС‹ РёР· РІС‹Р±СЂР°РЅРЅРѕРіРѕ РјР°СЂРєРµС‚РїР»РµР№СЃР° РІ Р»РѕРєР°Р»СЊРЅСѓСЋ Р±Р°Р·Сѓ.",
-    "РџРµСЂРµР·Р°РіСЂСѓР·РёС‚СЊ Р±Р°Р·Сѓ": "РџРѕР»РЅРѕСЃС‚СЊСЋ РїРµСЂРµСЃРѕР·РґР°РµС‚ Р»РѕРєР°Р»СЊРЅСѓСЋ Р±Р°Р·Сѓ С‚РѕРІР°СЂРѕРІ РїРѕ РІС‹Р±СЂР°РЅРЅРѕРјСѓ РјР°СЂРєРµС‚РїР»РµР№СЃСѓ.",
-    "РџСЂРѕРІРµСЂРёС‚СЊ РІС‹Р±СЂР°РЅРЅС‹Рµ": "РџСЂРѕРІРµСЂСЏРµС‚ РїРѕР·РёС†РёРё С‚РѕР»СЊРєРѕ РІС‹Р±СЂР°РЅРЅС‹С… С‚РѕРІР°СЂРѕРІ РїРѕ СѓРєР°Р·Р°РЅРЅС‹Рј РєР»СЋС‡Р°Рј.",
-    "РџСЂРѕРІРµСЂРёС‚СЊ РІСЃРµ": "РџСЂРѕРІРµСЂСЏРµС‚ РїРѕР·РёС†РёРё РІСЃРµС… С‚РѕРІР°СЂРѕРІ РІ Р±Р°Р·Рµ.",
-    "РЎРіРµРЅРµСЂРёСЂРѕРІР°С‚СЊ": "РЎРѕР·РґР°РµС‚ С‡РµСЂРЅРѕРІРёРє РѕС‚РІРµС‚Р° AI РїРѕ С‚РµРєСЃС‚Сѓ РєР»РёРµРЅС‚Р°.",
-    "РћС‚РїСЂР°РІРёС‚СЊ": "РџСѓР±Р»РёРєСѓРµС‚ РѕС‚РІРµС‚ РІ РјР°СЂРєРµС‚РїР»РµР№СЃ.",
-    "РћР±РЅРѕРІРёС‚СЊ": "РћР±РЅРѕРІР»СЏРµС‚ СЂР°РЅРµРµ РѕС‚РїСЂР°РІР»РµРЅРЅС‹Р№ РѕС‚РІРµС‚ РІ РјР°СЂРєРµС‚РїР»РµР№СЃРµ.",
-    "Р—Р°РіСЂСѓР·РёС‚СЊ РєР°РјРїР°РЅРёРё": "Р—Р°РіСЂСѓР¶Р°РµС‚ СЃРїРёСЃРѕРє СЂРµРєР»Р°РјРЅС‹С… РєР°РјРїР°РЅРёР№ РёР· РєР°Р±РёРЅРµС‚Р° WB Ads.",
-    "РџРѕР»СѓС‡РёС‚СЊ СЃС‚Р°РІРєРё": "Р—Р°РїСЂР°С€РёРІР°РµС‚ СЃС‚Р°РІРєРё РїРѕ РІС‹Р±СЂР°РЅРЅРѕР№ СЂРµРєР»Р°РјРЅРѕР№ РєР°РјРїР°РЅРёРё.",
-    "РЎР±СЂРѕСЃРёС‚СЊ С„РёР»СЊС‚СЂС‹": "РЎР±СЂР°СЃС‹РІР°РµС‚ С„РёР»СЊС‚СЂС‹ Рё СЃРѕСЂС‚РёСЂРѕРІРєСѓ СЂРµРєР»Р°РјРЅС‹С… РєР°РјРїР°РЅРёР№.",
-    "РџРѕСЃС‚СЂРѕРёС‚СЊ РѕС‚С‡РµС‚": "Р¤РѕСЂРјРёСЂСѓРµС‚ Р°РЅР°Р»РёС‚РёС‡РµСЃРєРёР№ РѕС‚С‡РµС‚ РїРѕ WB Ads Р·Р° РІС‹Р±СЂР°РЅРЅС‹Р№ РїРµСЂРёРѕРґ.",
-    "РџРѕСЃС‚СЂРѕРёС‚СЊ СЂРµРєРѕРјРµРЅРґР°С†РёРё": "Р¤РѕСЂРјРёСЂСѓРµС‚ СЃРїРёСЃРѕРє РїСЂРёРѕСЂРёС‚РµС‚РЅС‹С… РґРµР№СЃС‚РІРёР№ РїРѕ РѕРїС‚РёРјРёР·Р°С†РёРё СЂРµРєР»Р°РјРЅС‹С… РєР°РјРїР°РЅРёР№.",
-    "Р—Р°РіСЂСѓР·РёС‚СЊ СЃС‚Р°С‚РёСЃС‚РёРєСѓ": "Р—Р°РіСЂСѓР¶Р°РµС‚ РїСЂРѕРґР°Р¶Рё Р·Р° РІС‹Р±СЂР°РЅРЅС‹Р№ РїРµСЂРёРѕРґ Рё СЃС‚СЂРѕРёС‚ РіСЂР°С„РёРє.",
-    "РЎРѕС…СЂР°РЅРёС‚СЊ РїСЂРѕС„РёР»СЊ": "РЎРѕС…СЂР°РЅСЏРµС‚ Р»РёС‡РЅС‹Рµ Рё СЋСЂРёРґРёС‡РµСЃРєРёРµ РґР°РЅРЅС‹Рµ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ.",
-    "РћР±РЅРѕРІРёС‚СЊ РїСЂРѕС„РёР»СЊ": "РџРµСЂРµР·Р°РіСЂСѓР¶Р°РµС‚ РґР°РЅРЅС‹Рµ РїСЂРѕС„РёР»СЏ СЃ СЃРµСЂРІРµСЂР°.",
-    "РЎРјРµРЅРёС‚СЊ С‚Р°СЂРёС„": "РџРµСЂРµРєР»СЋС‡Р°РµС‚ С‚Р°СЂРёС„РЅС‹Р№ РїР»Р°РЅ С‚РµРєСѓС‰РµРіРѕ Р°РєРєР°СѓРЅС‚Р°.",
-    "РџСЂРѕРґР»РёС‚СЊ РЅР° 30 РґРЅРµР№": "РџСЂРѕРґР»РµРІР°РµС‚ С‚Р°СЂРёС„ РЅР° СЃР»РµРґСѓСЋС‰РёР№ СЂР°СЃС‡РµС‚РЅС‹Р№ РїРµСЂРёРѕРґ.",
-    "РЎРјРµРЅРёС‚СЊ РїР°СЂРѕР»СЊ": "РћР±РЅРѕРІР»СЏРµС‚ РїР°СЂРѕР»СЊ С‚РµРєСѓС‰РµРіРѕ Р°РєРєР°СѓРЅС‚Р°.",
-    "Р—Р°РіСЂСѓР·РёС‚СЊ РІ Р±Р°Р·Сѓ Р·РЅР°РЅРёР№": "Р—Р°РіСЂСѓР¶Р°РµС‚ РґРѕРєСѓРјРµРЅС‚, РєРѕС‚РѕСЂС‹Р№ AI Р±СѓРґРµС‚ СѓС‡РёС‚С‹РІР°С‚СЊ РІ РѕС‚РІРµС‚Р°С….",
-    "РЈРґР°Р»РёС‚СЊ РІС‹Р±СЂР°РЅРЅС‹Р№ РґРѕРєСѓРјРµРЅС‚": "РЈРґР°Р»СЏРµС‚ РІС‹Р±СЂР°РЅРЅС‹Р№ РґРѕРєСѓРјРµРЅС‚ РёР· Р±Р°Р·С‹ Р·РЅР°РЅРёР№ AI.",
-    "РћР±РЅРѕРІРёС‚СЊ СЃРїСЂР°РІРєСѓ": "РџРµСЂРµР·Р°РіСЂСѓР¶Р°РµС‚ СЃРїСЂР°РІРѕС‡РЅСѓСЋ РёРЅС„РѕСЂРјР°С†РёСЋ РїРѕ РјРѕРґСѓР»СЏРј.",
+    "Импорт": "Импортирует товары из выбранного маркетплейса в локальную базу.",
+    "Перезагрузить базу": "Полностью пересоздает локальную базу товаров по выбранному маркетплейсу.",
+    "Проверить выбранные": "Проверяет позиции только выбранных товаров по указанным ключам.",
+    "Проверить все": "Проверяет позиции всех товаров в базе.",
+    "Сгенерировать": "Создает черновик ответа AI по тексту клиента.",
+    "Отправить": "Публикует ответ в маркетплейс.",
+    "Обновить": "Обновляет ранее отправленный ответ в маркетплейсе.",
+    "Загрузить кампании": "Загружает список рекламных кампаний из кабинета WB Ads.",
+    "Получить ставки": "Запрашивает ставки по выбранной рекламной кампании.",
+    "Сбросить фильтры": "Сбрасывает фильтры и сортировку рекламных кампаний.",
+    "Построить отчет": "Формирует аналитический отчет по WB Ads за выбранный период.",
+    "Построить рекомендации": "Формирует список приоритетных действий по оптимизации рекламных кампаний.",
+    "Загрузить статистику": "Загружает продажи за выбранный период и строит график.",
+    "Сохранить профиль": "Сохраняет личные и юридические данные пользователя.",
+    "Обновить профиль": "Перезагружает данные профиля с сервера.",
+    "Сменить тариф": "Переключает тарифный план текущего аккаунта.",
+    "Продлить на 30 дней": "Продлевает тариф на следующий расчетный период.",
+    "Сменить пароль": "Обновляет пароль текущего аккаунта.",
+    "Загрузить в базу знаний": "Загружает документ, который AI будет учитывать в ответах.",
+    "Удалить выбранный документ": "Удаляет выбранный документ из базы знаний AI.",
+    "Обновить справку": "Перезагружает справочную информацию по модулям.",
   },
   en: {
     "Import": "Imports products from selected marketplace into local catalog.",
@@ -1727,7 +1727,7 @@ function inferButtonTip(text) {
   if (!cleaned) return "";
   const dict = BUTTON_TIPS[currentLang] || BUTTON_TIPS.ru;
   if (dict[cleaned]) return dict[cleaned];
-  return currentLang === "en" ? `Action: ${cleaned}` : `Р”РµР№СЃС‚РІРёРµ: ${cleaned}`;
+  return currentLang === "en" ? `Action: ${cleaned}` : `Действие: ${cleaned}`;
 }
 
 function applyButtonTooltips() {
@@ -1824,7 +1824,7 @@ function renderTrendChart(svgId, metaId, points) {
 
   if (!points.length) {
     clearChartHost(svg);
-    meta.textContent = tr("РџРѕРєР° РЅРµС‚ РґР°РЅРЅС‹С… РїРѕ РїСЂРѕРІРµСЂРєР°Рј.", "No checks data yet.");
+    meta.textContent = tr("Пока нет данных по проверкам.", "No checks data yet.");
     return;
   }
 
@@ -1884,7 +1884,7 @@ function renderTrendChart(svgId, metaId, points) {
           },
           series: [
             {
-              name: tr("РџРѕР·РёС†РёСЏ", "Rank"),
+              name: tr("Позиция", "Rank"),
               type: "line",
               smooth: true,
               showSymbol: false,
@@ -1906,9 +1906,9 @@ function renderTrendChart(svgId, metaId, points) {
         true
       );
       meta.innerHTML = `
-        <span>${tr("РџСЂРѕРІРµСЂРѕРє", "Checks")}: <b>${checks}</b></span>
-        <span>${tr("РЎСЂРµРґРЅСЏСЏ РїРѕР·РёС†РёСЏ", "Average rank")}: <b>${avgPos}</b></span>
-        <span>${tr("Р’С…РѕРґРѕРІ РІ С‚РѕРї-5", "Top-5 hits")}: <b>${top5}</b></span>
+        <span>${tr("Проверок", "Checks")}: <b>${checks}</b></span>
+        <span>${tr("Средняя позиция", "Average rank")}: <b>${avgPos}</b></span>
+        <span>${tr("Входов в топ-5", "Top-5 hits")}: <b>${top5}</b></span>
       `;
       return;
     }
@@ -1929,9 +1929,9 @@ function renderTrendChart(svgId, metaId, points) {
     svg.innerHTML = `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${fallbackMarkup}</svg>`;
   }
   meta.innerHTML = `
-    <span>${tr("РџСЂРѕРІРµСЂРѕРє", "Checks")}: <b>${checks}</b></span>
-    <span>${tr("РЎСЂРµРґРЅСЏСЏ РїРѕР·РёС†РёСЏ", "Average rank")}: <b>${avgPos}</b></span>
-    <span>${tr("Р’С…РѕРґРѕРІ РІ С‚РѕРї-5", "Top-5 hits")}: <b>${top5}</b></span>
+    <span>${tr("Проверок", "Checks")}: <b>${checks}</b></span>
+    <span>${tr("Средняя позиция", "Average rank")}: <b>${avgPos}</b></span>
+    <span>${tr("Входов в топ-5", "Top-5 hits")}: <b>${top5}</b></span>
   `;
 }
 
@@ -1939,10 +1939,10 @@ function renderSeoKanban(rows) {
   const board = document.getElementById("seoKanban");
   if (!board) return;
   const columns = [
-    { key: "generated", title: tr("РЎРіРµРЅРµСЂРёСЂРѕРІР°РЅРѕ", "Generated"), cls: "generated" },
-    { key: "in_progress", title: tr("Р’ СЂР°Р±РѕС‚Рµ", "In progress"), cls: "in-progress" },
-    { key: "applied", title: tr("РџСЂРёРјРµРЅРµРЅРѕ", "Applied"), cls: "applied" },
-    { key: "top_reached", title: tr("РўРѕРї-5 РґРѕСЃС‚РёРіРЅСѓС‚", "Top-5 reached"), cls: "top" },
+    { key: "generated", title: tr("Сгенерировано", "Generated"), cls: "generated" },
+    { key: "in_progress", title: tr("В работе", "In progress"), cls: "in-progress" },
+    { key: "applied", title: tr("Применено", "Applied"), cls: "applied" },
+    { key: "top_reached", title: tr("Топ-5 достигнут", "Top-5 reached"), cls: "top" },
   ];
 
   const html = columns
@@ -1959,12 +1959,12 @@ function renderSeoKanban(rows) {
                       (i) => `
                 <article class="kanban-item">
                   <div>${escapeHtml(i.product_article || "-")}</div>
-                  <small>${escapeHtml(i.product_name || tr("РўРѕРІР°СЂ", "Product"))}</small>
+                  <small>${escapeHtml(i.product_name || tr("Товар", "Product"))}</small>
                 </article>
               `
                     )
                     .join("")
-                : `<div class="kanban-empty">${tr("РќРµС‚ Р·Р°РґР°С‡", "No jobs")}</div>`
+                : `<div class="kanban-empty">${tr("Нет задач", "No jobs")}</div>`
             }
           </div>
         </section>
@@ -1978,7 +1978,7 @@ async function renderProductPreview(product) {
   const card = document.getElementById("productPreviewCard");
   if (!card) return;
   if (!product) {
-    card.innerHTML = `<p class="hint">${tr("Р’С‹Р±РµСЂРёС‚Рµ С‚РѕРІР°СЂ РІ С‚Р°Р±Р»РёС†Рµ.", "Select a product in table.")}</p>`;
+    card.innerHTML = `<p class="hint">${tr("Выберите товар в таблице.", "Select a product in table.")}</p>`;
     renderTrendChart("productTrendChart", "productTrendMeta", []);
     renderProductDetailsPane(null, null);
     return;
@@ -1990,10 +1990,10 @@ async function renderProductPreview(product) {
     ${photo}
     <h4>${escapeHtml(product.name)}</h4>
     <div class="preview-grid">
-      <span>${tr("РђСЂС‚РёРєСѓР»", "Article")}</span><b>${escapeHtml(product.article)}</b>
-      <span>${tr("Р‘Р°СЂРєРѕРґ", "Barcode")}</span><b>${escapeHtml(product.barcode || "-")}</b>
-      <span>${tr("РњР°СЂРєРµС‚РїР»РµР№СЃ", "Marketplace")}</span><b>${escapeHtml((product.marketplace || "").toUpperCase())}</b>
-      <span>${tr("РџРѕР·РёС†РёСЏ", "Rank")}</span><b>${escapeHtml(formatPositionValue(product.last_position))}</b>
+      <span>${tr("Артикул", "Article")}</span><b>${escapeHtml(product.article)}</b>
+      <span>${tr("Баркод", "Barcode")}</span><b>${escapeHtml(product.barcode || "-")}</b>
+      <span>${tr("Маркетплейс", "Marketplace")}</span><b>${escapeHtml((product.marketplace || "").toUpperCase())}</b>
+      <span>${tr("Позиция", "Rank")}</span><b>${escapeHtml(formatPositionValue(product.last_position))}</b>
     </div>
   `;
   const previewImg = card.querySelector(".preview-photo");
@@ -2018,7 +2018,7 @@ function renderProductDetailsPane(product, payload) {
   const kwEl = document.getElementById("productDetailKeywords");
   if (!warnEl || !photosEl || !rawEl || !nameEl || !descEl || !photoEl || !kwEl) return;
   if (!product) {
-    warnEl.textContent = tr("Р’С‹Р±РµСЂРёС‚Рµ С‚РѕРІР°СЂ РІ С‚Р°Р±Р»РёС†Рµ, С‡С‚РѕР±С‹ СѓРІРёРґРµС‚СЊ РґРµС‚Р°Р»Рё.", "Select a product in table to view details.");
+    warnEl.textContent = tr("Выберите товар в таблице, чтобы увидеть детали.", "Select a product in table to view details.");
     photosEl.innerHTML = "";
     rawEl.textContent = "-";
     nameEl.value = "";
@@ -2030,7 +2030,7 @@ function renderProductDetailsPane(product, payload) {
   const warnings = Array.isArray(payload?.warnings) ? payload.warnings.filter(Boolean) : [];
   warnEl.textContent = warnings.length
     ? warnings.join(" | ")
-    : tr("Р”РµС‚Р°Р»Рё РєР°СЂС‚РѕС‡РєРё Р·Р°РіСЂСѓР¶РµРЅС‹. РњРѕР¶РЅРѕ СЂРµРґР°РєС‚РёСЂРѕРІР°С‚СЊ Рё СЃРѕС…СЂР°РЅСЏС‚СЊ.", "Product details loaded. You can edit and save.");
+    : tr("Детали карточки загружены. Можно редактировать и сохранять.", "Product details loaded. You can edit and save.");
   const photos = Array.isArray(payload?.photos)
     ? payload.photos.filter((x) => typeof x === "string" && x.trim())
     : [];
@@ -2038,7 +2038,7 @@ function renderProductDetailsPane(product, payload) {
   const photoRows = photos.length ? photos : (fallbackPhoto ? [fallbackPhoto] : []);
   photosEl.innerHTML = photoRows.length
     ? photoRows.map((url, idx) => `<img src="${escapeHtml(url)}" alt="product-photo-${idx + 1}" class="product-detail-photo" loading="lazy" />`).join("")
-    : `<div class="hint">${tr("Р¤РѕС‚РѕРіСЂР°С„РёРё РЅРµ РЅР°Р№РґРµРЅС‹.", "No photos found.")}</div>`;
+    : `<div class="hint">${tr("Фотографии не найдены.", "No photos found.")}</div>`;
   nameEl.value = String(payload?.product?.name || product?.name || "");
   descEl.value = String(payload?.product?.current_description || product?.current_description || "");
   photoEl.value = String(payload?.product?.photo_url || product?.photo_url || "");
@@ -2070,7 +2070,7 @@ async function loadSelectedProductDetails(productId = selectedProductId, opts = 
 async function saveSelectedProductDetails() {
   const id = Number(selectedProductId || 0);
   if (!id) {
-    alert(tr("РЎРЅР°С‡Р°Р»Р° РІС‹Р±РµСЂРёС‚Рµ С‚РѕРІР°СЂ РІ С‚Р°Р±Р»РёС†Рµ.", "Select a product in table first."));
+    alert(tr("Сначала выберите товар в таблице.", "Select a product in table first."));
     return;
   }
   const payload = {
@@ -2080,14 +2080,14 @@ async function saveSelectedProductDetails() {
     target_keywords: String(document.getElementById("productDetailKeywords")?.value || "").trim(),
   };
   const updated = await withBusy(
-    tr("РЎРѕС…СЂР°РЅСЏРµРј РёР·РјРµРЅРµРЅРёСЏ РєР°СЂС‚РѕС‡РєРё С‚РѕРІР°СЂР°вЂ¦", "Saving product card changes..."),
+    tr("Сохраняем изменения карточки товара…", "Saving product card changes..."),
     () => requestJson(`/api/products/${id}`, {
       method: "PATCH",
       headers: authHeaders(),
       body: JSON.stringify(payload),
       timeoutMs: 120000,
     }),
-    tr("Р•СЃР»Рё РёР·РјРµРЅРµРЅРѕ РѕРїРёСЃР°РЅРёРµ, СЃРµСЂРІРёСЃ РѕС‚РїСЂР°РІРёС‚ РµРіРѕ РІ РјР°СЂРєРµС‚РїР»РµР№СЃ С‡РµСЂРµР· API.", "If description changed, service also sends it to marketplace API.")
+    tr("Если изменено описание, сервис отправит его в маркетплейс через API.", "If description changed, service also sends it to marketplace API.")
   ).catch((e) => {
     alert(e.message);
     return null;
@@ -2096,7 +2096,7 @@ async function saveSelectedProductDetails() {
   invalidateModuleCache("products", "seo");
   await loadProducts();
   await loadSelectedProductDetails(id, { silent: true });
-  alert(tr("РљР°СЂС‚РѕС‡РєР° С‚РѕРІР°СЂР° РѕР±РЅРѕРІР»РµРЅР°.", "Product card updated."));
+  alert(tr("Карточка товара обновлена.", "Product card updated."));
 }
 
 async function suggestKeywordsForSelectedProduct(productId) {
@@ -2134,13 +2134,13 @@ function ensureProfileTeamUi() {
   panel.className = "panel";
   panel.id = "profileTeamPanel";
   panel.innerHTML = `
-    <h3>${tr("РЎРѕС‚СЂСѓРґРЅРёРєРё РєР°Р±РёРЅРµС‚Р°", "Workspace Team")}</h3>
+    <h3>${tr("Сотрудники кабинета", "Workspace Team")}</h3>
     <div class="team-member-toolbar">
-      <div id="teamPanelHint" class="hint">${tr("Р”РѕР±Р°РІР»РµРЅРёРµ Рё СЂРµРґР°РєС‚РёСЂРѕРІР°РЅРёРµ СЃРѕС‚СЂСѓРґРЅРёРєР° РІС‹РїРѕР»РЅСЏРµС‚СЃСЏ С‡РµСЂРµР· pop-up РѕРєРЅРѕ.", "Add or edit employees via popup window.")}</div>
-      <button id="teamAddMemberBtn" class="btn-secondary" type="button" onclick="openTeamMemberCreator()">${tr("Р”РѕР±Р°РІРёС‚СЊ СЃРѕС‚СЂСѓРґРЅРёРєР°", "Add employee")}</button>
+      <div id="teamPanelHint" class="hint">${tr("Добавление и редактирование сотрудника выполняется через pop-up окно.", "Add or edit employees via popup window.")}</div>
+      <button id="teamAddMemberBtn" class="btn-secondary" type="button" onclick="openTeamMemberCreator()">${tr("Добавить сотрудника", "Add employee")}</button>
     </div>
     <div class="team-member-list" id="teamMembersList">
-      <div class="hint">${tr("РЎРѕС‚СЂСѓРґРЅРёРєРё Р·Р°РіСЂСѓР¶Р°СЋС‚СЃСЏ...", "Loading employees...")}</div>
+      <div class="hint">${tr("Сотрудники загружаются...", "Loading employees...")}</div>
     </div>
   `;
   profileTab.appendChild(panel);
@@ -2231,7 +2231,7 @@ function pruneLegacyUi() {
   migrateLegacyModuleSection("ads-analytics", "adsSubtabAnalytics", "#adsAnalyticsTable");
   migrateLegacyModuleSection("ads-recommendations", "adsSubtabRecommendations", "#adsRecTable");
   const legacyTabs = ["dashboard", "questions", "ads-analytics", "ads-recommendations", "keywords"];
-  const legacyTextPattern = /^(РґР°С€Р±РѕСЂРґ|dashboard|РІРѕРїСЂРѕСЃС‹ wb\/ozon|questions wb\/ozon|Р°РЅР°Р»РёС‚РёРєР° wb ads|wb ads analytics|СЂРµРєРѕРјРµРЅРґР°С†РёРё wb ads|wb ads recommendations|РєР»СЋС‡РµРІРёРєРё|keywords)$/i;
+  const legacyTextPattern = /^(дашборд|dashboard|вопросы wb\/ozon|questions wb\/ozon|аналитика wb ads|wb ads analytics|рекомендации wb ads|wb ads recommendations|ключевики|keywords)$/i;
   for (const btn of document.querySelectorAll(".side-nav .nav-btn")) {
     const tab = String(btn.dataset.tab || "").trim();
     if (tab === "seo") {
@@ -2525,31 +2525,49 @@ function showTab(name, btn = null) {
   }, 0);
 }
 
-function openSocialChatFromBell(event = null) {
-  currentSocialSubtab = "chat";
-  const socialBtn = document.querySelector(".nav-btn[data-tab='social']");
-  showTab("social", socialBtn || null);
-  closeMobileNav();
-
-  const openCenter = () => {
+async function openSocialChatFromBell(event = null) {
+  const openCenter = async () => {
     if (typeof window.socialToggleNotificationCenter !== "function") return false;
     try {
-      const anchor = document.getElementById("socialBellBtn") || document.getElementById("mobileDrawerBellBtn") || null;
-      const evt = event || {
-        preventDefault() {},
-        stopPropagation() {},
-        currentTarget: anchor,
-        target: anchor,
-      };
-      window.socialToggleNotificationCenter(evt);
-      return true;
+      const opened = await window.socialToggleNotificationCenter(event || null);
+      return opened !== false;
     } catch (_) {
       return false;
     }
   };
 
-  if (openCenter()) return;
+  if (await openCenter()) {
+    closeMobileNav();
+    return;
+  }
 
+  const socialBtn = document.querySelector(".nav-btn[data-tab='social']");
+  if (String(currentTab || "") !== "social") {
+    currentSocialSubtab = String(currentSocialSubtab || "chat");
+    showTab("social", socialBtn || null);
+  }
+
+  if (typeof runModuleLoader === "function" && typeof loadSocialWorkspace === "function") {
+    try {
+      await runModuleLoader("social", () => loadSocialWorkspace());
+    } catch (_) {}
+  } else if (typeof loadSocialWorkspace === "function") {
+    try {
+      await loadSocialWorkspace();
+    } catch (_) {}
+  }
+
+  for (let i = 0; i < 8; i += 1) {
+    if (await openCenter()) {
+      closeMobileNav();
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 120));
+  }
+
+  currentSocialSubtab = "chat";
+  showTab("social", socialBtn || null);
+  closeMobileNav();
   const trySwitch = () => {
     if (typeof window.switchSocialSubtab !== "function") return false;
     window.switchSocialSubtab("chat", true);
@@ -2559,7 +2577,7 @@ function openSocialChatFromBell(event = null) {
   let tries = 0;
   const timer = setInterval(() => {
     tries += 1;
-    if (openCenter() || trySwitch() || tries >= 10) clearInterval(timer);
+    if (trySwitch() || tries >= 10) clearInterval(timer);
   }, 120);
 }
 
@@ -2666,29 +2684,29 @@ function getMobileQuickNavOptions() {
     if (!modulesLoaded) return true;
     return enabledModules instanceof Set && enabledModules.has(code);
   };
-  const options = [{ value: "sales_dashboard", label: isEn ? "Statistics" : "РЎС‚Р°С‚РёСЃС‚РёРєР°" }];
+  const options = [{ value: "sales_dashboard", label: isEn ? "Statistics" : "Статистика" }];
   if (has("social_hub")) {
-    options.push({ value: "social_chat", label: isEn ? "Chat" : "Р§Р°С‚" });
-    options.push({ value: "social_tasks", label: isEn ? "Tasks" : "Р—Р°РґР°С‡Рё" });
-    options.push({ value: "social_notes", label: isEn ? "Notes" : "Р—Р°РјРµС‚РєРё" });
-    options.push({ value: "social_calculator", label: isEn ? "Calculator" : "РљР°Р»СЊРєСѓР»СЏС‚РѕСЂ" });
-    options.push({ value: "social_calendar", label: isEn ? "Calendar" : "РљР°Р»РµРЅРґР°СЂСЊ" });
-    options.push({ value: "social_games", label: isEn ? "Games" : "РРіСЂС‹" });
+    options.push({ value: "social_chat", label: isEn ? "Chat" : "Чат" });
+    options.push({ value: "social_tasks", label: isEn ? "Tasks" : "Задачи" });
+    options.push({ value: "social_notes", label: isEn ? "Notes" : "Заметки" });
+    options.push({ value: "social_calculator", label: isEn ? "Calculator" : "Калькулятор" });
+    options.push({ value: "social_calendar", label: isEn ? "Calendar" : "Календарь" });
+    options.push({ value: "social_games", label: isEn ? "Games" : "Игры" });
   }
   if (has("wb_reviews_ai") || has("wb_questions_ai") || has("returns")) {
-    if (has("wb_reviews_ai")) options.push({ value: "reviews_reviews", label: isEn ? "Review replies" : "РћС‚РІРµС‚С‹ РЅР° РѕС‚Р·С‹РІС‹" });
-    if (has("wb_questions_ai")) options.push({ value: "reviews_questions", label: isEn ? "Question replies" : "РћС‚РІРµС‚С‹ РЅР° РІРѕРїСЂРѕСЃС‹" });
-    if (has("returns")) options.push({ value: "reviews_returns", label: isEn ? "Returns" : "Р’РѕР·РІСЂР°С‚С‹" });
+    if (has("wb_reviews_ai")) options.push({ value: "reviews_reviews", label: isEn ? "Review replies" : "Ответы на отзывы" });
+    if (has("wb_questions_ai")) options.push({ value: "reviews_questions", label: isEn ? "Question replies" : "Ответы на вопросы" });
+    if (has("returns")) options.push({ value: "reviews_returns", label: isEn ? "Returns" : "Возвраты" });
   }
   if (has("wb_ads") || has("wb_ads_analytics") || has("wb_ads_recommendations")) {
-    if (has("wb_ads")) options.push({ value: "ads_campaigns", label: isEn ? "Ad campaigns" : "Р РµРєР»Р°РјРЅС‹Рµ РєР°РјРїР°РЅРёРё" });
-    if (has("wb_ads_analytics")) options.push({ value: "ads_analytics", label: isEn ? "Ads analytics" : "РђРЅР°Р»РёС‚РёРєР° СЂРµРєР»Р°РјС‹" });
-    if (has("wb_ads_recommendations")) options.push({ value: "ads_recommendations", label: isEn ? "Recommendations" : "Р РµРєРѕРјРµРЅРґР°С†РёРё" });
-    if (has("wb_ads")) options.push({ value: "ads_bidder", label: isEn ? "WB Ads bidder" : "Р‘РёРґРµСЂ WB Ads" });
+    if (has("wb_ads")) options.push({ value: "ads_campaigns", label: isEn ? "Ad campaigns" : "Рекламные кампании" });
+    if (has("wb_ads_analytics")) options.push({ value: "ads_analytics", label: isEn ? "Ads analytics" : "Аналитика рекламы" });
+    if (has("wb_ads_recommendations")) options.push({ value: "ads_recommendations", label: isEn ? "Recommendations" : "Рекомендации" });
+    if (has("wb_ads")) options.push({ value: "ads_bidder", label: isEn ? "WB Ads bidder" : "Бидер WB Ads" });
   }
-  options.push({ value: "profile_main", label: isEn ? "Profile" : "РџСЂРѕС„РёР»СЊ" });
+  options.push({ value: "profile_main", label: isEn ? "Profile" : "Профиль" });
   if (has("help_center")) {
-    options.push({ value: "help_main", label: isEn ? "Help" : "РЎРїСЂР°РІРєР°" });
+    options.push({ value: "help_main", label: isEn ? "Help" : "Справка" });
   }
   return options;
 }
@@ -3269,8 +3287,8 @@ function renderTopbarUser() {
   const name = String(me.actor_nick || actorEmail || "-");
   const isOwner = Boolean(me.actor_is_owner);
   const roleText = me.role === "admin"
-    ? tr("РђРґРјРёРЅ", "Admin")
-    : (isOwner ? tr("Р’Р»Р°РґРµР»РµС†", "Owner") : tr("РЎРѕС‚СЂСѓРґРЅРёРє", "Member"));
+    ? tr("Админ", "Admin")
+    : (isOwner ? tr("Владелец", "Owner") : tr("Сотрудник", "Member"));
   const initials = computeAvatarInitials(name, actorEmail);
   const avatarText = document.getElementById("topbarAvatarText");
   const avatarName = document.getElementById("topbarAvatarName");
@@ -3346,15 +3364,15 @@ async function uploadAvatarFile(inputId, endpoint) {
   const input = document.getElementById(inputId);
   const file = input?.files?.[0] || null;
   if (!file) {
-    alert(tr("Р’С‹Р±РµСЂРёС‚Рµ С„Р°Р№Р» РёР·РѕР±СЂР°Р¶РµРЅРёСЏ.", "Choose an image file."));
+    alert(tr("Выберите файл изображения.", "Choose an image file."));
     return null;
   }
   if (!String(file.type || "").startsWith("image/")) {
-    alert(tr("Р¤Р°Р№Р» РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ РёР·РѕР±СЂР°Р¶РµРЅРёРµРј.", "File must be an image."));
+    alert(tr("Файл должен быть изображением.", "File must be an image."));
     return null;
   }
   if (file.size > 4 * 1024 * 1024) {
-    alert(tr("Р¤Р°Р№Р» СЃР»РёС€РєРѕРј Р±РѕР»СЊС€РѕР№ (РґРѕ 4 РњР‘).", "File is too large (max 4 MB)."));
+    alert(tr("Файл слишком большой (до 4 МБ).", "File is too large (max 4 MB)."));
     return null;
   }
   const form = new FormData();
@@ -3406,7 +3424,7 @@ function triggerTeamAvatarUpload() {
 
 async function uploadTeamAvatar() {
   if (!activeTeamMemberId) {
-    alert(tr("РЎРЅР°С‡Р°Р»Р° РІС‹Р±РµСЂРёС‚Рµ СЃРѕС‚СЂСѓРґРЅРёРєР°.", "Select a team member first."));
+    alert(tr("Сначала выберите сотрудника.", "Select a team member first."));
     return;
   }
   try {
@@ -3456,7 +3474,7 @@ async function saveKey(marketplace) {
 async function testKey(marketplace) {
   const inputId = marketplace === "wb" ? "wbKey" : "ozonKey";
   const api_key = document.getElementById(inputId).value.trim();
-  if (!api_key) return alert(tr("Р’РІРµРґРёС‚Рµ РєР»СЋС‡", "Enter API key"));
+  if (!api_key) return alert(tr("Введите ключ", "Enter API key"));
   const data = await requestJson("/api/credentials/test", {
     method: "POST",
     headers: authHeaders(),
@@ -3479,7 +3497,7 @@ async function loadKeys() {
 async function addKeyword() {
   const marketplace = document.getElementById("kwMarketplace").value;
   const keyword = document.getElementById("kwText").value.trim();
-  if (!keyword) return alert(tr("Р’РІРµРґРёС‚Рµ РєР»СЋС‡РµРІРёРє", "Enter keyword"));
+  if (!keyword) return alert(tr("Введите ключевик", "Enter keyword"));
   await requestJson("/api/keywords", {
     method: "POST",
     headers: authHeaders(),
@@ -3496,7 +3514,7 @@ async function loadKeywords() {
   if (!host) return;
   const rows = Array.isArray(data) ? data : [];
   if (!rows.length) {
-    host.innerHTML = `<div class="hint">${tr("РџРѕРєР° РЅРµС‚ СЂСѓС‡РЅС‹С… РєР»СЋС‡РµР№.", "No manual keywords yet.")}</div>`;
+    host.innerHTML = `<div class="hint">${tr("Пока нет ручных ключей.", "No manual keywords yet.")}</div>`;
     return;
   }
   host.innerHTML = rows
@@ -3508,7 +3526,7 @@ async function loadKeywords() {
           <b>${escapeHtml(String(row.keyword || "-"))}</b>
           <span>${escapeHtml(String(row.marketplace || "all").toUpperCase())}</span>
         </div>
-        <button class="btn-danger icon-action-btn" type="button" data-tip="${tr("РЈРґР°Р»РёС‚СЊ РєР»СЋС‡", "Delete keyword")}" onclick="deleteKeyword(${Number(row.id || 0)})">вњ–</button>
+        <button class="btn-danger icon-action-btn" type="button" data-tip="${tr("Удалить ключ", "Delete keyword")}" onclick="deleteKeyword(${Number(row.id || 0)})">✖</button>
       </article>
     `)
     .join("");
@@ -3720,13 +3738,13 @@ function applyFeedbackPromptVisibility(kind) {
   if (wrap) wrap.classList.toggle("hidden", !visible);
   if (btn) {
     btn.textContent = visible
-      ? tr("РЎРєСЂС‹С‚СЊ РїСЂРѕРјРїС‚ РѕР±СѓС‡РµРЅРёСЏ", "Hide training prompt")
-      : tr("РџРѕРєР°Р·Р°С‚СЊ РїСЂРѕРјРїС‚ РѕР±СѓС‡РµРЅРёСЏ", "Show training prompt");
+      ? tr("Скрыть промпт обучения", "Hide training prompt")
+      : tr("Показать промпт обучения", "Show training prompt");
     btn.setAttribute(
       "aria-label",
       visible
-        ? tr("РЎРєСЂС‹С‚СЊ РїСЂРѕРјРїС‚ РѕР±СѓС‡РµРЅРёСЏ", "Hide training prompt")
-        : tr("РџРѕРєР°Р·Р°С‚СЊ РїСЂРѕРјРїС‚ РѕР±СѓС‡РµРЅРёСЏ", "Show training prompt")
+        ? tr("Скрыть промпт обучения", "Hide training prompt")
+        : tr("Показать промпт обучения", "Show training prompt")
     );
   }
 }
@@ -3762,7 +3780,7 @@ async function saveReviewAiSettings() {
     return null;
   });
   if (!data) return;
-  alert(tr("AI-РЅР°СЃС‚СЂРѕР№РєРё СЃРѕС…СЂР°РЅРµРЅС‹", "AI settings saved"));
+  alert(tr("AI-настройки сохранены", "AI settings saved"));
 }
 
 function getReviewsMarketplace() {
@@ -3908,8 +3926,8 @@ function updateReviewLoadStatus(message = "") {
   }
   el.innerHTML = buildLoadStatusHtml({
     title: active
-      ? tr("Р—Р°РіСЂСѓР·РєР° РѕС‚Р·С‹РІРѕРІ", "Loading reviews")
-      : tr("РћС‚Р·С‹РІС‹ Р·Р°РіСЂСѓР¶РµРЅС‹", "Reviews loaded"),
+      ? tr("Загрузка отзывов", "Loading reviews")
+      : tr("Отзывы загружены", "Reviews loaded"),
     loaded,
     total,
     active,
@@ -3935,8 +3953,8 @@ function updateQuestionLoadStatus(message = "") {
   }
   el.innerHTML = buildLoadStatusHtml({
     title: active
-      ? tr("Р—Р°РіСЂСѓР·РєР° РІРѕРїСЂРѕСЃРѕРІ", "Loading questions")
-      : tr("Р’РѕРїСЂРѕСЃС‹ Р·Р°РіСЂСѓР¶РµРЅС‹", "Questions loaded"),
+      ? tr("Загрузка вопросов", "Loading questions")
+      : tr("Вопросы загружены", "Questions loaded"),
     loaded,
     total,
     active,
@@ -3947,12 +3965,12 @@ function buildLoadStatusHtml({ title = "", loaded = 0, total = 0, active = false
   const safeTotal = Math.max(0, Number(total || 0));
   const safeLoaded = Math.max(0, Math.min(safeTotal || Number(loaded || 0), Number(loaded || 0)));
   const ratio = safeTotal > 0 ? Math.max(0, Math.min(100, (safeLoaded / safeTotal) * 100)) : (active ? 8 : 0);
-  const progressText = safeTotal > 0 ? `${safeLoaded} / ${safeTotal}` : (active ? tr("РїРѕРґРіРѕС‚РѕРІРєР°", "preparing") : "-");
-  const failedText = failed > 0 ? ` вЂў ${tr("\u043e\u0448\u0438\u0431\u043e\u043a", "errors")}: ${failed}` : "";
+  const progressText = safeTotal > 0 ? `${safeLoaded} / ${safeTotal}` : (active ? tr("подготовка", "preparing") : "-");
+  const failedText = failed > 0 ? ` • ${tr("\u043e\u0448\u0438\u0431\u043e\u043a", "errors")}: ${failed}` : "";
   return `
     <div class="status-wrap ${active ? "active" : "done"}">
       <div class="status-head">
-        <span>${escapeHtml(title || (active ? tr("Р—Р°РіСЂСѓР·РєР°", "Loading") : tr("Р“РѕС‚РѕРІРѕ", "Done")))}</span>
+        <span>${escapeHtml(title || (active ? tr("Загрузка", "Loading") : tr("Готово", "Done")))}</span>
         <b>${escapeHtml(progressText)}${escapeHtml(failedText)}</b>
       </div>
       <div class="status-track"><i style="width:${ratio.toFixed(2)}%"></i></div>
@@ -3965,7 +3983,7 @@ function renderProductCellText(row) {
   const article = String(row?.article || "-");
   const barcode = String(row?.barcode || "").trim();
   if (!barcode) return `${name} (${article})`;
-  return `${name} (${article}; ${currentLang === "en" ? "barcode" : "С€С‚СЂРёС…РєРѕРґ"}: ${barcode})`;
+  return `${name} (${article}; ${currentLang === "en" ? "barcode" : "штрихкод"}: ${barcode})`;
 }
 
 function renderFeedbackProductCell(targetCell, row) {
@@ -3984,13 +4002,13 @@ function renderFeedbackProductCell(targetCell, row) {
   if (article) {
     const articleEl = document.createElement("div");
     articleEl.className = "cell-meta-small";
-    articleEl.textContent = `${currentLang === "en" ? "Article" : "РђСЂС‚РёРєСѓР»"}: ${article}`;
+    articleEl.textContent = `${currentLang === "en" ? "Article" : "Артикул"}: ${article}`;
     targetCell.appendChild(articleEl);
   }
   if (barcode) {
     const barcodeEl = document.createElement("div");
     barcodeEl.className = "cell-meta-small";
-    barcodeEl.textContent = `${currentLang === "en" ? "Barcode" : "РЁС‚СЂРёС…РєРѕРґ"}: ${barcode}`;
+    barcodeEl.textContent = `${currentLang === "en" ? "Barcode" : "Штрихкод"}: ${barcode}`;
     targetCell.appendChild(barcodeEl);
   }
 }
@@ -4164,8 +4182,8 @@ async function loadWbReviews() {
     reviewBackgroundReloadTimer = null;
   }
   if (!enabledModules.has("wb_reviews_ai")) {
-    setTableMessage("wbReviewsTable", 7, tr("РњРѕРґСѓР»СЊ РѕС‚Р·С‹РІРѕРІ РѕС‚РєР»СЋС‡РµРЅ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂРѕРј.", "Reviews module is disabled by admin."));
-    updateReviewLoadStatus(tr("РњРѕРґСѓР»СЊ РѕС‚РєР»СЋС‡РµРЅ.", "Module is disabled."));
+    setTableMessage("wbReviewsTable", 7, tr("Модуль отзывов отключен администратором.", "Reviews module is disabled by admin."));
+    updateReviewLoadStatus(tr("Модуль отключен.", "Module is disabled."));
     return;
   }
   reviewLoadToken += 1;
@@ -4192,9 +4210,9 @@ async function loadWbReviews() {
   const endpoint = getReviewsEndpoint(marketplace);
   const raw = document.getElementById("wbReviewsRaw");
   reviewLoadProgress = { active: true, total: 0, loaded: 0 };
-  updateReviewLoadStatus(tr("Р—Р°РїСЂРѕСЃ РѕС‚Р·С‹РІРѕРІ Рє API...", "Requesting reviews from API..."));
-  setTableMessage("wbReviewsTable", 7, tr("Р—Р°РіСЂСѓР¶Р°РµРј РѕС‚Р·С‹РІС‹...", "Loading reviews..."));
-  if (raw) raw.textContent = tr("Р—Р°РіСЂСѓР·РєР° РѕС‚Р·С‹РІРѕРІ...", "Loading reviews...");
+  updateReviewLoadStatus(tr("Запрос отзывов к API...", "Requesting reviews from API..."));
+  setTableMessage("wbReviewsTable", 7, tr("Загружаем отзывы...", "Loading reviews..."));
+  if (raw) raw.textContent = tr("Загрузка отзывов...", "Loading reviews...");
 
   const applyReviewsPayload = async (payload) => {
     const incoming = [];
@@ -4236,13 +4254,13 @@ async function loadWbReviews() {
         reviewLoadProgress.active = false;
         const msg = String(e?.message || "").trim();
         if (isMarketplaceKeyError(msg)) {
-          updateReviewLoadStatus(tr("РџСЂРѕРІРµСЂСЊС‚Рµ API-РєР»СЋС‡Рё WB/Ozon РІ СЂР°Р·РґРµР»Рµ В«РџСЂРѕС„РёР»СЊВ».", "Check WB/Ozon API keys in Profile."));
+          updateReviewLoadStatus(tr("Проверьте API-ключи WB/Ozon в разделе «Профиль».", "Check WB/Ozon API keys in Profile."));
           return;
         }
-        updateReviewLoadStatus(tr("РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РїРѕР»РЅС‹Р№ СЃРїРёСЃРѕРє РѕС‚Р·С‹РІРѕРІ.", "Failed to load full reviews list."));
+        updateReviewLoadStatus(tr("Не удалось загрузить полный список отзывов.", "Failed to load full reviews list."));
         if (!wbReviewRows.length) {
-          setTableMessage("wbReviewsTable", 7, tr("РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РѕС‚Р·С‹РІС‹.", "Failed to load reviews."));
-          if (raw) raw.textContent = tr("РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё РѕС‚Р·С‹РІРѕРІ.", "Reviews loading failed.");
+          setTableMessage("wbReviewsTable", 7, tr("Не удалось загрузить отзывы.", "Failed to load reviews."));
+          if (raw) raw.textContent = tr("Ошибка загрузки отзывов.", "Reviews loading failed.");
         }
       });
   };
@@ -4258,14 +4276,14 @@ async function loadWbReviews() {
     const fastMsg = fastError?.message || "";
     updateReviewLoadStatus(
       fastMsg
-        ? tr(`Р‘С‹СЃС‚СЂР°СЏ Р·Р°РіСЂСѓР·РєР° РЅРµ СѓРґР°Р»Р°СЃСЊ: ${fastMsg}`, `Fast load failed: ${fastMsg}`)
-        : tr("Р‘С‹СЃС‚СЂР°СЏ Р·Р°РіСЂСѓР·РєР° РЅРµ СѓРґР°Р»Р°СЃСЊ, Р·Р°РїСѓСЃРєР°РµРј СЂР°СЃС€РёСЂРµРЅРЅС‹Р№ Р·Р°РїСЂРѕСЃ...", "Fast load failed, running extended request...")
+        ? tr(`Быстрая загрузка не удалась: ${fastMsg}`, `Fast load failed: ${fastMsg}`)
+        : tr("Быстрая загрузка не удалась, запускаем расширенный запрос...", "Fast load failed, running extended request...")
     );
-    setTableMessage("wbReviewsTable", 7, tr("Р‘С‹СЃС‚СЂС‹Р№ СЃР»РѕР№ РЅРµРґРѕСЃС‚СѓРїРµРЅ, РІС‹РїРѕР»РЅСЏРµРј СЂР°СЃС€РёСЂРµРЅРЅС‹Р№ Р·Р°РїСЂРѕСЃ...", "Fast layer unavailable, running extended request..."));
+    setTableMessage("wbReviewsTable", 7, tr("Быстрый слой недоступен, выполняем расширенный запрос...", "Fast layer unavailable, running extended request..."));
     if (raw && fastMsg) raw.textContent = fastMsg;
     if (isMarketplaceKeyError(fastMsg)) {
       reviewLoadProgress.active = false;
-      updateReviewLoadStatus(tr("РџСЂРѕРІРµСЂСЊС‚Рµ API-РєР»СЋС‡Рё WB/Ozon РІ СЂР°Р·РґРµР»Рµ В«РџСЂРѕС„РёР»СЊВ».", "Check WB/Ozon API keys in Profile."));
+      updateReviewLoadStatus(tr("Проверьте API-ключи WB/Ozon в разделе «Профиль».", "Check WB/Ozon API keys in Profile."));
       return;
     }
     requestFullReload();
@@ -4274,13 +4292,13 @@ async function loadWbReviews() {
 
   await applyReviewsPayload(fastData).catch((e) => {
     reviewLoadProgress = { active: false, total: 0, loaded: 0 };
-    updateReviewLoadStatus(tr("РћС€РёР±РєР° РѕС‚СЂРёСЃРѕРІРєРё РѕС‚Р·С‹РІРѕРІ.", "Failed to render reviews."));
-    setTableMessage("wbReviewsTable", 7, tr("РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РѕР±СЂР°Р·РёС‚СЊ РѕС‚Р·С‹РІС‹.", "Failed to render reviews."));
-    if (raw) raw.textContent = tr("РћС€РёР±РєР° РѕС‚СЂРёСЃРѕРІРєРё РѕС‚Р·С‹РІРѕРІ.", "Reviews rendering failed.");
+    updateReviewLoadStatus(tr("Ошибка отрисовки отзывов.", "Failed to render reviews."));
+    setTableMessage("wbReviewsTable", 7, tr("Не удалось отобразить отзывы.", "Failed to render reviews."));
+    if (raw) raw.textContent = tr("Ошибка отрисовки отзывов.", "Reviews rendering failed.");
   });
   if (runToken !== reviewLoadToken) return;
   reviewLoadProgress.active = true;
-  updateReviewLoadStatus(tr("Р‘С‹СЃС‚СЂР°СЏ Р·Р°РіСЂСѓР·РєР° РіРѕС‚РѕРІР°, РґРѕРіСЂСѓР¶Р°РµРј РїРѕР»РЅС‹Р№ СЃРїРёСЃРѕРє...", "Fast load complete, fetching full list..."));
+  updateReviewLoadStatus(tr("Быстрая загрузка готова, догружаем полный список...", "Fast load complete, fetching full list..."));
   requestFullReload();
 }
 
@@ -4320,8 +4338,8 @@ async function renderWbReviews() {
     const rowEl = document.createElement("tr");
     rowEl.innerHTML = `<td colspan="7">${
       wbReviewRows.length
-        ? (currentLang === "en" ? "No reviews for current filters." : "РџРѕ С‚РµРєСѓС‰РёРј С„РёР»СЊС‚СЂР°Рј РѕС‚Р·С‹РІС‹ РЅРµ РЅР°Р№РґРµРЅС‹.")
-        : (currentLang === "en" ? "No reviews found." : "РћС‚Р·С‹РІС‹ РЅРµ РЅР°Р№РґРµРЅС‹.")
+        ? (currentLang === "en" ? "No reviews for current filters." : "По текущим фильтрам отзывы не найдены.")
+        : (currentLang === "en" ? "No reviews found." : "Отзывы не найдены.")
     }</td>`;
     tbody.appendChild(rowEl);
     reviewLoadProgress = { active: false, total: wbReviewRows.length, loaded: wbReviewRows.length };
@@ -4346,8 +4364,8 @@ async function renderWbReviews() {
     const reviewMp = (currentReviewMarketplace || "wb").trim().toLowerCase() === "ozon" ? "ozon" : "wb";
     const pill = document.createElement("span");
     pill.className = "review-type-pill";
-    pill.textContent = status === "new" ? "рџ†•" : "вњ…";
-    pill.dataset.tip = status === "new" ? tr("РќРѕРІС‹Р№ РѕС‚Р·С‹РІ", "New review") : tr("РћС‚РІРµС‡РµРЅРЅС‹Р№ РѕС‚Р·С‹РІ", "Answered review");
+    pill.textContent = status === "new" ? "🆕" : "✅";
+    pill.dataset.tip = status === "new" ? tr("Новый отзыв", "New review") : tr("Отвеченный отзыв", "Answered review");
     meta.appendChild(pill);
     const dateBadge = document.createElement("span");
     dateBadge.className = "feedback-meta-badge";
@@ -4360,8 +4378,8 @@ async function renderWbReviews() {
       starBadge.className = "feedback-meta-badge";
       const ratingVal = Math.max(1, Math.min(5, Number(stars || 0)));
       starBadge.classList.add(`feedback-rating-${ratingVal}`);
-      starBadge.textContent = `в… ${stars}`;
-      starBadge.dataset.tip = tr("РћС†РµРЅРєР° РїРѕРєСѓРїР°С‚РµР»СЏ", "Customer rating");
+      starBadge.textContent = `★ ${stars}`;
+      starBadge.dataset.tip = tr("Оценка покупателя", "Customer rating");
       meta.appendChild(starBadge);
     }
     const mpBadge = document.createElement("span");
@@ -4373,7 +4391,7 @@ async function renderWbReviews() {
     if (row?.user) {
       const author = document.createElement("div");
       author.className = "cell-meta-small";
-      author.textContent = `${currentLang === "en" ? "Author" : "РђРІС‚РѕСЂ"}: ${row.user}`;
+      author.textContent = `${currentLang === "en" ? "Author" : "Автор"}: ${row.user}`;
       head.appendChild(author);
     }
     card.appendChild(head);
@@ -4387,7 +4405,7 @@ async function renderWbReviews() {
     textBlock.className = "feedback-text-line";
     const textTitle = document.createElement("span");
     textTitle.className = "cell-meta-small";
-    textTitle.textContent = tr("РћС‚Р·С‹РІ", "Review");
+    textTitle.textContent = tr("Отзыв", "Review");
     textBlock.appendChild(textTitle);
     const body = document.createElement("div");
     body.className = "cell-main-text";
@@ -4412,8 +4430,8 @@ async function renderWbReviews() {
       btnAll.type = "button";
       btnAll.className = "btn-secondary";
       btnAll.textContent = photos.length > 3
-        ? (currentLang === "en" ? `All photos (${photos.length})` : `Р’СЃРµ С„РѕС‚Рѕ (${photos.length})`)
-        : (currentLang === "en" ? "Open photos" : "РћС‚РєСЂС‹С‚СЊ С„РѕС‚Рѕ");
+        ? (currentLang === "en" ? `All photos (${photos.length})` : `Все фото (${photos.length})`)
+        : (currentLang === "en" ? "Open photos" : "Открыть фото");
       btnAll.onclick = () => openReviewPhotoViewer(photos, 0);
       previewWrap.appendChild(btnAll);
       card.appendChild(previewWrap);
@@ -4423,13 +4441,13 @@ async function renderWbReviews() {
     replyBlock.className = "feedback-reply-line";
     const replyTitle = document.createElement("span");
     replyTitle.className = "cell-meta-small";
-    replyTitle.textContent = tr("РћС‚РІРµС‚", "Reply");
+    replyTitle.textContent = tr("Ответ", "Reply");
     replyBlock.appendChild(replyTitle);
     const replyInput = document.createElement("textarea");
     replyInput.rows = 3;
     replyInput.className = "review-reply-input";
     replyInput.dataset.itemId = reviewId;
-    replyInput.placeholder = currentLang === "en" ? "Reply text to customer" : "РўРµРєСЃС‚ РѕС‚РІРµС‚Р° РєР»РёРµРЅС‚Сѓ";
+    replyInput.placeholder = currentLang === "en" ? "Reply text to customer" : "Текст ответа клиенту";
     const draftKey = reviewDraftKey(currentReviewMarketplace, reviewId);
     replyInput.value = wbReviewDrafts.get(draftKey) ?? row?.answer ?? "";
     replyInput.oninput = () => wbReviewDrafts.set(draftKey, replyInput.value);
@@ -4440,20 +4458,20 @@ async function renderWbReviews() {
     wrap.className = "review-actions feedback-actions-row";
     const btnGenerate = makeIconActionButton({
       icon: "&#9889;",
-      tip: tr("РЎРіРµРЅРµСЂРёСЂРѕРІР°С‚СЊ РѕС‚РІРµС‚", "Generate reply"),
+      tip: tr("Сгенерировать ответ", "Generate reply"),
       onClick: () => generateReviewReply(reviewId),
       secondary: true,
     });
     const btnSend = makeIconActionButton({
       icon: status === "answered" ? "&#9998;" : "&#10148;",
-      tip: status === "answered" ? tr("РћР±РЅРѕРІРёС‚СЊ РѕС‚РІРµС‚", "Update reply") : tr("РћС‚РїСЂР°РІРёС‚СЊ РѕС‚РІРµС‚", "Send reply"),
+      tip: status === "answered" ? tr("Обновить ответ", "Update reply") : tr("Отправить ответ", "Send reply"),
       onClick: () => sendReviewReply(reviewId),
     });
     if (!reviewId) {
       btnGenerate.disabled = true;
       btnSend.disabled = true;
-      btnGenerate.dataset.tip = tr("РЈ Р·Р°РїРёСЃРё РЅРµС‚ ID", "Record has no ID");
-      btnSend.dataset.tip = tr("РЈ Р·Р°РїРёСЃРё РЅРµС‚ ID", "Record has no ID");
+      btnGenerate.dataset.tip = tr("У записи нет ID", "Record has no ID");
+      btnSend.dataset.tip = tr("У записи нет ID", "Record has no ID");
     }
     wrap.append(btnGenerate, btnSend);
     card.appendChild(wrap);
@@ -4473,8 +4491,8 @@ async function renderWbReviews() {
       for (const row of chunk) appendRow(row);
     } catch (e) {
       reviewLoadProgress.active = false;
-      updateReviewLoadStatus(tr("РћС€РёР±РєР° РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ СЃС‚СЂРѕРєРё РѕС‚Р·С‹РІР°.", "Review row rendering error."));
-      setTableMessage("wbReviewsTable", 7, tr("РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РѕР±СЂР°Р·РёС‚СЊ С‡Р°СЃС‚СЊ РѕС‚Р·С‹РІРѕРІ.", "Failed to render part of reviews."));
+      updateReviewLoadStatus(tr("Ошибка отображения строки отзыва.", "Review row rendering error."));
+      setTableMessage("wbReviewsTable", 7, tr("Не удалось отобразить часть отзывов.", "Failed to render part of reviews."));
       if (e?.message) console.error(e);
       return;
     }
@@ -4493,13 +4511,13 @@ async function generateReviewReply(reviewId) {
   if (!reviewIdText) return;
   if (feedbackInFlight.reviewGenerate.has(reviewIdText)) return;
   const row = wbReviewRows.find((x) => String(x?.id || "") === reviewIdText);
-  if (!row) return alert(tr("РћС‚Р·С‹РІ РЅРµ РЅР°Р№РґРµРЅ", "Review not found"));
+  if (!row) return alert(tr("Отзыв не найден", "Review not found"));
   const endpoint = `${getReviewsEndpoint(currentReviewMarketplace)}/generate-reply`;
   const mpLabel = currentReviewMarketplace === "ozon" ? "Ozon" : "WB";
   feedbackInFlight.reviewGenerate.add(reviewIdText);
   try {
     const data = await withBusy(
-      tr("Р“РµРЅРµСЂРёСЂСѓРµРј РѕС‚РІРµС‚вЂ¦", "Generating reply..."),
+      tr("Генерируем ответ…", "Generating reply..."),
       () => requestJson(endpoint, {
         method: "POST",
         headers: authHeaders(),
@@ -4514,7 +4532,7 @@ async function generateReviewReply(reviewId) {
         maxRetries: 3,
         retryBaseDelayMs: 420,
       }),
-      tr(`Р“РµРЅРµСЂР°С†РёСЏ Р·Р°РІРёСЃРёС‚ РѕС‚ AI-РєРѕРЅС„РёРіСѓСЂР°С†РёРё СЃРµСЂРІРёСЃР° (${mpLabel}).`, `Generation depends on AI settings (${mpLabel}).`)
+      tr(`Генерация зависит от AI-конфигурации сервиса (${mpLabel}).`, `Generation depends on AI settings (${mpLabel}).`)
     ).catch((e) => {
       alert(e.message);
       return null;
@@ -4523,7 +4541,7 @@ async function generateReviewReply(reviewId) {
     const replyText = String(data.reply || "");
     wbReviewDrafts.set(reviewDraftKey(currentReviewMarketplace, reviewIdText), replyText);
     applyDraftToVisibleInputs("#wbReviewsTable .review-reply-input", reviewIdText, replyText);
-    updateReviewLoadStatus(tr("Р§РµСЂРЅРѕРІРёРє РѕС‚РІРµС‚Р° РѕР±РЅРѕРІР»РµРЅ.", "Draft updated."));
+    updateReviewLoadStatus(tr("Черновик ответа обновлен.", "Draft updated."));
   } finally {
     feedbackInFlight.reviewGenerate.delete(reviewIdText);
   }
@@ -4535,13 +4553,13 @@ async function sendReviewReply(reviewId) {
   if (feedbackInFlight.reviewSend.has(reviewIdText)) return;
   const key = reviewDraftKey(currentReviewMarketplace, reviewIdText);
   const text = (wbReviewDrafts.get(key) || "").trim();
-  if (!text) return alert(tr("Р’РІРµРґРёС‚Рµ РёР»Рё СЃРіРµРЅРµСЂРёСЂСѓР№С‚Рµ С‚РµРєСЃС‚ РѕС‚РІРµС‚Р°", "Enter or generate reply text"));
+  if (!text) return alert(tr("Введите или сгенерируйте текст ответа", "Enter or generate reply text"));
   const endpoint = `${getReviewsEndpoint(currentReviewMarketplace)}/reply`;
   const mpLabel = currentReviewMarketplace === "ozon" ? "Ozon" : "WB";
   feedbackInFlight.reviewSend.add(reviewIdText);
   try {
     const data = await withBusy(
-      tr(`РћС‚РїСЂР°РІР»СЏРµРј РѕС‚РІРµС‚ РІ ${mpLabel}вЂ¦`, `Sending reply to ${mpLabel}...`),
+      tr(`Отправляем ответ в ${mpLabel}…`, `Sending reply to ${mpLabel}...`),
       () => requestJson(endpoint, {
         method: "POST",
         headers: authHeaders(),
@@ -4551,7 +4569,7 @@ async function sendReviewReply(reviewId) {
         maxRetries: 3,
         retryBaseDelayMs: 420,
       }),
-      tr("РћС‚РІРµС‚ РѕС‚РїСЂР°РІР»СЏРµС‚СЃСЏ РІ РєР°СЂС‚РѕС‡РєСѓ РѕС‚Р·С‹РІР° С‡РµСЂРµР· API РјР°СЂРєРµС‚РїР»РµР№СЃР°.", "Reply is sent to marketplace review card via API.")
+      tr("Ответ отправляется в карточку отзыва через API маркетплейса.", "Reply is sent to marketplace review card via API.")
     ).catch((e) => {
       alert(e.message);
       return null;
@@ -4565,7 +4583,7 @@ async function sendReviewReply(reviewId) {
     }
     wbReviewDrafts.set(key, text);
     applyDraftToVisibleInputs("#wbReviewsTable .review-reply-input", reviewIdText, text);
-    updateReviewLoadStatus(tr("РћС‚РІРµС‚ РѕС‚РїСЂР°РІР»РµРЅ.", "Reply sent."));
+    updateReviewLoadStatus(tr("Ответ отправлен.", "Reply sent."));
     renderWbReviews();
     scheduleBackgroundReviewsReload(1800);
   } finally {
@@ -4624,7 +4642,7 @@ function isMarketplaceKeyError(message) {
   const lowered = String(message || "").toLowerCase();
   if (!lowered) return false;
   return (
-    lowered.includes("РєР»СЋС‡") ||
+    lowered.includes("ключ") ||
     lowered.includes("api key") ||
     lowered.includes("apikey") ||
     lowered.includes("token") ||
@@ -4643,14 +4661,14 @@ function formatReturnsWarnings(warnings = []) {
     if (!text) continue;
     const lowered = text.toLowerCase();
     if (lowered.includes("endpoint unavailable") || lowered.includes("returns endpoint")) {
-      out.push(tr("API РІРѕР·РІСЂР°С‚РѕРІ WB РІСЂРµРјРµРЅРЅРѕ РЅРµРґРѕСЃС‚СѓРїРµРЅ.", "WB returns API is temporarily unavailable."));
+      out.push(tr("API возвратов WB временно недоступен.", "WB returns API is temporarily unavailable."));
       continue;
     }
     if (isMarketplaceKeyError(lowered)) {
-      out.push(tr("РџСЂРѕРІРµСЂСЊС‚Рµ API-РєР»СЋС‡Рё РІРѕР·РІСЂР°С‚РѕРІ WB/Ozon.", "Check WB/Ozon returns API keys."));
+      out.push(tr("Проверьте API-ключи возвратов WB/Ozon.", "Check WB/Ozon returns API keys."));
       continue;
     }
-    out.push(tr("Р’РѕР·РІСЂР°С‚С‹ Р·Р°РіСЂСѓР¶РµРЅС‹ СЃ РїСЂРµРґСѓРїСЂРµР¶РґРµРЅРёСЏРјРё.", "Returns loaded with warnings."));
+    out.push(tr("Возвраты загружены с предупреждениями.", "Returns loaded with warnings."));
   }
   return [...new Set(out)];
 }
@@ -4678,7 +4696,7 @@ async function saveQuestionAiSettings() {
     return null;
   });
   if (!data) return;
-  alert(tr("AI-РЅР°СЃС‚СЂРѕР№РєРё СЃРѕС…СЂР°РЅРµРЅС‹", "AI settings saved"));
+  alert(tr("AI-настройки сохранены", "AI settings saved"));
 }
 
 async function loadAiDocs() {
@@ -4690,18 +4708,18 @@ async function loadAiDocs() {
   if (sel) {
     sel.innerHTML = rows.length
       ? rows.map((x) => `<option value="${x.id}">#${x.id} ${escapeHtml(x.filename)} (${x.size_chars} ch)</option>`).join("")
-      : `<option value="">${tr("Р”РѕРєСѓРјРµРЅС‚РѕРІ РЅРµС‚", "No documents")}</option>`;
+      : `<option value="">${tr("Документов нет", "No documents")}</option>`;
   }
 }
 
 async function uploadAiDoc() {
   const input = document.getElementById("aiDocUploadInput");
   const file = input?.files?.[0];
-  if (!file) return alert(tr("РЎРЅР°С‡Р°Р»Р° РІС‹Р±РµСЂРёС‚Рµ С„Р°Р№Р».", "Select a file first."));
+  if (!file) return alert(tr("Сначала выберите файл.", "Select a file first."));
   const form = new FormData();
   form.append("file", file);
   const data = await withBusy(
-    tr("Р—Р°РіСЂСѓР¶Р°РµРј РґРѕРєСѓРјРµРЅС‚ РІ Р±Р°Р·Сѓ Р·РЅР°РЅРёР№вЂ¦", "Uploading knowledge document..."),
+    tr("Загружаем документ в базу знаний…", "Uploading knowledge document..."),
     () => fetch("/api/ai/docs/upload", {
       method: "POST",
       headers: { "Authorization": `Bearer ${token}` },
@@ -4711,7 +4729,7 @@ async function uploadAiDoc() {
       if (!r.ok) throw new Error(payload.detail || payload.message || "Upload error");
       return payload;
     }),
-    tr("РўРµРєСЃС‚ РґРѕРєСѓРјРµРЅС‚Р° Р±СѓРґРµС‚ РёСЃРїРѕР»СЊР·РѕРІР°РЅ AI РІ РѕС‚РІРµС‚Р°С….", "The text will be used by AI for generated replies.")
+    tr("Текст документа будет использован AI в ответах.", "The text will be used by AI for generated replies.")
   ).catch((e) => {
     alert(e.message);
     return null;
@@ -4719,12 +4737,12 @@ async function uploadAiDoc() {
   if (!data) return;
   if (input) input.value = "";
   await loadAiDocs();
-  alert(tr("Р”РѕРєСѓРјРµРЅС‚ Р·Р°РіСЂСѓР¶РµРЅ.", "Document uploaded."));
+  alert(tr("Документ загружен.", "Document uploaded."));
 }
 
 async function deleteAiDoc() {
   const id = Number(document.getElementById("aiDocDeleteSelect")?.value || 0);
-  if (!id) return alert(tr("Р’С‹Р±РµСЂРёС‚Рµ РґРѕРєСѓРјРµРЅС‚.", "Select a document."));
+  if (!id) return alert(tr("Выберите документ.", "Select a document."));
   const data = await requestJson(`/api/ai/docs/${id}`, {
     method: "DELETE",
     headers: authHeaders(),
@@ -4764,8 +4782,8 @@ async function loadWbQuestions() {
     questionBackgroundReloadTimer = null;
   }
   if (!enabledModules.has("wb_questions_ai")) {
-    setTableMessage("wbQuestionsTable", 6, tr("РњРѕРґСѓР»СЊ РІРѕРїСЂРѕСЃРѕРІ РѕС‚РєР»СЋС‡РµРЅ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂРѕРј.", "Questions module is disabled by admin."));
-    updateQuestionLoadStatus(tr("РњРѕРґСѓР»СЊ РѕС‚РєР»СЋС‡РµРЅ.", "Module is disabled."));
+    setTableMessage("wbQuestionsTable", 6, tr("Модуль вопросов отключен администратором.", "Questions module is disabled by admin."));
+    updateQuestionLoadStatus(tr("Модуль отключен.", "Module is disabled."));
     return;
   }
   questionLoadToken += 1;
@@ -4790,9 +4808,9 @@ async function loadWbQuestions() {
   const endpoint = getQuestionsEndpoint(marketplace);
   const raw = document.getElementById("wbQuestionsRaw");
   questionLoadProgress = { active: true, total: 0, loaded: 0 };
-  updateQuestionLoadStatus(tr("Р—Р°РїСЂРѕСЃ РІРѕРїСЂРѕСЃРѕРІ Рє API...", "Requesting questions from API..."));
-  setTableMessage("wbQuestionsTable", 6, tr("Р—Р°РіСЂСѓР¶Р°РµРј РІРѕРїСЂРѕСЃС‹...", "Loading questions..."));
-  if (raw) raw.textContent = tr("Р—Р°РіСЂСѓР·РєР° РІРѕРїСЂРѕСЃРѕРІ...", "Loading questions...");
+  updateQuestionLoadStatus(tr("Запрос вопросов к API...", "Requesting questions from API..."));
+  setTableMessage("wbQuestionsTable", 6, tr("Загружаем вопросы...", "Loading questions..."));
+  if (raw) raw.textContent = tr("Загрузка вопросов...", "Loading questions...");
 
   const applyQuestionsPayload = async (payload) => {
     const incoming = [];
@@ -4835,13 +4853,13 @@ async function loadWbQuestions() {
         questionLoadProgress.active = false;
         const msg = String(e?.message || "").trim();
         if (isMarketplaceKeyError(msg)) {
-          updateQuestionLoadStatus(tr("РџСЂРѕРІРµСЂСЊС‚Рµ API-РєР»СЋС‡Рё WB/Ozon РІ СЂР°Р·РґРµР»Рµ В«РџСЂРѕС„РёР»СЊВ».", "Check WB/Ozon API keys in Profile."));
+          updateQuestionLoadStatus(tr("Проверьте API-ключи WB/Ozon в разделе «Профиль».", "Check WB/Ozon API keys in Profile."));
           return;
         }
-        updateQuestionLoadStatus(tr("РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РїРѕР»РЅС‹Р№ СЃРїРёСЃРѕРє РІРѕРїСЂРѕСЃРѕРІ.", "Failed to load full questions list."));
+        updateQuestionLoadStatus(tr("Не удалось загрузить полный список вопросов.", "Failed to load full questions list."));
         if (!wbQuestionRows.length) {
-          setTableMessage("wbQuestionsTable", 6, tr("РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РІРѕРїСЂРѕСЃС‹.", "Failed to load questions."));
-          if (raw) raw.textContent = tr("РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё РІРѕРїСЂРѕСЃРѕРІ.", "Questions loading failed.");
+          setTableMessage("wbQuestionsTable", 6, tr("Не удалось загрузить вопросы.", "Failed to load questions."));
+          if (raw) raw.textContent = tr("Ошибка загрузки вопросов.", "Questions loading failed.");
         }
       });
   };
@@ -4856,14 +4874,14 @@ async function loadWbQuestions() {
     const fastMsg = fastError?.message || "";
     updateQuestionLoadStatus(
       fastMsg
-        ? tr(`Р‘С‹СЃС‚СЂР°СЏ Р·Р°РіСЂСѓР·РєР° РЅРµ СѓРґР°Р»Р°СЃСЊ: ${fastMsg}`, `Fast load failed: ${fastMsg}`)
-        : tr("Р‘С‹СЃС‚СЂР°СЏ Р·Р°РіСЂСѓР·РєР° РЅРµ СѓРґР°Р»Р°СЃСЊ, Р·Р°РїСѓСЃРєР°РµРј СЂР°СЃС€РёСЂРµРЅРЅС‹Р№ Р·Р°РїСЂРѕСЃ...", "Fast load failed, running extended request...")
+        ? tr(`Быстрая загрузка не удалась: ${fastMsg}`, `Fast load failed: ${fastMsg}`)
+        : tr("Быстрая загрузка не удалась, запускаем расширенный запрос...", "Fast load failed, running extended request...")
     );
-    setTableMessage("wbQuestionsTable", 6, tr("Р‘С‹СЃС‚СЂС‹Р№ СЃР»РѕР№ РЅРµРґРѕСЃС‚СѓРїРµРЅ, РІС‹РїРѕР»РЅСЏРµРј СЂР°СЃС€РёСЂРµРЅРЅС‹Р№ Р·Р°РїСЂРѕСЃ...", "Fast layer unavailable, running extended request..."));
+    setTableMessage("wbQuestionsTable", 6, tr("Быстрый слой недоступен, выполняем расширенный запрос...", "Fast layer unavailable, running extended request..."));
     if (raw && fastMsg) raw.textContent = fastMsg;
     if (isMarketplaceKeyError(fastMsg)) {
       questionLoadProgress.active = false;
-      updateQuestionLoadStatus(tr("РџСЂРѕРІРµСЂСЊС‚Рµ API-РєР»СЋС‡Рё WB/Ozon РІ СЂР°Р·РґРµР»Рµ В«РџСЂРѕС„РёР»СЊВ».", "Check WB/Ozon API keys in Profile."));
+      updateQuestionLoadStatus(tr("Проверьте API-ключи WB/Ozon в разделе «Профиль».", "Check WB/Ozon API keys in Profile."));
       return;
     }
     requestFullReload();
@@ -4872,13 +4890,13 @@ async function loadWbQuestions() {
 
   await applyQuestionsPayload(fastData).catch((e) => {
     questionLoadProgress = { active: false, total: 0, loaded: 0 };
-    updateQuestionLoadStatus(tr("РћС€РёР±РєР° РѕС‚СЂРёСЃРѕРІРєРё РІРѕРїСЂРѕСЃРѕРІ.", "Failed to render questions."));
-    setTableMessage("wbQuestionsTable", 6, tr("РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РѕР±СЂР°Р·РёС‚СЊ РІРѕРїСЂРѕСЃС‹.", "Failed to render questions."));
-    if (raw) raw.textContent = tr("РћС€РёР±РєР° РѕС‚СЂРёСЃРѕРІРєРё РІРѕРїСЂРѕСЃРѕРІ.", "Questions rendering failed.");
+    updateQuestionLoadStatus(tr("Ошибка отрисовки вопросов.", "Failed to render questions."));
+    setTableMessage("wbQuestionsTable", 6, tr("Не удалось отобразить вопросы.", "Failed to render questions."));
+    if (raw) raw.textContent = tr("Ошибка отрисовки вопросов.", "Questions rendering failed.");
   });
   if (runToken !== questionLoadToken) return;
   questionLoadProgress.active = true;
-  updateQuestionLoadStatus(tr("Р‘С‹СЃС‚СЂР°СЏ Р·Р°РіСЂСѓР·РєР° РіРѕС‚РѕРІР°, РґРѕРіСЂСѓР¶Р°РµРј РїРѕР»РЅС‹Р№ СЃРїРёСЃРѕРє...", "Fast load complete, fetching full list..."));
+  updateQuestionLoadStatus(tr("Быстрая загрузка готова, догружаем полный список...", "Fast load complete, fetching full list..."));
   requestFullReload();
 }
 
@@ -4916,8 +4934,8 @@ async function renderWbQuestions() {
     const rowEl = document.createElement("tr");
     rowEl.innerHTML = `<td colspan="6">${
       wbQuestionRows.length
-        ? (currentLang === "en" ? "No questions for current filters." : "РџРѕ С‚РµРєСѓС‰РёРј С„РёР»СЊС‚СЂР°Рј РІРѕРїСЂРѕСЃС‹ РЅРµ РЅР°Р№РґРµРЅС‹.")
-        : (currentLang === "en" ? "No questions found." : "Р’РѕРїСЂРѕСЃС‹ РЅРµ РЅР°Р№РґРµРЅС‹.")
+        ? (currentLang === "en" ? "No questions for current filters." : "По текущим фильтрам вопросы не найдены.")
+        : (currentLang === "en" ? "No questions found." : "Вопросы не найдены.")
     }</td>`;
     tbody.appendChild(rowEl);
     questionLoadProgress = { active: false, total: wbQuestionRows.length, loaded: wbQuestionRows.length };
@@ -4942,8 +4960,8 @@ async function renderWbQuestions() {
     const questionMp = (currentQuestionMarketplace || "wb").trim().toLowerCase() === "ozon" ? "ozon" : "wb";
     const pill = document.createElement("span");
     pill.className = "review-type-pill";
-    pill.textContent = status === "new" ? "рџ†•" : "вњ…";
-    pill.dataset.tip = status === "new" ? tr("РќРѕРІС‹Р№ РІРѕРїСЂРѕСЃ", "New question") : tr("РћС‚РІРµС‡РµРЅРЅС‹Р№ РІРѕРїСЂРѕСЃ", "Answered question");
+    pill.textContent = status === "new" ? "🆕" : "✅";
+    pill.dataset.tip = status === "new" ? tr("Новый вопрос", "New question") : tr("Отвеченный вопрос", "Answered question");
     meta.appendChild(pill);
     const dateBadge = document.createElement("span");
     dateBadge.className = "feedback-meta-badge";
@@ -4960,14 +4978,14 @@ async function renderWbQuestions() {
       const stateBadge = document.createElement("span");
       stateBadge.className = "feedback-meta-badge";
       stateBadge.textContent = stateLabel;
-      stateBadge.dataset.tip = tr("РЎС‚Р°С‚СѓСЃ/СЃРѕСЃС‚РѕСЏРЅРёРµ Р·Р°РїРёСЃРё API", "API record state/status");
+      stateBadge.dataset.tip = tr("Статус/состояние записи API", "API record state/status");
       meta.appendChild(stateBadge);
     }
     head.appendChild(meta);
     if (row?.user) {
       const author = document.createElement("div");
       author.className = "cell-meta-small";
-      author.textContent = `${currentLang === "en" ? "Author" : "РђРІС‚РѕСЂ"}: ${row.user}`;
+      author.textContent = `${currentLang === "en" ? "Author" : "Автор"}: ${row.user}`;
       head.appendChild(author);
     }
     card.appendChild(head);
@@ -4981,7 +4999,7 @@ async function renderWbQuestions() {
     textBlock.className = "feedback-text-line";
     const textTitle = document.createElement("span");
     textTitle.className = "cell-meta-small";
-    textTitle.textContent = tr("Р’РѕРїСЂРѕСЃ", "Question");
+    textTitle.textContent = tr("Вопрос", "Question");
     textBlock.appendChild(textTitle);
     const body = document.createElement("div");
     body.className = "cell-main-text";
@@ -5006,8 +5024,8 @@ async function renderWbQuestions() {
       btnAll.type = "button";
       btnAll.className = "btn-secondary";
       btnAll.textContent = photos.length > 3
-        ? (currentLang === "en" ? `All photos (${photos.length})` : `Р’СЃРµ С„РѕС‚Рѕ (${photos.length})`)
-        : (currentLang === "en" ? "Open photos" : "РћС‚РєСЂС‹С‚СЊ С„РѕС‚Рѕ");
+        ? (currentLang === "en" ? `All photos (${photos.length})` : `Все фото (${photos.length})`)
+        : (currentLang === "en" ? "Open photos" : "Открыть фото");
       btnAll.onclick = () => openReviewPhotoViewer(photos, 0);
       previewWrap.appendChild(btnAll);
       card.appendChild(previewWrap);
@@ -5017,13 +5035,13 @@ async function renderWbQuestions() {
     replyBlock.className = "feedback-reply-line";
     const replyTitle = document.createElement("span");
     replyTitle.className = "cell-meta-small";
-    replyTitle.textContent = tr("РћС‚РІРµС‚", "Reply");
+    replyTitle.textContent = tr("Ответ", "Reply");
     replyBlock.appendChild(replyTitle);
     const replyInput = document.createElement("textarea");
     replyInput.rows = 3;
     replyInput.className = "review-reply-input";
     replyInput.dataset.itemId = questionId;
-    replyInput.placeholder = currentLang === "en" ? "Reply text to customer" : "РўРµРєСЃС‚ РѕС‚РІРµС‚Р° РєР»РёРµРЅС‚Сѓ";
+    replyInput.placeholder = currentLang === "en" ? "Reply text to customer" : "Текст ответа клиенту";
     const draftKey = questionDraftKey(currentQuestionMarketplace, questionId);
     replyInput.value = wbQuestionDrafts.get(draftKey) ?? row?.answer ?? "";
     replyInput.oninput = () => wbQuestionDrafts.set(draftKey, replyInput.value);
@@ -5034,20 +5052,20 @@ async function renderWbQuestions() {
     wrap.className = "review-actions feedback-actions-row";
     const btnGenerate = makeIconActionButton({
       icon: "&#9889;",
-      tip: tr("РЎРіРµРЅРµСЂРёСЂРѕРІР°С‚СЊ РѕС‚РІРµС‚", "Generate reply"),
+      tip: tr("Сгенерировать ответ", "Generate reply"),
       onClick: () => generateQuestionReply(questionId),
       secondary: true,
     });
     const btnSend = makeIconActionButton({
       icon: status === "answered" ? "&#9998;" : "&#10148;",
-      tip: status === "answered" ? tr("РћР±РЅРѕРІРёС‚СЊ РѕС‚РІРµС‚", "Update reply") : tr("РћС‚РїСЂР°РІРёС‚СЊ РѕС‚РІРµС‚", "Send reply"),
+      tip: status === "answered" ? tr("Обновить ответ", "Update reply") : tr("Отправить ответ", "Send reply"),
       onClick: () => sendQuestionReply(questionId),
     });
     if (!questionId) {
       btnGenerate.disabled = true;
       btnSend.disabled = true;
-      btnGenerate.dataset.tip = tr("РЈ Р·Р°РїРёСЃРё РЅРµС‚ ID", "Record has no ID");
-      btnSend.dataset.tip = tr("РЈ Р·Р°РїРёСЃРё РЅРµС‚ ID", "Record has no ID");
+      btnGenerate.dataset.tip = tr("У записи нет ID", "Record has no ID");
+      btnSend.dataset.tip = tr("У записи нет ID", "Record has no ID");
     }
     wrap.append(btnGenerate, btnSend);
     card.appendChild(wrap);
@@ -5067,8 +5085,8 @@ async function renderWbQuestions() {
       for (const row of chunk) appendRow(row);
     } catch (e) {
       questionLoadProgress.active = false;
-      updateQuestionLoadStatus(tr("РћС€РёР±РєР° РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ СЃС‚СЂРѕРєРё РІРѕРїСЂРѕСЃР°.", "Question row rendering error."));
-      setTableMessage("wbQuestionsTable", 6, tr("РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РѕР±СЂР°Р·РёС‚СЊ С‡Р°СЃС‚СЊ РІРѕРїСЂРѕСЃРѕРІ.", "Failed to render part of questions."));
+      updateQuestionLoadStatus(tr("Ошибка отображения строки вопроса.", "Question row rendering error."));
+      setTableMessage("wbQuestionsTable", 6, tr("Не удалось отобразить часть вопросов.", "Failed to render part of questions."));
       if (e?.message) console.error(e);
       return;
     }
@@ -5087,13 +5105,13 @@ async function generateQuestionReply(questionId) {
   if (!questionIdText) return;
   if (feedbackInFlight.questionGenerate.has(questionIdText)) return;
   const row = wbQuestionRows.find((x) => String(x?.id || "") === questionIdText);
-  if (!row) return alert(tr("Р’РѕРїСЂРѕСЃ РЅРµ РЅР°Р№РґРµРЅ", "Question not found"));
+  if (!row) return alert(tr("Вопрос не найден", "Question not found"));
   const endpoint = `${getQuestionsEndpoint(currentQuestionMarketplace)}/generate-reply`;
   const mpLabel = currentQuestionMarketplace === "ozon" ? "Ozon" : "WB";
   feedbackInFlight.questionGenerate.add(questionIdText);
   try {
     const data = await withBusy(
-      tr("Р“РµРЅРµСЂРёСЂСѓРµРј РѕС‚РІРµС‚вЂ¦", "Generating reply..."),
+      tr("Генерируем ответ…", "Generating reply..."),
       () => requestJson(endpoint, {
         method: "POST",
         headers: authHeaders(),
@@ -5108,7 +5126,7 @@ async function generateQuestionReply(questionId) {
         maxRetries: 3,
         retryBaseDelayMs: 420,
       }),
-      tr(`Р“РµРЅРµСЂР°С†РёСЏ Р·Р°РІРёСЃРёС‚ РѕС‚ AI-РєРѕРЅС„РёРіСѓСЂР°С†РёРё СЃРµСЂРІРёСЃР° (${mpLabel}).`, `Generation depends on AI settings (${mpLabel}).`)
+      tr(`Генерация зависит от AI-конфигурации сервиса (${mpLabel}).`, `Generation depends on AI settings (${mpLabel}).`)
     ).catch((e) => {
       alert(e.message);
       return null;
@@ -5117,7 +5135,7 @@ async function generateQuestionReply(questionId) {
     const replyText = String(data.reply || "");
     wbQuestionDrafts.set(questionDraftKey(currentQuestionMarketplace, questionIdText), replyText);
     applyDraftToVisibleInputs("#wbQuestionsTable .review-reply-input", questionIdText, replyText);
-    updateQuestionLoadStatus(tr("Р§РµСЂРЅРѕРІРёРє РѕС‚РІРµС‚Р° РѕР±РЅРѕРІР»РµРЅ.", "Draft updated."));
+    updateQuestionLoadStatus(tr("Черновик ответа обновлен.", "Draft updated."));
   } finally {
     feedbackInFlight.questionGenerate.delete(questionIdText);
   }
@@ -5128,10 +5146,10 @@ async function sendQuestionReply(questionId) {
   if (!questionIdText) return;
   if (feedbackInFlight.questionSend.has(questionIdText)) return;
   const row = wbQuestionRows.find((x) => String(x?.id || "") === questionIdText);
-  if (!row) return alert(tr("Р’РѕРїСЂРѕСЃ РЅРµ РЅР°Р№РґРµРЅ", "Question not found"));
+  if (!row) return alert(tr("Вопрос не найден", "Question not found"));
   const key = questionDraftKey(currentQuestionMarketplace, questionIdText);
   const text = (wbQuestionDrafts.get(key) || "").trim();
-  if (!text) return alert(tr("Р’РІРµРґРёС‚Рµ РёР»Рё СЃРіРµРЅРµСЂРёСЂСѓР№С‚Рµ С‚РµРєСЃС‚ РѕС‚РІРµС‚Р°", "Enter or generate reply text"));
+  if (!text) return alert(tr("Введите или сгенерируйте текст ответа", "Enter or generate reply text"));
   const payload = { id: questionIdText, text };
   if (currentQuestionMarketplace === "wb") {
     const state = String(row?.state || "").trim();
@@ -5148,7 +5166,7 @@ async function sendQuestionReply(questionId) {
     }
     if (!payload.sku) {
       return alert(tr(
-        "Р”Р»СЏ РІРѕРїСЂРѕСЃР° Ozon РЅРµ РЅР°Р№РґРµРЅ SKU. РћР±РЅРѕРІРёС‚Рµ РІРѕРїСЂРѕСЃС‹ Рё РїРѕРІС‚РѕСЂРёС‚Рµ.",
+        "Для вопроса Ozon не найден SKU. Обновите вопросы и повторите.",
         "SKU is missing for Ozon question. Reload questions and retry."
       ));
     }
@@ -5158,7 +5176,7 @@ async function sendQuestionReply(questionId) {
   feedbackInFlight.questionSend.add(questionIdText);
   try {
     const data = await withBusy(
-      tr(`РћС‚РїСЂР°РІР»СЏРµРј РѕС‚РІРµС‚ РІ ${mpLabel}вЂ¦`, `Sending reply to ${mpLabel}...`),
+      tr(`Отправляем ответ в ${mpLabel}…`, `Sending reply to ${mpLabel}...`),
       () => requestJson(endpoint, {
         method: "POST",
         headers: authHeaders(),
@@ -5168,7 +5186,7 @@ async function sendQuestionReply(questionId) {
         maxRetries: 3,
         retryBaseDelayMs: 420,
       }),
-      tr("РћС‚РІРµС‚ РѕС‚РїСЂР°РІР»СЏРµС‚СЃСЏ РІ РєР°СЂС‚РѕС‡РєСѓ РІРѕРїСЂРѕСЃР° С‡РµСЂРµР· API РјР°СЂРєРµС‚РїР»РµР№СЃР°.", "Reply is sent to marketplace question card via API.")
+      tr("Ответ отправляется в карточку вопроса через API маркетплейса.", "Reply is sent to marketplace question card via API.")
     ).catch((e) => {
       alert(e.message);
       return null;
@@ -5179,7 +5197,7 @@ async function sendQuestionReply(questionId) {
     row._type = "answered";
     wbQuestionDrafts.set(key, text);
     applyDraftToVisibleInputs("#wbQuestionsTable .review-reply-input", questionIdText, text);
-    updateQuestionLoadStatus(tr("РћС‚РІРµС‚ РѕС‚РїСЂР°РІР»РµРЅ.", "Reply sent."));
+    updateQuestionLoadStatus(tr("Ответ отправлен.", "Reply sent."));
     renderWbQuestions();
     scheduleBackgroundQuestionsReload(1800);
   } finally {
@@ -5210,7 +5228,7 @@ function normalizeReturnRow(rawRow, marketplace, idx) {
       const text = normalizeFeedbackText(getValueByPath(rawRow, path));
       if (!text) continue;
       const low = String(text).trim().toLowerCase();
-      if (!low || low === "-" || low === "вЂ”" || low === "null" || low === "undefined") continue;
+      if (!low || low === "-" || low === "—" || low === "null" || low === "undefined") continue;
       return String(text).trim();
     }
     return "";
@@ -5574,7 +5592,7 @@ function refreshReturnsStatusOptions(rows, preserve = "") {
     const status = String(row?.status || "").trim();
     if (status) uniq.add(status);
   }
-  const options = [`<option value="">${tr("Р’СЃРµ СЃС‚Р°С‚СѓСЃС‹", "All statuses")}</option>`];
+  const options = [`<option value="">${tr("Все статусы", "All statuses")}</option>`];
   [...uniq].sort((a, b) => a.localeCompare(b)).forEach((status) => {
     options.push(`<option value="${escapeHtml(status)}">${escapeHtml(status)}</option>`);
   });
@@ -5627,9 +5645,9 @@ async function hydrateReturnsRowsFromDetails(rows, marketplace) {
 
 async function loadReturns() {
   if (!enabledModules.has("returns")) {
-    setTableMessage("returnsTable", 6, tr("РњРѕРґСѓР»СЊ РІРѕР·РІСЂР°С‚РѕРІ РѕС‚РєР»СЋС‡РµРЅ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂРѕРј.", "Returns module is disabled by admin."));
+    setTableMessage("returnsTable", 6, tr("Модуль возвратов отключен администратором.", "Returns module is disabled by admin."));
     const status = document.getElementById("returnsLoadStatus");
-    if (status) status.textContent = tr("РњРѕРґСѓР»СЊ РѕС‚РєР»СЋС‡РµРЅ.", "Module is disabled.");
+    if (status) status.textContent = tr("Модуль отключен.", "Module is disabled.");
     return;
   }
   const marketplace = getReturnsMarketplace();
@@ -5644,16 +5662,16 @@ async function loadReturns() {
   const suffix = qp.toString() ? `?${qp.toString()}` : "";
   const endpoint = marketplace === "ozon" ? `/api/ozon/returns${suffix}` : `/api/wb/returns${suffix}`;
   const statusEl = document.getElementById("returnsLoadStatus");
-  if (statusEl) statusEl.textContent = tr("Р—Р°РіСЂСѓР·РєР° РІРѕР·РІСЂР°С‚РѕРІ...", "Loading returns...");
-  setTableMessage("returnsTable", 6, tr("Р—Р°РіСЂСѓР¶Р°РµРј РІРѕР·РІСЂР°С‚С‹...", "Loading returns..."));
+  if (statusEl) statusEl.textContent = tr("Загрузка возвратов...", "Loading returns...");
+  setTableMessage("returnsTable", 6, tr("Загружаем возвраты...", "Loading returns..."));
   const data = await requestJson(endpoint, { headers: authHeaders(), timeoutMs: 120000 }).catch((e) => {
     const msg = String(e?.message || "").trim();
     if (isMarketplaceKeyError(msg)) {
-      if (statusEl) statusEl.textContent = tr("РџСЂРѕРІРµСЂСЊС‚Рµ API-РєР»СЋС‡Рё РІРѕР·РІСЂР°С‚РѕРІ WB/Ozon.", "Check WB/Ozon returns API keys.");
-      setTableMessage("returnsTable", 6, tr("РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РІРѕР·РІСЂР°С‚С‹. РџСЂРѕРІРµСЂСЊС‚Рµ РєР»СЋС‡Рё.", "Failed to load returns. Check API keys."));
+      if (statusEl) statusEl.textContent = tr("Проверьте API-ключи возвратов WB/Ozon.", "Check WB/Ozon returns API keys.");
+      setTableMessage("returnsTable", 6, tr("Не удалось загрузить возвраты. Проверьте ключи.", "Failed to load returns. Check API keys."));
       return null;
     }
-    if (statusEl) statusEl.textContent = tr("РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё РІРѕР·РІСЂР°С‚РѕРІ.", "Failed to load returns.");
+    if (statusEl) statusEl.textContent = tr("Ошибка загрузки возвратов.", "Failed to load returns.");
     return null;
   });
   if (!data) return;
@@ -5668,10 +5686,10 @@ async function loadReturns() {
     if (warnings.length) {
       const cleaned = formatReturnsWarnings(warnings);
       statusEl.textContent = cleaned.length
-        ? cleaned.join(" вЂў ")
-        : tr("Р’РѕР·РІСЂР°С‚С‹ Р·Р°РіСЂСѓР¶РµРЅС‹ СЃ РїСЂРµРґСѓРїСЂРµР¶РґРµРЅРёСЏРјРё.", "Returns loaded with warnings.");
+        ? cleaned.join(" • ")
+        : tr("Возвраты загружены с предупреждениями.", "Returns loaded with warnings.");
     } else {
-      statusEl.textContent = tr("Р’РѕР·РІСЂР°С‚С‹ Р·Р°РіСЂСѓР¶РµРЅС‹", "Returns loaded");
+      statusEl.textContent = tr("Возвраты загружены", "Returns loaded");
     }
   }
   markModuleLoaded("reviews");
@@ -5701,7 +5719,7 @@ function extractReturnDetailContext(detail, returnId = "") {
   const normalizeScalar = (value, options = {}) => {
     const text = String(normalizeProductDetailValue(value) || "").trim();
     const low = text.toLowerCase();
-    if (!text || low === "-" || low === "вЂ”" || low === "вЂ”" || low === "null" || low === "undefined") return "";
+    if (!text || low === "-" || low === "—" || low === "—" || low === "null" || low === "undefined") return "";
     if (!options.allowZero && (low === "0" || low === "0.0")) return "";
     return text;
   };
@@ -5873,34 +5891,34 @@ function renderReturnDetailModal(detail, returnId = "") {
 
   if (titleEl) {
     const rid = ctx.id || String(returnId || "-");
-    titleEl.textContent = `${tr("Р”РµС‚Р°Р»Рё РІРѕР·РІСЂР°С‚Р°", "Return details")} #${rid}`;
+    titleEl.textContent = `${tr("Детали возврата", "Return details")} #${rid}`;
   }
   if (summaryEl) {
     const parts = [
-      ctx.marketplace ? `${tr("РњР°СЂРєРµС‚РїР»РµР№СЃ", "Marketplace")}: ${ctx.marketplace}` : "",
-      ctx.status ? `${tr("РЎС‚Р°С‚СѓСЃ", "Status")}: ${ctx.status}` : "",
-      ctx.createdAt ? `${tr("РЎРѕР·РґР°РЅ", "Created")}: ${ctx.createdAt}` : "",
-      ctx.updatedAt ? `${tr("РћР±РЅРѕРІР»РµРЅ", "Updated")}: ${ctx.updatedAt}` : "",
+      ctx.marketplace ? `${tr("Маркетплейс", "Marketplace")}: ${ctx.marketplace}` : "",
+      ctx.status ? `${tr("Статус", "Status")}: ${ctx.status}` : "",
+      ctx.createdAt ? `${tr("Создан", "Created")}: ${ctx.createdAt}` : "",
+      ctx.updatedAt ? `${tr("Обновлен", "Updated")}: ${ctx.updatedAt}` : "",
     ].filter(Boolean);
-    summaryEl.textContent = parts.join(" | ") || tr("РљР°СЂС‚РѕС‡РєР° РІРѕР·РІСЂР°С‚Р° Р·Р°РіСЂСѓР¶РµРЅР°.", "Return card loaded.");
+    summaryEl.textContent = parts.join(" | ") || tr("Карточка возврата загружена.", "Return card loaded.");
   }
   if (cardsEl) {
     cardsEl.innerHTML = renderProductInfoGrid(
       [
         { label: "id", value: ctx.id || "-" },
-        { label: tr("РњР°СЂРєРµС‚РїР»РµР№СЃ", "Marketplace"), value: ctx.marketplace || "-" },
-        { label: tr("РЎС‚Р°С‚СѓСЃ", "Status"), value: ctx.status || "-" },
-        { label: tr("РљРѕРјРјРµРЅС‚Р°СЂРёР№ Рє СЃС‚Р°С‚СѓСЃСѓ", "Status note"), value: ctx.statusNote || "-" },
-        { label: tr("РўРѕРІР°СЂ", "Product"), value: ctx.product || "-" },
-        { label: tr("РђСЂС‚РёРєСѓР»", "Article"), value: ctx.article || "-" },
+        { label: tr("Маркетплейс", "Marketplace"), value: ctx.marketplace || "-" },
+        { label: tr("Статус", "Status"), value: ctx.status || "-" },
+        { label: tr("Комментарий к статусу", "Status note"), value: ctx.statusNote || "-" },
+        { label: tr("Товар", "Product"), value: ctx.product || "-" },
+        { label: tr("Артикул", "Article"), value: ctx.article || "-" },
         { label: tr("Vendor code", "Vendor code"), value: ctx.vendorCode || "-" },
         { label: tr("NM ID", "NM ID"), value: ctx.nmId || "-" },
-        { label: tr("РљРѕР»РёС‡РµСЃС‚РІРѕ", "Quantity"), value: ctx.quantity || "-" },
-        { label: tr("РЎСѓРјРјР°", "Amount"), value: ctx.amount || "-" },
-        { label: tr("Р—Р°РєР°Р·", "Order"), value: ctx.orderId || "-" },
-        { label: tr("РЎРєР»Р°Рґ", "Warehouse"), value: ctx.warehouse || "-" },
+        { label: tr("Количество", "Quantity"), value: ctx.quantity || "-" },
+        { label: tr("Сумма", "Amount"), value: ctx.amount || "-" },
+        { label: tr("Заказ", "Order"), value: ctx.orderId || "-" },
+        { label: tr("Склад", "Warehouse"), value: ctx.warehouse || "-" },
       ],
-      tr("РљР»СЋС‡РµРІС‹Рµ РїРѕР»СЏ РѕС‚СЃСѓС‚СЃС‚РІСѓСЋС‚.", "No key fields.")
+      tr("Ключевые поля отсутствуют.", "No key fields.")
     );
   }
   if (descEl) {
@@ -5910,21 +5928,21 @@ function renderReturnDetailModal(detail, returnId = "") {
       if (!safe) return;
       lines.push(`<p><b>${escapeHtml(label)}:</b> ${escapeHtml(safe)}</p>`);
     };
-    addLine(tr("РџСЂРёС‡РёРЅР°", "Reason"), ctx.reason);
+    addLine(tr("Причина", "Reason"), ctx.reason);
     if (String(ctx.description || "").trim() && String(ctx.description || "").trim() !== String(ctx.reason || "").trim()) {
-      addLine(tr("РћРїРёСЃР°РЅРёРµ", "Description"), ctx.description);
+      addLine(tr("Описание", "Description"), ctx.description);
     }
-    addLine(tr("РљРѕРјРјРµРЅС‚Р°СЂРёР№ РїРѕРєСѓРїР°С‚РµР»СЏ", "Customer comment"), ctx.customerComment);
-    addLine(tr("РљРѕРјРјРµРЅС‚Р°СЂРёР№ РїСЂРѕРґР°РІС†Р°", "Seller comment"), ctx.sellerComment);
-    addLine(tr("РЁС‚СЂРёС…РєРѕРґ", "Barcode"), ctx.barcode);
+    addLine(tr("Комментарий покупателя", "Customer comment"), ctx.customerComment);
+    addLine(tr("Комментарий продавца", "Seller comment"), ctx.sellerComment);
+    addLine(tr("Штрихкод", "Barcode"), ctx.barcode);
     descEl.innerHTML = lines.length
       ? lines.join("")
-      : `<div class="hint">${escapeHtml(tr("РџРѕРґСЂРѕР±РЅРѕРµ РѕРїРёСЃР°РЅРёРµ РїРѕРєР° РЅРµ РїСЂРёС€Р»Рѕ РѕС‚ API.", "Detailed description is not available yet."))}</div>`;
+      : `<div class="hint">${escapeHtml(tr("Подробное описание пока не пришло от API.", "Detailed description is not available yet."))}</div>`;
   }
   if (photosEl) {
     photosEl.innerHTML = ctx.photos.length
       ? ctx.photos.map((url, idx) => `<img src="${escapeHtml(String(url))}" alt="return-photo-${idx + 1}" loading="lazy" class="product-detail-photo">`).join("")
-      : `<div class="hint">${escapeHtml(tr("Р¤РѕС‚Рѕ РЅРµ РїСЂРёРєСЂРµРїР»РµРЅС‹.", "No photos attached."))}</div>`;
+      : `<div class="hint">${escapeHtml(tr("Фото не прикреплены.", "No photos attached."))}</div>`;
     if (ctx.photos.length) {
       photosEl.querySelectorAll("img.product-detail-photo").forEach((imgEl, idx) => {
         imgEl.classList.add("clickable-photo");
@@ -5976,13 +5994,13 @@ async function actionReturn(returnId, actionCode) {
   const rid = String(returnId || "").trim();
   if (!rid) return;
   if (currentReturnsMarketplace !== "wb") {
-    alert(tr("Р”Р»СЏ Ozon РґРµР№СЃС‚РІРёСЏ РїРѕ РІРѕР·РІСЂР°С‚Р°Рј РїРѕРєР° РІ staged-СЂРµР¶РёРјРµ (С‚РѕР»СЊРєРѕ С‡С‚РµРЅРёРµ).", "Ozon return actions are staged (read-only)."));
+    alert(tr("Для Ozon действия по возвратам пока в staged-режиме (только чтение).", "Ozon return actions are staged (read-only)."));
     return;
   }
   const safeAction = String(actionCode || "").trim().toLowerCase();
   if (!safeAction) return;
   const comment = (safeAction === "reject" || safeAction === "comment")
-    ? (prompt(tr("РљРѕРјРјРµРЅС‚Р°СЂРёР№ Рє РґРµР№СЃС‚РІРёСЋ (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ):", "Action comment (optional):"), "") || "")
+    ? (prompt(tr("Комментарий к действию (опционально):", "Action comment (optional):"), "") || "")
     : "";
   const data = await requestJson("/api/wb/returns/action", {
     method: "PATCH",
@@ -5994,7 +6012,7 @@ async function actionReturn(returnId, actionCode) {
     return null;
   });
   if (!data) return;
-  alert(data.message || tr("Р”РµР№СЃС‚РІРёРµ РІС‹РїРѕР»РЅРµРЅРѕ.", "Action completed."));
+  alert(data.message || tr("Действие выполнено.", "Action completed."));
   await loadReturns();
 }
 
@@ -6011,7 +6029,7 @@ function renderReturns() {
     return true;
   });
   if (!rows.length) {
-    setTableMessage("returnsTable", 6, tr("Р—Р°СЏРІРєРё РЅР° РІРѕР·РІСЂР°С‚ РЅРµ РЅР°Р№РґРµРЅС‹.", "No returns found."));
+    setTableMessage("returnsTable", 6, tr("Заявки на возврат не найдены.", "No returns found."));
     return;
   }
   for (const row of rows) {
@@ -6027,40 +6045,40 @@ function renderReturns() {
       : `<span class="hint">-</span>`;
     const productMeta = [row.article, row.vendor_code, row.nm_id].map((value) => String(value || "").trim()).filter(Boolean);
     const descriptionMeta = [row.status_note, row.customer_comment, row.seller_comment].map((value) => String(value || "").trim()).filter(Boolean);
-    const dateParts = [row.date || row.created_at || "-", row.updated_at ? `${tr("РѕР±РЅРѕРІР»РµРЅРѕ", "updated")}: ${row.updated_at}` : ""].filter(Boolean);
+    const dateParts = [row.date || row.created_at || "-", row.updated_at ? `${tr("обновлено", "updated")}: ${row.updated_at}` : ""].filter(Boolean);
     const fallbackMeta = [];
-    if (String(row.quantity || "").trim()) fallbackMeta.push(`${tr("РљРѕР»-РІРѕ", "Qty")}: ${row.quantity}`);
-    if (String(row.amount || "").trim()) fallbackMeta.push(`${tr("РЎСѓРјРјР°", "Amount")}: ${row.amount}`);
+    if (String(row.quantity || "").trim()) fallbackMeta.push(`${tr("Кол-во", "Qty")}: ${row.quantity}`);
+    if (String(row.amount || "").trim()) fallbackMeta.push(`${tr("Сумма", "Amount")}: ${row.amount}`);
     const actionButtons = currentReturnsMarketplace === "wb"
       ? `
         <div class="review-actions">
-          <button type="button" class="btn-secondary returns-action-btn" onclick="openReturnDetails('${escapeHtml(rid)}')">${escapeHtml(tr("РћС‚РєСЂС‹С‚СЊ РєР°СЂС‚РѕС‡РєСѓ", "Open card"))}</button>
-          <button type="button" class="btn-secondary returns-action-btn" onclick="actionReturn('${escapeHtml(rid)}', 'approve')">${escapeHtml(tr("РћРґРѕР±СЂРёС‚СЊ РІРѕР·РІСЂР°С‚", "Approve return"))}</button>
-          <button type="button" class="btn-danger returns-action-btn" onclick="actionReturn('${escapeHtml(rid)}', 'reject')">${escapeHtml(tr("РћС‚РєР»РѕРЅРёС‚СЊ РІРѕР·РІСЂР°С‚", "Reject return"))}</button>
+          <button type="button" class="btn-secondary returns-action-btn" onclick="openReturnDetails('${escapeHtml(rid)}')">${escapeHtml(tr("Открыть карточку", "Open card"))}</button>
+          <button type="button" class="btn-secondary returns-action-btn" onclick="actionReturn('${escapeHtml(rid)}', 'approve')">${escapeHtml(tr("Одобрить возврат", "Approve return"))}</button>
+          <button type="button" class="btn-danger returns-action-btn" onclick="actionReturn('${escapeHtml(rid)}', 'reject')">${escapeHtml(tr("Отклонить возврат", "Reject return"))}</button>
         </div>
       `
       : `
         <div class="review-actions">
-          <button type="button" class="btn-secondary returns-action-btn" onclick="openReturnDetails('${escapeHtml(rid)}')">${escapeHtml(tr("РћС‚РєСЂС‹С‚СЊ РєР°СЂС‚РѕС‡РєСѓ", "Open card"))}</button>
-          <button type="button" class="returns-action-btn" disabled>${escapeHtml(tr("РўРѕР»СЊРєРѕ РїСЂРѕСЃРјРѕС‚СЂ (Ozon)", "Read only (Ozon)"))}</button>
+          <button type="button" class="btn-secondary returns-action-btn" onclick="openReturnDetails('${escapeHtml(rid)}')">${escapeHtml(tr("Открыть карточку", "Open card"))}</button>
+          <button type="button" class="returns-action-btn" disabled>${escapeHtml(tr("Только просмотр (Ozon)", "Read only (Ozon)"))}</button>
         </div>
       `;
     trEl.innerHTML = `
-      <td data-label="${escapeHtml(tr("РЎС‚Р°С‚СѓСЃ", "Status"))}">
+      <td data-label="${escapeHtml(tr("Статус", "Status"))}">
         <span class="review-type-pill return-status-pill">${escapeHtml(statusValue)}</span>
         <div class="cell-meta-small">${escapeHtml(statusNote || "-")}</div>
       </td>
-      <td data-label="${escapeHtml(tr("Р”Р°С‚Р°", "Date"))}" class="cell-meta-small">${escapeHtml(dateParts.join(" | "))}</td>
-      <td data-label="${escapeHtml(tr("РўРѕРІР°СЂ", "Product"))}">
+      <td data-label="${escapeHtml(tr("Дата", "Date"))}" class="cell-meta-small">${escapeHtml(dateParts.join(" | "))}</td>
+      <td data-label="${escapeHtml(tr("Товар", "Product"))}">
         <div class="cell-product-name">${escapeHtml(String(row.product || "-"))}</div>
         <div class="cell-meta-small">${escapeHtml(productMeta.join(" | ") || "-")}</div>
       </td>
-      <td data-label="${escapeHtml(tr("РџСЂРёС‡РёРЅР° / РєРѕРјРјРµРЅС‚Р°СЂРёР№", "Reason / comments"))}">
+      <td data-label="${escapeHtml(tr("Причина / комментарий", "Reason / comments"))}">
         <div class="cell-main-text">${escapeHtml(String(row.description || row.reason || "-"))}</div>
         <div class="cell-meta-small">${escapeHtml(descriptionMeta.join(" | ") || fallbackMeta.join(" | ") || "-")}</div>
       </td>
-      <td data-label="${escapeHtml(tr("Р¤РѕС‚Рѕ", "Photos"))}"><div class="review-photo-list">${photosHtml}</div></td>
-      <td data-label="${escapeHtml(tr("Р§С‚Рѕ СЃРґРµР»Р°С‚СЊ", "Actions"))}">${actionButtons}</td>
+      <td data-label="${escapeHtml(tr("Фото", "Photos"))}"><div class="review-photo-list">${photosHtml}</div></td>
+      <td data-label="${escapeHtml(tr("Что сделать", "Actions"))}">${actionButtons}</td>
     `;
     tbody.appendChild(trEl);
     if (photos.length) {
@@ -6087,7 +6105,7 @@ async function loadWbAdCampaigns(options = {}) {
     };
     updateWbAdsLoadStatus(
       tr(
-        "РџРѕРєР°Р·Р°РЅС‹ СЃРІРµР¶РёРµ РґР°РЅРЅС‹Рµ РёР· РєРµС€Р°. Р”Р»СЏ РїРѕР»РЅРѕРіРѕ РѕР±РЅРѕРІР»РµРЅРёСЏ РЅР°Р¶РјРёС‚Рµ В«Р—Р°РіСЂСѓР·РёС‚СЊ РєР°РјРїР°РЅРёРёВ».",
+        "Показаны свежие данные из кеша. Для полного обновления нажмите «Загрузить кампании».",
         "Showing fresh cached campaigns. Press \"Load campaigns\" to force refresh."
       )
     );
@@ -6101,32 +6119,32 @@ async function loadWbAdCampaigns(options = {}) {
     wbAdsLoadToken += 1;
     const runToken = wbAdsLoadToken;
     wbAdsLoadProgress = { active: true, total: 0, loaded: 0, failed: 0 };
-    updateWbAdsLoadStatus(tr("Р—Р°РіСЂСѓР·РєР° СЃРїРёСЃРєР° РєР°РјРїР°РЅРёР№вЂ¦", "Loading campaign list..."));
+    updateWbAdsLoadStatus(tr("Загрузка списка кампаний…", "Loading campaign list..."));
 
     const formatAdsLoadError = (err) => {
       const status = Number(err?.status || 0);
       const msg = String(err?.message || "").trim();
       const low = msg.toLowerCase();
-      if (status === 400 && (low.includes("РєР»СЋС‡") || low.includes("api key") || low.includes("token"))) {
+      if (status === 400 && (low.includes("ключ") || low.includes("api key") || low.includes("token"))) {
         return tr(
-          "РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РєР°РјРїР°РЅРёРё: РїСЂРѕРІРµСЂСЊС‚Рµ API-РєР»СЋС‡ WB Ads РІ РїСЂРѕС„РёР»Рµ.",
+          "Не удалось загрузить кампании: проверьте API-ключ WB Ads в профиле.",
           "Unable to load campaigns: check WB Ads API key in profile."
         );
       }
       if (status === 403) {
         return tr(
-          "РќРµС‚ РґРѕСЃС‚СѓРїР° Рє РјРѕРґСѓР»СЋ СЂРµРєР»Р°РјС‹ РІ СЌС‚РѕРј РєР°Р±РёРЅРµС‚Рµ.",
+          "Нет доступа к модулю рекламы в этом кабинете.",
           "No access to Ads module in this workspace."
         );
       }
       if (status === 429) {
         return tr(
-          "WB Ads РІСЂРµРјРµРЅРЅРѕ РѕРіСЂР°РЅРёС‡РёР» Р·Р°РїСЂРѕСЃС‹. РџРѕРєР°Р·Р°РЅС‹ РїРѕСЃР»РµРґРЅРёРµ РґРѕСЃС‚СѓРїРЅС‹Рµ РґР°РЅРЅС‹Рµ.",
+          "WB Ads временно ограничил запросы. Показаны последние доступные данные.",
           "WB Ads temporarily rate-limited requests. Showing the latest available data."
         );
       }
       return msg || tr(
-        "РќРµ СѓРґР°Р»РѕСЃСЊ РѕР±РЅРѕРІРёС‚СЊ РєР°РјРїР°РЅРёРё СЃРµР№С‡Р°СЃ. РџРѕРІС‚РѕСЂРёРј РїСЂРё СЃР»РµРґСѓСЋС‰РµРј С†РёРєР»Рµ Р·Р°РіСЂСѓР·РєРё.",
+        "Не удалось обновить кампании сейчас. Повторим при следующем цикле загрузки.",
         "Unable to refresh campaigns now. Will retry on next refresh cycle."
       );
     };
@@ -6247,7 +6265,7 @@ async function loadWbAdCampaigns(options = {}) {
     if (!wbCampaignRows.length) {
       updateWbAdsLoadStatus(
         tr(
-          "РљР°РјРїР°РЅРёРё РїРѕРєР° РЅРµ РїРѕР»СѓС‡РµРЅС‹: РїСЂРѕРІРµСЂСЊС‚Рµ РєР»СЋС‡ WB Ads Рё РЅР°Р¶РјРёС‚Рµ РѕР±РЅРѕРІРёС‚СЊ.",
+          "Кампании пока не получены: проверьте ключ WB Ads и нажмите обновить.",
           "No campaigns yet: verify WB Ads key and refresh."
         )
       );
@@ -6305,8 +6323,8 @@ function isPlaceholderCampaignName(name, campaignId = "") {
     "\u0440\u0435\u043a\u043b\u0430\u043c\u0430",
     "\u0440\u0435\u043a\u043b\u0430\u043c\u043d\u0430\u044f",
   ]);
-  const compactSingle = new RegExp(`^(?:campaign|camp|advert|advertising|ads?|${ruAdRoot}[a-z\u0400-\u04ff0-9_]*|${ruCampaignRoot}[a-z\u0400-\u04ff0-9_]*)\\s*[#в„–:\\-]?\\s*\\d+$`, "iu");
-  const compactDouble = new RegExp(`^(?:${ruAdRoot}[a-z\u0400-\u04ff0-9_]*|advert|advertising|ads?|campaign|camp)\\s+(?:${ruCampaignRoot}[a-z\u0400-\u04ff0-9_]*|campaign|camp)\\s*[#в„–:\\-]?\\s*\\d+$`, "iu");
+  const compactSingle = new RegExp(`^(?:campaign|camp|advert|advertising|ads?|${ruAdRoot}[a-z\u0400-\u04ff0-9_]*|${ruCampaignRoot}[a-z\u0400-\u04ff0-9_]*)\\s*[#№:\\-]?\\s*\\d+$`, "iu");
+  const compactDouble = new RegExp(`^(?:${ruAdRoot}[a-z\u0400-\u04ff0-9_]*|advert|advertising|ads?|campaign|camp)\\s+(?:${ruCampaignRoot}[a-z\u0400-\u04ff0-9_]*|campaign|camp)\\s*[#№:\\-]?\\s*\\d+$`, "iu");
   if (compactSingle.test(compact) || compactDouble.test(compact)) return true;
 
   const cidRaw = String(campaignId || "").trim();
@@ -6316,7 +6334,7 @@ function isPlaceholderCampaignName(name, campaignId = "") {
     const cidRe = new RegExp(`\\b${cid}\\b`);
     if (compact === cid || cidRe.test(compact)) {
       let reduced = compact.replace(new RegExp(`\\b${cid}\\b`, "g"), " ");
-      reduced = reduced.replace(/[#в„–:;,_\-.()\[\]/]+/g, " ").replace(/\s+/g, " ").trim();
+      reduced = reduced.replace(/[#№:;,_\-.()\[\]/]+/g, " ").replace(/\s+/g, " ").trim();
       if (!reduced) return true;
       const words = reduced.match(/[a-z\u0400-\u04ff]+/gi) || [];
       if (words.length && words.every((word) => {
@@ -6383,11 +6401,11 @@ function updateWbAdsLoadStatus(message = "") {
     return;
   }
   const doneTitle = failed > 0
-    ? tr("Р”РѕРіСЂСѓР·РєР° Р·Р°РІРµСЂС€РµРЅР° С‡Р°СЃС‚РёС‡РЅРѕ", "Campaign load completed partially")
-    : tr("Р”РѕРіСЂСѓР·РєР° РєР°РјРїР°РЅРёР№ Р·Р°РІРµСЂС€РµРЅР°", "Campaign load complete");
+    ? tr("Догрузка завершена частично", "Campaign load completed partially")
+    : tr("Догрузка кампаний завершена", "Campaign load complete");
   holder.innerHTML = buildLoadStatusHtml({
     title: active
-      ? tr("Р”РѕРіСЂСѓР·РєР° РєР°РјРїР°РЅРёР№", "Loading campaigns")
+      ? tr("Догрузка кампаний", "Loading campaigns")
       : doneTitle,
     loaded,
     total,
@@ -6402,7 +6420,7 @@ async function enrichWbCampaignRows(runToken) {
     .filter((id) => id > 0);
   if (!allIds.length) {
     wbAdsLoadProgress = { active: false, total: 0, loaded: 0, failed: 0 };
-    updateWbAdsLoadStatus(tr("РљР°РјРїР°РЅРёРё РЅРµ РЅР°Р№РґРµРЅС‹.", "No campaigns found."));
+    updateWbAdsLoadStatus(tr("Кампании не найдены.", "No campaigns found."));
     return;
   }
   const pendingRaw = [...new Set(
@@ -6535,33 +6553,33 @@ async function enrichWbCampaignRows(runToken) {
   wbAdsLoadProgress.active = false;
   if (partialFallback || Number(wbAdsLoadProgress.failed || 0) > 0) {
     let msg = tr(
-      "РљР°РјРїР°РЅРёРё Р·Р°РіСЂСѓР¶РµРЅС‹ С‡Р°СЃС‚РёС‡РЅРѕ: С‡Р°СЃС‚СЊ РґРµС‚Р°Р»СЊРЅС‹С… РїРѕР»РµР№ РІСЂРµРјРµРЅРЅРѕ РЅРµРґРѕСЃС‚СѓРїРЅР°.",
+      "Кампании загружены частично: часть детальных полей временно недоступна.",
       "Campaigns loaded partially: some detailed fields are temporarily unavailable."
     );
     if (temporaryUnavailableChunks > 0) {
       msg = tr(
-        "WB Ads API РІСЂРµРјРµРЅРЅРѕ РѕРіСЂР°РЅРёС‡РёР» РґРµС‚Р°Р»РёР·Р°С†РёСЋ. РљР°РјРїР°РЅРёРё Р·Р°РіСЂСѓР¶РµРЅС‹, РЅРѕ С‡Р°СЃС‚СЊ РїРѕР»РµР№ РїРѕРєР° РЅРµРґРѕСЃС‚СѓРїРЅР°.",
+        "WB Ads API временно ограничил детализацию. Кампании загружены, но часть полей пока недоступна.",
         "WB Ads API temporarily limited details. Campaigns are loaded, but some fields are not available yet."
       );
     }
     if (temporaryUnavailableChunks <= 0 && partialStatsMissingTotal > 0 && Number(wbAdsLoadProgress.failed || 0) <= 0) {
       msg = tr(
-        `РљР°РјРїР°РЅРёРё Р·Р°РіСЂСѓР¶РµРЅС‹. Р”Р»СЏ ${formatInt(partialStatsMissingTotal)} РєР°РјРїР°РЅРёР№ СЃС‚Р°С‚РёСЃС‚РёРєР° Р·Р° РїРµСЂРёРѕРґ РїРѕРєР° РЅРµ РІРµСЂРЅСѓР»Р°СЃСЊ API.`,
+        `Кампании загружены. Для ${formatInt(partialStatsMissingTotal)} кампаний статистика за период пока не вернулась API.`,
         `Campaigns loaded. Period stats are not returned yet for ${formatInt(partialStatsMissingTotal)} campaigns.`
       );
     } else if (partialSummaryMissingTotal > 0 && Number(wbAdsLoadProgress.failed || 0) <= 0) {
       msg = tr(
-        `РљР°РјРїР°РЅРёРё Р·Р°РіСЂСѓР¶РµРЅС‹. Р”Р»СЏ ${formatInt(partialSummaryMissingTotal)} РєР°РјРїР°РЅРёР№ API WB РЅРµ РІРµСЂРЅСѓР»Рѕ С‡РµР»РѕРІРµРєРѕС‡РёС‚Р°РµРјРѕРµ РЅР°Р·РІР°РЅРёРµ.`,
+        `Кампании загружены. Для ${formatInt(partialSummaryMissingTotal)} кампаний API WB не вернуло человекочитаемое название.`,
         `Campaigns loaded. WB API returned no readable name for ${formatInt(partialSummaryMissingTotal)} campaigns.`
       );
     } else if (partialStatsMissingTotal > 0 || partialSummaryMissingTotal > 0) {
-      msg += ` ${tr("РќРµРїРѕР»РЅС‹Рµ РїРѕР»СЏ", "Incomplete fields")}: ${formatInt(partialStatsMissingTotal + partialSummaryMissingTotal)}.`;
+      msg += ` ${tr("Неполные поля", "Incomplete fields")}: ${formatInt(partialStatsMissingTotal + partialSummaryMissingTotal)}.`;
     }
     updateWbAdsLoadStatus(msg);
   } else if (deferredCount > 0) {
     updateWbAdsLoadStatus(
       tr(
-        `РљР°РјРїР°РЅРёРё Р·Р°РіСЂСѓР¶РµРЅС‹. Р”Р»СЏ СЃРЅРёР¶РµРЅРёСЏ РЅР°РіСЂСѓР·РєРё РґРµС‚Р°Р»СЊРЅР°СЏ РґРѕРіСЂСѓР·РєР° РѕРіСЂР°РЅРёС‡РµРЅР°: РѕС‚Р»РѕР¶РµРЅРѕ ${formatInt(deferredCount)}.`,
+        `Кампании загружены. Для снижения нагрузки детальная догрузка ограничена: отложено ${formatInt(deferredCount)}.`,
         `Campaigns loaded. To reduce load, detailed enrichment is deferred for ${formatInt(deferredCount)} campaigns.`
       )
     );
@@ -6592,25 +6610,25 @@ function campaignStatusMeta(value) {
         "11": "paused",
       }
       : {
-        "-1": "СѓРґР°Р»РµРЅР°",
-        "1": "С‡РµСЂРЅРѕРІРёРє (РјРµРґРёР°)",
-        "2": "РЅР° РјРѕРґРµСЂР°С†РёРё (РјРµРґРёР°)",
-        "3": "РѕС‚РєР»РѕРЅРµРЅР° (РјРµРґРёР°)",
-        "4": "РіРѕС‚РѕРІР° Рє Р·Р°РїСѓСЃРєСѓ",
-        "5": "Р·Р°РїР»Р°РЅРёСЂРѕРІР°РЅР° (РјРµРґРёР°)",
-        "6": "РёРґСѓС‚ РїРѕРєР°Р·С‹ (РјРµРґРёР°)",
-        "7": "Р·Р°РІРµСЂС€РµРЅР°",
-        "8": "РѕС‚РјРµРЅРµРЅР°",
-        "9": "Р°РєС‚РёРІРЅР°",
-        "10": "РїР°СѓР·Р° РїРѕ РґРЅРµРІРЅРѕРјСѓ Р»РёРјРёС‚Сѓ (РјРµРґРёР°)",
-        "11": "РїР°СѓР·Р°",
+        "-1": "удалена",
+        "1": "черновик (медиа)",
+        "2": "на модерации (медиа)",
+        "3": "отклонена (медиа)",
+        "4": "готова к запуску",
+        "5": "запланирована (медиа)",
+        "6": "идут показы (медиа)",
+        "7": "завершена",
+        "8": "отменена",
+        "9": "активна",
+        "10": "пауза по дневному лимиту (медиа)",
+        "11": "пауза",
       };
-    const label = dict[String(num)] || (currentLang === "en" ? `status ${num}` : `СЃС‚Р°С‚СѓСЃ ${num}`);
+    const label = dict[String(num)] || (currentLang === "en" ? `status ${num}` : `статус ${num}`);
     const isWorking = num === 6 || num === 9;
     return { code: String(num), label, isWorking };
   }
   const low = raw.toLowerCase();
-  const isWorking = low.includes("active") || low.includes("Р°РєС‚РёРІ");
+  const isWorking = low.includes("active") || low.includes("актив");
   return { code: raw, label: raw, isWorking };
 }
 
@@ -6799,29 +6817,29 @@ function renderWbCampaignRows() {
       ?? 0
     );
     const balanceText = wbAdsBalanceData?.data
-      ? (Number.isFinite(extractedBalance) && extractedBalance > 0 ? formatMoney(extractedBalance) : tr("РґРѕСЃС‚СѓРїРµРЅ", "available"))
-      : (currentLang === "en" ? "unavailable" : "РЅРµ РїРѕР»СѓС‡РµРЅ");
+      ? (Number.isFinite(extractedBalance) && extractedBalance > 0 ? formatMoney(extractedBalance) : tr("доступен", "available"))
+      : (currentLang === "en" ? "unavailable" : "не получен");
     meta.textContent = currentLang === "en"
       ? `Campaigns: ${rows.length}/${wbCampaignRows.length}. Balance: ${balanceText}`
-      : `РљР°РјРїР°РЅРёР№: ${rows.length}/${wbCampaignRows.length}. Р‘Р°Р»Р°РЅСЃ: ${balanceText}`;
+      : `Кампаний: ${rows.length}/${wbCampaignRows.length}. Баланс: ${balanceText}`;
   }
 
   if (!rows.length) {
     const rowEl = document.createElement("tr");
-    rowEl.innerHTML = `<td colspan="11">${currentLang === "en" ? "No campaigns found." : "РљР°РјРїР°РЅРёРё РЅРµ РЅР°Р№РґРµРЅС‹."}</td>`;
+    rowEl.innerHTML = `<td colspan="11">${currentLang === "en" ? "No campaigns found." : "Кампании не найдены."}</td>`;
     tbody.appendChild(rowEl);
     return;
   }
   for (const row of rows) {
     const rowId = getCampaignRowId(row);
     const id = rowId || "-";
-    const name = row.name || row.campaignName || row.campaign_name || row.subject || row.title || (id !== "-" ? (currentLang === "en" ? `Campaign ${id}` : `РљР°РјРїР°РЅРёСЏ ${id}`) : "-");
+    const name = row.name || row.campaignName || row.campaign_name || row.subject || row.title || (id !== "-" ? (currentLang === "en" ? `Campaign ${id}` : `Кампания ${id}`) : "-");
     const statusMeta = campaignStatusMeta(row.status || row.state || "-");
     const typeMeta = campaignTypeMeta(row.type || row.adType || row.campaignType || row.typeId || "-");
     const status = normalizeCampaignStatus(row.status || row.state || "-");
     const type = normalizeCampaignType(row.type || row.adType || row.campaignType || row.typeId || "-");
     const budget = parseCampaignBudget(row);
-    const workingText = statusMeta.isWorking ? (currentLang === "en" ? "Yes" : "Р”Р°") : (currentLang === "en" ? "No" : "РќРµС‚");
+    const workingText = statusMeta.isWorking ? (currentLang === "en" ? "Yes" : "Да") : (currentLang === "en" ? "No" : "Нет");
     const views = parseCampaignMetric(row, "views");
     const clicks = parseCampaignMetric(row, "clicks");
     const ctr = parseCampaignMetric(row, "ctr", 2);
@@ -6953,30 +6971,30 @@ function renderCampaignDetail(data) {
   const cpo = statTotals.orders > 0 ? (statTotals.spent / statTotals.orders) : 0;
   const statusText = normalizeCampaignStatus(summary.status || "-");
   const typeText = normalizeCampaignType(summary.type || "-");
-  const workingText = campaignStatusMeta(summary.status || "-").isWorking ? tr("Р”Р°", "Yes") : tr("РќРµС‚", "No");
+  const workingText = campaignStatusMeta(summary.status || "-").isWorking ? tr("Да", "Yes") : tr("Нет", "No");
   const summaryRows = [
     `${tr("ID", "ID")}: ${summary.campaign_id || "-"}`,
-    `${tr("РќР°Р·РІР°РЅРёРµ", "Name")}: ${summary.name || "-"}`,
-    `${tr("РЎС‚Р°С‚СѓСЃ", "Status")}: ${statusText}`,
-    `${tr("РўРёРї", "Type")}: ${typeText}`,
-    `${tr("Р Р°Р±РѕС‚Р°РµС‚", "Running")}: ${workingText}`,
-    `${tr("Р‘СЋРґР¶РµС‚", "Budget")}: ${summary.budget || "-"}`,
-    `${tr("РџРѕРєР°Р·С‹", "Views")}: ${formatInt(statTotals.views)}`,
-    `${tr("РљР»РёРєРё", "Clicks")}: ${formatInt(statTotals.clicks)}`,
-    `${tr("Р—Р°РєР°Р·С‹", "Orders")}: ${formatInt(statTotals.orders)}`,
-    `${tr("Р Р°СЃС…РѕРґ", "Spend")}: ${formatMoney(statTotals.spent)}`,
+    `${tr("Название", "Name")}: ${summary.name || "-"}`,
+    `${tr("Статус", "Status")}: ${statusText}`,
+    `${tr("Тип", "Type")}: ${typeText}`,
+    `${tr("Работает", "Running")}: ${workingText}`,
+    `${tr("Бюджет", "Budget")}: ${summary.budget || "-"}`,
+    `${tr("Показы", "Views")}: ${formatInt(statTotals.views)}`,
+    `${tr("Клики", "Clicks")}: ${formatInt(statTotals.clicks)}`,
+    `${tr("Заказы", "Orders")}: ${formatInt(statTotals.orders)}`,
+    `${tr("Расход", "Spend")}: ${formatMoney(statTotals.spent)}`,
     `CTR: ${Number(ctr || 0).toFixed(2)}%`,
     `CPO: ${formatMoney(cpo)}`,
-    `${tr("РЎРѕР·РґР°РЅР°", "Created")}: ${summary.created_at || "-"}`,
-    `${tr("РћР±РЅРѕРІР»РµРЅР°", "Updated")}: ${summary.updated_at || "-"}`,
+    `${tr("Создана", "Created")}: ${summary.created_at || "-"}`,
+    `${tr("Обновлена", "Updated")}: ${summary.updated_at || "-"}`,
   ];
-  summaryEl.textContent = summaryRows.join(" вЂў ");
+  summaryEl.textContent = summaryRows.join(" • ");
 
   productsEl.innerHTML = "";
   const products = Array.isArray(data?.products) ? data.products : [];
   if (!products.length) {
     const rowEl = document.createElement("tr");
-    rowEl.innerHTML = `<td colspan="3">${tr("РўРѕРІР°СЂС‹ РєР°РјРїР°РЅРёРё РЅРµ РѕР±РЅР°СЂСѓР¶РµРЅС‹ РІ РѕС‚РІРµС‚Р°С… API.", "Campaign products were not found in API responses.")}</td>`;
+    rowEl.innerHTML = `<td colspan="3">${tr("Товары кампании не обнаружены в ответах API.", "Campaign products were not found in API responses.")}</td>`;
     productsEl.appendChild(rowEl);
   } else {
     for (const row of products.slice(0, 600)) {
@@ -6996,26 +7014,26 @@ function renderCampaignDetail(data) {
     const body = payload && typeof payload === "object" ? payload : {};
     const cpm = body.cpm ?? body.bid ?? body.price ?? "-";
     const updated = body.updatedAt ?? body.updated_at ?? body.last_update ?? "-";
-    ratesLines.push(`[${mode}] ${tr("РЎС‚Р°РІРєР°", "Bid")}: ${cpm}; ${tr("РћР±РЅРѕРІР»РµРЅРѕ", "Updated")}: ${updated}`);
+    ratesLines.push(`[${mode}] ${tr("Ставка", "Bid")}: ${cpm}; ${tr("Обновлено", "Updated")}: ${updated}`);
   }
   if (!ratesLines.length) {
-    ratesLines.push(tr("РЎС‚Р°РІРєРё РЅРµ РїРѕР»СѓС‡РµРЅС‹ РїРѕ API.", "Rates were not returned by API."));
+    ratesLines.push(tr("Ставки не получены по API.", "Rates were not returned by API."));
   }
   if (keywordList.length) {
     ratesLines.push("");
-    ratesLines.push(tr("РљР»СЋС‡РµРІС‹Рµ С„СЂР°Р·С‹:", "Keywords:"));
-    ratesLines.push(...keywordList.slice(0, 30).map((x) => `вЂў ${x}`));
+    ratesLines.push(tr("Ключевые фразы:", "Keywords:"));
+    ratesLines.push(...keywordList.slice(0, 30).map((x) => `• ${x}`));
   }
   if (minusList.length) {
     ratesLines.push("");
-    ratesLines.push(tr("РњРёРЅСѓСЃ-СЃР»РѕРІР°:", "Negative keywords:"));
-    ratesLines.push(...minusList.slice(0, 30).map((x) => `вЂў ${x}`));
+    ratesLines.push(tr("Минус-слова:", "Negative keywords:"));
+    ratesLines.push(...minusList.slice(0, 30).map((x) => `• ${x}`));
   }
   ratesEl.textContent = ratesLines.join("\n");
 
   const statsLines = [];
   if (statsRows.length) {
-    statsLines.push(tr(`РЎС‚СЂРѕРє СЃС‚Р°С‚РёСЃС‚РёРєРё: ${statsRows.length}`, `Stats rows: ${statsRows.length}`));
+    statsLines.push(tr(`Строк статистики: ${statsRows.length}`, `Stats rows: ${statsRows.length}`));
     const sorted = [...statsRows]
       .sort((a, b) => Number(b?.spent || 0) - Number(a?.spent || 0))
       .slice(0, 20);
@@ -7025,10 +7043,10 @@ function renderCampaignDetail(data) {
       const clicks = formatInt(Number(row?.clicks || 0));
       const orders = formatInt(Number(row?.orders || 0));
       const spent = formatMoney(Number(row?.spent || 0));
-      statsLines.push(`${dateLabel}: ${tr("РїРѕРєР°Р·С‹", "views")} ${views}, ${tr("РєР»РёРєРё", "clicks")} ${clicks}, ${tr("Р·Р°РєР°Р·С‹", "orders")} ${orders}, ${tr("СЂР°СЃС…РѕРґ", "spent")} ${spent}`);
+      statsLines.push(`${dateLabel}: ${tr("показы", "views")} ${views}, ${tr("клики", "clicks")} ${clicks}, ${tr("заказы", "orders")} ${orders}, ${tr("расход", "spent")} ${spent}`);
     }
   } else {
-    statsLines.push(tr("РЎС‚Р°С‚РёСЃС‚РёРєР° РЅРµРґРѕСЃС‚СѓРїРЅР° РїРѕ API.", "Stats are unavailable from API."));
+    statsLines.push(tr("Статистика недоступна по API.", "Stats are unavailable from API."));
   }
   statsEl.textContent = statsLines.join("\n");
   rawEl.textContent = JSON.stringify(data?.raw || {}, null, 2);
@@ -7053,11 +7071,11 @@ async function openCampaignDetailModal(campaignId) {
       const baseStatus = normalizeCampaignStatus(baseRow?.status || baseRow?.state || "-");
       const baseType = normalizeCampaignType(baseRow?.type || baseRow?.adType || baseRow?.campaignType || baseRow?.typeId || "-");
       summaryEl.textContent = tr(
-        `РљР°РјРїР°РЅРёСЏ ${currentCampaignDetailId}: ${baseName || "-"} | ${baseStatus} | ${baseType}. Р”РѕРіСЂСѓР¶Р°РµРј СЂР°СЃС€РёСЂРµРЅРЅС‹Рµ РґРµС‚Р°Р»Рё...`,
+        `Кампания ${currentCampaignDetailId}: ${baseName || "-"} | ${baseStatus} | ${baseType}. Догружаем расширенные детали...`,
         `Campaign ${currentCampaignDetailId}: ${baseName || "-"} | ${baseStatus} | ${baseType}. Loading extended details...`
       );
     } else {
-      summaryEl.textContent = tr("Р—Р°РіСЂСѓР¶Р°РµРј РґРµС‚Р°Р»Рё РєР°РјРїР°РЅРёРёвЂ¦", "Loading campaign details...");
+      summaryEl.textContent = tr("Загружаем детали кампании…", "Loading campaign details...");
     }
   }
   if (productsEl) productsEl.innerHTML = "";
@@ -7069,12 +7087,12 @@ async function openCampaignDetailModal(campaignId) {
   let payload = wbCampaignDetailCache.get(cacheKey) || null;
   if (!payload) {
     payload = await withBusy(
-      tr(`Р—Р°РіСЂСѓР¶Р°РµРј РґРµС‚Р°Р»Рё РєР°РјРїР°РЅРёРё ${campaignId}вЂ¦`, `Loading campaign ${campaignId} details...`),
+      tr(`Загружаем детали кампании ${campaignId}…`, `Loading campaign ${campaignId} details...`),
       () => requestJson(`/api/wb/ads/campaign-details?campaign_id=${campaignId}`, {
         headers: authHeaders(),
         timeoutMs: 120000,
       }),
-      tr("РЎР±РѕСЂ РґРµС‚Р°Р»РµР№ РёРґРµС‚ С‡РµСЂРµР· РЅРµСЃРєРѕР»СЊРєРѕ РјРµС‚РѕРґРѕРІ API WB.", "Details are fetched via several WB API methods.")
+      tr("Сбор деталей идет через несколько методов API WB.", "Details are fetched via several WB API methods.")
     ).catch((e) => {
       alert(e.message);
       return null;
@@ -7082,7 +7100,7 @@ async function openCampaignDetailModal(campaignId) {
     if (!payload) {
       if (summaryEl) {
         summaryEl.textContent = tr(
-          "РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РґРµС‚Р°Р»Рё РєР°РјРїР°РЅРёРё. РџСЂРѕРІРµСЂСЊС‚Рµ РєР»СЋС‡ WB Ads Рё РїРѕРІС‚РѕСЂРёС‚Рµ.",
+          "Не удалось загрузить детали кампании. Проверьте ключ WB Ads и повторите.",
           "Failed to load campaign details. Check WB Ads key and retry."
         );
       }
@@ -7100,23 +7118,23 @@ async function refreshCampaignDetails() {
 }
 
 async function applyCampaignAction(action) {
-  if (!currentCampaignDetailId) return alert(tr("РљР°РјРїР°РЅРёСЏ РЅРµ РІС‹Р±СЂР°РЅР°", "Campaign is not selected"));
+  if (!currentCampaignDetailId) return alert(tr("Кампания не выбрана", "Campaign is not selected"));
   const data = await withBusy(
-    tr(`Р’С‹РїРѕР»РЅСЏРµРј ${action} РґР»СЏ РєР°РјРїР°РЅРёРё ${currentCampaignDetailId}вЂ¦`, `Running ${action} for campaign ${currentCampaignDetailId}...`),
+    tr(`Выполняем ${action} для кампании ${currentCampaignDetailId}…`, `Running ${action} for campaign ${currentCampaignDetailId}...`),
     () => requestJson("/api/wb/ads/action", {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify({ campaign_id: currentCampaignDetailId, action }),
       timeoutMs: 60000,
     }),
-    tr("РћРїРµСЂР°С†РёСЏ РѕС‚РїСЂР°РІР»СЏРµС‚СЃСЏ РІ СЂРµРєР»Р°РјРЅС‹Р№ API WB.", "Operation is sent to WB Ads API.")
+    tr("Операция отправляется в рекламный API WB.", "Operation is sent to WB Ads API.")
   ).catch((e) => {
     alert(e.message);
     return null;
   });
   if (!data) return;
   invalidateModuleCache("ads", "sales");
-  alert(data.message || tr("РћРїРµСЂР°С†РёСЏ РІС‹РїРѕР»РЅРµРЅР°", "Operation completed"));
+  alert(data.message || tr("Операция выполнена", "Operation completed"));
   await loadWbAdCampaigns();
   await refreshCampaignDetails();
 }
@@ -7127,17 +7145,17 @@ window.applyCampaignAction = applyCampaignAction;
 async function loadWbCampaignRates() {
   if (!enabledModules.has("wb_ads")) return;
   const campaign_id = Number(document.getElementById("wbRateCampaignId")?.value || 0);
-  if (!campaign_id) return alert(tr("РЈРєР°Р¶РёС‚Рµ campaign_id", "Specify campaign_id"));
+  if (!campaign_id) return alert(tr("Укажите campaign_id", "Specify campaign_id"));
   const campaign_type = document.getElementById("wbRateCampaignType")?.value || "search";
   const data = await withBusy(
-    tr("Р—Р°РіСЂСѓР¶Р°РµРј СЃС‚Р°РІРєРё РєР°РјРїР°РЅРёРёвЂ¦", "Loading campaign rates..."),
+    tr("Загружаем ставки кампании…", "Loading campaign rates..."),
     () => requestJson("/api/wb/ads/rates", {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify({ campaign_id, campaign_type }),
       timeoutMs: 60000,
     }),
-    tr("Р—Р°РїСЂРѕСЃ РІС‹РїРѕР»РЅСЏРµС‚СЃСЏ РІ СЂРµРєР»Р°РјРЅС‹Р№ API WB.", "Request is sent to WB Ads API.")
+    tr("Запрос выполняется в рекламный API WB.", "Request is sent to WB Ads API.")
   ).catch((e) => {
     alert(e.message);
     return null;
@@ -7183,19 +7201,19 @@ function buildAdsAnalyticsSummaryText(meta, totals) {
   const campaignFilter = Number(meta?.campaign_id || 0);
   const analyticsMeta = meta?.analytics_meta && typeof meta.analytics_meta === "object" ? meta.analytics_meta : {};
   const lines = [
-    `${tr("РџРµСЂРёРѕРґ", "Period")}: ${periodFrom} - ${periodTo}`,
-    `${tr("РљР°РјРїР°РЅРёР№ РІ РѕС‚С‡РµС‚Рµ", "Campaigns in report")}: ${formatInt(campaignsLoaded)}`,
-    `${tr("РџРѕРєР°Р·С‹", "Views")}: ${formatInt(totals.views)}`,
-    `${tr("РљР»РёРєРё", "Clicks")}: ${formatInt(totals.clicks)}`,
-    `${tr("Р—Р°РєР°Р·С‹", "Orders")}: ${formatInt(totals.orders)}`,
-    `${tr("Р Р°СЃС…РѕРґ", "Spend")}: ${formatMoney(totals.spent)}`,
+    `${tr("Период", "Period")}: ${periodFrom} - ${periodTo}`,
+    `${tr("Кампаний в отчете", "Campaigns in report")}: ${formatInt(campaignsLoaded)}`,
+    `${tr("Показы", "Views")}: ${formatInt(totals.views)}`,
+    `${tr("Клики", "Clicks")}: ${formatInt(totals.clicks)}`,
+    `${tr("Заказы", "Orders")}: ${formatInt(totals.orders)}`,
+    `${tr("Расход", "Spend")}: ${formatMoney(totals.spent)}`,
     `CTR: ${Number(totals.ctr || 0).toFixed(2)}%`,
     `CR: ${Number(totals.cr || 0).toFixed(2)}%`,
     `CPC: ${formatMoney(totals.cpc)}`,
     `CPO: ${formatMoney(totals.cpo)}`,
   ];
   if (campaignFilter > 0) {
-    lines.unshift(`${tr("Р¤РёР»СЊС‚СЂ campaign_id", "campaign_id filter")}: ${campaignFilter}`);
+    lines.unshift(`${tr("Фильтр campaign_id", "campaign_id filter")}: ${campaignFilter}`);
   }
   lines.push(...buildAdsAnalyticsMetaLines(analyticsMeta));
   return lines.join("\n");
@@ -7204,22 +7222,22 @@ function buildAdsAnalyticsSummaryText(meta, totals) {
 function describeAdsAnalyticsWarning(code) {
   const key = String(code || "").trim().toLowerCase();
   if (key === "temporary_unavailable") {
-    return tr("WB Ads РІСЂРµРјРµРЅРЅРѕ РЅРµ РІРµСЂРЅСѓР» РїСЂРёРіРѕРґРЅС‹Рµ РґРµС‚Р°Р»Рё РїРѕ СЌС‚РѕРјСѓ РїРµСЂРёРѕРґСѓ.", "WB Ads temporarily returned no usable details for this period.");
+    return tr("WB Ads временно не вернул пригодные детали по этому периоду.", "WB Ads temporarily returned no usable details for this period.");
   }
   if (key === "summary_partial") {
-    return tr("Р§Р°СЃС‚СЊ РєР°РјРїР°РЅРёР№ РїРѕРєР° Р±РµР· РЅРѕСЂРјР°Р»СЊРЅС‹С… РЅР°Р·РІР°РЅРёР№ РёР»Рё СЃС‚Р°С‚СѓСЃРѕРІ.", "Some campaigns still have placeholder names or statuses.");
+    return tr("Часть кампаний пока без нормальных названий или статусов.", "Some campaigns still have placeholder names or statuses.");
   }
   if (key === "stats_partial") {
-    return tr("Р§Р°СЃС‚СЊ РєР°РјРїР°РЅРёР№ РїРѕРєР° Р±РµР· РїРѕРєР°Р·РѕРІ/РєР»РёРєРѕРІ/СЂР°СЃС…РѕРґР° Р·Р° РІС‹Р±СЂР°РЅРЅС‹Р№ РїРµСЂРёРѕРґ.", "Some campaigns still have no views/clicks/spend for the selected period.");
+    return tr("Часть кампаний пока без показов/кликов/расхода за выбранный период.", "Some campaigns still have no views/clicks/spend for the selected period.");
   }
   if (key === "base_fetch_failed") {
-    return tr("РќРµ СѓРґР°Р»РѕСЃСЊ РѕР±РЅРѕРІРёС‚СЊ Р±Р°Р·РѕРІС‹Р№ СЃРїРёСЃРѕРє РєР°РјРїР°РЅРёР№.", "Base campaign list refresh failed.");
+    return tr("Не удалось обновить базовый список кампаний.", "Base campaign list refresh failed.");
   }
   if (key === "summary_fetch_failed") {
-    return tr("РќРµ СѓРґР°Р»РѕСЃСЊ РґРѕРіСЂСѓР·РёС‚СЊ СЂРµР°Р»СЊРЅС‹Рµ РЅР°Р·РІР°РЅРёСЏ Рё СЃС‚Р°С‚СѓСЃС‹ РєР°РјРїР°РЅРёР№.", "Campaign names and statuses could not be enriched.");
+    return tr("Не удалось догрузить реальные названия и статусы кампаний.", "Campaign names and statuses could not be enriched.");
   }
   if (key === "stats_fetch_failed") {
-    return tr("РќРµ СѓРґР°Р»РѕСЃСЊ РґРѕРіСЂСѓР·РёС‚СЊ СЃС‚Р°С‚РёСЃС‚РёРєСѓ РєР°РјРїР°РЅРёР№ РёР· WB Ads.", "Campaign statistics could not be loaded from WB Ads.");
+    return tr("Не удалось догрузить статистику кампаний из WB Ads.", "Campaign statistics could not be loaded from WB Ads.");
   }
   return key || "-";
 }
@@ -7228,32 +7246,32 @@ function buildAdsAnalyticsMetaLines(meta) {
   if (!meta || typeof meta !== "object") return [];
   const lines = [];
   if (meta.temporary_unavailable) {
-    lines.push(tr("WB Ads СЃРµР№С‡Р°СЃ РѕС‚РґР°РµС‚ С‚РѕР»СЊРєРѕ С‡Р°СЃС‚РёС‡РЅС‹Рµ РґР°РЅРЅС‹Рµ. РўР°Р±Р»РёС†Р° СЃРѕС…СЂР°РЅРµРЅР° Р±РµР· РѕР±РЅСѓР»РµРЅРёСЏ СѓР¶Рµ Р·Р°РіСЂСѓР¶РµРЅРЅС‹С… СЃС‚СЂРѕРє.", "WB Ads is returning partial data right now. Existing rows are preserved instead of being blanked."));
+    lines.push(tr("WB Ads сейчас отдает только частичные данные. Таблица сохранена без обнуления уже загруженных строк.", "WB Ads is returning partial data right now. Existing rows are preserved instead of being blanked."));
   }
   const partialSummaryCount = Number(meta.partial_summary_count || 0);
   const partialStatsCount = Number(meta.partial_stats_count || 0);
   if (partialSummaryCount > 0) {
-    lines.push(`${tr("Р‘РµР· РїРѕР»РЅРѕРіРѕ РЅР°Р·РІР°РЅРёСЏ РёР»Рё СЃС‚Р°С‚СѓСЃР°", "Without full name/status")}: ${formatInt(partialSummaryCount)}`);
+    lines.push(`${tr("Без полного названия или статуса", "Without full name/status")}: ${formatInt(partialSummaryCount)}`);
   }
   if (partialStatsCount > 0) {
-    lines.push(`${tr("Р‘РµР· РјРµС‚СЂРёРє Р·Р° РїРµСЂРёРѕРґ", "Without period metrics")}: ${formatInt(partialStatsCount)}`);
+    lines.push(`${tr("Без метрик за период", "Without period metrics")}: ${formatInt(partialStatsCount)}`);
   }
   const warnings = Array.isArray(meta.warnings)
     ? meta.warnings.map((code) => describeAdsAnalyticsWarning(code)).filter(Boolean)
     : [];
   if (warnings.length) {
-    lines.push(`${tr("РЎРѕСЃС‚РѕСЏРЅРёРµ Р·Р°РіСЂСѓР·РєРё", "Load state")}: ${warnings.join(" | ")}`);
+    lines.push(`${tr("Состояние загрузки", "Load state")}: ${warnings.join(" | ")}`);
   }
   const sourceParts = [];
   if (Array.isArray(meta.base_sources) && meta.base_sources.length) sourceParts.push(`base=${meta.base_sources.join(",")}`);
   if (Array.isArray(meta.summary_sources) && meta.summary_sources.length) sourceParts.push(`summary=${meta.summary_sources.join(",")}`);
   if (Array.isArray(meta.stats_sources) && meta.stats_sources.length) sourceParts.push(`stats=${meta.stats_sources.join(",")}`);
   if (sourceParts.length) {
-    lines.push(`${tr("РСЃС‚РѕС‡РЅРёРєРё РєСЌС€Р°", "Cache sources")}: ${sourceParts.join("; ")}`);
+    lines.push(`${tr("Источники кэша", "Cache sources")}: ${sourceParts.join("; ")}`);
   }
   const errors = Array.isArray(meta.errors) ? meta.errors.map((msg) => String(msg || "").trim()).filter(Boolean) : [];
   if (errors.length) {
-    lines.push(`${tr("РћС€РёР±РєРё", "Errors")}: ${errors.join(" | ")}`);
+    lines.push(`${tr("Ошибки", "Errors")}: ${errors.join(" | ")}`);
   }
   return lines;
 }
@@ -7261,21 +7279,21 @@ function describeAdsAnalyticsLoadFailure(err) {
   const kind = String(err?.kind || "").trim().toLowerCase();
   const status = Number(err?.status || 0);
   if (kind === "timeout") {
-    return tr("WB Ads РЅРµ РѕС‚РІРµС‚РёР» РІРѕРІСЂРµРјСЏ. РЈР¶Рµ Р·Р°РіСЂСѓР¶РµРЅРЅС‹Рµ СЃС‚СЂРѕРєРё СЃРѕС…СЂР°РЅРµРЅС‹, РїРѕРІС‚РѕСЂРёС‚Рµ Р·Р°РїСЂРѕСЃ С‡СѓС‚СЊ РїРѕР·Р¶Рµ.", "WB Ads timed out. Existing rows were preserved, please retry shortly.");
+    return tr("WB Ads не ответил вовремя. Уже загруженные строки сохранены, повторите запрос чуть позже.", "WB Ads timed out. Existing rows were preserved, please retry shortly.");
   }
   if (kind === "network") {
-    return tr("РќРµ СѓРґР°Р»РѕСЃСЊ СЃРІСЏР·Р°С‚СЊСЃСЏ СЃ СЃРµСЂРІРµСЂРѕРј WB Ads. РџСЂРѕРІРµСЂСЊС‚Рµ СЃРѕРµРґРёРЅРµРЅРёРµ Рё РїРѕРІС‚РѕСЂРёС‚Рµ Р·Р°РіСЂСѓР·РєСѓ.", "Could not reach WB Ads. Check the connection and retry.");
+    return tr("Не удалось связаться с сервером WB Ads. Проверьте соединение и повторите загрузку.", "Could not reach WB Ads. Check the connection and retry.");
   }
   if (kind === "parse") {
-    return tr("РЎРµСЂРІРµСЂ РІРµСЂРЅСѓР» РЅРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ РѕС‚РІРµС‚ WB Ads. РўРµРєСѓС‰РёРµ СЃС‚СЂРѕРєРё РЅРµ Р±С‹Р»Рё РѕС‡РёС‰РµРЅС‹.", "Server returned a malformed WB Ads response. Existing rows were preserved.");
+    return tr("Сервер вернул некорректный ответ WB Ads. Текущие строки не были очищены.", "Server returned a malformed WB Ads response. Existing rows were preserved.");
   }
   if (status >= 500) {
-    return tr(`WB Ads РІСЂРµРјРµРЅРЅРѕ РЅРµРґРѕСЃС‚СѓРїРµРЅ (HTTP ${status}). РўРµРєСѓС‰РёРµ СЃС‚СЂРѕРєРё РЅРµ Р±С‹Р»Рё РѕС‡РёС‰РµРЅС‹.`, `WB Ads is temporarily unavailable (HTTP ${status}). Existing rows were preserved.`);
+    return tr(`WB Ads временно недоступен (HTTP ${status}). Текущие строки не были очищены.`, `WB Ads is temporarily unavailable (HTTP ${status}). Existing rows were preserved.`);
   }
   if (status >= 400) {
-    return tr(`WB Ads РѕС‚РєР»РѕРЅРёР» Р·Р°РїСЂРѕСЃ (HTTP ${status}). РџСЂРѕРІРµСЂСЊС‚Рµ РєР»СЋС‡ API Рё РІС‹Р±СЂР°РЅРЅС‹Р№ РїРµСЂРёРѕРґ.`, `WB Ads rejected the request (HTTP ${status}). Check the API key and selected period.`);
+    return tr(`WB Ads отклонил запрос (HTTP ${status}). Проверьте ключ API и выбранный период.`, `WB Ads rejected the request (HTTP ${status}). Check the API key and selected period.`);
   }
-  return tr("РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ Р°РЅР°Р»РёС‚РёРєСѓ WB Ads. РЈР¶Рµ Р·Р°РіСЂСѓР¶РµРЅРЅС‹Рµ СЃС‚СЂРѕРєРё СЃРѕС…СЂР°РЅРµРЅС‹.", "Failed to load WB Ads analytics. Existing rows were preserved.");
+  return tr("Не удалось загрузить аналитику WB Ads. Уже загруженные строки сохранены.", "Failed to load WB Ads analytics. Existing rows were preserved.");
 }
 async function loadAdsAnalytics() {
   if (!enabledModules.has("wb_ads_analytics")) return;
@@ -7284,8 +7302,8 @@ async function loadAdsAnalytics() {
   const campaignId = Number(document.getElementById("adsAnalyticsCampaignId")?.value || 0);
   const totalBox = document.getElementById("adsAnalyticsTotals");
   const rawBox = document.getElementById("adsAnalyticsRaw");
-  if (totalBox) totalBox.textContent = tr("Р—Р°РіСЂСѓР¶Р°РµРј Р°РЅР°Р»РёС‚РёРєСѓ РїРѕ РєР°РјРїР°РЅРёСЏРј...", "Loading campaign analytics...");
-  if (rawBox) rawBox.textContent = tr("Р—Р°РїСЂР°С€РёРІР°РµРј РґР°РЅРЅС‹Рµ...", "Requesting data...");
+  if (totalBox) totalBox.textContent = tr("Загружаем аналитику по кампаниям...", "Loading campaign analytics...");
+  if (rawBox) rawBox.textContent = tr("Запрашиваем данные...", "Requesting data...");
 
   const pageLimit = 80;
   let offset = 0;
@@ -7319,7 +7337,7 @@ async function loadAdsAnalytics() {
     qp.set("limit", String(pageLimit));
     if (totalBox) {
       totalBox.textContent = tr(
-        `Р—Р°РіСЂСѓР¶Р°РµРј Р°РЅР°Р»РёС‚РёРєСѓ: СЃС‚СЂР°РЅРёС†Р° ${page} (offset ${offset})...`,
+        `Загружаем аналитику: страница ${page} (offset ${offset})...`,
         `Loading analytics: page ${page} (offset ${offset})...`
       );
     }
@@ -7330,7 +7348,7 @@ async function loadAdsAnalytics() {
       adsAnalyticsMeta = {
         temporary_unavailable: false,
         warnings: [],
-        errors: [String(e?.message || tr("РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё Р°РЅР°Р»РёС‚РёРєРё.", "Analytics loading failed."))],
+        errors: [String(e?.message || tr("Ошибка загрузки аналитики.", "Analytics loading failed."))],
       };
       if (totalBox) totalBox.textContent = describeAdsAnalyticsLoadFailure(e);
       if (rawBox) {
@@ -7434,10 +7452,10 @@ function renderAdsAnalyticsRows() {
   if (!adsAnalyticsRows.length) {
     const rowEl = document.createElement("tr");
     const emptyMessage = adsAnalyticsMeta?.temporary_unavailable
-      ? (currentLang === "en" ? "WB Ads temporarily returned no usable analytics for this period." : "WB Ads РІСЂРµРјРµРЅРЅРѕ РЅРµ РІРµСЂРЅСѓР» РїСЂРёРіРѕРґРЅСѓСЋ Р°РЅР°Р»РёС‚РёРєСѓ Р·Р° СЌС‚РѕС‚ РїРµСЂРёРѕРґ.")
+      ? (currentLang === "en" ? "WB Ads temporarily returned no usable analytics for this period." : "WB Ads временно не вернул пригодную аналитику за этот период.")
       : (Array.isArray(adsAnalyticsMeta?.errors) && adsAnalyticsMeta.errors.length
         ? adsAnalyticsMeta.errors[0]
-        : (currentLang === "en" ? "No data." : "РќРµС‚ РґР°РЅРЅС‹С…."));
+        : (currentLang === "en" ? "No data." : "Нет данных."));
     rowEl.innerHTML = `<td colspan="12">${escapeHtml(emptyMessage)}</td>`;
     tbody.appendChild(rowEl);
     return;
@@ -7446,9 +7464,9 @@ function renderAdsAnalyticsRows() {
     const ctrVal = parseCampaignMetric(row, "ctr", 2);
     const rowEl = document.createElement("tr");
     const rowWarnings = [];
-    if (row.summary_has_context === false) rowWarnings.push(currentLang === "en" ? "Name/status still partial" : "РќР°Р·РІР°РЅРёРµ/СЃС‚Р°С‚СѓСЃ РµС‰С‘ С‡Р°СЃС‚РёС‡РЅС‹Рµ");
-    if (row.stat_has_context === false) rowWarnings.push(currentLang === "en" ? "Metrics not loaded for selected period" : "РњРµС‚СЂРёРєРё Р·Р° РїРµСЂРёРѕРґ РЅРµ Р·Р°РіСЂСѓР¶РµРЅС‹");
-    if (rowWarnings.length) rowEl.title = rowWarnings.join(" вЂў ");
+    if (row.summary_has_context === false) rowWarnings.push(currentLang === "en" ? "Name/status still partial" : "Название/статус ещё частичные");
+    if (row.stat_has_context === false) rowWarnings.push(currentLang === "en" ? "Metrics not loaded for selected period" : "Метрики за период не загружены");
+    if (rowWarnings.length) rowEl.title = rowWarnings.join(" • ");
     rowEl.innerHTML = `
       <td>${escapeHtml(row.campaign_id ?? "-")}</td>
       <td>${escapeHtml(row.name ?? "-")}</td>
@@ -7496,8 +7514,8 @@ function updateAdsRecLoadStatus(message = "") {
   }
   holder.innerHTML = buildLoadStatusHtml({
     title: active
-      ? tr("Р”РѕРіСЂСѓР·РєР° СЂРµРєРѕРјРµРЅРґР°С†РёР№", "Loading recommendations")
-      : tr("Р РµРєРѕРјРµРЅРґР°С†РёРё Р·Р°РіСЂСѓР¶РµРЅС‹", "Recommendations loaded"),
+      ? tr("Догрузка рекомендаций", "Loading recommendations")
+      : tr("Рекомендации загружены", "Recommendations loaded"),
     loaded,
     total,
     active,
@@ -7523,12 +7541,12 @@ function updateSalesLoadStatus(message = "") {
   }
   const state = salesLoadState || "idle";
   const title = active
-    ? tr("Р—Р°РіСЂСѓР·РєР° СЃС‚Р°С‚РёСЃС‚РёРєРё РїСЂРѕРґР°Р¶", "Loading sales statistics")
+    ? tr("Загрузка статистики продаж", "Loading sales statistics")
     : (state === "error"
-      ? tr("РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё СЃС‚Р°С‚РёСЃС‚РёРєРё РїСЂРѕРґР°Р¶", "Sales statistics loading failed")
+      ? tr("Ошибка загрузки статистики продаж", "Sales statistics loading failed")
       : (state === "partial"
-        ? tr("РЎС‚Р°С‚РёСЃС‚РёРєР° РїСЂРѕРґР°Р¶ Р·Р°РіСЂСѓР¶РµРЅР° С‡Р°СЃС‚РёС‡РЅРѕ", "Sales statistics partially loaded")
-        : tr("РЎС‚Р°С‚РёСЃС‚РёРєР° РїСЂРѕРґР°Р¶ Р·Р°РіСЂСѓР¶РµРЅР°", "Sales statistics loaded")));
+        ? tr("Статистика продаж загружена частично", "Sales statistics partially loaded")
+        : tr("Статистика продаж загружена", "Sales statistics loaded")));
   holder.innerHTML = buildLoadStatusHtml({
     title,
     loaded,
@@ -7549,15 +7567,15 @@ function renderAdsRecommendationsMeta(payload) {
     return;
   }
   const rows = [
-    [tr("РџРµСЂРёРѕРґ", "Period"), `${payload.date_from || "-"} - ${payload.date_to || "-"}`],
-    [tr("РџСЂРѕРІРµСЂРµРЅРѕ РєР°РјРїР°РЅРёР№", "Scanned campaigns"), `${formatInt(payload.campaigns_scanned || 0)} / ${formatInt(payload.total_campaigns || 0)}`],
-    [tr("РњРёРЅ. СЂР°СЃС…РѕРґ", "Min spend"), formatMoney(payload.min_spent || 0)],
-    [tr("Р РµРєРѕРјРµРЅРґР°С†РёР№", "Recommendations"), formatInt(payload.recommendations || 0)],
+    [tr("Период", "Period"), `${payload.date_from || "-"} - ${payload.date_to || "-"}`],
+    [tr("Проверено кампаний", "Scanned campaigns"), `${formatInt(payload.campaigns_scanned || 0)} / ${formatInt(payload.total_campaigns || 0)}`],
+    [tr("Мин. расход", "Min spend"), formatMoney(payload.min_spent || 0)],
+    [tr("Рекомендаций", "Recommendations"), formatInt(payload.recommendations || 0)],
   ];
   if (Number(payload.high || 0) || Number(payload.medium || 0) || Number(payload.low || 0)) {
-    rows.push([tr("Р’С‹СЃРѕРєРёР№ РїСЂРёРѕСЂРёС‚РµС‚", "High priority"), formatInt(payload.high || 0)]);
-    rows.push([tr("РЎСЂРµРґРЅРёР№ РїСЂРёРѕСЂРёС‚РµС‚", "Medium priority"), formatInt(payload.medium || 0)]);
-    rows.push([tr("РќРёР·РєРёР№ РїСЂРёРѕСЂРёС‚РµС‚", "Low priority"), formatInt(payload.low || 0)]);
+    rows.push([tr("Высокий приоритет", "High priority"), formatInt(payload.high || 0)]);
+    rows.push([tr("Средний приоритет", "Medium priority"), formatInt(payload.medium || 0)]);
+    rows.push([tr("Низкий приоритет", "Low priority"), formatInt(payload.low || 0)]);
   }
   host.innerHTML = `
     <div class="ads-rec-meta-grid">
@@ -7574,7 +7592,7 @@ function renderAdsRecommendationsInsights() {
     host.innerHTML = `<div class="hint">${
       currentLang === "en"
         ? "No recommendation cards yet. Build recommendations for selected dates."
-        : "РљР°СЂС‚РѕС‡РєРё СЂРµРєРѕРјРµРЅРґР°С†РёР№ РїРѕРєР° РїСѓСЃС‚С‹. РџРѕСЃС‚СЂРѕР№С‚Рµ СЂРµРєРѕРјРµРЅРґР°С†РёРё Р·Р° РІС‹Р±СЂР°РЅРЅС‹Р№ РїРµСЂРёРѕРґ."
+        : "Карточки рекомендаций пока пусты. Постройте рекомендации за выбранный период."
     }</div>`;
     return;
   }
@@ -7582,17 +7600,17 @@ function renderAdsRecommendationsInsights() {
   host.innerHTML = topRows.map((row) => {
     const prio = String(row?.priority || "low").toLowerCase();
     const prioLabel = prio === "high"
-      ? tr("Р’С‹СЃРѕРєРёР№", "High")
-      : (prio === "medium" ? tr("РЎСЂРµРґРЅРёР№", "Medium") : tr("РќРёР·РєРёР№", "Low"));
+      ? tr("Высокий", "High")
+      : (prio === "medium" ? tr("Средний", "Medium") : tr("Низкий", "Low"));
     const views = Number(row?.views || 0);
     const clicks = Number(row?.clicks || 0);
     const orders = Number(row?.orders || 0);
     const spent = Number(row?.spent || 0);
     const metricBits = [
-      `${tr("РџРѕРєР°Р·С‹", "Views")}: ${formatInt(Number.isFinite(views) ? views : 0)}`,
-      `${tr("РљР»РёРєРё", "Clicks")}: ${formatInt(Number.isFinite(clicks) ? clicks : 0)}`,
-      `${tr("Р—Р°РєР°Р·С‹", "Orders")}: ${formatInt(Number.isFinite(orders) ? orders : 0)}`,
-      `${tr("Р Р°СЃС…РѕРґ", "Spend")}: ${formatMoney(Number.isFinite(spent) ? spent : 0)}`,
+      `${tr("Показы", "Views")}: ${formatInt(Number.isFinite(views) ? views : 0)}`,
+      `${tr("Клики", "Clicks")}: ${formatInt(Number.isFinite(clicks) ? clicks : 0)}`,
+      `${tr("Заказы", "Orders")}: ${formatInt(Number.isFinite(orders) ? orders : 0)}`,
+      `${tr("Расход", "Spend")}: ${formatMoney(Number.isFinite(spent) ? spent : 0)}`,
     ];
     return `
       <article class="ads-rec-insight-card ${escapeHtml(prio)}">
@@ -7627,13 +7645,13 @@ async function loadAdsRecommendations() {
     total_campaigns: 0,
     min_spent: Number.isFinite(minSpent) ? minSpent : 0,
     recommendations: 0,
-    note: tr("Р—Р°РіСЂСѓР¶Р°РµРј СЂРµРєРѕРјРµРЅРґР°С†РёРё...", "Loading recommendations..."),
+    note: tr("Загружаем рекомендации...", "Loading recommendations..."),
   });
   adsRecommendationRows = [];
   renderAdsRecommendationsRows();
   renderAdsRecommendationsInsights();
   adsRecLoadProgress = { active: true, total: 0, loaded: 0 };
-  updateAdsRecLoadStatus(tr("Р—Р°РїСЂР°С€РёРІР°РµРј СЂРµРєРѕРјРµРЅРґР°С†РёРё...", "Requesting recommendations..."));
+  updateAdsRecLoadStatus(tr("Запрашиваем рекомендации...", "Requesting recommendations..."));
 
   const pageLimit = 80;
   let offset = 0;
@@ -7666,15 +7684,15 @@ async function loadAdsRecommendations() {
     }
     if (!data || runToken !== adsRecLoadToken) {
       partialLoadWarning = tr(
-        `Р§Р°СЃС‚СЊ СЂРµРєРѕРјРµРЅРґР°С†РёР№ РЅРµ Р·Р°РіСЂСѓР·РёР»Р°СЃСЊ (offset ${offset}).`,
+        `Часть рекомендаций не загрузилась (offset ${offset}).`,
         `Part of recommendations failed to load (offset ${offset}).`
       );
       if (lastError && !adsRecommendationRows.length) {
         adsRecLoadProgress = { active: false, total: Math.max(0, seenTotal), loaded: Math.max(0, scanned) };
-        updateAdsRecLoadStatus(tr("Р РµРєРѕРјРµРЅРґР°С†РёРё РІСЂРµРјРµРЅРЅРѕ РЅРµРґРѕСЃС‚СѓРїРЅС‹.", "Recommendations are temporarily unavailable."));
+        updateAdsRecLoadStatus(tr("Рекомендации временно недоступны.", "Recommendations are temporarily unavailable."));
         renderAdsRecommendationsMeta({
           error: tr(
-            "Р РµРєРѕРјРµРЅРґР°С†РёРё РїРѕРєР° РЅРµРґРѕСЃС‚СѓРїРЅС‹. РџСЂРѕРІРµСЂСЊС‚Рµ API-РєР»СЋС‡ Рё РїРµСЂРёРѕРґ, Р·Р°С‚РµРј РѕР±РЅРѕРІРёС‚Рµ РјРѕРґСѓР»СЊ.",
+            "Рекомендации пока недоступны. Проверьте API-ключ и период, затем обновите модуль.",
             "Recommendations are currently unavailable. Check API key and date range, then refresh the module."
           ),
         });
@@ -7725,9 +7743,9 @@ async function loadAdsRecommendations() {
     return acc;
   }, { high: 0, medium: 0, low: 0 });
   const explain = adsRecommendationRows.length
-    ? tr("Р РµРєРѕРјРµРЅРґР°С†РёРё СЃС„РѕСЂРјРёСЂРѕРІР°РЅС‹ РІ РІРёРґРµ РєР°СЂС‚РѕС‡РµРє Рё С‚Р°Р±Р»РёС†С‹. РќР°С‡РЅРёС‚Рµ СЃ РІС‹СЃРѕРєРѕРіРѕ РїСЂРёРѕСЂРёС‚РµС‚Р°.", "Recommendations are ready in cards and table. Start with high priority.")
+    ? tr("Рекомендации сформированы в виде карточек и таблицы. Начните с высокого приоритета.", "Recommendations are ready in cards and table. Start with high priority.")
     : tr(
-      "РќРµС‚ РіРѕС‚РѕРІС‹С… СЂРµРєРѕРјРµРЅРґР°С†РёР№. РЎРµСЂРІРёСЃ РІРµСЂРЅСѓР» РЅРµР№С‚СЂР°Р»СЊРЅСѓСЋ СЃС‚Р°С‚РёСЃС‚РёРєСѓ РёР»Рё РЅРµРґРѕСЃС‚Р°СЋС‰РёРµ РґР°РЅРЅС‹Рµ Р·Р° РїРµСЂРёРѕРґ.",
+      "Нет готовых рекомендаций. Сервис вернул нейтральную статистику или недостающие данные за период.",
       "No actionable recommendations. Service returned neutral or insufficient data for selected period."
     );
   const finalMeta = {
@@ -7741,7 +7759,7 @@ async function loadAdsRecommendations() {
     medium: prioCounts.medium || 0,
     low: prioCounts.low || 0,
     note: `${explain}${
-      fallbackMode ? ` ${tr("Р§Р°СЃС‚СЊ СЃС‚СЂРѕРє СЃРѕР±СЂР°РЅР° РІ fallback-СЂРµР¶РёРјРµ.", "Some rows are generated in fallback mode.")}` : ""
+      fallbackMode ? ` ${tr("Часть строк собрана в fallback-режиме.", "Some rows are generated in fallback mode.")}` : ""
     }${
       partialLoadWarning ? ` ${partialLoadWarning}` : ""
     }`,
@@ -7752,7 +7770,7 @@ async function loadAdsRecommendations() {
     loaded: Math.max(0, scanned),
   };
   if (partialLoadWarning) {
-    updateAdsRecLoadStatus(tr("Р—Р°РіСЂСѓР·РєР° Р·Р°РІРµСЂС€РµРЅР° С‡Р°СЃС‚РёС‡РЅРѕ.", "Load completed partially."));
+    updateAdsRecLoadStatus(tr("Загрузка завершена частично.", "Load completed partially."));
   } else {
     updateAdsRecLoadStatus();
   }
@@ -7768,7 +7786,7 @@ function renderAdsRecommendationsRows() {
   tbody.innerHTML = "";
   if (!adsRecommendationRows.length) {
     const rowEl = document.createElement("tr");
-    rowEl.innerHTML = `<td colspan="14">${currentLang === "en" ? "No recommendations for selected period." : "Р РµРєРѕРјРµРЅРґР°С†РёР№ Р·Р° РІС‹Р±СЂР°РЅРЅС‹Р№ РїРµСЂРёРѕРґ РЅРµС‚."}</td>`;
+    rowEl.innerHTML = `<td colspan="14">${currentLang === "en" ? "No recommendations for selected period." : "Рекомендаций за выбранный период нет."}</td>`;
     tbody.appendChild(rowEl);
     return;
   }
@@ -7780,8 +7798,8 @@ function renderAdsRecommendationsRows() {
       : "";
     const priorityRaw = String(row.priority || "low").toLowerCase();
     const priorityLabel = priorityRaw === "high"
-      ? tr("Р’С‹СЃРѕРєРёР№", "High")
-      : (priorityRaw === "medium" ? tr("РЎСЂРµРґРЅРёР№", "Medium") : tr("РќРёР·РєРёР№", "Low"));
+      ? tr("Высокий", "High")
+      : (priorityRaw === "medium" ? tr("Средний", "Medium") : tr("Низкий", "Low"));
     const rowEl = document.createElement("tr");
     rowEl.innerHTML = `
       <td>${escapeHtml(row.campaign_id ?? "-")}</td>
@@ -7831,7 +7849,7 @@ function refreshWbBidderCampaignHints() {
     const id = String(getCampaignRowId(row) || row?.campaign_id || row?.id || "").trim();
     if (!id || seen.has(id)) continue;
     seen.add(id);
-    const name = getCampaignLookupName(id) || (currentLang === "en" ? `Campaign ${id}` : `РљР°РјРїР°РЅРёСЏ ${id}`);
+    const name = getCampaignLookupName(id) || (currentLang === "en" ? `Campaign ${id}` : `Кампания ${id}`);
     const status = normalizeCampaignStatus(row?.status || row?.state || "-");
     const type = normalizeCampaignType(row?.type || row?.adType || row?.campaignType || row?.typeId || "-");
     const meta = [name, status, type].filter((part) => String(part || "").trim() && String(part || "").trim() !== "-");
@@ -7902,62 +7920,62 @@ function applyWbBidderFieldHints() {
 
   setInputHint(
     "wbBidderCampaignId",
-    isEn ? "WB campaign ID from campaign list" : "ID РєР°РјРїР°РЅРёРё WB РёР· СЃРїРёСЃРєР° РєР°РјРїР°РЅРёР№",
-    isEn ? "Numeric campaign id from WB Ads campaigns table" : "Р§РёСЃР»РѕРІРѕР№ ID РєР°РјРїР°РЅРёРё РёР· С‚Р°Р±Р»РёС†С‹ СЂРµРєР»Р°РјРЅС‹С… РєР°РјРїР°РЅРёР№"
+    isEn ? "WB campaign ID from campaign list" : "ID кампании WB из списка кампаний",
+    isEn ? "Numeric campaign id from WB Ads campaigns table" : "Числовой ID кампании из таблицы рекламных кампаний"
   );
   setInputHint(
     "wbBidderNmId",
-    isEn ? "Product nmID" : "nmID РєР°СЂС‚РѕС‡РєРё С‚РѕРІР°СЂР°",
-    isEn ? "nmID of the product card the rule controls" : "nmID РєР°СЂС‚РѕС‡РєРё С‚РѕРІР°СЂР°, РґР»СЏ РєРѕС‚РѕСЂРѕР№ РґРµР№СЃС‚РІСѓРµС‚ РїСЂР°РІРёР»Рѕ"
+    isEn ? "Product nmID" : "nmID карточки товара",
+    isEn ? "nmID of the product card the rule controls" : "nmID карточки товара, для которой действует правило"
   );
-  setInputHint("wbBidderTargetValue", isEn ? "Search phrase for normquery mode" : "РџРѕРёСЃРєРѕРІР°СЏ С„СЂР°Р·Р° РґР»СЏ СЂРµР¶РёРјР° normquery");
-  setInputHint("wbBidderDesiredBid", isEn ? "Target bid, RUB" : "Р¦РµР»РµРІР°СЏ СЃС‚Р°РІРєР°, в‚Ѕ");
-  setInputHint("wbBidderMinBid", isEn ? "Minimum bid, RUB" : "РњРёРЅРёРјР°Р»СЊРЅР°СЏ СЃС‚Р°РІРєР°, в‚Ѕ");
-  setInputHint("wbBidderMaxBid", isEn ? "Maximum bid, RUB" : "РњР°РєСЃРёРјР°Р»СЊРЅР°СЏ СЃС‚Р°РІРєР°, в‚Ѕ");
-  setInputHint("wbBidderStepBid", isEn ? "Bid change step, RUB" : "РЁР°Рі РёР·РјРµРЅРµРЅРёСЏ СЃС‚Р°РІРєРё, в‚Ѕ");
-  setInputHint("wbBidderPosFrom", isEn ? "Target position from" : "Р¦РµР»РµРІР°СЏ РїРѕР·РёС†РёСЏ РѕС‚");
-  setInputHint("wbBidderPosTo", isEn ? "Target position to" : "Р¦РµР»РµРІР°СЏ РїРѕР·РёС†РёСЏ РґРѕ");
-  setInputHint("wbBidderMinClicks", isEn ? "Min clicks before auto-step" : "РњРёРЅ. РєР»РёРєРѕРІ РґР»СЏ Р°РІС‚РѕС€Р°РіР°");
-  setInputHint("wbBidderCooldownSec", isEn ? "Cooldown between runs, sec" : "РРЅС‚РµСЂРІР°Р» РјРµР¶РґСѓ РїРµСЂРµСЃС‡РµС‚Р°РјРё, СЃРµРє");
-  setInputHint("wbBidderNotes", isEn ? "Rule note (optional)" : "РљРѕРјРјРµРЅС‚Р°СЂРёР№ Рє РїСЂР°РІРёР»Сѓ (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ)");
+  setInputHint("wbBidderTargetValue", isEn ? "Search phrase for normquery mode" : "Поисковая фраза для режима normquery");
+  setInputHint("wbBidderDesiredBid", isEn ? "Target bid, RUB" : "Целевая ставка, ₽");
+  setInputHint("wbBidderMinBid", isEn ? "Minimum bid, RUB" : "Минимальная ставка, ₽");
+  setInputHint("wbBidderMaxBid", isEn ? "Maximum bid, RUB" : "Максимальная ставка, ₽");
+  setInputHint("wbBidderStepBid", isEn ? "Bid change step, RUB" : "Шаг изменения ставки, ₽");
+  setInputHint("wbBidderPosFrom", isEn ? "Target position from" : "Целевая позиция от");
+  setInputHint("wbBidderPosTo", isEn ? "Target position to" : "Целевая позиция до");
+  setInputHint("wbBidderMinClicks", isEn ? "Min clicks before auto-step" : "Мин. кликов для автошага");
+  setInputHint("wbBidderCooldownSec", isEn ? "Cooldown between runs, sec" : "Интервал между пересчетами, сек");
+  setInputHint("wbBidderNotes", isEn ? "Rule note (optional)" : "Комментарий к правилу (опционально)");
 
   setOptionText("wbBidderTargetKind", {
-    normquery: isEn ? "Search phrase (normquery)" : "РџРѕРёСЃРєРѕРІР°СЏ С„СЂР°Р·Р° (normquery)",
-    nm: isEn ? "Product card (nm)" : "РљР°СЂС‚РѕС‡РєР° С‚РѕРІР°СЂР° (nm)",
+    normquery: isEn ? "Search phrase (normquery)" : "Поисковая фраза (normquery)",
+    nm: isEn ? "Product card (nm)" : "Карточка товара (nm)",
   });
   setOptionText("wbBidderPlacement", {
-    search: isEn ? "Search only" : "РўРѕР»СЊРєРѕ РїРѕРёСЃРє",
-    recommendations: isEn ? "Recommendations only" : "РўРѕР»СЊРєРѕ СЂРµРєРѕРјРµРЅРґР°С†РёРё",
-    combined: isEn ? "Search + recommendations" : "РџРѕРёСЃРє + СЂРµРєРѕРјРµРЅРґР°С†РёРё",
+    search: isEn ? "Search only" : "Только поиск",
+    recommendations: isEn ? "Recommendations only" : "Только рекомендации",
+    combined: isEn ? "Search + recommendations" : "Поиск + рекомендации",
   });
   setOptionText("wbBidderStrategy", {
-    optimal: isEn ? "Optimal (auto balance)" : "Optimal (Р°РІС‚Рѕ Р±Р°Р»Р°РЅСЃ)",
-    position: isEn ? "Position hold" : "Position (РґРµСЂР¶Р°С‚СЊ РїРѕР·РёС†РёСЋ)",
-    range: isEn ? "Range hold" : "Range (РґРµСЂР¶Р°С‚СЊ РґРёР°РїР°Р·РѕРЅ)",
-    hold: isEn ? "Hold fixed bid" : "Hold (С„РёРєСЃРёСЂРѕРІР°РЅРЅР°СЏ СЃС‚Р°РІРєР°)",
+    optimal: isEn ? "Optimal (auto balance)" : "Optimal (авто баланс)",
+    position: isEn ? "Position hold" : "Position (держать позицию)",
+    range: isEn ? "Range hold" : "Range (держать диапазон)",
+    hold: isEn ? "Hold fixed bid" : "Hold (фиксированная ставка)",
   });
 
-  ensureFieldCard("wbBidderCampaignId", isEn ? "Campaign ID" : "ID РєР°РјРїР°РЅРёРё", isEn ? "Select from campaign list to avoid mismatch." : "Р’С‹Р±РёСЂР°Р№С‚Рµ ID РёР· СЃРїРёСЃРєР° РєР°РјРїР°РЅРёР№, С‡С‚РѕР±С‹ РЅРµ РѕС€РёР±РёС‚СЊСЃСЏ.");
-  ensureFieldCard("wbBidderNmId", isEn ? "Product nmID" : "nmID РєР°СЂС‚РѕС‡РєРё С‚РѕРІР°СЂР°", isEn ? "Use nmID from the same campaign." : "РЈРєР°Р¶РёС‚Рµ nmID РёР· СЌС‚РѕР№ Р¶Рµ РєР°РјРїР°РЅРёРё.");
-  ensureFieldCard("wbBidderTargetKind", isEn ? "Target type" : "РўРёРї С†РµР»Рё");
-  ensureFieldCard("wbBidderTargetValue", isEn ? "Search phrase (for normquery)" : "РџРѕРёСЃРєРѕРІР°СЏ С„СЂР°Р·Р° (РґР»СЏ normquery)", isEn ? "Used only in normquery mode." : "РСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ С‚РѕР»СЊРєРѕ РІ СЂРµР¶РёРјРµ normquery.");
-  ensureFieldCard("wbBidderPlacement", isEn ? "Placement" : "РџР»РѕС‰Р°РґРєР°");
-  ensureFieldCard("wbBidderStrategy", isEn ? "Strategy" : "РЎС‚СЂР°С‚РµРіРёСЏ");
-  ensureFieldCard("wbBidderDesiredBid", isEn ? "Target bid, RUB" : "Р¦РµР»РµРІР°СЏ СЃС‚Р°РІРєР°, в‚Ѕ");
-  ensureFieldCard("wbBidderMinBid", isEn ? "Minimum bid, RUB" : "РњРёРЅРёРјР°Р»СЊРЅР°СЏ СЃС‚Р°РІРєР°, в‚Ѕ");
-  ensureFieldCard("wbBidderMaxBid", isEn ? "Maximum bid, RUB" : "РњР°РєСЃРёРјР°Р»СЊРЅР°СЏ СЃС‚Р°РІРєР°, в‚Ѕ");
-  ensureFieldCard("wbBidderStepBid", isEn ? "Bid step, RUB" : "РЁР°Рі РёР·РјРµРЅРµРЅРёСЏ СЃС‚Р°РІРєРё, в‚Ѕ", isEn ? "How much to increase/decrease bid per step." : "РќР° СЃРєРѕР»СЊРєРѕ СЂСѓР±Р»РµР№ РїРѕРІС‹С€Р°С‚СЊ/РїРѕРЅРёР¶Р°С‚СЊ СЃС‚Р°РІРєСѓ Р·Р° С€Р°Рі.");
-  ensureFieldCard("wbBidderPosFrom", isEn ? "Target position from" : "Р¦РµР»РµРІР°СЏ РїРѕР·РёС†РёСЏ РѕС‚", isEn ? "Lower bound of desired position range." : "РќРёР¶РЅСЏСЏ РіСЂР°РЅРёС†Р° Р¶РµР»Р°РµРјРѕРіРѕ РґРёР°РїР°Р·РѕРЅР° РїРѕР·РёС†РёРё.");
-  ensureFieldCard("wbBidderPosTo", isEn ? "Target position to" : "Р¦РµР»РµРІР°СЏ РїРѕР·РёС†РёСЏ РґРѕ", isEn ? "Upper bound of desired position range." : "Р’РµСЂС…РЅСЏСЏ РіСЂР°РЅРёС†Р° Р¶РµР»Р°РµРјРѕРіРѕ РґРёР°РїР°Р·РѕРЅР° РїРѕР·РёС†РёРё.");
-  ensureFieldCard("wbBidderMinClicks", isEn ? "Minimum clicks" : "РњРёРЅРёРјСѓРј РєР»РёРєРѕРІ", isEn ? "0 means no clicks threshold." : "0 = Р±РµР· РїРѕСЂРѕРіР° РїРѕ РєР»РёРєР°Рј.");
-  ensureFieldCard("wbBidderCooldownSec", isEn ? "Cooldown, sec" : "РРЅС‚РµСЂРІР°Р» РїРµСЂРµСЃС‡РµС‚Р°, СЃРµРє", isEn ? "Pause between auto-runs for one rule." : "РџР°СѓР·Р° РјРµР¶РґСѓ Р°РІС‚РѕР·Р°РїСѓСЃРєР°РјРё РѕРґРЅРѕРіРѕ РїСЂР°РІРёР»Р°.");
-  ensureFieldCard("wbBidderNotes", isEn ? "Comment" : "РљРѕРјРјРµРЅС‚Р°СЂРёР№", isEn ? "Optional note for your team." : "РћРїС†РёРѕРЅР°Р»СЊРЅР°СЏ РїРѕРјРµС‚РєР° РґР»СЏ РєРѕРјР°РЅРґС‹.");
+  ensureFieldCard("wbBidderCampaignId", isEn ? "Campaign ID" : "ID кампании", isEn ? "Select from campaign list to avoid mismatch." : "Выбирайте ID из списка кампаний, чтобы не ошибиться.");
+  ensureFieldCard("wbBidderNmId", isEn ? "Product nmID" : "nmID карточки товара", isEn ? "Use nmID from the same campaign." : "Укажите nmID из этой же кампании.");
+  ensureFieldCard("wbBidderTargetKind", isEn ? "Target type" : "Тип цели");
+  ensureFieldCard("wbBidderTargetValue", isEn ? "Search phrase (for normquery)" : "Поисковая фраза (для normquery)", isEn ? "Used only in normquery mode." : "Используется только в режиме normquery.");
+  ensureFieldCard("wbBidderPlacement", isEn ? "Placement" : "Площадка");
+  ensureFieldCard("wbBidderStrategy", isEn ? "Strategy" : "Стратегия");
+  ensureFieldCard("wbBidderDesiredBid", isEn ? "Target bid, RUB" : "Целевая ставка, ₽");
+  ensureFieldCard("wbBidderMinBid", isEn ? "Minimum bid, RUB" : "Минимальная ставка, ₽");
+  ensureFieldCard("wbBidderMaxBid", isEn ? "Maximum bid, RUB" : "Максимальная ставка, ₽");
+  ensureFieldCard("wbBidderStepBid", isEn ? "Bid step, RUB" : "Шаг изменения ставки, ₽", isEn ? "How much to increase/decrease bid per step." : "На сколько рублей повышать/понижать ставку за шаг.");
+  ensureFieldCard("wbBidderPosFrom", isEn ? "Target position from" : "Целевая позиция от", isEn ? "Lower bound of desired position range." : "Нижняя граница желаемого диапазона позиции.");
+  ensureFieldCard("wbBidderPosTo", isEn ? "Target position to" : "Целевая позиция до", isEn ? "Upper bound of desired position range." : "Верхняя граница желаемого диапазона позиции.");
+  ensureFieldCard("wbBidderMinClicks", isEn ? "Minimum clicks" : "Минимум кликов", isEn ? "0 means no clicks threshold." : "0 = без порога по кликам.");
+  ensureFieldCard("wbBidderCooldownSec", isEn ? "Cooldown, sec" : "Интервал пересчета, сек", isEn ? "Pause between auto-runs for one rule." : "Пауза между автозапусками одного правила.");
+  ensureFieldCard("wbBidderNotes", isEn ? "Comment" : "Комментарий", isEn ? "Optional note for your team." : "Опциональная пометка для команды.");
 
   const hint = document.getElementById("wbBidderFieldsHint");
   if (hint) {
     hint.textContent = isEn
       ? "campaign_id = campaign ID, nmID = product card ID. Step/position/clicks/cooldown are optimization controls. Bid values are in RUB."
-      : "campaign_id = ID РєР°РјРїР°РЅРёРё, nmID = ID РєР°СЂС‚РѕС‡РєРё С‚РѕРІР°СЂР°. РџРѕР»СЏ С€Р°Рі/РїРѕР·РёС†РёСЏ/РєР»РёРєРё/cooldown вЂ” СЌС‚Рѕ РїР°СЂР°РјРµС‚СЂС‹ РѕРїС‚РёРјРёР·Р°С†РёРё. РЎС‚Р°РІРєРё СѓРєР°Р·С‹РІР°СЋС‚СЃСЏ РІ СЂСѓР±Р»СЏС….";
+      : "campaign_id = ID кампании, nmID = ID карточки товара. Поля шаг/позиция/клики/cooldown — это параметры оптимизации. Ставки указываются в рублях.";
   }
 }
 
@@ -7968,14 +7986,14 @@ function syncWbBidderTargetKindUi() {
   if (!targetValueEl) return;
   if (kind === "nm") {
     targetValueEl.disabled = true;
-    targetValueEl.placeholder = tr("Р”Р»СЏ СЂРµР¶РёРјР° В«РљР°СЂС‚РѕС‡РєР° (nm)В» РЅРµ РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ", "Not used in product-card (nm) mode");
-    targetValueEl.title = tr("РџРѕР»Рµ С„СЂР°Р·С‹ СЂР°Р±РѕС‚Р°РµС‚ С‚РѕР»СЊРєРѕ РґР»СЏ СЂРµР¶РёРјР° normquery.", "Phrase field is used only for normquery mode.");
+    targetValueEl.placeholder = tr("Для режима «Карточка (nm)» не используется", "Not used in product-card (nm) mode");
+    targetValueEl.title = tr("Поле фразы работает только для режима normquery.", "Phrase field is used only for normquery mode.");
     targetValueEl.value = "";
     return;
   }
   targetValueEl.disabled = false;
-  targetValueEl.placeholder = tr("РџРѕРёСЃРєРѕРІР°СЏ С„СЂР°Р·Р° (СЂРµР¶РёРј normquery)", "Search phrase (normquery mode)");
-  targetValueEl.title = tr("РЈРєР°Р¶РёС‚Рµ С„СЂР°Р·Сѓ, РїРѕ РєРѕС‚РѕСЂРѕР№ РЅСѓР¶РЅРѕ РґРµСЂР¶Р°С‚СЊ СЃС‚Р°РІРєСѓ/РїРѕР·РёС†РёСЋ.", "Set phrase used to control bid/position.");
+  targetValueEl.placeholder = tr("Поисковая фраза (режим normquery)", "Search phrase (normquery mode)");
+  targetValueEl.title = tr("Укажите фразу, по которой нужно держать ставку/позицию.", "Set phrase used to control bid/position.");
 }
 function resetWbBidderForm() {
   const defaults = [
@@ -8065,18 +8083,18 @@ function collectWbBidderPayload() {
 
 function bidderPlacementLabel(value) {
   const key = String(value || "").trim().toLowerCase();
-  if (key === "search") return tr("РџРѕРёСЃРє", "Search");
-  if (key === "recommendations") return tr("Р РµРєРѕРјРµРЅРґР°С†РёРё", "Recommendations");
-  if (key === "combined") return tr("РџРѕРёСЃРє + СЂРµРєРѕРјРµРЅРґР°С†РёРё", "Search + recommendations");
+  if (key === "search") return tr("Поиск", "Search");
+  if (key === "recommendations") return tr("Рекомендации", "Recommendations");
+  if (key === "combined") return tr("Поиск + рекомендации", "Search + recommendations");
   return key || "-";
 }
 
 function bidderStrategyLabel(value) {
   const key = String(value || "").trim().toLowerCase();
-  if (key === "optimal") return tr("Optimal (Р°РІС‚Рѕ Р±Р°Р»Р°РЅСЃ)", "Optimal (auto balance)");
-  if (key === "position") return tr("Position (РґРµСЂР¶Р°С‚СЊ РїРѕР·РёС†РёСЋ)", "Position hold");
-  if (key === "range") return tr("Range (РґРµСЂР¶Р°С‚СЊ РґРёР°РїР°Р·РѕРЅ)", "Range hold");
-  if (key === "hold") return tr("Hold (С„РёРєСЃРёСЂРѕРІР°РЅРЅР°СЏ СЃС‚Р°РІРєР°)", "Hold fixed bid");
+  if (key === "optimal") return tr("Optimal (авто баланс)", "Optimal (auto balance)");
+  if (key === "position") return tr("Position (держать позицию)", "Position hold");
+  if (key === "range") return tr("Range (держать диапазон)", "Range hold");
+  if (key === "hold") return tr("Hold (фиксированная ставка)", "Hold fixed bid");
   return key || "-";
 }
 
@@ -8084,16 +8102,16 @@ function bidderRuleTargetText(row) {
   const kind = String(row?.target_kind || "").toLowerCase();
   const nm = Number(row?.nm_id || 0);
   if (kind === "normquery") {
-    return `${tr("nmID", "nmID")}: ${nm} В· ${String(row?.target_value || "-")}`;
+    return `${tr("nmID", "nmID")}: ${nm} · ${String(row?.target_value || "-")}`;
   }
-  return `${tr("РљР°СЂС‚РѕС‡РєР° nmID", "nmID card")}: ${nm}`;
+  return `${tr("Карточка nmID", "nmID card")}: ${nm}`;
 }
 
 function bidderStatusBadge(status) {
   const low = String(status || "").trim().toLowerCase();
   if (low === "ok") return `<span class="ads-bidder-status-ok">${escapeHtml(tr("ok", "ok"))}</span>`;
-  if (low === "error") return `<span class="ads-bidder-status-error">${escapeHtml(tr("РѕС€РёР±РєР°", "error"))}</span>`;
-  if (low === "skipped") return `<span class="ads-bidder-status-skipped">${escapeHtml(tr("РїСЂРѕРїСѓСЃРє", "skipped"))}</span>`;
+  if (low === "error") return `<span class="ads-bidder-status-error">${escapeHtml(tr("ошибка", "error"))}</span>`;
+  if (low === "skipped") return `<span class="ads-bidder-status-skipped">${escapeHtml(tr("пропуск", "skipped"))}</span>`;
   return escapeHtml(String(status || "-"));
 }
 
@@ -8114,7 +8132,7 @@ async function loadWbBidderRules() {
     headers: authHeaders(),
     timeoutMs: 60000,
   }).catch((e) => {
-    setWbBidderStatus(e.message || tr("РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РїСЂР°РІРёР»Р° Р±РёРґРґРµСЂР°.", "Unable to load bidder rules."), "error");
+    setWbBidderStatus(e.message || tr("Не удалось загрузить правила биддера.", "Unable to load bidder rules."), "error");
     return null;
   });
   if (!data) return;
@@ -8123,7 +8141,7 @@ async function loadWbBidderRules() {
   syncWbBidderTargetKindUi();
   const activeCount = wbBidderRules.filter((x) => Boolean(x?.is_active)).length;
   setWbBidderStatus(
-    tr(`РџСЂР°РІРёР»: ${wbBidderRules.length}, Р°РєС‚РёРІРЅС‹С…: ${activeCount}`, `Rules: ${wbBidderRules.length}, active: ${activeCount}`),
+    tr(`Правил: ${wbBidderRules.length}, активных: ${activeCount}`, `Rules: ${wbBidderRules.length}, active: ${activeCount}`),
     wbBidderRules.length ? "ok" : "skipped"
   );
 }
@@ -8134,7 +8152,7 @@ function renderWbBidderRules() {
   tbody.innerHTML = "";
   if (!Array.isArray(wbBidderRules) || !wbBidderRules.length) {
     const row = document.createElement("tr");
-    row.innerHTML = `<td colspan="11">${escapeHtml(tr("РџСЂР°РІРёР»Р° РїРѕРєР° РЅРµ СЃРѕР·РґР°РЅС‹.", "No bidder rules yet."))}</td>`;
+    row.innerHTML = `<td colspan="11">${escapeHtml(tr("Правила пока не созданы.", "No bidder rules yet."))}</td>`;
     tbody.appendChild(row);
     return;
   }
@@ -8143,21 +8161,21 @@ function renderWbBidderRules() {
     const trEl = document.createElement("tr");
     trEl.innerHTML = `
       <td>${escapeHtml(String(row.id || "-"))}</td>
-      <td>${row.is_active ? "вњ…" : "вЏёпёЏ"}</td>
+      <td>${row.is_active ? "✅" : "⏸️"}</td>
       <td>${escapeHtml(String(row.campaign_id || "-"))}${campaignName ? `<div class="cell-meta-small">${escapeHtml(campaignName)}</div>` : ""}</td>
       <td>${escapeHtml(bidderRuleTargetText(row))}</td>
-      <td>${escapeHtml(bidderStrategyLabel(row.strategy))} В· ${escapeHtml(bidderPlacementLabel(row.placement))}</td>
-      <td>${escapeHtml(String(row.min_bid || 0))} .. ${escapeHtml(String(row.max_bid || 0))} В· step ${escapeHtml(String(row.step_bid || 0))}</td>
+      <td>${escapeHtml(bidderStrategyLabel(row.strategy))} · ${escapeHtml(bidderPlacementLabel(row.placement))}</td>
+      <td>${escapeHtml(String(row.min_bid || 0))} .. ${escapeHtml(String(row.max_bid || 0))} · step ${escapeHtml(String(row.step_bid || 0))}</td>
       <td>${escapeHtml(String(row.target_pos_from || 0))} .. ${escapeHtml(String(row.target_pos_to || 0))}</td>
       <td>${escapeHtml(String(row.cooldown_sec || 0))}s</td>
       <td>${escapeHtml(String(row.last_run_at || "-"))}</td>
       <td>${bidderStatusBadge(row.last_status)}<br><small>${escapeHtml(String(row.last_reason || ""))}</small></td>
       <td>
         <div class="ads-bidder-row-actions">
-          <button type="button" class="btn-secondary" onclick="editWbBidderRule(${Number(row.id || 0)})">вњЋ</button>
-          <button type="button" class="btn-secondary" onclick="runWbBidderRuleNow(${Number(row.id || 0)})">в–¶</button>
-          <button type="button" class="btn-secondary" onclick="toggleWbBidderRule(${Number(row.id || 0)}, ${row.is_active ? "false" : "true"})">${row.is_active ? "вЏё" : "в–¶"}</button>
-          <button type="button" class="btn-danger" onclick="deleteWbBidderRule(${Number(row.id || 0)})">рџ—‘</button>
+          <button type="button" class="btn-secondary" onclick="editWbBidderRule(${Number(row.id || 0)})">✎</button>
+          <button type="button" class="btn-secondary" onclick="runWbBidderRuleNow(${Number(row.id || 0)})">▶</button>
+          <button type="button" class="btn-secondary" onclick="toggleWbBidderRule(${Number(row.id || 0)}, ${row.is_active ? "false" : "true"})">${row.is_active ? "⏸" : "▶"}</button>
+          <button type="button" class="btn-danger" onclick="deleteWbBidderRule(${Number(row.id || 0)})">🗑</button>
         </div>
       </td>
     `;
@@ -8170,7 +8188,7 @@ function editWbBidderRule(ruleId) {
   if (!row) return;
   fillWbBidderForm(row);
   setWbBidderStatus(
-    tr(`Р РµРґР°РєС‚РёСЂРѕРІР°РЅРёРµ РїСЂР°РІРёР»Р° #${row.id}`, `Editing rule #${row.id}`),
+    tr(`Редактирование правила #${row.id}`, `Editing rule #${row.id}`),
     "skipped"
   );
 }
@@ -8181,14 +8199,14 @@ async function saveWbBidderRule() {
   const ruleId = Number(document.getElementById("wbBidderRuleId")?.value || 0);
   if (!payload.campaign_id || !payload.nm_id) {
     setWbBidderStatus(
-      tr("Р—Р°РїРѕР»РЅРёС‚Рµ campaign_id Рё nm_id.", "Fill campaign_id and nm_id."),
+      tr("Заполните campaign_id и nm_id.", "Fill campaign_id and nm_id."),
       "error"
     );
     return;
   }
   if (payload.target_kind === "normquery" && !payload.target_value) {
     setWbBidderStatus(
-      tr("Р”Р»СЏ normquery СѓРєР°Р¶РёС‚Рµ С„СЂР°Р·Сѓ.", "For normquery provide the phrase."),
+      tr("Для normquery укажите фразу.", "For normquery provide the phrase."),
       "error"
     );
     return;
@@ -8201,15 +8219,15 @@ async function saveWbBidderRule() {
     body: JSON.stringify(payload),
     timeoutMs: 60000,
   }).catch((e) => {
-    setWbBidderStatus(e.message || tr("РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ РїСЂР°РІРёР»Рѕ.", "Unable to save rule."), "error");
+    setWbBidderStatus(e.message || tr("Не удалось сохранить правило.", "Unable to save rule."), "error");
     return null;
   });
   if (!data) return;
   resetWbBidderForm();
   setWbBidderStatus(
     ruleId > 0
-      ? tr(`РџСЂР°РІРёР»Рѕ #${ruleId} РѕР±РЅРѕРІР»РµРЅРѕ.`, `Rule #${ruleId} updated.`)
-      : tr("РџСЂР°РІРёР»Рѕ СЃРѕР·РґР°РЅРѕ.", "Rule created."),
+      ? tr(`Правило #${ruleId} обновлено.`, `Rule #${ruleId} updated.`)
+      : tr("Правило создано.", "Rule created."),
     "ok"
   );
   await loadWbBidderRules();
@@ -8219,18 +8237,18 @@ async function saveWbBidderRule() {
 async function deleteWbBidderRule(ruleId) {
   const id = Number(ruleId || 0);
   if (id <= 0) return;
-  const sure = window.confirm(tr(`РЈРґР°Р»РёС‚СЊ РїСЂР°РІРёР»Рѕ #${id}?`, `Delete rule #${id}?`));
+  const sure = window.confirm(tr(`Удалить правило #${id}?`, `Delete rule #${id}?`));
   if (!sure) return;
   const data = await requestJson(`/api/wb/ads/bidder/rules/${id}`, {
     method: "DELETE",
     headers: authHeaders(),
     timeoutMs: 60000,
   }).catch((e) => {
-    setWbBidderStatus(e.message || tr("РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ РїСЂР°РІРёР»Рѕ.", "Unable to delete rule."), "error");
+    setWbBidderStatus(e.message || tr("Не удалось удалить правило.", "Unable to delete rule."), "error");
     return null;
   });
   if (!data) return;
-  setWbBidderStatus(tr(`РџСЂР°РІРёР»Рѕ #${id} СѓРґР°Р»РµРЅРѕ.`, `Rule #${id} deleted.`), "ok");
+  setWbBidderStatus(tr(`Правило #${id} удалено.`, `Rule #${id} deleted.`), "ok");
   await loadWbBidderRules();
   await loadWbBidderRuns();
 }
@@ -8245,12 +8263,12 @@ async function toggleWbBidderRule(ruleId, active) {
     body: JSON.stringify({ is_active: isActive }),
     timeoutMs: 60000,
   }).catch((e) => {
-    setWbBidderStatus(e.message || tr("РќРµ СѓРґР°Р»РѕСЃСЊ РѕР±РЅРѕРІРёС‚СЊ СЃС‚Р°С‚СѓСЃ РїСЂР°РІРёР»Р°.", "Unable to update rule state."), "error");
+    setWbBidderStatus(e.message || tr("Не удалось обновить статус правила.", "Unable to update rule state."), "error");
     return null;
   });
   if (!data) return;
   setWbBidderStatus(
-    tr(`РџСЂР°РІРёР»Рѕ #${id}: ${isActive ? "РІРєР»СЋС‡РµРЅРѕ" : "РІС‹РєР»СЋС‡РµРЅРѕ"}.`, `Rule #${id}: ${isActive ? "enabled" : "disabled"}.`),
+    tr(`Правило #${id}: ${isActive ? "включено" : "выключено"}.`, `Rule #${id}: ${isActive ? "enabled" : "disabled"}.`),
     isActive ? "ok" : "skipped"
   );
   await loadWbBidderRules();
@@ -8266,7 +8284,7 @@ async function runWbBidder(force = false, ruleIds = []) {
     body: JSON.stringify({ rule_ids: ids, force: Boolean(force) }),
     timeoutMs: 120000,
   }).catch((e) => {
-    setWbBidderStatus(e.message || tr("РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РїСѓСЃС‚РёС‚СЊ Р±РёРґРґРµСЂ.", "Unable to run bidder."), "error");
+    setWbBidderStatus(e.message || tr("Не удалось запустить биддер.", "Unable to run bidder."), "error");
     return null;
   });
   if (!data) return;
@@ -8299,7 +8317,7 @@ function renderWbBidderRuns() {
   tbody.innerHTML = "";
   if (!Array.isArray(wbBidderRuns) || !wbBidderRuns.length) {
     const row = document.createElement("tr");
-    row.innerHTML = `<td colspan="9">${escapeHtml(tr("Р›РѕРіРё РїРѕРєР° РїСѓСЃС‚С‹.", "Run logs are empty."))}</td>`;
+    row.innerHTML = `<td colspan="9">${escapeHtml(tr("Логи пока пусты.", "Run logs are empty."))}</td>`;
     tbody.appendChild(row);
     return;
   }
@@ -8311,7 +8329,7 @@ function renderWbBidderRuns() {
       <td>#${escapeHtml(String(row.rule_id || "-"))}</td>
       <td>${escapeHtml(String(row.campaign_id || "-"))}${campaignName ? `<div class="cell-meta-small">${escapeHtml(campaignName)}</div>` : ""}</td>
       <td>${escapeHtml(bidderRuleTargetText(row))}</td>
-      <td>${escapeHtml(String(row.previous_bid || 0))} в†’ ${escapeHtml(String(row.next_bid || 0))}</td>
+      <td>${escapeHtml(String(row.previous_bid || 0))} → ${escapeHtml(String(row.next_bid || 0))}</td>
       <td>${escapeHtml(String(row.avg_position || 0))}</td>
       <td>${escapeHtml(String(row.clicks || 0))} / ${escapeHtml(String(row.orders || 0))}</td>
       <td>${bidderStatusBadge(row.status)}</td>
@@ -8354,7 +8372,7 @@ function syncCategoryFilterOptions(categories = []) {
     normalized.push(value);
   }
   normalized.sort((a, b) => a.localeCompare(b, "ru", { sensitivity: "base" }));
-  const allLabel = currentLang === "en" ? "All categories" : "Р’СЃРµ РєР°С‚РµРіРѕСЂРёРё";
+  const allLabel = currentLang === "en" ? "All categories" : "Все категории";
   const optionsHtml = [`<option value="all">${escapeHtml(allLabel)}</option>`]
     .concat(normalized.map((x) => `<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`))
     .join("");
@@ -8371,7 +8389,7 @@ function syncCategoryFilterState() {
   const market = String(marketEl.value || "all").trim().toLowerCase();
   const categoryEnabled = market === "wb" || market === "ozon";
   const shouldResetToAll = !categoryEnabled && String(categoryEl.value || "all").toLowerCase() !== "all";
-  const allLabel = currentLang === "en" ? "All categories" : "Р’СЃРµ РєР°С‚РµРіРѕСЂРёРё";
+  const allLabel = currentLang === "en" ? "All categories" : "Все категории";
   if (!categoryEnabled && categoryEl.options.length > 1) {
     categoryEl.innerHTML = `<option value="all">${escapeHtml(allLabel)}</option>`;
   } else if (!categoryEl.options.length) {
@@ -8383,7 +8401,7 @@ function syncCategoryFilterState() {
   categoryEl.disabled = !categoryEnabled;
   categoryEl.title = categoryEnabled
     ? ""
-    : tr("Р’С‹Р±РµСЂРёС‚Рµ WB РёР»Рё Ozon, С‡С‚РѕР±С‹ С„РёР»СЊС‚СЂРѕРІР°С‚СЊ РїРѕ РєР°С‚РµРіРѕСЂРёСЏРј.", "Choose WB or Ozon to filter by categories.");
+    : tr("Выберите WB или Ozon, чтобы фильтровать по категориям.", "Choose WB or Ozon to filter by categories.");
   return shouldResetToAll;
 }
 
@@ -8394,8 +8412,8 @@ function syncSelectedProductsActions() {
   btn.disabled = count <= 0;
   btn.classList.toggle("is-soft-hidden", count <= 0);
   const tip = count > 0
-    ? tr(`РЈРґР°Р»РёС‚СЊ РІС‹Р±СЂР°РЅРЅС‹Рµ (${count}) РёР· Р»РѕРєР°Р»СЊРЅРѕР№ Р±Р°Р·С‹`, `Delete selected (${count}) from local database`)
-    : tr("РЈРґР°Р»РёС‚СЊ РІС‹Р±СЂР°РЅРЅС‹Рµ РёР· Р»РѕРєР°Р»СЊРЅРѕР№ Р±Р°Р·С‹", "Delete selected from local database");
+    ? tr(`Удалить выбранные (${count}) из локальной базы`, `Delete selected (${count}) from local database`)
+    : tr("Удалить выбранные из локальной базы", "Delete selected from local database");
   btn.dataset.tip = tip;
   btn.setAttribute("aria-label", tip);
 }
@@ -8462,14 +8480,14 @@ function productsNextPage() {
 async function importProducts() {
   const payload = getImportPayload();
   const data = await withBusy(
-    tr("РРјРїРѕСЂС‚РёСЂСѓРµРј С‚РѕРІР°СЂС‹вЂ¦", "Importing products..."),
+    tr("Импортируем товары…", "Importing products..."),
     () => requestJson("/api/products/import", {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify(payload),
       timeoutMs: 120000,
     }),
-    tr("Р—Р°РіСЂСѓР·РєР° Р·Р°РІРёСЃРёС‚ РѕС‚ РѕС‚РІРµС‚Р° РјР°СЂРєРµС‚РїР»РµР№СЃР°.", "Loading depends on marketplace API response.")
+    tr("Загрузка зависит от ответа маркетплейса.", "Loading depends on marketplace API response.")
   ).catch((e) => {
     alert(e.message);
     return null;
@@ -8481,22 +8499,22 @@ async function importProducts() {
   await loadDashboard();
   const safeMp = String(payload.marketplace || "all").toLowerCase();
   await trackUiActivity("products_import_completed", "products", `marketplace=${safeMp};import_all=${payload.import_all ? 1 : 0};count=${Number(data.length || 0)}`);
-  alert(tr(`РРјРїРѕСЂС‚РёСЂРѕРІР°РЅРѕ: ${data.length}`, `Imported: ${data.length}`));
+  alert(tr(`Импортировано: ${data.length}`, `Imported: ${data.length}`));
 }
 
 async function reloadProducts() {
-  if (!confirm(tr("РћР±РЅРѕРІРёС‚СЊ Р»РѕРєР°Р»СЊРЅСѓСЋ Р±Р°Р·Сѓ С‚РѕРІР°СЂРѕРІ РїРѕ РІС‹Р±СЂР°РЅРЅРѕРјСѓ РјР°СЂРєРµС‚РїР»РµР№СЃСѓ (РґРѕР±Р°РІРёС‚ РЅРѕРІС‹Рµ Рё РѕР±РЅРѕРІРёС‚ РёР·РјРµРЅРµРЅРЅС‹Рµ)?", "Refresh local catalog for selected marketplace (add new and update changed)?"))) return;
+  if (!confirm(tr("Обновить локальную базу товаров по выбранному маркетплейсу (добавит новые и обновит измененные)?", "Refresh local catalog for selected marketplace (add new and update changed)?"))) return;
   const payload = getImportPayload({ forceAll: true });
   const body = JSON.stringify(payload);
   const data = await withBusy(
-    tr("РћР±РЅРѕРІР»СЏРµРј Р»РѕРєР°Р»СЊРЅСѓСЋ Р±Р°Р·Сѓ С‚РѕРІР°СЂРѕРІвЂ¦", "Refreshing local catalog..."),
+    tr("Обновляем локальную базу товаров…", "Refreshing local catalog..."),
     () => tryRequestChain([
       { url: "/api/products/reload", opts: { method: "POST", headers: authHeaders(), body, timeoutMs: 240000 } },
       { url: "/api/products/refresh", opts: { method: "POST", headers: authHeaders(), body, timeoutMs: 240000 } },
       { url: "/api/products/reset", opts: { method: "POST", headers: authHeaders(), body, timeoutMs: 240000 } },
       { url: "/api/products/reimport", opts: { method: "POST", headers: authHeaders(), body, timeoutMs: 240000 } },
     ]),
-    tr("Р”Р°РЅРЅС‹Рµ РѕР±РЅРѕРІР»СЏСЋС‚СЃСЏ Р±РµР· СѓРґР°Р»РµРЅРёСЏ: РґРѕР±Р°РІРёРј РЅРѕРІС‹Рµ С‚РѕРІР°СЂС‹ Рё РѕР±РЅРѕРІРёРј РёР·РјРµРЅРµРЅРЅС‹Рµ РєР°СЂС‚РѕС‡РєРё.", "Updates without deletion: new items added, changed ones updated.")
+    tr("Данные обновляются без удаления: добавим новые товары и обновим измененные карточки.", "Updates without deletion: new items added, changed ones updated.")
   ).catch((e) => {
     alert(e.message);
     return null;
@@ -8510,7 +8528,7 @@ async function reloadProducts() {
   await loadDashboard();
   const safeMp = String(payload.marketplace || "all").toLowerCase();
   await trackUiActivity("products_reload_completed", "products", `marketplace=${safeMp};import_all=${payload.import_all ? 1 : 0};count=${Number(data.length || 0)}`);
-  alert(tr(`Р‘Р°Р·Р° РѕР±РЅРѕРІР»РµРЅР°, С‚РѕРІР°СЂРѕРІ: ${data.length}`, `Catalog refreshed, products: ${data.length}`));
+  alert(tr(`База обновлена, товаров: ${data.length}`, `Catalog refreshed, products: ${data.length}`));
 }
 
 async function loadProducts() {
@@ -8544,7 +8562,7 @@ async function loadProducts() {
     syncProductsPagerControls();
     const tbodyError = document.getElementById("productsTable");
     if (tbodyError) {
-      tbodyError.innerHTML = `<tr><td colspan="10">${escapeHtml(tr("РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ С‚РѕРІР°СЂС‹. РџСЂРѕРІРµСЂСЊС‚Рµ API РєР»СЋС‡Рё Рё С„РёР»СЊС‚СЂС‹.", "Failed to load products. Check API keys and filters."))}</td></tr>`;
+      tbodyError.innerHTML = `<tr><td colspan="10">${escapeHtml(tr("Не удалось загрузить товары. Проверьте API ключи и фильтры.", "Failed to load products. Check API keys and filters."))}</td></tr>`;
     }
     markModuleLoaded("products");
     return;
@@ -8626,8 +8644,8 @@ async function loadProducts() {
     tdActions.className = "product-actions-cell";
     tdActions.innerHTML = `
       <div class="product-row-actions">
-        <button class="btn-secondary btn-row-action btn-row-action-icon" type="button" data-tip="${escapeHtml(tr("РџРѕСЃРјРѕС‚СЂРµС‚СЊ", "View"))}" aria-label="${escapeHtml(tr("РџРѕСЃРјРѕС‚СЂРµС‚СЊ", "View"))}">&#128065;</button>
-        <button class="btn-danger btn-row-action btn-row-action-icon" type="button" data-tip="${escapeHtml(tr("РЈРґР°Р»РёС‚СЊ Р»РѕРєР°Р»СЊРЅРѕ", "Delete local"))}" aria-label="${escapeHtml(tr("РЈРґР°Р»РёС‚СЊ Р»РѕРєР°Р»СЊРЅРѕ", "Delete local"))}">&#128465;</button>
+        <button class="btn-secondary btn-row-action btn-row-action-icon" type="button" data-tip="${escapeHtml(tr("Посмотреть", "View"))}" aria-label="${escapeHtml(tr("Посмотреть", "View"))}">&#128065;</button>
+        <button class="btn-danger btn-row-action btn-row-action-icon" type="button" data-tip="${escapeHtml(tr("Удалить локально", "Delete local"))}" aria-label="${escapeHtml(tr("Удалить локально", "Delete local"))}">&#128465;</button>
       </div>
     `;
     const [viewBtn, deleteBtn] = tdActions.querySelectorAll("button");
@@ -8666,7 +8684,7 @@ async function loadProducts() {
     if (row) row.classList.add("selected-row");
   }
   if (!currentProducts.length) {
-    tbody.innerHTML = `<tr><td colspan="10">${escapeHtml(tr("РўРѕРІР°СЂС‹ РЅРµ РЅР°Р№РґРµРЅС‹", "No products found"))}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10">${escapeHtml(tr("Товары не найдены", "No products found"))}</td></tr>`;
   }
   markModuleLoaded("products");
 }
@@ -8737,7 +8755,7 @@ async function refreshProductViewModal() {
   const refreshBtn = document.getElementById("productViewRefreshBtn");
   if (refreshBtn) refreshBtn.disabled = true;
   const warnEl = document.getElementById("productViewWarn");
-  if (warnEl) warnEl.textContent = tr("РћР±РЅРѕРІР»СЏРµРј РґР°РЅРЅС‹Рµ РїРѕ APIвЂ¦", "Refreshing data from API...");
+  if (warnEl) warnEl.textContent = tr("Обновляем данные по API…", "Refreshing data from API...");
   await openProductViewModal(id, { refresh: true });
   if (refreshBtn) refreshBtn.disabled = false;
   activeProductViewIsRefreshing = false;
@@ -8747,7 +8765,7 @@ function normalizeProductDetailValue(value) {
   if (value === null || value === undefined) return "";
   if (typeof value === "string") {
     const text = value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
-    if (!text || text === "-" || text === "вЂ”") return "";
+    if (!text || text === "-" || text === "—") return "";
     return text;
   }
   if (typeof value === "number") {
@@ -8932,12 +8950,12 @@ function extractProductDetailContext(details, fallbackProduct) {
   );
 
   const summaryItems = [
-    { label: tr("РњР°СЂРєРµС‚РїР»РµР№СЃ", "Marketplace"), value: marketplace },
-    { label: tr("РљР°С‚РµРіРѕСЂРёСЏ", "Category"), value: category },
-    { label: tr("Р‘СЂРµРЅРґ", "Brand"), value: brand || "-" },
-    { label: tr("РђСЂС‚РёРєСѓР»", "Article"), value: article || "-" },
-    { label: tr("Р’РЅРµС€РЅРёР№ ID", "External ID"), value: externalId || "-" },
-    { label: tr("Р‘Р°СЂРєРѕРґ", "Barcode"), value: barcode || "-" },
+    { label: tr("Маркетплейс", "Marketplace"), value: marketplace },
+    { label: tr("Категория", "Category"), value: category },
+    { label: tr("Бренд", "Brand"), value: brand || "-" },
+    { label: tr("Артикул", "Article"), value: article || "-" },
+    { label: tr("Внешний ID", "External ID"), value: externalId || "-" },
+    { label: tr("Баркод", "Barcode"), value: barcode || "-" },
   ];
 
   const purchasePriceValue = pickPrice(
@@ -9035,28 +9053,28 @@ function extractProductDetailContext(details, fallbackProduct) {
   );
 
   const commerceItems = [
-    { label: tr("Р—Р°РєСѓРїРѕС‡РЅР°СЏ С†РµРЅР°", "Purchase price"), value: purchasePriceValue || "-" },
-    { label: tr("Р¦РµРЅР° Р±РµР· СЃРєРёРґРєРё", "Base price"), value: priceBaseValue || "-" },
-    { label: tr("Р¦РµРЅР° СЃРѕ СЃРєРёРґРєРѕР№", "Discounted price"), value: priceDiscountValue || "-" },
-    { label: tr("РњРёРЅ. С†РµРЅР°", "Min price"), value: priceMinValue || "-" },
-    { label: tr("РњР°СЂРєРµС‚РёРЅРі С†РµРЅР°", "Marketing price"), value: priceMarketingValue || "-" },
-    { label: tr("Р’Р°Р»СЋС‚Р°", "Currency"), value: pickAny(pickAttr("currency_code", "currency"), pickRaw("currency_code", "currency", "price_info.currency_code", "price_info.price.currency_code")) || "-" },
-    { label: tr("РќР”РЎ", "VAT"), value: pickAny(pickAttr("vat", "vat_rate", "nds"), pickRaw("vat", "vat_rate", "nds", "price_info.vat", "price_info.price.vat")) || "-" },
-    { label: tr("РЎС‚Р°С‚СѓСЃ", "Status"), value: pickAny(pickAttr("state"), pickRaw("state.name", "state")) || "-" },
-    { label: tr("Р’РёРґРёРјРѕСЃС‚СЊ", "Visibility"), value: pickAny(pickAttr("visibility"), pickRaw("visibility")) || "-" },
+    { label: tr("Закупочная цена", "Purchase price"), value: purchasePriceValue || "-" },
+    { label: tr("Цена без скидки", "Base price"), value: priceBaseValue || "-" },
+    { label: tr("Цена со скидкой", "Discounted price"), value: priceDiscountValue || "-" },
+    { label: tr("Мин. цена", "Min price"), value: priceMinValue || "-" },
+    { label: tr("Маркетинг цена", "Marketing price"), value: priceMarketingValue || "-" },
+    { label: tr("Валюта", "Currency"), value: pickAny(pickAttr("currency_code", "currency"), pickRaw("currency_code", "currency", "price_info.currency_code", "price_info.price.currency_code")) || "-" },
+    { label: tr("НДС", "VAT"), value: pickAny(pickAttr("vat", "vat_rate", "nds"), pickRaw("vat", "vat_rate", "nds", "price_info.vat", "price_info.price.vat")) || "-" },
+    { label: tr("Статус", "Status"), value: pickAny(pickAttr("state"), pickRaw("state.name", "state")) || "-" },
+    { label: tr("Видимость", "Visibility"), value: pickAny(pickAttr("visibility"), pickRaw("visibility")) || "-" },
   ];
 
   const logisticsItems = [
-    { label: tr("Р’РµСЃ", "Weight"), value: pickAny(pickAttr("weight"), pickRaw("weight")) || "-" },
-    { label: tr("Р•Рґ. РІРµСЃР°", "Weight unit"), value: pickAny(pickAttr("weight_unit"), pickRaw("weight_unit")) || "-" },
-    { label: tr("Р”Р»РёРЅР°", "Length"), value: pickAny(pickAttr("depth"), pickRaw("depth")) || "-" },
-    { label: tr("РЁРёСЂРёРЅР°", "Width"), value: pickAny(pickAttr("width"), pickRaw("width")) || "-" },
-    { label: tr("Р’С‹СЃРѕС‚Р°", "Height"), value: pickAny(pickAttr("height"), pickRaw("height")) || "-" },
-    { label: tr("Р•Рґ. РіР°Р±Р°СЂРёС‚РѕРІ", "Dimension unit"), value: pickAny(pickAttr("dimension_unit"), pickRaw("dimension_unit")) || "-" },
-    { label: tr("РЈРїР°РєРѕРІРєР°: РІРµСЃ", "Package: weight"), value: pickAny(pickAttr("package_weight"), pickRaw("package_dimensions.weight")) || "-" },
-    { label: tr("РЈРїР°РєРѕРІРєР°: РґР»РёРЅР°", "Package: depth"), value: pickAny(pickAttr("package_depth"), pickRaw("package_dimensions.depth")) || "-" },
-    { label: tr("РЈРїР°РєРѕРІРєР°: С€РёСЂРёРЅР°", "Package: width"), value: pickAny(pickAttr("package_width"), pickRaw("package_dimensions.width")) || "-" },
-    { label: tr("РЈРїР°РєРѕРІРєР°: РІС‹СЃРѕС‚Р°", "Package: height"), value: pickAny(pickAttr("package_height"), pickRaw("package_dimensions.height")) || "-" },
+    { label: tr("Вес", "Weight"), value: pickAny(pickAttr("weight"), pickRaw("weight")) || "-" },
+    { label: tr("Ед. веса", "Weight unit"), value: pickAny(pickAttr("weight_unit"), pickRaw("weight_unit")) || "-" },
+    { label: tr("Длина", "Length"), value: pickAny(pickAttr("depth"), pickRaw("depth")) || "-" },
+    { label: tr("Ширина", "Width"), value: pickAny(pickAttr("width"), pickRaw("width")) || "-" },
+    { label: tr("Высота", "Height"), value: pickAny(pickAttr("height"), pickRaw("height")) || "-" },
+    { label: tr("Ед. габаритов", "Dimension unit"), value: pickAny(pickAttr("dimension_unit"), pickRaw("dimension_unit")) || "-" },
+    { label: tr("Упаковка: вес", "Package: weight"), value: pickAny(pickAttr("package_weight"), pickRaw("package_dimensions.weight")) || "-" },
+    { label: tr("Упаковка: длина", "Package: depth"), value: pickAny(pickAttr("package_depth"), pickRaw("package_dimensions.depth")) || "-" },
+    { label: tr("Упаковка: ширина", "Package: width"), value: pickAny(pickAttr("package_width"), pickRaw("package_dimensions.width")) || "-" },
+    { label: tr("Упаковка: высота", "Package: height"), value: pickAny(pickAttr("package_height"), pickRaw("package_dimensions.height")) || "-" },
   ];
 
   const technicalItems = [
@@ -9101,7 +9119,7 @@ function extractProductDetailContext(details, fallbackProduct) {
     base,
     raw,
     photos,
-    name: name || tr("РўРѕРІР°СЂ", "Product"),
+    name: name || tr("Товар", "Product"),
     description,
     summaryItems,
     commerceItems,
@@ -9123,7 +9141,7 @@ function renderProductInfoGrid(items, emptyLabel, options = {}) {
   const emptyValueLabel = String(
     options && options.emptyValueLabel !== undefined
       ? options.emptyValueLabel
-      : tr("РЅРµС‚ РґР°РЅРЅС‹С…", "n/a")
+      : tr("нет данных", "n/a")
   );
   const rows = (Array.isArray(items) ? items : [])
     .map((item) => {
@@ -9150,15 +9168,15 @@ function renderProductAttributeTable(items) {
     .filter(Boolean)
     .join("");
   if (!rows) {
-    return `<div class="hint">${escapeHtml(tr("РђС‚СЂРёР±СѓС‚С‹ РЅРµ РЅР°Р№РґРµРЅС‹.", "No attributes found."))}</div>`;
+    return `<div class="hint">${escapeHtml(tr("Атрибуты не найдены.", "No attributes found."))}</div>`;
   }
   return `
     <div class="table-card product-attrs-table-wrap">
       <table class="product-attrs-table">
         <thead>
           <tr>
-            <th>${escapeHtml(tr("РџР°СЂР°РјРµС‚СЂ", "Parameter"))}</th>
-            <th>${escapeHtml(tr("Р—РЅР°С‡РµРЅРёРµ", "Value"))}</th>
+            <th>${escapeHtml(tr("Параметр", "Parameter"))}</th>
+            <th>${escapeHtml(tr("Значение", "Value"))}</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -9175,7 +9193,7 @@ async function openProductViewModal(productId, opts = {}) {
   if (!modal) return;
   activeProductViewId = id;
   const product = currentProducts.find((x) => Number(x.id) === id) || null;
-  const name = product?.name || tr("РўРѕРІР°СЂ", "Product");
+  const name = product?.name || tr("Товар", "Product");
   const titleEl = modal.querySelector("h3");
   const editBtn = document.getElementById("productViewEditBtn");
   const refreshBtn = document.getElementById("productViewRefreshBtn");
@@ -9184,7 +9202,7 @@ async function openProductViewModal(productId, opts = {}) {
     editBtn.dataset.productId = String(id);
   }
   if (refreshBtn) refreshBtn.disabled = activeProductViewIsRefreshing;
-  if (titleEl) titleEl.textContent = `${tr("РљР°СЂС‚РѕС‡РєР° С‚РѕРІР°СЂР°", "Product card")}: ${name}`;
+  if (titleEl) titleEl.textContent = `${tr("Карточка товара", "Product card")}: ${name}`;
   modal.classList.remove("hidden");
   const metaEl = document.getElementById("productViewMeta");
   const warnEl = document.getElementById("productViewWarn");
@@ -9198,10 +9216,10 @@ async function openProductViewModal(productId, opts = {}) {
   const rawEl = document.getElementById("productViewRaw");
   if (metaEl) {
     metaEl.textContent = product
-      ? `${tr("ID", "ID")}: ${product.id} вЂў ${tr("\u041c\u041f", "MP")}: ${String(product.marketplace || "").toUpperCase()} вЂў ${tr("\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f", "Category")}: ${product.category_name || "-"}`
+      ? `${tr("ID", "ID")}: ${product.id} • ${tr("\u041c\u041f", "MP")}: ${String(product.marketplace || "").toUpperCase()} • ${tr("\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f", "Category")}: ${product.category_name || "-"}`
       : "-";
   }
-  if (warnEl) warnEl.textContent = tr("Р—Р°РіСЂСѓР¶Р°РµРј РґРµС‚Р°Р»Рё РєР°СЂС‚РѕС‡РєРёвЂ¦", "Loading product details...");
+  if (warnEl) warnEl.textContent = tr("Загружаем детали карточки…", "Loading product details...");
   if (summaryEl) summaryEl.innerHTML = "";
   if (photosEl) photosEl.innerHTML = "";
   if (descEl) descEl.textContent = "-";
@@ -9214,21 +9232,21 @@ async function openProductViewModal(productId, opts = {}) {
   const details = await fetchProductDetailsById(id, { silent: true, refresh });
   if (!details || activeProductViewId !== id) return;
   const context = extractProductDetailContext(details, product || {});
-  if (titleEl) titleEl.textContent = `${tr("РљР°СЂС‚РѕС‡РєР° С‚РѕРІР°СЂР°", "Product card")}: ${context.name}`;
+  if (titleEl) titleEl.textContent = `${tr("Карточка товара", "Product card")}: ${context.name}`;
   const allPhotos = context.photos;
   if (summaryEl) {
     summaryEl.innerHTML = renderProductInfoGrid(
       context.summaryItems,
-      tr("РљСЂР°С‚РєР°СЏ РёРЅС„РѕСЂРјР°С†РёСЏ РЅРµРґРѕСЃС‚СѓРїРЅР°.", "Summary is unavailable.")
+      tr("Краткая информация недоступна.", "Summary is unavailable.")
     );
   }
   if (descEl) {
-    descEl.textContent = context.description || tr("РћРїРёСЃР°РЅРёРµ РѕС‚СЃСѓС‚СЃС‚РІСѓРµС‚.", "Description is not available.");
+    descEl.textContent = context.description || tr("Описание отсутствует.", "Description is not available.");
   }
   if (photosEl) {
     photosEl.innerHTML = allPhotos.length
       ? allPhotos.map((url, idx) => `<img src="${escapeHtml(String(url))}" alt="product-photo-${idx + 1}" loading="lazy" class="product-detail-photo">`).join("")
-      : `<div class="hint">${escapeHtml(tr("Р¤РѕС‚РѕРіСЂР°С„РёРё РЅРµ РЅР°Р№РґРµРЅС‹.", "No photos found."))}</div>`;
+      : `<div class="hint">${escapeHtml(tr("Фотографии не найдены.", "No photos found."))}</div>`;
     if (allPhotos.length) {
       const imgNodes = photosEl.querySelectorAll("img.product-detail-photo");
       imgNodes.forEach((imgEl, idx) => {
@@ -9239,25 +9257,25 @@ async function openProductViewModal(productId, opts = {}) {
   }
   if (warnEl) {
     const warnings = Array.isArray(details.warnings) ? details.warnings.filter(Boolean) : [];
-    warnEl.textContent = warnings.length ? warnings.join(" | ") : tr("Р”РµС‚Р°Р»Рё Р·Р°РіСЂСѓР¶РµРЅС‹.", "Details loaded.");
+    warnEl.textContent = warnings.length ? warnings.join(" | ") : tr("Детали загружены.", "Details loaded.");
   }
   if (commerceEl) {
     commerceEl.innerHTML = renderProductInfoGrid(
       context.commerceItems,
-      tr("РљРѕРјРјРµСЂС‡РµСЃРєРёРµ РґР°РЅРЅС‹Рµ РЅРµ РЅР°Р№РґРµРЅС‹.", "Commerce data not found."),
-      { keepEmptyRows: true, emptyValueLabel: tr("РЅРµС‚ РґР°РЅРЅС‹С…", "n/a") }
+      tr("Коммерческие данные не найдены.", "Commerce data not found."),
+      { keepEmptyRows: true, emptyValueLabel: tr("нет данных", "n/a") }
     );
   }
   if (logisticsEl) {
     logisticsEl.innerHTML = renderProductInfoGrid(
       context.logisticsItems,
-      tr("Р›РѕРіРёСЃС‚РёС‡РµСЃРєРёРµ РґР°РЅРЅС‹Рµ РЅРµ РЅР°Р№РґРµРЅС‹.", "Logistics data not found.")
+      tr("Логистические данные не найдены.", "Logistics data not found.")
     );
   }
   if (technicalEl) {
     technicalEl.innerHTML = renderProductInfoGrid(
       context.technicalItems,
-      tr("РўРµС…РЅРёС‡РµСЃРєРёРµ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂС‹ РЅРµ РЅР°Р№РґРµРЅС‹.", "Technical identifiers not found.")
+      tr("Технические идентификаторы не найдены.", "Technical identifiers not found.")
     );
   }
   if (attrsEl) attrsEl.innerHTML = renderProductAttributeTable(context.attributeItems);
@@ -9275,13 +9293,13 @@ async function openProductEditModal(productId) {
   activeProductEditId = id;
   const product = currentProducts.find((x) => Number(x.id) === id) || null;
   const titleEl = modal.querySelector("h3");
-  if (titleEl) titleEl.textContent = `${tr("Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ С‚РѕРІР°СЂ", "Edit product")}: ${product?.name || id}`;
+  if (titleEl) titleEl.textContent = `${tr("Редактировать товар", "Edit product")}: ${product?.name || id}`;
   const hintEl = document.getElementById("productEditHint");
   const summaryEl = document.getElementById("productEditSummary");
   const detailsEl = document.getElementById("productEditDetails");
   const photosEl = document.getElementById("productEditPhotos");
   const attrsEl = document.getElementById("productEditAttrs");
-  if (hintEl) hintEl.textContent = tr("Р—Р°РіСЂСѓР¶Р°РµРј РґР°РЅРЅС‹Рµ РєР°СЂС‚РѕС‡РєРёвЂ¦", "Loading product data...");
+  if (hintEl) hintEl.textContent = tr("Загружаем данные карточки…", "Loading product data...");
   if (summaryEl) summaryEl.innerHTML = "";
   if (detailsEl) detailsEl.innerHTML = "";
   if (photosEl) photosEl.innerHTML = "";
@@ -9293,11 +9311,11 @@ async function openProductEditModal(productId) {
   const context = extractProductDetailContext(details, product || {});
   const base = context.base || product || {};
   const warnings = Array.isArray(details?.warnings) ? details.warnings.filter(Boolean) : [];
-  if (titleEl) titleEl.textContent = `${tr("Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ С‚РѕРІР°СЂ", "Edit product")}: ${context.name || id}`;
+  if (titleEl) titleEl.textContent = `${tr("Редактировать товар", "Edit product")}: ${context.name || id}`;
   if (hintEl) {
     hintEl.textContent = warnings.length
       ? warnings.join(" | ")
-      : tr("РњРѕР¶РЅРѕ СЂРµРґР°РєС‚РёСЂРѕРІР°С‚СЊ Рё СЃРѕС…СЂР°РЅСЏС‚СЊ РёР·РјРµРЅРµРЅРёСЏ.", "You can edit and save changes.");
+      : tr("Можно редактировать и сохранять изменения.", "You can edit and save changes.");
   }
   const setValue = (idValue, value) => {
     const el = document.getElementById(idValue);
@@ -9325,14 +9343,14 @@ async function openProductEditModal(productId) {
   if (summaryEl) {
     summaryEl.innerHTML = renderProductInfoGrid(
       context.summaryItems,
-      tr("РљСЂР°С‚РєР°СЏ РёРЅС„РѕСЂРјР°С†РёСЏ РЅРµРґРѕСЃС‚СѓРїРЅР°.", "Summary is unavailable.")
+      tr("Краткая информация недоступна.", "Summary is unavailable.")
     );
   }
   if (detailsEl) {
     const editInfo = [...context.commerceItems, ...context.logisticsItems, ...context.technicalItems];
     detailsEl.innerHTML = renderProductInfoGrid(
       editInfo,
-      tr("Р”РµС‚Р°Р»Рё РєР°СЂС‚РѕС‡РєРё РЅРµРґРѕСЃС‚СѓРїРЅС‹.", "Details are unavailable.")
+      tr("Детали карточки недоступны.", "Details are unavailable.")
     );
   }
   productEditPhotoOrder = Array.isArray(context.photos) ? context.photos.map((x) => String(x || "")).filter(Boolean) : [];
@@ -9394,12 +9412,12 @@ function addProductEditPhotoFromInput() {
   const input = document.getElementById("productEditPhotoAddUrl");
   const raw = String(input?.value || "").trim();
   if (!raw) {
-    alert(tr("Р’СЃС‚Р°РІСЊС‚Рµ URL С„РѕС‚Рѕ РёР»Рё РёСЃРїРѕР»СЊР·СѓР№С‚Рµ РєРЅРѕРїРєСѓ В«Р”РѕР±Р°РІРёС‚СЊ С„РѕС‚РѕВ».", "Paste photo URL or use the Add photo button."));
+    alert(tr("Вставьте URL фото или используйте кнопку «Добавить фото».", "Paste photo URL or use the Add photo button."));
     return;
   }
   const added = addProductEditPhoto(raw);
   if (!added) {
-    alert(tr("Р¤РѕС‚Рѕ СѓР¶Рµ РґРѕР±Р°РІР»РµРЅРѕ.", "Photo is already added."));
+    alert(tr("Фото уже добавлено.", "Photo is already added."));
     return;
   }
   if (input) input.value = "";
@@ -9423,18 +9441,18 @@ async function uploadProductEditPhotos(options = {}) {
   const files = Array.from(input?.files || []);
   if (!files.length) {
     if (!silentNoFiles) {
-      alert(tr("Р’С‹Р±РµСЂРёС‚Рµ РёР·РѕР±СЂР°Р¶РµРЅРёСЏ РґР»СЏ Р·Р°РіСЂСѓР·РєРё.", "Select images to upload."));
+      alert(tr("Выберите изображения для загрузки.", "Select images to upload."));
     }
     return;
   }
   const imageFiles = files.filter((file) => String(file?.type || "").startsWith("image/"));
   if (!imageFiles.length) {
-    alert(tr("Р”РѕРїСѓСЃРєР°СЋС‚СЃСЏ С‚РѕР»СЊРєРѕ С„Р°Р№Р»С‹ РёР·РѕР±СЂР°Р¶РµРЅРёР№.", "Only image files are allowed."));
+    alert(tr("Допускаются только файлы изображений.", "Only image files are allowed."));
     return;
   }
   const oversized = imageFiles.find((file) => Number(file?.size || 0) > 8 * 1024 * 1024);
   if (oversized) {
-    alert(tr("РћРґРёРЅ РёР· С„Р°Р№Р»РѕРІ Р±РѕР»СЊС€Рµ 8 РњР‘.", "One of files is larger than 8 MB."));
+    alert(tr("Один из файлов больше 8 МБ.", "One of files is larger than 8 MB."));
     return;
   }
   const uploadedUrls = [];
@@ -9451,7 +9469,7 @@ async function uploadProductEditPhotos(options = {}) {
       retryOnPost: true,
       maxRetries: 1,
     }).catch((e) => {
-      alert(e.message || tr("РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ С„РѕС‚Рѕ.", "Failed to upload photo."));
+      alert(e.message || tr("Не удалось загрузить фото.", "Failed to upload photo."));
       return null;
     });
     if (!payload?.url) continue;
@@ -9464,7 +9482,7 @@ async function uploadProductEditPhotos(options = {}) {
   }
   alert(
     tr(
-      `Р—Р°РіСЂСѓР¶РµРЅРѕ С„РѕС‚Рѕ: ${uploadedUrls.length}. Р¤РѕС‚Рѕ СЃСЂР°Р·Сѓ РґРѕР±Р°РІР»РµРЅС‹ РІ РєР°СЂС‚РѕС‡РєСѓ.`,
+      `Загружено фото: ${uploadedUrls.length}. Фото сразу добавлены в карточку.`,
       `Uploaded photos: ${uploadedUrls.length}. Photos were added to product card immediately.`
     )
   );
@@ -9486,7 +9504,7 @@ function renderProductEditPhotos() {
   if (!photosEl) return;
   const photos = Array.isArray(productEditPhotoOrder) ? productEditPhotoOrder : [];
   if (!photos.length) {
-    photosEl.innerHTML = `<div class="hint">${escapeHtml(tr("Р¤РѕС‚РѕРіСЂР°С„РёРё РЅРµ РЅР°Р№РґРµРЅС‹.", "No photos found."))}</div>`;
+    photosEl.innerHTML = `<div class="hint">${escapeHtml(tr("Фотографии не найдены.", "No photos found."))}</div>`;
     return;
   }
   photosEl.innerHTML = photos
@@ -9498,8 +9516,8 @@ function renderProductEditPhotos() {
       >
         <img src="${escapeHtml(String(url))}" alt="edit-photo-${idx + 1}" loading="lazy" class="product-detail-photo">
         <span class="product-edit-photo-index">${idx + 1}</span>
-        <button class="product-edit-photo-remove" type="button" data-remove-idx="${idx}" aria-label="${escapeHtml(tr("РЈРґР°Р»РёС‚СЊ С„РѕС‚Рѕ", "Remove photo"))}">вњ•</button>
-        ${idx === 0 ? `<span class="product-edit-photo-main">${escapeHtml(tr("Р“Р»Р°РІРЅРѕРµ", "Main"))}</span>` : ""}
+        <button class="product-edit-photo-remove" type="button" data-remove-idx="${idx}" aria-label="${escapeHtml(tr("Удалить фото", "Remove photo"))}">✕</button>
+        ${idx === 0 ? `<span class="product-edit-photo-main">${escapeHtml(tr("Главное", "Main"))}</span>` : ""}
       </div>
     `)
     .join("");
@@ -9595,14 +9613,14 @@ async function saveProductEditModal() {
     target_keywords: String(document.getElementById("productEditKeywords")?.value || "").trim(),
   };
   const updated = await withBusy(
-    tr("РЎРѕС…СЂР°РЅСЏРµРј РёР·РјРµРЅРµРЅРёСЏ РєР°СЂС‚РѕС‡РєРё С‚РѕРІР°СЂР°вЂ¦", "Saving product card changes..."),
+    tr("Сохраняем изменения карточки товара…", "Saving product card changes..."),
     () => requestJson(`/api/products/${id}`, {
       method: "PATCH",
       headers: authHeaders(),
       body: JSON.stringify(payload),
       timeoutMs: 120000,
     }),
-    tr("Р•СЃР»Рё РёР·РјРµРЅРµРЅРѕ РѕРїРёСЃР°РЅРёРµ, СЃРµСЂРІРёСЃ РѕС‚РїСЂР°РІРёС‚ РµРіРѕ РІ РјР°СЂРєРµС‚РїР»РµР№СЃ С‡РµСЂРµР· API.", "If description changed, service also sends it to marketplace API.")
+    tr("Если изменено описание, сервис отправит его в маркетплейс через API.", "If description changed, service also sends it to marketplace API.")
   ).catch((e) => {
     alert(e.message);
     return null;
@@ -9612,7 +9630,7 @@ async function saveProductEditModal() {
   productDetailsCache.delete(id);
   await loadProducts();
   closeProductEditModal();
-  alert(tr("РљР°СЂС‚РѕС‡РєР° С‚РѕРІР°СЂР° РѕР±РЅРѕРІР»РµРЅР°.", "Product card updated."));
+  alert(tr("Карточка товара обновлена.", "Product card updated."));
 }
 
 async function deleteLocalProduct(productId) {
@@ -9621,19 +9639,19 @@ async function deleteLocalProduct(productId) {
   const row = currentProducts.find((x) => Number(x?.id || 0) === id) || null;
   const label = String(row?.name || row?.article || `#${id}`);
   const confirmText = tr(
-    `РЈРґР°Р»РёС‚СЊ С‚РѕРІР°СЂ "${label}" С‚РѕР»СЊРєРѕ РёР· Р»РѕРєР°Р»СЊРЅРѕР№ Р±Р°Р·С‹?`,
+    `Удалить товар "${label}" только из локальной базы?`,
     `Delete "${label}" from local database only?`
   );
   if (!confirm(confirmText)) return;
 
   const deleted = await withBusy(
-    tr("РЈРґР°Р»СЏРµРј С‚РѕРІР°СЂ РёР· Р»РѕРєР°Р»СЊРЅРѕР№ Р±Р°Р·С‹вЂ¦", "Deleting product from local database..."),
+    tr("Удаляем товар из локальной базы…", "Deleting product from local database..."),
     () => requestJson(`/api/products/${id}/local`, {
       method: "DELETE",
       headers: authHeaders(),
       timeoutMs: 90000,
     }),
-    tr("РЈРґР°Р»СЏРµС‚СЃСЏ С‚РѕР»СЊРєРѕ Р»РѕРєР°Р»СЊРЅР°СЏ Р·Р°РїРёСЃСЊ. РќР° РјР°СЂРєРµС‚РїР»РµР№СЃРµ С‚РѕРІР°СЂ РЅРµ СѓРґР°Р»СЏРµС‚СЃСЏ.", "Only local record is deleted. Marketplace item is untouched.")
+    tr("Удаляется только локальная запись. На маркетплейсе товар не удаляется.", "Only local record is deleted. Marketplace item is untouched.")
   ).catch((e) => {
     alert(e.message);
     return null;
@@ -9644,7 +9662,7 @@ async function deleteLocalProduct(productId) {
   if (Number(selectedProductId || 0) === id) selectedProductId = null;
   invalidateModuleCache("products", "seo");
   await loadProducts();
-  alert(tr("РўРѕРІР°СЂ СѓРґР°Р»РµРЅ РёР· Р»РѕРєР°Р»СЊРЅРѕР№ Р±Р°Р·С‹.", "Product deleted from local database."));
+  alert(tr("Товар удален из локальной базы.", "Product deleted from local database."));
 }
 
 async function deleteSelectedLocalProducts() {
@@ -9652,16 +9670,16 @@ async function deleteSelectedLocalProducts() {
     .map((x) => Number(x || 0))
     .filter((x) => Number.isFinite(x) && x > 0);
   if (!ids.length) {
-    alert(tr("Р’С‹Р±РµСЂРёС‚Рµ С‚РѕРІР°СЂС‹ РґР»СЏ СѓРґР°Р»РµРЅРёСЏ.", "Select products to delete."));
+    alert(tr("Выберите товары для удаления.", "Select products to delete."));
     return;
   }
   const confirmText = tr(
-    `РЈРґР°Р»РёС‚СЊ ${ids.length} РІС‹Р±СЂР°РЅРЅС‹С… С‚РѕРІР°СЂРѕРІ С‚РѕР»СЊРєРѕ РёР· Р»РѕРєР°Р»СЊРЅРѕР№ Р±Р°Р·С‹?`,
+    `Удалить ${ids.length} выбранных товаров только из локальной базы?`,
     `Delete ${ids.length} selected products from local database only?`
   );
   if (!confirm(confirmText)) return;
   const payload = await withBusy(
-    tr("РЈРґР°Р»СЏРµРј РІС‹Р±СЂР°РЅРЅС‹Рµ С‚РѕРІР°СЂС‹ РёР· Р»РѕРєР°Р»СЊРЅРѕР№ Р±Р°Р·С‹вЂ¦", "Deleting selected products from local database..."),
+    tr("Удаляем выбранные товары из локальной базы…", "Deleting selected products from local database..."),
     () => requestJson("/api/products/local/delete", {
       method: "POST",
       headers: authHeaders(),
@@ -9670,7 +9688,7 @@ async function deleteSelectedLocalProducts() {
       retryOnPost: true,
       maxRetries: 1,
     }),
-    tr("РЈРґР°Р»СЏСЋС‚СЃСЏ С‚РѕР»СЊРєРѕ Р»РѕРєР°Р»СЊРЅС‹Рµ Р·Р°РїРёСЃРё. РќР° РјР°СЂРєРµС‚РїР»РµР№СЃРµ С‚РѕРІР°СЂС‹ РЅРµ СѓРґР°Р»СЏСЋС‚СЃСЏ.", "Only local records are removed. Marketplace items stay unchanged.")
+    tr("Удаляются только локальные записи. На маркетплейсе товары не удаляются.", "Only local records are removed. Marketplace items stay unchanged.")
   ).catch((e) => {
     alert(e.message);
     return null;
@@ -9681,7 +9699,7 @@ async function deleteSelectedLocalProducts() {
   syncSelectedProductsActions();
   invalidateModuleCache("products", "seo");
   await loadProducts();
-  alert(String(payload?.message || tr("Р’С‹Р±СЂР°РЅРЅС‹Рµ С‚РѕРІР°СЂС‹ СѓРґР°Р»РµРЅС‹ РёР· Р»РѕРєР°Р»СЊРЅРѕР№ Р±Р°Р·С‹.", "Selected products were removed from local database.")));
+  alert(String(payload?.message || tr("Выбранные товары удалены из локальной базы.", "Selected products were removed from local database.")));
 }
 
 function toggleProduct(id, checked) {
@@ -9704,19 +9722,19 @@ async function checkCurrentPositions(applyToAll) {
     if (selectedProductId) {
       selectedProducts.add(selectedProductId);
     } else {
-      return alert(tr("Р’С‹Р±РµСЂРёС‚Рµ С‚РѕРІР°СЂС‹ РІРѕ РІРєР»Р°РґРєРµ 'РўРѕРІР°СЂС‹' РёР»Рё Р·Р°РїСѓСЃС‚РёС‚Рµ РїСЂРѕРІРµСЂРєСѓ РґР»СЏ РІСЃРµС….", "Select products in Products tab or run check for all."));
+      return alert(tr("Выберите товары во вкладке 'Товары' или запустите проверку для всех.", "Select products in Products tab or run check for all."));
     }
   }
 
   const data = await withBusy(
-    tr("РџСЂРѕРІРµСЂСЏРµРј С‚РµРєСѓС‰РёРµ РїРѕР·РёС†РёРёвЂ¦", "Checking current rankings..."),
+    tr("Проверяем текущие позиции…", "Checking current rankings..."),
     () => requestJson("/api/seo/positions/check", {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify({ product_ids: [...selectedProducts], keywords, apply_to_all: applyToAll }),
       timeoutMs: 120000,
     }),
-    tr("Р•СЃР»Рё РїСЂРѕРІРµСЂРєР° РёРґРµС‚ РґРѕР»СЊС€Рµ 2 РјРёРЅСѓС‚, СЃРµСЂРІРёСЃ РїРѕРєР°Р¶РµС‚ РѕС€РёР±РєСѓ С‚Р°Р№РјР°СѓС‚Р°.", "If check takes over 2 minutes, timeout error is shown.")
+    tr("Если проверка идет дольше 2 минут, сервис покажет ошибку таймаута.", "If check takes over 2 minutes, timeout error is shown.")
   ).catch((e) => {
     alert(e.message);
     return null;
@@ -9725,34 +9743,34 @@ async function checkCurrentPositions(applyToAll) {
   invalidateModuleCache("products", "seo", "sales");
 
   const criterion = keywords.length
-    ? tr(`РљСЂРёС‚РµСЂРёР№: РїРѕР·РёС†РёРё СЂР°СЃСЃС‡РёС‚Р°РЅС‹ РїРѕ РІР°С€РёРј РєР»СЋС‡Р°Рј (${keywords.join(", ")}).`, `Criteria: rankings calculated by your keywords (${keywords.join(", ")}).`)
-    : tr("РљСЂРёС‚РµСЂРёР№: РїРѕР·РёС†РёРё СЂР°СЃСЃС‡РёС‚Р°РЅС‹ РїРѕ Р°РІС‚РѕСЏРґСЂСѓ РєР»СЋС‡РµР№ (РЅР°Р·РІР°РЅРёРµ + РѕРїРёСЃР°РЅРёРµ + РєРѕРЅРєСѓСЂРµРЅС‚С‹).", "Criteria: rankings calculated by auto semantic core (title + description + competitors).");
+    ? tr(`Критерий: позиции рассчитаны по вашим ключам (${keywords.join(", ")}).`, `Criteria: rankings calculated by your keywords (${keywords.join(", ")}).`)
+    : tr("Критерий: позиции рассчитаны по автоядру ключей (название + описание + конкуренты).", "Criteria: rankings calculated by auto semantic core (title + description + competitors).");
   document.getElementById("positionCheckResult").textContent = `${criterion}\n\n${JSON.stringify(data, null, 2)}`;
   await loadProducts();
   await loadDashboard();
   const withoutPos = data.filter((x) => !x.best_position || x.best_position <= 0).length;
   if (withoutPos > 0) {
-    alert(tr(`РџСЂРѕРІРµСЂРєР° Р·Р°РІРµСЂС€РµРЅР°. РўРѕРІР°СЂРѕРІ: ${data.length}. Р‘РµР· РґРѕСЃС‚РѕРІРµСЂРЅРѕР№ РїРѕР·РёС†РёРё: ${withoutPos}.`, `Check completed. Products: ${data.length}. Without reliable rank: ${withoutPos}.`));
+    alert(tr(`Проверка завершена. Товаров: ${data.length}. Без достоверной позиции: ${withoutPos}.`, `Check completed. Products: ${data.length}. Without reliable rank: ${withoutPos}.`));
   } else {
-    alert(tr(`РџСЂРѕРІРµСЂРєР° Р·Р°РІРµСЂС€РµРЅР°. РўРѕРІР°СЂРѕРІ: ${data.length}.`, `Check completed. Products: ${data.length}.`));
+    alert(tr(`Проверка завершена. Товаров: ${data.length}.`, `Check completed. Products: ${data.length}.`));
   }
 }
 
 async function generateSeo(applyToAll) {
-  if (!applyToAll && !selectedProducts.size) return alert(tr("Р’С‹Р±РµСЂРёС‚Рµ С‚РѕРІР°СЂС‹ РІРѕ РІРєР»Р°РґРєРµ 'РўРѕРІР°СЂС‹'.", "Select products in Products tab."));
+  if (!applyToAll && !selectedProducts.size) return alert(tr("Выберите товары во вкладке 'Товары'.", "Select products in Products tab."));
   const extraRaw = document.getElementById("extraKeywords").value.trim();
   const extra_keywords = extraRaw ? extraRaw.split(",").map((x) => x.trim()).filter(Boolean) : [];
   const target_position = Number(document.getElementById("targetPosition").value || 5);
 
   const data = await withBusy(
-    tr("Р“РµРЅРµСЂРёСЂСѓРµРј SEO-РѕРїРёСЃР°РЅРёСЏвЂ¦", "Generating SEO descriptions..."),
+    tr("Генерируем SEO-описания…", "Generating SEO descriptions..."),
     () => requestJson("/api/seo/generate", {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify({ product_ids: [...selectedProducts], extra_keywords, target_position, apply_to_all: applyToAll }),
       timeoutMs: 120000,
     }),
-    tr("Р“РµРЅРµСЂР°С†РёСЏ СѓС‡РёС‚С‹РІР°РµС‚ РєР»СЋС‡Рё Рё РєРѕРЅРєСѓСЂРµРЅС‚РЅСѓСЋ РІС‹РґР°С‡Сѓ, СЌС‚Рѕ РјРѕР¶РµС‚ Р·Р°РЅСЏС‚СЊ РґРѕ 2 РјРёРЅСѓС‚.", "Generation uses keywords and competitors, it can take up to 2 minutes.")
+    tr("Генерация учитывает ключи и конкурентную выдачу, это может занять до 2 минут.", "Generation uses keywords and competitors, it can take up to 2 minutes.")
   ).catch((e) => {
     alert(e.message);
     return null;
@@ -9763,14 +9781,14 @@ async function generateSeo(applyToAll) {
   await loadSeoJobs();
   await loadDashboard();
   if (data.length) renderSeoPreview(data[0]);
-  alert(tr(`РЎРіРµРЅРµСЂРёСЂРѕРІР°РЅРѕ Р·Р°РґР°С‡: ${data.length}`, `Generated jobs: ${data.length}`));
+  alert(tr(`Сгенерировано задач: ${data.length}`, `Generated jobs: ${data.length}`));
 }
 
 function renderSeoPreview(job) {
-  const title = job.product_name || tr("РўРѕРІР°СЂ", "Product");
+  const title = job.product_name || tr("Товар", "Product");
   const article = job.product_article || "-";
   document.getElementById("seoPreview").textContent = [
-    `${tr("РўРѕРІР°СЂ", "Product")}: ${title} (${article})`,
+    `${tr("Товар", "Product")}: ${title} (${article})`,
     "",
     job.generated_description || "",
   ].join("\n");
@@ -9779,15 +9797,15 @@ function renderSeoPreview(job) {
   if (!holder) return;
   const items = Array.isArray(job.competitor_items) ? job.competitor_items : [];
   if (!items.length) {
-    holder.innerHTML = `<div class="hint">${tr("Р”Р°РЅРЅС‹Рµ РїРѕ РєРѕРЅРєСѓСЂРµРЅС‚Р°Рј РїРѕСЏРІСЏС‚СЃСЏ РїРѕСЃР»Рµ РЅРѕРІРѕР№ РіРµРЅРµСЂР°С†РёРё SEO.", "Competitor data will appear after next SEO generation.")}</div>`;
+    holder.innerHTML = `<div class="hint">${tr("Данные по конкурентам появятся после новой генерации SEO.", "Competitor data will appear after next SEO generation.")}</div>`;
     return;
   }
   holder.innerHTML = items
     .map((c, idx) => {
-      const name = escapeHtml(c.name || `${tr("РљРѕРЅРєСѓСЂРµРЅС‚", "Competitor")} ${idx + 1}`);
+      const name = escapeHtml(c.name || `${tr("Конкурент", "Competitor")} ${idx + 1}`);
       const position = escapeHtml(c.position || idx + 1);
       const kws = Array.isArray(c.keywords) ? c.keywords.slice(0, 4).join(", ") : "";
-      const fallbackQ = encodeURIComponent((Array.isArray(c.keywords) && c.keywords.length ? c.keywords[0] : tr("С‚РѕРІР°СЂ wb", "wb product")));
+      const fallbackQ = encodeURIComponent((Array.isArray(c.keywords) && c.keywords.length ? c.keywords[0] : tr("товар wb", "wb product")));
       const href = c.url ? escapeHtml(c.url) : `https://www.wildberries.ru/catalog/0/search.aspx?search=${fallbackQ}`;
       const isLink = href.startsWith("http://") || href.startsWith("https://");
       return `
@@ -9814,7 +9832,7 @@ async function loadSeoJobs() {
 
   for (const j of currentJobs) {
     const article = j.product_article || "-";
-    const name = j.product_name || tr("РўРѕРІР°СЂ", "Product");
+    const name = j.product_name || tr("Товар", "Product");
     const rowEl = document.createElement("tr");
     rowEl.innerHTML = `
       <td><input type="checkbox" ${selectedJobs.has(j.id) ? "checked" : ""} onchange="toggleJob(${j.id}, this.checked)"></td>
@@ -9846,8 +9864,8 @@ function selectAllJobs() {
 }
 
 async function deleteSeoSelected() {
-  if (!selectedJobs.size) return alert(tr("Р’С‹Р±РµСЂРёС‚Рµ Р·Р°РґР°С‡Рё РґР»СЏ СѓРґР°Р»РµРЅРёСЏ", "Select jobs to delete"));
-  if (!confirm(tr("РЈРґР°Р»РёС‚СЊ РІС‹Р±СЂР°РЅРЅС‹Рµ SEO-Р·Р°РґР°С‡Рё?", "Delete selected SEO jobs?"))) return;
+  if (!selectedJobs.size) return alert(tr("Выберите задачи для удаления", "Select jobs to delete"));
+  if (!confirm(tr("Удалить выбранные SEO-задачи?", "Delete selected SEO jobs?"))) return;
   const body = JSON.stringify({ job_ids: [...selectedJobs], delete_all: false });
   const data = await tryRequestChain([
     { url: "/api/seo/jobs/delete", opts: { method: "POST", headers: authHeaders(), body } },
@@ -9864,11 +9882,11 @@ async function deleteSeoSelected() {
   selectedJobs.clear();
   await loadSeoJobs();
   await loadDashboard();
-  alert(data.message || tr("Р’С‹Р±СЂР°РЅРЅС‹Рµ SEO-Р·Р°РґР°С‡Рё СѓРґР°Р»РµРЅС‹.", "Selected SEO jobs removed."));
+  alert(data.message || tr("Выбранные SEO-задачи удалены.", "Selected SEO jobs removed."));
 }
 
 async function deleteSeoAll() {
-  if (!confirm(tr("РџРѕР»РЅРѕСЃС‚СЊСЋ РѕС‡РёСЃС‚РёС‚СЊ РІСЃРµ SEO-Р·Р°РґР°С‡Рё?", "Completely clear all SEO jobs?"))) return;
+  if (!confirm(tr("Полностью очистить все SEO-задачи?", "Completely clear all SEO jobs?"))) return;
   const body = JSON.stringify({ job_ids: [], delete_all: true });
   const data = await tryRequestChain([
     { url: "/api/seo/jobs/delete", opts: { method: "POST", headers: authHeaders(), body } },
@@ -9885,20 +9903,20 @@ async function deleteSeoAll() {
   selectedJobs.clear();
   await loadSeoJobs();
   await loadDashboard();
-  alert(data.message || tr("Р’СЃРµ SEO-Р·Р°РґР°С‡Рё СѓРґР°Р»РµРЅС‹.", "All SEO jobs removed."));
+  alert(data.message || tr("Все SEO-задачи удалены.", "All SEO jobs removed."));
 }
 
 async function applySeo() {
-  if (!selectedJobs.size) return alert(tr("Р’С‹Р±РµСЂРёС‚Рµ SEO Р·Р°РґР°С‡Рё", "Select SEO jobs"));
+  if (!selectedJobs.size) return alert(tr("Выберите SEO задачи", "Select SEO jobs"));
   const data = await withBusy(
-    tr("РџСЂРёРјРµРЅСЏРµРј SEO-РёР·РјРµРЅРµРЅРёСЏ РІ РјР°СЂРєРµС‚РїР»РµР№СЃвЂ¦", "Applying SEO updates to marketplace..."),
+    tr("Применяем SEO-изменения в маркетплейс…", "Applying SEO updates to marketplace..."),
     () => requestJson("/api/seo/apply", {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify({ job_ids: [...selectedJobs] }),
       timeoutMs: 120000,
     }),
-    tr("РџРѕРґРѕР¶РґРёС‚Рµ Р·Р°РІРµСЂС€РµРЅРёСЏ РѕС‚РїСЂР°РІРєРё РѕР±РЅРѕРІР»РµРЅРёР№.", "Wait for update publishing to finish.")
+    tr("Подождите завершения отправки обновлений.", "Wait for update publishing to finish.")
   ).catch((e) => {
     alert(e.message);
     return null;
@@ -9907,20 +9925,20 @@ async function applySeo() {
   invalidateModuleCache("seo", "products", "sales");
   await loadSeoJobs();
   await loadDashboard();
-  alert(tr(`РџСЂРёРјРµРЅРµРЅРѕ: ${data.length}`, `Applied: ${data.length}`));
+  alert(tr(`Применено: ${data.length}`, `Applied: ${data.length}`));
 }
 
 async function recheckSelected() {
-  if (!selectedJobs.size) return alert(tr("Р’С‹Р±РµСЂРёС‚Рµ SEO Р·Р°РґР°С‡Рё РґР»СЏ recheck", "Select SEO jobs for recheck"));
+  if (!selectedJobs.size) return alert(tr("Выберите SEO задачи для recheck", "Select SEO jobs for recheck"));
   const data = await withBusy(
-    tr("Р—Р°РїСѓСЃРєР°РµРј recheck РІС‹Р±СЂР°РЅРЅС‹С… Р·Р°РґР°С‡вЂ¦", "Running recheck for selected jobs..."),
+    tr("Запускаем recheck выбранных задач…", "Running recheck for selected jobs..."),
     () => requestJson("/api/seo/recheck", {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify({ job_ids: [...selectedJobs], recheck_all_due: false }),
       timeoutMs: 120000,
     }),
-    tr("РџРµСЂРµРѕС†РµРЅРєР° Р·Р°РІРёСЃРёС‚ РѕС‚ РґРѕСЃС‚СѓРїРЅРѕСЃС‚Рё РїРѕРёСЃРєР° WB/Ozon.", "Recheck depends on WB/Ozon search availability.")
+    tr("Переоценка зависит от доступности поиска WB/Ozon.", "Recheck depends on WB/Ozon search availability.")
   ).catch((e) => {
     alert(e.message);
     return null;
@@ -9929,19 +9947,19 @@ async function recheckSelected() {
   invalidateModuleCache("seo", "products", "sales");
   await loadSeoJobs();
   await loadDashboard();
-  alert(tr(`РџРµСЂРµРѕС†РµРЅРµРЅРѕ Р·Р°РґР°С‡: ${data.length}`, `Rechecked jobs: ${data.length}`));
+  alert(tr(`Переоценено задач: ${data.length}`, `Rechecked jobs: ${data.length}`));
 }
 
 async function recheckDue() {
   const data = await withBusy(
-    tr("РџРµСЂРµРѕС†РµРЅРёРІР°РµРј РїСЂРѕСЃСЂРѕС‡РµРЅРЅС‹Рµ Р·Р°РґР°С‡РёвЂ¦", "Rechecking overdue jobs..."),
+    tr("Переоцениваем просроченные задачи…", "Rechecking overdue jobs..."),
     () => requestJson("/api/seo/recheck", {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify({ job_ids: [], recheck_all_due: true }),
       timeoutMs: 120000,
     }),
-    tr("РџСЂРѕС†РµСЃСЃ РјРѕР¶РµС‚ Р·Р°РЅСЏС‚СЊ РґРѕ 2 РјРёРЅСѓС‚.", "This can take up to 2 minutes.")
+    tr("Процесс может занять до 2 минут.", "This can take up to 2 minutes.")
   ).catch((e) => {
     alert(e.message);
     return null;
@@ -9950,7 +9968,7 @@ async function recheckDue() {
   invalidateModuleCache("seo", "products", "sales");
   await loadSeoJobs();
   await loadDashboard();
-  alert(tr(`РџРµСЂРµРѕС†РµРЅРµРЅРѕ РїСЂРѕСЃСЂРѕС‡РµРЅРЅС‹С… Р·Р°РґР°С‡: ${data.length}`, `Rechecked overdue jobs: ${data.length}`));
+  alert(tr(`Переоценено просроченных задач: ${data.length}`, `Rechecked overdue jobs: ${data.length}`));
 }
 
 async function loadDashboard() {
@@ -9958,11 +9976,11 @@ async function loadDashboard() {
   if (!d) return false;
 
   const stats = [
-    [tr("РўРѕРІР°СЂРѕРІ", "Products"), d.total_products],
-    [tr("SEO Р·Р°РґР°С‡", "SEO jobs"), d.total_jobs],
-    [tr("РџСЂРёРјРµРЅРµРЅРѕ", "Applied"), d.applied_jobs],
-    [tr("Р’ СЂР°Р±РѕС‚Рµ", "In progress"), d.in_progress_jobs],
-    [tr("РўРѕРї-5", "Top-5"), d.top5_products],
+    [tr("Товаров", "Products"), d.total_products],
+    [tr("SEO задач", "SEO jobs"), d.total_jobs],
+    [tr("Применено", "Applied"), d.applied_jobs],
+    [tr("В работе", "In progress"), d.in_progress_jobs],
+    [tr("Топ-5", "Top-5"), d.top5_products],
   ];
 
   const maxVal = Math.max(...stats.map((x) => x[1]), 1);
@@ -10133,28 +10151,28 @@ function renderSalesTotals() {
   }
   totals.gross_profit = Number(totals.revenue || 0) - Number(totals.ad_spend || 0) - Number(totals.penalties || 0);
   host.innerHTML = `
-    <article class="sales-kpi"><span>${tr("Р—Р°РєР°Р·С‹", "Orders")}</span><strong>${formatInt(totals.orders)}</strong></article>
-    <article class="sales-kpi"><span>${tr("РЁС‚СѓРєРё", "Units")}</span><strong>${formatInt(totals.units)}</strong></article>
-    <article class="sales-kpi"><span>${tr("Р’С‹РєСѓРїС‹", "Buyouts")}</span><strong>${formatInt(totals.buyouts)}</strong></article>
-    <article class="sales-kpi"><span>${tr("Р’С‹СЂСѓС‡РєР°", "Revenue")}</span><strong>${formatMoney(totals.revenue)}</strong></article>
-    <article class="sales-kpi"><span>${tr("РћС‚РєР°Р·С‹", "Returns")}</span><strong>${formatInt(totals.returns)}</strong></article>
-    <article class="sales-kpi"><span>${tr("Р РµРєР»Р°РјР°", "Ads spend")}</span><strong>${formatMoney(totals.ad_spend)}</strong></article>
-    <article class="sales-kpi"><span>${tr("Р’Р°Р»РѕРІР°СЏ РїСЂРёР±С‹Р»СЊ", "Gross Profit")}</span><strong>${formatMoney(totals.gross_profit)}</strong></article>
+    <article class="sales-kpi"><span>${tr("Заказы", "Orders")}</span><strong>${formatInt(totals.orders)}</strong></article>
+    <article class="sales-kpi"><span>${tr("Штуки", "Units")}</span><strong>${formatInt(totals.units)}</strong></article>
+    <article class="sales-kpi"><span>${tr("Выкупы", "Buyouts")}</span><strong>${formatInt(totals.buyouts)}</strong></article>
+    <article class="sales-kpi"><span>${tr("Выручка", "Revenue")}</span><strong>${formatMoney(totals.revenue)}</strong></article>
+    <article class="sales-kpi"><span>${tr("Отказы", "Returns")}</span><strong>${formatInt(totals.returns)}</strong></article>
+    <article class="sales-kpi"><span>${tr("Реклама", "Ads spend")}</span><strong>${formatMoney(totals.ad_spend)}</strong></article>
+    <article class="sales-kpi"><span>${tr("Валовая прибыль", "Gross Profit")}</span><strong>${formatMoney(totals.gross_profit)}</strong></article>
   `;
   if (extraHost) {
     extraHost.innerHTML = `
-      <article class="sales-kpi"><span>${tr("РЎСѓРјРјР° Р·Р°РєР°Р·РѕРІ", "Orders amount")}</span><strong>${formatMoney(totals.order_amount)}</strong></article>
-      <article class="sales-kpi"><span>${tr("РЎСѓРјРјР° РІС‹РєСѓРїРѕРІ", "Buyouts amount")}</span><strong>${formatMoney(totals.buyout_amount)}</strong></article>
-      <article class="sales-kpi"><span>${tr("РџСЂРёС…РѕРґ", "Income")}</span><strong>${formatMoney(totals.income)}</strong></article>
-      <article class="sales-kpi"><span>${tr("Р Р°СЃС…РѕРґ", "Expense")}</span><strong>${formatMoney(totals.expense)}</strong></article>
-      <article class="sales-kpi"><span>${tr("РР·Рј. Р±Р°Р»Р°РЅСЃР°", "Net change")}</span><strong>${formatMoney(totals.net)}</strong></article>
-      <article class="sales-kpi"><span>${tr("РЁС‚СЂР°С„С‹", "Penalties")}</span><strong>${formatMoney(totals.penalties)}</strong></article>
-      <article class="sales-kpi"><span>${tr("РљРѕРјРёСЃСЃРёСЏ", "Commission")}</span><strong>${formatMoney(totals.commission)}</strong></article>
-      <article class="sales-kpi"><span>${tr("Р›РѕРіРёСЃС‚РёРєР°", "Logistics")}</span><strong>${formatMoney(totals.logistics)}</strong></article>
-      <article class="sales-kpi"><span>${tr("РҐСЂР°РЅРµРЅРёРµ", "Storage")}</span><strong>${formatMoney(totals.storage)}</strong></article>
-      <article class="sales-kpi"><span>${tr("РЈРґРµСЂР¶Р°РЅРёСЏ", "Deductions")}</span><strong>${formatMoney(totals.deductions)}</strong></article>
-      <article class="sales-kpi"><span>${tr("РџСЂРёРµРјРєР°", "Acceptance")}</span><strong>${formatMoney(totals.acceptance)}</strong></article>
-      <article class="sales-kpi"><span>${tr("РџСЂРѕС‡РёРµ СЂР°СЃС…РѕРґС‹", "Other expense")}</span><strong>${formatMoney(totals.other_expense)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Сумма заказов", "Orders amount")}</span><strong>${formatMoney(totals.order_amount)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Сумма выкупов", "Buyouts amount")}</span><strong>${formatMoney(totals.buyout_amount)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Приход", "Income")}</span><strong>${formatMoney(totals.income)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Расход", "Expense")}</span><strong>${formatMoney(totals.expense)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Изм. баланса", "Net change")}</span><strong>${formatMoney(totals.net)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Штрафы", "Penalties")}</span><strong>${formatMoney(totals.penalties)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Комиссия", "Commission")}</span><strong>${formatMoney(totals.commission)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Логистика", "Logistics")}</span><strong>${formatMoney(totals.logistics)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Хранение", "Storage")}</span><strong>${formatMoney(totals.storage)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Удержания", "Deductions")}</span><strong>${formatMoney(totals.deductions)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Приемка", "Acceptance")}</span><strong>${formatMoney(totals.acceptance)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Прочие расходы", "Other expense")}</span><strong>${formatMoney(totals.other_expense)}</strong></article>
     `;
   }
   if (extraWrap) {
@@ -10168,7 +10186,7 @@ function renderSalesChart(points) {
   if (!svg || !meta) return;
   if (!Array.isArray(points) || !points.length) {
     clearChartHost(svg);
-    meta.textContent = tr("РќРµС‚ РґР°РЅРЅС‹С… Р·Р° РїРµСЂРёРѕРґ.", "No data for selected period.");
+    meta.textContent = tr("Нет данных за период.", "No data for selected period.");
     return;
   }
   const metric = (document.getElementById("salesMetricMode")?.value || "units").trim().toLowerCase();
@@ -10241,7 +10259,7 @@ function renderSalesChart(points) {
   const comparePoints = normalizeChartPoints(compareSource);
   if (!chartPoints.length) {
     clearChartHost(svg);
-    meta.textContent = tr("РќРµС‚ РґР°РЅРЅС‹С… Р·Р° РїРµСЂРёРѕРґ.", "No data for selected period.");
+    meta.textContent = tr("Нет данных за период.", "No data for selected period.");
     return;
   }
   const labels = chartPoints.map((x) => x.label);
@@ -10411,8 +10429,8 @@ function renderSalesChart(points) {
       return normalizeMetricValue(Number(valueOf(dayRow, metric) / bucketsPerDay));
     });
   };
-  const currentLabel = salesCurrentLabel || tr("РўРµРєСѓС‰РёР№ РїРµСЂРёРѕРґ", "Current period");
-  const compareLabel = salesCompareLabel || tr("РџСЂРµРґС‹РґСѓС‰РёР№ РїРµСЂРёРѕРґ", "Previous period");
+  const currentLabel = salesCurrentLabel || tr("Текущий период", "Current period");
+  const compareLabel = salesCompareLabel || tr("Предыдущий период", "Previous period");
   const palette = {
     wb: { current: "#2ec5ff", previous: "#7c61ff" },
     ozon: { current: "#34d9a3", previous: "#ff9f6b" },
@@ -10420,7 +10438,7 @@ function renderSalesChart(points) {
   if (showWb) {
     series.push({
       key: "wb",
-      label: `WB вЂў ${currentLabel}`,
+      label: `WB • ${currentLabel}`,
       color: palette.wb.current,
       values: resolveMarketplaceSeries(chartPoints, currentMaps, "wb"),
     });
@@ -10428,7 +10446,7 @@ function renderSalesChart(points) {
   if (showOzon) {
     series.push({
       key: "ozon",
-      label: `Ozon вЂў ${currentLabel}`,
+      label: `Ozon • ${currentLabel}`,
       color: palette.ozon.current,
       values: resolveMarketplaceSeries(chartPoints, currentMaps, "ozon"),
     });
@@ -10442,7 +10460,7 @@ function renderSalesChart(points) {
     if (showWb) {
       series.push({
         key: "wb_prev",
-        label: `WB вЂў ${compareLabel}`,
+        label: `WB • ${compareLabel}`,
         color: palette.wb.previous,
         values: alignCompareValues("wb"),
       });
@@ -10450,7 +10468,7 @@ function renderSalesChart(points) {
     if (showOzon) {
       series.push({
         key: "ozon_prev",
-        label: `Ozon вЂў ${compareLabel}`,
+        label: `Ozon • ${compareLabel}`,
         color: palette.ozon.previous,
         values: alignCompareValues("ozon"),
       });
@@ -10458,7 +10476,7 @@ function renderSalesChart(points) {
   }
   if (!series.length) {
     clearChartHost(svg);
-    meta.textContent = tr("Р’С‹Р±РµСЂРёС‚Рµ С…РѕС‚СЏ Р±С‹ РѕРґРЅСѓ Р»РёРЅРёСЋ РіСЂР°С„РёРєР°.", "Select at least one chart line.");
+    meta.textContent = tr("Выберите хотя бы одну линию графика.", "Select at least one chart line.");
     return;
   }
 
@@ -10515,26 +10533,26 @@ function renderSalesChart(points) {
     return `${line}${points}`;
   }).join("");
   const metricLabels = {
-    units: tr("РЁС‚СѓРєРё", "Units"),
-    orders: tr("Р—Р°РєР°Р·С‹", "Orders"),
-    buyouts: tr("Р’С‹РєСѓРїС‹", "Buyouts"),
-    order_amount: tr("РЎСѓРјРјР° Р·Р°РєР°Р·РѕРІ", "Orders amount"),
-    buyout_amount: tr("РЎСѓРјРјР° РІС‹РєСѓРїРѕРІ", "Buyouts amount"),
-    revenue: tr("Р’С‹СЂСѓС‡РєР°", "Revenue"),
-    income: tr("РџСЂРёС…РѕРґ", "Income"),
-    expense: tr("Р Р°СЃС…РѕРґ", "Expense"),
-    net: tr("РР·РјРµРЅРµРЅРёРµ Р±Р°Р»Р°РЅСЃР°", "Net change"),
-    returns: tr("РћС‚РєР°Р·С‹", "Returns"),
-    ad_spend: tr("Р РµРєР»Р°РјР°", "Ads Spend"),
-    penalties: tr("РЁС‚СЂР°С„С‹", "Penalties"),
-    commission: tr("РљРѕРјРёСЃСЃРёСЏ", "Commission"),
-    logistics: tr("Р›РѕРіРёСЃС‚РёРєР°", "Logistics"),
-    storage: tr("РҐСЂР°РЅРµРЅРёРµ", "Storage"),
-    deductions: tr("РЈРґРµСЂР¶Р°РЅРёСЏ", "Deductions"),
-    acceptance: tr("РџСЂРёРµРјРєР°", "Acceptance"),
-    other_expense: tr("РџСЂРѕС‡РёРµ СЂР°СЃС…РѕРґС‹", "Other expense"),
+    units: tr("Штуки", "Units"),
+    orders: tr("Заказы", "Orders"),
+    buyouts: tr("Выкупы", "Buyouts"),
+    order_amount: tr("Сумма заказов", "Orders amount"),
+    buyout_amount: tr("Сумма выкупов", "Buyouts amount"),
+    revenue: tr("Выручка", "Revenue"),
+    income: tr("Приход", "Income"),
+    expense: tr("Расход", "Expense"),
+    net: tr("Изменение баланса", "Net change"),
+    returns: tr("Отказы", "Returns"),
+    ad_spend: tr("Реклама", "Ads Spend"),
+    penalties: tr("Штрафы", "Penalties"),
+    commission: tr("Комиссия", "Commission"),
+    logistics: tr("Логистика", "Logistics"),
+    storage: tr("Хранение", "Storage"),
+    deductions: tr("Удержания", "Deductions"),
+    acceptance: tr("Приемка", "Acceptance"),
+    other_expense: tr("Прочие расходы", "Other expense"),
   };
-  const metricLabel = metricLabels[metric] || tr("РЁС‚СѓРєРё", "Units");
+  const metricLabel = metricLabels[metric] || tr("Штуки", "Units");
   const moneyMetrics = new Set([
     "revenue",
     "income",
@@ -10557,7 +10575,7 @@ function renderSalesChart(points) {
       const total = item.values.reduce((acc, val) => acc + Number(val || 0), 0);
       return `<span class="trend-series-item" style="--series-color:${item.color}">${escapeHtml(item.label)} <b>${escapeHtml(formatValue(total))}</b></span>`;
     })
-    .join(" вЂў ");
+    .join(" • ");
   const topSeries = series[0] || { values: [] };
   const topValues = Array.isArray(topSeries.values) ? topSeries.values : [];
   const peak = topValues.length ? Math.max(...topValues) : 0;
@@ -10632,8 +10650,8 @@ function renderSalesChart(points) {
       });
       meta.innerHTML = `
         <span>${metricLabel}: ${seriesSummaryHtml}</span>
-        <span>${tr("РџРёРє", "Peak")}: <b>${formatValue(peak)}</b></span>
-        <span>${tr("РњРёРЅ", "Min")}: <b>${formatValue(low)}</b></span>
+        <span>${tr("Пик", "Peak")}: <b>${formatValue(peak)}</b></span>
+        <span>${tr("Мин", "Min")}: <b>${formatValue(low)}</b></span>
       `;
       return;
     }
@@ -10648,8 +10666,8 @@ function renderSalesChart(points) {
 
   meta.innerHTML = `
     <span>${metricLabel}: ${seriesSummaryHtml}</span>
-    <span>${tr("РџРёРє", "Peak")}: <b>${formatValue(peak)}</b></span>
-    <span>${tr("РњРёРЅ", "Min")}: <b>${formatValue(low)}</b></span>
+    <span>${tr("Пик", "Peak")}: <b>${formatValue(peak)}</b></span>
+    <span>${tr("Мин", "Min")}: <b>${formatValue(low)}</b></span>
   `;
 }
 
@@ -10767,26 +10785,26 @@ function isSalesSourceWarningFatal(source, warnings = []) {
   return safeWarnings.some((item) => {
     const warning = String(item || "").toLowerCase();
     if (!warning) return false;
-    if (warning.includes("РѕС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё СЃС‚Р°С‚РёСЃС‚РёРєРё")) return true;
+    if (warning.includes("ошибка загрузки статистики")) return true;
     if (source === "wb") {
       if (!warning.includes("wb")) return false;
-      if (warning.includes("РєР°РјРїР°РЅРёР№ РјРЅРѕРіРѕ")) return false;
-      if (warning.includes("РїРѕРєР°Р·Р°РЅС‹ РєСЌС€РёСЂРѕРІР°РЅРЅС‹Рµ РґР°РЅРЅС‹Рµ")) return false;
+      if (warning.includes("кампаний много")) return false;
+      if (warning.includes("показаны кэшированные данные")) return false;
       return (
-        warning.includes("РєР»СЋС‡") ||
+        warning.includes("ключ") ||
         warning.includes("sales api") ||
         warning.includes("429") ||
         warning.includes("error") ||
-        warning.includes("РЅРµРґРѕСЃС‚СѓРї")
+        warning.includes("недоступ")
       );
     }
     if (!warning.includes("ozon")) return false;
     return (
-      warning.includes("РєР»СЋС‡") ||
+      warning.includes("ключ") ||
       warning.includes("client_id") ||
       warning.includes("analytics api") ||
       warning.includes("error") ||
-      warning.includes("РЅРµРґРѕСЃС‚СѓРї")
+      warning.includes("недоступ")
     );
   });
 }
@@ -10808,7 +10826,7 @@ function renderSalesStats() {
   tbody.innerHTML = "";
   if (!Array.isArray(salesRows) || !salesRows.length) {
     const trEl = document.createElement("tr");
-    trEl.innerHTML = `<td colspan="9">${tr("РќРµС‚ РїСЂРѕРґР°Р¶ Р·Р° РїРµСЂРёРѕРґ.", "No sales for selected period.")}</td>`;
+    trEl.innerHTML = `<td colspan="9">${tr("Нет продаж за период.", "No sales for selected period.")}</td>`;
     tbody.appendChild(trEl);
   } else {
     for (const row of salesRows) {
@@ -10837,7 +10855,7 @@ function renderSalesStats() {
 async function loadSalesStats(retryAttempt = 0, forceRefresh = false) {
   if (modulesLoaded && !enabledModules.has("sales_stats")) {
     const meta = document.getElementById("salesStatsMeta");
-    if (meta) meta.textContent = tr("РњРѕРґСѓР»СЊ СЃС‚Р°С‚РёСЃС‚РёРєРё РїСЂРѕРґР°Р¶ РѕС‚РєР»СЋС‡РµРЅ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂРѕРј.", "Sales statistics module is disabled by admin.");
+    if (meta) meta.textContent = tr("Модуль статистики продаж отключен администратором.", "Sales statistics module is disabled by admin.");
     salesRows = [];
     salesChartRows = [];
     salesCompareRows = [];
@@ -10875,11 +10893,11 @@ async function loadSalesStats(retryAttempt = 0, forceRefresh = false) {
       compare_from = toYmd(prevFrom);
       compare_to = toYmd(prevTo);
       salesCurrentLabel = diffDays === 0
-        ? tr("РЎРµРіРѕРґРЅСЏ", "Today")
-        : tr("РўРµРєСѓС‰РёР№ РїРµСЂРёРѕРґ", "Current period");
+        ? tr("Сегодня", "Today")
+        : tr("Текущий период", "Current period");
       salesCompareLabel = diffDays === 0
-        ? tr("Р’С‡РµСЂР°", "Yesterday")
-        : tr("РџСЂРµРґС‹РґСѓС‰РёР№ РїРµСЂРёРѕРґ", "Previous period");
+        ? tr("Вчера", "Yesterday")
+        : tr("Предыдущий период", "Previous period");
     }
   }
   const qp = new URLSearchParams();
@@ -10913,7 +10931,7 @@ async function loadSalesStats(retryAttempt = 0, forceRefresh = false) {
     && (Date.now() - Number(salesLastLoadedAt || 0)) < 14000
   ) {
     if (meta) meta.textContent = tr(
-      "РџРѕРєР°Р·Р°РЅС‹ Р°РєС‚СѓР°Р»СЊРЅС‹Рµ РґР°РЅРЅС‹Рµ Р±РµР· РїРѕРІС‚РѕСЂРЅРѕРіРѕ Р·Р°РїСЂРѕСЃР° Рє API.",
+      "Показаны актуальные данные без повторного запроса к API.",
       "Showing up-to-date data without another API request."
     );
     salesLoadState = "success";
@@ -10923,7 +10941,7 @@ async function loadSalesStats(retryAttempt = 0, forceRefresh = false) {
     salesLoadInflightKey = "";
     return true;
   }
-  if (meta) meta.textContent = tr("Р—Р°РіСЂСѓР·РєР° СЃС‚Р°С‚РёСЃС‚РёРєРё РїСЂРѕРґР°Р¶...", "Loading sales statistics...");
+  if (meta) meta.textContent = tr("Загрузка статистики продаж...", "Loading sales statistics...");
   
   salesLoadState = "loading";
   salesLoadProgress = { active: true, total: market === "all" ? 2 : 1, loaded: 0 };
@@ -10941,7 +10959,7 @@ async function loadSalesStats(retryAttempt = 0, forceRefresh = false) {
     });
     if (data) break;
     if (attempt < 1) {
-      updateSalesLoadStatus(tr("РџРѕРІС‚РѕСЂРЅС‹Р№ Р·Р°РїСЂРѕСЃ СЃС‚Р°С‚РёСЃС‚РёРєРё...", "Retrying sales request..."));
+      updateSalesLoadStatus(tr("Повторный запрос статистики...", "Retrying sales request..."));
       await new Promise((resolve) => setTimeout(resolve, 900));
     }
   }
@@ -10992,7 +11010,7 @@ async function loadSalesStats(retryAttempt = 0, forceRefresh = false) {
   if (hasWb429 && (market === "wb" || market === "all") && retryAttempt < 1) {
     if (meta) {
       meta.textContent = tr(
-        "WB API РІСЂРµРјРµРЅРЅРѕ РѕРіСЂР°РЅРёС‡РёР» Р·Р°РїСЂРѕСЃ (429). РџРѕРІС‚РѕСЂСЏРµРј Р·Р°РіСЂСѓР·РєСѓ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё...",
+        "WB API временно ограничил запрос (429). Повторяем загрузку автоматически...",
         "WB API rate-limited this request (429). Retrying automatically..."
       );
     }
@@ -11002,7 +11020,7 @@ async function loadSalesStats(retryAttempt = 0, forceRefresh = false) {
       loaded: 0,
     };
     salesLoadState = "loading";
-    updateSalesLoadStatus(tr("РџРѕРІС‚РѕСЂРЅС‹Р№ Р·Р°РїСЂРѕСЃ СЃС‚Р°С‚РёСЃС‚РёРєРё...", "Retrying sales request..."));
+    updateSalesLoadStatus(tr("Повторный запрос статистики...", "Retrying sales request..."));
     await new Promise((resolve) => setTimeout(resolve, 1200));
     if (runToken !== salesLoadToken) return;
     await loadSalesStats(retryAttempt + 1, forceRefresh);
@@ -11087,7 +11105,7 @@ async function loadBilling() {
 async function changeBillingPlan() {
   if (!enabledModules.has("billing")) return;
   const plan_code = (document.getElementById("billingPlanSelect")?.value || "").trim().toLowerCase();
-  if (!plan_code) return alert(tr("Р’С‹Р±РµСЂРёС‚Рµ С‚Р°СЂРёС„", "Select plan"));
+  if (!plan_code) return alert(tr("Выберите тариф", "Select plan"));
   const data = await requestJson("/api/billing/plan", {
     method: "POST",
     headers: authHeaders(),
@@ -11098,7 +11116,7 @@ async function changeBillingPlan() {
     return null;
   });
   if (!data) return;
-  alert(tr("РўР°СЂРёС„ РѕР±РЅРѕРІР»РµРЅ", "Plan updated"));
+  alert(tr("Тариф обновлен", "Plan updated"));
   await loadBilling();
 }
 
@@ -11113,7 +11131,7 @@ async function renewBilling() {
     return null;
   });
   if (!data) return;
-  alert(tr("РџСЂРѕРґР»РµРЅРёРµ РІС‹РїРѕР»РЅРµРЅРѕ", "Renewal completed"));
+  alert(tr("Продление выполнено", "Renewal completed"));
   await loadBilling();
 }
 
@@ -11143,7 +11161,7 @@ function openProfileSectionModal(sectionId) {
   activeProfileSectionId = key;
   host.appendChild(node);
   const header = String(node.dataset.profileSectionTitle || node.querySelector("h3")?.textContent || "").trim();
-  if (title) title.textContent = header || tr("РџСЂРѕС„РёР»СЊ РєРѕРјРїР°РЅРёРё", "Company profile");
+  if (title) title.textContent = header || tr("Профиль компании", "Company profile");
   modal.classList.remove("hidden");
 }
 
@@ -11222,10 +11240,10 @@ function renderProfileData(data) {
     const planCode = String(data.plan_code || "-").trim() || "-";
     const monthlyPrice = formatMoney(Number(data.monthly_price || 0));
     planSummaryTable.innerHTML = `
-      <tr><td>${escapeHtml(tr("РџР»Р°РЅ", "Plan"))}</td><td><b>${escapeHtml(planCode)}</b></td></tr>
-      <tr><td>${escapeHtml(tr("РЎС‚Р°С‚СѓСЃ", "Status"))}</td><td>${escapeHtml(planStatus)}</td></tr>
-      <tr><td>${escapeHtml(tr("Р¦РµРЅР°/РјРµСЃ.", "Monthly price"))}</td><td>${escapeHtml(monthlyPrice)}</td></tr>
-      <tr><td>${escapeHtml(tr("РџСЂРѕРґР»РµРЅРёРµ", "Renew date"))}</td><td>${escapeHtml(renewAt || "-")}</td></tr>
+      <tr><td>${escapeHtml(tr("План", "Plan"))}</td><td><b>${escapeHtml(planCode)}</b></td></tr>
+      <tr><td>${escapeHtml(tr("Статус", "Status"))}</td><td>${escapeHtml(planStatus)}</td></tr>
+      <tr><td>${escapeHtml(tr("Цена/мес.", "Monthly price"))}</td><td>${escapeHtml(monthlyPrice)}</td></tr>
+      <tr><td>${escapeHtml(tr("Продление", "Renew date"))}</td><td>${escapeHtml(renewAt || "-")}</td></tr>
     `;
   }
 
@@ -11233,14 +11251,14 @@ function renderProfileData(data) {
   const keysTable = document.getElementById("profileKeysTable");
   if (keysTable) {
     if (!credentials.length) {
-      keysTable.innerHTML = `<tr><td colspan="3">${escapeHtml(tr("РљР»СЋС‡Рё РЅРµ РїРѕРґРєР»СЋС‡РµРЅС‹.", "No API keys connected."))}</td></tr>`;
+      keysTable.innerHTML = `<tr><td colspan="3">${escapeHtml(tr("Ключи не подключены.", "No API keys connected."))}</td></tr>`;
     } else {
       keysTable.innerHTML = credentials
         .map((row) => `
           <tr>
             <td>${escapeHtml(String(row.marketplace || "-").toUpperCase())}</td>
             <td>${escapeHtml(String(row.api_key_masked || "-"))}</td>
-            <td>${row.active ? escapeHtml(tr("РђРєС‚РёРІРµРЅ", "Active")) : escapeHtml(tr("РћС‚РєР»СЋС‡РµРЅ", "Disabled"))}</td>
+            <td>${row.active ? escapeHtml(tr("Активен", "Active")) : escapeHtml(tr("Отключен", "Disabled"))}</td>
           </tr>
         `)
         .join("");
@@ -11256,29 +11274,29 @@ function renderProfileData(data) {
   const companySummary = document.getElementById("profileCompanySummary");
   if (companySummary) {
     const parts = [String(data.company_name || "").trim(), String(data.full_name || "").trim()].filter(Boolean);
-    companySummary.textContent = parts.join(" вЂў ") || "-";
+    companySummary.textContent = parts.join(" • ") || "-";
   }
   const planSummaryShort = document.getElementById("profilePlanSummaryShort");
   if (planSummaryShort) {
     const code = String(data.plan_code || "-").trim() || "-";
     const status = String(data.plan_status || "-").trim() || "-";
-    planSummaryShort.textContent = `${code} вЂў ${status}`;
+    planSummaryShort.textContent = `${code} • ${status}`;
   }
   const keysSummaryShort = document.getElementById("profileKeysSummaryShort");
   if (keysSummaryShort) {
     const activeCount = credentials.filter((x) => Boolean(x?.active)).length;
-    keysSummaryShort.textContent = tr(`${activeCount} Р°РєС‚РёРІРЅС‹С…`, `${activeCount} active`);
+    keysSummaryShort.textContent = tr(`${activeCount} активных`, `${activeCount} active`);
   }
   const aiSummaryShort = document.getElementById("profileAiSummaryShort");
   if (aiSummaryShort) {
     const effective = profileAiState?.effective || null;
     aiSummaryShort.textContent = effective
-      ? `${effective.provider || "-"} вЂў ${effective.model || "-"}`
-      : tr("РќРµ РІС‹Р±СЂР°РЅ", "Not selected");
+      ? `${effective.provider || "-"} • ${effective.model || "-"}`
+      : tr("Не выбран", "Not selected");
   }
   const teamSummaryShort = document.getElementById("profileTeamSummaryShort");
   if (teamSummaryShort) {
-    teamSummaryShort.textContent = tr(`${Array.isArray(data.team_members) ? data.team_members.length : 0} СЃРѕС‚СЂСѓРґРЅРёРєРѕРІ`, `${Array.isArray(data.team_members) ? data.team_members.length : 0} employees`);
+    teamSummaryShort.textContent = tr(`${Array.isArray(data.team_members) ? data.team_members.length : 0} сотрудников`, `${Array.isArray(data.team_members) ? data.team_members.length : 0} employees`);
   }
 
   teamMembers = Array.isArray(data.team_members) ? data.team_members : [];
@@ -11298,7 +11316,7 @@ function renderProfileAiServiceOptions(forcedMode = "") {
   const prev = String(serviceSelect.value || "").trim();
   serviceSelect.innerHTML = activeRows.length
     ? activeRows.map((row) => `<option value="${Number(row.id || 0)}">#${Number(row.id || 0)} ${escapeHtml(String(row.name || "-"))} (${escapeHtml(String(row.provider || "-"))})</option>`).join("")
-    : `<option value="">${tr("РЎРµСЂРІРёСЃРѕРІ РЅРµС‚", "No services")}</option>`;
+    : `<option value="">${tr("Сервисов нет", "No services")}</option>`;
   if (prev && [...serviceSelect.options].some((x) => x.value === prev)) {
     serviceSelect.value = prev;
     return;
@@ -11325,10 +11343,10 @@ function renderProfileAiState(data) {
   renderProfileAiServiceOptions(sourceSelect.value);
 
   const effective = profileAiState?.effective || {};
-  effectiveBox.textContent = `${tr("Р­С„С„РµРєС‚РёРІРЅС‹Р№ AI", "Effective AI")}: ${effective.mode || "-"} | ${effective.provider || "-"} | ${effective.model || "-"} | ${effective.service_name || "-"}`;
+  effectiveBox.textContent = `${tr("Эффективный AI", "Effective AI")}: ${effective.mode || "-"} | ${effective.provider || "-"} | ${effective.model || "-"} | ${effective.service_name || "-"}`;
   const aiSummaryShort = document.getElementById("profileAiSummaryShort");
   if (aiSummaryShort) {
-    aiSummaryShort.textContent = `${effective.provider || "-"} вЂў ${effective.model || "-"}`;
+    aiSummaryShort.textContent = `${effective.provider || "-"} • ${effective.model || "-"}`;
   }
 
   const merged = [...globalRows, ...userRows];
@@ -11345,14 +11363,14 @@ function renderProfileAiState(data) {
         <td>
           ${row.scope === "user"
             ? `<div class="actions">
-                <button class="btn-secondary" type="button" data-profile-ai-edit="${Number(row.id || 0)}">${tr("РР·РјРµРЅРёС‚СЊ", "Edit")}</button>
-                <button class="btn-danger" type="button" data-profile-ai-del="${Number(row.id || 0)}">${tr("РЈРґР°Р»РёС‚СЊ", "Delete")}</button>
+                <button class="btn-secondary" type="button" data-profile-ai-edit="${Number(row.id || 0)}">${tr("Изменить", "Edit")}</button>
+                <button class="btn-danger" type="button" data-profile-ai-del="${Number(row.id || 0)}">${tr("Удалить", "Delete")}</button>
               </div>`
             : "-"}
         </td>
       </tr>
     `).join("")
-    : `<tr><td colspan="8">${tr("AI СЃРµСЂРІРёСЃРѕРІ РїРѕРєР° РЅРµС‚.", "No AI services yet.")}</td></tr>`;
+    : `<tr><td colspan="8">${tr("AI сервисов пока нет.", "No AI services yet.")}</td></tr>`;
 
   table.querySelectorAll("[data-profile-ai-edit]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -11367,7 +11385,7 @@ function renderProfileAiState(data) {
       const addBtn = document.querySelector("button[onclick='addProfileAiService()']");
       if (addBtn) {
         addBtn.dataset.editId = String(id);
-        addBtn.textContent = tr("РЎРѕС…СЂР°РЅРёС‚СЊ РёР·РјРµРЅРµРЅРёСЏ", "Save changes");
+        addBtn.textContent = tr("Сохранить изменения", "Save changes");
       }
       document.getElementById("profileAiApiKey")?.focus();
     });
@@ -11376,7 +11394,7 @@ function renderProfileAiState(data) {
     btn.addEventListener("click", async () => {
       const id = Number(btn.dataset.profileAiDel || 0);
       if (!id) return;
-      if (!confirm(tr(`РЈРґР°Р»РёС‚СЊ AI СЃРµСЂРІРёСЃ #${id}?`, `Delete AI service #${id}?`))) return;
+      if (!confirm(tr(`Удалить AI сервис #${id}?`, `Delete AI service #${id}?`))) return;
       await requestJson(`/api/profile/ai/services/${id}`, {
         method: "DELETE",
         headers: authHeaders(),
@@ -11398,22 +11416,22 @@ function applyTeamModalHeader(mode, row = null) {
   const passLabelEl = document.getElementById("teamModalPasswordLabel");
   const passEl = document.getElementById("teamModalPassword");
   if (mode === "create") {
-    if (titleEl) titleEl.textContent = tr("РќРѕРІС‹Р№ СЃРѕС‚СЂСѓРґРЅРёРє", "New employee");
-    if (metaEl) metaEl.textContent = tr("Р—Р°РїРѕР»РЅРёС‚Рµ РґР°РЅРЅС‹Рµ Рё РІС‹РґР°Р№С‚Рµ РґРѕСЃС‚СѓРїС‹ Рє РјРѕРґСѓР»СЏРј.", "Fill details and grant module access.");
-    if (saveBtn) saveBtn.textContent = tr("Р”РѕР±Р°РІРёС‚СЊ", "Add");
+    if (titleEl) titleEl.textContent = tr("Новый сотрудник", "New employee");
+    if (metaEl) metaEl.textContent = tr("Заполните данные и выдайте доступы к модулям.", "Fill details and grant module access.");
+    if (saveBtn) saveBtn.textContent = tr("Добавить", "Add");
     if (deleteBtn) deleteBtn.classList.add("hidden");
-    if (passLabelEl) passLabelEl.textContent = tr("РџР°СЂРѕР»СЊ", "Password");
-    if (passEl) passEl.placeholder = tr("РџР°СЂРѕР»СЊ СЃРѕС‚СЂСѓРґРЅРёРєР° (>=8)", "Employee password (>=8)");
+    if (passLabelEl) passLabelEl.textContent = tr("Пароль", "Password");
+    if (passEl) passEl.placeholder = tr("Пароль сотрудника (>=8)", "Employee password (>=8)");
     return;
   }
-  if (saveBtn) saveBtn.textContent = tr("РЎРѕС…СЂР°РЅРёС‚СЊ", "Save");
-  if (passLabelEl) passLabelEl.textContent = tr("РќРѕРІС‹Р№ РїР°СЂРѕР»СЊ", "New password");
-  if (passEl) passEl.placeholder = tr("РќРѕРІС‹Р№ РїР°СЂРѕР»СЊ (РѕРїС†.)", "New password (optional)");
+  if (saveBtn) saveBtn.textContent = tr("Сохранить", "Save");
+  if (passLabelEl) passLabelEl.textContent = tr("Новый пароль", "New password");
+  if (passEl) passEl.placeholder = tr("Новый пароль (опц.)", "New password (optional)");
   if (!row) return;
   if (titleEl) {
     titleEl.textContent = row.is_owner
-      ? tr("Р’Р»Р°РґРµР»РµС† РєР°Р±РёРЅРµС‚Р°", "Workspace owner")
-      : tr("РЎРѕС‚СЂСѓРґРЅРёРє РєР°Р±РёРЅРµС‚Р°", "Workspace employee");
+      ? tr("Владелец кабинета", "Workspace owner")
+      : tr("Сотрудник кабинета", "Workspace employee");
   }
   const isSelfEmployee = Boolean(
     me
@@ -11423,11 +11441,11 @@ function applyTeamModalHeader(mode, row = null) {
   );
   if (metaEl) {
     const metaText = row.is_owner
-      ? tr("РџСЂР°РІР° РІР»Р°РґРµР»СЊС†Р°", "Owner permissions")
+      ? tr("Права владельца", "Owner permissions")
       : (isSelfEmployee
-        ? tr("РњРѕР¶РЅРѕ РјРµРЅСЏС‚СЊ С‚РѕР»СЊРєРѕ СЃРІРѕРё Р¤РРћ, С‚РµР»РµС„РѕРЅ, РЅРёРє Рё С„РѕС‚Рѕ.", "You can edit only your own name, phone, nickname and avatar.")
-        : tr("РњРѕР¶РЅРѕ РјРµРЅСЏС‚СЊ РґРѕСЃС‚СѓРїС‹ Рё РґР°РЅРЅС‹Рµ", "You can edit access and profile fields"));
-    metaEl.textContent = `#${Number(row.id || 0)} вЂў ${metaText}`;
+        ? tr("Можно менять только свои ФИО, телефон, ник и фото.", "You can edit only your own name, phone, nickname and avatar.")
+        : tr("Можно менять доступы и данные", "You can edit access and profile fields"));
+    metaEl.textContent = `#${Number(row.id || 0)} • ${metaText}`;
   }
   if (deleteBtn) deleteBtn.classList.toggle("hidden", Boolean(row.is_owner || isSelfEmployee));
 }
@@ -11441,8 +11459,8 @@ function findTeamMemberById(memberId) {
 function summarizeTeamAccess(row) {
   if (row?.is_owner) {
     return {
-      title: tr("РџРѕР»РЅС‹Р№ РґРѕСЃС‚СѓРї", "Full access"),
-      details: tr("Р’СЃРµ РјРѕРґСѓР»Рё РґРѕСЃС‚СѓРїРЅС‹ РІР»Р°РґРµР»СЊС†Сѓ РєР°Р±РёРЅРµС‚Р°.", "All modules are available for workspace owner."),
+      title: tr("Полный доступ", "Full access"),
+      details: tr("Все модули доступны владельцу кабинета.", "All modules are available for workspace owner."),
     };
   }
   const accessCodes = Array.isArray(row?.access_scope)
@@ -11450,18 +11468,18 @@ function summarizeTeamAccess(row) {
     : [];
   if (!accessCodes.length) {
     return {
-      title: tr("Р”РѕСЃС‚СѓРї РЅРµ РІС‹РґР°РЅ", "No access"),
-      details: tr("РњРѕРґСѓР»Рё РЅРµ РІС‹Р±СЂР°РЅС‹.", "No modules selected."),
+      title: tr("Доступ не выдан", "No access"),
+      details: tr("Модули не выбраны.", "No modules selected."),
     };
   }
   const labels = accessCodes.map((code) => moduleLabel(code));
   const shortList = labels.slice(0, 3).join(", ");
   const left = labels.length - 3;
   return {
-    title: shortList || tr("Р”РѕСЃС‚СѓРї РЅР°Р·РЅР°С‡РµРЅ", "Access granted"),
+    title: shortList || tr("Доступ назначен", "Access granted"),
     details: left > 0
-      ? tr(`Р РµС‰Рµ РјРѕРґСѓР»РµР№: ${left}`, `And ${left} more modules`)
-      : tr(`РњРѕРґСѓР»РµР№: ${labels.length}`, `Modules: ${labels.length}`),
+      ? tr(`И еще модулей: ${left}`, `And ${left} more modules`)
+      : tr(`Модулей: ${labels.length}`, `Modules: ${labels.length}`),
   };
 }
 
@@ -11471,7 +11489,7 @@ function renderTeamMembers() {
   host.innerHTML = "";
   if (!Array.isArray(teamMembers) || !teamMembers.length) {
     closeTeamMemberEditor();
-    host.innerHTML = `<div class="hint">${escapeHtml(tr("РЎРѕС‚СЂСѓРґРЅРёРєРѕРІ РїРѕРєР° РЅРµС‚.", "No employees yet."))}</div>`;
+    host.innerHTML = `<div class="hint">${escapeHtml(tr("Сотрудников пока нет.", "No employees yet."))}</div>`;
     return;
   }
   for (const row of teamMembers) {
@@ -11479,25 +11497,25 @@ function renderTeamMembers() {
     const card = document.createElement("article");
     card.className = "team-member-row";
     const roleLabel = row.is_owner
-      ? tr("Р’Р»Р°РґРµР»РµС†", "Owner")
-      : tr("РЎРѕС‚СЂСѓРґРЅРёРє", "Employee");
+      ? tr("Владелец", "Owner")
+      : tr("Сотрудник", "Employee");
     const roleMeta = row.is_owner
       ? ""
-      : (row.has_password ? tr("РїР°СЂРѕР»СЊ Р·Р°РґР°РЅ", "password set") : tr("РїР°СЂРѕР»СЊ РЅРµ Р·Р°РґР°РЅ", "password missing"));
-    const editLabel = tr("Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ СЃРѕС‚СЂСѓРґРЅРёРєР°", "Edit employee");
+      : (row.has_password ? tr("пароль задан", "password set") : tr("пароль не задан", "password missing"));
+    const editLabel = tr("Редактировать сотрудника", "Edit employee");
     card.innerHTML = `
       <div class="team-member-row-main">
         <div class="team-member-identity">
           <strong>${escapeHtml(String(row.full_name || row.nickname || row.email || "-"))}</strong>
           <div class="hint">${escapeHtml(String(row.email || "-"))}</div>
         </div>
-        <div class="team-member-role">${escapeHtml(roleMeta ? `${roleLabel} вЂў ${roleMeta}` : roleLabel)}</div>
+        <div class="team-member-role">${escapeHtml(roleMeta ? `${roleLabel} • ${roleMeta}` : roleLabel)}</div>
         <div class="team-member-access">
           <strong>${escapeHtml(access.title)}</strong>
           <div class="hint">${escapeHtml(access.details)}</div>
         </div>
       </div>
-      <button class="team-row-edit" type="button" title="${escapeHtml(editLabel)}" aria-label="${escapeHtml(editLabel)}" data-team-edit="${Number(row.id || 0)}">вњЋ</button>
+      <button class="team-row-edit" type="button" title="${escapeHtml(editLabel)}" aria-label="${escapeHtml(editLabel)}" data-team-edit="${Number(row.id || 0)}">✎</button>
     `;
     card.querySelector(`[data-team-edit="${Number(row.id || 0)}"]`)?.addEventListener("click", () => openTeamMemberEditor(row.id));
     card.addEventListener("dblclick", () => openTeamMemberEditor(row.id));
@@ -11570,7 +11588,7 @@ function openTeamMemberEditor(memberId) {
 
 function openTeamMemberCreator() {
   if (me && !me.actor_is_owner) {
-    alert(tr("РўРѕР»СЊРєРѕ РІР»Р°РґРµР»РµС† РєР°Р±РёРЅРµС‚Р° РјРѕР¶РµС‚ РґРѕР±Р°РІР»СЏС‚СЊ СЃРѕС‚СЂСѓРґРЅРёРєРѕРІ.", "Only workspace owner can add employees."));
+    alert(tr("Только владелец кабинета может добавлять сотрудников.", "Only workspace owner can add employees."));
     return;
   }
   const modal = document.getElementById("teamMemberEditModal");
@@ -11629,7 +11647,7 @@ async function saveTeamMemberEditor() {
   const payload = buildTeamMemberPayloadFromModal(id);
   if (!payload) return;
   if (!payload.email) {
-    alert(tr("РЈРєР°Р¶РёС‚Рµ email СЃРѕС‚СЂСѓРґРЅРёРєР°.", "Enter employee email."));
+    alert(tr("Укажите email сотрудника.", "Enter employee email."));
     return;
   }
   if (teamModalMode === "create") {
@@ -11682,7 +11700,7 @@ async function saveProfileAiSelection() {
   });
   if (!data) return;
   renderProfileAiState(data);
-  alert(tr("AI РІС‹Р±РѕСЂ СЃРѕС…СЂР°РЅРµРЅ", "AI selection saved"));
+  alert(tr("AI выбор сохранен", "AI selection saved"));
 }
 
 async function addProfileAiService() {
@@ -11697,7 +11715,7 @@ async function addProfileAiService() {
     api_key: String(document.getElementById("profileAiApiKey")?.value || "").trim(),
   };
   if (!payload.name || !payload.api_key) {
-    alert(tr("РЈРєР°Р¶РёС‚Рµ РЅР°Р·РІР°РЅРёРµ Рё API key СЃРµСЂРІРёСЃР°", "Provide service name and API key"));
+    alert(tr("Укажите название и API key сервиса", "Provide service name and API key"));
     return;
   }
   const url = editId ? `/api/profile/ai/services/${editId}` : "/api/profile/ai/services";
@@ -11720,7 +11738,7 @@ async function addProfileAiService() {
   if (provider) provider.value = "openai";
   if (btn) {
     btn.dataset.editId = "";
-    btn.textContent = tr("Р”РѕР±Р°РІРёС‚СЊ AI СЃРµСЂРІРёСЃ", "Add AI service");
+    btn.textContent = tr("Добавить AI сервис", "Add AI service");
   }
   await loadProfileAi();
 }
@@ -11728,7 +11746,7 @@ async function addProfileAiService() {
 async function addTeamMember(payloadOverride = null) {
   if (!enabledModules.has("user_profile")) return null;
   if (me && !me.actor_is_owner) {
-    alert(tr("РўРѕР»СЊРєРѕ РІР»Р°РґРµР»РµС† РєР°Р±РёРЅРµС‚Р° РјРѕР¶РµС‚ РґРѕР±Р°РІР»СЏС‚СЊ СЃРѕС‚СЂСѓРґРЅРёРєРѕРІ.", "Only workspace owner can add employees."));
+    alert(tr("Только владелец кабинета может добавлять сотрудников.", "Only workspace owner can add employees."));
     return null;
   }
   const payload = payloadOverride && typeof payloadOverride === "object"
@@ -11745,7 +11763,7 @@ async function addTeamMember(payloadOverride = null) {
   payload.avatar_url = String(payload.avatar_url || "").trim();
   if (!Array.isArray(payload.access_scope)) payload.access_scope = [];
   if (!payload.email) {
-    alert(tr("РЈРєР°Р¶РёС‚Рµ email СЃРѕС‚СЂСѓРґРЅРёРєР°.", "Enter employee email."));
+    alert(tr("Укажите email сотрудника.", "Enter employee email."));
     return null;
   }
   const row = await requestJson("/api/profile/team", {
@@ -11788,7 +11806,7 @@ async function updateTeamMember(memberId, payloadOverride = null) {
   payload.nickname = String(payload.nickname || "").trim();
   payload.avatar_url = String(payload.avatar_url || "").trim();
   if (!payload.email) {
-    alert(tr("Email СЃРѕС‚СЂСѓРґРЅРёРєР° РѕР±СЏР·Р°С‚РµР»РµРЅ.", "Employee email is required."));
+    alert(tr("Email сотрудника обязателен.", "Employee email is required."));
     return null;
   }
   const row = await requestJson(`/api/profile/team/${id}`, {
@@ -11814,7 +11832,7 @@ async function updateTeamMember(memberId, payloadOverride = null) {
 async function deleteTeamMember(memberId) {
   const id = Number(memberId || 0);
   if (!id) return false;
-  if (!confirm(tr("РЈРґР°Р»РёС‚СЊ СЃРѕС‚СЂСѓРґРЅРёРєР° РёР· РєР°Р±РёРЅРµС‚Р°?", "Delete employee from workspace?"))) return false;
+  if (!confirm(tr("Удалить сотрудника из кабинета?", "Delete employee from workspace?"))) return false;
   const result = await requestJson(`/api/profile/team/${id}`, {
     method: "DELETE",
     headers: authHeaders(),
@@ -11859,7 +11877,7 @@ async function saveProfileData() {
     const actorMemberId = Number(me.actor_member_id || 0);
     const actorRow = findTeamMemberById(actorMemberId);
     if (!actorMemberId || !actorRow) {
-      alert(tr("РџСЂРѕС„РёР»СЊ СЃРѕС‚СЂСѓРґРЅРёРєР° РЅРµ РЅР°Р№РґРµРЅ.", "Employee profile is not found."));
+      alert(tr("Профиль сотрудника не найден.", "Employee profile is not found."));
       return;
     }
     const updated = await updateTeamMember(actorMemberId, {
@@ -11876,7 +11894,7 @@ async function saveProfileData() {
     if (!updated) return;
     invalidateModuleCache("profile");
     await loadProfile();
-    alert(tr("РџСЂРѕС„РёР»СЊ СЃРѕС…СЂР°РЅРµРЅ", "Profile saved"));
+    alert(tr("Профиль сохранен", "Profile saved"));
     return;
   }
   const payload = {
@@ -11905,13 +11923,13 @@ async function saveProfileData() {
   if (!data) return;
   invalidateModuleCache("profile");
   renderProfileData(data);
-  alert(tr("РџСЂРѕС„РёР»СЊ СЃРѕС…СЂР°РЅРµРЅ", "Profile saved"));
+  alert(tr("Профиль сохранен", "Profile saved"));
 }
 
 async function changeProfilePlan() {
   if (!enabledModules.has("user_profile")) return;
   const plan_code = (document.getElementById("profilePlanSelect")?.value || "").trim().toLowerCase();
-  if (!plan_code) return alert(tr("Р’С‹Р±РµСЂРёС‚Рµ С‚Р°СЂРёС„", "Select plan"));
+  if (!plan_code) return alert(tr("Выберите тариф", "Select plan"));
   const data = await requestJson("/api/profile/plan", {
     method: "POST",
     headers: authHeaders(),
@@ -11924,7 +11942,7 @@ async function changeProfilePlan() {
   if (!data) return;
   invalidateModuleCache("profile", "billing");
   renderProfileData(data);
-  alert(tr("РўР°СЂРёС„ РѕР±РЅРѕРІР»РµРЅ", "Plan updated"));
+  alert(tr("Тариф обновлен", "Plan updated"));
 }
 
 async function renewProfilePlan() {
@@ -11940,7 +11958,7 @@ async function renewProfilePlan() {
   if (!data) return;
   invalidateModuleCache("profile", "billing");
   renderProfileData(data);
-  alert(tr("РџСЂРѕРґР»РµРЅРёРµ РІС‹РїРѕР»РЅРµРЅРѕ", "Renewal completed"));
+  alert(tr("Продление выполнено", "Renewal completed"));
 }
 
 async function changeProfilePassword() {
@@ -11948,10 +11966,10 @@ async function changeProfilePassword() {
   const current_password = document.getElementById("profileCurrentPassword")?.value || "";
   const new_password = document.getElementById("profileNewPassword")?.value || "";
   if (!current_password || !new_password) {
-    return alert(tr("Р—Р°РїРѕР»РЅРёС‚Рµ С‚РµРєСѓС‰РёР№ Рё РЅРѕРІС‹Р№ РїР°СЂРѕР»СЊ", "Fill both current and new passwords"));
+    return alert(tr("Заполните текущий и новый пароль", "Fill both current and new passwords"));
   }
   if (new_password.length < 8) {
-    return alert(tr("РќРѕРІС‹Р№ РїР°СЂРѕР»СЊ РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ РјРёРЅРёРјСѓРј 8 СЃРёРјРІРѕР»РѕРІ", "New password must be at least 8 characters"));
+    return alert(tr("Новый пароль должен быть минимум 8 символов", "New password must be at least 8 characters"));
   }
   const data = await requestJson("/api/profile/password", {
     method: "POST",
@@ -11966,7 +11984,7 @@ async function changeProfilePassword() {
   invalidateModuleCache("profile");
   setInputValue("profileCurrentPassword", "");
   setInputValue("profileNewPassword", "");
-  alert(data.message || tr("РџР°СЂРѕР»СЊ РѕР±РЅРѕРІР»РµРЅ", "Password updated"));
+  alert(data.message || tr("Пароль обновлен", "Password updated"));
 }
 
 function getProfileKeyInput(marketplace) {
@@ -11976,7 +11994,7 @@ function getProfileKeyInput(marketplace) {
 async function saveProfileKey(marketplace) {
   const input = getProfileKeyInput(marketplace);
   const api_key = input?.value?.trim() || "";
-  if (!api_key) return alert(tr("Р’РІРµРґРёС‚Рµ API РєР»СЋС‡", "Enter API key"));
+  if (!api_key) return alert(tr("Введите API ключ", "Enter API key"));
   await requestJson("/api/credentials", {
     method: "POST",
     headers: authHeaders(),
@@ -11990,7 +12008,7 @@ async function saveProfileKey(marketplace) {
 async function testProfileKey(marketplace) {
   const input = getProfileKeyInput(marketplace);
   const api_key = input?.value?.trim() || "";
-  if (!api_key) return alert(tr("Р’РІРµРґРёС‚Рµ API РєР»СЋС‡", "Enter API key"));
+  if (!api_key) return alert(tr("Введите API ключ", "Enter API key"));
   const data = await requestJson("/api/credentials/test", {
     method: "POST",
     headers: authHeaders(),
@@ -12000,11 +12018,11 @@ async function testProfileKey(marketplace) {
     return null;
   });
   if (!data) return;
-  alert(data.message || (data.ok ? tr("РљР»СЋС‡ РІР°Р»РёРґРµРЅ", "Key is valid") : tr("РљР»СЋС‡ РЅРµ РІР°Р»РёРґРµРЅ", "Invalid key")));
+  alert(data.message || (data.ok ? tr("Ключ валиден", "Key is valid") : tr("Ключ не валиден", "Invalid key")));
 }
 
 async function deleteProfileKey(marketplace) {
-  if (!confirm(tr(`РЈРґР°Р»РёС‚СЊ РєР»СЋС‡ ${marketplace.toUpperCase()}?`, `Delete ${marketplace.toUpperCase()} key?`))) return;
+  if (!confirm(tr(`Удалить ключ ${marketplace.toUpperCase()}?`, `Delete ${marketplace.toUpperCase()} key?`))) return;
   const data = await requestJson(`/api/credentials/${marketplace}`, {
     method: "DELETE",
     headers: authHeaders(),
@@ -12028,7 +12046,7 @@ async function loadHelpDocs() {
     helpReleaseRows = [];
     const select = document.getElementById("helpModuleSelect");
     if (select) {
-      select.innerHTML = `<option value="">${lang === "en" ? "Help module is disabled" : "РњРѕРґСѓР»СЊ СЃРїСЂР°РІРєРё РѕС‚РєР»СЋС‡РµРЅ"}</option>`;
+      select.innerHTML = `<option value="">${lang === "en" ? "Help module is disabled" : "Модуль справки отключен"}</option>`;
       select.value = "";
     }
     const view = document.getElementById("helpDocsView");
@@ -12036,7 +12054,7 @@ async function loadHelpDocs() {
       view.innerHTML = `<div class="help-empty">${
         lang === "en"
           ? "Help docs are disabled for your account."
-          : "Р”РѕРєСѓРјРµРЅС‚Р°С†РёСЏ РѕС‚РєР»СЋС‡РµРЅР° РґР»СЏ РІР°С€РµРіРѕ РґРѕСЃС‚СѓРїР°."
+          : "Документация отключена для вашего доступа."
       }</div>`;
     }
     const downloadsCurrent = document.getElementById("helpDownloadsCurrent");
@@ -12045,7 +12063,7 @@ async function loadHelpDocs() {
       downloadsCurrent.innerHTML = `<div class="help-empty">${
         lang === "en"
           ? "Downloads are unavailable for your access."
-          : "Р Р°Р·РґРµР» Р·Р°РіСЂСѓР·РѕРє РЅРµРґРѕСЃС‚СѓРїРµРЅ РґР»СЏ РІР°С€РµРіРѕ РґРѕСЃС‚СѓРїР°."
+          : "Раздел загрузок недоступен для вашего доступа."
       }</div>`;
     }
     if (downloadsList) downloadsList.innerHTML = "";
@@ -12074,7 +12092,7 @@ async function loadHelpDocs() {
       if (!pairs.has(code)) pairs.set(code, title);
     }
     const options = [...pairs.entries()].map(([code, title]) => `<option value="${code}">${escapeHtml(title)} (${escapeHtml(code)})</option>`).join("");
-    select.innerHTML = `<option value="">${lang === "en" ? "All modules" : "Р’СЃРµ РјРѕРґСѓР»Рё"}</option>${options}`;
+    select.innerHTML = `<option value="">${lang === "en" ? "All modules" : "Все модули"}</option>${options}`;
     if (prev && [...select.options].some((opt) => opt.value === prev)) {
       select.value = prev;
     } else if (moduleCode && [...select.options].some((opt) => opt.value === moduleCode)) {
@@ -12085,7 +12103,7 @@ async function loadHelpDocs() {
   const view = document.getElementById("helpDocsView");
   if (!view) return;
   if (!rows.length) {
-    view.innerHTML = `<div class="help-empty">${lang === "en" ? "No help data." : "РЎРїСЂР°РІРєР° РЅРµ РЅР°Р№РґРµРЅР°."}</div>`;
+    view.innerHTML = `<div class="help-empty">${lang === "en" ? "No help data." : "Справка не найдена."}</div>`;
     return;
   }
   const unique = new Map();
@@ -12120,22 +12138,22 @@ async function loadHelpDocs() {
           </div>
           <div class="help-card-actions">
             <button class="btn-secondary help-open-btn" type="button" onclick="filterHelpModule('${escapeHtml(code)}')">
-              ${lang === "en" ? "Show module help" : "РџРѕРєР°Р·Р°С‚СЊ СЃРїСЂР°РІРєСѓ РјРѕРґСѓР»СЏ"}
+              ${lang === "en" ? "Show module help" : "Показать справку модуля"}
             </button>
             <button class="help-filter-btn" type="button" onclick="filterHelpModule('${escapeHtml(code)}')">
-              ${lang === "en" ? "Highlight module" : "РџРѕРґСЃРІРµС‚РёС‚СЊ РјРѕРґСѓР»СЊ"}
+              ${lang === "en" ? "Highlight module" : "Подсветить модуль"}
             </button>
           </div>
         </header>
         <div class="help-card-body">${formatHelpContent(String(row?.content || ""), lang)}</div>
         <div class="help-checklist">
-          <strong>${lang === "en" ? "Quick checklist" : "Р‘С‹СЃС‚СЂС‹Р№ С‡РµРє-Р»РёСЃС‚"}</strong>
+          <strong>${lang === "en" ? "Quick checklist" : "Быстрый чек-лист"}</strong>
           <ol>
-            <li>${lang === "en" ? "Open the module from the left menu." : "РћС‚РєСЂРѕР№С‚Рµ РјРѕРґСѓР»СЊ С‡РµСЂРµР· Р»РµРІРѕРµ РјРµРЅСЋ."}</li>
-            <li>${lang === "en" ? "Fill required filters/fields before action." : "Р—Р°РїРѕР»РЅРёС‚Рµ РѕР±СЏР·Р°С‚РµР»СЊРЅС‹Рµ РїРѕР»СЏ/С„РёР»СЊС‚СЂС‹ РїРµСЂРµРґ Р·Р°РїСѓСЃРєРѕРј."}</li>
-            <li>${lang === "en" ? "Run action and watch the status bar." : "Р—Р°РїСѓСЃС‚РёС‚Рµ РґРµР№СЃС‚РІРёРµ Рё РєРѕРЅС‚СЂРѕР»РёСЂСѓР№С‚Рµ СЃС‚Р°С‚СѓСЃ-Р±Р°СЂ."}</li>
-            <li>${lang === "en" ? "Check resulting table and totals." : "РџСЂРѕРІРµСЂСЊС‚Рµ РёС‚РѕРіРѕРІСѓСЋ С‚Р°Р±Р»РёС†Сѓ Рё СЃРІРѕРґРЅС‹Рµ РїРѕРєР°Р·Р°С‚РµР»Рё."}</li>
-            <li>${lang === "en" ? "If something looks wrong, refresh the module and check warnings in the status line." : "Р•СЃР»Рё РґР°РЅРЅС‹Рµ РІС‹РіР»СЏРґСЏС‚ РЅРµРєРѕСЂСЂРµРєС‚РЅРѕ, РѕР±РЅРѕРІРёС‚Рµ РјРѕРґСѓР»СЊ Рё РїСЂРѕРІРµСЂСЊС‚Рµ РїСЂРµРґСѓРїСЂРµР¶РґРµРЅРёСЏ РІ СЃС‚СЂРѕРєРµ СЃС‚Р°С‚СѓСЃР°."}</li>
+            <li>${lang === "en" ? "Open the module from the left menu." : "Откройте модуль через левое меню."}</li>
+            <li>${lang === "en" ? "Fill required filters/fields before action." : "Заполните обязательные поля/фильтры перед запуском."}</li>
+            <li>${lang === "en" ? "Run action and watch the status bar." : "Запустите действие и контролируйте статус-бар."}</li>
+            <li>${lang === "en" ? "Check resulting table and totals." : "Проверьте итоговую таблицу и сводные показатели."}</li>
+            <li>${lang === "en" ? "If something looks wrong, refresh the module and check warnings in the status line." : "Если данные выглядят некорректно, обновите модуль и проверьте предупреждения в строке статуса."}</li>
           </ol>
         </div>
       </article>
@@ -12145,14 +12163,14 @@ async function loadHelpDocs() {
   view.innerHTML = `
     <div class="help-header">
       <div class="help-header-title">
-        <h4>${lang === "en" ? "Interactive help center" : "РРЅС‚РµСЂР°РєС‚РёРІРЅР°СЏ СЃРїСЂР°РІРєР°"}</h4>
+        <h4>${lang === "en" ? "Interactive help center" : "Интерактивная справка"}</h4>
         <p>${lang === "en"
       ? (selectedCode ? "Showing help for selected module." : "Select module to open focused help.")
-      : (selectedCode ? "РџРѕРєР°Р·Р°РЅР° СЃРїСЂР°РІРєР° С‚РѕР»СЊРєРѕ РїРѕ РІС‹Р±СЂР°РЅРЅРѕРјСѓ РјРѕРґСѓР»СЋ." : "Р’С‹Р±РµСЂРёС‚Рµ РјРѕРґСѓР»СЊ, С‡С‚РѕР±С‹ РѕС‚РєСЂС‹С‚СЊ С†РµР»РµРІСѓСЋ СЃРїСЂР°РІРєСѓ.")}</p>
+      : (selectedCode ? "Показана справка только по выбранному модулю." : "Выберите модуль, чтобы открыть целевую справку.")}</p>
       </div>
       <div class="help-chip-list">${moduleChips}</div>
     </div>
-    <div class="help-card-list">${cards || `<div class="help-empty">${lang === "en" ? "Module help not found." : "РЎРїСЂР°РІРєР° РїРѕ РјРѕРґСѓР»СЋ РЅРµ РЅР°Р№РґРµРЅР°."}</div>`}</div>
+    <div class="help-card-list">${cards || `<div class="help-empty">${lang === "en" ? "Module help not found." : "Справка по модулю не найдена."}</div>`}</div>
   `;
   renderHelpAssistantModuleOptions();
   markModuleLoaded("help");
@@ -12174,7 +12192,7 @@ async function loadHelpReleases() {
   const rows = Array.isArray(data) ? data : [];
   helpReleaseRows = rows;
   if (!rows.length) {
-    currentHost.innerHTML = `<div class="help-empty">${lang === "en" ? "No release data yet." : "Р”Р°РЅРЅС‹Рµ СЂРµР»РёР·РѕРІ РїРѕРєР° РѕС‚СЃСѓС‚СЃС‚РІСѓСЋС‚."}</div>`;
+    currentHost.innerHTML = `<div class="help-empty">${lang === "en" ? "No release data yet." : "Данные релизов пока отсутствуют."}</div>`;
     listHost.innerHTML = "";
     return;
   }
@@ -12193,12 +12211,12 @@ async function loadHelpReleases() {
     <article class="help-card selected">
       <header class="help-card-head">
         <div>
-          <h4>${lang === "en" ? "Current version" : "РўРµРєСѓС‰Р°СЏ РІРµСЂСЃРёСЏ"} ${currentVersion}</h4>
-          <small>${releaseDate}${currentCode > 0 ? ` вЂў code ${currentCode}` : ""}</small>
+          <h4>${lang === "en" ? "Current version" : "Текущая версия"} ${currentVersion}</h4>
+          <small>${releaseDate}${currentCode > 0 ? ` • code ${currentCode}` : ""}</small>
         </div>
         <div class="help-card-actions">
           <a class="btn-secondary help-open-btn" href="${escapeHtml(downloadUrl)}" target="_blank" rel="noopener noreferrer">
-            ${lang === "en" ? "Download Android APK" : "РЎРєР°С‡Р°С‚СЊ Android APK"}
+            ${lang === "en" ? "Download Android APK" : "Скачать Android APK"}
           </a>
         </div>
       </header>
@@ -12209,7 +12227,7 @@ async function loadHelpReleases() {
           <p>${downloadName}</p>
           ${notesText ? `<p>${notesText}</p>` : ""}
         </section>
-        ${diffItems ? `<section class="help-block"><h5>${lang === "en" ? "Difference from previous version" : "РћС‚Р»РёС‡РёСЏ РѕС‚ РїСЂРѕС€Р»РѕР№ РІРµСЂСЃРёРё"}</h5><ul>${diffItems}</ul></section>` : ""}
+        ${diffItems ? `<section class="help-block"><h5>${lang === "en" ? "Difference from previous version" : "Отличия от прошлой версии"}</h5><ul>${diffItems}</ul></section>` : ""}
       </div>
     </article>
   `;
@@ -12227,7 +12245,7 @@ async function loadHelpReleases() {
         <header class="help-card-head">
           <div>
             <h4>${version}</h4>
-            <small>${date}${versionCode > 0 ? ` вЂў code ${versionCode}` : ""}</small>
+            <small>${date}${versionCode > 0 ? ` • code ${versionCode}` : ""}</small>
           </div>
         </header>
         <div class="help-card-body">
@@ -12241,8 +12259,8 @@ async function loadHelpReleases() {
   listHost.innerHTML = `
     <div class="help-header">
       <div class="help-header-title">
-        <h4>${lang === "en" ? "APK version history" : "РСЃС‚РѕСЂРёСЏ APK РІРµСЂСЃРёР№"}</h4>
-        <p>${lang === "en" ? "Only Android APK releases with short release notes." : "Р—РґРµСЃСЊ РѕС‚РѕР±СЂР°Р¶Р°СЋС‚СЃСЏ С‚РѕР»СЊРєРѕ Android APK РІРµСЂСЃРёРё Рё РєСЂР°С‚РєРёРµ РїСЂРёРјРµС‡Р°РЅРёСЏ Рє СЂРµР»РёР·Сѓ."}</p>
+        <h4>${lang === "en" ? "APK version history" : "История APK версий"}</h4>
+        <p>${lang === "en" ? "Only Android APK releases with short release notes." : "Здесь отображаются только Android APK версии и краткие примечания к релизу."}</p>
       </div>
     </div>
     <div class="help-card-list">${cards}</div>
@@ -12264,11 +12282,11 @@ function formatHelpContent(text, lang = "ru") {
     const first = firstRaw.toLowerCase();
 
     const numbered = lines.every((line) => /^\d+[).]\s+/.test(line));
-    const bullets = lines.every((line) => /^[-вЂ“вЂ”]\s+/.test(line));
-    const headerAndBullets = lines.length > 1 && /:\s*$/.test(firstRaw) && lines.slice(1).every((line) => /^[-вЂ“вЂ”]\s+/.test(line));
+    const bullets = lines.every((line) => /^[-–—]\s+/.test(line));
+    const headerAndBullets = lines.length > 1 && /:\s*$/.test(firstRaw) && lines.slice(1).every((line) => /^[-–—]\s+/.test(line));
 
     if (headerAndBullets) {
-      const items = lines.slice(1).map((line) => `<li>${escapeHtml(line.replace(/^[-вЂ“вЂ”]\s+/, ""))}</li>`).join("");
+      const items = lines.slice(1).map((line) => `<li>${escapeHtml(line.replace(/^[-–—]\s+/, ""))}</li>`).join("");
       return `<section class="help-block"><h5>${escapeHtml(firstRaw)}</h5><ul>${items}</ul></section>`;
     }
     if (numbered) {
@@ -12276,16 +12294,16 @@ function formatHelpContent(text, lang = "ru") {
       return `<section class="help-block"><ol>${items}</ol></section>`;
     }
     if (bullets) {
-      const items = lines.map((line) => `<li>${escapeHtml(line.replace(/^[-вЂ“вЂ”]\s+/, ""))}</li>`).join("");
+      const items = lines.map((line) => `<li>${escapeHtml(line.replace(/^[-–—]\s+/, ""))}</li>`).join("");
       return `<section class="help-block"><ul>${items}</ul></section>`;
     }
-    if (first.startsWith("РЅР°Р·РЅР°С‡РµРЅРёРµ:") || first.startsWith("purpose:")) {
+    if (first.startsWith("назначение:") || first.startsWith("purpose:")) {
       return `<section class="help-callout main"><strong>${escapeHtml(firstRaw)}</strong></section>`;
     }
-    if (first.startsWith("РїСЂРёРјРµСЂ:") || first.startsWith("example:")) {
-      return `<section class="help-callout example"><strong>${isRu ? "РџСЂРёРјРµСЂ" : "Example"}:</strong> ${escapeHtml(firstRaw.replace(/^РїСЂРёРјРµСЂ:\s*/i, "").replace(/^example:\s*/i, ""))}</section>`;
+    if (first.startsWith("пример:") || first.startsWith("example:")) {
+      return `<section class="help-callout example"><strong>${isRu ? "Пример" : "Example"}:</strong> ${escapeHtml(firstRaw.replace(/^пример:\s*/i, "").replace(/^example:\s*/i, ""))}</section>`;
     }
-    if (first.startsWith("РІР°Р¶РЅРѕ:") || first.startsWith("important:")) {
+    if (first.startsWith("важно:") || first.startsWith("important:")) {
       return `<section class="help-callout warn"><strong>${escapeHtml(firstRaw)}</strong></section>`;
     }
     return `<section class="help-block"><p>${lines.map((line) => escapeHtml(line)).join("<br>")}</p></section>`;
@@ -12323,7 +12341,7 @@ function renderHelpAssistantModuleOptions() {
     }
   }
   const rows = [...byCode.entries()];
-  const allLabel = currentLang === "en" ? "All modules" : "Р’СЃРµ РјРѕРґСѓР»Рё";
+  const allLabel = currentLang === "en" ? "All modules" : "Все модули";
   select.innerHTML = `<option value="">${escapeHtml(allLabel)}</option>${rows
     .map(([code, title]) => `<option value="${escapeHtml(code)}">${escapeHtml(title)} (${escapeHtml(code)})</option>`)
     .join("")}`;
@@ -12335,21 +12353,21 @@ function renderHelpAssistantModuleOptions() {
   if (!enabledModules.has("ai_assistant")) {
     hint.textContent = currentLang === "en"
       ? "AI assistant is disabled for your access."
-      : "AI РїРѕРјРѕС‰РЅРёРє РѕС‚РєР»СЋС‡РµРЅ РґР»СЏ РІР°С€РµРіРѕ РґРѕСЃС‚СѓРїР°.";
+      : "AI помощник отключен для вашего доступа.";
     return;
   }
   const effective = profileAiState?.effective || {};
   const provider = String(effective.provider || "-");
   const model = String(effective.model || "-");
   const source = String(effective.service_name || effective.mode || "-");
-  hint.textContent = `${tr("РўРµРєСѓС‰РёР№ AI", "Current AI")}: ${source} | ${provider} | ${model}`;
+  hint.textContent = `${tr("Текущий AI", "Current AI")}: ${source} | ${provider} | ${model}`;
 }
 
 function renderHelpAssistantHistory() {
   const host = document.getElementById("helpAssistantHistory");
   if (!host) return;
   if (!helpAssistantHistory.length) {
-    host.innerHTML = `<div class="help-empty">${currentLang === "en" ? "Ask your first question." : "Р—Р°РґР°Р№С‚Рµ РїРµСЂРІС‹Р№ РІРѕРїСЂРѕСЃ."}</div>`;
+    host.innerHTML = `<div class="help-empty">${currentLang === "en" ? "Ask your first question." : "Задайте первый вопрос."}</div>`;
     return;
   }
   host.innerHTML = helpAssistantHistory
@@ -12360,18 +12378,18 @@ function renderHelpAssistantHistory() {
       if (item?.module_code) metaBits.push(`#${String(item.module_code)}`);
       if (item?.provider) metaBits.push(String(item.provider));
       if (item?.service_name) metaBits.push(String(item.service_name));
-      const meta = metaBits.join(" вЂў ");
+      const meta = metaBits.join(" • ");
       return `
         <article class="help-card selected">
           <header class="help-card-head">
             <div>
-              <h4>${escapeHtml(tr("Р’РѕРїСЂРѕСЃ", "Question"))}</h4>
+              <h4>${escapeHtml(tr("Вопрос", "Question"))}</h4>
               <small>${escapeHtml(meta || "-")}</small>
             </div>
           </header>
           <div class="help-card-body">
             <section class="help-block"><p>${escapeHtml(String(item?.question || "-"))}</p></section>
-            <section class="help-callout main"><strong>${escapeHtml(tr("РћС‚РІРµС‚", "Answer"))}:</strong> ${escapeHtml(String(item?.answer || "-"))}</section>
+            <section class="help-callout main"><strong>${escapeHtml(tr("Ответ", "Answer"))}:</strong> ${escapeHtml(String(item?.answer || "-"))}</section>
           </div>
         </article>
       `;
@@ -12381,7 +12399,7 @@ function renderHelpAssistantHistory() {
 
 async function askHelpAssistant() {
   if (!enabledModules.has("ai_assistant")) {
-    alert(tr("РњРѕРґСѓР»СЊ AI РїРѕРјРѕС‰РЅРёРєР° РЅРµРґРѕСЃС‚СѓРїРµРЅ.", "AI assistant module is unavailable."));
+    alert(tr("Модуль AI помощника недоступен.", "AI assistant module is unavailable."));
     return;
   }
   const input = document.getElementById("helpAssistantQuestion");
@@ -12390,12 +12408,12 @@ async function askHelpAssistant() {
   const hint = document.getElementById("helpAssistantHint");
   const question = String(input?.value || "").split(/\s+/).join(" ").trim();
   if (question.length < 3) {
-    alert(tr("Р’РІРµРґРёС‚Рµ РІРѕРїСЂРѕСЃ РїРѕРґСЂРѕР±РЅРµРµ (РјРёРЅРёРјСѓРј 3 СЃРёРјРІРѕР»Р°).", "Enter a more detailed question (min 3 chars)."));
+    alert(tr("Введите вопрос подробнее (минимум 3 символа).", "Enter a more detailed question (min 3 chars)."));
     return;
   }
   const moduleCode = String(moduleSel?.value || "").trim();
   if (askBtn) askBtn.disabled = true;
-  if (hint) hint.textContent = tr("Р“РµРЅРµСЂРёСЂСѓСЋ РѕС‚РІРµС‚...", "Generating response...");
+  if (hint) hint.textContent = tr("Генерирую ответ...", "Generating response...");
   const data = await requestJson("/api/help/assistant", {
     method: "POST",
     headers: authHeaders(),
@@ -12407,7 +12425,7 @@ async function askHelpAssistant() {
   });
   if (askBtn) askBtn.disabled = false;
   if (!data) {
-    if (hint) hint.textContent = tr("РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ РѕС‚РІРµС‚. РџРѕРІС‚РѕСЂРёС‚Рµ Р·Р°РїСЂРѕСЃ.", "Failed to get response. Please retry.");
+    if (hint) hint.textContent = tr("Не удалось получить ответ. Повторите запрос.", "Failed to get response. Please retry.");
     return;
   }
   helpAssistantHistory.push({
@@ -12423,7 +12441,7 @@ async function askHelpAssistant() {
   }
   if (input) input.value = "";
   if (hint) {
-    hint.textContent = `${tr("РћС‚РІРµС‚ РїРѕР»СѓС‡РµРЅ", "Response ready")}: ${data.service_name || data.mode || "-"} | ${data.provider || "-"}`;
+    hint.textContent = `${tr("Ответ получен", "Response ready")}: ${data.service_name || data.mode || "-"} | ${data.provider || "-"}`;
   }
   renderHelpAssistantHistory();
 }
@@ -12472,7 +12490,7 @@ async function adminSaveCredential() {
 
 async function adminListCredentials() {
   const userId = Number(document.getElementById("adminCredUserId").value);
-  if (!userId) return alert(tr("РЈРєР°Р¶РёС‚Рµ user_id", "Specify user_id"));
+  if (!userId) return alert(tr("Укажите user_id", "Specify user_id"));
   const data = await requestJson(`/api/admin/credentials?user_id=${userId}`, { headers: authHeaders() }).catch((e) => {
     alert(e.message);
     return null;
@@ -12482,7 +12500,7 @@ async function adminListCredentials() {
 
 async function adminDeleteCredential() {
   const credentialId = Number(document.getElementById("adminDeleteCredentialId").value);
-  if (!credentialId) return alert(tr("РЈРєР°Р¶РёС‚Рµ credential_id", "Specify credential_id"));
+  if (!credentialId) return alert(tr("Укажите credential_id", "Specify credential_id"));
 
   await requestJson(`/api/admin/credentials/${credentialId}`, {
     method: "DELETE",
@@ -12494,7 +12512,7 @@ async function adminDeleteCredential() {
 async function adminResetUserPassword() {
   const user_id = Number(document.getElementById("adminResetUserId").value);
   const new_password = document.getElementById("adminResetPassword").value;
-  if (!user_id || !new_password) return alert(tr("РЈРєР°Р¶РёС‚Рµ user_id Рё РЅРѕРІС‹Р№ РїР°СЂРѕР»СЊ", "Specify user_id and new password"));
+  if (!user_id || !new_password) return alert(tr("Укажите user_id и новый пароль", "Specify user_id and new password"));
 
   const data = await requestJson("/api/admin/users/password", {
     method: "POST",
@@ -12718,4 +12736,5 @@ window.closeMobileNav = closeMobileNav;
 window.handleMobileBackPress = handleMobileBackPress;
 window.onMobileQuickNavChanged = onMobileQuickNavChanged;
 window.syncMobileQuickNavSelection = syncMobileQuickNavSelection;
+
 
