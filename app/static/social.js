@@ -915,7 +915,7 @@ function socialRenderNotificationCenter() {
     const kindClass = socialNotificationKindClass(row?.kind || "");
     const isRead = Boolean(row?.is_read);
     const text = socialResolveNotificationText(row);
-    const created = String(row?.created_at || "").replace("T", " ").slice(0, 16);
+    const created = socialFormatTaskDateTime(row?.created_at) || String(row?.created_at || "").replace("T", " ").slice(0, 16);
     return `
       <button type="button" class="social-notif-item ${isRead ? "is-read" : "is-unread"} kind-${escapeHtml(kindClass)}" onclick="socialOpenNotificationFromCenter(${id})">
         <div class="social-notif-item-head">
@@ -1121,6 +1121,7 @@ async function socialPollNotifications() {
     socialState.unreadCount = Number(data.unread || 0);
     socialSetBell(socialState.unreadCount);
     const rows = Array.isArray(data.rows) ? data.rows : [];
+    const isBootstrapSync = Number(socialState.lastNotificationId || 0) <= 0;
     if (!Array.isArray(socialState.notificationsFeed)) socialState.notificationsFeed = [];
     for (const srcRow of rows) {
       const row = {
@@ -1140,6 +1141,7 @@ async function socialPollNotifications() {
       if (id > socialState.lastNotificationId) socialState.lastNotificationId = id;
       if (!id || socialState.toastsSeen.has(id)) continue;
       socialState.toastsSeen.add(id);
+      if (row.is_read || isBootstrapSync) continue;
       const text = socialResolveNotificationText(row);
       socialShowToast(text.title || tr("Уведомление", "Notification"), text.body || "");
       const kindGroup = socialNotificationKindGroup(row.kind || "");
