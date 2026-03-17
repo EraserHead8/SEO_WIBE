@@ -12398,3 +12398,57 @@ body.mobile-apk-mode #socialSubtabTasks .social-task-item,
 body.mobile-client-mode #socialSubtabTasks .social-task-item {
   grid-template-columns: 32px minmax(0, 1fr) 28px;
 }
+/* 2026-03-17 mobile notification + task title clipping hotfix */
+.social-task-content {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.social-task-title-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.social-task-title-text {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.social-notif-item-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.social-notif-kind {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.social-notif-item-head small {
+  white-space: nowrap;
+}
+
+body.mobile-apk-mode .social-notif-center,
+body.mobile-client-mode .social-notif-center {
+  left: 8px !important;
+  right: 8px !important;
+  width: auto !important;
+  max-width: none !important;
+}
+
+body.mobile-apk-mode .social-notif-list,
+body.mobile-client-mode .social-notif-list {
+  max-height: calc(74vh - 58px);
+}

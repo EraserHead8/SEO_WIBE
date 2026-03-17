@@ -980,13 +980,26 @@ async function socialToggleNotificationCenter(event = null) {
   socialRenderNotificationCenter();
 
   const safeTop = 10 + Number(window.visualViewport?.offsetTop || 0);
-  if (anchor?.getBoundingClientRect) {
+  const isMobileShell = (typeof socialIsMobileClientShell === "function" && socialIsMobileClientShell())
+    || (typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell())
+    || (window.innerWidth || document.documentElement.clientWidth || 0) <= 980;
+  if (isMobileShell) {
+    root.style.left = "8px";
+    root.style.right = "8px";
+    root.style.width = "auto";
+    root.style.top = `${Math.round(safeTop + 52)}px`;
+    root.style.maxHeight = "74vh";
+  } else if (anchor?.getBoundingClientRect) {
     const rect = anchor.getBoundingClientRect();
     const top = Math.max(safeTop, Number(rect.bottom || 0) + 8);
     const right = Math.max(8, (window.innerWidth || document.documentElement.clientWidth || 0) - Number(rect.right || 0));
-    root.style.top = `${Math.round(top)}px`;
+    root.style.left = "auto";
     root.style.right = `${Math.round(right)}px`;
+    root.style.width = "min(390px, calc(100vw - 20px))";
+    root.style.top = `${Math.round(top)}px`;
   } else {
+    root.style.left = "auto";
+    root.style.width = "min(390px, calc(100vw - 20px))";
     root.style.top = `${Math.round(safeTop + 56)}px`;
     root.style.right = `12px`;
   }
