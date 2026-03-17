@@ -12452,3 +12452,34 @@ body.mobile-apk-mode .social-notif-list,
 body.mobile-client-mode .social-notif-list {
   max-height: calc(74vh - 58px);
 }
+
+
+/* 2026-03-18 mobile notification center lock */
+body.mobile-apk-mode .social-notif-center.mobile-open,
+body.mobile-client-mode .social-notif-center.mobile-open {
+  left: 8px !important;
+  right: 8px !important;
+  width: auto !important;
+  max-width: none !important;
+  top: calc(env(safe-area-inset-top, 0px) + 56px) !important;
+  bottom: 8px !important;
+  max-height: none !important;
+  min-height: 320px !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  z-index: 2800 !important;
+}
+
+body.mobile-apk-mode .social-notif-center.mobile-open .social-notif-list,
+body.mobile-client-mode .social-notif-center.mobile-open .social-notif-list {
+  max-height: none !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+body.mobile-apk-mode .social-notif-center.mobile-open .social-notif-item,
+body.mobile-client-mode .social-notif-center.mobile-open .social-notif-item {
+  background: #ffffff !important;
+  opacity: 1 !important;
+}
+

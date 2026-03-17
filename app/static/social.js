@@ -933,6 +933,7 @@ function socialCloseNotificationCenter(silent = false) {
   const root = document.getElementById("socialNotificationCenter");
   if (!root || root.classList.contains("hidden")) return false;
   root.classList.add("hidden");
+  root.classList.remove("mobile-open");
   socialState.notificationCenterOpen = false;
   socialState.notificationCenterAnchorId = "";
   if (!silent && socialState.notificationCenterMarkOnScrollDone) {
@@ -984,12 +985,16 @@ async function socialToggleNotificationCenter(event = null) {
     || (typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell())
     || (window.innerWidth || document.documentElement.clientWidth || 0) <= 980;
   if (isMobileShell) {
+    const viewportHeight = Math.max(320, Math.round(window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 720));
+    const panelTop = Math.round(safeTop + 52);
+    root.classList.add("mobile-open");
     root.style.left = "8px";
     root.style.right = "8px";
     root.style.width = "auto";
-    root.style.top = `${Math.round(safeTop + 52)}px`;
-    root.style.maxHeight = "74vh";
+    root.style.top = `${panelTop}px`;
+    root.style.maxHeight = `${Math.max(260, viewportHeight - panelTop - 12)}px`;
   } else if (anchor?.getBoundingClientRect) {
+    root.classList.remove("mobile-open");
     const rect = anchor.getBoundingClientRect();
     const top = Math.max(safeTop, Number(rect.bottom || 0) + 8);
     const right = Math.max(8, (window.innerWidth || document.documentElement.clientWidth || 0) - Number(rect.right || 0));
@@ -998,6 +1003,7 @@ async function socialToggleNotificationCenter(event = null) {
     root.style.width = "min(390px, calc(100vw - 20px))";
     root.style.top = `${Math.round(top)}px`;
   } else {
+    root.classList.remove("mobile-open");
     root.style.left = "auto";
     root.style.width = "min(390px, calc(100vw - 20px))";
     root.style.top = `${Math.round(safeTop + 56)}px`;
