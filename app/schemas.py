@@ -1283,6 +1283,18 @@ class SocialNotificationOut(BaseModel):
     created_at: str
 
 
+class SocialCalendarReminderSettingsOut(BaseModel):
+    event_id: int
+    enabled: bool = True
+    offsets_min: list[int] = Field(default_factory=list)
+    available_offsets_min: list[int] = Field(default_factory=list)
+
+
+class SocialCalendarReminderSettingsIn(BaseModel):
+    enabled: bool = True
+    offsets_min: list[int] = Field(default_factory=list)
+
+
 class NotificationSoundSettingsOut(BaseModel):
     desktop_enabled: bool = True
     chat_enabled: bool = True
