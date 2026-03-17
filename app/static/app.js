@@ -1,4 +1,4 @@
-function sanitizeToken(raw) {
+﻿function sanitizeToken(raw) {
   let value = String(raw || "").trim();
   if (!value || value === "null" || value === "undefined") return "";
   if (value.toLowerCase().startsWith("bearer ")) {
@@ -2526,17 +2526,46 @@ function showTab(name, btn = null) {
 }
 
 async function openSocialChatFromBell(event = null) {
-  if (typeof window.socialToggleNotificationCenter === "function") {
+  const openCenter = async () => {
+    if (typeof window.socialToggleNotificationCenter !== "function") return false;
     try {
       const opened = await window.socialToggleNotificationCenter(event || null);
-      if (opened !== false) return;
+      return opened !== false;
+    } catch (_) {
+      return false;
+    }
+  };
+
+  if (await openCenter()) {
+    closeMobileNav();
+    return;
+  }
+
+  const socialBtn = document.querySelector(".nav-btn[data-tab='social']");
+  if (String(currentTab || "") !== "social") {
+    currentSocialSubtab = String(currentSocialSubtab || "chat");
+    showTab("social", socialBtn || null);
+  }
+
+  if (typeof runModuleLoader === "function" && typeof loadSocialWorkspace === "function") {
+    try {
+      await runModuleLoader("social", () => loadSocialWorkspace());
+    } catch (_) {}
+  } else if (typeof loadSocialWorkspace === "function") {
+    try {
+      await loadSocialWorkspace();
     } catch (_) {}
   }
-  if (typeof window.socialMarkNotificationsReadAll === "function") {
-    try { window.socialMarkNotificationsReadAll(true); } catch (_) {}
+
+  for (let i = 0; i < 8; i += 1) {
+    if (await openCenter()) {
+      closeMobileNav();
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 120));
   }
+
   currentSocialSubtab = "chat";
-  const socialBtn = document.querySelector(".nav-btn[data-tab='social']");
   showTab("social", socialBtn || null);
   closeMobileNav();
   const trySwitch = () => {
@@ -12707,3 +12736,5 @@ window.closeMobileNav = closeMobileNav;
 window.handleMobileBackPress = handleMobileBackPress;
 window.onMobileQuickNavChanged = onMobileQuickNavChanged;
 window.syncMobileQuickNavSelection = syncMobileQuickNavSelection;
+
+

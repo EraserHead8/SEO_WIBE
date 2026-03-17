@@ -14570,7 +14570,7 @@ def social_tasks_list(
         assignee_key = _social_canonical_actor_key(db, str(task.assignee_key or "").strip().lower())
         creator_key = _social_canonical_actor_key(db, str(task.creator_key or "").strip().lower())
 
-        if assignee_key and assignee_key in actor_aliases:
+        if assignee_key:
             if due_local < now_local:
                 _social_push_notification(
                     db,
@@ -14578,37 +14578,60 @@ def social_tasks_list(
                     recipient_key=str(task.assignee_key or ""),
                     kind="task_overdue",
                     dedupe_key=f"task_overdue:{task.id}:{now_local.date().isoformat()}:{assignee_key}",
-                    title="Task overdue",
-                    body=f"{str(task.title or '')[:120]} — deadline passed.",
-                    payload={"task_id": int(task.id), "assignee": actor_nick},
+                    title="Задача просрочена",
+                    body=f"{str(task.title or '')[:120]} — срок задачи истек.",
+                    payload={
+                        "task_id": int(task.id),
+                        "i18n_key": "task_overdue",
+                        "i18n_params": {
+                            "task_title": str(task.title or "")[:180],
+                            "assignee_nick": str(task.assignee_nick or ""),
+                        },
+                    },
                 )
                 notif_created = True
             else:
                 delta_sec = (due_local - now_local).total_seconds()
                 if 0 < delta_sec <= (3 * 3600):
                     slot = due_local.strftime("%Y%m%d%H")
+                    due_text = due_local.strftime("%d.%m.%Y %H:%M")
                     _social_push_notification(
                         db,
                         user_id=user.id,
                         recipient_key=str(task.assignee_key or ""),
-                        kind="task_reminder",
+                        kind="task_reminder_3h",
                         dedupe_key=f"task_reminder_3h:{task.id}:{slot}:{assignee_key}",
-                        title="Deadline in less than 3 hours",
-                        body=f"{str(task.title or '')[:120]} — reminder before deadline.",
-                        payload={"task_id": int(task.id), "assignee": actor_nick},
+                        title="Срок задачи скоро",
+                        body=f"{str(task.title or '')[:120]} — до дедлайна меньше 3 часов.",
+                        payload={
+                            "task_id": int(task.id),
+                            "i18n_key": "task_reminder_3h",
+                            "i18n_params": {
+                                "task_title": str(task.title or "")[:180],
+                                "assignee_nick": str(task.assignee_nick or ""),
+                                "due_text": due_text,
+                            },
+                        },
                     )
                     notif_created = True
 
-        if due_local < now_local and creator_key and creator_key not in {assignee_key, ""} and creator_key in actor_aliases:
+        if due_local < now_local and creator_key and creator_key not in {assignee_key, ""}:
             _social_push_notification(
                 db,
                 user_id=user.id,
                 recipient_key=str(task.creator_key or ""),
                 kind="task_overdue",
                 dedupe_key=f"task_overdue:{task.id}:{now_local.date().isoformat()}:{creator_key}",
-                title="Task overdue",
-                body=f"{str(task.title or '')[:120]} — assignee missed deadline.",
-                payload={"task_id": int(task.id), "assignee": str(task.assignee_nick or "")},
+                title="Задача просрочена",
+                body=f"{str(task.title or '')[:120]} — исполнитель пропустил срок.",
+                payload={
+                    "task_id": int(task.id),
+                    "i18n_key": "task_overdue",
+                    "i18n_params": {
+                        "task_title": str(task.title or "")[:180],
+                        "assignee_nick": str(task.assignee_nick or ""),
+                    },
+                },
             )
             notif_created = True
 
@@ -14700,16 +14723,27 @@ def social_create_task(
     db.add(task)
     db.flush()
 
-    if assignee_key != actor_key:
+    notif_stamp = int(datetime.utcnow().timestamp())
+    notify_recipients = {str(assignee_key or "").strip(), str(actor_key or "").strip()}
+    notify_recipients.discard("")
+    for recipient in sorted(notify_recipients):
         _social_push_notification(
             db,
             user_id=user.id,
-            recipient_key=assignee_key,
+            recipient_key=recipient,
             kind="task_assigned",
-            dedupe_key=f"task_assigned:{task.id}:{int(datetime.utcnow().timestamp())}",
-            title="New assigned task",
+            dedupe_key=f"task_assigned:{task.id}:{notif_stamp}:{recipient}",
+            title="Новая задача",
             body=f"{actor_nick}: {title[:180]}",
-            payload={"task_id": int(task.id)},
+            payload={
+                "task_id": int(task.id),
+                "i18n_key": "task_assigned",
+                "i18n_params": {
+                    "task_title": str(title or "")[:180],
+                    "actor_nick": str(actor_nick or ""),
+                    "assignee_nick": str(task.assignee_nick or ""),
+                },
+            },
         )
 
     _audit(
@@ -14821,28 +14855,52 @@ def social_update_task(
             task.completed_at = None
 
     if str(task.assignee_key or "") != old_assignee:
-        _social_push_notification(
-            db,
-            user_id=user.id,
-            recipient_key=str(task.assignee_key or ""),
-            kind="task_assigned",
-            dedupe_key=f"task_assigned:{task.id}:{int(datetime.utcnow().timestamp())}",
-            title="Task reassigned",
-            body=f"{actor_nick}: {str(task.title or '')[:180]}",
-            payload={"task_id": int(task.id)},
-        )
+        reassigned_stamp = int(datetime.utcnow().timestamp())
+        reassign_recipients = {str(task.assignee_key or "").strip(), str(task.creator_key or "").strip()}
+        reassign_recipients.discard("")
+        for recipient in sorted(reassign_recipients):
+            _social_push_notification(
+                db,
+                user_id=user.id,
+                recipient_key=recipient,
+                kind="task_assigned",
+                dedupe_key=f"task_assigned:{task.id}:{reassigned_stamp}:{recipient}",
+                title="Задача назначена",
+                body=f"{actor_nick}: {str(task.title or '')[:180]}",
+                payload={
+                    "task_id": int(task.id),
+                    "i18n_key": "task_assigned",
+                    "i18n_params": {
+                        "task_title": str(task.title or "")[:180],
+                        "actor_nick": str(actor_nick or ""),
+                        "assignee_nick": str(task.assignee_nick or ""),
+                    },
+                },
+            )
 
-    if old_status != "done" and str(task.status or "") == "done" and str(task.creator_key or "") != actor_key:
-        _social_push_notification(
-            db,
-            user_id=user.id,
-            recipient_key=str(task.creator_key or ""),
-            kind="task_done",
-            dedupe_key=f"task_done:{task.id}:{int(datetime.utcnow().timestamp())}",
-            title="Task completed",
-            body=f"{actor_nick} completed task: {str(task.title or '')[:140]}",
-            payload={"task_id": int(task.id)},
-        )
+    if old_status != "done" and str(task.status or "") == "done":
+        done_stamp = int(datetime.utcnow().timestamp())
+        done_recipients = {str(task.creator_key or "").strip(), str(task.assignee_key or "").strip()}
+        done_recipients.discard("")
+        for recipient in sorted(done_recipients):
+            _social_push_notification(
+                db,
+                user_id=user.id,
+                recipient_key=recipient,
+                kind="task_done",
+                dedupe_key=f"task_done:{task.id}:{done_stamp}:{recipient}",
+                title="Задача выполнена",
+                body=f"{actor_nick}: {str(task.title or '')[:140]}",
+                payload={
+                    "task_id": int(task.id),
+                    "i18n_key": "task_done",
+                    "i18n_params": {
+                        "task_title": str(task.title or "")[:180],
+                        "actor_nick": str(actor_nick or ""),
+                        "assignee_nick": str(task.assignee_nick or ""),
+                    },
+                },
+            )
 
     _audit(
         db,
@@ -19077,6 +19135,8 @@ def mask_key(api_key: str) -> str:
     if len(api_key) <= 8:
         return "*" * len(api_key)
     return f"{api_key[:4]}...{api_key[-4:]}"
+
+
 
 
 

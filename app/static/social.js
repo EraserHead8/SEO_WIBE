@@ -753,8 +753,9 @@ function socialNotifyDesktop(row) {
   if (kindGroup === "chat" && cfg.chat_enabled === false) return;
   if (kindGroup === "task" && cfg.task_enabled === false) return;
   if (kindGroup === "calendar" && cfg.calendar_enabled === false) return;
-  const title = String(row.title || tr("Уведомление", "Notification")).trim();
-  const body = String(row.body || "").trim();
+  const text = socialResolveNotificationText(row);
+  const title = String(text.title || tr("Уведомление", "Notification")).trim();
+  const body = String(text.body || "").trim();
   if (!title && !body) return;
   try {
     const n = new Notification(title || tr("Уведомление", "Notification"), {
@@ -810,6 +811,50 @@ function socialNotificationKindClass(kind) {
   if (code.startsWith("task_")) return "task";
   if (code.startsWith("calendar_")) return "calendar";
   return "system";
+}
+
+function socialNotificationDecodeText(value) {
+  const raw = String(value || "");
+  if (typeof decodePossiblyMojibake === "function") {
+    try { return decodePossiblyMojibake(raw); } catch (_) {}
+  }
+  return raw;
+}
+
+function socialResolveNotificationText(row) {
+  const safeRow = row && typeof row === "object" ? row : {};
+  const payload = safeRow.payload && typeof safeRow.payload === "object" ? safeRow.payload : {};
+  const key = String(payload.i18n_key || "").trim().toLowerCase();
+  const params = payload.i18n_params && typeof payload.i18n_params === "object" ? payload.i18n_params : {};
+  const actorNick = String(params.actor_nick || "").trim();
+  const assigneeNick = String(params.assignee_nick || "").trim();
+  const taskTitle = String(params.task_title || params.title || "").trim();
+  const dueText = String(params.due_text || "").trim();
+
+  if (key === "task_assigned") {
+    const title = tr("Новая задача", "New task");
+    const body = [actorNick, taskTitle].filter(Boolean).join(": ") || taskTitle || tr("Вам назначена задача", "A task was assigned");
+    return { title, body };
+  }
+  if (key === "task_done") {
+    const title = tr("Задача выполнена", "Task completed");
+    const body = [actorNick, taskTitle].filter(Boolean).join(": ") || taskTitle || tr("Задача отмечена выполненной", "Task was marked done");
+    return { title, body };
+  }
+  if (key === "task_overdue") {
+    const title = tr("Задача просрочена", "Task overdue");
+    const body = [taskTitle, assigneeNick ? `${tr("Исполнитель", "Assignee")}: ${assigneeNick}` : ""].filter(Boolean).join(" • ") || tr("Срок задачи истек", "Task deadline passed");
+    return { title, body };
+  }
+  if (key === "task_reminder_3h") {
+    const title = tr("Срок задачи скоро", "Task deadline soon");
+    const body = [taskTitle, dueText ? `${tr("Дедлайн", "Deadline")}: ${dueText}` : ""].filter(Boolean).join(" • ") || tr("До дедлайна осталось меньше 3 часов", "Less than 3 hours left");
+    return { title, body };
+  }
+
+  const title = socialNotificationDecodeText(safeRow.title || tr("Уведомление", "Notification")).replace(/\s+/g, " ").trim();
+  const body = socialNotificationDecodeText(safeRow.body || "").replace(/\s+/g, " ").trim();
+  return { title, body };
 }
 
 function socialEnsureNotificationCenter() {
@@ -869,15 +914,7 @@ function socialRenderNotificationCenter() {
     const id = Number(row?.id || 0);
     const kindClass = socialNotificationKindClass(row?.kind || "");
     const isRead = Boolean(row?.is_read);
-    const decodeText = (value) => {
-      const raw = String(value || "");
-      if (typeof decodePossiblyMojibake === "function") {
-        try { return decodePossiblyMojibake(raw); } catch (_) {}
-      }
-      return raw;
-    };
-    const title = decodeText(row?.title || tr("Уведомление", "Notification")).replace(/\s+/g, " ").trim();
-    const body = decodeText(row?.body || "").replace(/\s+/g, " ").trim();
+    const text = socialResolveNotificationText(row);
     const created = String(row?.created_at || "").replace("T", " ").slice(0, 16);
     return `
       <button type="button" class="social-notif-item ${isRead ? "is-read" : "is-unread"} kind-${escapeHtml(kindClass)}" onclick="socialOpenNotificationFromCenter(${id})">
@@ -885,8 +922,8 @@ function socialRenderNotificationCenter() {
           <span class="social-notif-kind">${escapeHtml(socialNotificationKindTitle(row?.kind || ""))}</span>
           <small>${escapeHtml(created || "")}</small>
         </div>
-        <b>${escapeHtml(title)}</b>
-        <p>${escapeHtml(body || "-")}</p>
+        <b>${escapeHtml(text.title || tr("Уведомление", "Notification"))}</b>
+        <p>${escapeHtml(text.body || "-")}</p>
       </button>
     `;
   }).join("");
@@ -913,17 +950,10 @@ async function socialLoadNotificationCenterFeed(force = false) {
   try {
     const data = await socialRequest('/api/social/notifications?limit=80').catch(() => null);
     const rows = Array.isArray(data?.rows) ? data.rows : [];
-    const decodeText = (value) => {
-      const raw = String(value || "");
-      if (typeof decodePossiblyMojibake === "function") {
-        try { return decodePossiblyMojibake(raw); } catch (_) {}
-      }
-      return raw;
-    };
     socialState.notificationsFeed = rows.map((row) => ({
       ...row,
-      title: decodeText(row?.title || ""),
-      body: decodeText(row?.body || ""),
+      title: socialNotificationDecodeText(row?.title || ""),
+      body: socialNotificationDecodeText(row?.body || ""),
       is_read: Boolean(row?.is_read),
     }));
     socialState.unreadCount = Number(data?.unread || 0);
@@ -1074,14 +1104,12 @@ async function socialPollNotifications() {
     const rows = Array.isArray(data.rows) ? data.rows : [];
     if (!Array.isArray(socialState.notificationsFeed)) socialState.notificationsFeed = [];
     for (const srcRow of rows) {
-      const decodeText = (value) => {
-        const raw = String(value || "");
-        if (typeof decodePossiblyMojibake === "function") {
-          try { return decodePossiblyMojibake(raw); } catch (_) {}
-        }
-        return raw;
+      const row = {
+        ...srcRow,
+        title: socialNotificationDecodeText(srcRow?.title || ""),
+        body: socialNotificationDecodeText(srcRow?.body || ""),
+        is_read: Boolean(srcRow?.is_read),
       };
-      const row = { ...srcRow, title: decodeText(srcRow?.title || ""), body: decodeText(srcRow?.body || ""), is_read: Boolean(srcRow?.is_read) };
       const rowId = Number(row.id || 0);
       if (rowId > 0) {
         const idx = socialState.notificationsFeed.findIndex((x) => Number(x?.id || 0) === rowId);
@@ -1093,7 +1121,8 @@ async function socialPollNotifications() {
       if (id > socialState.lastNotificationId) socialState.lastNotificationId = id;
       if (!id || socialState.toastsSeen.has(id)) continue;
       socialState.toastsSeen.add(id);
-      socialShowToast(row.title || tr("Уведомление", "Notification"), row.body || "");
+      const text = socialResolveNotificationText(row);
+      socialShowToast(text.title || tr("Уведомление", "Notification"), text.body || "");
       const kindGroup = socialNotificationKindGroup(row.kind || "");
       socialPlayNotificationSound(kindGroup);
       const shouldDesktopNotify = document.hidden
@@ -6336,7 +6365,8 @@ socialMaybeStartHooks();
         : [];
       const result = await originalSocialLoadTasks(opts);
       const currentRows = Array.isArray(window.socialState.tasks) ? window.socialState.tasks : [];
-      if (currentRows.length) {
+      const hadError = Boolean(window.socialState.tasksLastLoadError);
+      if (currentRows.length || !hadError) {
         window.socialState.tasksLastGood = [...currentRows];
       } else if (previousGood.length) {
         window.socialState.tasks = [...previousGood];
@@ -6748,4 +6778,247 @@ socialMaybeStartHooks();
       return result;
     };
   }
+})();
+
+
+
+
+
+
+
+
+(function patchSocialTasksAndNotificationsV3() {
+  if (typeof window === "undefined") return;
+  if (window.__socialTasksAndNotificationsV3) return;
+  window.__socialTasksAndNotificationsV3 = true;
+
+  function safeTaskBucket(task) {
+    const raw = String(task?.bucket || "").trim().toLowerCase();
+    if (["today", "tomorrow", "upcoming", "overdue", "done"].includes(raw)) return raw;
+    const status = String(task?.status || "todo").trim().toLowerCase();
+    if (status === "done") return "done";
+    const due = task?.due_date ? socialParseDateSafe(String(task.due_date || "")) : null;
+    if (!(due instanceof Date) || Number.isNaN(due.getTime())) return "upcoming";
+    const now = new Date();
+    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startTomorrow = new Date(startToday.getFullYear(), startToday.getMonth(), startToday.getDate() + 1);
+    const startAfterTomorrow = new Date(startToday.getFullYear(), startToday.getMonth(), startToday.getDate() + 2);
+    if (due < startToday) return "overdue";
+    if (due < startTomorrow) return "today";
+    if (due < startAfterTomorrow) return "tomorrow";
+    return "upcoming";
+  }
+
+  function bucketLabel(bucket) {
+    if (bucket === "today") return tr("Сегодня", "Today");
+    if (bucket === "tomorrow") return tr("Завтра", "Tomorrow");
+    if (bucket === "upcoming") return tr("Предстоящие", "Upcoming");
+    if (bucket === "overdue") return tr("Просроченные", "Overdue");
+    if (bucket === "done") return tr("Выполненные", "Completed");
+    return tr("Задачи", "Tasks");
+  }
+
+  const originalLoadTasks = typeof window.socialLoadTasks === "function" ? window.socialLoadTasks : null;
+  if (originalLoadTasks) {
+    window.socialLoadTasks = async function socialLoadTasksV3(options = {}) {
+      const force = Boolean(options && options.force);
+      const projectId = document.getElementById("socialTaskProjectFilter")?.value || "";
+      const kind = String(document.getElementById("socialTaskKindFilter")?.value || "all").trim().toLowerCase();
+      const cacheKey = `${projectId || ""}|${kind || "all"}`;
+      const cachedRows = Array.isArray(socialState.tasksAll) ? socialState.tasksAll : [];
+      const hasCacheForKey = String(socialState.tasksCacheKey || "") === cacheKey
+        && (cachedRows.length > 0 || Number(socialState.tasksCacheLoadedAt || 0) > 0);
+      const cacheAgeMs = Date.now() - Number(socialState.tasksCacheLoadedAt || 0);
+      const cacheFresh = hasCacheForKey && cacheAgeMs < 60000;
+
+      if (hasCacheForKey) {
+        socialApplyTaskRowsFromCache();
+        if (typeof window.socialRenderTasks === "function") window.socialRenderTasks();
+        if (!force && cacheFresh) return;
+      }
+
+      socialState.tasksLastLoadError = false;
+      try {
+        await originalLoadTasks(options);
+      } catch (error) {
+        socialState.tasksLastLoadError = true;
+        if (typeof socialShowToast === "function") {
+          socialShowToast(tr("Задачи", "Tasks"), String(error?.message || tr("Ошибка загрузки задач", "Failed to load tasks")));
+        }
+      }
+
+      const currentRows = Array.isArray(socialState.tasks) ? socialState.tasks : [];
+      if (currentRows.length || !socialState.tasksLastLoadError) {
+        socialState.tasksLastGood = [...currentRows];
+      }
+      if (!currentRows.length && !socialTaskIncludeDoneEnabled()) {
+        if (typeof window.socialRenderTasks === "function") window.socialRenderTasks();
+      }
+    };
+  }
+
+  window.socialTaskDragStart = function socialTaskDragStart(event, taskId) {
+    if (typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell()) return;
+    const id = Number(taskId || 0);
+    if (!id || !event?.dataTransfer) return;
+    try {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", String(id));
+    } catch (_) {}
+    const node = event.currentTarget;
+    if (node?.setAttribute) node.setAttribute("data-dragging", "1");
+  };
+
+  window.socialTaskDragEnd = function socialTaskDragEnd(event) {
+    const node = event?.currentTarget;
+    if (node?.removeAttribute) node.removeAttribute("data-dragging");
+  };
+
+  window.socialTaskDragOver = function socialTaskDragOver(event) {
+    if (typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell()) return;
+    if (event?.preventDefault) event.preventDefault();
+  };
+
+  window.socialRenderTasks = function socialRenderTasksV3() {
+    const host = document.getElementById("socialTasksBoard");
+    if (!host) return;
+    const rows = Array.isArray(socialState.tasks) ? socialState.tasks : [];
+    const includeDone = socialTaskIncludeDoneEnabled();
+    const myActorKey = String(socialState.boot?.actor?.actor_key || "").trim();
+    const isOwner = Boolean(socialState.boot?.actor?.is_owner);
+
+    const order = ["today", "tomorrow", "upcoming", "overdue", "done"];
+    const bucketMap = new Map(order.map((x) => [x, []]));
+    for (const row of rows) {
+      const key = safeTaskBucket(row);
+      if (!bucketMap.has(key)) bucketMap.set(key, []);
+      bucketMap.get(key).push(row);
+    }
+
+    const sections = order
+      .filter((bucket) => includeDone || bucket !== "done")
+      .map((bucket) => {
+        const items = bucketMap.get(bucket) || [];
+        const listHtml = items.length
+          ? items.map((task) => {
+            const id = Number(task?.id || 0);
+            const status = socialTaskVisualStatus(task);
+            const isDone = status === "done";
+            const due = socialFormatTaskDateTime(task?.due_date);
+            const created = socialFormatTaskDateTime(task?.created_at);
+            const project = socialTaskProjectTitle(task);
+            const kind = String(task?.task_kind || "company").toLowerCase();
+            const kindLabel = kind === "personal" ? tr("ЛИЧНАЯ", "PERSONAL") : project;
+            const assigneeNick = String(task?.assignee_nick || "-");
+            const avatar = socialAvatarMarkup(String(task?.assignee_avatar_url || ""), assigneeNick, "xs");
+            const pendingText = socialTaskPendingHint(id);
+            const isMine = myActorKey && String(task?.assignee_key || "") === myActorKey;
+            const canToggle = Boolean(task?.can_complete || isMine || isOwner);
+            const canDelete = Boolean(task?.can_delete || isOwner);
+            const dueDt = task?.due_date ? socialParseDateSafe(String(task.due_date || "")) : null;
+            const isOverdue = !isDone && dueDt instanceof Date && !Number.isNaN(dueDt.getTime()) && dueDt.getTime() < Date.now();
+            const canDrag = !(typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell());
+            return `
+              <article class="social-task-item ${isMine ? "is-assignee" : ""} ${isDone ? "is-done" : ""} ${isOverdue ? "is-overdue" : ""}" data-task-id="${id}" draggable="${canDrag ? "true" : "false"}" ondragstart="socialTaskDragStart(event, ${id})" ondragend="socialTaskDragEnd(event)" ondblclick="socialOpenTaskModal(${id})">
+                <button class="social-task-check ${isDone ? "is-done" : ""}" type="button" onclick="socialToggleTaskDone(${id}); event.stopPropagation();" title="${tr("Переключить выполнение", "Toggle done")}" ${canToggle ? "" : "disabled"}>✓</button>
+                <div class="social-task-content" onclick="socialOpenTaskModal(${id})">
+                  <div class="social-task-title-row">
+                    <div class="social-task-title-text">${escapeHtml(task?.title || "-")}</div>
+                    <span class="social-task-kind ${kind === "personal" ? "personal" : "company"}">${escapeHtml(kindLabel || tr("Без проекта", "No project"))}</span>
+                  </div>
+                  <div class="social-task-subline">
+                    <span class="social-task-assignee">${avatar}<span class="social-task-assignee-name">${escapeHtml(assigneeNick)}</span></span>
+                    <span>${tr("Дата создания", "Created")}: ${escapeHtml(created || "-")} • ${tr("Дедлайн", "Deadline")}: ${escapeHtml(due || tr("Без дедлайна", "No deadline"))}</span>
+                  </div>
+                  ${pendingText ? `<div class="social-task-pending">${escapeHtml(pendingText)}</div>` : ""}
+                </div>
+                ${canDelete ? `<button class="social-task-delete" type="button" onclick="socialDeleteTask(${id}); event.stopPropagation();" title="${tr("Удалить", "Delete")}">✕</button>` : `<span></span>`}
+              </article>
+            `;
+          }).join("")
+          : `<div class="hint">${escapeHtml(tr("Нет задач", "No tasks"))}</div>`;
+
+        return `
+          <section class="social-task-bucket" data-bucket="${bucket}" ondragover="socialTaskDragOver(event)" ondrop="socialTaskDrop(event, '${bucket}')">
+            <header>
+              <h4>${escapeHtml(bucketLabel(bucket))}</h4>
+              <span>${Number(items.length || 0)}</span>
+            </header>
+            <div class="social-task-bucket-list">${listHtml}</div>
+          </section>
+        `;
+      })
+      .join("");
+
+    host.innerHTML = `<div class="social-task-board-v2">${sections}</div>`;
+  };
+
+  window.socialOpenProjectMembersModal = async function socialOpenProjectMembersModal() {
+    const projectId = Number(document.getElementById("socialTaskProjectFilter")?.value || 0);
+    if (!projectId) {
+      if (typeof socialShowToast === "function") socialShowToast(tr("Проекты", "Projects"), tr("Сначала выберите проект в фильтре.", "Select a project first."));
+      else alert(tr("Сначала выберите проект в фильтре.", "Select a project first."));
+      return;
+    }
+
+    const project = (Array.isArray(socialState.projects) ? socialState.projects : []).find((row) => Number(row?.id || 0) === projectId);
+    const title = String(project?.title || "").trim() || tr("Проект", "Project");
+    const members = await socialRequest(`/api/social/tasks/projects/${projectId}/members`).catch((error) => {
+      const msg = String(error?.message || tr("Не удалось загрузить участников", "Failed to load members"));
+      if (typeof socialShowToast === "function") socialShowToast(tr("Участники", "Members"), msg);
+      else alert(msg);
+      return null;
+    });
+    if (!Array.isArray(members)) return;
+
+    const canEdit = Boolean(socialState.boot?.actor?.is_owner);
+    const rowsHtml = members.map((row) => {
+      const actorKey = String(row?.actor_key || "");
+      const nick = String(row?.nick || actorKey || "-");
+      const avatar = socialAvatarMarkup(String(row?.avatar_url || ""), nick, "xs");
+      const checked = Boolean(row?.in_project) ? "checked" : "";
+      const disabled = canEdit ? "" : "disabled";
+      const ownerBadge = Boolean(row?.is_owner) ? `<span class="social-task-tag">${escapeHtml(tr("owner", "owner"))}</span>` : "";
+      return `
+        <label class="social-member-row">
+          <input class="social-project-member-check" type="checkbox" value="${escapeHtml(actorKey)}" ${checked} ${disabled} />
+          ${avatar}
+          <span class="social-task-assignee-name">${escapeHtml(nick)}</span>
+          ${ownerBadge}
+        </label>
+      `;
+    }).join("");
+
+    socialOpenModal(
+      `${tr("Участники проекта", "Project members")}: ${escapeHtml(title)}`,
+      `
+        <div class="social-group-members">
+          <div class="social-group-members-list" id="socialProjectMembersList">${rowsHtml || `<div class="hint">${escapeHtml(tr("Участников пока нет", "No members yet"))}</div>`}</div>
+          <div class="actions">
+            <button type="button" class="btn-secondary" onclick="socialCloseModal()">${tr("Отмена", "Cancel")}</button>
+            ${canEdit ? `<button type="button" onclick="socialSaveProjectMembers(${projectId})">${tr("Сохранить", "Save")}</button>` : `<span class="hint">${escapeHtml(tr("Только владелец может менять состав", "Only owner can edit members"))}</span>`}
+          </div>
+        </div>
+      `
+    );
+  };
+
+  window.socialSaveProjectMembers = async function socialSaveProjectMembers(projectId) {
+    const safeProjectId = Number(projectId || 0);
+    if (!safeProjectId) return;
+    const checks = [...document.querySelectorAll("#socialProjectMembersList .social-project-member-check")];
+    const actorKeys = checks.filter((node) => node.checked).map((node) => String(node.value || "").trim()).filter(Boolean);
+    await socialRequest(`/api/social/tasks/projects/${safeProjectId}/members`, {
+      method: "PUT",
+      body: JSON.stringify({ actor_keys: actorKeys }),
+    }).catch((error) => {
+      const msg = String(error?.message || tr("Не удалось сохранить участников", "Failed to save members"));
+      if (typeof socialShowToast === "function") socialShowToast(tr("Участники", "Members"), msg);
+      else alert(msg);
+      throw error;
+    });
+    socialCloseModal();
+    await socialLoadProjects();
+    await window.socialLoadTasks({ force: true });
+  };
 })();

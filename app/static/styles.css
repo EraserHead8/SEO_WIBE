@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Unbounded:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+﻿@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Unbounded:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
 :root {
   --bg-1: #060a18;
@@ -12321,4 +12321,80 @@ body.mobile-client-mode .social-notif-center {
   left: 8px;
   right: 8px;
   max-height: min(74vh, 620px);
+}
+
+/* 2026-03-17 tasks + notifications stabilization */
+.social-notif-center {
+  background: #ffffff;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-color: color-mix(in srgb, var(--line) 70%, #4f7ef7 30%);
+}
+
+.social-notif-head {
+  background: #f8fbff;
+}
+
+.social-notif-item {
+  background: #ffffff;
+  border-color: color-mix(in srgb, var(--line) 80%, #c2d4ff 20%);
+}
+
+.social-notif-item b {
+  color: #142744;
+  font-weight: 800;
+}
+
+.social-notif-item p {
+  color: #334155;
+}
+
+.social-notif-item.is-read {
+  opacity: 0.92;
+  filter: grayscale(0.18);
+  background: #f5f7fb;
+}
+
+.social-notif-item.is-unread {
+  opacity: 1;
+}
+
+.social-task-item {
+  grid-template-columns: 34px minmax(0, 1fr) 30px;
+}
+
+.social-task-delete {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: color-mix(in srgb, #ef4444 78%, var(--text));
+  background: color-mix(in srgb, #ef4444 9%, var(--panel-bg));
+  border: 1px solid color-mix(in srgb, #ef4444 40%, var(--line));
+}
+
+.social-task-delete:hover {
+  background: color-mix(in srgb, #ef4444 14%, var(--panel-bg));
+}
+
+body.mobile-apk-mode #socialSubtabTasks .social-tasks-board,
+body.mobile-client-mode #socialSubtabTasks .social-tasks-board {
+  max-height: none;
+  overflow: visible;
+}
+
+body.mobile-apk-mode #socialSubtabTasks .social-task-board-v2,
+body.mobile-client-mode #socialSubtabTasks .social-task-board-v2 {
+  gap: 10px;
+}
+
+body.mobile-apk-mode #socialSubtabTasks .social-task-item,
+body.mobile-client-mode #socialSubtabTasks .social-task-item {
+  grid-template-columns: 32px minmax(0, 1fr) 28px;
 }
