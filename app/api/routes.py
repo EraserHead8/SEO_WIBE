@@ -186,6 +186,7 @@ from app.schemas import (
     SocialTaskProjectOut,
     SocialTaskProjectMemberOut,
     SocialTaskProjectMembersUpdateIn,
+    SocialTaskReorderIn,
     SocialTaskUpdateIn,
     NotificationSoundSettingsIn,
     NotificationSoundSettingsOut,
