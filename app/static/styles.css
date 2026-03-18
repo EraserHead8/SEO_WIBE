@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Unbounded:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+﻿@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Unbounded:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
 :root {
   --bg-1: #060a18;
@@ -12583,6 +12583,7 @@ body.mobile-client-mode .social-notif-center.mobile-open .social-notif-item p {
   display: grid;
   gap: 12px;
   padding-bottom: 72px;
+  overflow: visible;
   border-radius: 18px;
   background: linear-gradient(180deg, color-mix(in oklab, var(--panel-bg-soft) 88%, #ffffff), color-mix(in oklab, var(--panel-bg) 94%, #ffffff));
 }
@@ -12601,15 +12602,10 @@ body.mobile-client-mode .social-notif-center.mobile-open .social-notif-item p {
   line-height: 1.12;
 }
 
-#socialSubtabCalendar .social-calendar-tools {
+#socialSubtabCalendar .social-calendar-tools--minimal {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
+  justify-content: flex-start;
   gap: 8px;
-}
-
-#socialSubtabCalendar .social-calendar-month-picker {
-  min-width: 210px;
 }
 
 #socialSubtabCalendar .social-calendar-grid--samsung .social-day {
@@ -12624,7 +12620,7 @@ body.mobile-client-mode .social-notif-center.mobile-open .social-notif-item p {
 
 #socialSubtabCalendar .social-day-snippets {
   display: grid;
-  gap: 3px;
+  gap: 4px;
   width: 100%;
   min-width: 0;
 }
@@ -12637,16 +12633,19 @@ body.mobile-client-mode .social-notif-center.mobile-open .social-notif-item p {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding-left: 8px;
+  padding: 2px 7px 2px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--entry-color, #0ea5e9) 16%, #ffffff 84%);
   font-size: 11px;
   line-height: 1.24;
+  font-weight: 600;
   color: color-mix(in oklab, var(--text-color) 88%, #10233d);
 }
 
 #socialSubtabCalendar .social-day-snippet::before {
   content: "";
   position: absolute;
-  left: 0;
+  left: 4px;
   top: 50%;
   width: 4px;
   height: 4px;
@@ -12668,60 +12667,94 @@ body.mobile-client-mode .social-notif-center.mobile-open .social-notif-item p {
   color: var(--text-muted);
 }
 
-#socialSubtabCalendar .social-calendar-day-sheet {
-  border: 1px solid color-mix(in oklab, var(--line) 82%, var(--accent) 18%);
-  border-radius: 14px;
-  background: color-mix(in oklab, var(--panel-bg) 90%, #ffffff);
-  padding: 10px;
-  display: grid;
-  gap: 10px;
+#socialSubtabCalendar .social-calendar-day-sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 16;
+  border-radius: 18px;
+  background: rgba(245, 249, 255, 0.72);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 
-#socialSubtabCalendar .social-calendar-day-sheet.hidden {
+#socialSubtabCalendar .social-calendar-day-sheet {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 14px;
+  z-index: 17;
+  display: grid;
+  gap: 12px;
+  max-height: min(70vh, 560px);
+  padding: 14px;
+  border: 1px solid color-mix(in oklab, var(--line) 82%, var(--accent) 18%);
+  border-radius: 24px;
+  background: color-mix(in oklab, var(--panel-bg) 96%, #ffffff);
+  box-shadow: 0 28px 50px rgba(14, 27, 54, 0.22);
+}
+
+#socialSubtabCalendar .social-calendar-day-sheet.hidden,
+#socialSubtabCalendar .social-calendar-day-sheet-backdrop.hidden {
   display: none;
 }
 
 #socialSubtabCalendar .social-calendar-day-sheet-head {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+#socialSubtabCalendar .social-calendar-day-sheet-title {
+  min-width: 0;
 }
 
 #socialSubtabCalendar .social-calendar-day-sheet-head span {
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 #socialSubtabCalendar .social-calendar-day-sheet-head h4 {
   margin: 2px 0 0;
-  font-size: 20px;
+  font-size: clamp(20px, 2.2vw, 28px);
+}
+
+#socialSubtabCalendar .social-calendar-day-sheet-close {
+  width: 40px;
+  height: 40px;
+  border: 1px solid color-mix(in oklab, var(--line) 82%, transparent);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--panel-bg-soft) 92%, #ffffff);
+  font-size: 24px;
+  line-height: 1;
+  color: var(--text-color);
 }
 
 #socialSubtabCalendar .social-calendar-day-list {
   display: grid;
-  gap: 8px;
+  gap: 10px;
+  min-height: 0;
+  overflow: auto;
 }
 
 #socialSubtabCalendar .social-calendar-day-entry {
   display: grid;
-  grid-template-columns: 10px minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 10px;
   align-items: flex-start;
   width: 100%;
   border: 1px solid color-mix(in oklab, var(--line) 80%, transparent);
-  border-radius: 12px;
-  padding: 9px 10px;
-  background: color-mix(in oklab, var(--panel-bg-soft) 86%, #ffffff);
+  border-radius: 16px;
+  padding: 12px;
+  background: color-mix(in oklab, var(--panel-bg-soft) 88%, #ffffff);
   text-align: left;
 }
 
 #socialSubtabCalendar .social-calendar-day-entry-dot {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   margin-top: 6px;
   border-radius: 999px;
   background: var(--entry-color, #0ea5e9);
@@ -12730,7 +12763,7 @@ body.mobile-client-mode .social-notif-center.mobile-open .social-notif-item p {
 #socialSubtabCalendar .social-calendar-day-entry-main {
   min-width: 0;
   display: grid;
-  gap: 2px;
+  gap: 4px;
 }
 
 #socialSubtabCalendar .social-calendar-day-entry-main b,
@@ -12742,6 +12775,10 @@ body.mobile-client-mode .social-notif-center.mobile-open .social-notif-item p {
   white-space: nowrap;
 }
 
+#socialSubtabCalendar .social-calendar-day-entry-main b {
+  font-size: 18px;
+}
+
 #socialSubtabCalendar .social-calendar-day-entry-main small {
   color: var(--text-muted);
   font-size: 12px;
@@ -12750,6 +12787,23 @@ body.mobile-client-mode .social-notif-center.mobile-open .social-notif-item p {
 #socialSubtabCalendar .social-calendar-day-empty {
   color: var(--text-muted);
   font-size: 14px;
+}
+
+#socialSubtabCalendar .social-calendar-day-sheet-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+#socialSubtabCalendar .social-calendar-day-sheet-add {
+  width: 54px;
+  height: 54px;
+  border: 0;
+  border-radius: 50%;
+  font-size: 30px;
+  line-height: 1;
+  color: #ffffff;
+  background: linear-gradient(145deg, #9acb43, #79b021);
+  box-shadow: 0 16px 28px rgba(79, 133, 28, 0.28);
 }
 
 #socialSubtabCalendar .social-calendar-fab {
@@ -12803,17 +12857,6 @@ body.mobile-client-mode .social-notif-center.mobile-open .social-notif-item p {
 }
 
 @media (max-width: 980px) {
-  #socialSubtabCalendar .social-calendar-tools {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-
-  #socialSubtabCalendar .social-calendar-month-picker {
-    min-width: 0;
-    grid-column: 1 / -1;
-  }
-
   #socialSubtabCalendar .social-calendar-grid--samsung .social-day {
     min-height: 72px;
     padding: 5px;
@@ -12823,9 +12866,20 @@ body.mobile-client-mode .social-notif-center.mobile-open .social-notif-item p {
     font-size: 10px;
   }
 
+  #socialSubtabCalendar .social-calendar-day-sheet {
+    left: 8px;
+    right: 8px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+    max-height: min(76vh, 580px);
+    padding: 12px;
+  }
+
   #socialSubtabCalendar .social-calendar-day-sheet-head {
     align-items: flex-start;
-    flex-direction: column;
+  }
+
+  #socialSubtabCalendar .social-calendar-day-entry-main b {
+    font-size: 16px;
   }
 
   #socialSubtabCalendar .social-calendar-fab {
@@ -12835,7 +12889,6 @@ body.mobile-client-mode .social-notif-center.mobile-open .social-notif-item p {
     bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
   }
 }
-
 /* Notification center readability and no overlap (web + APK) */
 #socialNotificationCenter.social-notif-center {
   background: #ffffff !important;
@@ -13012,3 +13065,4 @@ body.mobile-apk-mode #socialSubtabTasks .social-task-item,
 body.mobile-client-mode #socialSubtabTasks .social-task-item {
   overflow: hidden;
 }
+

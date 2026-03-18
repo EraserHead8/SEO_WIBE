@@ -1,4 +1,4 @@
-let socialState = {
+﻿let socialState = {
   boot: null,
   currentSubtab: "chat",
   gamesLeaderboardCache: new Map(),
@@ -1420,6 +1420,9 @@ function switchSocialSubtab(tab, loadNow = true) {
     socialLoadTasks();
   }
   if (safe === "calendar") {
+    socialLoadTaskActors().catch(() => null);
+    socialLoadProjects().catch(() => null);
+    socialHideCalendarDaySheet();
     socialLoadCalendar();
   }
   if (safe === "calculator") {
@@ -5296,13 +5299,29 @@ function socialCalendarTaskBadge(task) {
   return tr("Задача", "Task");
 }
 
+function socialCalendarDayBounds(dayKey) {
+  const dt = socialCalendarParseDate(dayKey);
+  if (!dt) return null;
+  const start = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate(), 0, 0, 0, 0);
+  const end = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate(), 23, 59, 59, 999);
+  return { start, end };
+}
+
+function socialCalendarEntrySpansDay(startValue, endValue, dayKey) {
+  const bounds = socialCalendarDayBounds(dayKey);
+  const start = socialCalendarParseDate(startValue);
+  if (!bounds || !start) return false;
+  const end = socialCalendarParseDate(endValue || startValue) || start;
+  return start.getTime() <= bounds.end.getTime() && end.getTime() >= bounds.start.getTime();
+}
+
 function socialCalendarCollectDayEntries(dayKey) {
   const entries = [];
   const events = Array.isArray(socialState.calendarEvents) ? socialState.calendarEvents : [];
   const tasks = Array.isArray(socialState.calendarTasks) ? socialState.calendarTasks : [];
 
   for (const row of events) {
-    if (socialCalendarDayKey(row?.start_at || "") !== dayKey) continue;
+    if (!socialCalendarEntrySpansDay(row?.start_at || "", row?.end_at || "", dayKey)) continue;
     entries.push({
       id: Number(row?.id || 0),
       entry_id: Number(row?.id || 0),
@@ -5349,11 +5368,7 @@ function socialCalendarCollectDayEntries(dayKey) {
 }
 
 function socialCalendarSnippetLabel(entry) {
-  const title = String(entry?.title || "-").trim() || "-";
-  const kind = String(entry?.entry_type || "event").toLowerCase();
-  if (kind === "task") return `${tr("Задача", "Task")}: ${title}`;
-  if (kind === "reminder") return `${tr("Напоминание", "Reminder")}: ${title}`;
-  return title;
+  return String(entry?.title || "-").trim() || "-";
 }
 
 function socialRenderCalendar() {
@@ -5374,6 +5389,12 @@ function socialRenderCalendar() {
     monthLabel.textContent = socialCalendarMonthLabel(d);
   }
 
+  const monthPrefix = `${year}-${socialCalendarPad(month + 1)}-`;
+  const todayFallback = todayKey && String(todayKey).startsWith(monthPrefix) ? todayKey : `${monthPrefix}01`;
+  const selected = String(socialState.calendarSelectedDay || "");
+  const target = selected.startsWith(monthPrefix) ? selected : todayFallback;
+  socialState.calendarSelectedDay = target;
+
   const dayEntriesMap = new Map();
   for (let day = 1; day <= days; day += 1) {
     const key = `${year}-${socialCalendarPad(month + 1)}-${socialCalendarPad(day)}`;
@@ -5388,14 +5409,12 @@ function socialRenderCalendar() {
   for (let day = 1; day <= days; day += 1) {
     const key = `${year}-${socialCalendarPad(month + 1)}-${socialCalendarPad(day)}`;
     const entries = dayEntriesMap.get(key) || [];
-    const active = socialState.calendarSelectedDay === key ? "active" : "";
+    const active = target === key ? "active" : "";
     const isToday = todayKey && key === todayKey ? "today" : "";
 
     const visible = entries.slice(0, 2);
     const hiddenCount = Math.max(0, entries.length - visible.length);
-    const lines = visible.map((entry) => {
-      return `<span class="social-day-snippet" style="--entry-color:${escapeHtml(socialCalendarEntryColor(entry))}">${escapeHtml(socialCalendarSnippetLabel(entry))}</span>`;
-    }).join("");
+    const lines = visible.map((entry) => `<span class="social-day-snippet" style="--entry-color:${escapeHtml(socialCalendarEntryColor(entry))}">${escapeHtml(socialCalendarSnippetLabel(entry))}</span>`).join("");
     const more = hiddenCount > 0 ? `<span class="social-day-more">+${hiddenCount}</span>` : "";
 
     html += `
@@ -5408,28 +5427,28 @@ function socialRenderCalendar() {
 
   html += `</div>`;
   grid.innerHTML = html;
-
-  const monthPrefix = `${year}-${socialCalendarPad(month + 1)}-`;
-  const todayFallback = todayKey && String(todayKey).startsWith(monthPrefix) ? todayKey : `${monthPrefix}01`;
-  const selected = String(socialState.calendarSelectedDay || "");
-  const target = selected.startsWith(monthPrefix) ? selected : todayFallback;
-  socialShowDay(target);
+  socialHideCalendarDaySheet();
 }
 
 function socialBuildCalendarDaySheet(dayKey, entries) {
   const title = socialCalendarDayLabel(dayKey);
+  const countLabel = entries.length === 1
+    ? tr("1 запись", "1 item")
+    : currentLang === "en"
+      ? `${entries.length} items`
+      : `${entries.length} ${entries.length >= 2 && entries.length <= 4 ? "записи" : "записей"}`;
   const header = `
     <div class="social-calendar-day-sheet-head">
-      <div>
-        <span>${escapeHtml(tr("День", "Day"))}</span>
+      <div class="social-calendar-day-sheet-title">
+        <span>${escapeHtml(countLabel)}</span>
         <h4>${escapeHtml(title)}</h4>
       </div>
-      <button type="button" class="btn-secondary" onclick="socialOpenCalendarQuickAddMenu('${escapeHtml(dayKey)}')">${escapeHtml(tr("+ Добавить", "+ Add"))}</button>
+      <button type="button" class="social-calendar-day-sheet-close" onclick="socialHideCalendarDaySheet()" aria-label="${escapeHtml(tr("Закрыть", "Close"))}">&times;</button>
     </div>
   `;
 
   if (!entries.length) {
-    return `${header}<div class="social-calendar-day-empty">${escapeHtml(tr("На этот день записей нет.", "No entries for this day."))}</div>`;
+    return `${header}<div class="social-calendar-day-empty">${escapeHtml(tr("На этот день записей нет.", "No entries for this day."))}</div><div class="social-calendar-day-sheet-actions"><button type="button" class="social-calendar-day-sheet-add" onclick="socialOpenCalendarQuickAddMenu('${escapeHtml(dayKey)}')" aria-label="${escapeHtml(tr("Добавить", "Add"))}">+</button></div>`;
   }
 
   const rows = entries.map((entry) => {
@@ -5452,7 +5471,19 @@ function socialBuildCalendarDaySheet(dayKey, entries) {
     `;
   }).join("");
 
-  return `${header}<div class="social-calendar-day-list">${rows}</div>`;
+  return `${header}<div class="social-calendar-day-list">${rows}</div><div class="social-calendar-day-sheet-actions"><button type="button" class="social-calendar-day-sheet-add" onclick="socialOpenCalendarQuickAddMenu('${escapeHtml(dayKey)}')" aria-label="${escapeHtml(tr("Добавить", "Add"))}">+</button></div>`;
+}
+
+function socialHideCalendarDaySheet() {
+  const shell = document.querySelector("#socialSubtabCalendar .social-calendar-shell--samsung");
+  const backdrop = document.getElementById("socialCalendarDaySheetBackdrop");
+  const sheet = document.getElementById("socialCalendarDaySheet");
+  if (shell) shell.classList.remove("day-sheet-open");
+  if (backdrop) backdrop.classList.add("hidden");
+  if (sheet) {
+    sheet.classList.add("hidden");
+    sheet.setAttribute("aria-hidden", "true");
+  }
 }
 
 function socialShowDay(dayKey) {
@@ -5468,11 +5499,16 @@ function socialShowDay(dayKey) {
   }
 
   const sheet = document.getElementById("socialCalendarDaySheet");
+  const backdrop = document.getElementById("socialCalendarDaySheetBackdrop");
+  const shell = document.querySelector("#socialSubtabCalendar .social-calendar-shell--samsung");
   if (!sheet) return;
 
   const entries = socialCalendarCollectDayEntries(safeKey);
   sheet.innerHTML = socialBuildCalendarDaySheet(safeKey, entries);
   sheet.classList.remove("hidden");
+  sheet.setAttribute("aria-hidden", "false");
+  if (backdrop) backdrop.classList.remove("hidden");
+  if (shell) shell.classList.add("day-sheet-open");
 }
 
 function socialOpenCalendarDetail(kind, entryId, dayKey = "") {
@@ -5560,7 +5596,14 @@ function socialOpenCalendarQuickAddMenu(dayKey = "") {
   );
 }
 
-function socialOpenCalendarTaskCreateModal(dayKey = "") {
+async function socialOpenCalendarTaskCreateModal(dayKey = "") {
+  if (!Array.isArray(socialState.actors) || !socialState.actors.length) {
+    await socialLoadTaskActors().catch(() => null);
+  }
+  if (!Array.isArray(socialState.projects) || !socialState.projects.length) {
+    await socialLoadProjects().catch(() => null);
+  }
+
   const actors = Array.isArray(socialState.actors) ? socialState.actors : [];
   const projects = Array.isArray(socialState.projects) ? socialState.projects : [];
   const due = socialCalendarDefaultDateTime(dayKey).slice(0, 16);
@@ -5607,15 +5650,20 @@ async function socialCreateTaskFromCalendar() {
     return;
   }
 
-  await socialRequest("/api/social/tasks", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  }).catch((e) => {
+  try {
+    await socialRequest("/api/social/tasks", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  } catch (e) {
     alert(e?.message || tr("Не удалось создать задачу", "Failed to create task"));
-  });
+    return;
+  }
 
   socialCloseModal();
+  socialState.calendarSelectedDay = socialCalendarDayKey(payload.due_date || "") || socialState.calendarSelectedDay;
   await socialLoadCalendar();
+  if (socialState.calendarSelectedDay) socialShowDay(socialState.calendarSelectedDay);
 }
 
 function socialOpenCalendarModal(eventId = 0, preset = null) {
@@ -5691,9 +5739,17 @@ async function socialSaveEvent(eventId = 0) {
     ? socialRequest(`/api/social/calendar/events/${Number(eventId)}`, { method: "PUT", body: JSON.stringify(payload) })
     : socialRequest("/api/social/calendar/events", { method: "POST", body: JSON.stringify(payload) });
 
-  await req.catch((e) => alert(e?.message || tr("Не удалось сохранить запись", "Failed to save entry")));
+  try {
+    await req;
+  } catch (e) {
+    alert(e?.message || tr("Не удалось сохранить запись", "Failed to save entry"));
+    return;
+  }
+
+  socialState.calendarSelectedDay = socialCalendarDayKey(payload.start_at || "") || socialState.calendarSelectedDay;
   socialCloseModal();
   await socialLoadCalendar();
+  if (socialState.calendarSelectedDay) socialShowDay(socialState.calendarSelectedDay);
 }
 
 async function socialDeleteEvent(eventId) {
@@ -5701,6 +5757,7 @@ async function socialDeleteEvent(eventId) {
   if (!id) return;
   await socialRequest(`/api/social/calendar/events/${id}`, { method: "DELETE" }).catch((e) => alert(e?.message || tr("Не удалось удалить запись", "Failed to delete entry")));
   await socialLoadCalendar();
+  socialHideCalendarDaySheet();
 }
 
 async function socialSyncGoogleCalendar() {
@@ -6364,6 +6421,9 @@ window.socialLoadCalendar = socialLoadCalendar;
 window.socialConnectGoogleCalendar = socialConnectGoogleCalendar;
 window.socialRenderCalendar = socialRenderCalendar;
 window.socialShowDay = socialShowDay;
+window.socialHideCalendarDaySheet = socialHideCalendarDaySheet;
+window.socialOpenCalendarQuickAddMenu = socialOpenCalendarQuickAddMenu;
+window.socialOpenCalendarTaskCreateModal = socialOpenCalendarTaskCreateModal;
 window.socialSetBell = socialSetBell;
 window.socialMarkNotificationsReadAll = socialMarkNotificationsReadAll;
 window.socialToggleNotificationCenter = socialToggleNotificationCenter;
@@ -6640,5 +6700,6 @@ socialMaybeStartHooks();
     await window.socialLoadTasks({ force: true });
   };
 })();
+
 
 
