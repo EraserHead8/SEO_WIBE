@@ -405,6 +405,12 @@ def run_lightweight_migrations():
             calendar_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(social_calendar_events)"))}
             if calendar_cols and "is_public" not in calendar_cols:
                 conn.execute(text("ALTER TABLE social_calendar_events ADD COLUMN is_public BOOLEAN DEFAULT 0"))
+            if calendar_cols and "entry_type" not in calendar_cols:
+                conn.execute(text("ALTER TABLE social_calendar_events ADD COLUMN entry_type VARCHAR(20) DEFAULT 'event'"))
+            if calendar_cols and "is_all_day" not in calendar_cols:
+                conn.execute(text("ALTER TABLE social_calendar_events ADD COLUMN is_all_day BOOLEAN DEFAULT 0"))
+            if calendar_cols and "color" not in calendar_cols:
+                conn.execute(text("ALTER TABLE social_calendar_events ADD COLUMN color VARCHAR(24) DEFAULT ''"))
 
             ai_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(ai_service_accounts)"))}
             if ai_cols and "priority" not in ai_cols:

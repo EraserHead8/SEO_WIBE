@@ -5188,22 +5188,10 @@ async function socialConnectGoogleCalendar() {
 async function socialLoadCalendar() {
   const monthInput = document.getElementById("socialCalendarMonth");
   const monthLabel = document.getElementById("socialCalendarMonthLabel");
-  const syncUrlInput = document.getElementById("socialCalendarGoogleIcs");
-  if (syncUrlInput && !String(syncUrlInput.value || "").trim()) {
-    try {
-      syncUrlInput.value = String(localStorage.getItem("social_calendar_google_ics_url") || "").trim();
-    } catch (_) {}
-  }
-  const syncReplace = document.getElementById("socialCalendarGoogleReplace");
-  if (syncReplace && !syncReplace.dataset.bound) {
-    syncReplace.dataset.bound = "1";
-    try {
-      syncReplace.checked = localStorage.getItem("social_calendar_google_replace") === "1";
-    } catch (_) {}
-  }
   if (monthInput && !monthInput.value) {
     monthInput.value = socialCalendarMonthValue(socialState.calendarDate);
   }
+
   const monthVal = String(monthInput?.value || "").trim();
   if (monthVal) {
     const [y, m] = monthVal.split("-").map((x) => Number(x || 0));
@@ -5214,21 +5202,54 @@ async function socialLoadCalendar() {
   if (monthLabel) {
     monthLabel.textContent = socialCalendarMonthLabel(socialState.calendarDate);
   }
-  await socialLoadGoogleCalendarStatus();
+
+  const seq = Number(socialState.calendarLoadSeq || 0) + 1;
+  socialState.calendarLoadSeq = seq;
+
   const start = new Date(socialState.calendarDate.getFullYear(), socialState.calendarDate.getMonth(), 1, 0, 0, 0, 0);
   const end = new Date(socialState.calendarDate.getFullYear(), socialState.calendarDate.getMonth() + 1, 0, 23, 59, 59, 0);
-  const qp = new URLSearchParams({
+  const eventsQuery = new URLSearchParams({
     date_from: socialCalendarRangeParam(start, false),
     date_to: socialCalendarRangeParam(end, true),
   });
-  const rows = await socialRequest(`/api/social/calendar/events?${qp.toString()}`).catch((e) => {
-    socialState.calendarEvents = [];
-    socialSetCalendarSyncMessage("error", tr("Не удалось загрузить события календаря", "Failed to load calendar events"), [e?.message || tr("Повторите попытку чуть позже.", "Please retry in a moment.")]);
-    return [];
-  });
-  socialState.calendarEvents = Array.isArray(rows) ? rows : [];
+
+  const [eventRows, taskRows] = await Promise.all([
+    socialRequest(`/api/social/calendar/events?${eventsQuery.toString()}`).catch((e) => ({ __error: e })),
+    socialRequest("/api/social/tasks?task_kind=all&include_done=true").catch((e) => ({ __error: e })),
+  ]);
+
+  if (Number(socialState.calendarLoadSeq || 0) !== seq) return;
+
+  const prevEvents = Array.isArray(socialState.calendarEvents) ? socialState.calendarEvents : [];
+  const prevTasks = Array.isArray(socialState.calendarTasks) ? socialState.calendarTasks : [];
+
+  if (Array.isArray(eventRows)) {
+    socialState.calendarEvents = eventRows;
+    socialState.calendarLastGoodEvents = [...eventRows];
+  } else {
+    socialState.calendarEvents = Array.isArray(socialState.calendarLastGoodEvents)
+      ? [...socialState.calendarLastGoodEvents]
+      : prevEvents;
+    if (eventRows?.__error && typeof socialShowToast === "function") {
+      socialShowToast(tr("Календарь", "Calendar"), eventRows.__error?.message || tr("Не удалось загрузить события.", "Failed to load events."));
+    }
+  }
+
+  if (Array.isArray(taskRows)) {
+    socialState.calendarTasks = taskRows;
+    socialState.calendarLastGoodTasks = [...taskRows];
+  } else {
+    socialState.calendarTasks = Array.isArray(socialState.calendarLastGoodTasks)
+      ? [...socialState.calendarLastGoodTasks]
+      : prevTasks;
+    if (taskRows?.__error && typeof socialShowToast === "function") {
+      socialShowToast(tr("Календарь", "Calendar"), taskRows.__error?.message || tr("Не удалось загрузить задачи.", "Failed to load tasks."));
+    }
+  }
+
   socialRenderCalendar();
 }
+
 function socialShiftCalendar(deltaMonths = 0) {
   const delta = Number(deltaMonths || 0);
   if (!Number.isFinite(delta) || !delta) return;
@@ -5251,364 +5272,426 @@ function socialJumpCalendarToday() {
   }
   socialLoadCalendar();
 }
+
+function socialCalendarEntryTypeLabel(type) {
+  const safe = String(type || "event").toLowerCase();
+  if (safe === "task") return tr("Задача", "Task");
+  if (safe === "reminder") return tr("Напоминание", "Reminder");
+  return tr("Событие", "Event");
+}
+
+function socialCalendarEntryColor(entry) {
+  const kind = String(entry?.entry_type || "event").toLowerCase();
+  const raw = String(entry?.color || "").trim();
+  if (raw && /^#[0-9a-fA-F]{6}$/.test(raw)) return raw;
+  if (kind === "reminder") return "#8b5cf6";
+  if (kind === "task") return "#2563eb";
+  return "#0ea5e9";
+}
+
+function socialCalendarTaskBadge(task) {
+  const bucket = String(task?.bucket || "").toLowerCase();
+  if (bucket === "overdue") return tr("Просрочено", "Overdue");
+  if (bucket === "done") return tr("Выполнено", "Done");
+  return tr("Задача", "Task");
+}
+
+function socialCalendarCollectDayEntries(dayKey) {
+  const entries = [];
+  const events = Array.isArray(socialState.calendarEvents) ? socialState.calendarEvents : [];
+  const tasks = Array.isArray(socialState.calendarTasks) ? socialState.calendarTasks : [];
+
+  for (const row of events) {
+    if (socialCalendarDayKey(row?.start_at || "") !== dayKey) continue;
+    entries.push({
+      id: Number(row?.id || 0),
+      entry_id: Number(row?.id || 0),
+      source: "calendar",
+      entry_type: String(row?.entry_type || "event").toLowerCase() === "reminder" ? "reminder" : "event",
+      title: String(row?.title || "-").trim() || "-",
+      details: socialCleanCalendarDetails(row?.details || ""),
+      start_at: String(row?.start_at || ""),
+      end_at: row?.end_at ? String(row.end_at) : "",
+      is_all_day: Boolean(row?.is_all_day),
+      is_public: Boolean(row?.is_public),
+      color: socialCalendarEntryColor(row),
+      sortTs: socialCalendarParseDate(row?.start_at || "")?.getTime() || 0,
+    });
+  }
+
+  for (const task of tasks) {
+    if (socialCalendarDayKey(task?.due_date || "") !== dayKey) continue;
+    const due = socialCalendarParseDate(task?.due_date || "");
+    entries.push({
+      id: Number(task?.id || 0),
+      entry_id: Number(task?.id || 0),
+      source: "task",
+      entry_type: "task",
+      title: String(task?.title || "-").trim() || "-",
+      details: String(task?.description || "").trim(),
+      start_at: String(task?.due_date || ""),
+      end_at: "",
+      is_all_day: false,
+      is_public: false,
+      color: socialCalendarEntryColor({ entry_type: "task", color: "" }),
+      task_row: task,
+      sortTs: due?.getTime() || 0,
+    });
+  }
+
+  entries.sort((a, b) => {
+    if (a.is_all_day && !b.is_all_day) return -1;
+    if (!a.is_all_day && b.is_all_day) return 1;
+    return Number(a.sortTs || 0) - Number(b.sortTs || 0);
+  });
+
+  return entries;
+}
+
+function socialCalendarSnippetLabel(entry) {
+  const title = String(entry?.title || "-").trim() || "-";
+  const kind = String(entry?.entry_type || "event").toLowerCase();
+  if (kind === "task") return `${tr("Задача", "Task")}: ${title}`;
+  if (kind === "reminder") return `${tr("Напоминание", "Reminder")}: ${title}`;
+  return title;
+}
+
 function socialRenderCalendar() {
   const grid = document.getElementById("socialCalendarGrid");
-  const list = document.getElementById("socialCalendarEvents");
   const monthLabel = document.getElementById("socialCalendarMonthLabel");
-  if (!grid || !list) return;
+  if (!grid) return;
+
   const d = socialState.calendarDate;
-  const todayKey = socialCalendarDayKey(new Date());
   const year = d.getFullYear();
   const month = d.getMonth();
   const firstDay = new Date(year, month, 1, 0, 0, 0, 0);
   const lastDay = new Date(year, month + 1, 0, 0, 0, 0, 0);
   const shift = (firstDay.getDay() + 6) % 7;
   const days = lastDay.getDate();
-  const compactCalendar = typeof window !== "undefined"
-    && window.matchMedia
-    && window.matchMedia("(max-width: 980px)").matches;
-  const eventsByDay = new Map();
-  const tasksByDay = new Map();
-  const myTasksByDay = new Map();
-  const myActorKey = String(socialState.boot?.actor?.actor_key || "").trim();
-  (socialState.calendarEvents || []).forEach((eventRow) => {
-    const key = socialCalendarDayKey(eventRow?.start_at || "");
-    if (!key) return;
-    if (!eventsByDay.has(key)) eventsByDay.set(key, []);
-    eventsByDay.get(key).push(eventRow);
-  });
-  (socialState.tasks || []).forEach((task) => {
-    const key = socialCalendarDayKey(task?.due_date || "");
-    if (!key) return;
-    if (!tasksByDay.has(key)) tasksByDay.set(key, []);
-    tasksByDay.get(key).push(task);
-    if (myActorKey && String(task.assignee_key || "") === myActorKey) {
-      if (!myTasksByDay.has(key)) myTasksByDay.set(key, []);
-      myTasksByDay.get(key).push(task);
-    }
-  });
+  const todayKey = socialCalendarDayKey(new Date());
+
   if (monthLabel) {
     monthLabel.textContent = socialCalendarMonthLabel(d);
   }
-  let html = `<div class="social-calendar-row head">${[tr("Пн", "Mon"), tr("Вт", "Tue"), tr("Ср", "Wed"), tr("Чт", "Thu"), tr("Пт", "Fri"), tr("Сб", "Sat"), tr("Вс", "Sun")].map((x) => `<span>${x}</span>`).join("")}</div><div class="social-calendar-cells">`;
-  for (let i = 0; i < shift; i += 1) html += `<button class="social-day muted" disabled></button>`;
+
+  const dayEntriesMap = new Map();
   for (let day = 1; day <= days; day += 1) {
     const key = `${year}-${socialCalendarPad(month + 1)}-${socialCalendarPad(day)}`;
-    const eventsCount = (eventsByDay.get(key) || []).length;
-    const tasksCount = (tasksByDay.get(key) || []).length;
-    const myTasksCount = (myTasksByDay.get(key) || []).length;
+    dayEntriesMap.set(key, socialCalendarCollectDayEntries(key));
+  }
+
+  let html = `<div class="social-calendar-row head">${[tr("Пн", "Mon"), tr("Вт", "Tue"), tr("Ср", "Wed"), tr("Чт", "Thu"), tr("Пт", "Fri"), tr("Сб", "Sat"), tr("Вс", "Sun")].map((x) => `<span>${x}</span>`).join("")}</div><div class="social-calendar-cells">`;
+  for (let i = 0; i < shift; i += 1) {
+    html += `<button class="social-day muted" disabled></button>`;
+  }
+
+  for (let day = 1; day <= days; day += 1) {
+    const key = `${year}-${socialCalendarPad(month + 1)}-${socialCalendarPad(day)}`;
+    const entries = dayEntriesMap.get(key) || [];
     const active = socialState.calendarSelectedDay === key ? "active" : "";
     const isToday = todayKey && key === todayKey ? "today" : "";
-    const hasEvents = eventsCount > 0 ? "has-event" : "";
-    const hasTasks = tasksCount > 0 ? "has-task" : "";
-    const hasMyTasks = myTasksCount > 0 ? "has-my-task" : "";
-    const manyMyTasks = myTasksCount > 1 ? "my-task-many" : "";
-    const countsHtml = compactCalendar
-      ? `<small><span class="calendar-count calendar-events">${eventsCount}</span><span class="calendar-sep">-</span><span class="calendar-count calendar-tasks ${myTasksCount ? "my-task" : ""}">${tasksCount}</span></small>`
-      : `<small><span class="calendar-count calendar-events">${eventsCount} ${tr("соб.", "ev.")}</span><span class="calendar-sep">-</span><span class="calendar-count calendar-tasks ${myTasksCount ? "my-task" : ""}">${tasksCount} ${tr("задач", "tasks")}</span></small>`;
-    html += `<button class="social-day ${active} ${isToday} ${hasEvents} ${hasTasks} ${hasMyTasks} ${manyMyTasks}" data-day-key="${key}" type="button" onclick="socialShowDay('${key}')"><b>${day}</b>${countsHtml}</button>`;
+
+    const visible = entries.slice(0, 2);
+    const hiddenCount = Math.max(0, entries.length - visible.length);
+    const lines = visible.map((entry) => {
+      return `<span class="social-day-snippet" style="--entry-color:${escapeHtml(socialCalendarEntryColor(entry))}">${escapeHtml(socialCalendarSnippetLabel(entry))}</span>`;
+    }).join("");
+    const more = hiddenCount > 0 ? `<span class="social-day-more">+${hiddenCount}</span>` : "";
+
+    html += `
+      <button class="social-day social-day--samsung ${active} ${isToday}" data-day-key="${key}" type="button" onclick="socialShowDay('${key}')">
+        <b>${day}</b>
+        <span class="social-day-snippets">${lines}${more}</span>
+      </button>
+    `;
   }
+
   html += `</div>`;
   grid.innerHTML = html;
-  const todayFallback = todayKey && String(todayKey).startsWith(`${year}-${socialCalendarPad(month + 1)}-`)
-    ? todayKey
-    : "";
-  const fallback = todayFallback || `${year}-${socialCalendarPad(month + 1)}-01`;
-  const inMonth = String(socialState.calendarSelectedDay || "").startsWith(`${year}-${socialCalendarPad(month + 1)}-`);
-  socialShowDay(inMonth ? socialState.calendarSelectedDay : fallback);
+
+  const monthPrefix = `${year}-${socialCalendarPad(month + 1)}-`;
+  const todayFallback = todayKey && String(todayKey).startsWith(monthPrefix) ? todayKey : `${monthPrefix}01`;
+  const selected = String(socialState.calendarSelectedDay || "");
+  const target = selected.startsWith(monthPrefix) ? selected : todayFallback;
+  socialShowDay(target);
 }
-function socialCleanCalendarDetails(raw) {
-  const value = String(raw || "");
-  if (!value.trim()) return "";
-  const cleaned = value
-    .split("\n")
-    .filter((line) => !/^\s*\[\[gcal_sync\s+source=[a-f0-9]{16}\s+uid=[^\]\s]+\]\]\s*$/i.test(String(line || "")))
-    .join("\n")
-    .trim();
-  return cleaned;
+
+function socialBuildCalendarDaySheet(dayKey, entries) {
+  const title = socialCalendarDayLabel(dayKey);
+  const header = `
+    <div class="social-calendar-day-sheet-head">
+      <div>
+        <span>${escapeHtml(tr("День", "Day"))}</span>
+        <h4>${escapeHtml(title)}</h4>
+      </div>
+      <button type="button" class="btn-secondary" onclick="socialOpenCalendarQuickAddMenu('${escapeHtml(dayKey)}')">${escapeHtml(tr("+ Добавить", "+ Add"))}</button>
+    </div>
+  `;
+
+  if (!entries.length) {
+    return `${header}<div class="social-calendar-day-empty">${escapeHtml(tr("На этот день записей нет.", "No entries for this day."))}</div>`;
+  }
+
+  const rows = entries.map((entry) => {
+    const kind = String(entry?.entry_type || "event").toLowerCase();
+    const timeLabel = entry?.is_all_day
+      ? tr("Весь день", "All day")
+      : (entry?.start_at ? socialCalendarTimeLabel(entry.start_at) : "-");
+    const sub = kind === "task"
+      ? `${socialCalendarTaskBadge(entry.task_row)} • ${entry?.task_row?.assignee_nick || tr("Без исполнителя", "No assignee")}`
+      : `${socialCalendarEntryTypeLabel(kind)} • ${timeLabel}`;
+
+    return `
+      <button type="button" class="social-calendar-day-entry" onclick="socialOpenCalendarDetail('${kind}', ${Number(entry.entry_id || 0)}, '${escapeHtml(dayKey)}')">
+        <span class="social-calendar-day-entry-dot" style="--entry-color:${escapeHtml(socialCalendarEntryColor(entry))}"></span>
+        <span class="social-calendar-day-entry-main">
+          <b>${escapeHtml(String(entry.title || "-").trim() || "-")}</b>
+          <small>${escapeHtml(sub)}</small>
+        </span>
+      </button>
+    `;
+  }).join("");
+
+  return `${header}<div class="social-calendar-day-list">${rows}</div>`;
 }
 
 function socialShowDay(dayKey) {
-  const list = document.getElementById("socialCalendarEvents");
-  if (!list) return;
-  socialState.calendarSelectedDay = dayKey;
-  const events = (socialState.calendarEvents || [])
-    .filter((eventRow) => socialCalendarDayKey(eventRow?.start_at || "") === dayKey)
-    .sort((a, b) => {
-      const left = socialCalendarParseDate(a?.start_at)?.getTime() || 0;
-      const right = socialCalendarParseDate(b?.start_at)?.getTime() || 0;
-      return left - right;
-    });
-  const tasks = (socialState.tasks || [])
-    .filter((task) => socialCalendarDayKey(task?.due_date || "") === dayKey)
-    .sort((a, b) => String(a?.title || "").localeCompare(String(b?.title || ""), currentLang === "en" ? "en" : "ru"));
-  list.innerHTML = `
-    <div class="social-calendar-day-header">
-      <div>
-        <span>${escapeHtml(tr("Выбранный день", "Selected day"))}</span>
-        <h4>${escapeHtml(socialCalendarDayLabel(dayKey))}</h4>
-      </div>
-      <div class="social-calendar-day-stats">
-        <span>${escapeHtml(`${tr("События", "Events")}: ${events.length}`)}</span>
-        <span>${escapeHtml(`${tr("Задачи", "Tasks")}: ${tasks.length}`)}</span>
-      </div>
-    </div>
-    <div class="social-day-events">
-      <h5>${tr("События", "Events")}</h5>
-      ${events.length ? events.map((eventRow) => {
-        const timeLabel = eventRow?.start_at
-          ? `${socialCalendarTimeLabel(eventRow.start_at)}${eventRow?.end_at ? ` - ${socialCalendarTimeLabel(eventRow.end_at)}` : ""}`
-          : "-";
-        const scopeLabel = eventRow?.is_public ? tr("Общее", "Shared") : tr("Личное", "Private");
-        const cleanDetails = socialCleanCalendarDetails(eventRow.details || "");
-        return `<div class="social-day-item"><b>${escapeHtml(eventRow.title || "-")}</b><small>${escapeHtml(timeLabel)} - ${escapeHtml(scopeLabel)}</small><div>${cleanDetails ? escapeHtml(cleanDetails) : `<span class="hint">${escapeHtml(tr("Без описания", "No description"))}</span>`}</div><div class="actions"><button type="button" onclick="socialOpenCalendarModal(${Number(eventRow.id)})">${tr("Изменить", "Edit")}</button><button class="btn-danger" type="button" onclick="socialDeleteEvent(${Number(eventRow.id)})">${tr("Удалить", "Delete")}</button></div></div>`;
-      }).join("") : `<div class="hint">${tr("На этот день событий нет.", "No events for this day.")}</div>`}
-    </div>
-    <div class="social-day-events">
-      <h5>${tr("Дедлайны задач", "Task deadlines")}</h5>
-      ${tasks.length ? tasks.map((task) => `<div class="social-day-item"><b>${escapeHtml(task.title || "-")}</b><small>${escapeHtml(task.assignee_nick || "-")}</small><div>${escapeHtml(task.status || "")}</div></div>`).join("") : `<div class="hint">${tr("На этот день дедлайнов нет.", "No task deadlines for this day.")}</div>`}
-    </div>
-  `;
+  const safeKey = String(dayKey || "").trim();
+  if (!safeKey) return;
+  socialState.calendarSelectedDay = safeKey;
+
   const grid = document.getElementById("socialCalendarGrid");
   if (grid) {
     grid.querySelectorAll(".social-day[data-day-key]").forEach((btn) => {
-      btn.classList.toggle("active", String(btn.getAttribute("data-day-key") || "") === dayKey);
+      btn.classList.toggle("active", String(btn.getAttribute("data-day-key") || "") === safeKey);
     });
   }
+
+  const sheet = document.getElementById("socialCalendarDaySheet");
+  if (!sheet) return;
+
+  const entries = socialCalendarCollectDayEntries(safeKey);
+  sheet.innerHTML = socialBuildCalendarDaySheet(safeKey, entries);
+  sheet.classList.remove("hidden");
 }
 
-const SOCIAL_EMOJI_STORAGE_KEY = "seo_wibe_social_emoji_recent_v2";
-const SOCIAL_EMOJI_RECENT_LIMIT = 30;
-const SOCIAL_EMOJI_TAB_ORDER = ["recent", "all"];
-const SOCIAL_EMOJI_GROUPS = [
-  {
-    id: "faces",
-    label: tr("\u041b\u0438\u0446\u0430", "Faces"),
-    items: ["🙂", "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", "🤗", "🤩", "🥳", "😎", "🤓", "🧐", "🥺", "😏", "😒", "🙄", "😬", "🤨", "😶", "🫠", "🤔", "🫡", "😴", "🤤", "🤯", "😮", "😲", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😢", "😭", "😤", "😠", "😡", "🤬", "🤢", "🤮", "🤧", "😷", "🤒", "🤕", "🤑", "🤠", "🥴", "😵", "🫨", "🤥"],
-  },
-  {
-    id: "gestures",
-    label: tr("\u0416\u0435\u0441\u0442\u044b", "Gestures"),
-    items: ["👍", "👎", "👌", "✌️", "🤞", "🫶", "🤟", "🤘", "🤙", "👈", "👉", "👆", "👇", "☝️", "✋", "🤚", "🖐️", "🖖", "👋", "🤝", "👏", "🙌", "🫡", "🙏", "💪", "🦾", "🫂", "👐", "🤲", "🫴", "🫷", "🫸"],
-  },
-  {
-    id: "symbols",
-    label: tr("\u0421\u0438\u043c\u0432\u043e\u043b\u044b", "Symbols"),
-    items: ["❤️", "🩷", "🩵", "💙", "💚", "💛", "🧡", "💜", "🖤", "🤍", "🤎", "💔", "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💯", "✅", "☑️", "✔️", "❌", "⛔", "⚠️", "🚫", "‼️", "❓", "❗", "🔔", "🔕", "⭐", "🌟", "✨", "🔥", "⚡", "🎯", "📌"],
-  },
-  {
-    id: "work",
-    label: tr("\u0414\u0435\u043b\u043e", "Work"),
-    items: ["💼", "📁", "📂", "🗂️", "📊", "📈", "📉", "🧾", "🧮", "📎", "📌", "🗓️", "📅", "⏰", "⌛", "🕒", "📝", "✏️", "🖊️", "🖋️", "📚", "📖", "💡", "🛠️", "🧰", "⚙️", "🖥️", "💻", "⌨️", "📱", "🔋", "🔌", "📡", "🧠", "🧑‍💻", "📦", "📬", "📢", "📣", "📨"],
-  },
-  {
-    id: "objects",
-    label: tr("\u041f\u0440\u0435\u0434\u043c\u0435\u0442\u044b", "Objects"),
-    items: ["🛍️", "🛒", "🎁", "🔑", "🔒", "🔓", "💳", "💵", "💶", "💷", "💴", "🪙", "🏷️", "🧴", "🧼", "🧻", "🧹", "🧽", "🪥", "🪮", "🪞", "🧸", "🎮", "📷", "📸", "🎥", "🎧", "🎤", "🔍", "🔎", "🔬", "🧪", "🧫", "🧯", "🕯️", "🪫", "💿", "📀", "🧲", "📼"],
-  },
-  {
-    id: "food",
-    label: tr("\u0415\u0434\u0430", "Food"),
-    items: ["☕", "🍵", "🧋", "🥤", "🍶", "🍺", "🍷", "🍸", "🍹", "🍾", "🍎", "🍊", "🍋", "🍌", "🍉", "🍇", "🍓", "🫐", "🍍", "🥭", "🍒", "🍑", "🥝", "🍅", "🥑", "🥦", "🥒", "🌶️", "🌽", "🥕", "🍞", "🥐", "🥖", "🧀", "🍔", "🍟", "🍕", "🌭", "🍜", "🍣"],
-  },
-  {
-    id: "travel",
-    label: tr("\u041f\u043e\u0435\u0437\u0434\u043a\u0438", "Travel"),
-    items: ["🚗", "🚕", "🚙", "🚌", "🚎", "🏎️", "🚓", "🚑", "🚒", "🚚", "🚛", "🚜", "🛵", "🏍️", "🚲", "✈️", "🛫", "🛬", "🚁", "🚀", "🛸", "🚢", "⛴️", "🚆", "🚇", "🚝", "🚞", "🚊", "🚉", "⛽", "🗺️", "🧭", "🏖️", "🏝️", "🏔️", "🏕️", "🏙️", "🌆", "🌉", "🗽"],
-  },
-  {
-    id: "nature",
-    label: tr("\u041f\u0440\u0438\u0440\u043e\u0434\u0430", "Nature"),
-    items: ["🌤️", "⛅", "🌥️", "☁️", "🌦️", "🌧️", "⛈️", "🌩️", "🌨️", "❄️", "☀️", "🌙", "⭐", "🌟", "✨", "🌈", "🌪️", "🌊", "💧", "🌿", "🍀", "🌱", "🌳", "🌲", "🌴", "🌵", "🌸", "🌼", "🌻", "🌺", "🌹", "🌷", "🪻", "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻"],
-  },
-];
-let socialEmojiSetKey = "recent";
+function socialOpenCalendarDetail(kind, entryId, dayKey = "") {
+  const safeKind = String(kind || "event").trim().toLowerCase();
+  const id = Number(entryId || 0);
+  if (!id) return;
 
-function socialLoadEmojiRecents() {
-  try {
-    const raw = localStorage.getItem(SOCIAL_EMOJI_STORAGE_KEY);
-    const list = JSON.parse(String(raw || "[]"));
-    if (!Array.isArray(list)) return [];
-    return list
-      .map((x) => String(x || "").trim())
-      .filter(Boolean)
-      .slice(0, SOCIAL_EMOJI_RECENT_LIMIT);
-  } catch (_) {
-    return [];
+  if (safeKind === "task") {
+    const tasks = Array.isArray(socialState.calendarTasks) ? socialState.calendarTasks : [];
+    const row = tasks.find((task) => Number(task?.id || 0) === id) || null;
+    if (!row) return;
+
+    const assignee = String(row?.assignee_nick || "").trim() || tr("Не назначено", "Not assigned");
+    const created = socialFormatTaskDateTime(row?.created_at) || "-";
+    const due = socialFormatTaskDateTime(row?.due_date) || "-";
+    socialOpenModal(
+      tr("Задача", "Task"),
+      `
+        <div class="social-calendar-detail-grid">
+          <h3>${escapeHtml(String(row?.title || "-").trim() || "-")}</h3>
+          <p>${escapeHtml(String(row?.description || "").trim() || tr("Без описания", "No description"))}</p>
+          <div class="social-calendar-detail-meta">
+            <span>${escapeHtml(tr("Исполнитель", "Assignee"))}: <b>${escapeHtml(assignee)}</b></span>
+            <span>${escapeHtml(tr("Создано", "Created"))}: <b>${escapeHtml(created)}</b></span>
+            <span>${escapeHtml(tr("Дедлайн", "Deadline"))}: <b>${escapeHtml(due)}</b></span>
+          </div>
+        </div>
+        <div class="actions social-calendar-detail-actions">
+          <button type="button" onclick="socialCloseModal(); socialOpenTaskModal(${id})">${escapeHtml(tr("Редактировать", "Edit"))}</button>
+          ${Boolean(row?.can_delete || socialState.boot?.actor?.is_owner) ? `<button class="btn-danger" type="button" onclick="socialCloseModal(); socialDeleteTask(${id})">${escapeHtml(tr("Удалить", "Delete"))}</button>` : ""}
+        </div>
+      `
+    );
+    return;
   }
-}
 
-function socialSaveEmojiRecents(list) {
-  try {
-    localStorage.setItem(SOCIAL_EMOJI_STORAGE_KEY, JSON.stringify(Array.isArray(list) ? list.slice(0, SOCIAL_EMOJI_RECENT_LIMIT) : []));
-  } catch (_) {}
-}
+  const events = Array.isArray(socialState.calendarEvents) ? socialState.calendarEvents : [];
+  const row = events.find((eventRow) => Number(eventRow?.id || 0) === id) || null;
+  if (!row) return;
 
-function socialGetEmojiRecents() {
-  if (!Array.isArray(socialState.emojiRecents)) {
-    socialState.emojiRecents = socialLoadEmojiRecents();
-  }
-  return socialState.emojiRecents;
-}
+  const startText = row?.is_all_day ? tr("Весь день", "All day") : (socialFormatTaskDateTime(row?.start_at) || "-");
+  const endText = row?.end_at ? (socialFormatTaskDateTime(row?.end_at) || "-") : tr("Не задано", "Not set");
+  const scopeText = row?.is_public ? tr("Общее", "Shared") : tr("Личное", "Private");
 
-function socialRememberRecentEmoji(emoji) {
-  const code = String(emoji || "").trim();
-  if (!code) return;
-  const current = socialGetEmojiRecents().filter((x) => x !== code);
-  current.unshift(code);
-  socialState.emojiRecents = current.slice(0, SOCIAL_EMOJI_RECENT_LIMIT);
-  socialSaveEmojiRecents(socialState.emojiRecents);
-}
-
-function socialSwitchEmojiSetByDelta(delta = 0) {
-  const step = Number(delta || 0);
-  if (!step) return;
-  const idx = Math.max(0, SOCIAL_EMOJI_TAB_ORDER.indexOf(socialEmojiSetKey));
-  const next = Math.max(0, Math.min(SOCIAL_EMOJI_TAB_ORDER.length - 1, idx + step));
-  if (next === idx) return;
-  socialSwitchEmojiSet(SOCIAL_EMOJI_TAB_ORDER[next]);
-}
-
-function socialBindEmojiSwipe(host) {
-  if (!host || host.dataset.swipeBind === "1") return;
-  host.dataset.swipeBind = "1";
-  let startX = 0;
-  let startY = 0;
-  host.addEventListener("pointerdown", (e) => {
-    if (!e.target?.closest?.(".social-emoji-pane")) return;
-    startX = Number(e.clientX || 0);
-    startY = Number(e.clientY || 0);
-  }, { passive: true });
-  host.addEventListener("pointermove", (e) => {
-    if (!startX) return;
-    const dx = Number(e.clientX || 0) - startX;
-    const dy = Number(e.clientY || 0) - startY;
-    if (Math.abs(dx) > 42 && Math.abs(dx) > Math.abs(dy) * 1.2) {
-      socialState.keepEmojiOpenUntil = Date.now() + 260;
-      socialSwitchEmojiSetByDelta(dx < 0 ? 1 : -1);
-      startX = 0;
-      startY = 0;
-    }
-  }, { passive: true });
-  const stop = () => {
-    startX = 0;
-    startY = 0;
-  };
-  host.addEventListener("pointerup", stop, { passive: true });
-  host.addEventListener("pointercancel", stop, { passive: true });
-}
-
-function socialBuildEmojiSectionsHtml() {
-  return SOCIAL_EMOJI_GROUPS.map((group) => {
-    const itemsHtml = group.items.map((emoji) => `<button type="button" class="social-emoji-item" onclick="socialInsertEmoji('${emoji}')">${emoji}</button>`).join("");
-    return `
-      <section class="social-emoji-section" data-emoji-group="${escapeHtml(group.id)}">
-        <header class="social-emoji-section-title">${escapeHtml(group.label)}</header>
-        <div class="social-emoji-grid">${itemsHtml}</div>
-      </section>
-    `;
-  }).join("");
-}
-
-function socialBuildRecentEmojiHtml() {
-  const recents = socialGetEmojiRecents();
-  if (!recents.length) {
-    return `<div class="social-emoji-empty">${escapeHtml(tr("\u041d\u0435\u0434\u0430\u0432\u043d\u0438\u0445 \u0441\u043c\u0430\u0439\u043b\u0438\u043a\u043e\u0432 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442", "No recent emoji yet"))}</div>`;
-  }
-  const items = recents.map((emoji) => `<button type="button" class="social-emoji-item" onclick="socialInsertEmoji('${emoji}')">${emoji}</button>`).join("");
-  return `<div class="social-emoji-grid">${items}</div>`;
-}
-
-function socialEnsureEmojiPicker() {
-  const host = document.getElementById("socialEmojiPicker");
-  if (!host) return;
-  socialGetEmojiRecents();
-  const tabs = `
-    <button type="button" class="social-emoji-tab ${socialEmojiSetKey === "recent" ? "active" : ""}" onclick="socialSwitchEmojiSet('recent')" aria-label="${escapeHtml(tr("\u041d\u0435\u0434\u0430\u0432\u043d\u0438\u0435", "Recent"))}" title="${escapeHtml(tr("\u041d\u0435\u0434\u0430\u0432\u043d\u0438\u0435", "Recent"))}">
-      <span class="social-emoji-tab-icon" aria-hidden="true">🕘</span>
-    </button>
-    <button type="button" class="social-emoji-tab ${socialEmojiSetKey === "all" ? "active" : ""}" onclick="socialSwitchEmojiSet('all')" aria-label="${escapeHtml(tr("\u0412\u0441\u0435 \u0441\u043c\u0430\u0439\u043b\u0438\u043a\u0438", "All emoji"))}" title="${escapeHtml(tr("\u0412\u0441\u0435 \u0441\u043c\u0430\u0439\u043b\u0438\u043a\u0438", "All emoji"))}">
-      <span class="social-emoji-tab-icon" aria-hidden="true">🙂</span>
-    </button>
-  `;
-  const pane = socialEmojiSetKey === "recent"
-    ? socialBuildRecentEmojiHtml()
-    : `<div class="social-emoji-sections">${socialBuildEmojiSectionsHtml()}</div>`;
-  host.innerHTML = `
-    <div class="social-emoji-tabs">${tabs}</div>
-    <div class="social-emoji-pane">${pane}</div>
-  `;
-  socialBindEmojiSwipe(host);
-}
-
-function socialToggleEmojiPicker(force = null) {
-  const host = document.getElementById("socialEmojiPicker");
-  if (!host) return;
-  const shouldOpen = force === null ? host.classList.contains("hidden") : Boolean(force);
-  if (shouldOpen) socialEnsureEmojiPicker();
-  host.classList.toggle("hidden", !shouldOpen);
-  if (shouldOpen) {
-    const input = document.getElementById("socialChatInput");
-    if (input) input.focus();
-  }
-}
-
-function socialSwitchEmojiSet(key) {
-  const normalized = ({ business: "all", quick: "all", smile: "all", all: "all", recent: "recent" })[String(key || "").trim()] || "all";
-  if (normalized === socialEmojiSetKey) return;
-  socialState.keepEmojiOpenUntil = Date.now() + 220;
-  socialEmojiSetKey = normalized;
-  socialEnsureEmojiPicker();
-}
-
-function socialInsertEmoji(emoji) {
-  const code = String(emoji || "").trim();
-  if (!code) return;
-  const input = document.getElementById("socialChatInput");
-  if (!input) return;
-  const value = String(input.value || "");
-  const start = Number(input.selectionStart || value.length);
-  const end = Number(input.selectionEnd || value.length);
-  const next = `${value.slice(0, start)}${code}${value.slice(end)}`;
-  input.value = next;
-  const caret = start + code.length;
-  input.setSelectionRange(caret, caret);
-  input.focus();
-  socialRememberRecentEmoji(code);
-  socialSyncChatComposerState();
-  socialToggleEmojiPicker(true);
-}
-
-function socialOpenCalendarModal(eventId = 0) {
-  const row = socialState.calendarEvents.find((x) => Number(x.id) === Number(eventId || 0)) || null;
   socialOpenModal(
-    row ? tr("Изменить событие", "Edit event") : tr("Новое событие", "New event"),
+    socialCalendarEntryTypeLabel(row?.entry_type || "event"),
     `
-      <div class="grid-2">
-        <label><span>${tr("Название", "Title")}</span><input id="socialEventTitle" value="${escapeHtml(row?.title || "")}" /></label>
-        <label><span>${tr("Начало", "Start")}</span><input id="socialEventStart" type="datetime-local" value="${escapeHtml(socialCalendarDateTimeValue(row?.start_at || ""))}" /></label>
-        <label><span>${tr("Конец", "End")}</span><input id="socialEventEnd" type="datetime-local" value="${escapeHtml(socialCalendarDateTimeValue(row?.end_at || ""))}" /></label>
-        <label class="check"><input id="socialEventPublic" type="checkbox" ${row?.is_public ? "checked" : ""} /> ${tr("Общее событие (видно всем)", "Public event (visible to all)")}</label>
-        <label class="full"><span>${tr("Описание", "Details")}</span><textarea id="socialEventDetails" rows="4">${escapeHtml(socialCleanCalendarDetails(row?.details || ""))}</textarea></label>
+      <div class="social-calendar-detail-grid">
+        <h3>${escapeHtml(String(row?.title || "-").trim() || "-")}</h3>
+        <p>${escapeHtml(socialCleanCalendarDetails(row?.details || "") || tr("Без описания", "No description"))}</p>
+        <div class="social-calendar-detail-meta">
+          <span>${escapeHtml(tr("Начало", "Start"))}: <b>${escapeHtml(startText)}</b></span>
+          <span>${escapeHtml(tr("Конец", "End"))}: <b>${escapeHtml(endText)}</b></span>
+          <span>${escapeHtml(tr("Видимость", "Visibility"))}: <b>${escapeHtml(scopeText)}</b></span>
+        </div>
       </div>
-      <div class="actions"><button type="button" onclick="socialSaveEvent(${row ? Number(row.id) : 0})">${row ? tr("Сохранить", "Save") : tr("Создать", "Create")}</button></div>
+      <div class="actions social-calendar-detail-actions">
+        <button type="button" onclick="socialCloseModal(); socialOpenCalendarModal(${id})">${escapeHtml(tr("Редактировать", "Edit"))}</button>
+        <button class="btn-danger" type="button" onclick="socialCloseModal(); socialDeleteEvent(${id})">${escapeHtml(tr("Удалить", "Delete"))}</button>
+      </div>
     `
   );
 }
 
+function socialCalendarDefaultDateTime(dayKey = "") {
+  const safeKey = String(dayKey || socialState.calendarSelectedDay || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(safeKey)) {
+    return `${safeKey}T09:00`;
+  }
+  const now = new Date();
+  return `${now.getFullYear()}-${socialCalendarPad(now.getMonth() + 1)}-${socialCalendarPad(now.getDate())}T09:00`;
+}
+
+function socialOpenCalendarQuickAddMenu(dayKey = "") {
+  const safeDay = String(dayKey || socialState.calendarSelectedDay || socialCalendarDayKey(new Date())).trim();
+  socialOpenModal(
+    tr("Добавить", "Add"),
+    `
+      <div class="social-calendar-quick-add-menu">
+        <button type="button" onclick="socialCloseModal(); socialOpenCalendarModal(0, { dayKey: '${escapeHtml(safeDay)}', entryType: 'event' })">${escapeHtml(tr("Событие", "Event"))}</button>
+        <button type="button" onclick="socialCloseModal(); socialOpenCalendarModal(0, { dayKey: '${escapeHtml(safeDay)}', entryType: 'reminder' })">${escapeHtml(tr("Напоминание", "Reminder"))}</button>
+        <button type="button" onclick="socialCloseModal(); socialOpenCalendarTaskCreateModal('${escapeHtml(safeDay)}')">${escapeHtml(tr("Задача", "Task"))}</button>
+      </div>
+    `
+  );
+}
+
+function socialOpenCalendarTaskCreateModal(dayKey = "") {
+  const actors = Array.isArray(socialState.actors) ? socialState.actors : [];
+  const projects = Array.isArray(socialState.projects) ? socialState.projects : [];
+  const due = socialCalendarDefaultDateTime(dayKey).slice(0, 16);
+  const actorDefault = String(socialState.boot?.actor?.actor_key || "").trim();
+
+  socialOpenModal(
+    tr("Новая задача", "New task"),
+    `
+      <div class="grid-2">
+        <label><span>${escapeHtml(tr("Название", "Title"))}</span><input id="socialCalendarTaskTitle" /></label>
+        <label><span>${escapeHtml(tr("Исполнитель", "Assignee"))}</span><select id="socialCalendarTaskAssignee">${actors.map((a) => {
+          const key = String(a?.actor_key || "");
+          const selected = key === actorDefault ? "selected" : "";
+          return `<option value="${escapeHtml(key)}" ${selected}>${escapeHtml(String(a?.nick || "-"))}</option>`;
+        }).join("")}</select></label>
+        <label><span>${escapeHtml(tr("Проект", "Project"))}</span><select id="socialCalendarTaskProject"><option value="">${escapeHtml(tr("Без проекта", "No project"))}</option>${projects.map((p) => `<option value="${Number(p?.id || 0)}">${escapeHtml(String(p?.title || "-"))}</option>`).join("")}</select></label>
+        <label><span>${escapeHtml(tr("Тип", "Type"))}</span><select id="socialCalendarTaskKind"><option value="company">${escapeHtml(tr("Проектная", "Project"))}</option><option value="personal">${escapeHtml(tr("Личная", "Personal"))}</option></select></label>
+        <label><span>${escapeHtml(tr("Приоритет", "Priority"))}</span><select id="socialCalendarTaskPriority"><option value="normal">normal</option><option value="high">high</option><option value="critical">critical</option><option value="low">low</option></select></label>
+        <label><span>${escapeHtml(tr("Дедлайн", "Deadline"))}</span><input id="socialCalendarTaskDue" type="datetime-local" value="${escapeHtml(due)}" /></label>
+        <label class="full"><span>${escapeHtml(tr("Описание", "Description"))}</span><textarea id="socialCalendarTaskDescription" rows="4"></textarea></label>
+      </div>
+      <div class="actions">
+        <button type="button" onclick="socialCreateTaskFromCalendar()">${escapeHtml(tr("Создать", "Create"))}</button>
+      </div>
+    `
+  );
+}
+
+async function socialCreateTaskFromCalendar() {
+  const taskKind = String(document.getElementById("socialCalendarTaskKind")?.value || "company").trim().toLowerCase();
+  const payload = {
+    title: String(document.getElementById("socialCalendarTaskTitle")?.value || "").trim(),
+    description: String(document.getElementById("socialCalendarTaskDescription")?.value || "").trim(),
+    due_date: String(document.getElementById("socialCalendarTaskDue")?.value || "").trim() || null,
+    assignee_key: String(document.getElementById("socialCalendarTaskAssignee")?.value || "").trim(),
+    task_kind: taskKind === "personal" ? "personal" : "company",
+    priority: String(document.getElementById("socialCalendarTaskPriority")?.value || "normal").trim(),
+    status: "todo",
+    project_id: taskKind === "personal" ? null : (Number(document.getElementById("socialCalendarTaskProject")?.value || 0) || null),
+  };
+
+  if (!payload.title) {
+    alert(tr("Название задачи обязательно", "Task title is required"));
+    return;
+  }
+
+  await socialRequest("/api/social/tasks", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  }).catch((e) => {
+    alert(e?.message || tr("Не удалось создать задачу", "Failed to create task"));
+  });
+
+  socialCloseModal();
+  await socialLoadCalendar();
+}
+
+function socialOpenCalendarModal(eventId = 0, preset = null) {
+  const row = (Array.isArray(socialState.calendarEvents) ? socialState.calendarEvents : []).find((x) => Number(x.id) === Number(eventId || 0)) || null;
+  const dayKey = String(preset?.dayKey || socialState.calendarSelectedDay || socialCalendarDayKey(new Date())).trim();
+  const defaultStart = socialCalendarDefaultDateTime(dayKey);
+  const typeValue = String(row?.entry_type || preset?.entryType || "event").trim().toLowerCase() === "reminder" ? "reminder" : "event";
+  const startValue = socialCalendarDateTimeValue(row?.start_at || defaultStart).slice(0, 16);
+  const endValue = socialCalendarDateTimeValue(row?.end_at || "").slice(0, 16);
+  const colorValue = /^#[0-9a-fA-F]{6}$/.test(String(row?.color || ""))
+    ? String(row.color)
+    : (typeValue === "reminder" ? "#8b5cf6" : "#0ea5e9");
+
+  socialOpenModal(
+    row ? tr("Редактировать запись", "Edit entry") : tr("Новая запись", "New entry"),
+    `
+      <div class="grid-2">
+        <label><span>${escapeHtml(tr("Название", "Title"))}</span><input id="socialEventTitle" value="${escapeHtml(row?.title || "")}" /></label>
+        <label><span>${escapeHtml(tr("Тип", "Type"))}</span>
+          <select id="socialEventType">
+            <option value="event" ${typeValue === "event" ? "selected" : ""}>${escapeHtml(tr("Событие", "Event"))}</option>
+            <option value="reminder" ${typeValue === "reminder" ? "selected" : ""}>${escapeHtml(tr("Напоминание", "Reminder"))}</option>
+          </select>
+        </label>
+        <label><span>${escapeHtml(tr("Начало", "Start"))}</span><input id="socialEventStart" type="datetime-local" value="${escapeHtml(startValue)}" /></label>
+        <label><span>${escapeHtml(tr("Конец", "End"))}</span><input id="socialEventEnd" type="datetime-local" value="${escapeHtml(endValue)}" /></label>
+        <label><span>${escapeHtml(tr("Цвет", "Color"))}</span><input id="socialEventColor" type="color" value="${escapeHtml(colorValue)}" /></label>
+        <label class="check"><input id="socialEventAllDay" type="checkbox" ${row?.is_all_day ? "checked" : ""} /> ${escapeHtml(tr("Весь день", "All day"))}</label>
+        <label class="check"><input id="socialEventPublic" type="checkbox" ${row?.is_public ? "checked" : ""} /> ${escapeHtml(tr("Общее событие (видно всем)", "Shared event (visible to everyone)"))}</label>
+        <label class="full"><span>${escapeHtml(tr("Описание", "Details"))}</span><textarea id="socialEventDetails" rows="4">${escapeHtml(socialCleanCalendarDetails(row?.details || ""))}</textarea></label>
+      </div>
+      <div class="actions"><button type="button" onclick="socialSaveEvent(${row ? Number(row.id) : 0})">${row ? escapeHtml(tr("Сохранить", "Save")) : escapeHtml(tr("Создать", "Create"))}</button></div>
+    `
+  );
+}
+
+function socialCalendarNormalizeDateTimeInput(raw, fallback = "") {
+  const text = String(raw || "").trim();
+  if (!text) return String(fallback || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return `${text}T09:00`;
+  return text;
+}
+
 async function socialSaveEvent(eventId = 0) {
+  const allDay = Boolean(document.getElementById("socialEventAllDay")?.checked);
+  let startAt = socialCalendarNormalizeDateTimeInput(document.getElementById("socialEventStart")?.value || "", socialCalendarDefaultDateTime());
+  let endAt = socialCalendarNormalizeDateTimeInput(document.getElementById("socialEventEnd")?.value || "", "");
+  if (allDay) {
+    const dateOnly = String(startAt || "").slice(0, 10);
+    if (dateOnly) {
+      startAt = `${dateOnly}T09:00`;
+      if (!endAt) endAt = `${dateOnly}T18:00`;
+    }
+  }
+
   const payload = {
     title: String(document.getElementById("socialEventTitle")?.value || "").trim(),
     details: String(document.getElementById("socialEventDetails")?.value || "").trim(),
-    start_at: String(document.getElementById("socialEventStart")?.value || "").trim(),
-    end_at: String(document.getElementById("socialEventEnd")?.value || "").trim() || null,
+    start_at: startAt,
+    end_at: endAt || null,
     is_public: Boolean(document.getElementById("socialEventPublic")?.checked),
+    entry_type: String(document.getElementById("socialEventType")?.value || "event").trim().toLowerCase() === "reminder" ? "reminder" : "event",
+    is_all_day: allDay,
+    color: String(document.getElementById("socialEventColor")?.value || "").trim() || null,
   };
-  if (!payload.title || !payload.start_at) return alert(tr("Заполните название и дату начала", "Fill title and start date"));
+
+  if (!payload.title || !payload.start_at) {
+    alert(tr("Заполните название и дату начала", "Fill title and start date"));
+    return;
+  }
+
   const req = eventId > 0
     ? socialRequest(`/api/social/calendar/events/${Number(eventId)}`, { method: "PUT", body: JSON.stringify(payload) })
     : socialRequest("/api/social/calendar/events", { method: "POST", body: JSON.stringify(payload) });
-  await req.catch((e) => alert(e.message));
+
+  await req.catch((e) => alert(e?.message || tr("Не удалось сохранить запись", "Failed to save entry")));
   socialCloseModal();
   await socialLoadCalendar();
 }
@@ -5616,7 +5699,7 @@ async function socialSaveEvent(eventId = 0) {
 async function socialDeleteEvent(eventId) {
   const id = Number(eventId || 0);
   if (!id) return;
-  await socialRequest(`/api/social/calendar/events/${id}`, { method: "DELETE" }).catch((e) => alert(e.message));
+  await socialRequest(`/api/social/calendar/events/${id}`, { method: "DELETE" }).catch((e) => alert(e?.message || tr("Не удалось удалить запись", "Failed to delete entry")));
   await socialLoadCalendar();
 }
 
@@ -6322,506 +6405,6 @@ document.addEventListener("visibilitychange", () => {
 
 socialMaybeStartHooks();
 
-(function attachSocialTasksPlanPatchV2() {
-  if (typeof window === "undefined") return;
-  if (window.__socialTasksPlanPatchV2) return;
-  window.__socialTasksPlanPatchV2 = true;
-
-  function ensurePatchStyles() {
-    if (document.getElementById("socialTasksPlanPatchV2Styles")) return;
-    const style = document.createElement("style");
-    style.id = "socialTasksPlanPatchV2Styles";
-    style.textContent = `
-      .social-calendar-task-mode {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-        margin-left: auto;
-      }
-      .social-calendar-task-mode .chip-btn {
-        min-height: 36px;
-      }
-      .social-calendar-task-mode .chip-btn.is-active {
-        border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
-        background: color-mix(in srgb, var(--accent) 16%, var(--panel-bg));
-        box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
-      }
-      .social-task-bucket-list.is-touch-drop-target {
-        outline: 2px dashed color-mix(in srgb, var(--accent) 62%, var(--line));
-        outline-offset: 3px;
-        border-radius: 12px;
-      }
-      .social-task-item.is-touch-dragging {
-        opacity: 0.75;
-        transform: scale(0.985);
-      }
-      @media (max-width: 980px) {
-        .social-calendar-task-mode {
-          width: 100%;
-          margin-left: 0;
-        }
-      }
-    `;
-    document.head.appendChild(style);
-  }
-
-  function ensureTaskStateDefaults() {
-    if (!window.socialState || typeof window.socialState !== "object") return;
-    if (!Array.isArray(window.socialState.tasksLastGood)) {
-      window.socialState.tasksLastGood = Array.isArray(window.socialState.tasks)
-        ? [...window.socialState.tasks]
-        : [];
-    }
-    const mode = String(window.socialState.calendarTaskFilter || "").toLowerCase();
-    if (!["events", "tasks", "my_tasks"].includes(mode)) {
-      window.socialState.calendarTaskFilter = "events";
-    }
-  }
-
-  ensurePatchStyles();
-  ensureTaskStateDefaults();
-
-  const originalResetSocialState = typeof window.resetSocialState === "function" ? window.resetSocialState : null;
-  if (originalResetSocialState) {
-    window.resetSocialState = function patchedResetSocialState() {
-      originalResetSocialState();
-      ensureTaskStateDefaults();
-      ensurePatchStyles();
-    };
-  }
-
-  const originalSocialLoadTasks = typeof window.socialLoadTasks === "function" ? window.socialLoadTasks : null;
-  if (originalSocialLoadTasks) {
-    window.socialLoadTasks = async function patchedSocialLoadTasks(opts = {}) {
-      ensureTaskStateDefaults();
-      const previousGood = Array.isArray(window.socialState.tasksLastGood)
-        ? [...window.socialState.tasksLastGood]
-        : [];
-      const result = await originalSocialLoadTasks(opts);
-      const currentRows = Array.isArray(window.socialState.tasks) ? window.socialState.tasks : [];
-      const hadError = Boolean(window.socialState.tasksLastLoadError);
-      if (currentRows.length || !hadError) {
-        window.socialState.tasksLastGood = [...currentRows];
-      } else if (previousGood.length) {
-        window.socialState.tasks = [...previousGood];
-        if (typeof window.socialRenderTasks === "function") {
-          window.socialRenderTasks();
-        }
-      }
-      return result;
-    };
-  }
-
-  function normalizeCalendarMode(mode) {
-    const safe = String(mode || "").trim().toLowerCase();
-    if (safe === "tasks") return "tasks";
-    if (safe === "my_tasks") return "my_tasks";
-    return "events";
-  }
-
-  function getCalendarTaskRowsByMode() {
-    ensureTaskStateDefaults();
-    const mode = normalizeCalendarMode(window.socialState.calendarTaskFilter);
-    const allTasks = Array.isArray(window.socialState.tasks) ? window.socialState.tasks : [];
-    if (mode === "events") return [];
-    if (mode === "my_tasks") {
-      return allTasks.filter((task) => String(task?.task_kind || "").toLowerCase() === "personal");
-    }
-    return allTasks;
-  }
-
-  function syncCalendarModeButtons() {
-    const mode = normalizeCalendarMode(window.socialState?.calendarTaskFilter);
-    const host = document.getElementById("socialCalendarTaskMode");
-    if (!host) return;
-    host.querySelectorAll("button[data-mode]").forEach((btn) => {
-      btn.classList.toggle("is-active", String(btn.getAttribute("data-mode") || "") === mode);
-    });
-  }
-
-  function ensureCalendarTaskModeControls() {
-    const toolbar = document.querySelector("#socialSubtabCalendar .social-calendar-toolbar--modern");
-    if (!toolbar) return;
-    let host = document.getElementById("socialCalendarTaskMode");
-    if (!host) {
-      host = document.createElement("div");
-      host.id = "socialCalendarTaskMode";
-      host.className = "social-calendar-task-mode";
-      host.innerHTML = `
-        <button type="button" class="chip-btn" data-mode="events">${window.tr("События", "Events")}</button>
-        <button type="button" class="chip-btn" data-mode="tasks">${window.tr("Задачи", "Tasks")}</button>
-        <button type="button" class="chip-btn" data-mode="my_tasks">${window.tr("МОИ ЗАДАЧИ", "MY TASKS")}</button>
-      `;
-      host.addEventListener("click", (event) => {
-        const btn = event.target.closest("button[data-mode]");
-        if (!btn) return;
-        window.socialSetCalendarTaskMode(String(btn.getAttribute("data-mode") || "events"));
-      });
-      toolbar.appendChild(host);
-    }
-    syncCalendarModeButtons();
-  }
-
-  window.socialSetCalendarTaskMode = function socialSetCalendarTaskMode(mode) {
-    ensureTaskStateDefaults();
-    const safe = normalizeCalendarMode(mode);
-    window.socialState.calendarTaskFilter = safe;
-    try {
-      localStorage.setItem("social_calendar_task_mode", safe);
-    } catch (_) {}
-    syncCalendarModeButtons();
-    if (String(window.socialState.currentSubtab || "") === "calendar" && typeof window.socialRenderCalendar === "function") {
-      window.socialRenderCalendar();
-    }
-  };
-
-  try {
-    const persistedMode = normalizeCalendarMode(localStorage.getItem("social_calendar_task_mode") || "events");
-    window.socialState.calendarTaskFilter = persistedMode;
-  } catch (_) {
-    window.socialState.calendarTaskFilter = normalizeCalendarMode(window.socialState.calendarTaskFilter);
-  }
-
-  const originalSocialLoadCalendar = typeof window.socialLoadCalendar === "function" ? window.socialLoadCalendar : null;
-  if (originalSocialLoadCalendar) {
-    window.socialLoadCalendar = async function patchedSocialLoadCalendar() {
-      ensureTaskStateDefaults();
-      ensureCalendarTaskModeControls();
-      const result = await originalSocialLoadCalendar();
-      syncCalendarModeButtons();
-      return result;
-    };
-  }
-
-  const originalSocialRenderCalendar = typeof window.socialRenderCalendar === "function" ? window.socialRenderCalendar : null;
-  if (originalSocialRenderCalendar) {
-    window.socialRenderCalendar = function patchedSocialRenderCalendar() {
-      ensureTaskStateDefaults();
-      ensureCalendarTaskModeControls();
-      const sourceTasks = Array.isArray(window.socialState.tasks) ? window.socialState.tasks : [];
-      const filteredTasks = getCalendarTaskRowsByMode();
-      if (filteredTasks === sourceTasks) {
-        const result = originalSocialRenderCalendar();
-        syncCalendarModeButtons();
-        return result;
-      }
-      window.socialState.tasks = filteredTasks;
-      try {
-        const result = originalSocialRenderCalendar();
-        syncCalendarModeButtons();
-        return result;
-      } finally {
-        window.socialState.tasks = sourceTasks;
-      }
-    };
-  }
-
-  const originalSocialShowDay = typeof window.socialShowDay === "function" ? window.socialShowDay : null;
-  if (originalSocialShowDay) {
-    window.socialShowDay = function patchedSocialShowDay(dayKey) {
-      ensureTaskStateDefaults();
-      const sourceTasks = Array.isArray(window.socialState.tasks) ? window.socialState.tasks : [];
-      const filteredTasks = getCalendarTaskRowsByMode();
-      if (filteredTasks === sourceTasks) {
-        return originalSocialShowDay(dayKey);
-      }
-      window.socialState.tasks = filteredTasks;
-      try {
-        return originalSocialShowDay(dayKey);
-      } finally {
-        window.socialState.tasks = sourceTasks;
-      }
-    };
-  }
-
-  const touchDrag = {
-    taskId: 0,
-    moved: false,
-    sourceBucket: "",
-    targetBucket: "",
-    targetList: null,
-    startX: 0,
-    startY: 0,
-    lastY: 0,
-  };
-
-  function clearTouchDropMarkers() {
-    document.querySelectorAll(".social-task-bucket-list.is-touch-drop-target")
-      .forEach((node) => node.classList.remove("is-touch-drop-target"));
-  }
-
-  function findTaskElement(taskId) {
-    return document.querySelector(`.social-task-item[data-task-id="${Number(taskId || 0)}"]`);
-  }
-
-  function resetTouchDrag() {
-    clearTouchDropMarkers();
-    if (touchDrag.taskId) {
-      findTaskElement(touchDrag.taskId)?.classList.remove("is-touch-dragging");
-    }
-    touchDrag.taskId = 0;
-    touchDrag.moved = false;
-    touchDrag.sourceBucket = "";
-    touchDrag.targetBucket = "";
-    touchDrag.targetList = null;
-    touchDrag.startX = 0;
-    touchDrag.startY = 0;
-    touchDrag.lastY = 0;
-  }
-
-  function resolveDropTarget(clientX, clientY) {
-    const hovered = document.elementFromPoint(clientX, clientY);
-    const list = hovered?.closest?.(".social-task-bucket-list");
-    if (!list) return null;
-    const bucket = String(list.closest(".social-task-bucket")?.getAttribute("data-bucket") || "").trim().toLowerCase();
-    if (!bucket) return null;
-    return { bucket, list };
-  }
-
-  function resolveDropIndex(list, clientY, draggedTaskId) {
-    if (!list) return 0;
-    const items = [...list.querySelectorAll(".social-task-item")]
-      .filter((node) => Number(node.getAttribute("data-task-id") || 0) !== Number(draggedTaskId || 0));
-    if (!items.length) return 0;
-    let index = items.length;
-    for (let i = 0; i < items.length; i += 1) {
-      const rect = items[i].getBoundingClientRect();
-      if (clientY < rect.top + rect.height / 2) {
-        index = i;
-        break;
-      }
-    }
-    return Math.max(0, index);
-  }
-
-  async function commitTouchDragDrop() {
-    if (!touchDrag.taskId || !touchDrag.targetBucket) return;
-    const toIndex = resolveDropIndex(touchDrag.targetList, touchDrag.lastY, touchDrag.taskId);
-    const moved = await window.socialRequest("/api/social/tasks/reorder", {
-      method: "POST",
-      body: JSON.stringify({
-        items: [
-          {
-            task_id: Number(touchDrag.taskId),
-            bucket: String(touchDrag.targetBucket || "upcoming"),
-            to_index: Number(toIndex || 0),
-          },
-        ],
-      }),
-    }).then(() => true).catch((error) => {
-      if (typeof window.socialShowToast === "function") {
-        window.socialShowToast(window.tr("Ошибка", "Error"), error?.message || window.tr("Не удалось перенести задачу", "Failed to move task"));
-      }
-      return false;
-    });
-    if (moved && typeof window.socialLoadTasks === "function") {
-      await window.socialLoadTasks({ silent: true });
-    }
-  }
-
-  function onTaskTouchStart(event) {
-    if (typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell()) return;
-    if (String(window.socialState?.currentSubtab || "") !== "tasks") return;
-    if (!event.touches || event.touches.length !== 1) return;
-    const item = event.target.closest(".social-task-item");
-    if (!item) return;
-    const taskId = Number(item.getAttribute("data-task-id") || 0);
-    if (!taskId) return;
-    const point = event.touches[0];
-    touchDrag.taskId = taskId;
-    touchDrag.sourceBucket = String(item.closest(".social-task-bucket")?.getAttribute("data-bucket") || "").trim().toLowerCase();
-    touchDrag.startX = Number(point.clientX || 0);
-    touchDrag.startY = Number(point.clientY || 0);
-    touchDrag.lastY = touchDrag.startY;
-    touchDrag.moved = false;
-    touchDrag.targetBucket = "";
-    touchDrag.targetList = null;
-    item.classList.add("is-touch-dragging");
-  }
-
-  function onTaskTouchMove(event) {
-    if (typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell()) return;
-    if (!touchDrag.taskId) return;
-    if (!event.touches || event.touches.length !== 1) return;
-    const point = event.touches[0];
-    const dx = Math.abs(Number(point.clientX || 0) - touchDrag.startX);
-    const dy = Math.abs(Number(point.clientY || 0) - touchDrag.startY);
-    touchDrag.lastY = Number(point.clientY || 0);
-    if (!touchDrag.moved && (dx > 10 || dy > 10)) {
-      touchDrag.moved = true;
-    }
-    if (!touchDrag.moved) return;
-    event.preventDefault();
-    const target = resolveDropTarget(Number(point.clientX || 0), Number(point.clientY || 0));
-    clearTouchDropMarkers();
-    if (!target) {
-      touchDrag.targetBucket = "";
-      touchDrag.targetList = null;
-      return;
-    }
-    touchDrag.targetBucket = target.bucket;
-    touchDrag.targetList = target.list;
-    target.list.classList.add("is-touch-drop-target");
-  }
-
-  async function onTaskTouchEnd() {
-    if (typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell()) {
-      resetTouchDrag();
-      return;
-    }
-    if (!touchDrag.taskId) return;
-    const shouldCommit = Boolean(touchDrag.moved && touchDrag.targetBucket);
-    const pendingTaskId = touchDrag.taskId;
-    const pendingBucket = touchDrag.targetBucket || touchDrag.sourceBucket;
-    if (findTaskElement(pendingTaskId)) {
-      findTaskElement(pendingTaskId)?.classList.remove("is-touch-dragging");
-    }
-    clearTouchDropMarkers();
-    if (shouldCommit) {
-      touchDrag.targetBucket = pendingBucket;
-      await commitTouchDragDrop();
-    }
-    resetTouchDrag();
-  }
-
-  function onTaskTouchCancel() {
-    resetTouchDrag();
-  }
-
-  document.addEventListener("touchstart", onTaskTouchStart, { passive: true });
-  document.addEventListener("touchmove", onTaskTouchMove, { passive: false });
-  document.addEventListener("touchend", onTaskTouchEnd, { passive: false });
-  document.addEventListener("touchcancel", onTaskTouchCancel, { passive: true });
-
-  ensureCalendarTaskModeControls();
-  syncCalendarModeButtons();
-})();
-
-(function patchSocialTaskMouseDropV2() {
-  if (typeof window === "undefined") return;
-  if (window.__socialTaskMouseDropV2) return;
-  window.__socialTaskMouseDropV2 = true;
-
-  function resolveDropIndex(list, clientY, draggedTaskId) {
-    if (!list) return 0;
-    const items = [...list.querySelectorAll(".social-task-item")]
-      .filter((node) => Number(node.getAttribute("data-task-id") || 0) !== Number(draggedTaskId || 0));
-    if (!items.length) return 0;
-    let index = items.length;
-    for (let i = 0; i < items.length; i += 1) {
-      const rect = items[i].getBoundingClientRect();
-      if (clientY < rect.top + rect.height / 2) {
-        index = i;
-        break;
-      }
-    }
-    return Math.max(0, index);
-  }
-
-  window.socialTaskDrop = async function socialTaskDropEnhanced(event, bucket) {
-    if (typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell()) return false;
-    if (event?.preventDefault) event.preventDefault();
-    let id = 0;
-    try {
-      id = Number(event?.dataTransfer?.getData("text/plain") || 0);
-    } catch (_) {
-      id = 0;
-    }
-    if (!id) {
-      const node = document.querySelector(".social-task-item.is-touch-dragging")
-        || document.querySelector(".social-task-item[draggable='true'][data-dragging='1']");
-      id = Number(node?.getAttribute("data-task-id") || 0);
-    }
-    if (!id) return;
-
-    const safeBucket = String(bucket || "").trim().toLowerCase();
-    const list = event?.target?.closest?.(".social-task-bucket-list")
-      || document.querySelector(`.social-task-bucket[data-bucket="${safeBucket}"] .social-task-bucket-list`);
-    const toIndex = resolveDropIndex(list, Number(event?.clientY || 0), id);
-
-    const ok = await window.socialRequest("/api/social/tasks/reorder", {
-      method: "POST",
-      body: JSON.stringify({
-        items: [{ task_id: id, bucket: safeBucket, to_index: toIndex }],
-      }),
-    }).then(() => true).catch((e) => {
-      if (typeof window.socialShowToast === "function") {
-        window.socialShowToast(window.tr("Ошибка", "Error"), e?.message || window.tr("Не удалось перенести задачу", "Failed to move task"));
-      }
-      return false;
-    });
-
-    if (!ok) return;
-    if (typeof window.socialLoadTasks === "function") {
-      await window.socialLoadTasks({ silent: true });
-    }
-  };
-})();
-
-(function patchSocialCalendarModeVisualsV1() {
-  if (typeof window === "undefined") return;
-  if (window.__socialCalendarModeVisualsV1) return;
-  window.__socialCalendarModeVisualsV1 = true;
-
-  function normalizeMode(mode) {
-    const safe = String(mode || "").trim().toLowerCase();
-    if (safe === "tasks") return "tasks";
-    if (safe === "my_tasks") return "my_tasks";
-    return "events";
-  }
-
-  function ensureModeStyle() {
-    if (document.getElementById("socialCalendarModeVisualsV1Style")) return;
-    const style = document.createElement("style");
-    style.id = "socialCalendarModeVisualsV1Style";
-    style.textContent = `
-      #socialSubtabCalendar[data-task-mode="events"] #socialCalendarEvents .social-day-events:nth-of-type(2) { display: none; }
-      #socialSubtabCalendar[data-task-mode="tasks"] #socialCalendarEvents .social-day-events:nth-of-type(1) { display: none; }
-      #socialSubtabCalendar[data-task-mode="my_tasks"] #socialCalendarEvents .social-day-events:nth-of-type(1) { display: none; }
-    `;
-    document.head.appendChild(style);
-  }
-
-  function applyModeDataset() {
-    const mode = normalizeMode(window.socialState?.calendarTaskFilter || "events");
-    const root = document.getElementById("socialSubtabCalendar");
-    if (root) root.setAttribute("data-task-mode", mode);
-  }
-
-  ensureModeStyle();
-  applyModeDataset();
-
-  const originalSetMode = typeof window.socialSetCalendarTaskMode === "function"
-    ? window.socialSetCalendarTaskMode
-    : null;
-  if (originalSetMode) {
-    window.socialSetCalendarTaskMode = function patchedSetCalendarTaskMode(mode) {
-      const result = originalSetMode(mode);
-      applyModeDataset();
-      return result;
-    };
-  }
-
-  const originalRenderCalendar = typeof window.socialRenderCalendar === "function"
-    ? window.socialRenderCalendar
-    : null;
-  if (originalRenderCalendar) {
-    window.socialRenderCalendar = function patchedRenderCalendarWithMode() {
-      const result = originalRenderCalendar.apply(this, arguments);
-      applyModeDataset();
-      return result;
-    };
-  }
-})();
-
-
-
-
-
-
-
-
 (function patchSocialTasksAndNotificationsV3() {
   if (typeof window === "undefined") return;
   if (window.__socialTasksAndNotificationsV3) return;
@@ -7057,3 +6640,5 @@ socialMaybeStartHooks();
     await window.socialLoadTasks({ force: true });
   };
 })();
+
+

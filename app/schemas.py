@@ -1224,6 +1224,9 @@ class SocialCalendarEventIn(BaseModel):
     start_at: str
     end_at: str | None = None
     is_public: bool = False
+    entry_type: str = "event"
+    is_all_day: bool = False
+    color: str | None = None
 
 
 class SocialCalendarEventOut(BaseModel):
@@ -1234,6 +1237,9 @@ class SocialCalendarEventOut(BaseModel):
     end_at: str | None = None
     created_at: str
     is_public: bool = False
+    entry_type: str = "event"
+    is_all_day: bool = False
+    color: str | None = None
 
 
 class SocialCalendarGoogleSyncIn(BaseModel):

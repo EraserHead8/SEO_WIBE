@@ -15092,6 +15092,20 @@ def _social_calendar_tzinfo() -> ZoneInfo:
     return ZoneInfo(SOCIAL_CALENDAR_DEFAULT_TZ)
 
 
+def _social_calendar_entry_type(value: str | None) -> str:
+    code = str(value or "").strip().lower()
+    return "reminder" if code == "reminder" else "event"
+
+
+def _social_calendar_color(value: str | None) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    if re.fullmatch(r"#[0-9a-fA-F]{6}", raw):
+        return raw.lower()
+    return ""
+
+
 def _social_localize_dt(value: datetime | None) -> datetime | None:
     if not isinstance(value, datetime):
         return None
@@ -15649,6 +15663,9 @@ def social_calendar_events(
             end_at=row.end_at.isoformat() if row.end_at else None,
             created_at=row.created_at.isoformat() if row.created_at else "",
             is_public=bool(row.is_public),
+            entry_type=_social_calendar_entry_type(str(getattr(row, "entry_type", "event") or "event")),
+            is_all_day=bool(getattr(row, "is_all_day", False)),
+            color=_social_calendar_color(str(getattr(row, "color", "") or "")) or None,
         )
         for row in rows
     ]
@@ -16083,7 +16100,10 @@ def social_calendar_create_event(
     row = SocialCalendarEvent(
         user_id=user.id,
         actor_key=actor_key,
+        entry_type=_social_calendar_entry_type(payload.entry_type),
         is_public=bool(payload.is_public),
+        is_all_day=bool(payload.is_all_day),
+        color=_social_calendar_color(payload.color),
         title=str(payload.title or "").strip()[:255],
         details=str(payload.details or "")[:5000],
         start_at=start_at,
@@ -16142,6 +16162,9 @@ def social_calendar_update_event(
     row.start_at = start_at
     row.end_at = _social_parse_dt(payload.end_at)
     row.is_public = bool(payload.is_public)
+    row.entry_type = _social_calendar_entry_type(payload.entry_type)
+    row.is_all_day = bool(payload.is_all_day)
+    row.color = _social_calendar_color(payload.color)
     _audit(
         db,
         user,
