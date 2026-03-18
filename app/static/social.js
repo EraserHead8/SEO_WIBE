@@ -1,4 +1,4 @@
-let socialState = {
+﻿let socialState = {
   boot: null,
   currentSubtab: "chat",
   gamesLeaderboardCache: new Map(),
@@ -1432,6 +1432,11 @@ function switchSocialSubtab(tab, loadNow = true) {
     socialLoadProjects().catch(() => null);
     socialHideCalendarDaySheet();
     socialLoadCalendar();
+    setTimeout(() => {
+      if (currentTab === "social" && socialState.currentSubtab === "calendar") {
+        socialLoadCalendar();
+      }
+    }, 120);
   }
   if (safe === "calculator") {
     socialRenderConverterOptions();
@@ -5142,6 +5147,13 @@ async function socialOpenCalendarTaskEdit(taskId = 0) {
     || (Array.isArray(socialState.tasksAll) ? socialState.tasksAll : []).find((x) => Number(x?.id || 0) === id)
     || (Array.isArray(socialState.tasks) ? socialState.tasks : []).find((x) => Number(x?.id || 0) === id)
     || null;
+  if (!row) {
+    await socialLoadTasks({ force: true }).catch(() => null);
+    row = (Array.isArray(socialState.calendarTasks) ? socialState.calendarTasks : []).find((x) => Number(x?.id || 0) === id)
+      || (Array.isArray(socialState.tasksAll) ? socialState.tasksAll : []).find((x) => Number(x?.id || 0) === id)
+      || (Array.isArray(socialState.tasks) ? socialState.tasks : []).find((x) => Number(x?.id || 0) === id)
+      || null;
+  }
   socialCloseModal();
   await socialOpenTaskModal(id, row || null);
 }
@@ -5453,6 +5465,11 @@ async function socialLoadCalendar() {
   await Promise.allSettled([eventPromise, taskPromise]);
   if (Number(socialState.calendarLoadSeq || 0) === seq) {
     socialRenderCalendar();
+    setTimeout(() => {
+      if (Number(socialState.calendarLoadSeq || 0) === seq) {
+        socialRenderCalendar();
+      }
+    }, 60);
   }
 }
 
@@ -5827,18 +5844,20 @@ function socialCalendarDefaultDateTime(dayKey = "") {
 function socialOpenCalendarQuickAddEntry(dayKey = "", entryType = "event") {
   const safeDay = String(dayKey || socialState.calendarSelectedDay || socialCalendarDayKey(new Date())).trim();
   const safeType = String(entryType || "event").trim().toLowerCase() === "reminder" ? "reminder" : "event";
+  socialHideCalendarDaySheet();
   socialCloseModal();
   setTimeout(() => {
     socialOpenCalendarModal(0, { dayKey: safeDay, entryType: safeType });
-  }, 10);
+  }, 60);
 }
 
 function socialOpenCalendarTaskQuickAdd(dayKey = "") {
   const safeDay = String(dayKey || socialState.calendarSelectedDay || socialCalendarDayKey(new Date())).trim();
+  socialHideCalendarDaySheet();
   socialCloseModal();
   setTimeout(() => {
     socialOpenCalendarTaskCreateModal(safeDay);
-  }, 10);
+  }, 60);
 }
 
 function socialOpenCalendarQuickAddMenu(dayKey = "") {
