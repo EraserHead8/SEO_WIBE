@@ -1409,7 +1409,7 @@
               <div class="social-chat-compose">
                 <div id="socialChatReplyBar" class="social-chat-reply hidden"></div>
                 <div class="social-chat-input-wrap">
-                  <button id="socialEmojiBtn" class="btn-secondary social-emoji-btn" type="button" onclick="socialToggleEmojiPicker()" title="Эмодзи">&#128578;</button>
+                  <button id="socialEmojiBtn" class="btn-secondary social-emoji-btn" type="button" onclick="event.preventDefault(); event.stopPropagation(); return (window.socialToggleEmojiPicker ? window.socialToggleEmojiPicker() : false);" title="Эмодзи">&#128578;</button>
                   <textarea id="socialChatInput" rows="2" placeholder="Введите сообщение..."></textarea>
                   <button id="socialAttachBtn" class="btn-secondary social-attach-btn" type="button" onclick="socialTriggerChatFileDialog()" title="Файл">&#128206;</button>
                   <button id="socialSendIconBtn" class="btn-secondary social-send-icon-btn hidden" type="button" onclick="socialSendMessage()" title="Отправить" aria-label="Отправить">&#10148;</button>

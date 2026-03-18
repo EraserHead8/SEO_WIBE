@@ -33,6 +33,10 @@ let socialState = {
   tasksCacheLoadedAt: 0,
   tasksLoadSeq: 0,
   calendarEvents: [],
+  calendarTasks: [],
+  calendarLastGoodEvents: [],
+  calendarLastGoodTasks: [],
+  calendarLoadSeq: 0,
   calendarDate: new Date(),
   calendarSelectedDay: "",
   notes: [],
@@ -228,13 +232,13 @@ function socialBuildUploadLargeError(file, limitBytes) {
   const sizeInfo = `${socialFormatFileSize(file?.size || 0)} / ${socialFormatFileSize(limitBytes)}`;
   if (isImage) {
     return tr(
-      `Фото слишком большое для отправки (${sizeInfo}). Сожмите его в галерее или выберите другой размер.`,
+      `Р¤РѕС‚Рѕ СЃР»РёС€РєРѕРј Р±РѕР»СЊС€РѕРµ РґР»СЏ РѕС‚РїСЂР°РІРєРё (${sizeInfo}). РЎРѕР¶РјРёС‚Рµ РµРіРѕ РІ РіР°Р»РµСЂРµРµ РёР»Рё РІС‹Р±РµСЂРёС‚Рµ РґСЂСѓРіРѕР№ СЂР°Р·РјРµСЂ.`,
       `Image is too large to send (${sizeInfo}). Compress it in your gallery app or choose a smaller size.`
     );
   }
   const suffix = fileName ? ` (${fileName})` : "";
   return tr(
-    `Файл${suffix} превышает лимит ${socialFormatFileSize(limitBytes)}.`,
+    `Р¤Р°Р№Р»${suffix} РїСЂРµРІС‹С€Р°РµС‚ Р»РёРјРёС‚ ${socialFormatFileSize(limitBytes)}.`,
     `File${suffix} exceeds the ${socialFormatFileSize(limitBytes)} limit.`
   );
 }
@@ -247,17 +251,17 @@ function socialBuildUploadErrorMessage(err, fallbackFile) {
     const limit = socialFormatFileSize(SOCIAL_CHAT_UPLOAD_MAX_BYTES);
     const details = fallbackFile ? socialBuildUploadLargeError(fallbackFile, SOCIAL_CHAT_UPLOAD_MAX_BYTES) : "";
     return details || tr(
-      `Файл слишком большой для отправки. Лимит: ${limit}.`,
+      `Р¤Р°Р№Р» СЃР»РёС€РєРѕРј Р±РѕР»СЊС€РѕР№ РґР»СЏ РѕС‚РїСЂР°РІРєРё. Р›РёРјРёС‚: ${limit}.`,
       `The file is too large to upload. Limit: ${limit}.`
     );
   }
   if (/(<html|<body|gateway time-?out|internal server error|bad gateway|traceback)/i.test(message)) {
     return tr(
-      "Сервер временно занят. Повторите отправку через несколько секунд.",
+      "РЎРµСЂРІРµСЂ РІСЂРµРјРµРЅРЅРѕ Р·Р°РЅСЏС‚. РџРѕРІС‚РѕСЂРёС‚Рµ РѕС‚РїСЂР°РІРєСѓ С‡РµСЂРµР· РЅРµСЃРєРѕР»СЊРєРѕ СЃРµРєСѓРЅРґ.",
       "The server is temporarily busy. Please retry in a few seconds."
     );
   }
-  return message || tr("Ошибка загрузки файла", "File upload error");
+  return message || tr("РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё С„Р°Р№Р»Р°", "File upload error");
 }
 
 async function socialSendChatFile(threadId, file, text, replyId, requestId) {
@@ -457,11 +461,11 @@ function socialCalendarSourceLabel(value) {
 
 function socialCalendarSyncStateLabel(value) {
   const code = String(value || "idle").trim().toLowerCase();
-  if (code === "ok") return tr("Успешно", "Successful");
-  if (code === "partial") return tr("Частично", "Partial");
-  if (code === "empty") return tr("Без изменений", "No changes");
-  if (code === "error") return tr("Ошибка", "Error");
-  return tr("Ожидание", "Idle");
+  if (code === "ok") return tr("РЈСЃРїРµС€РЅРѕ", "Successful");
+  if (code === "partial") return tr("Р§Р°СЃС‚РёС‡РЅРѕ", "Partial");
+  if (code === "empty") return tr("Р‘РµР· РёР·РјРµРЅРµРЅРёР№", "No changes");
+  if (code === "error") return tr("РћС€РёР±РєР°", "Error");
+  return tr("РћР¶РёРґР°РЅРёРµ", "Idle");
 }
 
 function socialSetCalendarSyncMessage(kind = "info", title = "", lines = []) {
@@ -487,21 +491,21 @@ function socialRenderCalendarStatusMeta(status) {
   const node = document.getElementById("socialCalendarGoogleMeta");
   if (!node) return;
   if (!status || typeof status !== "object") {
-    node.innerHTML = `<div class="hint">${escapeHtml(tr("Статус синхронизации появится после первой проверки.", "Sync status appears after the first check."))}</div>`;
+    node.innerHTML = `<div class="hint">${escapeHtml(tr("РЎС‚Р°С‚СѓСЃ СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёРё РїРѕСЏРІРёС‚СЃСЏ РїРѕСЃР»Рµ РїРµСЂРІРѕР№ РїСЂРѕРІРµСЂРєРё.", "Sync status appears after the first check."))}</div>`;
     return;
   }
   const rows = [];
   const expiresAt = Number(status.expires_at || 0);
   const lastSyncAt = String(status.last_sync_at || "").trim();
-  rows.push([tr("Публичный адрес", "Public base"), String(status.public_base_url || "").trim() || "-"]);
+  rows.push([tr("РџСѓР±Р»РёС‡РЅС‹Р№ Р°РґСЂРµСЃ", "Public base"), String(status.public_base_url || "").trim() || "-"]);
   rows.push([tr("Redirect URI", "Redirect URI"), String(status.redirect_uri || "").trim() || "-"]);
-  rows.push([tr("Google OAuth", "Google OAuth"), status.oauth_configured ? tr("Настроен", "Configured") : tr("Не настроен", "Not configured")]);
-  rows.push([tr("Подключение", "Connection"), status.connected ? tr("Подключено", "Connected") : tr("Не подключено", "Not connected")]);
-  rows.push([tr("Последняя синхронизация", "Last sync"), lastSyncAt ? new Date(lastSyncAt).toLocaleString(currentLang === "en" ? "en-GB" : "ru-RU") : tr("Ещё не запускалась", "Not run yet")]);
-  rows.push([tr("Источник", "Source"), socialCalendarSourceLabel(status.last_sync_source)]);
-  rows.push([tr("Состояние", "State"), socialCalendarSyncStateLabel(status.last_sync_state)]);
+  rows.push([tr("Google OAuth", "Google OAuth"), status.oauth_configured ? tr("РќР°СЃС‚СЂРѕРµРЅ", "Configured") : tr("РќРµ РЅР°СЃС‚СЂРѕРµРЅ", "Not configured")]);
+  rows.push([tr("РџРѕРґРєР»СЋС‡РµРЅРёРµ", "Connection"), status.connected ? tr("РџРѕРґРєР»СЋС‡РµРЅРѕ", "Connected") : tr("РќРµ РїРѕРґРєР»СЋС‡РµРЅРѕ", "Not connected")]);
+  rows.push([tr("РџРѕСЃР»РµРґРЅСЏСЏ СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ", "Last sync"), lastSyncAt ? new Date(lastSyncAt).toLocaleString(currentLang === "en" ? "en-GB" : "ru-RU") : tr("Р•С‰С‘ РЅРµ Р·Р°РїСѓСЃРєР°Р»Р°СЃСЊ", "Not run yet")]);
+  rows.push([tr("РСЃС‚РѕС‡РЅРёРє", "Source"), socialCalendarSourceLabel(status.last_sync_source)]);
+  rows.push([tr("РЎРѕСЃС‚РѕСЏРЅРёРµ", "State"), socialCalendarSyncStateLabel(status.last_sync_state)]);
   if (expiresAt > 0) {
-    rows.push([tr("Токен до", "Token valid until"), new Date(expiresAt * 1000).toLocaleString(currentLang === "en" ? "en-GB" : "ru-RU")]);
+    rows.push([tr("РўРѕРєРµРЅ РґРѕ", "Token valid until"), new Date(expiresAt * 1000).toLocaleString(currentLang === "en" ? "en-GB" : "ru-RU")]);
   }
   node.innerHTML = rows.map(([label, value]) => `
     <div class="social-calendar-meta-row">
@@ -652,7 +656,7 @@ function socialOpenNotificationTarget(row) {
   if (kind === "announcement") {
     socialOpenAnnouncementModal({
       id: Number(payload.announcement_id || 0),
-      title: row.title || tr("Объявление", "Announcement"),
+      title: row.title || tr("РћР±СЉСЏРІР»РµРЅРёРµ", "Announcement"),
       body: row.body || "",
     });
   }
@@ -693,15 +697,15 @@ function socialOpenAnnouncementModal(row) {
   const annId = Number(row.id || 0);
   if (!annId || socialState.announcementModalId === annId) return;
   socialState.announcementModalId = annId;
-  const title = String(row.title || tr("Объявление", "Announcement")).trim();
+  const title = String(row.title || tr("РћР±СЉСЏРІР»РµРЅРёРµ", "Announcement")).trim();
   const body = String(row.body || "").trim();
   socialOpenModal(
-    title || tr("Объявление", "Announcement"),
+    title || tr("РћР±СЉСЏРІР»РµРЅРёРµ", "Announcement"),
     `
       <div class="social-announcement-modal">
-        <div class="social-announcement-body">${escapeHtml(body || tr("Нет текста объявления.", "Announcement text is empty."))}</div>
+        <div class="social-announcement-body">${escapeHtml(body || tr("РќРµС‚ С‚РµРєСЃС‚Р° РѕР±СЉСЏРІР»РµРЅРёСЏ.", "Announcement text is empty."))}</div>
         <div class="actions">
-          <button type="button" class="btn-primary" id="socialAnnouncementAckBtn">${escapeHtml(tr("ОК", "OK"))}</button>
+          <button type="button" class="btn-primary" id="socialAnnouncementAckBtn">${escapeHtml(tr("РћРљ", "OK"))}</button>
         </div>
       </div>
     `
@@ -754,11 +758,11 @@ function socialNotifyDesktop(row) {
   if (kindGroup === "task" && cfg.task_enabled === false) return;
   if (kindGroup === "calendar" && cfg.calendar_enabled === false) return;
   const text = socialResolveNotificationText(row);
-  const title = String(text.title || tr("Уведомление", "Notification")).trim();
+  const title = String(text.title || tr("РЈРІРµРґРѕРјР»РµРЅРёРµ", "Notification")).trim();
   const body = String(text.body || "").trim();
   if (!title && !body) return;
   try {
-    const n = new Notification(title || tr("Уведомление", "Notification"), {
+    const n = new Notification(title || tr("РЈРІРµРґРѕРјР»РµРЅРёРµ", "Notification"), {
       body,
       tag: `social-${String(row.kind || "event")}-${Number(row.id || 0) || Date.now()}`,
       renotify: true,
@@ -799,10 +803,10 @@ function socialSetBell(unread) {
 
 function socialNotificationKindTitle(kind) {
   const code = String(kind || "").trim().toLowerCase();
-  if (code.startsWith("chat_")) return tr("Чат", "Chat");
-  if (code.startsWith("task_")) return tr("Задачи", "Tasks");
-  if (code.startsWith("calendar_")) return tr("Календарь", "Calendar");
-  return tr("Система", "System");
+  if (code.startsWith("chat_")) return tr("Р§Р°С‚", "Chat");
+  if (code.startsWith("task_")) return tr("Р—Р°РґР°С‡Рё", "Tasks");
+  if (code.startsWith("calendar_")) return tr("РљР°Р»РµРЅРґР°СЂСЊ", "Calendar");
+  return tr("РЎРёСЃС‚РµРјР°", "System");
 }
 
 function socialNotificationKindClass(kind) {
@@ -832,27 +836,27 @@ function socialResolveNotificationText(row) {
   const dueText = String(params.due_text || "").trim();
 
   if (key === "task_assigned") {
-    const title = tr("Новая задача", "New task");
-    const body = [actorNick, taskTitle].filter(Boolean).join(": ") || taskTitle || tr("Вам назначена задача", "A task was assigned");
+    const title = tr("РќРѕРІР°СЏ Р·Р°РґР°С‡Р°", "New task");
+    const body = [actorNick, taskTitle].filter(Boolean).join(": ") || taskTitle || tr("Р’Р°Рј РЅР°Р·РЅР°С‡РµРЅР° Р·Р°РґР°С‡Р°", "A task was assigned");
     return { title, body };
   }
   if (key === "task_done") {
-    const title = tr("Задача выполнена", "Task completed");
-    const body = [actorNick, taskTitle].filter(Boolean).join(": ") || taskTitle || tr("Задача отмечена выполненной", "Task was marked done");
+    const title = tr("Р—Р°РґР°С‡Р° РІС‹РїРѕР»РЅРµРЅР°", "Task completed");
+    const body = [actorNick, taskTitle].filter(Boolean).join(": ") || taskTitle || tr("Р—Р°РґР°С‡Р° РѕС‚РјРµС‡РµРЅР° РІС‹РїРѕР»РЅРµРЅРЅРѕР№", "Task was marked done");
     return { title, body };
   }
   if (key === "task_overdue") {
-    const title = tr("Задача просрочена", "Task overdue");
-    const body = [taskTitle, assigneeNick ? `${tr("Исполнитель", "Assignee")}: ${assigneeNick}` : ""].filter(Boolean).join(" • ") || tr("Срок задачи истек", "Task deadline passed");
+    const title = tr("Р—Р°РґР°С‡Р° РїСЂРѕСЃСЂРѕС‡РµРЅР°", "Task overdue");
+    const body = [taskTitle, assigneeNick ? `${tr("РСЃРїРѕР»РЅРёС‚РµР»СЊ", "Assignee")}: ${assigneeNick}` : ""].filter(Boolean).join(" вЂў ") || tr("РЎСЂРѕРє Р·Р°РґР°С‡Рё РёСЃС‚РµРє", "Task deadline passed");
     return { title, body };
   }
   if (key === "task_reminder_3h") {
-    const title = tr("Срок задачи скоро", "Task deadline soon");
-    const body = [taskTitle, dueText ? `${tr("Дедлайн", "Deadline")}: ${dueText}` : ""].filter(Boolean).join(" • ") || tr("До дедлайна осталось меньше 3 часов", "Less than 3 hours left");
+    const title = tr("РЎСЂРѕРє Р·Р°РґР°С‡Рё СЃРєРѕСЂРѕ", "Task deadline soon");
+    const body = [taskTitle, dueText ? `${tr("Р”РµРґР»Р°Р№РЅ", "Deadline")}: ${dueText}` : ""].filter(Boolean).join(" вЂў ") || tr("Р”Рѕ РґРµРґР»Р°Р№РЅР° РѕСЃС‚Р°Р»РѕСЃСЊ РјРµРЅСЊС€Рµ 3 С‡Р°СЃРѕРІ", "Less than 3 hours left");
     return { title, body };
   }
 
-  const title = socialNotificationDecodeText(safeRow.title || tr("Уведомление", "Notification")).replace(/\s+/g, " ").trim();
+  const title = socialNotificationDecodeText(safeRow.title || tr("РЈРІРµРґРѕРјР»РµРЅРёРµ", "Notification")).replace(/\s+/g, " ").trim();
   const body = socialNotificationDecodeText(safeRow.body || "").replace(/\s+/g, " ").trim();
   return { title, body };
 }
@@ -865,8 +869,8 @@ function socialEnsureNotificationCenter() {
   root.className = "social-notif-center hidden";
   root.innerHTML = `
     <div class="social-notif-head">
-      <strong>${escapeHtml(tr("Уведомления", "Notifications"))}</strong>
-      <button type="button" class="btn-secondary" onclick="socialCloseNotificationCenter()">✕</button>
+      <strong>${escapeHtml(tr("РЈРІРµРґРѕРјР»РµРЅРёСЏ", "Notifications"))}</strong>
+      <button type="button" class="btn-secondary" onclick="socialCloseNotificationCenter()">вњ•</button>
     </div>
     <div id="socialNotificationCenterList" class="social-notif-list"></div>
   `;
@@ -907,7 +911,7 @@ function socialRenderNotificationCenter() {
   const rows = Array.isArray(socialState.notificationsFeed) ? [...socialState.notificationsFeed] : [];
   rows.sort((a, b) => Number(b?.id || 0) - Number(a?.id || 0));
   if (!rows.length) {
-    list.innerHTML = `<div class="hint">${escapeHtml(tr("Пока нет уведомлений", "No notifications yet"))}</div>`;
+    list.innerHTML = `<div class="hint">${escapeHtml(tr("РџРѕРєР° РЅРµС‚ СѓРІРµРґРѕРјР»РµРЅРёР№", "No notifications yet"))}</div>`;
     return;
   }
   list.innerHTML = rows.map((row) => {
@@ -922,7 +926,7 @@ function socialRenderNotificationCenter() {
           <span class="social-notif-kind">${escapeHtml(socialNotificationKindTitle(row?.kind || ""))}</span>
           <small>${escapeHtml(created || "")}</small>
         </div>
-        <b>${escapeHtml(text.title || tr("Уведомление", "Notification"))}</b>
+        <b>${escapeHtml(text.title || tr("РЈРІРµРґРѕРјР»РµРЅРёРµ", "Notification"))}</b>
         <p>${escapeHtml(text.body || "-")}</p>
       </button>
     `;
@@ -1157,7 +1161,7 @@ async function socialPollNotifications() {
       socialState.toastsSeen.add(id);
       if (row.is_read || isBootstrapSync) continue;
       const text = socialResolveNotificationText(row);
-      socialShowToast(text.title || tr("Уведомление", "Notification"), text.body || "");
+      socialShowToast(text.title || tr("РЈРІРµРґРѕРјР»РµРЅРёРµ", "Notification"), text.body || "");
       const kindGroup = socialNotificationKindGroup(row.kind || "");
       socialPlayNotificationSound(kindGroup);
       const shouldDesktopNotify = document.hidden
@@ -1175,7 +1179,7 @@ async function socialPollNotifications() {
       if (String(row.kind || "").trim().toLowerCase() === "announcement") {
         socialOpenAnnouncementModal({
           id: Number(row.payload?.announcement_id || 0),
-          title: row.title || tr("Объявление", "Announcement"),
+          title: row.title || tr("РћР±СЉСЏРІР»РµРЅРёРµ", "Announcement"),
           body: row.body || "",
         });
       }
@@ -1280,6 +1284,10 @@ function resetSocialState() {
     tasksCacheLoadedAt: 0,
     tasksLoadSeq: 0,
     calendarEvents: [],
+    calendarTasks: [],
+    calendarLastGoodEvents: [],
+    calendarLastGoodTasks: [],
+    calendarLoadSeq: 0,
     calendarDate: new Date(),
     calendarSelectedDay: "",
     notes: [],
@@ -1518,12 +1526,158 @@ function socialBindChatComposer() {
   input.addEventListener("blur", sync);
 }
 
+function socialGetEmojiSets() {
+  const recents = Array.isArray(socialState.emojiRecents)
+    ? socialState.emojiRecents.filter((item) => String(item || "").trim())
+    : [];
+  return [
+    {
+      key: "recent",
+      icon: "\uD83D\uDD58",
+      title: tr("\u041d\u0435\u0434\u0430\u0432\u043d\u0438\u0435", "Recent"),
+      items: recents,
+    },
+    {
+      key: "faces",
+      icon: "\uD83D\uDE42",
+      title: tr("\u0421\u043c\u0430\u0439\u043b\u044b", "Smileys"),
+      items: [
+        "\uD83D\uDE42", "\uD83D\uDE09", "\uD83D\uDE0A", "\uD83D\uDE0D", "\uD83E\uDD70", "\uD83D\uDE0E",
+        "\uD83D\uDE07", "\uD83E\uDD14", "\uD83D\uDE10", "\uD83D\uDE11", "\uD83D\uDE04", "\uD83D\uDE02",
+        "\uD83D\uDE05", "\uD83D\uDE0C", "\uD83D\uDE14", "\uD83D\uDE22", "\uD83D\uDE2D", "\uD83D\uDE21",
+        "\uD83E\uDD2F", "\uD83D\uDE31", "\uD83D\uDE2C", "\uD83D\uDE0F", "\uD83E\uDEE1", "\uD83E\uDD7A",
+      ],
+    },
+    {
+      key: "gestures",
+      icon: "\uD83D\uDC4D",
+      title: tr("\u0416\u0435\u0441\u0442\u044b", "Gestures"),
+      items: [
+        "\uD83D\uDC4D", "\uD83D\uDC4E", "\u270C\uFE0F", "\uD83E\uDD18", "\uD83D\uDE4F", "\uD83D\uDC4F",
+        "\uD83D\uDCAA", "\uD83E\uDEF6", "\uD83D\uDC4C", "\uD83D\uDE4C", "\uD83D\uDC50", "\uD83D\uDC4B",
+      ],
+    },
+    {
+      key: "symbols",
+      icon: "\u2764\uFE0F",
+      title: tr("\u0421\u0438\u043c\u0432\u043e\u043b\u044b", "Symbols"),
+      items: [
+        "\u2764\uFE0F", "\uD83D\uDC9B", "\uD83D\uDC9A", "\uD83D\uDC99", "\uD83D\uDC9C", "\uD83D\uDCA5",
+        "\u2728", "\u2B50", "\uD83D\uDD25", "\u2705", "\u274C", "\u26A0\uFE0F",
+      ],
+    },
+  ].filter((set) => set.key !== "recent" || set.items.length > 0);
+}
+
+function socialRenderEmojiPicker(activeKey = "") {
+  const picker = document.getElementById("socialEmojiPicker");
+  if (!picker) return;
+  const sets = socialGetEmojiSets();
+  const fallbackKey = sets.find((set) => set.key === "faces")?.key || sets[0]?.key || "faces";
+  const safeKey = sets.some((set) => set.key === activeKey)
+    ? activeKey
+    : (String(socialState.emojiSet || "").trim() || fallbackKey);
+  const activeSet = sets.find((set) => set.key === safeKey) || sets[0] || { key: "faces", items: [] };
+  socialState.emojiSet = activeSet.key;
+  picker.innerHTML = `
+    <div class="social-emoji-tabs">
+      ${sets.map((set) => `
+        <button
+          type="button"
+          class="social-emoji-tab ${set.key === activeSet.key ? "active" : ""}"
+          onclick="socialSwitchEmojiSet('${set.key}')"
+          aria-label="${escapeHtml(set.title)}"
+          title="${escapeHtml(set.title)}"
+        >
+          <span class="social-emoji-tab-icon">${set.icon}</span>
+        </button>
+      `).join("")}
+    </div>
+    <div class="social-emoji-pane">
+      ${activeSet.items.length ? `
+        <div class="social-emoji-sections">
+          <section class="social-emoji-section">
+            <div class="social-emoji-section-title">${escapeHtml(activeSet.title)}</div>
+            <div class="social-emoji-grid">
+              ${activeSet.items.map((emoji) => `<button type="button" class="social-emoji-item" onclick="socialInsertEmoji('${escapeHtml(emoji)}')">${emoji}</button>`).join("")}
+            </div>
+          </section>
+        </div>
+      ` : `<div class="social-emoji-empty">${escapeHtml(tr("\u041f\u043e\u043a\u0430 \u043f\u0443\u0441\u0442\u043e", "Nothing yet"))}</div>`}
+    </div>
+  `;
+}
+
+function socialSwitchEmojiSet(setKey) {
+  socialState.keepEmojiOpenUntil = Date.now() + 180;
+  socialRenderEmojiPicker(String(setKey || "").trim());
+}
+
+function socialInsertEmoji(emoji) {
+  const input = document.getElementById("socialChatInput");
+  const safeEmoji = String(emoji || "").trim();
+  if (!input || !safeEmoji) return false;
+  const start = Number(input.selectionStart ?? input.value.length);
+  const end = Number(input.selectionEnd ?? input.value.length);
+  const before = String(input.value || "").slice(0, start);
+  const after = String(input.value || "").slice(end);
+  input.value = `${before}${safeEmoji}${after}`;
+  const caret = start + safeEmoji.length;
+  if (typeof input.setSelectionRange === "function") input.setSelectionRange(caret, caret);
+  const recents = Array.isArray(socialState.emojiRecents) ? [...socialState.emojiRecents] : [];
+  socialState.emojiRecents = [safeEmoji, ...recents.filter((item) => item !== safeEmoji)].slice(0, 24);
+  socialState.keepEmojiOpenUntil = Date.now() + 180;
+  socialAutosizeChatInput(input);
+  socialSyncChatComposerState();
+  input.focus();
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  socialRenderEmojiPicker(String(socialState.emojiSet || "").trim());
+  return false;
+}
+
+function socialToggleEmojiPicker(forceOpen = null) {
+  const picker = document.getElementById("socialEmojiPicker");
+  const btn = document.getElementById("socialEmojiBtn");
+  if (!picker) return false;
+  const shouldOpen = typeof forceOpen === "boolean" ? forceOpen : picker.classList.contains("hidden");
+  if (!shouldOpen) {
+    picker.classList.add("hidden");
+    picker.setAttribute("aria-hidden", "true");
+    if (btn) btn.setAttribute("aria-expanded", "false");
+    return false;
+  }
+  socialState.keepEmojiOpenUntil = Date.now() + 180;
+  socialRenderEmojiPicker(String(socialState.emojiSet || "").trim());
+  picker.classList.remove("hidden");
+  picker.setAttribute("aria-hidden", "false");
+  if (btn) btn.setAttribute("aria-expanded", "true");
+  return true;
+}
+
+function socialCleanCalendarDetails(value) {
+  const raw = String(value ?? "");
+  let text = raw;
+  if (typeof decodePossiblyMojibake === "function") {
+    try { text = String(decodePossiblyMojibake(text) ?? ""); } catch (_) {}
+  }
+  return String(text || "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+if (typeof globalThis !== "undefined") {
+  globalThis.socialToggleEmojiPicker = socialToggleEmojiPicker;
+  globalThis.socialCleanCalendarDetails = socialCleanCalendarDetails;
+}
+
 function socialOpenModal(title, html) {
   const modal = document.getElementById("socialModal");
   const host = document.getElementById("socialModalHost");
   const titleNode = document.getElementById("socialModalTitle");
   if (!modal || !host || !titleNode) return;
-  titleNode.textContent = title || tr("Социальный модуль", "Social module");
+  titleNode.textContent = title || tr("РЎРѕС†РёР°Р»СЊРЅС‹Р№ РјРѕРґСѓР»СЊ", "Social module");
   host.innerHTML = html || "";
   modal.classList.remove("hidden");
 }
@@ -1545,28 +1699,28 @@ function socialRenderGames() {
   const games = Array.isArray(socialState.boot?.games) && socialState.boot.games.length
     ? socialState.boot.games
     : [
-      { code: "snake", title: "Змейка" },
-      { code: "tetris", title: "Тетрис" },
+      { code: "snake", title: "Р—РјРµР№РєР°" },
+      { code: "tetris", title: "РўРµС‚СЂРёСЃ" },
       { code: "2048", title: "2048" },
-      { code: "checkers", title: "Шашки" },
-      { code: "chess", title: "Шахматы" },
-      { code: "battleship", title: "Морской бой" },
+      { code: "checkers", title: "РЁР°С€РєРё" },
+      { code: "chess", title: "РЁР°С…РјР°С‚С‹" },
+      { code: "battleship", title: "РњРѕСЂСЃРєРѕР№ Р±РѕР№" },
     ];
   host.innerHTML = games.map((game) => {
     const icon = game.code === "snake"
-      ? "🐍"
+      ? "рџђЌ"
       : (game.code === "tetris"
-        ? "🧩"
+        ? "рџ§©"
         : (game.code === "checkers"
-          ? "♟"
+          ? "в™џ"
           : (game.code === "chess"
-            ? "♜"
-            : (game.code === "battleship" ? "⚓" : "🔢"))));
+            ? "в™њ"
+            : (game.code === "battleship" ? "вљ“" : "рџ”ў"))));
     return `
       <button class="social-game-card" type="button" ondblclick="socialOpenGameMenu('${escapeHtml(game.code)}')" onclick="socialOpenGameMenu('${escapeHtml(game.code)}')">
         <span class="social-game-icon" aria-hidden="true">${icon}</span>
         <span class="social-game-title">${escapeHtml(game.title || game.code)}</span>
-        <small>${tr("Нажмите для входа", "Tap to open")}</small>
+        <small>${tr("РќР°Р¶РјРёС‚Рµ РґР»СЏ РІС…РѕРґР°", "Tap to open")}</small>
       </button>
     `;
   }).join("");
@@ -1591,25 +1745,25 @@ async function socialOpenGameMenu(gameCode) {
   const lb = await socialRequest(`/api/social/games/leaderboard?game_code=${encodeURIComponent(code)}&limit=10`).catch(() => ({ my_best: 0, my_rank: null, top: [] }));
   socialState.gamesLeaderboardCache.set(code, lb || {});
   const title = code === "snake"
-    ? tr("Змейка", "Snake")
+    ? tr("Р—РјРµР№РєР°", "Snake")
     : (code === "tetris"
-      ? tr("Тетрис", "Tetris")
+      ? tr("РўРµС‚СЂРёСЃ", "Tetris")
       : (code === "2048"
         ? "2048"
         : (code === "chess"
-          ? tr("Шахматы", "Chess")
-          : (code === "battleship" ? tr("Морской бой", "Battleship") : code))));
+          ? tr("РЁР°С…РјР°С‚С‹", "Chess")
+          : (code === "battleship" ? tr("РњРѕСЂСЃРєРѕР№ Р±РѕР№", "Battleship") : code))));
   const myBest = Number(lb?.my_best || 0);
-  const myRank = lb?.my_rank ? `#${lb.my_rank}` : "—";
+  const myRank = lb?.my_rank ? `#${lb.my_rank}` : "вЂ”";
   socialOpenModal(
     `${title}`,
     `
       <div class="social-game-menu">
-        <div class="social-game-record">${tr("Ваш рекорд", "Your best")}: <b>${myBest}</b> - ${tr("Место", "Rank")}: <b>${myRank}</b></div>
+        <div class="social-game-record">${tr("Р’Р°С€ СЂРµРєРѕСЂРґ", "Your best")}: <b>${myBest}</b> - ${tr("РњРµСЃС‚Рѕ", "Rank")}: <b>${myRank}</b></div>
         <div class="actions">
-          <button type="button" onclick="socialStartGame('${escapeHtml(code)}')">${tr("Игра", "Play")}</button>
-          <button class="btn-secondary" type="button" onclick="socialShowLeaderboard('${escapeHtml(code)}')">${tr("Рейтинг игроков", "Leaderboard")}</button>
-          <button class="btn-secondary" type="button" onclick="socialShowGameTips('${escapeHtml(code)}')">${tr("Как играть", "How to play")}</button>
+          <button type="button" onclick="socialStartGame('${escapeHtml(code)}')">${tr("РРіСЂР°", "Play")}</button>
+          <button class="btn-secondary" type="button" onclick="socialShowLeaderboard('${escapeHtml(code)}')">${tr("Р РµР№С‚РёРЅРі РёРіСЂРѕРєРѕРІ", "Leaderboard")}</button>
+          <button class="btn-secondary" type="button" onclick="socialShowGameTips('${escapeHtml(code)}')">${tr("РљР°Рє РёРіСЂР°С‚СЊ", "How to play")}</button>
         </div>
       </div>
     `
@@ -1631,16 +1785,16 @@ function socialShowGameTips(code) {
     return;
   }
   const title = safe === "snake"
-    ? tr("Как играть в Змейку", "How to play Snake")
+    ? tr("РљР°Рє РёРіСЂР°С‚СЊ РІ Р—РјРµР№РєСѓ", "How to play Snake")
     : (safe === "tetris"
-      ? tr("Как играть в Тетрис", "How to play Tetris")
-      : (safe === "2048" ? tr("Как играть в 2048", "How to play 2048") : tr("Как играть", "How to play")));
+      ? tr("РљР°Рє РёРіСЂР°С‚СЊ РІ РўРµС‚СЂРёСЃ", "How to play Tetris")
+      : (safe === "2048" ? tr("РљР°Рє РёРіСЂР°С‚СЊ РІ 2048", "How to play 2048") : tr("РљР°Рє РёРіСЂР°С‚СЊ", "How to play")));
   const body = safe === "snake"
-    ? tr("Управление: стрелки. Ешьте еду, не врезайтесь в стену и в себя. Каждые 5 очков скорость растет.", "Controls: arrows. Eat food and avoid walls or your body. Speed increases every 5 points.")
+    ? tr("РЈРїСЂР°РІР»РµРЅРёРµ: СЃС‚СЂРµР»РєРё. Р•С€СЊС‚Рµ РµРґСѓ, РЅРµ РІСЂРµР·Р°Р№С‚РµСЃСЊ РІ СЃС‚РµРЅСѓ Рё РІ СЃРµР±СЏ. РљР°Р¶РґС‹Рµ 5 РѕС‡РєРѕРІ СЃРєРѕСЂРѕСЃС‚СЊ СЂР°СЃС‚РµС‚.", "Controls: arrows. Eat food and avoid walls or your body. Speed increases every 5 points.")
     : (safe === "tetris"
-      ? tr("Управление: ← →, ↓, ↑ поворот, пробел — быстрый сброс. Собирайте линии и набирайте очки.", "Controls: ← →, ↓, ↑ rotate, Space hard drop. Complete lines to gain score.")
-      : tr("Управление: стрелки. Совмещайте одинаковые плитки, чтобы получить 2048. Ход завершает игру, когда нет доступных ходов.", "Controls: arrows. Merge equal tiles to reach 2048. Game ends when no moves are available."));
-  socialOpenModal(title, `<div class="hint">${escapeHtml(body)}</div><div class="actions"><button type="button" onclick="socialOpenGameMenu('${escapeHtml(safe)}')">${tr("Назад", "Back")}</button></div>`);
+      ? tr("РЈРїСЂР°РІР»РµРЅРёРµ: в†ђ в†’, в†“, в†‘ РїРѕРІРѕСЂРѕС‚, РїСЂРѕР±РµР» вЂ” Р±С‹СЃС‚СЂС‹Р№ СЃР±СЂРѕСЃ. РЎРѕР±РёСЂР°Р№С‚Рµ Р»РёРЅРёРё Рё РЅР°Р±РёСЂР°Р№С‚Рµ РѕС‡РєРё.", "Controls: в†ђ в†’, в†“, в†‘ rotate, Space hard drop. Complete lines to gain score.")
+      : tr("РЈРїСЂР°РІР»РµРЅРёРµ: СЃС‚СЂРµР»РєРё. РЎРѕРІРјРµС‰Р°Р№С‚Рµ РѕРґРёРЅР°РєРѕРІС‹Рµ РїР»РёС‚РєРё, С‡С‚РѕР±С‹ РїРѕР»СѓС‡РёС‚СЊ 2048. РҐРѕРґ Р·Р°РІРµСЂС€Р°РµС‚ РёРіСЂСѓ, РєРѕРіРґР° РЅРµС‚ РґРѕСЃС‚СѓРїРЅС‹С… С…РѕРґРѕРІ.", "Controls: arrows. Merge equal tiles to reach 2048. Game ends when no moves are available."));
+  socialOpenModal(title, `<div class="hint">${escapeHtml(body)}</div><div class="actions"><button type="button" onclick="socialOpenGameMenu('${escapeHtml(safe)}')">${tr("РќР°Р·Р°Рґ", "Back")}</button></div>`);
 }
 
 async function socialShowLeaderboard(code) {
@@ -1666,18 +1820,18 @@ async function socialShowLeaderboard(code) {
   const html = `
     <div class="table-card">
       <table>
-        <thead><tr><th>#</th><th>${tr("Ник", "Nickname")}</th><th>${tr("Очки", "Score")}</th></tr></thead>
+        <thead><tr><th>#</th><th>${tr("РќРёРє", "Nickname")}</th><th>${tr("РћС‡РєРё", "Score")}</th></tr></thead>
         <tbody>
           ${rows.length ? rows.map((row) => `
             <tr class="${row.is_me ? "social-me-row" : ""}"><td>${Number(row.rank || 0)}</td><td>${escapeHtml(row.nick || "-")}</td><td>${Number(row.score || 0)}</td></tr>
-          `).join("") : `<tr><td colspan="3">${tr("Пока нет результатов", "No records yet")}</td></tr>`}
+          `).join("") : `<tr><td colspan="3">${tr("РџРѕРєР° РЅРµС‚ СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ", "No records yet")}</td></tr>`}
         </tbody>
       </table>
     </div>
-    <div class="hint">${tr("Ваше место", "Your rank")}: <b>${data.my_rank ? `#${data.my_rank}` : "—"}</b> - ${tr("Ваш рекорд", "Your best")}: <b>${Number(data.my_best || 0)}</b></div>
-    <div class="actions"><button type="button" onclick="socialOpenGameMenu('${escapeHtml(safe)}')">${tr("Назад", "Back")}</button></div>
+    <div class="hint">${tr("Р’Р°С€Рµ РјРµСЃС‚Рѕ", "Your rank")}: <b>${data.my_rank ? `#${data.my_rank}` : "вЂ”"}</b> - ${tr("Р’Р°С€ СЂРµРєРѕСЂРґ", "Your best")}: <b>${Number(data.my_best || 0)}</b></div>
+    <div class="actions"><button type="button" onclick="socialOpenGameMenu('${escapeHtml(safe)}')">${tr("РќР°Р·Р°Рґ", "Back")}</button></div>
   `;
-  socialOpenModal(tr("Рейтинг игроков", "Leaderboard"), html);
+  socialOpenModal(tr("Р РµР№С‚РёРЅРі РёРіСЂРѕРєРѕРІ", "Leaderboard"), html);
 }
 
 async function socialStoreGameScore(code, score) {
@@ -1695,10 +1849,10 @@ function socialGameOverlay(title, score, onRetry) {
   return `
     <div class="social-game-overlay">
       <h3>${escapeHtml(title)}</h3>
-      <div>${tr("Счет", "Score")}: <b>${Number(score || 0)}</b></div>
+      <div>${tr("РЎС‡РµС‚", "Score")}: <b>${Number(score || 0)}</b></div>
       <div class="actions">
-        ${retryFn ? `<button type="button" onclick="${retryFn}">${tr("Еще раз", "Retry")}</button>` : ""}
-        <button class="btn-secondary" type="button" onclick="socialOpenGameMenu('${escapeHtml(socialState.currentGameCode || "snake")}')">${tr("В меню", "Menu")}</button>
+        ${retryFn ? `<button type="button" onclick="${retryFn}">${tr("Р•С‰Рµ СЂР°Р·", "Retry")}</button>` : ""}
+        <button class="btn-secondary" type="button" onclick="socialOpenGameMenu('${escapeHtml(socialState.currentGameCode || "snake")}')">${tr("Р’ РјРµРЅСЋ", "Menu")}</button>
       </div>
     </div>
   `;
@@ -1732,31 +1886,31 @@ function socialGameControlsHtml(code) {
   if (safe === "snake") {
     return `
       <div class="social-game-controls">
-        <button type="button" onclick="socialGameControl('up')">↑</button>
-        <button type="button" onclick="socialGameControl('left')">←</button>
-        <button type="button" onclick="socialGameControl('down')">↓</button>
-        <button type="button" onclick="socialGameControl('right')">→</button>
+        <button type="button" onclick="socialGameControl('up')">в†‘</button>
+        <button type="button" onclick="socialGameControl('left')">в†ђ</button>
+        <button type="button" onclick="socialGameControl('down')">в†“</button>
+        <button type="button" onclick="socialGameControl('right')">в†’</button>
       </div>
     `;
   }
   if (safe === "2048") {
     return `
       <div class="social-game-controls">
-        <button type="button" onclick="socialGameControl('up')">↑</button>
-        <button type="button" onclick="socialGameControl('left')">←</button>
-        <button type="button" onclick="socialGameControl('down')">↓</button>
-        <button type="button" onclick="socialGameControl('right')">→</button>
+        <button type="button" onclick="socialGameControl('up')">в†‘</button>
+        <button type="button" onclick="socialGameControl('left')">в†ђ</button>
+        <button type="button" onclick="socialGameControl('down')">в†“</button>
+        <button type="button" onclick="socialGameControl('right')">в†’</button>
       </div>
     `;
   }
   if (safe === "tetris") {
     return `
       <div class="social-game-controls">
-        <button type="button" onclick="socialGameControl('left')">←</button>
-        <button type="button" onclick="socialGameControl('right')">→</button>
-        <button type="button" onclick="socialGameControl('down')">↓</button>
-        <button type="button" onclick="socialGameControl('rotate')">${tr("Поворот", "Rotate")}</button>
-        <button type="button" onclick="socialGameControl('drop')">${tr("Сброс", "Drop")}</button>
+        <button type="button" onclick="socialGameControl('left')">в†ђ</button>
+        <button type="button" onclick="socialGameControl('right')">в†’</button>
+        <button type="button" onclick="socialGameControl('down')">в†“</button>
+        <button type="button" onclick="socialGameControl('rotate')">${tr("РџРѕРІРѕСЂРѕС‚", "Rotate")}</button>
+        <button type="button" onclick="socialGameControl('drop')">${tr("РЎР±СЂРѕСЃ", "Drop")}</button>
       </div>
     `;
   }
@@ -1778,15 +1932,15 @@ function socialStartGame(code) {
     return;
   }
   const title = safe === "snake"
-    ? tr("Змейка", "Snake")
+    ? tr("Р—РјРµР№РєР°", "Snake")
     : (safe === "tetris"
-      ? tr("Тетрис", "Tetris")
+      ? tr("РўРµС‚СЂРёСЃ", "Tetris")
       : (safe === "2048" ? "2048" : safe));
   const hint = safe === "snake"
-    ? tr("Управление: стрелки, свайпы и тап по стороне от змейки. Ешьте еду и не врезайтесь.", "Controls: arrows, swipes, and tap around snake direction. Eat food and avoid collisions.")
+    ? tr("РЈРїСЂР°РІР»РµРЅРёРµ: СЃС‚СЂРµР»РєРё, СЃРІР°Р№РїС‹ Рё С‚Р°Рї РїРѕ СЃС‚РѕСЂРѕРЅРµ РѕС‚ Р·РјРµР№РєРё. Р•С€СЊС‚Рµ РµРґСѓ Рё РЅРµ РІСЂРµР·Р°Р№С‚РµСЃСЊ.", "Controls: arrows, swipes, and tap around snake direction. Eat food and avoid collisions.")
     : (safe === "tetris"
-      ? tr("Управление: ← →, ↓, ↑ поворот, пробел — быстрый сброс.", "Controls: ← →, ↓, ↑ rotate, Space hard drop.")
-      : tr("Управление: стрелки. Совмещайте одинаковые плитки.", "Controls: arrows. Merge equal tiles."));
+      ? tr("РЈРїСЂР°РІР»РµРЅРёРµ: в†ђ в†’, в†“, в†‘ РїРѕРІРѕСЂРѕС‚, РїСЂРѕР±РµР» вЂ” Р±С‹СЃС‚СЂС‹Р№ СЃР±СЂРѕСЃ.", "Controls: в†ђ в†’, в†“, в†‘ rotate, Space hard drop.")
+      : tr("РЈРїСЂР°РІР»РµРЅРёРµ: СЃС‚СЂРµР»РєРё. РЎРѕРІРјРµС‰Р°Р№С‚Рµ РѕРґРёРЅР°РєРѕРІС‹Рµ РїР»РёС‚РєРё.", "Controls: arrows. Merge equal tiles."));
   const canvasSize = socialGameCanvasSize(safe);
   const controls = socialGameControlsHtml(safe);
   socialOpenModal(
@@ -1795,7 +1949,7 @@ function socialStartGame(code) {
       <div class="social-game-wrap">
         <div class="hint">${escapeHtml(hint)}</div>
         <canvas id="socialGameCanvas" width="${Number(canvasSize.width || 420)}" height="${Number(canvasSize.height || 620)}"></canvas>
-        <div id="socialGameInfo" class="hint">${tr("Счет", "Score")}: 0</div>
+        <div id="socialGameInfo" class="hint">${tr("РЎС‡РµС‚", "Score")}: 0</div>
         ${controls}
       </div>
     `
@@ -1868,7 +2022,7 @@ function socialRunSnake() {
     ctx.globalAlpha = 1;
     ctx.fillStyle = "#ff6f91";
     ctx.fillRect(food.x * size + 2, food.y * size + 2, size - 4, size - 4);
-    info.textContent = `${tr("Счет", "Score")}: ${score}`;
+    info.textContent = `${tr("РЎС‡РµС‚", "Score")}: ${score}`;
   }
 
   function stopGame(gameOver = false) {
@@ -1880,7 +2034,7 @@ function socialRunSnake() {
     canvas.removeEventListener("pointerdown", onPointerDown);
     socialStoreGameScore("snake", score).catch(() => null);
     if (gameOver) {
-      socialOpenModal(tr("Змейка", "Snake"), socialGameOverlay(tr("Игра окончена", "Game over"), score, () => socialStartGame("snake")));
+      socialOpenModal(tr("Р—РјРµР№РєР°", "Snake"), socialGameOverlay(tr("РРіСЂР° РѕРєРѕРЅС‡РµРЅР°", "Game over"), score, () => socialStartGame("snake")));
     }
   }
 
@@ -2095,7 +2249,7 @@ function socialRunTetris() {
         });
       });
     }
-    info.textContent = `${tr("Счет", "Score")}: ${score}`;
+    info.textContent = `${tr("РЎС‡РµС‚", "Score")}: ${score}`;
   }
 
   function gameOver() {
@@ -2103,7 +2257,7 @@ function socialRunTetris() {
     if (timer) clearTimeout(timer);
     document.removeEventListener("keydown", onKey);
     socialStoreGameScore("tetris", score).catch(() => null);
-    socialOpenModal(tr("Тетрис", "Tetris"), socialGameOverlay(tr("Игра окончена", "Game over"), score, () => socialStartGame("tetris")));
+    socialOpenModal(tr("РўРµС‚СЂРёСЃ", "Tetris"), socialGameOverlay(tr("РРіСЂР° РѕРєРѕРЅС‡РµРЅР°", "Game over"), score, () => socialStartGame("tetris")));
   }
 
   function tick() {
@@ -2276,7 +2430,7 @@ function socialRun2048() {
     if (!canMove()) {
       running = false;
       socialStoreGameScore("2048", score).catch(() => null);
-      socialOpenModal("2048", socialGameOverlay(tr("Игра окончена", "Game over"), score, () => socialStartGame("2048")));
+      socialOpenModal("2048", socialGameOverlay(tr("РРіСЂР° РѕРєРѕРЅС‡РµРЅР°", "Game over"), score, () => socialStartGame("2048")));
     }
   }
 
@@ -2315,7 +2469,7 @@ function socialRun2048() {
         drawCell(x, y, board[y][x]);
       }
     }
-    info.textContent = `${tr("Счет", "Score")}: ${score}`;
+    info.textContent = `${tr("РЎС‡РµС‚", "Score")}: ${score}`;
   }
 
   function onKey(e) {
@@ -2833,8 +2987,8 @@ function socialApplyChatHeadCollapsed() {
     collapseBtn.setAttribute("aria-pressed", collapsed ? "true" : "false");
     collapseBtn.textContent = collapsed ? "+" : "-";
     collapseBtn.title = collapsed
-      ? tr("Развернуть шапку", "Expand header")
-      : tr("Свернуть шапку", "Collapse header");
+      ? tr("Р Р°Р·РІРµСЂРЅСѓС‚СЊ С€Р°РїРєСѓ", "Expand header")
+      : tr("РЎРІРµСЂРЅСѓС‚СЊ С€Р°РїРєСѓ", "Collapse header");
   }
 }
 
@@ -3118,36 +3272,36 @@ function socialOpenChatActionsMenu() {
   const actions = [];
   actions.push(`
     <button type="button" class="btn-secondary" data-chat-action="toggle_header">
-      ${escapeHtml(collapsed ? tr("Развернуть шапку", "Expand header") : tr("Свернуть шапку", "Collapse header"))}
+      ${escapeHtml(collapsed ? tr("Р Р°Р·РІРµСЂРЅСѓС‚СЊ С€Р°РїРєСѓ", "Expand header") : tr("РЎРІРµСЂРЅСѓС‚СЊ С€Р°РїРєСѓ", "Collapse header"))}
     </button>
   `);
   if (isTeamThread) {
     actions.push(`
-      <button type="button" data-chat-action="participants">${escapeHtml(tr("Участники", "Participants"))}</button>
-      <button type="button" class="btn-secondary" data-chat-action="group_avatar">${escapeHtml(tr("Аватар чата", "Chat avatar"))}</button>
+      <button type="button" data-chat-action="participants">${escapeHtml(tr("РЈС‡Р°СЃС‚РЅРёРєРё", "Participants"))}</button>
+      <button type="button" class="btn-secondary" data-chat-action="group_avatar">${escapeHtml(tr("РђРІР°С‚Р°СЂ С‡Р°С‚Р°", "Chat avatar"))}</button>
     `);
     if (isGroup) {
       actions.push(`
-        <button type="button" data-chat-action="manage_group">${escapeHtml(tr("Изменить состав", "Edit members"))}</button>
-        <button type="button" class="btn-danger" data-chat-action="delete_group">${escapeHtml(tr("Удалить группу", "Delete group"))}</button>
+        <button type="button" data-chat-action="manage_group">${escapeHtml(tr("РР·РјРµРЅРёС‚СЊ СЃРѕСЃС‚Р°РІ", "Edit members"))}</button>
+        <button type="button" class="btn-danger" data-chat-action="delete_group">${escapeHtml(tr("РЈРґР°Р»РёС‚СЊ РіСЂСѓРїРїСѓ", "Delete group"))}</button>
       `);
     }
     if (isCompany) {
       actions.push(`
-        <button type="button" data-chat-action="manage_company">${escapeHtml(tr("Переименовать чат", "Rename chat"))}</button>
+        <button type="button" data-chat-action="manage_company">${escapeHtml(tr("РџРµСЂРµРёРјРµРЅРѕРІР°С‚СЊ С‡Р°С‚", "Rename chat"))}</button>
       `);
     }
   } else {
     actions.push(`
-      <button type="button" data-chat-action="profile">${escapeHtml(tr("Открыть профиль", "Open profile"))}</button>
+      <button type="button" data-chat-action="profile">${escapeHtml(tr("РћС‚РєСЂС‹С‚СЊ РїСЂРѕС„РёР»СЊ", "Open profile"))}</button>
     `);
   }
   actions.push(`
-    <button type="button" class="btn-secondary" data-chat-action="direct">${escapeHtml(tr("Личный чат", "Direct chat"))}</button>
-    <button type="button" class="btn-secondary" data-chat-action="new_group">${escapeHtml(tr("Новая группа", "New group"))}</button>
+    <button type="button" class="btn-secondary" data-chat-action="direct">${escapeHtml(tr("Р›РёС‡РЅС‹Р№ С‡Р°С‚", "Direct chat"))}</button>
+    <button type="button" class="btn-secondary" data-chat-action="new_group">${escapeHtml(tr("РќРѕРІР°СЏ РіСЂСѓРїРїР°", "New group"))}</button>
   `);
   socialOpenModal(
-    tr("Действия чата", "Chat actions"),
+    tr("Р”РµР№СЃС‚РІРёСЏ С‡Р°С‚Р°", "Chat actions"),
     `<div class="social-chat-actions-menu">${actions.join("")}</div>`
   );
   document.querySelectorAll("[data-chat-action]").forEach((btn) => {
@@ -3196,22 +3350,22 @@ async function socialDeleteCurrentGroupThread() {
   const row = socialGetCurrentThread();
   const threadId = Number(row?.id || 0);
   if (!threadId || String(row?.kind || "") !== "group") return;
-  const title = String(row?.title || tr("эту группу", "this group")).trim();
-  const ok = confirm(tr(`Удалить группу "${title}"? Это действие необратимо.`, `Delete group "${title}"? This action cannot be undone.`));
+  const title = String(row?.title || tr("СЌС‚Сѓ РіСЂСѓРїРїСѓ", "this group")).trim();
+  const ok = confirm(tr(`РЈРґР°Р»РёС‚СЊ РіСЂСѓРїРїСѓ "${title}"? Р­С‚Рѕ РґРµР№СЃС‚РІРёРµ РЅРµРѕР±СЂР°С‚РёРјРѕ.`, `Delete group "${title}"? This action cannot be undone.`));
   if (!ok) return;
   const result = await socialRequest(`/api/social/chat/groups/${threadId}`, {
     method: "DELETE",
     retryOnPost: false,
     maxRetries: 0,
   }).catch((e) => {
-    alert(e?.message || tr("Не удалось удалить группу", "Failed to delete group"));
+    alert(e?.message || tr("РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ РіСЂСѓРїРїСѓ", "Failed to delete group"));
     return null;
   });
   if (!result) return;
   socialCloseThread({ keepAutoSelect: false });
   await socialLoadThreads({ silent: true });
   if (typeof socialShowToast === "function") {
-    socialShowToast(tr("Группа удалена", "Group deleted"), tr("Чат удален из списка.", "The chat was removed from the list."));
+    socialShowToast(tr("Р“СЂСѓРїРїР° СѓРґР°Р»РµРЅР°", "Group deleted"), tr("Р§Р°С‚ СѓРґР°Р»РµРЅ РёР· СЃРїРёСЃРєР°.", "The chat was removed from the list."));
   }
 }
 
@@ -3226,12 +3380,12 @@ function socialOpenChatQuickMenu() {
   const hasThread = Number(socialState.currentThreadId || 0) > 0;
   const html = `
     <div class="social-chat-actions-menu">
-      <button type="button" data-chat-quick="direct">${escapeHtml(tr("Личный чат", "Direct chat"))}</button>
-      <button type="button" data-chat-quick="group">${escapeHtml(tr("Новая группа", "New group"))}</button>
-      ${hasThread ? `<button type="button" class="btn-secondary" data-chat-quick="actions">${escapeHtml(tr("Действия текущего чата", "Current chat actions"))}</button>` : ""}
+      <button type="button" data-chat-quick="direct">${escapeHtml(tr("Р›РёС‡РЅС‹Р№ С‡Р°С‚", "Direct chat"))}</button>
+      <button type="button" data-chat-quick="group">${escapeHtml(tr("РќРѕРІР°СЏ РіСЂСѓРїРїР°", "New group"))}</button>
+      ${hasThread ? `<button type="button" class="btn-secondary" data-chat-quick="actions">${escapeHtml(tr("Р”РµР№СЃС‚РІРёСЏ С‚РµРєСѓС‰РµРіРѕ С‡Р°С‚Р°", "Current chat actions"))}</button>` : ""}
     </div>
   `;
-  socialOpenModal(tr("Чаты", "Chats"), html);
+  socialOpenModal(tr("Р§Р°С‚С‹", "Chats"), html);
   document.querySelectorAll("[data-chat-quick]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const action = String(btn.getAttribute("data-chat-quick") || "").trim();
@@ -3265,38 +3419,38 @@ function socialOpenThreadMenu() {
   if (isTeamThread) {
     if (isGroup) {
       items.push({
-        label: tr("Управление группой", "Manage group"),
+        label: tr("РЈРїСЂР°РІР»РµРЅРёРµ РіСЂСѓРїРїРѕР№", "Manage group"),
         run: () => socialOpenGroupEditor(true),
       });
     }
     if (isCompany) {
       items.push({
-        label: tr("Настройки чата компании", "Company chat settings"),
+        label: tr("РќР°СЃС‚СЂРѕР№РєРё С‡Р°С‚Р° РєРѕРјРїР°РЅРёРё", "Company chat settings"),
         run: () => socialOpenCompanyChatEditor(),
       });
     }
     items.push({
-      label: tr("Участники", "Participants"),
+      label: tr("РЈС‡Р°СЃС‚РЅРёРєРё", "Participants"),
       run: () => socialOpenGroupParticipants(),
     });
     items.push({
-      label: tr("Аватар чата", "Chat avatar"),
+      label: tr("РђРІР°С‚Р°СЂ С‡Р°С‚Р°", "Chat avatar"),
       run: () => socialOpenGroupAvatarModal(),
     });
     if (isGroup) {
       items.push({
-        label: tr("Удалить группу", "Delete group"),
+        label: tr("РЈРґР°Р»РёС‚СЊ РіСЂСѓРїРїСѓ", "Delete group"),
         run: () => socialDeleteCurrentGroupThread(),
       });
     }
   } else {
     items.push({
-      label: tr("Профиль собеседника", "Open profile"),
+      label: tr("РџСЂРѕС„РёР»СЊ СЃРѕР±РµСЃРµРґРЅРёРєР°", "Open profile"),
       run: () => socialOpenCurrentParticipantProfile(),
     });
   }
   items.push({
-    label: tr("Закрыть чат", "Close chat"),
+    label: tr("Р—Р°РєСЂС‹С‚СЊ С‡Р°С‚", "Close chat"),
     run: () => socialCloseThread({ keepAutoSelect: false }),
   });
   const itemsHtml = items.map((item, index) => `
@@ -3305,7 +3459,7 @@ function socialOpenThreadMenu() {
     </button>
   `).join("");
   socialOpenModal(
-    tr("Меню чата", "Chat menu"),
+    tr("РњРµРЅСЋ С‡Р°С‚Р°", "Chat menu"),
     `<div class="social-thread-menu-list">${itemsHtml}</div>`
   );
   document.querySelectorAll("[data-social-thread-menu-item]").forEach((btn) => {
@@ -3334,8 +3488,8 @@ function socialOpenGroupParticipants() {
     const nick = String(p?.nick || actorKey || "-").trim() || "-";
     const online = socialIsParticipantOnline(p);
     const state = online
-      ? tr("онлайн", "online now")
-      : (socialFormatLastSeen(p?.last_seen_at || "") || tr("нет данных", "unknown"));
+      ? tr("РѕРЅР»Р°Р№РЅ", "online now")
+      : (socialFormatLastSeen(p?.last_seen_at || "") || tr("РЅРµС‚ РґР°РЅРЅС‹С…", "unknown"));
     return `
       <button type="button" class="social-participant-row" data-social-profile-actor="${escapeHtml(actorKey)}">
         <span class="social-participant-avatar">${socialAvatarMarkup(p?.avatar_url || "", nick, "xs")}</span>
@@ -3350,21 +3504,21 @@ function socialOpenGroupParticipants() {
   const actionsHtml = isGroup
     ? `
       <div class="actions social-group-participants-actions">
-        <button type="button" onclick="socialOpenGroupEditor(true)">${escapeHtml(tr("Изменить состав", "Edit members"))}</button>
-        <button type="button" class="btn-danger" onclick="socialDeleteCurrentGroupThread()">${escapeHtml(tr("Удалить группу", "Delete group"))}</button>
+        <button type="button" onclick="socialOpenGroupEditor(true)">${escapeHtml(tr("РР·РјРµРЅРёС‚СЊ СЃРѕСЃС‚Р°РІ", "Edit members"))}</button>
+        <button type="button" class="btn-danger" onclick="socialDeleteCurrentGroupThread()">${escapeHtml(tr("РЈРґР°Р»РёС‚СЊ РіСЂСѓРїРїСѓ", "Delete group"))}</button>
       </div>
     `
     : `
       <div class="actions social-group-participants-actions">
-        <button type="button" onclick="socialOpenCompanyChatEditor()">${escapeHtml(tr("Настройки чата", "Chat settings"))}</button>
+        <button type="button" onclick="socialOpenCompanyChatEditor()">${escapeHtml(tr("РќР°СЃС‚СЂРѕР№РєРё С‡Р°С‚Р°", "Chat settings"))}</button>
       </div>
     `;
   socialOpenModal(
-    isCompany ? tr("Участники чата компании", "Company chat members") : tr("Участники группы", "Group participants"),
+    isCompany ? tr("РЈС‡Р°СЃС‚РЅРёРєРё С‡Р°С‚Р° РєРѕРјРїР°РЅРёРё", "Company chat members") : tr("РЈС‡Р°СЃС‚РЅРёРєРё РіСЂСѓРїРїС‹", "Group participants"),
     `
       ${actionsHtml}
       <div class="social-participant-list">
-        ${listHtml || `<div class="hint">${escapeHtml(tr("Список участников пуст.", "No participants yet."))}</div>`}
+        ${listHtml || `<div class="hint">${escapeHtml(tr("РЎРїРёСЃРѕРє СѓС‡Р°СЃС‚РЅРёРєРѕРІ РїСѓСЃС‚.", "No participants yet."))}</div>`}
       </div>
     `
   );
@@ -3633,6 +3787,11 @@ function socialHandleMobileBack() {
     socialToggleEmojiPicker(false);
     return true;
   }
+  const daySheet = document.getElementById("socialCalendarDaySheet");
+  if (daySheet && !daySheet.classList.contains("hidden")) {
+    socialHideCalendarDaySheet();
+    return true;
+  }
   const modal = document.getElementById("socialModal");
   if (modal && !modal.classList.contains("hidden")) {
     socialCloseModal();
@@ -3662,9 +3821,9 @@ function socialOpenMessageContext(messageId, event) {
   const fallbackY = Number(event?.clientY || 0) || Number(rect?.top || 0) + Math.max(18, Math.min(30, Number(rect?.height || 0) * 0.45));
   socialState.chatContextX = fallbackX;
   socialState.chatContextY = fallbackY;
-  const quick = ["👍", "🔥", "❤️", "😂", "🙏", "✅"];
+  const quick = ["рџ‘Ќ", "рџ”Ґ", "вќ¤пёЏ", "рџ‚", "рџ™Џ", "вњ…"];
   menu.innerHTML = `
-    <button type="button" class="social-chat-context-btn" onclick="socialContextReply()">${tr("Ответить", "Reply")}</button>
+    <button type="button" class="social-chat-context-btn" onclick="socialContextReply()">${tr("РћС‚РІРµС‚РёС‚СЊ", "Reply")}</button>
     <div class="social-chat-context-reactions">
       ${quick.map((emoji) => `<button type="button" class="social-chat-context-emoji" onclick="socialContextReact('${escapeHtml(emoji)}')">${emoji}</button>`).join("")}
     </div>
@@ -3750,7 +3909,7 @@ function socialMessageAttachmentsHtml(message) {
     if (isImage) {
       return `<a class="tg-attach tg-attach-image" href="${escapeHtml(url)}" data-image-alt="${escapeHtml(name)}" onclick="return socialOpenImageFromAttachment(event)"><img src="${escapeHtml(url)}" alt="${escapeHtml(name)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" /></a>`;
     }
-    return `<a class="tg-attach tg-attach-file" href="${escapeHtml(url)}" target="_blank" rel="noopener">📎 ${escapeHtml(name)}</a>`;
+    return `<a class="tg-attach tg-attach-file" href="${escapeHtml(url)}" target="_blank" rel="noopener">рџ“Ћ ${escapeHtml(name)}</a>`;
   }).join("");
   if (!body) return "";
   return `<div class="tg-msg-attachments">${body}</div>`;
@@ -3783,10 +3942,10 @@ function socialMessageStatusDotHtml(message) {
   const readBy = Math.max(0, Number(message?.delivery_read_by || 0));
   const readTotal = Math.max(0, Number(message?.delivery_total || 0));
   const titleByStatus = {
-    sending: tr("Отправляется…", "Sending..."),
-    failed: tr("Не отправлено", "Not sent"),
-    sent: tr("Отправлено, не прочитано", "Sent, unread"),
-    read: tr("Прочитано", "Read"),
+    sending: tr("РћС‚РїСЂР°РІР»СЏРµС‚СЃСЏвЂ¦", "Sending..."),
+    failed: tr("РќРµ РѕС‚РїСЂР°РІР»РµРЅРѕ", "Not sent"),
+    sent: tr("РћС‚РїСЂР°РІР»РµРЅРѕ, РЅРµ РїСЂРѕС‡РёС‚Р°РЅРѕ", "Sent, unread"),
+    read: tr("РџСЂРѕС‡РёС‚Р°РЅРѕ", "Read"),
   };
   const title = status === "read" && readTotal > 0
     ? `${titleByStatus.read} (${readBy}/${readTotal})`
@@ -3806,24 +3965,24 @@ function socialOpenGroupAvatarModal() {
     return `<button type="button" class="avatar-chip ${active}" data-avatar-url="${escapeHtml(url)}"><img src="${escapeHtml(url)}" alt="avatar" /></button>`;
   }).join("");
   socialOpenModal(
-    tr("Аватар чата", "Chat avatar"),
+    tr("РђРІР°С‚Р°СЂ С‡Р°С‚Р°", "Chat avatar"),
     `
       <div class="social-avatar-editor">
         <div class="team-avatar-row">
           <div id="socialGroupAvatarPreview" class="profile-avatar-preview">--</div>
           <div class="team-avatar-controls">
             <label class="admin-user-field">
-              <span>${escapeHtml(tr("Ссылка на аватар", "Avatar URL"))}</span>
+              <span>${escapeHtml(tr("РЎСЃС‹Р»РєР° РЅР° Р°РІР°С‚Р°СЂ", "Avatar URL"))}</span>
               <input id="socialGroupAvatarUrl" placeholder="https://..." />
             </label>
             <div id="socialGroupAvatarPicker" class="avatar-picker">${pickerHtml}</div>
           </div>
         </div>
         <div class="actions">
-          <button id="socialGroupAvatarUploadBtn" class="btn-secondary" type="button">${tr("Загрузить файл", "Upload file")}</button>
+          <button id="socialGroupAvatarUploadBtn" class="btn-secondary" type="button">${tr("Р—Р°РіСЂСѓР·РёС‚СЊ С„Р°Р№Р»", "Upload file")}</button>
           <input id="socialGroupAvatarFileInput" type="file" accept="image/*" class="hidden" />
-          <button id="socialGroupAvatarSave" type="button">${tr("Сохранить", "Save")}</button>
-          <button id="socialGroupAvatarClear" class="btn-secondary" type="button">${tr("Удалить", "Clear")}</button>
+          <button id="socialGroupAvatarSave" type="button">${tr("РЎРѕС…СЂР°РЅРёС‚СЊ", "Save")}</button>
+          <button id="socialGroupAvatarClear" class="btn-secondary" type="button">${tr("РЈРґР°Р»РёС‚СЊ", "Clear")}</button>
         </div>
       </div>
     `
@@ -3873,7 +4032,7 @@ function socialOpenGroupAvatarModal() {
     const prevText = String(uploadBtn?.textContent || "");
     if (uploadBtn) {
       uploadBtn.disabled = true;
-      uploadBtn.textContent = tr("Загрузка...", "Uploading...");
+      uploadBtn.textContent = tr("Р—Р°РіСЂСѓР·РєР°...", "Uploading...");
     }
     try {
       const updated = await socialUploadGroupAvatarFile(file);
@@ -3887,7 +4046,7 @@ function socialOpenGroupAvatarModal() {
     } finally {
       if (uploadBtn) {
         uploadBtn.disabled = false;
-        uploadBtn.textContent = prevText || tr("Загрузить файл", "Upload file");
+        uploadBtn.textContent = prevText || tr("Р—Р°РіСЂСѓР·РёС‚СЊ С„Р°Р№Р»", "Upload file");
       }
       if (uploadInput) uploadInput.value = "";
     }
@@ -3899,7 +4058,7 @@ async function socialUploadGroupAvatarFile(file) {
   if (!thread || !file) return null;
   const type = String(file?.type || "").toLowerCase();
   if (type && !type.startsWith("image/")) {
-    alert(tr("Нужно выбрать изображение", "Please choose an image file"));
+    alert(tr("РќСѓР¶РЅРѕ РІС‹Р±СЂР°С‚СЊ РёР·РѕР±СЂР°Р¶РµРЅРёРµ", "Please choose an image file"));
     return null;
   }
   const form = new FormData();
@@ -3952,8 +4111,8 @@ function socialRenderChatMessages(opts = {}) {
     ? opts.wasAtBottom
     : (host.scrollHeight - host.scrollTop - host.clientHeight < 40);
   const loadMoreBtn = socialState.chatHasMore
-    ? `<button class="btn-secondary social-chat-loadmore" type="button" onclick="socialLoadOlderMessages()">${tr("Загрузить раньше", "Load earlier")}</button>`
-    : `<div class="hint">${tr("Начало чата", "Start of chat")}</div>`;
+    ? `<button class="btn-secondary social-chat-loadmore" type="button" onclick="socialLoadOlderMessages()">${tr("Р—Р°РіСЂСѓР·РёС‚СЊ СЂР°РЅСЊС€Рµ", "Load earlier")}</button>`
+    : `<div class="hint">${tr("РќР°С‡Р°Р»Рѕ С‡Р°С‚Р°", "Start of chat")}</div>`;
   const isGroup = String(socialState.currentThreadKind || "") !== "direct";
   let lastDate = "";
   let lastSender = "";
@@ -4090,7 +4249,7 @@ async function socialLoadMessages(threadId, opts = {}) {
       socialState.chatOldestId = 0;
       socialState.chatHasMore = true;
       if (host) {
-        host.innerHTML = `<div class="hint social-chat-error">${escapeHtml(tr("Не удалось загрузить сообщения. Потяните вниз или откройте чат снова.", "Failed to load messages. Pull to refresh or reopen the chat."))}</div>`;
+        host.innerHTML = `<div class="hint social-chat-error">${escapeHtml(tr("РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЃРѕРѕР±С‰РµРЅРёСЏ. РџРѕС‚СЏРЅРёС‚Рµ РІРЅРёР· РёР»Рё РѕС‚РєСЂРѕР№С‚Рµ С‡Р°С‚ СЃРЅРѕРІР°.", "Failed to load messages. Pull to refresh or reopen the chat."))}</div>`;
       }
     }
     return;
@@ -4236,7 +4395,7 @@ async function socialSendMessage() {
           return;
         }
       }
-      alert(data.message || tr("Ошибка отправки сообщения", "Failed to send message"));
+      alert(data.message || tr("РћС€РёР±РєР° РѕС‚РїСЂР°РІРєРё СЃРѕРѕР±С‰РµРЅРёСЏ", "Failed to send message"));
       return;
     }
     if (!data) {
@@ -4300,8 +4459,8 @@ async function socialUploadChatFiles(fileList) {
         const before = socialFormatFileSize(prep.originalSize || sourceFile.size || 0);
         const after = socialFormatFileSize(prep.compressedSize || uploadFile.size || 0);
         socialShowToast(
-          tr("Фото оптимизировано", "Image optimized"),
-          tr(`Размер уменьшен: ${before} -> ${after}.`, `Size reduced: ${before} -> ${after}.`)
+          tr("Р¤РѕС‚Рѕ РѕРїС‚РёРјРёР·РёСЂРѕРІР°РЅРѕ", "Image optimized"),
+          tr(`Р Р°Р·РјРµСЂ СѓРјРµРЅСЊС€РµРЅ: ${before} -> ${after}.`, `Size reduced: ${before} -> ${after}.`)
         );
       }
 
@@ -4326,8 +4485,8 @@ async function socialUploadChatFiles(fileList) {
               const before = socialFormatFileSize(sourceFile.size || 0);
               const after = socialFormatFileSize(uploadFile.size || 0);
               socialShowToast(
-                tr("Фото дополнительно сжато", "Image compressed more"),
-                tr(`Отправили после дополнительного сжатия: ${before} -> ${after}.`, `Sent after additional compression: ${before} -> ${after}.`)
+                tr("Р¤РѕС‚Рѕ РґРѕРїРѕР»РЅРёС‚РµР»СЊРЅРѕ СЃР¶Р°С‚Рѕ", "Image compressed more"),
+                tr(`РћС‚РїСЂР°РІРёР»Рё РїРѕСЃР»Рµ РґРѕРїРѕР»РЅРёС‚РµР»СЊРЅРѕРіРѕ СЃР¶Р°С‚РёСЏ: ${before} -> ${after}.`, `Sent after additional compression: ${before} -> ${after}.`)
               );
             }
           } catch (retryErr) {
@@ -4359,10 +4518,10 @@ async function socialOpenDirectPicker() {
     tr("\u041b\u0438\u0447\u043d\u044b\u0439 \u0447\u0430\u0442", "Direct chat"),
     `
       <div class="grid-2">
-        <input id="socialDirectSearch" placeholder="${tr("Поиск по email", "Search by email")}" oninput="socialFilterDirectActors()" />
-        <button type="button" onclick="socialFilterDirectActors()">${tr("Найти", "Search")}</button>
+        <input id="socialDirectSearch" placeholder="${tr("РџРѕРёСЃРє РїРѕ email", "Search by email")}" oninput="socialFilterDirectActors()" />
+        <button type="button" onclick="socialFilterDirectActors()">${tr("РќР°Р№С‚Рё", "Search")}</button>
       </div>
-      <div class="hint">${tr("Другие компании доступны через поиск по email.", "Other companies appear only via email search.")}</div>
+      <div class="hint">${tr("Р”СЂСѓРіРёРµ РєРѕРјРїР°РЅРёРё РґРѕСЃС‚СѓРїРЅС‹ С‡РµСЂРµР· РїРѕРёСЃРє РїРѕ email.", "Other companies appear only via email search.")}</div>
       <div id="socialDirectActors" class="social-direct-list"></div>
     `
   );
@@ -4406,20 +4565,20 @@ function socialCurrentCompanyThread() {
 function socialOpenCompanyChatEditor() {
   const thread = socialCurrentCompanyThread();
   if (!thread) {
-    alert(tr("Сначала откройте чат компании.", "Open company chat first."));
+    alert(tr("РЎРЅР°С‡Р°Р»Р° РѕС‚РєСЂРѕР№С‚Рµ С‡Р°С‚ РєРѕРјРїР°РЅРёРё.", "Open company chat first."));
     return;
   }
   socialOpenModal(
-    tr("Настройки чата компании", "Company chat settings"),
+    tr("РќР°СЃС‚СЂРѕР№РєРё С‡Р°С‚Р° РєРѕРјРїР°РЅРёРё", "Company chat settings"),
     `
       <div class="social-group-editor">
         <label>
-          <span>${tr("Название чата", "Chat title")}</span>
-          <input id="socialCompanyChatTitleInput" value="${escapeHtml(String(thread.title || "").trim())}" placeholder="${escapeHtml(tr("Введите название", "Enter title"))}" />
+          <span>${tr("РќР°Р·РІР°РЅРёРµ С‡Р°С‚Р°", "Chat title")}</span>
+          <input id="socialCompanyChatTitleInput" value="${escapeHtml(String(thread.title || "").trim())}" placeholder="${escapeHtml(tr("Р’РІРµРґРёС‚Рµ РЅР°Р·РІР°РЅРёРµ", "Enter title"))}" />
         </label>
-        <div class="hint">${escapeHtml(tr("Все сотрудники компании добавляются в чат автоматически.", "All company employees are added automatically."))}</div>
+        <div class="hint">${escapeHtml(tr("Р’СЃРµ СЃРѕС‚СЂСѓРґРЅРёРєРё РєРѕРјРїР°РЅРёРё РґРѕР±Р°РІР»СЏСЋС‚СЃСЏ РІ С‡Р°С‚ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё.", "All company employees are added automatically."))}</div>
         <div class="actions">
-          <button type="button" onclick="socialSaveCompanyChatEditor()">${tr("Сохранить", "Save")}</button>
+          <button type="button" onclick="socialSaveCompanyChatEditor()">${tr("РЎРѕС…СЂР°РЅРёС‚СЊ", "Save")}</button>
         </div>
       </div>
     `
@@ -4431,7 +4590,7 @@ async function socialSaveCompanyChatEditor() {
   if (!thread) return;
   const title = String(document.getElementById("socialCompanyChatTitleInput")?.value || "").trim();
   if (title.length < 2) {
-    alert(tr("Введите название чата.", "Enter chat title."));
+    alert(tr("Р’РІРµРґРёС‚Рµ РЅР°Р·РІР°РЅРёРµ С‡Р°С‚Р°.", "Enter chat title."));
     return;
   }
   const row = await socialRequest(`/api/social/chat/company/${Number(thread.id || 0)}`, {
@@ -4440,7 +4599,7 @@ async function socialSaveCompanyChatEditor() {
     retryOnPost: true,
     maxRetries: 1,
   }).catch((e) => {
-    alert(e?.message || tr("Ошибка сохранения чата", "Failed to save chat"));
+    alert(e?.message || tr("РћС€РёР±РєР° СЃРѕС…СЂР°РЅРµРЅРёСЏ С‡Р°С‚Р°", "Failed to save chat"));
     return null;
   });
   if (!row) return;
@@ -4457,7 +4616,7 @@ function socialOpenGroupEditor(editCurrent = false) {
   const editing = Boolean(editCurrent);
   const thread = editing ? socialCurrentGroupThread() : null;
   if (editing && !thread) {
-    alert(tr("Сначала откройте групповой чат.", "Open a group chat first."));
+    alert(tr("РЎРЅР°С‡Р°Р»Р° РѕС‚РєСЂРѕР№С‚Рµ РіСЂСѓРїРїРѕРІРѕР№ С‡Р°С‚.", "Open a group chat first."));
     return;
   }
   const actors = socialCompanyActors();
@@ -4479,29 +4638,29 @@ function socialOpenGroupEditor(editCurrent = false) {
     return `
       <label class="check">
         <input type="checkbox" data-group-member="${escapeHtml(actorKey)}" ${forceChecked ? "checked" : ""} ${disabled} />
-        ${escapeHtml(row.nick || actorKey)}${isMe ? ` (${escapeHtml(tr("вы", "you"))})` : ""}
+        ${escapeHtml(row.nick || actorKey)}${isMe ? ` (${escapeHtml(tr("РІС‹", "you"))})` : ""}
       </label>
     `;
   }).join("");
   socialOpenModal(
-    editing ? tr("Управление группой", "Manage group") : tr("Новая группа", "New group"),
+    editing ? tr("РЈРїСЂР°РІР»РµРЅРёРµ РіСЂСѓРїРїРѕР№", "Manage group") : tr("РќРѕРІР°СЏ РіСЂСѓРїРїР°", "New group"),
     `
       <div class="social-group-editor">
         <label>
-          <span>${tr("Название группы", "Group title")}</span>
-          <input id="socialGroupTitleInput" value="${escapeHtml(String(thread?.title || "").trim())}" placeholder="${escapeHtml(tr("Введите название", "Enter title"))}" />
+          <span>${tr("РќР°Р·РІР°РЅРёРµ РіСЂСѓРїРїС‹", "Group title")}</span>
+          <input id="socialGroupTitleInput" value="${escapeHtml(String(thread?.title || "").trim())}" placeholder="${escapeHtml(tr("Р’РІРµРґРёС‚Рµ РЅР°Р·РІР°РЅРёРµ", "Enter title"))}" />
         </label>
         <label>
-          <span>${tr("Аватар группы", "Group avatar")}</span>
+          <span>${tr("РђРІР°С‚Р°СЂ РіСЂСѓРїРїС‹", "Group avatar")}</span>
           <input id="socialGroupAvatarInput" value="${escapeHtml(avatarCurrent)}" placeholder="https://..." />
           <div id="socialGroupAvatarPreset" class="avatar-picker">${pickerHtml}</div>
         </label>
         <div class="social-group-members">
-          <div class="hint">${tr("Участники (только сотрудники текущей компании)", "Members (current company only)")}</div>
+          <div class="hint">${tr("РЈС‡Р°СЃС‚РЅРёРєРё (С‚РѕР»СЊРєРѕ СЃРѕС‚СЂСѓРґРЅРёРєРё С‚РµРєСѓС‰РµР№ РєРѕРјРїР°РЅРёРё)", "Members (current company only)")}</div>
           <div class="social-group-members-list">${membersHtml}</div>
         </div>
         <div class="actions">
-          <button type="button" onclick="socialSaveGroupEditor(${editing ? Number(thread.id || 0) : 0})">${editing ? tr("Сохранить", "Save") : tr("Создать группу", "Create group")}</button>
+          <button type="button" onclick="socialSaveGroupEditor(${editing ? Number(thread.id || 0) : 0})">${editing ? tr("РЎРѕС…СЂР°РЅРёС‚СЊ", "Save") : tr("РЎРѕР·РґР°С‚СЊ РіСЂСѓРїРїСѓ", "Create group")}</button>
         </div>
       </div>
     `
@@ -4526,11 +4685,11 @@ async function socialSaveGroupEditor(threadId = 0) {
     .map((el) => String(el.getAttribute("data-group-member") || "").trim())
     .filter(Boolean);
   if (title.length < 2) {
-    alert(tr("Введите название группы.", "Enter group title."));
+    alert(tr("Р’РІРµРґРёС‚Рµ РЅР°Р·РІР°РЅРёРµ РіСЂСѓРїРїС‹.", "Enter group title."));
     return;
   }
   if (member_keys.length < 2) {
-    alert(tr("Добавьте минимум двух участников.", "Add at least two members."));
+    alert(tr("Р”РѕР±Р°РІСЊС‚Рµ РјРёРЅРёРјСѓРј РґРІСѓС… СѓС‡Р°СЃС‚РЅРёРєРѕРІ.", "Add at least two members."));
     return;
   }
   const isEdit = Number(threadId || 0) > 0;
@@ -4544,7 +4703,7 @@ async function socialSaveGroupEditor(threadId = 0) {
     retryOnPost: true,
     maxRetries: 1,
   }).catch((e) => {
-    alert(e?.message || tr("Ошибка сохранения группы", "Failed to save group"));
+    alert(e?.message || tr("РћС€РёР±РєР° СЃРѕС…СЂР°РЅРµРЅРёСЏ РіСЂСѓРїРїС‹", "Failed to save group"));
     return null;
   });
   if (!row) return;
@@ -4563,7 +4722,7 @@ async function socialLoadDirectActors(query) {
   if (!host) return;
   const endpoint = q ? `/api/social/chat/actors?q=${encodeURIComponent(q)}` : "/api/social/chat/actors";
   const actors = await socialRequest(endpoint).catch((e) => {
-    host.innerHTML = `<div class="hint">${escapeHtml(e.message || tr("Ошибка загрузки", "Loading error"))}</div>`;
+    host.innerHTML = `<div class="hint">${escapeHtml(e.message || tr("РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё", "Loading error"))}</div>`;
     return [];
   });
   if (!Array.isArray(actors)) return;
@@ -4578,7 +4737,7 @@ async function socialLoadDirectActors(query) {
         <small>${escapeHtml(row.company || "")}</small>
       </div>
     </button>
-  `).join("") || `<div class="hint">${tr("Никого не найдено", "No users found")}</div>`;
+  `).join("") || `<div class="hint">${tr("РќРёРєРѕРіРѕ РЅРµ РЅР°Р№РґРµРЅРѕ", "No users found")}</div>`;
 }
 
 function socialFilterDirectActors() {
@@ -4619,7 +4778,7 @@ async function socialLoadProjects() {
   const select = document.getElementById("socialTaskProjectFilter");
   if (!select) return;
   const keep = String(select.value || "");
-  select.innerHTML = `<option value="">${tr("Все проекты", "All projects")}</option>${socialState.projects.map((p) => `<option value="${Number(p.id)}">${escapeHtml(p.title || "-")}</option>`).join("")}`;
+  select.innerHTML = `<option value="">${tr("Р’СЃРµ РїСЂРѕРµРєС‚С‹", "All projects")}</option>${socialState.projects.map((p) => `<option value="${Number(p.id)}">${escapeHtml(p.title || "-")}</option>`).join("")}`;
   if ([...select.options].some((x) => x.value === keep)) select.value = keep;
 }
 
@@ -4713,7 +4872,7 @@ function socialTaskProjectTitle(task) {
     const title = String(project?.title || "").trim();
     if (title) return title;
   }
-  return tr("Без проекта", "No project");
+  return tr("Р‘РµР· РїСЂРѕРµРєС‚Р°", "No project");
 }
 
 function socialTaskVisualStatus(task) {
@@ -4727,9 +4886,9 @@ function socialTaskPendingHint(taskId) {
   const pending = socialTaskPendingStatus.get(Number(taskId || 0));
   if (!pending) return "";
   if (String(pending.targetStatus) === "done") {
-    return tr("5с: повторный клик отменит завершение", "5s: click again to cancel complete");
+    return tr("5СЃ: РїРѕРІС‚РѕСЂРЅС‹Р№ РєР»РёРє РѕС‚РјРµРЅРёС‚ Р·Р°РІРµСЂС€РµРЅРёРµ", "5s: click again to cancel complete");
   }
-  return tr("5с: повторный клик отменит возврат", "5s: click again to cancel restore");
+  return tr("5СЃ: РїРѕРІС‚РѕСЂРЅС‹Р№ РєР»РёРє РѕС‚РјРµРЅРёС‚ РІРѕР·РІСЂР°С‚", "5s: click again to cancel restore");
 }
 
 function socialFormatTaskDateTime(iso) {
@@ -4761,7 +4920,7 @@ function socialRenderTasks() {
   const myActorKey = String(socialState.boot?.actor?.actor_key || "").trim();
   const isOwner = Boolean(socialState.boot?.actor?.is_owner);
   if (!rows.length) {
-    host.innerHTML = `<div class="hint">${tr("Задач пока нет", "No tasks yet")}</div>`;
+    host.innerHTML = `<div class="hint">${tr("Р—Р°РґР°С‡ РїРѕРєР° РЅРµС‚", "No tasks yet")}</div>`;
     return;
   }
   host.innerHTML = `
@@ -4771,8 +4930,8 @@ function socialRenderTasks() {
         const statusRaw = String(task?.status || "todo");
         const status = socialTaskVisualStatus(task);
         const statusLabel = status === "todo"
-          ? tr("Новые", "To do")
-          : (status === "in_progress" ? tr("В работе", "In progress") : tr("Готово", "Done"));
+          ? tr("РќРѕРІС‹Рµ", "To do")
+          : (status === "in_progress" ? tr("Р’ СЂР°Р±РѕС‚Рµ", "In progress") : tr("Р“РѕС‚РѕРІРѕ", "Done"));
         const priority = String(task?.priority || "normal");
         const due = socialFormatTaskDateTime(task?.due_date);
         const created = socialFormatTaskDateTime(task?.created_at);
@@ -4781,34 +4940,34 @@ function socialRenderTasks() {
         const isOverdue = !isDone && dueDt instanceof Date && !Number.isNaN(dueDt.getTime()) && dueDt.getTime() < Date.now();
         const project = socialTaskProjectTitle(task);
         const kind = String(task?.task_kind || "company").toLowerCase();
-        const kindLabel = kind === "personal" ? tr("ЛИЧНАЯ", "PERSONAL") : project;
+        const kindLabel = kind === "personal" ? tr("Р›РР§РќРђРЇ", "PERSONAL") : project;
         const isMine = myActorKey && String(task?.assignee_key || "") === myActorKey;
         const canToggle = Boolean(task?.can_complete || isMine || isOwner);
         const canDelete = Boolean(task?.can_delete || isOwner);
         const pendingText = socialTaskPendingHint(id);
-        const mineBadge = isMine ? `<span class="social-task-tag">${tr("Ваша задача", "Your task")}</span>` : "";
+        const mineBadge = isMine ? `<span class="social-task-tag">${tr("Р’Р°С€Р° Р·Р°РґР°С‡Р°", "Your task")}</span>` : "";
         const assigneeNick = String(task?.assignee_nick || "-");
         const avatar = socialAvatarMarkup(String(task?.assignee_avatar_url || ""), assigneeNick, "xs");
         return `
           <article class="social-task-row ${isMine ? "is-assignee" : ""} ${isDone ? "is-done" : ""} ${isOverdue ? "is-overdue" : ""}" ondblclick="socialOpenTaskModal(${id})">
-            <button class="social-task-check ${isDone ? "is-done" : ""}" type="button" onclick="socialToggleTaskDone(${id}); event.stopPropagation();" title="${tr("Переключить выполнение", "Toggle done")}" ${canToggle ? "" : "disabled"}>✓</button>
+            <button class="social-task-check ${isDone ? "is-done" : ""}" type="button" onclick="socialToggleTaskDone(${id}); event.stopPropagation();" title="${tr("РџРµСЂРµРєР»СЋС‡РёС‚СЊ РІС‹РїРѕР»РЅРµРЅРёРµ", "Toggle done")}" ${canToggle ? "" : "disabled"}>вњ“</button>
             <div class="social-task-main" onclick="socialOpenTaskModal(${id})">
               <div class="social-task-title">
                 <b>${escapeHtml(task?.title || "-")}</b>
-                <span class="social-task-kind-badge ${escapeHtml(kind)}">${escapeHtml(kindLabel || tr("ПРОЕКТ", "PROJECT"))}</span>
+                <span class="social-task-kind-badge ${escapeHtml(kind)}">${escapeHtml(kindLabel || tr("РџР РћР•РљРў", "PROJECT"))}</span>
                 ${mineBadge}
                 <span class="social-status ${escapeHtml(status)}">${escapeHtml(statusLabel)}</span>
                 <span class="social-priority ${escapeHtml(priority)}">${escapeHtml(priority)}</span>
               </div>
               <div class="social-task-meta">
                 <span class="social-task-assignee">${avatar}<span class="social-task-assignee-name">${escapeHtml(assigneeNick)}</span></span>
-                <span>${tr("Дата создания", "Created")}: ${escapeHtml(created || "-")}</span>
-                <span>${tr("Дедлайн", "Deadline")}: ${escapeHtml(due || tr("Без дедлайна", "No deadline"))}</span>
+                <span>${tr("Р”Р°С‚Р° СЃРѕР·РґР°РЅРёСЏ", "Created")}: ${escapeHtml(created || "-")}</span>
+                <span>${tr("Р”РµРґР»Р°Р№РЅ", "Deadline")}: ${escapeHtml(due || tr("Р‘РµР· РґРµРґР»Р°Р№РЅР°", "No deadline"))}</span>
               </div>
               ${pendingText ? `<div class="social-task-pending-hint">${escapeHtml(pendingText)}</div>` : ""}
             </div>
             <div class="social-task-actions">
-              ${canDelete ? `<button class="btn-danger" type="button" onclick="socialDeleteTask(${id}); event.stopPropagation();">${tr("Удалить", "Delete")}</button>` : ""}
+              ${canDelete ? `<button class="btn-danger" type="button" onclick="socialDeleteTask(${id}); event.stopPropagation();">${tr("РЈРґР°Р»РёС‚СЊ", "Delete")}</button>` : ""}
             </div>
           </article>
         `;
@@ -4830,7 +4989,7 @@ async function socialToggleTaskDone(taskId) {
   const isMine = myActorKey && String(row.assignee_key || "") === myActorKey;
   const canToggle = Boolean(row?.can_complete || isMine || isOwner);
   if (!canToggle) {
-    alert(tr("Сотрудник может менять статус только своих задач.", "Employees can update only their own tasks."));
+    alert(tr("РЎРѕС‚СЂСѓРґРЅРёРє РјРѕР¶РµС‚ РјРµРЅСЏС‚СЊ СЃС‚Р°С‚СѓСЃ С‚РѕР»СЊРєРѕ СЃРІРѕРёС… Р·Р°РґР°С‡.", "Employees can update only their own tasks."));
     return;
   }
 
@@ -4862,7 +5021,7 @@ async function socialToggleTaskDone(taskId) {
       row.completed_at = null;
       socialApplyTaskRowsFromCache();
       socialRenderTasks();
-      alert(e?.message || tr("Не удалось обновить статус задачи", "Failed to update task status"));
+      alert(e?.message || tr("РќРµ СѓРґР°Р»РѕСЃСЊ РѕР±РЅРѕРІРёС‚СЊ СЃС‚Р°С‚СѓСЃ Р·Р°РґР°С‡Рё", "Failed to update task status"));
     }
     return;
   }
@@ -4878,7 +5037,7 @@ async function socialToggleTaskDone(taskId) {
     } catch (e) {
       socialTaskPendingStatus.delete(id);
       socialRenderTasks();
-      alert(e?.message || tr("Не удалось обновить статус задачи", "Failed to update task status"));
+      alert(e?.message || tr("РќРµ СѓРґР°Р»РѕСЃСЊ РѕР±РЅРѕРІРёС‚СЊ СЃС‚Р°С‚СѓСЃ Р·Р°РґР°С‡Рё", "Failed to update task status"));
     }
   }, 5000);
 
@@ -4898,27 +5057,27 @@ function socialBuildTaskForm(task = null) {
   const due = task?.due_date ? String(task.due_date).slice(0, 16) : "";
   return `
     <div class="grid-2">
-      <label><span>${tr("Название", "Title")}</span><input id="socialTaskTitle" value="${escapeHtml(task?.title || "")}" /></label>
-      <label><span>${tr("Проект", "Project")}</span><select id="socialTaskProject"><option value="">${tr("Без проекта", "No project")}</option>${projects.map((p) => `<option value="${Number(p.id)}" ${Number(task?.project_id || 0) === Number(p.id) ? "selected" : ""}>${escapeHtml(p.title || "-")}</option>`).join("")}</select></label>
-      <label><span>${tr("Исполнитель", "Assignee")}</span><select id="socialTaskAssignee">${actors.map((a) => `<option value="${escapeHtml(String(a.actor_key || ""))}" ${String(task?.assignee_key || "") === String(a.actor_key || "") ? "selected" : ""}>${escapeHtml(a.nick || "-")}</option>`).join("")}</select></label>
-      <label><span>${tr("Приоритет", "Priority")}</span><select id="socialTaskPriority"><option value="low" ${task?.priority === "low" ? "selected" : ""}>low</option><option value="normal" ${task?.priority === "normal" || !task ? "selected" : ""}>normal</option><option value="high" ${task?.priority === "high" ? "selected" : ""}>high</option><option value="critical" ${task?.priority === "critical" ? "selected" : ""}>critical</option></select></label>
+      <label><span>${tr("РќР°Р·РІР°РЅРёРµ", "Title")}</span><input id="socialTaskTitle" value="${escapeHtml(task?.title || "")}" /></label>
+      <label><span>${tr("РџСЂРѕРµРєС‚", "Project")}</span><select id="socialTaskProject"><option value="">${tr("Р‘РµР· РїСЂРѕРµРєС‚Р°", "No project")}</option>${projects.map((p) => `<option value="${Number(p.id)}" ${Number(task?.project_id || 0) === Number(p.id) ? "selected" : ""}>${escapeHtml(p.title || "-")}</option>`).join("")}</select></label>
+      <label><span>${tr("РСЃРїРѕР»РЅРёС‚РµР»СЊ", "Assignee")}</span><select id="socialTaskAssignee">${actors.map((a) => `<option value="${escapeHtml(String(a.actor_key || ""))}" ${String(task?.assignee_key || "") === String(a.actor_key || "") ? "selected" : ""}>${escapeHtml(a.nick || "-")}</option>`).join("")}</select></label>
+      <label><span>${tr("РџСЂРёРѕСЂРёС‚РµС‚", "Priority")}</span><select id="socialTaskPriority"><option value="low" ${task?.priority === "low" ? "selected" : ""}>low</option><option value="normal" ${task?.priority === "normal" || !task ? "selected" : ""}>normal</option><option value="high" ${task?.priority === "high" ? "selected" : ""}>high</option><option value="critical" ${task?.priority === "critical" ? "selected" : ""}>critical</option></select></label>
       <label><span>${tr("\u0421\u0442\u0430\u0442\u0443\u0441", "Status")}</span><select id="socialTaskStatus"><option value="todo" ${status === "todo" ? "selected" : ""}>todo</option><option value="in_progress" ${status === "in_progress" ? "selected" : ""}>in_progress</option><option value="done" ${status === "done" ? "selected" : ""}>done</option></select></label>
-      <label><span>${tr("Дедлайн", "Deadline")}</span><input id="socialTaskDue" type="datetime-local" value="${escapeHtml(due)}" /></label>
-      <label class="full"><span>${tr("Описание", "Description")}</span><textarea id="socialTaskDescription" rows="5">${escapeHtml(task?.description || "")}</textarea></label>
+      <label><span>${tr("Р”РµРґР»Р°Р№РЅ", "Deadline")}</span><input id="socialTaskDue" type="datetime-local" value="${escapeHtml(due)}" /></label>
+      <label class="full"><span>${tr("РћРїРёСЃР°РЅРёРµ", "Description")}</span><textarea id="socialTaskDescription" rows="5">${escapeHtml(task?.description || "")}</textarea></label>
     </div>
   `;
 }
 
 function socialOpenProjectModal() {
   socialOpenModal(
-    tr("Новый проект", "New project"),
+    tr("РќРѕРІС‹Р№ РїСЂРѕРµРєС‚", "New project"),
     `
       <div class="grid-1">
-        <input id="socialProjectTitle" placeholder="${tr("Название проекта", "Project title")}" />
-        <textarea id="socialProjectDescription" rows="4" placeholder="${tr("Описание", "Description")}"></textarea>
+        <input id="socialProjectTitle" placeholder="${tr("РќР°Р·РІР°РЅРёРµ РїСЂРѕРµРєС‚Р°", "Project title")}" />
+        <textarea id="socialProjectDescription" rows="4" placeholder="${tr("РћРїРёСЃР°РЅРёРµ", "Description")}"></textarea>
       </div>
       <div class="actions">
-        <button type="button" onclick="socialCreateProject()">${tr("Создать", "Create")}</button>
+        <button type="button" onclick="socialCreateProject()">${tr("РЎРѕР·РґР°С‚СЊ", "Create")}</button>
       </div>
     `
   );
@@ -4927,7 +5086,7 @@ function socialOpenProjectModal() {
 async function socialCreateProject() {
   const title = String(document.getElementById("socialProjectTitle")?.value || "").trim();
   const description = String(document.getElementById("socialProjectDescription")?.value || "").trim();
-  if (!title) return alert(tr("Укажите название проекта", "Enter project title"));
+  if (!title) return alert(tr("РЈРєР°Р¶РёС‚Рµ РЅР°Р·РІР°РЅРёРµ РїСЂРѕРµРєС‚Р°", "Enter project title"));
   await socialRequest("/api/social/tasks/projects", {
     method: "POST",
     body: JSON.stringify({ title, description }),
@@ -4936,8 +5095,33 @@ async function socialCreateProject() {
   await socialLoadProjects();
 }
 
-function socialOpenTaskModal(taskId = 0) {
-  const task = socialState.tasks.find((x) => Number(x.id) === Number(taskId || 0)) || null;
+async function socialOpenTaskModal(taskId = 0, taskSnapshot = null) {
+  const targetId = Number(taskId || 0);
+  if (!Array.isArray(socialState.actors) || !socialState.actors.length) {
+    await socialLoadTaskActors().catch(() => null);
+  }
+  if (!Array.isArray(socialState.projects) || !socialState.projects.length) {
+    await socialLoadProjects().catch(() => null);
+  }
+
+  let task = taskSnapshot && typeof taskSnapshot === "object" ? { ...taskSnapshot } : null;
+  const pools = [
+    Array.isArray(socialState.tasksAll) ? socialState.tasksAll : [],
+    Array.isArray(socialState.tasks) ? socialState.tasks : [],
+    Array.isArray(socialState.calendarTasks) ? socialState.calendarTasks : [],
+  ];
+  for (const list of pools) {
+    task = list.find((x) => Number(x?.id || 0) === targetId) || task;
+    if (task) break;
+  }
+
+  if (!task && targetId > 0) {
+    await socialLoadTasks({ force: true }).catch(() => null);
+    task = (Array.isArray(socialState.tasksAll) ? socialState.tasksAll : []).find((x) => Number(x?.id || 0) === targetId)
+      || (Array.isArray(socialState.calendarTasks) ? socialState.calendarTasks : []).find((x) => Number(x?.id || 0) === targetId)
+      || null;
+  }
+
   const comments = Array.isArray(task?.comments) ? task.comments : [];
   socialOpenModal(
     task ? tr("Редактировать задачу", "Edit task") : tr("Новая задача", "New task"),
@@ -4951,6 +5135,22 @@ function socialOpenTaskModal(taskId = 0) {
   );
 }
 
+async function socialOpenCalendarTaskEdit(taskId = 0) {
+  const id = Number(taskId || 0);
+  if (!id) return;
+  let row = (Array.isArray(socialState.calendarTasks) ? socialState.calendarTasks : []).find((x) => Number(x?.id || 0) === id)
+    || (Array.isArray(socialState.tasksAll) ? socialState.tasksAll : []).find((x) => Number(x?.id || 0) === id)
+    || (Array.isArray(socialState.tasks) ? socialState.tasks : []).find((x) => Number(x?.id || 0) === id)
+    || null;
+  socialCloseModal();
+  await socialOpenTaskModal(id, row || null);
+}
+
+if (typeof globalThis !== "undefined") {
+  globalThis.socialOpenTaskModal = socialOpenTaskModal;
+  globalThis.socialOpenCalendarTaskEdit = socialOpenCalendarTaskEdit;
+}
+
 async function socialSaveTask(taskId = 0) {
   const payload = {
     project_id: Number(document.getElementById("socialTaskProject")?.value || 0) || null,
@@ -4961,7 +5161,7 @@ async function socialSaveTask(taskId = 0) {
     due_date: String(document.getElementById("socialTaskDue")?.value || "").trim() || null,
     assignee_key: String(document.getElementById("socialTaskAssignee")?.value || "").trim(),
   };
-  if (!payload.title) return alert(tr("Название задачи обязательно", "Task title is required"));
+  if (!payload.title) return alert(tr("РќР°Р·РІР°РЅРёРµ Р·Р°РґР°С‡Рё РѕР±СЏР·Р°С‚РµР»СЊРЅРѕ", "Task title is required"));
   const req = taskId > 0
     ? socialRequest(`/api/social/tasks/${Number(taskId)}`, { method: "PUT", body: JSON.stringify(payload) })
     : socialRequest("/api/social/tasks", { method: "POST", body: JSON.stringify(payload) });
@@ -4997,10 +5197,10 @@ async function socialDeleteTask(taskId) {
   if (!row) return;
   const canDelete = Boolean(row?.can_delete || socialState.boot?.actor?.is_owner);
   if (!canDelete) {
-    alert(tr("Удалять задачу может только создатель или владелец.", "Only creator or owner can delete task."));
+    alert(tr("РЈРґР°Р»СЏС‚СЊ Р·Р°РґР°С‡Сѓ РјРѕР¶РµС‚ С‚РѕР»СЊРєРѕ СЃРѕР·РґР°С‚РµР»СЊ РёР»Рё РІР»Р°РґРµР»РµС†.", "Only creator or owner can delete task."));
     return;
   }
-  if (!confirm(tr("Удалить задачу?", "Delete task?"))) return;
+  if (!confirm(tr("РЈРґР°Р»РёС‚СЊ Р·Р°РґР°С‡Сѓ?", "Delete task?"))) return;
 
   const previousAll = Array.isArray(socialState.tasksAll) ? socialState.tasksAll.slice() : [];
   socialTaskPendingStatus.delete(id);
@@ -5015,7 +5215,7 @@ async function socialDeleteTask(taskId) {
     socialState.tasksAll = previousAll;
     socialApplyTaskRowsFromCache();
     socialRenderTasks();
-    alert(e?.message || tr("Не удалось удалить задачу", "Failed to delete task"));
+    alert(e?.message || tr("РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ Р·Р°РґР°С‡Сѓ", "Failed to delete task"));
   }
 }
 
@@ -5033,11 +5233,11 @@ async function socialLoadGoogleCalendarStatus() {
   if (oauthConnected || oauthError || autoGoogleSync) {
     if (oauthConnected) {
       transientKind = "success";
-      transientTitle = tr("Google Calendar подключён", "Google Calendar connected");
-      transientLines = [tr("Теперь можно запускать прямой импорт календаря без ICS-ссылки.", "Direct calendar import is now available without an ICS URL.")];
+      transientTitle = tr("Google Calendar РїРѕРґРєР»СЋС‡С‘РЅ", "Google Calendar connected");
+      transientLines = [tr("РўРµРїРµСЂСЊ РјРѕР¶РЅРѕ Р·Р°РїСѓСЃРєР°С‚СЊ РїСЂСЏРјРѕР№ РёРјРїРѕСЂС‚ РєР°Р»РµРЅРґР°СЂСЏ Р±РµР· ICS-СЃСЃС‹Р»РєРё.", "Direct calendar import is now available without an ICS URL.")];
     } else if (oauthError) {
       transientKind = "error";
-      transientTitle = tr("Ошибка Google OAuth", "Google OAuth error");
+      transientTitle = tr("РћС€РёР±РєР° Google OAuth", "Google OAuth error");
       transientLines = [oauthError];
     }
     query.delete("google_oauth_connected");
@@ -5050,10 +5250,10 @@ async function socialLoadGoogleCalendarStatus() {
   const data = await socialRequest("/api/social/calendar/google-oauth/status", { timeoutMs: 12000 }).catch((e) => {
     socialState.googleCalendarOauth = null;
     if (statusNode) {
-      statusNode.innerHTML = `<strong>${escapeHtml(tr("Не удалось получить статус Google Calendar.", "Could not load Google Calendar status."))}</strong>`;
+      statusNode.innerHTML = `<strong>${escapeHtml(tr("РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ СЃС‚Р°С‚СѓСЃ Google Calendar.", "Could not load Google Calendar status."))}</strong>`;
     }
     socialRenderCalendarStatusMeta(null);
-    socialSetCalendarSyncMessage("error", tr("Проверка статуса не удалась", "Status check failed"), [e?.message || tr("Повторите попытку чуть позже.", "Please retry in a moment.")]);
+    socialSetCalendarSyncMessage("error", tr("РџСЂРѕРІРµСЂРєР° СЃС‚Р°С‚СѓСЃР° РЅРµ СѓРґР°Р»Р°СЃСЊ", "Status check failed"), [e?.message || tr("РџРѕРІС‚РѕСЂРёС‚Рµ РїРѕРїС‹С‚РєСѓ С‡СѓС‚СЊ РїРѕР·Р¶Рµ.", "Please retry in a moment.")]);
     return null;
   });
   socialState.googleCalendarOauth = data && typeof data === "object" ? data : null;
@@ -5068,20 +5268,20 @@ async function socialLoadGoogleCalendarStatus() {
   if (statusNode) {
     if (connected) {
       statusNode.innerHTML = `
-        <strong>${escapeHtml(tr("Ваш Google календарь подключён", "Your Google Calendar is connected"))}</strong>
+        <strong>${escapeHtml(tr("Р’Р°С€ Google РєР°Р»РµРЅРґР°СЂСЊ РїРѕРґРєР»СЋС‡С‘РЅ", "Your Google Calendar is connected"))}</strong>
         <span>${escapeHtml(accountEmail
-          ? tr(`Подключён аккаунт ${accountEmail}. Можно запускать прямой импорт событий.`, `Account ${accountEmail} is connected. You can run direct event import now.`)
-          : tr("Подключение готово. Можно запускать прямой импорт событий.", "Connection is ready. You can run direct event import now."))}</span>
+          ? tr(`РџРѕРґРєР»СЋС‡С‘РЅ Р°РєРєР°СѓРЅС‚ ${accountEmail}. РњРѕР¶РЅРѕ Р·Р°РїСѓСЃРєР°С‚СЊ РїСЂСЏРјРѕР№ РёРјРїРѕСЂС‚ СЃРѕР±С‹С‚РёР№.`, `Account ${accountEmail} is connected. You can run direct event import now.`)
+          : tr("РџРѕРґРєР»СЋС‡РµРЅРёРµ РіРѕС‚РѕРІРѕ. РњРѕР¶РЅРѕ Р·Р°РїСѓСЃРєР°С‚СЊ РїСЂСЏРјРѕР№ РёРјРїРѕСЂС‚ СЃРѕР±С‹С‚РёР№.", "Connection is ready. You can run direct event import now."))}</span>
       `;
     } else if (configured) {
       statusNode.innerHTML = `
-        <strong>${escapeHtml(tr("Подключите свой Google аккаунт", "Connect your Google account"))}</strong>
-        <span>${escapeHtml(tr("Нажмите одну кнопку ниже. После этого SEO WIBE будет синхронизировать календарь именно этого пользователя.", "Press the button below once. SEO WIBE will then sync this user's calendar only."))}</span>
+        <strong>${escapeHtml(tr("РџРѕРґРєР»СЋС‡РёС‚Рµ СЃРІРѕР№ Google Р°РєРєР°СѓРЅС‚", "Connect your Google account"))}</strong>
+        <span>${escapeHtml(tr("РќР°Р¶РјРёС‚Рµ РѕРґРЅСѓ РєРЅРѕРїРєСѓ РЅРёР¶Рµ. РџРѕСЃР»Рµ СЌС‚РѕРіРѕ SEO WIBE Р±СѓРґРµС‚ СЃРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°С‚СЊ РєР°Р»РµРЅРґР°СЂСЊ РёРјРµРЅРЅРѕ СЌС‚РѕРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ.", "Press the button below once. SEO WIBE will then sync this user's calendar only."))}</span>
       `;
     } else {
       statusNode.innerHTML = `
-        <strong>${escapeHtml(tr("Прямой импорт ещё не включён", "Direct import is not enabled yet"))}</strong>
-        <span>${escapeHtml(tr("Администратору нужно один раз добавить Google OAuth на сервере. После этого каждый пользователь подключает свой Google аккаунт одной кнопкой.", "An administrator needs to add Google OAuth on the server once. After that, each user connects their own Google account with one button."))}</span>
+        <strong>${escapeHtml(tr("РџСЂСЏРјРѕР№ РёРјРїРѕСЂС‚ РµС‰С‘ РЅРµ РІРєР»СЋС‡С‘РЅ", "Direct import is not enabled yet"))}</strong>
+        <span>${escapeHtml(tr("РђРґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂСѓ РЅСѓР¶РЅРѕ РѕРґРёРЅ СЂР°Р· РґРѕР±Р°РІРёС‚СЊ Google OAuth РЅР° СЃРµСЂРІРµСЂРµ. РџРѕСЃР»Рµ СЌС‚РѕРіРѕ РєР°Р¶РґС‹Р№ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РїРѕРґРєР»СЋС‡Р°РµС‚ СЃРІРѕР№ Google Р°РєРєР°СѓРЅС‚ РѕРґРЅРѕР№ РєРЅРѕРїРєРѕР№.", "An administrator needs to add Google OAuth on the server once. After that, each user connects their own Google account with one button."))}</span>
       `;
     }
   }
@@ -5091,14 +5291,14 @@ async function socialLoadGoogleCalendarStatus() {
     connectBtn.disabled = connectBtn.dataset.loading === "1" ? true : !configured;
     if (connectBtn.dataset.loading !== "1") {
       connectBtn.textContent = connected
-        ? tr("Переподключить Google", "Reconnect Google")
-        : tr("Подключить Google календарь", "Connect Google Calendar");
+        ? tr("РџРµСЂРµРїРѕРґРєР»СЋС‡РёС‚СЊ Google", "Reconnect Google")
+        : tr("РџРѕРґРєР»СЋС‡РёС‚СЊ Google РєР°Р»РµРЅРґР°СЂСЊ", "Connect Google Calendar");
     }
   }
   if (syncBtn) {
     syncBtn.textContent = connected
-      ? tr("Синхронизировать из Google / ICS", "Sync from Google / ICS")
-      : tr("Импорт по ICS URL", "Import via ICS URL");
+      ? tr("РЎРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°С‚СЊ РёР· Google / ICS", "Sync from Google / ICS")
+      : tr("РРјРїРѕСЂС‚ РїРѕ ICS URL", "Import via ICS URL");
   }
   if (autoGoogleSync && connected && !socialState.calendarAutoSyncInFlight) {
     socialState.calendarAutoSyncInFlight = true;
@@ -5118,33 +5318,33 @@ async function socialLoadGoogleCalendarStatus() {
   const summary = status.last_sync_summary && typeof status.last_sync_summary === "object" ? status.last_sync_summary : {};
   const warnings = Array.isArray(summary.warnings) ? summary.warnings.map((line) => String(line || "").trim()).filter(Boolean) : [];
   const summaryLines = [];
-  if (accountEmail) summaryLines.push(`${tr("Google аккаунт", "Google account")}: ${accountEmail}`);
+  if (accountEmail) summaryLines.push(`${tr("Google Р°РєРєР°СѓРЅС‚", "Google account")}: ${accountEmail}`);
   if (lastSyncAt) {
-    summaryLines.push(`${tr("Время", "Time")}: ${new Date(lastSyncAt).toLocaleString(currentLang === "en" ? "en-GB" : "ru-RU")}`);
+    summaryLines.push(`${tr("Р’СЂРµРјСЏ", "Time")}: ${new Date(lastSyncAt).toLocaleString(currentLang === "en" ? "en-GB" : "ru-RU")}`);
   }
-  summaryLines.push(`${tr("Импорт", "Imported")}: ${Number(summary.imported || 0)}`);
-  summaryLines.push(`${tr("Обновлено", "Updated")}: ${Number(summary.updated || 0)}`);
-  summaryLines.push(`${tr("Удалено", "Deleted")}: ${Number(summary.deleted || 0)}`);
-  summaryLines.push(`${tr("Пропущено", "Skipped")}: ${Number(summary.skipped || 0)}`);
-  if (warnings.length) summaryLines.push(`${tr("Предупреждения", "Warnings")}: ${warnings.join(" | ")}`);
+  summaryLines.push(`${tr("РРјРїРѕСЂС‚", "Imported")}: ${Number(summary.imported || 0)}`);
+  summaryLines.push(`${tr("РћР±РЅРѕРІР»РµРЅРѕ", "Updated")}: ${Number(summary.updated || 0)}`);
+  summaryLines.push(`${tr("РЈРґР°Р»РµРЅРѕ", "Deleted")}: ${Number(summary.deleted || 0)}`);
+  summaryLines.push(`${tr("РџСЂРѕРїСѓС‰РµРЅРѕ", "Skipped")}: ${Number(summary.skipped || 0)}`);
+  if (warnings.length) summaryLines.push(`${tr("РџСЂРµРґСѓРїСЂРµР¶РґРµРЅРёСЏ", "Warnings")}: ${warnings.join(" | ")}`);
   const lastError = String(status.last_sync_error || "").trim();
   if (lastSyncState === "error") {
-    socialSetCalendarSyncMessage("error", tr("Последняя синхронизация завершилась с ошибкой", "Last sync finished with an error"), lastError ? [lastError, ...summaryLines] : summaryLines);
+    socialSetCalendarSyncMessage("error", tr("РџРѕСЃР»РµРґРЅСЏСЏ СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ Р·Р°РІРµСЂС€РёР»Р°СЃСЊ СЃ РѕС€РёР±РєРѕР№", "Last sync finished with an error"), lastError ? [lastError, ...summaryLines] : summaryLines);
   } else if (lastSyncState === "partial") {
-    socialSetCalendarSyncMessage("warn", tr("Синхронизация завершилась частично", "Sync completed partially"), summaryLines);
+    socialSetCalendarSyncMessage("warn", tr("РЎРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ Р·Р°РІРµСЂС€РёР»Р°СЃСЊ С‡Р°СЃС‚РёС‡РЅРѕ", "Sync completed partially"), summaryLines);
   } else if (lastSyncState === "ok" || lastSyncState === "empty") {
-    socialSetCalendarSyncMessage("success", tr("Последняя синхронизация сохранена", "Latest sync recorded"), summaryLines);
+    socialSetCalendarSyncMessage("success", tr("РџРѕСЃР»РµРґРЅСЏСЏ СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ СЃРѕС…СЂР°РЅРµРЅР°", "Latest sync recorded"), summaryLines);
   } else if (!configured && !connected) {
-    const setupLines = [tr("Для прямого импорта нужен один раз настроенный Google OAuth на сервере.", "Direct import needs a one-time Google OAuth setup on the server.")];
+    const setupLines = [tr("Р”Р»СЏ РїСЂСЏРјРѕРіРѕ РёРјРїРѕСЂС‚Р° РЅСѓР¶РµРЅ РѕРґРёРЅ СЂР°Р· РЅР°СЃС‚СЂРѕРµРЅРЅС‹Р№ Google OAuth РЅР° СЃРµСЂРІРµСЂРµ.", "Direct import needs a one-time Google OAuth setup on the server.")];
     const redirectUri = String(status.required_redirect_uri || status.redirect_uri || "").trim();
     if (redirectUri) setupLines.push(`${tr("Redirect URI", "Redirect URI")}: ${redirectUri}`);
     const setupHint = String(status.setup_hint || "").trim();
     if (setupHint) setupLines.push(setupHint);
-    socialSetCalendarSyncMessage("warn", tr("Google OAuth ещё не настроен", "Google OAuth is not configured yet"), setupLines);
+    socialSetCalendarSyncMessage("warn", tr("Google OAuth РµС‰С‘ РЅРµ РЅР°СЃС‚СЂРѕРµРЅ", "Google OAuth is not configured yet"), setupLines);
   } else if (configured && !connected) {
-    socialSetCalendarSyncMessage("info", tr("Остался один шаг", "One step left"), [tr("Нажмите «Подключить Google календарь», войдите в нужный Google-аккаунт и разрешите доступ только к чтению календаря.", "Press “Connect Google Calendar”, sign in to the required Google account, and grant read-only calendar access.")]);
+    socialSetCalendarSyncMessage("info", tr("РћСЃС‚Р°Р»СЃСЏ РѕРґРёРЅ С€Р°Рі", "One step left"), [tr("РќР°Р¶РјРёС‚Рµ В«РџРѕРґРєР»СЋС‡РёС‚СЊ Google РєР°Р»РµРЅРґР°СЂСЊВ», РІРѕР№РґРёС‚Рµ РІ РЅСѓР¶РЅС‹Р№ Google-Р°РєРєР°СѓРЅС‚ Рё СЂР°Р·СЂРµС€РёС‚Рµ РґРѕСЃС‚СѓРї С‚РѕР»СЊРєРѕ Рє С‡С‚РµРЅРёСЋ РєР°Р»РµРЅРґР°СЂСЏ.", "Press вЂњConnect Google CalendarвЂќ, sign in to the required Google account, and grant read-only calendar access.")]);
   } else if (connected && expiresText) {
-    socialSetCalendarSyncMessage("success", tr("Прямой импорт готов", "Direct import is ready"), [`${tr("Токен действует до", "Token valid until")}: ${expiresText}`]);
+    socialSetCalendarSyncMessage("success", tr("РџСЂСЏРјРѕР№ РёРјРїРѕСЂС‚ РіРѕС‚РѕРІ", "Direct import is ready"), [`${tr("РўРѕРєРµРЅ РґРµР№СЃС‚РІСѓРµС‚ РґРѕ", "Token valid until")}: ${expiresText}`]);
   } else {
     socialSetCalendarSyncMessage();
   }
@@ -5158,7 +5358,7 @@ async function socialConnectGoogleCalendar() {
     if (connectBtn) {
       connectBtn.disabled = false;
       connectBtn.dataset.loading = "0";
-      connectBtn.textContent = previousText || tr("Подключить Google календарь", "Connect Google Calendar");
+      connectBtn.textContent = previousText || tr("РџРѕРґРєР»СЋС‡РёС‚СЊ Google РєР°Р»РµРЅРґР°СЂСЊ", "Connect Google Calendar");
     }
     if (statusNode && previousStatus) {
       statusNode.textContent = previousStatus;
@@ -5167,22 +5367,22 @@ async function socialConnectGoogleCalendar() {
   if (connectBtn) {
     connectBtn.disabled = true;
     connectBtn.dataset.loading = "1";
-    connectBtn.textContent = tr("Открываем Google...", "Opening Google...");
+    connectBtn.textContent = tr("РћС‚РєСЂС‹РІР°РµРј Google...", "Opening Google...");
   }
   if (statusNode) {
-    statusNode.textContent = tr("Готовим безопасное подключение Google OAuth...", "Preparing secure Google OAuth connection...");
+    statusNode.textContent = tr("Р“РѕС‚РѕРІРёРј Р±РµР·РѕРїР°СЃРЅРѕРµ РїРѕРґРєР»СЋС‡РµРЅРёРµ Google OAuth...", "Preparing secure Google OAuth connection...");
   }
-  socialSetCalendarSyncMessage("info", tr("Открываем Google OAuth", "Opening Google OAuth"), [tr("Подтвердите вход в нужный Google-аккаунт. После разрешения доступа откроется SEO WIBE с уже подключённым календарём.", "Sign in with the required Google account. After granting access, SEO WIBE will open with the calendar connected.")]);
+  socialSetCalendarSyncMessage("info", tr("РћС‚РєСЂС‹РІР°РµРј Google OAuth", "Opening Google OAuth"), [tr("РџРѕРґС‚РІРµСЂРґРёС‚Рµ РІС…РѕРґ РІ РЅСѓР¶РЅС‹Р№ Google-Р°РєРєР°СѓРЅС‚. РџРѕСЃР»Рµ СЂР°Р·СЂРµС€РµРЅРёСЏ РґРѕСЃС‚СѓРїР° РѕС‚РєСЂРѕРµС‚СЃСЏ SEO WIBE СЃ СѓР¶Рµ РїРѕРґРєР»СЋС‡С‘РЅРЅС‹Рј РєР°Р»РµРЅРґР°СЂС‘Рј.", "Sign in with the required Google account. After granting access, SEO WIBE will open with the calendar connected.")]);
   const oauthStartUrl = socialIsMobileApkShell() ? "/api/social/calendar/google-oauth/start?return_target=apk" : "/api/social/calendar/google-oauth/start";
   const data = await socialRequest(oauthStartUrl, { timeoutMs: 12000 }).catch((e) => {
     restoreUi();
-    socialSetCalendarSyncMessage("error", tr("Не удалось запустить Google OAuth", "Unable to start Google OAuth"), [e?.message || tr("Проверьте настройки OAuth на сервере.", "Check OAuth server settings.")]);
+    socialSetCalendarSyncMessage("error", tr("РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РїСѓСЃС‚РёС‚СЊ Google OAuth", "Unable to start Google OAuth"), [e?.message || tr("РџСЂРѕРІРµСЂСЊС‚Рµ РЅР°СЃС‚СЂРѕР№РєРё OAuth РЅР° СЃРµСЂРІРµСЂРµ.", "Check OAuth server settings.")]);
     return null;
   });
   const url = String(data?.url || "").trim();
   if (!url) {
     restoreUi();
-    socialSetCalendarSyncMessage("error", tr("Не удалось получить ссылку Google OAuth", "Unable to obtain Google OAuth URL"));
+    socialSetCalendarSyncMessage("error", tr("РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ СЃСЃС‹Р»РєСѓ Google OAuth", "Unable to obtain Google OAuth URL"));
     return false;
   }
   window.location.assign(url);
@@ -5251,6 +5451,9 @@ async function socialLoadCalendar() {
     .catch((error) => applyCalendarRows("tasks", null, error));
 
   await Promise.allSettled([eventPromise, taskPromise]);
+  if (Number(socialState.calendarLoadSeq || 0) === seq) {
+    socialRenderCalendar();
+  }
 }
 
 function socialShiftCalendar(deltaMonths = 0) {
@@ -5270,24 +5473,32 @@ function socialJumpCalendarToday() {
 
 function socialCalendarEntryTypeLabel(type) {
   const safe = String(type || "event").toLowerCase();
-  if (safe === "task") return tr("Задача", "Task");
-  if (safe === "reminder") return tr("Напоминание", "Reminder");
-  return tr("Событие", "Event");
+  if (safe === "task") return tr("Р—Р°РґР°С‡Р°", "Task");
+  if (safe === "reminder") return tr("РќР°РїРѕРјРёРЅР°РЅРёРµ", "Reminder");
+  return tr("РЎРѕР±С‹С‚РёРµ", "Event");
 }
 
 function socialCalendarEntryColor(entry) {
   const kind = String(entry?.entry_type || "event").toLowerCase();
   const raw = String(entry?.color || "").trim();
   if (raw && /^#[0-9a-fA-F]{6}$/.test(raw)) return raw;
+  if (kind === "task") {
+    const task = entry?.task_row || entry;
+    const status = String(typeof socialTaskVisualStatus === "function" ? socialTaskVisualStatus(task) : (task?.status || "todo")).toLowerCase();
+    const bucket = String(task?.bucket || entry?.bucket || "").toLowerCase();
+    if (status === "done" || bucket === "done") return "#16a34a";
+    if (bucket === "overdue") return "#dc2626";
+    return "#2563eb";
+  }
   if (kind === "reminder") return "#8b5cf6";
-  if (kind === "task") return "#2563eb";
-  return "#0ea5e9";
+  return "#d4a017";
 }
 
 function socialCalendarTaskBadge(task) {
+  const status = String(typeof socialTaskVisualStatus === "function" ? socialTaskVisualStatus(task) : (task?.status || "todo")).toLowerCase();
   const bucket = String(task?.bucket || "").toLowerCase();
+  if (status === "done" || bucket === "done") return tr("Выполнено", "Done");
   if (bucket === "overdue") return tr("Просрочено", "Overdue");
-  if (bucket === "done") return tr("Выполнено", "Done");
   return tr("Задача", "Task");
 }
 
@@ -5344,7 +5555,7 @@ function socialCalendarCollectDayEntries(dayKey) {
       end_at: "",
       is_all_day: false,
       is_public: false,
-      color: socialCalendarEntryColor({ entry_type: "task", color: "" }),
+      color: socialCalendarEntryColor({ entry_type: "task", color: "", task_row: task, bucket: task?.bucket || "", status: task?.status || "" }),
       task_row: task,
       sortTs: due?.getTime() || 0,
     });
@@ -5393,7 +5604,10 @@ function socialRenderCalendar() {
     dayEntriesMap.set(key, socialCalendarCollectDayEntries(key));
   }
 
-  let html = `<div class="social-calendar-row head">${[tr("Пн", "Mon"), tr("Вт", "Tue"), tr("Ср", "Wed"), tr("Чт", "Thu"), tr("Пт", "Fri"), tr("Сб", "Sat"), tr("Вс", "Sun")].map((x) => `<span>${x}</span>`).join("")}</div><div class="social-calendar-cells">`;
+  const daySheetNode = document.getElementById("socialCalendarDaySheet");
+  const wasDaySheetOpen = Boolean(daySheetNode && !daySheetNode.classList.contains("hidden"));
+
+  let html = `<div class="social-calendar-row head">${[tr("РџРЅ", "Mon"), tr("Р’С‚", "Tue"), tr("РЎСЂ", "Wed"), tr("Р§С‚", "Thu"), tr("РџС‚", "Fri"), tr("РЎР±", "Sat"), tr("Р’СЃ", "Sun")].map((x) => `<span>${x}</span>`).join("")}</div><div class="social-calendar-cells">`;
   for (let i = 0; i < shift; i += 1) {
     html += `<button class="social-day muted" disabled></button>`;
   }
@@ -5419,28 +5633,32 @@ function socialRenderCalendar() {
 
   html += `</div>`;
   grid.innerHTML = html;
-  socialHideCalendarDaySheet();
+  if (wasDaySheetOpen && socialState.calendarSelectedDay) {
+    socialShowDay(socialState.calendarSelectedDay);
+  } else {
+    socialHideCalendarDaySheet();
+  }
 }
 
 function socialBuildCalendarDaySheet(dayKey, entries) {
   const title = socialCalendarDayLabel(dayKey);
   const countLabel = entries.length === 1
-    ? tr("1 запись", "1 item")
+    ? tr("1 Р·Р°РїРёСЃСЊ", "1 item")
     : currentLang === "en"
       ? `${entries.length} items`
-      : `${entries.length} ${entries.length >= 2 && entries.length <= 4 ? "записи" : "записей"}`;
+      : `${entries.length} ${entries.length >= 2 && entries.length <= 4 ? "Р·Р°РїРёСЃРё" : "Р·Р°РїРёСЃРµР№"}`;
   const header = `
     <div class="social-calendar-day-sheet-head">
       <div class="social-calendar-day-sheet-title">
         <span>${escapeHtml(countLabel)}</span>
         <h4>${escapeHtml(title)}</h4>
       </div>
-      <button type="button" class="social-calendar-day-sheet-close" onclick="socialHideCalendarDaySheet()" aria-label="${escapeHtml(tr("Закрыть", "Close"))}">&times;</button>
+      <button type="button" class="social-calendar-day-sheet-close" onclick="socialHideCalendarDaySheet()" aria-label="${escapeHtml(tr("Р—Р°РєСЂС‹С‚СЊ", "Close"))}">&times;</button>
     </div>
   `;
 
   if (!entries.length) {
-    return `${header}<div class="social-calendar-day-empty">${escapeHtml(tr("На этот день записей нет.", "No entries for this day."))}</div><div class="social-calendar-day-sheet-actions"><button type="button" class="social-calendar-day-sheet-add" onclick="socialOpenCalendarQuickAddMenu('${escapeHtml(dayKey)}')" aria-label="${escapeHtml(tr("Добавить", "Add"))}">+</button></div>`;
+    return `${header}<div class="social-calendar-day-empty">${escapeHtml(tr("РќР° СЌС‚РѕС‚ РґРµРЅСЊ Р·Р°РїРёСЃРµР№ РЅРµС‚.", "No entries for this day."))}</div><div class="social-calendar-day-sheet-actions"><button type="button" class="social-calendar-day-sheet-add" onclick="socialOpenCalendarQuickAddMenu('${escapeHtml(dayKey)}')" aria-label="${escapeHtml(tr("Р”РѕР±Р°РІРёС‚СЊ", "Add"))}">+</button></div>`;
   }
 
   const rows = entries.map((entry) => {
@@ -5448,13 +5666,22 @@ function socialBuildCalendarDaySheet(dayKey, entries) {
     const timeLabel = entry?.is_all_day
       ? tr("Весь день", "All day")
       : (entry?.start_at ? socialCalendarTimeLabel(entry.start_at) : "-");
+    const taskRow = entry?.task_row || entry;
+    const taskStatus = kind === "task" ? socialTaskVisualStatus(taskRow) : "";
+    const taskBucket = String(taskRow?.bucket || entry?.bucket || "").toLowerCase();
+    const entryColor = socialCalendarEntryColor(entry);
+    const entryClass = kind === "task"
+      ? (taskStatus === "done" || taskBucket === "done"
+        ? "social-calendar-day-entry--done"
+        : (taskBucket === "overdue" ? "social-calendar-day-entry--overdue" : "social-calendar-day-entry--active"))
+      : `social-calendar-day-entry--${kind}`;
     const sub = kind === "task"
-      ? `${socialCalendarTaskBadge(entry.task_row)} • ${entry?.task_row?.assignee_nick || tr("Без исполнителя", "No assignee")}`
-      : `${socialCalendarEntryTypeLabel(kind)} • ${timeLabel}`;
+      ? `${socialCalendarTaskBadge(taskRow)} | ${entry?.task_row?.assignee_nick || tr("Без исполнителя", "No assignee")}`
+      : `${socialCalendarEntryTypeLabel(kind)} | ${timeLabel}`;
 
     return `
-      <button type="button" class="social-calendar-day-entry" onclick="socialOpenCalendarDetail('${kind}', ${Number(entry.entry_id || 0)}, '${escapeHtml(dayKey)}')">
-        <span class="social-calendar-day-entry-dot" style="--entry-color:${escapeHtml(socialCalendarEntryColor(entry))}"></span>
+      <button type="button" class="social-calendar-day-entry ${entryClass}" style="--entry-color:${escapeHtml(entryColor)}" onclick="socialOpenCalendarDetail('${kind}', ${Number(entry.entry_id || 0)}, '${escapeHtml(dayKey)}')">
+        <span class="social-calendar-day-entry-dot"></span>
         <span class="social-calendar-day-entry-main">
           <b>${escapeHtml(String(entry.title || "-").trim() || "-")}</b>
           <small>${escapeHtml(sub)}</small>
@@ -5463,7 +5690,7 @@ function socialBuildCalendarDaySheet(dayKey, entries) {
     `;
   }).join("");
 
-  return `${header}<div class="social-calendar-day-list">${rows}</div><div class="social-calendar-day-sheet-actions"><button type="button" class="social-calendar-day-sheet-add" onclick="socialOpenCalendarQuickAddMenu('${escapeHtml(dayKey)}')" aria-label="${escapeHtml(tr("Добавить", "Add"))}">+</button></div>`;
+  return `${header}<div class="social-calendar-day-list">${rows}</div><div class="social-calendar-day-sheet-actions"><button type="button" class="social-calendar-day-sheet-add" onclick="socialOpenCalendarQuickAddMenu('${escapeHtml(dayKey)}')" aria-label="${escapeHtml(tr("Р”РѕР±Р°РІРёС‚СЊ", "Add"))}">+</button></div>`;
 }
 
 function socialHideCalendarDaySheet() {
@@ -5513,24 +5740,24 @@ function socialOpenCalendarDetail(kind, entryId, dayKey = "") {
     const row = tasks.find((task) => Number(task?.id || 0) === id) || null;
     if (!row) return;
 
-    const assignee = String(row?.assignee_nick || "").trim() || tr("Не назначено", "Not assigned");
+    const assignee = String(row?.assignee_nick || "").trim() || tr("РќРµ РЅР°Р·РЅР°С‡РµРЅРѕ", "Not assigned");
     const created = socialFormatTaskDateTime(row?.created_at) || "-";
     const due = socialFormatTaskDateTime(row?.due_date) || "-";
     socialOpenModal(
-      tr("Задача", "Task"),
+      tr("Р—Р°РґР°С‡Р°", "Task"),
       `
         <div class="social-calendar-detail-grid">
           <h3>${escapeHtml(String(row?.title || "-").trim() || "-")}</h3>
-          <p>${escapeHtml(String(row?.description || "").trim() || tr("Без описания", "No description"))}</p>
+          <p>${escapeHtml(String(row?.description || "").trim() || tr("Р‘РµР· РѕРїРёСЃР°РЅРёСЏ", "No description"))}</p>
           <div class="social-calendar-detail-meta">
-            <span>${escapeHtml(tr("Исполнитель", "Assignee"))}: <b>${escapeHtml(assignee)}</b></span>
-            <span>${escapeHtml(tr("Создано", "Created"))}: <b>${escapeHtml(created)}</b></span>
-            <span>${escapeHtml(tr("Дедлайн", "Deadline"))}: <b>${escapeHtml(due)}</b></span>
+            <span>${escapeHtml(tr("РСЃРїРѕР»РЅРёС‚РµР»СЊ", "Assignee"))}: <b>${escapeHtml(assignee)}</b></span>
+            <span>${escapeHtml(tr("РЎРѕР·РґР°РЅРѕ", "Created"))}: <b>${escapeHtml(created)}</b></span>
+            <span>${escapeHtml(tr("Р”РµРґР»Р°Р№РЅ", "Deadline"))}: <b>${escapeHtml(due)}</b></span>
           </div>
         </div>
         <div class="actions social-calendar-detail-actions">
-          <button type="button" onclick="socialCloseModal(); socialOpenTaskModal(${id})">${escapeHtml(tr("Редактировать", "Edit"))}</button>
-          ${Boolean(row?.can_delete || socialState.boot?.actor?.is_owner) ? `<button class="btn-danger" type="button" onclick="socialCloseModal(); socialDeleteTask(${id})">${escapeHtml(tr("Удалить", "Delete"))}</button>` : ""}
+          <button type="button" onclick="socialOpenCalendarTaskEdit(${id})">${escapeHtml(tr("Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ", "Edit"))}</button>
+          ${Boolean(row?.can_delete || socialState.boot?.actor?.is_owner) ? `<button class="btn-danger" type="button" onclick="socialCloseModal(); socialDeleteTask(${id})">${escapeHtml(tr("РЈРґР°Р»РёС‚СЊ", "Delete"))}</button>` : ""}
         </div>
       `
     );
@@ -5541,28 +5768,51 @@ function socialOpenCalendarDetail(kind, entryId, dayKey = "") {
   const row = events.find((eventRow) => Number(eventRow?.id || 0) === id) || null;
   if (!row) return;
 
-  const startText = row?.is_all_day ? tr("Весь день", "All day") : (socialFormatTaskDateTime(row?.start_at) || "-");
-  const endText = row?.end_at ? (socialFormatTaskDateTime(row?.end_at) || "-") : tr("Не задано", "Not set");
-  const scopeText = row?.is_public ? tr("Общее", "Shared") : tr("Личное", "Private");
+  const startText = row?.is_all_day ? tr("Р’РµСЃСЊ РґРµРЅСЊ", "All day") : (socialFormatTaskDateTime(row?.start_at) || "-");
+  const endText = row?.end_at ? (socialFormatTaskDateTime(row?.end_at) || "-") : tr("РќРµ Р·Р°РґР°РЅРѕ", "Not set");
+  const scopeText = row?.is_public ? tr("РћР±С‰РµРµ", "Shared") : tr("Р›РёС‡РЅРѕРµ", "Private");
 
   socialOpenModal(
     socialCalendarEntryTypeLabel(row?.entry_type || "event"),
     `
       <div class="social-calendar-detail-grid">
         <h3>${escapeHtml(String(row?.title || "-").trim() || "-")}</h3>
-        <p>${escapeHtml(socialCleanCalendarDetails(row?.details || "") || tr("Без описания", "No description"))}</p>
+        <p>${escapeHtml(socialCleanCalendarDetails(row?.details || "") || tr("Р‘РµР· РѕРїРёСЃР°РЅРёСЏ", "No description"))}</p>
         <div class="social-calendar-detail-meta">
-          <span>${escapeHtml(tr("Начало", "Start"))}: <b>${escapeHtml(startText)}</b></span>
-          <span>${escapeHtml(tr("Конец", "End"))}: <b>${escapeHtml(endText)}</b></span>
-          <span>${escapeHtml(tr("Видимость", "Visibility"))}: <b>${escapeHtml(scopeText)}</b></span>
+          <span>${escapeHtml(tr("РќР°С‡Р°Р»Рѕ", "Start"))}: <b>${escapeHtml(startText)}</b></span>
+          <span>${escapeHtml(tr("РљРѕРЅРµС†", "End"))}: <b>${escapeHtml(endText)}</b></span>
+          <span>${escapeHtml(tr("Р’РёРґРёРјРѕСЃС‚СЊ", "Visibility"))}: <b>${escapeHtml(scopeText)}</b></span>
         </div>
       </div>
       <div class="actions social-calendar-detail-actions">
-        <button type="button" onclick="socialCloseModal(); socialOpenCalendarModal(${id})">${escapeHtml(tr("Редактировать", "Edit"))}</button>
-        <button class="btn-danger" type="button" onclick="socialCloseModal(); socialDeleteEvent(${id})">${escapeHtml(tr("Удалить", "Delete"))}</button>
+        <button type="button" onclick="socialCloseModal(); socialOpenCalendarModal(${id})">${escapeHtml(tr("Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ", "Edit"))}</button>
+        <button class="btn-danger" type="button" onclick="socialCloseModal(); socialDeleteEvent(${id})">${escapeHtml(tr("РЈРґР°Р»РёС‚СЊ", "Delete"))}</button>
       </div>
     `
   );
+}
+
+function socialOpenCalendarDetails(entryId, dayKey = "") {
+  const id = Number(entryId || 0);
+  if (!id) return false;
+  const safeDay = String(dayKey || socialState.calendarSelectedDay || "").trim();
+  const taskRow = (Array.isArray(socialState.calendarTasks) ? socialState.calendarTasks : []).find((task) => Number(task?.id || 0) === id) || null;
+  if (taskRow) {
+    socialOpenCalendarDetail("task", id, safeDay);
+    return true;
+  }
+  const eventRow = (Array.isArray(socialState.calendarEvents) ? socialState.calendarEvents : []).find((row) => Number(row?.id || 0) === id) || null;
+  if (eventRow) {
+    socialOpenCalendarDetail(String(eventRow?.entry_type || "event").trim().toLowerCase() === "reminder" ? "reminder" : "event", id, safeDay);
+    return true;
+  }
+  return false;
+}
+if (typeof globalThis !== "undefined") {
+  globalThis.socialHideCalendarDaySheet = socialHideCalendarDaySheet;
+  globalThis.socialShowDay = socialShowDay;
+  globalThis.socialOpenCalendarDetail = socialOpenCalendarDetail;
+  globalThis.socialOpenCalendarDetails = socialOpenCalendarDetails;
 }
 
 function socialCalendarDefaultDateTime(dayKey = "") {
@@ -5574,18 +5824,39 @@ function socialCalendarDefaultDateTime(dayKey = "") {
   return `${now.getFullYear()}-${socialCalendarPad(now.getMonth() + 1)}-${socialCalendarPad(now.getDate())}T09:00`;
 }
 
+function socialOpenCalendarQuickAddEntry(dayKey = "", entryType = "event") {
+  const safeDay = String(dayKey || socialState.calendarSelectedDay || socialCalendarDayKey(new Date())).trim();
+  const safeType = String(entryType || "event").trim().toLowerCase() === "reminder" ? "reminder" : "event";
+  socialCloseModal();
+  setTimeout(() => {
+    socialOpenCalendarModal(0, { dayKey: safeDay, entryType: safeType });
+  }, 10);
+}
+
+function socialOpenCalendarTaskQuickAdd(dayKey = "") {
+  const safeDay = String(dayKey || socialState.calendarSelectedDay || socialCalendarDayKey(new Date())).trim();
+  socialCloseModal();
+  setTimeout(() => {
+    socialOpenCalendarTaskCreateModal(safeDay);
+  }, 10);
+}
+
 function socialOpenCalendarQuickAddMenu(dayKey = "") {
   const safeDay = String(dayKey || socialState.calendarSelectedDay || socialCalendarDayKey(new Date())).trim();
-  socialOpenModal(
-    tr("Добавить", "Add"),
-    `
-      <div class="social-calendar-quick-add-menu">
-        <button type="button" onclick="socialOpenCalendarModal(0, { dayKey: '${escapeHtml(safeDay)}', entryType: 'event' })">${escapeHtml(tr("Событие", "Event"))}</button>
-        <button type="button" onclick="socialOpenCalendarModal(0, { dayKey: '${escapeHtml(safeDay)}', entryType: 'reminder' })">${escapeHtml(tr("Напоминание", "Reminder"))}</button>
-        <button type="button" onclick="socialOpenCalendarTaskCreateModal('${escapeHtml(safeDay)}')">${escapeHtml(tr("Задача", "Task"))}</button>
-      </div>
-    `
-  );
+  const html = [
+    '<div class="social-calendar-quick-add-menu">',
+    '<button type="button" onclick="socialOpenCalendarQuickAddEntry(&quot;' + escapeHtml(safeDay) + '&quot;, &quot;event&quot;)">' + escapeHtml(tr("Событие", "Event")) + '</button>',
+    '<button type="button" onclick="socialOpenCalendarQuickAddEntry(&quot;' + escapeHtml(safeDay) + '&quot;, &quot;reminder&quot;)">' + escapeHtml(tr("Напоминание", "Reminder")) + '</button>',
+    '<button type="button" onclick="socialOpenCalendarTaskQuickAdd(&quot;' + escapeHtml(safeDay) + '&quot;)">' + escapeHtml(tr("Задача", "Task")) + '</button>',
+    '</div>',
+  ].join("");
+  socialOpenModal(tr("Добавить", "Add"), html);
+}
+
+if (typeof globalThis !== "undefined") {
+  globalThis.socialOpenCalendarQuickAddEntry = socialOpenCalendarQuickAddEntry;
+  globalThis.socialOpenCalendarTaskQuickAdd = socialOpenCalendarTaskQuickAdd;
+  globalThis.socialOpenCalendarQuickAddMenu = socialOpenCalendarQuickAddMenu;
 }
 
 async function socialOpenCalendarTaskCreateModal(dayKey = "") {
@@ -5602,23 +5873,23 @@ async function socialOpenCalendarTaskCreateModal(dayKey = "") {
   const actorDefault = String(socialState.boot?.actor?.actor_key || "").trim();
 
   socialOpenModal(
-    tr("Новая задача", "New task"),
+    tr("РќРѕРІР°СЏ Р·Р°РґР°С‡Р°", "New task"),
     `
       <div class="grid-2">
-        <label><span>${escapeHtml(tr("Название", "Title"))}</span><input id="socialCalendarTaskTitle" /></label>
-        <label><span>${escapeHtml(tr("Исполнитель", "Assignee"))}</span><select id="socialCalendarTaskAssignee">${actors.map((a) => {
+        <label><span>${escapeHtml(tr("РќР°Р·РІР°РЅРёРµ", "Title"))}</span><input id="socialCalendarTaskTitle" /></label>
+        <label><span>${escapeHtml(tr("РСЃРїРѕР»РЅРёС‚РµР»СЊ", "Assignee"))}</span><select id="socialCalendarTaskAssignee">${actors.map((a) => {
           const key = String(a?.actor_key || "");
           const selected = key === actorDefault ? "selected" : "";
           return `<option value="${escapeHtml(key)}" ${selected}>${escapeHtml(String(a?.nick || "-"))}</option>`;
         }).join("")}</select></label>
-        <label><span>${escapeHtml(tr("Проект", "Project"))}</span><select id="socialCalendarTaskProject"><option value="">${escapeHtml(tr("Без проекта", "No project"))}</option>${projects.map((p) => `<option value="${Number(p?.id || 0)}">${escapeHtml(String(p?.title || "-"))}</option>`).join("")}</select></label>
-        <label><span>${escapeHtml(tr("Тип", "Type"))}</span><select id="socialCalendarTaskKind"><option value="company">${escapeHtml(tr("Проектная", "Project"))}</option><option value="personal">${escapeHtml(tr("Личная", "Personal"))}</option></select></label>
-        <label><span>${escapeHtml(tr("Приоритет", "Priority"))}</span><select id="socialCalendarTaskPriority"><option value="normal">normal</option><option value="high">high</option><option value="critical">critical</option><option value="low">low</option></select></label>
-        <label><span>${escapeHtml(tr("Дедлайн", "Deadline"))}</span><input id="socialCalendarTaskDue" type="datetime-local" value="${escapeHtml(due)}" /></label>
-        <label class="full"><span>${escapeHtml(tr("Описание", "Description"))}</span><textarea id="socialCalendarTaskDescription" rows="4"></textarea></label>
+        <label><span>${escapeHtml(tr("РџСЂРѕРµРєС‚", "Project"))}</span><select id="socialCalendarTaskProject"><option value="">${escapeHtml(tr("Р‘РµР· РїСЂРѕРµРєС‚Р°", "No project"))}</option>${projects.map((p) => `<option value="${Number(p?.id || 0)}">${escapeHtml(String(p?.title || "-"))}</option>`).join("")}</select></label>
+        <label><span>${escapeHtml(tr("РўРёРї", "Type"))}</span><select id="socialCalendarTaskKind"><option value="company">${escapeHtml(tr("РџСЂРѕРµРєС‚РЅР°СЏ", "Project"))}</option><option value="personal">${escapeHtml(tr("Р›РёС‡РЅР°СЏ", "Personal"))}</option></select></label>
+        <label><span>${escapeHtml(tr("РџСЂРёРѕСЂРёС‚РµС‚", "Priority"))}</span><select id="socialCalendarTaskPriority"><option value="normal">normal</option><option value="high">high</option><option value="critical">critical</option><option value="low">low</option></select></label>
+        <label><span>${escapeHtml(tr("Р”РµРґР»Р°Р№РЅ", "Deadline"))}</span><input id="socialCalendarTaskDue" type="datetime-local" value="${escapeHtml(due)}" /></label>
+        <label class="full"><span>${escapeHtml(tr("РћРїРёСЃР°РЅРёРµ", "Description"))}</span><textarea id="socialCalendarTaskDescription" rows="4"></textarea></label>
       </div>
       <div class="actions">
-        <button type="button" onclick="socialCreateTaskFromCalendar()">${escapeHtml(tr("Создать", "Create"))}</button>
+        <button type="button" onclick="socialCreateTaskFromCalendar()">${escapeHtml(tr("РЎРѕР·РґР°С‚СЊ", "Create"))}</button>
       </div>
     `
   );
@@ -5638,7 +5909,7 @@ async function socialCreateTaskFromCalendar() {
   };
 
   if (!payload.title) {
-    alert(tr("Название задачи обязательно", "Task title is required"));
+    alert(tr("РќР°Р·РІР°РЅРёРµ Р·Р°РґР°С‡Рё РѕР±СЏР·Р°С‚РµР»СЊРЅРѕ", "Task title is required"));
     return;
   }
 
@@ -5648,7 +5919,7 @@ async function socialCreateTaskFromCalendar() {
       body: JSON.stringify(payload),
     });
   } catch (e) {
-    alert(e?.message || tr("Не удалось создать задачу", "Failed to create task"));
+    alert(e?.message || tr("РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР·РґР°С‚СЊ Р·Р°РґР°С‡Сѓ", "Failed to create task"));
     return;
   }
 
@@ -5667,27 +5938,27 @@ function socialOpenCalendarModal(eventId = 0, preset = null) {
   const endValue = socialCalendarDateTimeValue(row?.end_at || "").slice(0, 16);
   const colorValue = /^#[0-9a-fA-F]{6}$/.test(String(row?.color || ""))
     ? String(row.color)
-    : (typeValue === "reminder" ? "#8b5cf6" : "#0ea5e9");
+    : (typeValue === "reminder" ? "#8b5cf6" : "#d4a017");
 
   socialOpenModal(
-    row ? tr("Редактировать запись", "Edit entry") : tr("Новая запись", "New entry"),
+    row ? tr("Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ Р·Р°РїРёСЃСЊ", "Edit entry") : tr("РќРѕРІР°СЏ Р·Р°РїРёСЃСЊ", "New entry"),
     `
       <div class="grid-2">
-        <label><span>${escapeHtml(tr("Название", "Title"))}</span><input id="socialEventTitle" value="${escapeHtml(row?.title || "")}" /></label>
-        <label><span>${escapeHtml(tr("Тип", "Type"))}</span>
+        <label><span>${escapeHtml(tr("РќР°Р·РІР°РЅРёРµ", "Title"))}</span><input id="socialEventTitle" value="${escapeHtml(row?.title || "")}" /></label>
+        <label><span>${escapeHtml(tr("РўРёРї", "Type"))}</span>
           <select id="socialEventType">
-            <option value="event" ${typeValue === "event" ? "selected" : ""}>${escapeHtml(tr("Событие", "Event"))}</option>
-            <option value="reminder" ${typeValue === "reminder" ? "selected" : ""}>${escapeHtml(tr("Напоминание", "Reminder"))}</option>
+            <option value="event" ${typeValue === "event" ? "selected" : ""}>${escapeHtml(tr("РЎРѕР±С‹С‚РёРµ", "Event"))}</option>
+            <option value="reminder" ${typeValue === "reminder" ? "selected" : ""}>${escapeHtml(tr("РќР°РїРѕРјРёРЅР°РЅРёРµ", "Reminder"))}</option>
           </select>
         </label>
-        <label><span>${escapeHtml(tr("Начало", "Start"))}</span><input id="socialEventStart" type="datetime-local" value="${escapeHtml(startValue)}" /></label>
-        <label><span>${escapeHtml(tr("Конец", "End"))}</span><input id="socialEventEnd" type="datetime-local" value="${escapeHtml(endValue)}" /></label>
-        <label><span>${escapeHtml(tr("Цвет", "Color"))}</span><input id="socialEventColor" type="color" value="${escapeHtml(colorValue)}" /></label>
-        <label class="check"><input id="socialEventAllDay" type="checkbox" ${row?.is_all_day ? "checked" : ""} /> ${escapeHtml(tr("Весь день", "All day"))}</label>
-        <label class="check"><input id="socialEventPublic" type="checkbox" ${row?.is_public ? "checked" : ""} /> ${escapeHtml(tr("Общее событие (видно всем)", "Shared event (visible to everyone)"))}</label>
-        <label class="full"><span>${escapeHtml(tr("Описание", "Details"))}</span><textarea id="socialEventDetails" rows="4">${escapeHtml(socialCleanCalendarDetails(row?.details || ""))}</textarea></label>
+        <label><span>${escapeHtml(tr("РќР°С‡Р°Р»Рѕ", "Start"))}</span><input id="socialEventStart" type="datetime-local" value="${escapeHtml(startValue)}" /></label>
+        <label><span>${escapeHtml(tr("РљРѕРЅРµС†", "End"))}</span><input id="socialEventEnd" type="datetime-local" value="${escapeHtml(endValue)}" /></label>
+        <label><span>${escapeHtml(tr("Р¦РІРµС‚", "Color"))}</span><input id="socialEventColor" type="color" value="${escapeHtml(colorValue)}" /></label>
+        <label class="check"><input id="socialEventAllDay" type="checkbox" ${row?.is_all_day ? "checked" : ""} /> ${escapeHtml(tr("Р’РµСЃСЊ РґРµРЅСЊ", "All day"))}</label>
+        <label class="check"><input id="socialEventPublic" type="checkbox" ${row?.is_public ? "checked" : ""} /> ${escapeHtml(tr("РћР±С‰РµРµ СЃРѕР±С‹С‚РёРµ (РІРёРґРЅРѕ РІСЃРµРј)", "Shared event (visible to everyone)"))}</label>
+        <label class="full"><span>${escapeHtml(tr("РћРїРёСЃР°РЅРёРµ", "Details"))}</span><textarea id="socialEventDetails" rows="4">${escapeHtml(socialCleanCalendarDetails(row?.details || ""))}</textarea></label>
       </div>
-      <div class="actions"><button type="button" onclick="socialSaveEvent(${row ? Number(row.id) : 0})">${row ? escapeHtml(tr("Сохранить", "Save")) : escapeHtml(tr("Создать", "Create"))}</button></div>
+      <div class="actions"><button type="button" onclick="socialSaveEvent(${row ? Number(row.id) : 0})">${row ? escapeHtml(tr("РЎРѕС…СЂР°РЅРёС‚СЊ", "Save")) : escapeHtml(tr("РЎРѕР·РґР°С‚СЊ", "Create"))}</button></div>
     `
   );
 }
@@ -5697,6 +5968,12 @@ function socialCalendarNormalizeDateTimeInput(raw, fallback = "") {
   if (!text) return String(fallback || "").trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return `${text}T09:00`;
   return text;
+}
+
+if (typeof globalThis !== "undefined") {
+  globalThis.socialOpenCalendarModal = socialOpenCalendarModal;
+  globalThis.socialOpenCalendarTaskCreateModal = socialOpenCalendarTaskCreateModal;
+  globalThis.socialCreateTaskFromCalendar = socialCreateTaskFromCalendar;
 }
 
 async function socialSaveEvent(eventId = 0) {
@@ -5723,7 +6000,7 @@ async function socialSaveEvent(eventId = 0) {
   };
 
   if (!payload.title || !payload.start_at) {
-    alert(tr("Заполните название и дату начала", "Fill title and start date"));
+    alert(tr("Р—Р°РїРѕР»РЅРёС‚Рµ РЅР°Р·РІР°РЅРёРµ Рё РґР°С‚Сѓ РЅР°С‡Р°Р»Р°", "Fill title and start date"));
     return;
   }
 
@@ -5734,7 +6011,7 @@ async function socialSaveEvent(eventId = 0) {
   try {
     await req;
   } catch (e) {
-    alert(e?.message || tr("Не удалось сохранить запись", "Failed to save entry"));
+    alert(e?.message || tr("РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ Р·Р°РїРёСЃСЊ", "Failed to save entry"));
     return;
   }
 
@@ -5747,7 +6024,7 @@ async function socialSaveEvent(eventId = 0) {
 async function socialDeleteEvent(eventId) {
   const id = Number(eventId || 0);
   if (!id) return;
-  await socialRequest(`/api/social/calendar/events/${id}`, { method: "DELETE" }).catch((e) => alert(e?.message || tr("Не удалось удалить запись", "Failed to delete entry")));
+  await socialRequest(`/api/social/calendar/events/${id}`, { method: "DELETE" }).catch((e) => alert(e?.message || tr("РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ Р·Р°РїРёСЃСЊ", "Failed to delete entry")));
   await socialLoadCalendar();
   socialHideCalendarDaySheet();
 }
@@ -5773,9 +6050,9 @@ async function socialSyncGoogleCalendar() {
   }
   if (syncBtn) {
     syncBtn.disabled = true;
-    syncBtn.textContent = tr("Синхронизируем...", "Syncing...");
+    syncBtn.textContent = tr("РЎРёРЅС…СЂРѕРЅРёР·РёСЂСѓРµРј...", "Syncing...");
   }
-  socialSetCalendarSyncMessage("info", tr("Синхронизация запущена", "Sync started"), [tr("Подождите, пока SEO WIBE обработает календарные события.", "Please wait while SEO WIBE processes calendar events.")]);
+  socialSetCalendarSyncMessage("info", tr("РЎРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ Р·Р°РїСѓС‰РµРЅР°", "Sync started"), [tr("РџРѕРґРѕР¶РґРёС‚Рµ, РїРѕРєР° SEO WIBE РѕР±СЂР°Р±РѕС‚Р°РµС‚ РєР°Р»РµРЅРґР°СЂРЅС‹Рµ СЃРѕР±С‹С‚РёСЏ.", "Please wait while SEO WIBE processes calendar events.")]);
   const data = await socialRequest("/api/social/calendar/google-sync", {
     method: "POST",
     body: JSON.stringify({
@@ -5787,26 +6064,26 @@ async function socialSyncGoogleCalendar() {
     retryOnPost: true,
     maxRetries: 1,
   }).catch((e) => {
-    socialSetCalendarSyncMessage("error", tr("Синхронизация календаря не удалась", "Calendar sync failed"), [e?.message || tr("Проверьте ссылку, доступность Google OAuth или повторите позже.", "Check the link, Google OAuth availability, or retry later.")]);
+    socialSetCalendarSyncMessage("error", tr("РЎРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ РєР°Р»РµРЅРґР°СЂСЏ РЅРµ СѓРґР°Р»Р°СЃСЊ", "Calendar sync failed"), [e?.message || tr("РџСЂРѕРІРµСЂСЊС‚Рµ СЃСЃС‹Р»РєСѓ, РґРѕСЃС‚СѓРїРЅРѕСЃС‚СЊ Google OAuth РёР»Рё РїРѕРІС‚РѕСЂРёС‚Рµ РїРѕР·Р¶Рµ.", "Check the link, Google OAuth availability, or retry later.")]);
     return null;
   });
   if (syncBtn) {
     syncBtn.disabled = false;
-    syncBtn.textContent = previousText || tr("Синхронизировать сейчас", "Sync now");
+    syncBtn.textContent = previousText || tr("РЎРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°С‚СЊ СЃРµР№С‡Р°СЃ", "Sync now");
   }
   if (!data) return;
   const warnings = Array.isArray(data.warnings) ? data.warnings.map((line) => String(line || "").trim()).filter(Boolean) : [];
   const summaryLines = [
-    `${tr("Импорт", "Imported")}: ${Number(data.imported || 0)}`,
-    `${tr("Обновлено", "Updated")}: ${Number(data.updated || 0)}`,
-    `${tr("Удалено", "Deleted")}: ${Number(data.deleted || 0)}`,
-    `${tr("Пропущено", "Skipped")}: ${Number(data.skipped || 0)}`,
-    `${tr("Источник", "Source")}: ${useIcs ? "ICS URL" : "Google OAuth"}`,
+    `${tr("РРјРїРѕСЂС‚", "Imported")}: ${Number(data.imported || 0)}`,
+    `${tr("РћР±РЅРѕРІР»РµРЅРѕ", "Updated")}: ${Number(data.updated || 0)}`,
+    `${tr("РЈРґР°Р»РµРЅРѕ", "Deleted")}: ${Number(data.deleted || 0)}`,
+    `${tr("РџСЂРѕРїСѓС‰РµРЅРѕ", "Skipped")}: ${Number(data.skipped || 0)}`,
+    `${tr("РСЃС‚РѕС‡РЅРёРє", "Source")}: ${useIcs ? "ICS URL" : "Google OAuth"}`,
   ];
-  if (warnings.length) summaryLines.push(`${tr("Предупреждения", "Warnings")}: ${warnings.join(" | ")}`);
+  if (warnings.length) summaryLines.push(`${tr("РџСЂРµРґСѓРїСЂРµР¶РґРµРЅРёСЏ", "Warnings")}: ${warnings.join(" | ")}`);
   socialSetCalendarSyncMessage(
     warnings.length ? "warn" : "success",
-    warnings.length ? tr("Синхронизация завершилась с предупреждениями", "Sync completed with warnings") : tr("Календарь синхронизирован", "Calendar synchronized"),
+    warnings.length ? tr("РЎРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ Р·Р°РІРµСЂС€РёР»Р°СЃСЊ СЃ РїСЂРµРґСѓРїСЂРµР¶РґРµРЅРёСЏРјРё", "Sync completed with warnings") : tr("РљР°Р»РµРЅРґР°СЂСЊ СЃРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°РЅ", "Calendar synchronized"),
     summaryLines
   );
   await socialLoadGoogleCalendarStatus();
@@ -5823,7 +6100,7 @@ function socialCalcEvaluate() {
   }
   const safe = expr.replace(/\s+/g, "");
   if (!/^[0-9+\-*/().,%]+$/.test(safe)) {
-    out.textContent = tr("Недопустимое выражение", "Invalid expression");
+    out.textContent = tr("РќРµРґРѕРїСѓСЃС‚РёРјРѕРµ РІС‹СЂР°Р¶РµРЅРёРµ", "Invalid expression");
     return;
   }
   try {
@@ -5832,13 +6109,13 @@ function socialCalcEvaluate() {
     const normalized = Number(value);
     out.textContent = Number.isFinite(normalized)
       ? normalized.toLocaleString("ru-RU", { maximumFractionDigits: 8 })
-      : tr("Ошибка вычисления", "Calculation error");
+      : tr("РћС€РёР±РєР° РІС‹С‡РёСЃР»РµРЅРёСЏ", "Calculation error");
     const input = document.getElementById("socialCalcExpr");
     if (input && Number.isFinite(normalized)) {
       input.value = String(normalized);
     }
   } catch (_) {
-    out.textContent = tr("Ошибка вычисления", "Calculation error");
+    out.textContent = tr("РћС€РёР±РєР° РІС‹С‡РёСЃР»РµРЅРёСЏ", "Calculation error");
   }
 }
 
@@ -5904,9 +6181,9 @@ function socialUpdateCurrencyMeta(payload, note = "") {
   }
   const date = String(payload.date || "").trim();
   const updated = String(payload.updated_at || "").trim();
-  const status = payload.stale ? tr("обновление задерживается", "stale") : tr("обновлено", "updated");
+  const status = payload.stale ? tr("РѕР±РЅРѕРІР»РµРЅРёРµ Р·Р°РґРµСЂР¶РёРІР°РµС‚СЃСЏ", "stale") : tr("РѕР±РЅРѕРІР»РµРЅРѕ", "updated");
   const stamp = date || (updated ? updated.slice(0, 16).replace("T", " ") : "-");
-  meta.textContent = `${tr("Курсы ЦБ", "CBR rates")}: ${stamp} - ${status}${note ? ` - ${note}` : ""}`;
+  meta.textContent = `${tr("РљСѓСЂСЃС‹ Р¦Р‘", "CBR rates")}: ${stamp} - ${status}${note ? ` - ${note}` : ""}`;
 }
 
 async function socialLoadCurrencyRates({ force = false } = {}) {
@@ -5916,7 +6193,7 @@ async function socialLoadCurrencyRates({ force = false } = {}) {
     return socialState.currencyRates;
   }
   if (!socialState.currencyRates) {
-    socialUpdateCurrencyMeta(null, tr("Загрузка курсов ЦБ...", "Loading CBR rates..."));
+    socialUpdateCurrencyMeta(null, tr("Р—Р°РіСЂСѓР·РєР° РєСѓСЂСЃРѕРІ Р¦Р‘...", "Loading CBR rates..."));
   }
   socialState.currencyRatesLoading = true;
   try {
@@ -5927,7 +6204,7 @@ async function socialLoadCurrencyRates({ force = false } = {}) {
       socialUpdateCurrencyMeta(data);
       return data;
     }
-    socialUpdateCurrencyMeta(null, tr("Ошибка загрузки", "Load failed"));
+    socialUpdateCurrencyMeta(null, tr("РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё", "Load failed"));
     return null;
   } finally {
     socialState.currencyRatesLoading = false;
@@ -5954,14 +6231,14 @@ function socialRenderConverterOptions() {
     volume: ["ml", "l", "m3", "cm3"],
   };
   const currencyLabels = {
-    RUB: tr("RUB (руб.)", "RUB"),
+    RUB: tr("RUB (СЂСѓР±.)", "RUB"),
     USD: "USD",
     EUR: "EUR",
     CNY: "CNY",
-    BYN: tr("BYN (бел. руб.)", "BYN (BYN)"),
-    TRY: tr("TRY (лира)", "TRY (Lira)"),
-    GBP: tr("GBP (фунт)", "GBP (Pound)"),
-    UAH: tr("UAH (гривна)", "UAH (Hryvnia)"),
+    BYN: tr("BYN (Р±РµР». СЂСѓР±.)", "BYN (BYN)"),
+    TRY: tr("TRY (Р»РёСЂР°)", "TRY (Lira)"),
+    GBP: tr("GBP (С„СѓРЅС‚)", "GBP (Pound)"),
+    UAH: tr("UAH (РіСЂРёРІРЅР°)", "UAH (Hryvnia)"),
   };
   const options = packs[type] || packs.currency;
   from.innerHTML = options.map((x) => `<option value="${x}">${escapeHtml(currencyLabels[x] || x)}</option>`).join("");
@@ -5983,7 +6260,7 @@ function socialConvert() {
   const out = document.getElementById("socialConvResult");
   if (!out) return;
   if (!Number.isFinite(value)) {
-    out.textContent = tr("Введите число", "Enter a number");
+    out.textContent = tr("Р’РІРµРґРёС‚Рµ С‡РёСЃР»Рѕ", "Enter a number");
     return;
   }
   const liveRates = socialState.currencyRates?.rates && typeof socialState.currencyRates.rates === "object"
@@ -5997,7 +6274,7 @@ function socialConvert() {
   };
   const pack = toBase[type] || toBase.currency;
   if (!pack[from] || !pack[to]) {
-    out.textContent = tr("Выберите единицы", "Select units");
+    out.textContent = tr("Р’С‹Р±РµСЂРёС‚Рµ РµРґРёРЅРёС†С‹", "Select units");
     return;
   }
   const base = value * pack[from];
@@ -6015,13 +6292,13 @@ function socialCalcVolume() {
   const out = document.getElementById("socialVolResult");
   if (!out) return;
   if (![a, b, c].every((n) => Number.isFinite(n) && n > 0)) {
-    out.textContent = tr("Введите длину, ширину и высоту", "Enter length, width and height");
+    out.textContent = tr("Р’РІРµРґРёС‚Рµ РґР»РёРЅСѓ, С€РёСЂРёРЅСѓ Рё РІС‹СЃРѕС‚Сѓ", "Enter length, width and height");
     return;
   }
   const cm3 = a * b * c;
   const liters = cm3 / 1000;
   const m3 = cm3 / 1_000_000;
-  out.textContent = `${tr("Объем", "Volume")}: ${cm3.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} см³ - ${liters.toLocaleString("ru-RU", { maximumFractionDigits: 3 })} л - ${m3.toLocaleString("ru-RU", { maximumFractionDigits: 6 })} м³`;
+  out.textContent = `${tr("РћР±СЉРµРј", "Volume")}: ${cm3.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} СЃРјВі - ${liters.toLocaleString("ru-RU", { maximumFractionDigits: 3 })} Р» - ${m3.toLocaleString("ru-RU", { maximumFractionDigits: 6 })} РјВі`;
 }
 
 function socialNormalizeNoteText(value) {
@@ -6067,12 +6344,12 @@ function socialRenderNotesList() {
   host.innerHTML = socialState.notes.map((row) => `
     <div class="social-note-row ${Number(row.id) === socialState.currentNoteId ? "active" : ""}">
       <button class="social-note-main" type="button" onclick="socialSelectNote(${Number(row.id)})">
-        <b>${escapeHtml(row.title || tr("Без названия", "Untitled"))}</b>
+        <b>${escapeHtml(row.title || tr("Р‘РµР· РЅР°Р·РІР°РЅРёСЏ", "Untitled"))}</b>
         <small>${escapeHtml(String(row.updated_at || "").slice(0,16).replace("T", " "))}</small>
       </button>
-      <button class="btn-secondary social-note-delete" type="button" onclick="socialDeleteNote(${Number(row.id)})">✕</button>
+      <button class="btn-secondary social-note-delete" type="button" onclick="socialDeleteNote(${Number(row.id)})">вњ•</button>
     </div>
-  `).join("") || `<div class="hint">${tr("Заметок пока нет", "No notes yet")}</div>`;
+  `).join("") || `<div class="hint">${tr("Р—Р°РјРµС‚РѕРє РїРѕРєР° РЅРµС‚", "No notes yet")}</div>`;
 }
 
 function socialRenderCurrentNote() {
@@ -6083,7 +6360,7 @@ function socialRenderCurrentNote() {
   title.value = socialNormalizeNoteText(note?.title || "");
   content.value = socialNormalizeNoteText(note?.content || "");
   const autosave = document.getElementById("socialNoteAutosave");
-  if (autosave) autosave.textContent = note ? tr("Автосохранение включено", "Autosave enabled") : tr("Выберите заметку", "Select note");
+  if (autosave) autosave.textContent = note ? tr("РђРІС‚РѕСЃРѕС…СЂР°РЅРµРЅРёРµ РІРєР»СЋС‡РµРЅРѕ", "Autosave enabled") : tr("Р’С‹Р±РµСЂРёС‚Рµ Р·Р°РјРµС‚РєСѓ", "Select note");
   socialRenderNoteFiles(note);
 }
 
@@ -6096,7 +6373,7 @@ function socialSelectNote(noteId) {
 async function socialCreateNote() {
   const row = await socialRequest("/api/social/notes", {
     method: "POST",
-    body: JSON.stringify({ title: tr("Новая заметка", "New note"), content: "" }),
+    body: JSON.stringify({ title: tr("РќРѕРІР°СЏ Р·Р°РјРµС‚РєР°", "New note"), content: "" }),
   }).catch((e) => {
     alert(e.message);
     return null;
@@ -6120,10 +6397,10 @@ async function socialSaveCurrentNote() {
   const contentNode = document.getElementById("socialNoteContent");
   const autosave = document.getElementById("socialNoteAutosave");
   const payload = {
-    title: String(titleNode?.value || "").trim() || tr("Без названия", "Untitled"),
+    title: String(titleNode?.value || "").trim() || tr("Р‘РµР· РЅР°Р·РІР°РЅРёСЏ", "Untitled"),
     content: String(contentNode?.value || ""),
   };
-  if (autosave) autosave.textContent = tr("Сохраняем...", "Saving...");
+  if (autosave) autosave.textContent = tr("РЎРѕС…СЂР°РЅСЏРµРј...", "Saving...");
   const saved = await socialRequest(`/api/social/notes/${noteId}`, {
     method: "PUT",
     body: JSON.stringify(payload),
@@ -6136,7 +6413,7 @@ async function socialSaveCurrentNote() {
   if (idx >= 0) socialState.notes[idx] = saved;
   socialRenderNotesList();
   socialRenderCurrentNote();
-  if (autosave) autosave.textContent = tr("Сохранено", "Saved");
+  if (autosave) autosave.textContent = tr("РЎРѕС…СЂР°РЅРµРЅРѕ", "Saved");
 }
 
 function socialFormatFileSize(sizeRaw) {
@@ -6152,7 +6429,7 @@ function socialRenderNoteFiles(note) {
   const uploader = document.getElementById("socialNoteFileUpload");
   if (!host) return;
   if (!note) {
-    host.innerHTML = `<div class="hint">${tr("Файлы будут доступны после выбора заметки", "Files will appear after selecting a note")}</div>`;
+    host.innerHTML = `<div class="hint">${tr("Р¤Р°Р№Р»С‹ Р±СѓРґСѓС‚ РґРѕСЃС‚СѓРїРЅС‹ РїРѕСЃР»Рµ РІС‹Р±РѕСЂР° Р·Р°РјРµС‚РєРё", "Files will appear after selecting a note")}</div>`;
     if (uploader) uploader.disabled = true;
     return;
   }
@@ -6163,16 +6440,16 @@ function socialRenderNoteFiles(note) {
       <div class="social-note-file-row">
         <a href="${escapeHtml(file.url || "#")}" target="_blank" rel="noopener noreferrer">${escapeHtml(file.filename || "file")}</a>
         <small>${escapeHtml(socialFormatFileSize(file.size_bytes || 0))}</small>
-        <button class="btn-secondary" type="button" onclick="socialDeleteNoteFile(${Number(file.id || 0)})">✕</button>
+        <button class="btn-secondary" type="button" onclick="socialDeleteNoteFile(${Number(file.id || 0)})">вњ•</button>
       </div>
     `).join("")
-    : `<div class="hint">${tr("Файлы пока не загружены", "No files uploaded yet")}</div>`;
+    : `<div class="hint">${tr("Р¤Р°Р№Р»С‹ РїРѕРєР° РЅРµ Р·Р°РіСЂСѓР¶РµРЅС‹", "No files uploaded yet")}</div>`;
 }
 
 function socialTriggerNoteFileDialog() {
   const noteId = Number(socialState.currentNoteId || 0);
   if (!noteId) {
-    alert(tr("Сначала выберите заметку", "Select a note first"));
+    alert(tr("РЎРЅР°С‡Р°Р»Р° РІС‹Р±РµСЂРёС‚Рµ Р·Р°РјРµС‚РєСѓ", "Select a note first"));
     return;
   }
   const input = document.getElementById("socialNoteFileUpload");
@@ -6185,7 +6462,7 @@ async function socialUploadNoteFiles(fileList) {
   const input = document.getElementById("socialNoteFileUpload");
   const files = Array.from(fileList || []);
   if (!noteId || !files.length) return;
-  if (autosave) autosave.textContent = tr("Загружаем файлы...", "Uploading files...");
+  if (autosave) autosave.textContent = tr("Р—Р°РіСЂСѓР¶Р°РµРј С„Р°Р№Р»С‹...", "Uploading files...");
   try {
     for (const file of files) {
       const body = new FormData();
@@ -6205,10 +6482,10 @@ async function socialUploadNoteFiles(fileList) {
     socialState.currentNoteId = noteId;
     socialRenderNotesList();
     socialRenderCurrentNote();
-    if (autosave) autosave.textContent = tr("Файлы загружены", "Files uploaded");
+    if (autosave) autosave.textContent = tr("Р¤Р°Р№Р»С‹ Р·Р°РіСЂСѓР¶РµРЅС‹", "Files uploaded");
   } catch (e) {
-    if (autosave) autosave.textContent = String(e?.message || tr("Ошибка загрузки файла", "File upload error"));
-    alert(e?.message || tr("Ошибка загрузки файла", "File upload error"));
+    if (autosave) autosave.textContent = String(e?.message || tr("РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё С„Р°Р№Р»Р°", "File upload error"));
+    alert(e?.message || tr("РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё С„Р°Р№Р»Р°", "File upload error"));
   } finally {
     if (input) input.value = "";
   }
@@ -6218,7 +6495,7 @@ async function socialDeleteNoteFile(fileId) {
   const id = Number(fileId || 0);
   const noteId = Number(socialState.currentNoteId || 0);
   if (!id || !noteId) return;
-  if (!confirm(tr("Удалить файл?", "Delete file?"))) return;
+  if (!confirm(tr("РЈРґР°Р»РёС‚СЊ С„Р°Р№Р»?", "Delete file?"))) return;
   await socialRequest(`/api/social/notes/${noteId}/files/${id}`, {
     method: "DELETE",
   }).catch((e) => {
@@ -6242,7 +6519,7 @@ async function socialDeleteCurrentNote() {
 async function socialDeleteNote(noteId) {
   const id = Number(noteId || 0);
   if (!id) return;
-  if (!confirm(tr("Удалить заметку?", "Delete note?"))) return;
+  if (!confirm(tr("РЈРґР°Р»РёС‚СЊ Р·Р°РјРµС‚РєСѓ?", "Delete note?"))) return;
   await socialRequest(`/api/social/notes/${id}`, { method: "DELETE" }).catch((e) => alert(e.message));
   if (socialState.currentNoteId === id) socialState.currentNoteId = 0;
   await socialLoadNotes();
@@ -6415,6 +6692,13 @@ window.socialRenderCalendar = socialRenderCalendar;
 window.socialShowDay = socialShowDay;
 window.socialHideCalendarDaySheet = socialHideCalendarDaySheet;
 window.socialOpenCalendarQuickAddMenu = socialOpenCalendarQuickAddMenu;
+window.socialOpenCalendarQuickAddEntry = socialOpenCalendarQuickAddEntry;
+window.socialOpenCalendarTaskQuickAdd = socialOpenCalendarTaskQuickAdd;
+window.socialOpenCalendarDetail = socialOpenCalendarDetail;
+window.socialOpenCalendarDetails = socialOpenCalendarDetails;
+window.socialOpenCalendarTaskEdit = socialOpenCalendarTaskEdit;
+window.socialCreateTaskFromCalendar = socialCreateTaskFromCalendar;
+window.socialCleanCalendarDetails = socialCleanCalendarDetails;
 window.socialOpenCalendarTaskCreateModal = socialOpenCalendarTaskCreateModal;
 window.socialSetBell = socialSetBell;
 window.socialMarkNotificationsReadAll = socialMarkNotificationsReadAll;
@@ -6480,12 +6764,12 @@ socialMaybeStartHooks();
   }
 
   function bucketLabel(bucket) {
-    if (bucket === "today") return tr("Сегодня", "Today");
-    if (bucket === "tomorrow") return tr("Завтра", "Tomorrow");
-    if (bucket === "upcoming") return tr("Предстоящие", "Upcoming");
-    if (bucket === "overdue") return tr("Просроченные", "Overdue");
-    if (bucket === "done") return tr("Выполненные", "Completed");
-    return tr("Задачи", "Tasks");
+    if (bucket === "today") return tr("РЎРµРіРѕРґРЅСЏ", "Today");
+    if (bucket === "tomorrow") return tr("Р—Р°РІС‚СЂР°", "Tomorrow");
+    if (bucket === "upcoming") return tr("РџСЂРµРґСЃС‚РѕСЏС‰РёРµ", "Upcoming");
+    if (bucket === "overdue") return tr("РџСЂРѕСЃСЂРѕС‡РµРЅРЅС‹Рµ", "Overdue");
+    if (bucket === "done") return tr("Р’С‹РїРѕР»РЅРµРЅРЅС‹Рµ", "Completed");
+    return tr("Р—Р°РґР°С‡Рё", "Tasks");
   }
 
   const originalLoadTasks = typeof window.socialLoadTasks === "function" ? window.socialLoadTasks : null;
@@ -6513,7 +6797,7 @@ socialMaybeStartHooks();
       } catch (error) {
         socialState.tasksLastLoadError = true;
         if (typeof socialShowToast === "function") {
-          socialShowToast(tr("Задачи", "Tasks"), String(error?.message || tr("Ошибка загрузки задач", "Failed to load tasks")));
+          socialShowToast(tr("Р—Р°РґР°С‡Рё", "Tasks"), String(error?.message || tr("РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё Р·Р°РґР°С‡", "Failed to load tasks")));
         }
       }
 
@@ -6578,7 +6862,7 @@ socialMaybeStartHooks();
             const created = socialFormatTaskDateTime(task?.created_at);
             const project = socialTaskProjectTitle(task);
             const kind = String(task?.task_kind || "company").toLowerCase();
-            const kindLabel = kind === "personal" ? tr("ЛИЧНАЯ", "PERSONAL") : project;
+            const kindLabel = kind === "personal" ? tr("Р›РР§РќРђРЇ", "PERSONAL") : project;
             const assigneeNick = String(task?.assignee_nick || "-");
             const avatar = socialAvatarMarkup(String(task?.assignee_avatar_url || ""), assigneeNick, "xs");
             const pendingText = socialTaskPendingHint(id);
@@ -6590,23 +6874,23 @@ socialMaybeStartHooks();
             const canDrag = !(typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell());
             return `
               <article class="social-task-item ${isMine ? "is-assignee" : ""} ${isDone ? "is-done" : ""} ${isOverdue ? "is-overdue" : ""}" data-task-id="${id}" draggable="${canDrag ? "true" : "false"}" ondragstart="socialTaskDragStart(event, ${id})" ondragend="socialTaskDragEnd(event)" ondblclick="socialOpenTaskModal(${id})">
-                <button class="social-task-check ${isDone ? "is-done" : ""}" type="button" onclick="socialToggleTaskDone(${id}); event.stopPropagation();" title="${tr("Переключить выполнение", "Toggle done")}" ${canToggle ? "" : "disabled"}>✓</button>
+                <button class="social-task-check ${isDone ? "is-done" : ""}" type="button" onclick="socialToggleTaskDone(${id}); event.stopPropagation();" title="${tr("РџРµСЂРµРєР»СЋС‡РёС‚СЊ РІС‹РїРѕР»РЅРµРЅРёРµ", "Toggle done")}" ${canToggle ? "" : "disabled"}>вњ“</button>
                 <div class="social-task-content" onclick="socialOpenTaskModal(${id})">
                   <div class="social-task-title-row">
                     <div class="social-task-title-text">${escapeHtml(task?.title || "-")}</div>
-                    <span class="social-task-kind ${kind === "personal" ? "personal" : "company"}">${escapeHtml(kindLabel || tr("Без проекта", "No project"))}</span>
+                    <span class="social-task-kind ${kind === "personal" ? "personal" : "company"}">${escapeHtml(kindLabel || tr("Р‘РµР· РїСЂРѕРµРєС‚Р°", "No project"))}</span>
                   </div>
                   <div class="social-task-subline">
                     <span class="social-task-assignee">${avatar}<span class="social-task-assignee-name">${escapeHtml(assigneeNick)}</span></span>
-                    <span>${tr("Дата создания", "Created")}: ${escapeHtml(created || "-")} • ${tr("Дедлайн", "Deadline")}: ${escapeHtml(due || tr("Без дедлайна", "No deadline"))}</span>
+                    <span>${tr("Р”Р°С‚Р° СЃРѕР·РґР°РЅРёСЏ", "Created")}: ${escapeHtml(created || "-")} вЂў ${tr("Р”РµРґР»Р°Р№РЅ", "Deadline")}: ${escapeHtml(due || tr("Р‘РµР· РґРµРґР»Р°Р№РЅР°", "No deadline"))}</span>
                   </div>
                   ${pendingText ? `<div class="social-task-pending">${escapeHtml(pendingText)}</div>` : ""}
                 </div>
-                ${canDelete ? `<button class="social-task-delete" type="button" onclick="socialDeleteTask(${id}); event.stopPropagation();" title="${tr("Удалить", "Delete")}">✕</button>` : `<span></span>`}
+                ${canDelete ? `<button class="social-task-delete" type="button" onclick="socialDeleteTask(${id}); event.stopPropagation();" title="${tr("РЈРґР°Р»РёС‚СЊ", "Delete")}">вњ•</button>` : `<span></span>`}
               </article>
             `;
           }).join("")
-          : `<div class="hint">${escapeHtml(tr("Нет задач", "No tasks"))}</div>`;
+          : `<div class="hint">${escapeHtml(tr("РќРµС‚ Р·Р°РґР°С‡", "No tasks"))}</div>`;
 
         return `
           <section class="social-task-bucket" data-bucket="${bucket}" ondragover="socialTaskDragOver(event)" ondrop="socialTaskDrop(event, '${bucket}')">
@@ -6626,16 +6910,16 @@ socialMaybeStartHooks();
   window.socialOpenProjectMembersModal = async function socialOpenProjectMembersModal() {
     const projectId = Number(document.getElementById("socialTaskProjectFilter")?.value || 0);
     if (!projectId) {
-      if (typeof socialShowToast === "function") socialShowToast(tr("Проекты", "Projects"), tr("Сначала выберите проект в фильтре.", "Select a project first."));
-      else alert(tr("Сначала выберите проект в фильтре.", "Select a project first."));
+      if (typeof socialShowToast === "function") socialShowToast(tr("РџСЂРѕРµРєС‚С‹", "Projects"), tr("РЎРЅР°С‡Р°Р»Р° РІС‹Р±РµСЂРёС‚Рµ РїСЂРѕРµРєС‚ РІ С„РёР»СЊС‚СЂРµ.", "Select a project first."));
+      else alert(tr("РЎРЅР°С‡Р°Р»Р° РІС‹Р±РµСЂРёС‚Рµ РїСЂРѕРµРєС‚ РІ С„РёР»СЊС‚СЂРµ.", "Select a project first."));
       return;
     }
 
     const project = (Array.isArray(socialState.projects) ? socialState.projects : []).find((row) => Number(row?.id || 0) === projectId);
-    const title = String(project?.title || "").trim() || tr("Проект", "Project");
+    const title = String(project?.title || "").trim() || tr("РџСЂРѕРµРєС‚", "Project");
     const members = await socialRequest(`/api/social/tasks/projects/${projectId}/members`).catch((error) => {
-      const msg = String(error?.message || tr("Не удалось загрузить участников", "Failed to load members"));
-      if (typeof socialShowToast === "function") socialShowToast(tr("Участники", "Members"), msg);
+      const msg = String(error?.message || tr("РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СѓС‡Р°СЃС‚РЅРёРєРѕРІ", "Failed to load members"));
+      if (typeof socialShowToast === "function") socialShowToast(tr("РЈС‡Р°СЃС‚РЅРёРєРё", "Members"), msg);
       else alert(msg);
       return null;
     });
@@ -6660,13 +6944,13 @@ socialMaybeStartHooks();
     }).join("");
 
     socialOpenModal(
-      `${tr("Участники проекта", "Project members")}: ${escapeHtml(title)}`,
+      `${tr("РЈС‡Р°СЃС‚РЅРёРєРё РїСЂРѕРµРєС‚Р°", "Project members")}: ${escapeHtml(title)}`,
       `
         <div class="social-group-members">
-          <div class="social-group-members-list" id="socialProjectMembersList">${rowsHtml || `<div class="hint">${escapeHtml(tr("Участников пока нет", "No members yet"))}</div>`}</div>
+          <div class="social-group-members-list" id="socialProjectMembersList">${rowsHtml || `<div class="hint">${escapeHtml(tr("РЈС‡Р°СЃС‚РЅРёРєРѕРІ РїРѕРєР° РЅРµС‚", "No members yet"))}</div>`}</div>
           <div class="actions">
-            <button type="button" class="btn-secondary" onclick="socialCloseModal()">${tr("Отмена", "Cancel")}</button>
-            ${canEdit ? `<button type="button" onclick="socialSaveProjectMembers(${projectId})">${tr("Сохранить", "Save")}</button>` : `<span class="hint">${escapeHtml(tr("Только владелец может менять состав", "Only owner can edit members"))}</span>`}
+            <button type="button" class="btn-secondary" onclick="socialCloseModal()">${tr("РћС‚РјРµРЅР°", "Cancel")}</button>
+            ${canEdit ? `<button type="button" onclick="socialSaveProjectMembers(${projectId})">${tr("РЎРѕС…СЂР°РЅРёС‚СЊ", "Save")}</button>` : `<span class="hint">${escapeHtml(tr("РўРѕР»СЊРєРѕ РІР»Р°РґРµР»РµС† РјРѕР¶РµС‚ РјРµРЅСЏС‚СЊ СЃРѕСЃС‚Р°РІ", "Only owner can edit members"))}</span>`}
           </div>
         </div>
       `
@@ -6682,8 +6966,8 @@ socialMaybeStartHooks();
       method: "PUT",
       body: JSON.stringify({ actor_keys: actorKeys }),
     }).catch((error) => {
-      const msg = String(error?.message || tr("Не удалось сохранить участников", "Failed to save members"));
-      if (typeof socialShowToast === "function") socialShowToast(tr("Участники", "Members"), msg);
+      const msg = String(error?.message || tr("РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ СѓС‡Р°СЃС‚РЅРёРєРѕРІ", "Failed to save members"));
+      if (typeof socialShowToast === "function") socialShowToast(tr("РЈС‡Р°СЃС‚РЅРёРєРё", "Members"), msg);
       else alert(msg);
       throw error;
     });
@@ -6692,6 +6976,5 @@ socialMaybeStartHooks();
     await window.socialLoadTasks({ force: true });
   };
 })();
-
 
 
