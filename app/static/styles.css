@@ -1,4 +1,4 @@
-﻿@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Unbounded:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Unbounded:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
 :root {
   --bg-1: #060a18;
@@ -12602,11 +12602,6 @@ body.mobile-client-mode .social-notif-center.mobile-open .social-notif-item p {
   line-height: 1.12;
 }
 
-#socialSubtabCalendar .social-calendar-tools--minimal {
-  display: flex;
-  justify-content: flex-start;
-  gap: 8px;
-}
 
 #socialSubtabCalendar .social-calendar-grid--samsung .social-day {
   min-height: 92px;

@@ -1,4 +1,4 @@
-﻿let socialState = {
+let socialState = {
   boot: null,
   currentSubtab: "chat",
   gamesLeaderboardCache: new Map(),
@@ -5189,22 +5189,28 @@ async function socialConnectGoogleCalendar() {
   return true;
 }
 async function socialLoadCalendar() {
-  const monthInput = document.getElementById("socialCalendarMonth");
   const monthLabel = document.getElementById("socialCalendarMonthLabel");
-  if (monthInput && !monthInput.value) {
-    monthInput.value = socialCalendarMonthValue(socialState.calendarDate);
-  }
+  const baseDate = socialCalendarParseDate(socialState.calendarDate) || new Date();
+  socialState.calendarDate = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1, 0, 0, 0, 0);
 
-  const monthVal = String(monthInput?.value || "").trim();
-  if (monthVal) {
-    const [y, m] = monthVal.split("-").map((x) => Number(x || 0));
-    if (y && m) {
-      socialState.calendarDate = new Date(y, m - 1, 1, 0, 0, 0, 0);
-    }
-  }
   if (monthLabel) {
     monthLabel.textContent = socialCalendarMonthLabel(socialState.calendarDate);
   }
+
+  const cachedEvents = Array.isArray(socialState.calendarEvents) && socialState.calendarEvents.length
+    ? socialState.calendarEvents
+    : (Array.isArray(socialState.calendarLastGoodEvents) ? socialState.calendarLastGoodEvents : []);
+  const cachedTasks = Array.isArray(socialState.calendarTasks) && socialState.calendarTasks.length
+    ? socialState.calendarTasks
+    : (
+      Array.isArray(socialState.tasksAll) && socialState.tasksAll.length
+        ? socialState.tasksAll
+        : (Array.isArray(socialState.calendarLastGoodTasks) ? socialState.calendarLastGoodTasks : [])
+    );
+
+  socialState.calendarEvents = Array.isArray(cachedEvents) ? [...cachedEvents] : [];
+  socialState.calendarTasks = Array.isArray(cachedTasks) ? [...cachedTasks] : [];
+  socialRenderCalendar();
 
   const seq = Number(socialState.calendarLoadSeq || 0) + 1;
   socialState.calendarLoadSeq = seq;
@@ -5216,41 +5222,35 @@ async function socialLoadCalendar() {
     date_to: socialCalendarRangeParam(end, true),
   });
 
-  const [eventRows, taskRows] = await Promise.all([
-    socialRequest(`/api/social/calendar/events?${eventsQuery.toString()}`).catch((e) => ({ __error: e })),
-    socialRequest("/api/social/tasks?task_kind=all&include_done=true").catch((e) => ({ __error: e })),
-  ]);
-
-  if (Number(socialState.calendarLoadSeq || 0) !== seq) return;
-
-  const prevEvents = Array.isArray(socialState.calendarEvents) ? socialState.calendarEvents : [];
-  const prevTasks = Array.isArray(socialState.calendarTasks) ? socialState.calendarTasks : [];
-
-  if (Array.isArray(eventRows)) {
-    socialState.calendarEvents = eventRows;
-    socialState.calendarLastGoodEvents = [...eventRows];
-  } else {
-    socialState.calendarEvents = Array.isArray(socialState.calendarLastGoodEvents)
-      ? [...socialState.calendarLastGoodEvents]
-      : prevEvents;
-    if (eventRows?.__error && typeof socialShowToast === "function") {
-      socialShowToast(tr("Календарь", "Calendar"), eventRows.__error?.message || tr("Не удалось загрузить события.", "Failed to load events."));
+  const applyCalendarRows = (kind, rows, error = null) => {
+    if (Number(socialState.calendarLoadSeq || 0) !== seq) return;
+    if (Array.isArray(rows)) {
+      if (kind === "events") {
+        socialState.calendarEvents = [...rows];
+        socialState.calendarLastGoodEvents = [...rows];
+      } else {
+        socialState.calendarTasks = [...rows];
+        socialState.calendarLastGoodTasks = [...rows];
+      }
+    } else if (error && typeof socialShowToast === "function") {
+      socialShowToast(
+        tr("\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c", "Calendar"),
+        error?.message || (kind === "events"
+          ? tr("\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0441\u043e\u0431\u044b\u0442\u0438\u044f.", "Failed to load events.")
+          : tr("\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0437\u0430\u0434\u0430\u0447\u0438.", "Failed to load tasks."))
+      );
     }
-  }
+    socialRenderCalendar();
+  };
 
-  if (Array.isArray(taskRows)) {
-    socialState.calendarTasks = taskRows;
-    socialState.calendarLastGoodTasks = [...taskRows];
-  } else {
-    socialState.calendarTasks = Array.isArray(socialState.calendarLastGoodTasks)
-      ? [...socialState.calendarLastGoodTasks]
-      : prevTasks;
-    if (taskRows?.__error && typeof socialShowToast === "function") {
-      socialShowToast(tr("Календарь", "Calendar"), taskRows.__error?.message || tr("Не удалось загрузить задачи.", "Failed to load tasks."));
-    }
-  }
+  const eventPromise = socialRequest(`/api/social/calendar/events?${eventsQuery.toString()}`)
+    .then((rows) => applyCalendarRows("events", rows))
+    .catch((error) => applyCalendarRows("events", null, error));
+  const taskPromise = socialRequest("/api/social/tasks?task_kind=all&include_done=true")
+    .then((rows) => applyCalendarRows("tasks", rows))
+    .catch((error) => applyCalendarRows("tasks", null, error));
 
-  socialRenderCalendar();
+  await Promise.allSettled([eventPromise, taskPromise]);
 }
 
 function socialShiftCalendar(deltaMonths = 0) {
@@ -5258,10 +5258,6 @@ function socialShiftCalendar(deltaMonths = 0) {
   if (!Number.isFinite(delta) || !delta) return;
   const d = socialState.calendarDate;
   socialState.calendarDate = new Date(d.getFullYear(), d.getMonth() + delta, 1, 0, 0, 0, 0);
-  const monthInput = document.getElementById("socialCalendarMonth");
-  if (monthInput) {
-    monthInput.value = socialCalendarMonthValue(socialState.calendarDate);
-  }
   socialLoadCalendar();
 }
 
@@ -5269,10 +5265,6 @@ function socialJumpCalendarToday() {
   const now = new Date();
   socialState.calendarDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
   socialState.calendarSelectedDay = socialCalendarDayKey(now);
-  const monthInput = document.getElementById("socialCalendarMonth");
-  if (monthInput) {
-    monthInput.value = socialCalendarMonthValue(socialState.calendarDate);
-  }
   socialLoadCalendar();
 }
 
@@ -5588,9 +5580,9 @@ function socialOpenCalendarQuickAddMenu(dayKey = "") {
     tr("Добавить", "Add"),
     `
       <div class="social-calendar-quick-add-menu">
-        <button type="button" onclick="socialCloseModal(); socialOpenCalendarModal(0, { dayKey: '${escapeHtml(safeDay)}', entryType: 'event' })">${escapeHtml(tr("Событие", "Event"))}</button>
-        <button type="button" onclick="socialCloseModal(); socialOpenCalendarModal(0, { dayKey: '${escapeHtml(safeDay)}', entryType: 'reminder' })">${escapeHtml(tr("Напоминание", "Reminder"))}</button>
-        <button type="button" onclick="socialCloseModal(); socialOpenCalendarTaskCreateModal('${escapeHtml(safeDay)}')">${escapeHtml(tr("Задача", "Task"))}</button>
+        <button type="button" onclick="socialOpenCalendarModal(0, { dayKey: '${escapeHtml(safeDay)}', entryType: 'event' })">${escapeHtml(tr("Событие", "Event"))}</button>
+        <button type="button" onclick="socialOpenCalendarModal(0, { dayKey: '${escapeHtml(safeDay)}', entryType: 'reminder' })">${escapeHtml(tr("Напоминание", "Reminder"))}</button>
+        <button type="button" onclick="socialOpenCalendarTaskCreateModal('${escapeHtml(safeDay)}')">${escapeHtml(tr("Задача", "Task"))}</button>
       </div>
     `
   );

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import base64
 import io
@@ -15648,8 +15648,8 @@ def social_calendar_events(
         select(SocialCalendarEvent)
         .where(
             SocialCalendarEvent.user_id == user.id,
-            SocialCalendarEvent.start_at >= left,
             SocialCalendarEvent.start_at <= right,
+            func.coalesce(SocialCalendarEvent.end_at, SocialCalendarEvent.start_at) >= left,
             or_(SocialCalendarEvent.is_public.is_(True), SocialCalendarEvent.actor_key == actor_key),
         )
         .order_by(SocialCalendarEvent.start_at.asc(), SocialCalendarEvent.id.asc())
