@@ -1,4 +1,4 @@
-﻿let socialState = {
+let socialState = {
   boot: null,
   currentSubtab: "chat",
   gamesLeaderboardCache: new Map(),
@@ -981,9 +981,23 @@ async function socialToggleNotificationCenter(event = null) {
   socialRenderNotificationCenter();
 
   const safeTop = 10 + Number(window.visualViewport?.offsetTop || 0);
+  const bodyClassMobile = Boolean(
+    document.body?.classList?.contains("mobile-client-mode")
+    || document.body?.classList?.contains("mobile-apk-mode")
+  );
+  const coarsePointer = (() => {
+    try { return Boolean(window.matchMedia && window.matchMedia("(pointer: coarse)").matches); } catch (_) { return false; }
+  })();
+  const uaMobile = (() => {
+    try { return /android|iphone|ipad|ipod|mobile/i.test(String(navigator?.userAgent || "")); } catch (_) { return false; }
+  })();
+  const viewportWidth = (window.innerWidth || document.documentElement.clientWidth || 0);
   const isMobileShell = (typeof socialIsMobileClientShell === "function" && socialIsMobileClientShell())
     || (typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell())
-    || (window.innerWidth || document.documentElement.clientWidth || 0) <= 980;
+    || bodyClassMobile
+    || (coarsePointer && viewportWidth <= 1280)
+    || (uaMobile && viewportWidth <= 1400)
+    || viewportWidth <= 980;
   if (isMobileShell) {
     const viewportHeight = Math.max(320, Math.round(window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 720));
     const panelTop = Math.round(safeTop + 52);
