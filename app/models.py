@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -752,6 +752,10 @@ class SocialCalendarEvent(Base):
     details: Mapped[str] = mapped_column(Text, default="")
     start_at: Mapped[datetime] = mapped_column(DateTime, index=True)
     end_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    recurrence_kind: Mapped[str] = mapped_column(String(20), default="none", index=True)
+    recurrence_interval: Mapped[int] = mapped_column(Integer, default=1)
+    reminder_enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    reminder_offsets_json: Mapped[str] = mapped_column(Text, default="[10]")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -792,4 +796,5 @@ class SocialNoteFile(Base):
 
     note: Mapped["SocialNote"] = relationship(back_populates="files")
     user: Mapped["User"] = relationship()
+
 

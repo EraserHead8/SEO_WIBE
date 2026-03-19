@@ -1,4 +1,4 @@
-﻿import json
+import json
 import logging
 import time
 
@@ -403,14 +403,45 @@ def run_lightweight_migrations():
                     conn.execute(text("ALTER TABLE audit_logs ADD COLUMN user_agent VARCHAR(500) DEFAULT ''"))
 
             calendar_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(social_calendar_events)"))}
-            if calendar_cols and "is_public" not in calendar_cols:
-                conn.execute(text("ALTER TABLE social_calendar_events ADD COLUMN is_public BOOLEAN DEFAULT 0"))
-            if calendar_cols and "entry_type" not in calendar_cols:
-                conn.execute(text("ALTER TABLE social_calendar_events ADD COLUMN entry_type VARCHAR(20) DEFAULT 'event'"))
-            if calendar_cols and "is_all_day" not in calendar_cols:
-                conn.execute(text("ALTER TABLE social_calendar_events ADD COLUMN is_all_day BOOLEAN DEFAULT 0"))
-            if calendar_cols and "color" not in calendar_cols:
-                conn.execute(text("ALTER TABLE social_calendar_events ADD COLUMN color VARCHAR(24) DEFAULT ''"))
+            if calendar_cols:
+                if "is_public" not in calendar_cols:
+                    conn.execute(text("ALTER TABLE social_calendar_events ADD COLUMN is_public BOOLEAN DEFAULT 0"))
+                if "recurrence_kind" not in calendar_cols:
+                    conn.execute(text("ALTER TABLE social_calendar_events ADD COLUMN recurrence_kind VARCHAR(20) DEFAULT 'none'"))
+                    deferred_backfills.append((
+                        "social_calendar_events_recurrence_kind",
+                        """
+                        UPDATE social_calendar_events
+                        SET recurrence_kind = CASE
+                            WHEN recurrence_kind IS NULL OR trim(recurrence_kind) = '' THEN 'none'
+                            ELSE lower(trim(recurrence_kind))
+                        END
+                        """
+                    ))
+                if "recurrence_interval" not in calendar_cols:
+                    conn.execute(text("ALTER TABLE social_calendar_events ADD COLUMN recurrence_interval INTEGER DEFAULT 1"))
+                    deferred_backfills.append((
+                        "social_calendar_events_recurrence_interval",
+                        """
+                        UPDATE social_calendar_events
+                        SET recurrence_interval = CASE
+                            WHEN recurrence_interval IS NULL OR recurrence_interval < 1 THEN 1
+                            ELSE recurrence_interval
+                        END
+                        """
+                    ))
+                if "reminder_enabled" not in calendar_cols:
+                    conn.execute(text("ALTER TABLE social_calendar_events ADD COLUMN reminder_enabled BOOLEAN DEFAULT 1"))
+                if "reminder_offsets_json" not in calendar_cols:
+                    conn.execute(text("ALTER TABLE social_calendar_events ADD COLUMN reminder_offsets_json TEXT DEFAULT '[10]'"))
+                    deferred_backfills.append((
+                        "social_calendar_events_reminder_offsets_json",
+                        """
+                        UPDATE social_calendar_events
+                        SET reminder_offsets_json = '[10]'
+                        WHERE reminder_offsets_json IS NULL OR trim(reminder_offsets_json) = ''
+                        """
+                    ))
 
             ai_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(ai_service_accounts)"))}
             if ai_cols and "priority" not in ai_cols:
@@ -450,6 +481,12 @@ def run_lightweight_migrations():
                 text(
                     "CREATE INDEX IF NOT EXISTS ix_social_task_project_members_project_actor "
                     "ON social_task_project_members(project_id, actor_key)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_social_calendar_events_user_start_repeat "
+                    "ON social_calendar_events(user_id, start_at, recurrence_kind, reminder_enabled)"
                 )
             )
             conn.execute(

@@ -1,11 +1,11 @@
 (function () {
   const state = { overview: null, room: null, pollTimer: null, selectedFrom: "", pendingMove: false };
-  const pieces = { wK: "♔", wQ: "♕", wR: "♖", wB: "♗", wN: "♘", wP: "♙", bK: "♚", bQ: "♛", bR: "♜", bB: "♝", bN: "♞", bP: "♟" };
+  const pieces = { wK: "Р В Р вЂ Р Р†РІР‚С›РЎС›Р Р†Р вЂљРЎСљ", wQ: "Р В Р вЂ Р Р†РІР‚С›РЎС›Р Р†Р вЂљРЎС›", wR: "Р В Р вЂ Р Р†РІР‚С›РЎС›Р Р†Р вЂљРІР‚Сљ", wB: "Р В Р вЂ Р Р†РІР‚С›РЎС›Р Р†Р вЂљРІР‚Сњ", wN: "Р В Р вЂ Р Р†РІР‚С›РЎС›Р вЂ™Р’В", wP: "Р В Р вЂ Р Р†РІР‚С›РЎС›Р Р†РІР‚С›РЎС›", bK: "Р В Р вЂ Р Р†РІР‚С›РЎС›Р РЋРІвЂћСћ", bQ: "Р В Р вЂ Р Р†РІР‚С›РЎС›Р Р†Р вЂљРЎвЂќ", bR: "Р В Р вЂ Р Р†РІР‚С›РЎС›Р РЋРЎв„ў", bB: "Р В Р вЂ Р Р†РІР‚С›РЎС›Р РЋРЎС™", bN: "Р В Р вЂ Р Р†РІР‚С›РЎС›Р РЋРІР‚С”", bP: "Р В Р вЂ Р Р†РІР‚С›РЎС›Р РЋРЎСџ" };
   const diffFallback = {
-    easy: { code: "easy", title: "Легкий" },
-    medium: { code: "medium", title: "Средний" },
-    hard: { code: "hard", title: "Сложный" },
-    expert: { code: "expert", title: "Эксперт" },
+    easy: { code: "easy", title: "Р В Р’В Р Р†Р вЂљРЎвЂќР В Р’В Р вЂ™Р’ВµР В Р’В Р РЋРІР‚вЂњР В Р’В Р РЋРІР‚СњР В Р’В Р РЋРІР‚ВР В Р’В Р Р†РІР‚С›РІР‚вЂњ" },
+    medium: { code: "medium", title: "Р В Р’В Р В Р вЂ№Р В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’ВµР В Р’В Р СћРІР‚ВР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚ВР В Р’В Р Р†РІР‚С›РІР‚вЂњ" },
+    hard: { code: "hard", title: "Р В Р’В Р В Р вЂ№Р В Р’В Р вЂ™Р’В»Р В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В¶Р В Р’В Р В РІР‚В¦Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р Р†РІР‚С›РІР‚вЂњ" },
+    expert: { code: "expert", title: "Р В Р’В Р вЂ™Р’В­Р В Р’В Р РЋРІР‚СњР В Р Р‹Р В РЎвЂњР В Р’В Р РЋРІР‚вЂќР В Р’В Р вЂ™Р’ВµР В Р Р‹Р В РІР‚С™Р В Р Р‹Р Р†Р вЂљРЎв„ў" },
   };
 
   function t(ru, en) { return typeof tr === "function" ? tr(ru, en) : ru; }
@@ -14,7 +14,7 @@
     return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;").replace(/'/g, "&#39;");
   }
   function toast(msg, kind = "info") {
-    const title = kind === "error" ? t("Шахматы: ошибка", "Chess: error") : t("Шахматы", "Chess");
+    const title = kind === "error" ? t("Р В Р’В Р В Р С“Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљР’В¦Р В Р’В Р РЋР’ВР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†Р вЂљРІвЂћвЂ“: Р В Р’В Р РЋРІР‚СћР В Р Р‹Р Р†РІР‚С™Р’В¬Р В Р’В Р РЋРІР‚ВР В Р’В Р вЂ™Р’В±Р В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В°", "Chess: error") : t("Р В Р’В Р В Р С“Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљР’В¦Р В Р’В Р РЋР’ВР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†Р вЂљРІвЂћвЂ“", "Chess");
     if (typeof socialShowToast === "function") { socialShowToast(title, msg); return; }
     if (kind === "error") alert(msg);
   }
@@ -49,18 +49,18 @@
   }
   function statusLabel(status) {
     const s = String(status || "").trim().toLowerCase();
-    if (s === "active") return t("Игра идет", "Active");
-    if (s === "finished") return t("Завершена", "Finished");
-    if (s === "cancelled") return t("Закрыта", "Cancelled");
-    return t("Ожидание", "Waiting");
+    if (s === "active") return t("Р В Р’В Р вЂ™Р’ВР В Р’В Р РЋРІР‚вЂњР В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’В° Р В Р’В Р РЋРІР‚ВР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’ВµР В Р Р‹Р Р†Р вЂљРЎв„ў", "Active");
+    if (s === "finished") return t("Р В Р’В Р Р†Р вЂљРІР‚СњР В Р’В Р вЂ™Р’В°Р В Р’В Р В РІР‚В Р В Р’В Р вЂ™Р’ВµР В Р Р‹Р В РІР‚С™Р В Р Р‹Р Р†РІР‚С™Р’В¬Р В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°", "Finished");
+    if (s === "cancelled") return t("Р В Р’В Р Р†Р вЂљРІР‚СњР В Р’В Р вЂ™Р’В°Р В Р’В Р РЋРІР‚СњР В Р Р‹Р В РІР‚С™Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р вЂ™Р’В°", "Cancelled");
+    return t("Р В Р’В Р РЋРІР‚С”Р В Р’В Р вЂ™Р’В¶Р В Р’В Р РЋРІР‚ВР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚ВР В Р’В Р вЂ™Р’Вµ", "Waiting");
   }
-  function modeLabel(room) { return String(room?.mode || "human") === "bot" ? t("С ботом", "Bot") : t("Онлайн", "Online"); }
+  function modeLabel(room) { return String(room?.mode || "human") === "bot" ? t("Р В Р’В Р В Р вЂ№ Р В Р’В Р вЂ™Р’В±Р В Р’В Р РЋРІР‚СћР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚СћР В Р’В Р РЋР’В", "Bot") : t("Р В Р’В Р РЋРІР‚С”Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В»Р В Р’В Р вЂ™Р’В°Р В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р’В Р В РІР‚В¦", "Online"); }
   function resultText(room) {
     const result = String(room?.result || "").trim().toLowerCase();
     const winner = String(room?.winner || "").trim().toLowerCase();
-    if (result === "draw") return t("Партия закончилась ничьей.", "The game ended in a draw.");
-    if (winner === "white") return t("Белые победили.", "White wins.");
-    if (winner === "black") return t("Черные победили.", "Black wins.");
+    if (result === "draw") return t("Р В Р’В Р РЋРЎСџР В Р’В Р вЂ™Р’В°Р В Р Р‹Р В РІР‚С™Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚ВР В Р Р‹Р В Р РЏ Р В Р’В Р вЂ™Р’В·Р В Р’В Р вЂ™Р’В°Р В Р’В Р РЋРІР‚СњР В Р’В Р РЋРІР‚СћР В Р’В Р В РІР‚В¦Р В Р Р‹Р Р†Р вЂљР Р‹Р В Р’В Р РЋРІР‚ВР В Р’В Р вЂ™Р’В»Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р В РЎвЂњР В Р Р‹Р В Р вЂ° Р В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚ВР В Р Р‹Р Р†Р вЂљР Р‹Р В Р Р‹Р В Р вЂ°Р В Р’В Р вЂ™Р’ВµР В Р’В Р Р†РІР‚С›РІР‚вЂњ.", "The game ended in a draw.");
+    if (winner === "white") return t("Р В Р’В Р Р†Р вЂљР’ВР В Р’В Р вЂ™Р’ВµР В Р’В Р вЂ™Р’В»Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р вЂ™Р’Вµ Р В Р’В Р РЋРІР‚вЂќР В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В±Р В Р’В Р вЂ™Р’ВµР В Р’В Р СћРІР‚ВР В Р’В Р РЋРІР‚ВР В Р’В Р вЂ™Р’В»Р В Р’В Р РЋРІР‚В.", "White wins.");
+    if (winner === "black") return t("Р В Р’В Р вЂ™Р’В§Р В Р’В Р вЂ™Р’ВµР В Р Р‹Р В РІР‚С™Р В Р’В Р В РІР‚В¦Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р вЂ™Р’Вµ Р В Р’В Р РЋРІР‚вЂќР В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В±Р В Р’В Р вЂ™Р’ВµР В Р’В Р СћРІР‚ВР В Р’В Р РЋРІР‚ВР В Р’В Р вЂ™Р’В»Р В Р’В Р РЋРІР‚В.", "Black wins.");
     return "";
   }
 
@@ -97,9 +97,22 @@
     const r = resultText(room);
     if (r) return r;
     const s = String(room?.status || "waiting").trim().toLowerCase();
-    if (s === "waiting") return room?.can_join ? t("Комната ждет второго игрока.", "Room waits for second player.") : t("Ожидание соперника.", "Waiting for opponent.");
-    if (s === "active") return room?.my_turn ? t("Ваш ход.", "Your move.") : t("Ход соперника.", "Opponent move.");
-    return t("Матч сохранен в истории.", "Match is saved in history.");
+    if (s === "waiting") return room?.can_join ? t("Р В Р’В Р РЋРІвЂћСћР В Р’В Р РЋРІР‚СћР В Р’В Р РЋР’ВР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р вЂ™Р’В° Р В Р’В Р вЂ™Р’В¶Р В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’ВµР В Р Р‹Р Р†Р вЂљРЎв„ў Р В Р’В Р В РІР‚В Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚СћР В Р Р‹Р В РІР‚С™Р В Р’В Р РЋРІР‚СћР В Р’В Р РЋРІР‚вЂњР В Р’В Р РЋРІР‚Сћ Р В Р’В Р РЋРІР‚ВР В Р’В Р РЋРІР‚вЂњР В Р Р‹Р В РІР‚С™Р В Р’В Р РЋРІР‚СћР В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В°.", "Room waits for second player.") : t("Р В Р’В Р РЋРІР‚С”Р В Р’В Р вЂ™Р’В¶Р В Р’В Р РЋРІР‚ВР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚ВР В Р’В Р вЂ™Р’Вµ Р В Р Р‹Р В РЎвЂњР В Р’В Р РЋРІР‚СћР В Р’В Р РЋРІР‚вЂќР В Р’В Р вЂ™Р’ВµР В Р Р‹Р В РІР‚С™Р В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚ВР В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В°.", "Waiting for opponent.");
+    if (s === "active") return room?.my_turn ? t("Р В Р’В Р Р†Р вЂљРІвЂћСћР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†РІР‚С™Р’В¬ Р В Р Р‹Р Р†Р вЂљР’В¦Р В Р’В Р РЋРІР‚СћР В Р’В Р СћРІР‚В.", "Your move.") : t("Р В Р’В Р СћРЎвЂ™Р В Р’В Р РЋРІР‚СћР В Р’В Р СћРІР‚В Р В Р Р‹Р В РЎвЂњР В Р’В Р РЋРІР‚СћР В Р’В Р РЋРІР‚вЂќР В Р’В Р вЂ™Р’ВµР В Р Р‹Р В РІР‚С™Р В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚ВР В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В°.", "Opponent move.");
+    return t("Р В Р’В Р РЋРЎв„ўР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†Р вЂљР Р‹ Р В Р Р‹Р В РЎвЂњР В Р’В Р РЋРІР‚СћР В Р Р‹Р Р†Р вЂљР’В¦Р В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’В°Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦ Р В Р’В Р В РІР‚В  Р В Р’В Р РЋРІР‚ВР В Р Р‹Р В РЎвЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚СћР В Р Р‹Р В РІР‚С™Р В Р’В Р РЋРІР‚ВР В Р’В Р РЋРІР‚В.", "Match is saved in history.");
+  }
+
+  function findRoomById(roomId) {
+    const id = Number(roomId || 0);
+    if (!id) return null;
+    if (Number(state.room?.id || 0) === id) return state.room;
+    const groups = [state.overview?.rooms?.mine, state.overview?.rooms?.public];
+    for (const list of groups) {
+      if (!Array.isArray(list)) continue;
+      const match = list.find((room) => Number(room?.id || 0) === id);
+      if (match) return match;
+    }
+    return null;
   }
 
   function roomCard(room, mine) {
@@ -108,7 +121,7 @@
     const black = players.black || {};
     const id = Number(room?.id || 0);
     const action = room?.can_join ? `socialChessJoinRoom(${id})` : `socialChessOpenRoom(${id})`;
-    const openLabel = mine ? t("Открыть", "Open") : (room?.can_join ? t("Подключиться", "Join") : t("Смотреть", "View"));
+    const openLabel = mine ? t("Р В Р’В Р РЋРІР‚С”Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚СњР В Р Р‹Р В РІР‚С™Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В Р вЂ°", "Open") : (room?.can_join ? t("Р В Р’В Р РЋРЎСџР В Р’В Р РЋРІР‚СћР В Р’В Р СћРІР‚ВР В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В РІР‚в„–Р В Р Р‹Р Р†Р вЂљР Р‹Р В Р’В Р РЋРІР‚ВР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В Р вЂ°Р В Р Р‹Р В РЎвЂњР В Р Р‹Р В Р РЏ", "Join") : t("Р В Р’В Р В Р вЂ№Р В Р’В Р РЋР’ВР В Р’В Р РЋРІР‚СћР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’ВµР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В Р вЂ°", "View"));
     return `
       <article class="social-checkers-room-card ${mine ? "mine" : ""}">
         <div class="social-checkers-room-top">
@@ -119,14 +132,14 @@
               ${String(room?.mode || "human") === "bot" ? `<span class="social-checkers-badge soft">${esc(difficultyTitle(room?.difficulty))}</span>` : ""}
             </div>
             <strong class="social-checkers-room-title">${esc(room?.title || `#${room?.room_code || "-"}`)}</strong>
-            <div class="social-checkers-room-code">#${esc(room?.room_code || "-")} | ${esc(t("Создана", "Created"))}: ${esc(dt(room?.created_at))}</div>
+            <div class="social-checkers-room-code">#${esc(room?.room_code || "-")} | ${esc(t("Р В Р’В Р В Р вЂ№Р В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В·Р В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°", "Created"))}: ${esc(dt(room?.created_at))}</div>
           </div>
-          <div class="social-checkers-room-actions actions"><button type="button" onclick="${action}">${esc(openLabel)}</button></div>
+          <div class="social-checkers-room-actions actions"><button type="button" onclick="${action}">${esc(openLabel)}</button>${room?.can_delete ? `<button class="btn-danger" type="button" onclick="socialChessDeleteRoom(${id})">${esc(t("\u0423\u0434\u0430\u043b\u0438\u0442\u044c", "Delete"))}</button>` : ""}</div>
         </div>
         <div class="social-checkers-room-meta">
-          <span>${esc(t("Белые", "White"))}: <b>${esc(white.nick || "-")}</b></span>
-          <span>${esc(t("Черные", "Black"))}: <b>${esc(black.nick || "-")}</b></span>
-          <span>${esc(t("Обновлено", "Updated"))}: <b>${esc(dt(room?.updated_at || room?.last_move_at || room?.created_at))}</b></span>
+          <span>${esc(t("Р В Р’В Р Р†Р вЂљР’ВР В Р’В Р вЂ™Р’ВµР В Р’В Р вЂ™Р’В»Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р вЂ™Р’Вµ", "White"))}: <b>${esc(white.nick || "-")}</b></span>
+          <span>${esc(t("Р В Р’В Р вЂ™Р’В§Р В Р’В Р вЂ™Р’ВµР В Р Р‹Р В РІР‚С™Р В Р’В Р В РІР‚В¦Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р вЂ™Р’Вµ", "Black"))}: <b>${esc(black.nick || "-")}</b></span>
+          <span>${esc(t("Р В Р’В Р РЋРІР‚С”Р В Р’В Р вЂ™Р’В±Р В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚СћР В Р’В Р В РІР‚В Р В Р’В Р вЂ™Р’В»Р В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚Сћ", "Updated"))}: <b>${esc(dt(room?.updated_at || room?.last_move_at || room?.created_at))}</b></span>
         </div>
         <div class="social-checkers-room-note">${esc(roomSummary(room))}</div>
       </article>
@@ -135,7 +148,7 @@
 
   function leaderboardPreview(rows) {
     const list = Array.isArray(rows) ? rows.slice(0, 8) : [];
-    if (!list.length) return `<div class="social-checkers-empty">${esc(t("Рейтинг пока пуст.", "Leaderboard is empty."))}</div>`;
+    if (!list.length) return `<div class="social-checkers-empty">${esc(t("Р В Р’В Р вЂ™Р’В Р В Р’В Р вЂ™Р’ВµР В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚ВР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚вЂњ Р В Р’В Р РЋРІР‚вЂќР В Р’В Р РЋРІР‚СћР В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В° Р В Р’В Р РЋРІР‚вЂќР В Р Р‹Р РЋРІР‚СљР В Р Р‹Р В РЎвЂњР В Р Р‹Р Р†Р вЂљРЎв„ў.", "Leaderboard is empty."))}</div>`;
     return `
       <div class="social-checkers-rank-list">
         ${list.map((row) => `
@@ -144,10 +157,10 @@
               <span class="social-checkers-rank-pill">#${Number(row.rank || 0)}</span>
               <div class="social-checkers-rank-meta">
                 <strong>${esc(row.nick || "-")}</strong>
-                <small>${esc(t("Рейтинг", "Rating"))}: ${Number(row.rating || 1200)} | ${esc(t("Партий", "Games"))}: ${Number(row.play_count || 0)}</small>
+                <small>${esc(t("Р В Р’В Р вЂ™Р’В Р В Р’В Р вЂ™Р’ВµР В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚ВР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚вЂњ", "Rating"))}: ${Number(row.rating || 1200)} | ${esc(t("Р В Р’В Р РЋРЎСџР В Р’В Р вЂ™Р’В°Р В Р Р‹Р В РІР‚С™Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚ВР В Р’В Р Р†РІР‚С›РІР‚вЂњ", "Games"))}: ${Number(row.play_count || 0)}</small>
               </div>
             </div>
-            <div class="social-checkers-rank-stats"><span>${esc(t("П", "W"))}: <b>${Number(row.wins || 0)}</b></span><span>${esc(t("Пор", "L"))}: <b>${Number(row.losses || 0)}</b></span></div>
+            <div class="social-checkers-rank-stats"><span>${esc(t("Р В Р’В Р РЋРЎСџ", "W"))}: <b>${Number(row.wins || 0)}</b></span><span>${esc(t("Р В Р’В Р РЋРЎСџР В Р’В Р РЋРІР‚СћР В Р Р‹Р В РІР‚С™", "L"))}: <b>${Number(row.losses || 0)}</b></span></div>
           </div>
         `).join("")}
       </div>
@@ -155,7 +168,7 @@
   }
 
   async function socialChessOpenMenu() {
-    socialOpenModal(t("Шахматы", "Chess"), `<div class="social-checkers-loading">${esc(t("Загружаю лобби шахмат...", "Loading chess lobby..."))}</div>`);
+    socialOpenModal(t("Р В Р’В Р В Р С“Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљР’В¦Р В Р’В Р РЋР’ВР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†Р вЂљРІвЂћвЂ“", "Chess"), `<div class="social-checkers-loading">${esc(t("Р В Р’В Р Р†Р вЂљРІР‚СњР В Р’В Р вЂ™Р’В°Р В Р’В Р РЋРІР‚вЂњР В Р Р‹Р В РІР‚С™Р В Р Р‹Р РЋРІР‚СљР В Р’В Р вЂ™Р’В¶Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р В РІР‚в„– Р В Р’В Р вЂ™Р’В»Р В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В±Р В Р’В Р вЂ™Р’В±Р В Р’В Р РЋРІР‚В Р В Р Р‹Р Р†РІР‚С™Р’В¬Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљР’В¦Р В Р’В Р РЋР’ВР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ў...", "Loading chess lobby..."))}</div>`);
     arm();
     try {
       state.overview = await socialRequest("/api/social/games/chess/overview");
@@ -163,7 +176,7 @@
       state.selectedFrom = "";
       renderMenu();
     } catch (e) {
-      socialOpenModal(t("Шахматы", "Chess"), `<div class="social-checkers-panel"><div class="hint">${esc(humanError(e, t("Не удалось открыть шахматы.", "Failed to open chess.")))}</div><div class="actions"><button type="button" onclick="socialChessOpenMenu()">${esc(t("Повторить", "Retry"))}</button><button class="btn-secondary" type="button" onclick="socialCloseModal()">${esc(t("Закрыть", "Close"))}</button></div></div>`);
+      socialOpenModal(t("Р В Р’В Р В Р С“Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљР’В¦Р В Р’В Р РЋР’ВР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†Р вЂљРІвЂћвЂ“", "Chess"), `<div class="social-checkers-panel"><div class="hint">${esc(humanError(e, t("Р В Р’В Р РЋРЎС™Р В Р’В Р вЂ™Р’Вµ Р В Р Р‹Р РЋРІР‚СљР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В»Р В Р’В Р РЋРІР‚СћР В Р Р‹Р В РЎвЂњР В Р Р‹Р В Р вЂ° Р В Р’В Р РЋРІР‚СћР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚СњР В Р Р‹Р В РІР‚С™Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В Р вЂ° Р В Р Р‹Р Р†РІР‚С™Р’В¬Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљР’В¦Р В Р’В Р РЋР’ВР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†Р вЂљРІвЂћвЂ“.", "Failed to open chess.")))}</div><div class="actions"><button type="button" onclick="socialChessOpenMenu()">${esc(t("Р В Р’В Р РЋРЎСџР В Р’В Р РЋРІР‚СћР В Р’В Р В РІР‚В Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚СћР В Р Р‹Р В РІР‚С™Р В Р’В Р РЋРІР‚ВР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В Р вЂ°", "Retry"))}</button><button class="btn-secondary" type="button" onclick="socialCloseModal()">${esc(t("Р В Р’В Р Р†Р вЂљРІР‚СњР В Р’В Р вЂ™Р’В°Р В Р’В Р РЋРІР‚СњР В Р Р‹Р В РІР‚С™Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В Р вЂ°", "Close"))}</button></div></div>`);
       arm();
     }
   }
@@ -176,18 +189,18 @@
     const publicRooms = Array.isArray(rooms.public) ? rooms.public : [];
     const myRooms = Array.isArray(rooms.mine) ? rooms.mine : [];
     const difficulties = Array.isArray(data.difficulties) && data.difficulties.length ? data.difficulties : Object.values(diffFallback);
-    const defaultTitle = profile.nick ? `${t("Комната", "Room")} ${profile.nick}` : t("Открытая комната", "Public room");
+    const defaultTitle = profile.nick ? `${t("Р В Р’В Р РЋРІвЂћСћР В Р’В Р РЋРІР‚СћР В Р’В Р РЋР’ВР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р вЂ™Р’В°", "Room")} ${profile.nick}` : t("Р В Р’В Р РЋРІР‚С”Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚СњР В Р Р‹Р В РІР‚С™Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р вЂ™Р’В°Р В Р Р‹Р В Р РЏ Р В Р’В Р РЋРІР‚СњР В Р’В Р РЋРІР‚СћР В Р’В Р РЋР’ВР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р вЂ™Р’В°", "Public room");
     socialOpenModal(
-      t("Шахматы", "Chess"),
+      t("Р В Р’В Р В Р С“Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљР’В¦Р В Р’В Р РЋР’ВР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†Р вЂљРІвЂћвЂ“", "Chess"),
       `
       <div class="social-checkers-shell lobby-view">
         <section class="social-checkers-main">
-          <article class="social-checkers-panel social-checkers-hero"><div class="social-checkers-hero-main"><div class="social-checkers-hero-copy"><span class="social-checkers-section-kicker">${esc(t("Глобальный рейтинг", "Global ladder"))}</span><h4>${esc(t("Шахматы SEO WIBE", "SEO WIBE Chess"))}</h4><p>${esc(t("Онлайн-лобби, ИИ-уровни и общий рейтинг между всеми пользователями и сотрудниками.", "Online lobby, AI levels and global ranking for all users and teammates."))}</p></div><div class="social-checkers-stats"><div class="social-checkers-stat"><span>${esc(t("Рейтинг", "Rating"))}</span><strong>${Number(profile.rating || 1200)}</strong></div><div class="social-checkers-stat"><span>${esc(t("Победы", "Wins"))}</span><strong>${Number(profile.wins || 0)}</strong></div><div class="social-checkers-stat"><span>${esc(t("Поражения", "Losses"))}</span><strong>${Number(profile.losses || 0)}</strong></div><div class="social-checkers-stat"><span>${esc(t("Ничьи", "Draws"))}</span><strong>${Number(profile.draws || 0)}</strong></div></div></div></article>
-          <article class="social-checkers-panel"><div class="social-checkers-section-head"><div><h5>${esc(t("Быстрый старт", "Quick start"))}</h5></div></div><div class="social-checkers-create-grid"><label class="social-checkers-input-card"><span>${esc(t("Название комнаты", "Room title"))}</span><input id="socialChessRoomTitle" type="text" maxlength="120" value="${esc(defaultTitle)}" /></label><label class="social-checkers-input-card"><span>${esc(t("Сложность ИИ", "Bot difficulty"))}</span><select id="socialChessDifficulty">${difficulties.map((d)=>`<option value="${esc(d.code)}">${esc(d.title || d.code)}</option>`).join("")}</select></label></div><div class="actions social-checkers-create-actions"><button type="button" onclick="socialChessCreateRoom('bot')">${esc(t("Играть с ИИ", "Play vs AI"))}</button><button type="button" onclick="socialChessCreateRoom('human')">${esc(t("Создать онлайн-комнату", "Create online room"))}</button><button class="btn-secondary" type="button" onclick="socialChessShowLeaderboard()">${esc(t("Полный рейтинг", "Full leaderboard"))}</button></div></article>
-          <article class="social-checkers-panel"><div class="social-checkers-section-head"><div><h5>${esc(t("Мои комнаты", "My rooms"))}</h5></div></div><div class="social-checkers-room-list">${myRooms.length ? myRooms.map((r)=>roomCard(r,true)).join("") : `<div class="social-checkers-empty">${esc(t("У вас пока нет активных комнат.", "You have no active rooms."))}</div>`}</div></article>
-          <article class="social-checkers-panel"><div class="social-checkers-section-head"><div><h5>${esc(t("Открытые комнаты", "Public rooms"))}</h5></div></div><div class="social-checkers-room-list">${publicRooms.length ? publicRooms.map((r)=>roomCard(r,false)).join("") : `<div class="social-checkers-empty">${esc(t("Сейчас нет открытых комнат.", "No public rooms."))}</div>`}</div></article>
+          <article class="social-checkers-panel social-checkers-hero"><div class="social-checkers-hero-main"><div class="social-checkers-hero-copy"><span class="social-checkers-section-kicker">${esc(t("Р В Р’В Р Р†Р вЂљРЎС™Р В Р’В Р вЂ™Р’В»Р В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В±Р В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В»Р В Р Р‹Р В Р вЂ°Р В Р’В Р В РІР‚В¦Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р Р†РІР‚С›РІР‚вЂњ Р В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’ВµР В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚ВР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚вЂњ", "Global ladder"))}</span><h4>${esc(t("Р В Р’В Р В Р С“Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљР’В¦Р В Р’В Р РЋР’ВР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†Р вЂљРІвЂћвЂ“ SEO WIBE", "SEO WIBE Chess"))}</h4><p>${esc(t("Р В Р’В Р РЋРІР‚С”Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В»Р В Р’В Р вЂ™Р’В°Р В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р’В Р В РІР‚В¦-Р В Р’В Р вЂ™Р’В»Р В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В±Р В Р’В Р вЂ™Р’В±Р В Р’В Р РЋРІР‚В, Р В Р’В Р вЂ™Р’ВР В Р’В Р вЂ™Р’В-Р В Р Р‹Р РЋРІР‚СљР В Р Р‹Р В РІР‚С™Р В Р’В Р РЋРІР‚СћР В Р’В Р В РІР‚В Р В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚В Р В Р’В Р РЋРІР‚В Р В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В±Р В Р Р‹Р Р†Р вЂљР’В°Р В Р’В Р РЋРІР‚ВР В Р’В Р Р†РІР‚С›РІР‚вЂњ Р В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’ВµР В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚ВР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚вЂњ Р В Р’В Р РЋР’ВР В Р’В Р вЂ™Р’ВµР В Р’В Р вЂ™Р’В¶Р В Р’В Р СћРІР‚ВР В Р Р‹Р РЋРІР‚Сљ Р В Р’В Р В РІР‚В Р В Р Р‹Р В РЎвЂњР В Р’В Р вЂ™Р’ВµР В Р’В Р РЋР’ВР В Р’В Р РЋРІР‚В Р В Р’В Р РЋРІР‚вЂќР В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В Р вЂ°Р В Р’В Р вЂ™Р’В·Р В Р’В Р РЋРІР‚СћР В Р’В Р В РІР‚В Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р вЂ™Р’ВµР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В Р РЏР В Р’В Р РЋР’ВР В Р’В Р РЋРІР‚В Р В Р’В Р РЋРІР‚В Р В Р Р‹Р В РЎвЂњР В Р’В Р РЋРІР‚СћР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В РІР‚С™Р В Р Р‹Р РЋРІР‚СљР В Р’В Р СћРІР‚ВР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚ВР В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В°Р В Р’В Р РЋР’ВР В Р’В Р РЋРІР‚В.", "Online lobby, AI levels and global ranking for all users and teammates."))}</p></div><div class="social-checkers-stats"><div class="social-checkers-stat"><span>${esc(t("Р В Р’В Р вЂ™Р’В Р В Р’В Р вЂ™Р’ВµР В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚ВР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚вЂњ", "Rating"))}</span><strong>${Number(profile.rating || 1200)}</strong></div><div class="social-checkers-stat"><span>${esc(t("Р В Р’В Р РЋРЎСџР В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В±Р В Р’В Р вЂ™Р’ВµР В Р’В Р СћРІР‚ВР В Р Р‹Р Р†Р вЂљРІвЂћвЂ“", "Wins"))}</span><strong>${Number(profile.wins || 0)}</strong></div><div class="social-checkers-stat"><span>${esc(t("Р В Р’В Р РЋРЎСџР В Р’В Р РЋРІР‚СћР В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В¶Р В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚ВР В Р Р‹Р В Р РЏ", "Losses"))}</span><strong>${Number(profile.losses || 0)}</strong></div><div class="social-checkers-stat"><span>${esc(t("Р В Р’В Р РЋРЎС™Р В Р’В Р РЋРІР‚ВР В Р Р‹Р Р†Р вЂљР Р‹Р В Р Р‹Р В Р вЂ°Р В Р’В Р РЋРІР‚В", "Draws"))}</span><strong>${Number(profile.draws || 0)}</strong></div></div></div></article>
+          <article class="social-checkers-panel"><div class="social-checkers-section-head"><div><h5>${esc(t("Р В Р’В Р Р†Р вЂљР’ВР В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р Р‹Р В РЎвЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В РІР‚С™Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р Р†РІР‚С›РІР‚вЂњ Р В Р Р‹Р В РЎвЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р вЂ™Р’В°Р В Р Р‹Р В РІР‚С™Р В Р Р‹Р Р†Р вЂљРЎв„ў", "Quick start"))}</h5></div></div><div class="social-checkers-create-grid"><label class="social-checkers-input-card"><span>${esc(t("Р В Р’В Р РЋРЎС™Р В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В·Р В Р’В Р В РІР‚В Р В Р’В Р вЂ™Р’В°Р В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚ВР В Р’В Р вЂ™Р’Вµ Р В Р’В Р РЋРІР‚СњР В Р’В Р РЋРІР‚СћР В Р’В Р РЋР’ВР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†Р вЂљРІвЂћвЂ“", "Room title"))}</span><input id="socialChessRoomTitle" type="text" maxlength="120" value="${esc(defaultTitle)}" /></label><label class="social-checkers-input-card"><span>${esc(t("Р В Р’В Р В Р вЂ№Р В Р’В Р вЂ™Р’В»Р В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В¶Р В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚СћР В Р Р‹Р В РЎвЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В Р вЂ° Р В Р’В Р вЂ™Р’ВР В Р’В Р вЂ™Р’В", "Bot difficulty"))}</span><select id="socialChessDifficulty">${difficulties.map((d)=>`<option value="${esc(d.code)}">${esc(d.title || d.code)}</option>`).join("")}</select></label></div><div class="actions social-checkers-create-actions"><button type="button" onclick="socialChessCreateRoom('bot')">${esc(t("Р В Р’В Р вЂ™Р’ВР В Р’В Р РЋРІР‚вЂњР В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В Р вЂ° Р В Р Р‹Р В РЎвЂњ Р В Р’В Р вЂ™Р’ВР В Р’В Р вЂ™Р’В", "Play vs AI"))}</button><button type="button" onclick="socialChessCreateRoom('human')">${esc(t("Р В Р’В Р В Р вЂ№Р В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В·Р В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В Р вЂ° Р В Р’В Р РЋРІР‚СћР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В»Р В Р’В Р вЂ™Р’В°Р В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р’В Р В РІР‚В¦-Р В Р’В Р РЋРІР‚СњР В Р’В Р РЋРІР‚СћР В Р’В Р РЋР’ВР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р РЋРІР‚Сљ", "Create online room"))}</button><button class="btn-secondary" type="button" onclick="socialChessShowLeaderboard()">${esc(t("Р В Р’В Р РЋРЎСџР В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В»Р В Р’В Р В РІР‚В¦Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р Р†РІР‚С›РІР‚вЂњ Р В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’ВµР В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚ВР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚вЂњ", "Full leaderboard"))}</button></div></article>
+          <article class="social-checkers-panel"><div class="social-checkers-section-head"><div><h5>${esc(t("Р В Р’В Р РЋРЎв„ўР В Р’В Р РЋРІР‚СћР В Р’В Р РЋРІР‚В Р В Р’В Р РЋРІР‚СњР В Р’В Р РЋРІР‚СћР В Р’В Р РЋР’ВР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†Р вЂљРІвЂћвЂ“", "My rooms"))}</h5></div></div><div class="social-checkers-room-list">${myRooms.length ? myRooms.map((r)=>roomCard(r,true)).join("") : `<div class="social-checkers-empty">${esc(t("Р В Р’В Р В РІвЂљВ¬ Р В Р’В Р В РІР‚В Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р В РЎвЂњ Р В Р’В Р РЋРІР‚вЂќР В Р’В Р РЋРІР‚СћР В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В° Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’ВµР В Р Р‹Р Р†Р вЂљРЎв„ў Р В Р’В Р вЂ™Р’В°Р В Р’В Р РЋРІР‚СњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚ВР В Р’В Р В РІР‚В Р В Р’В Р В РІР‚В¦Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р Р‹Р Р†Р вЂљР’В¦ Р В Р’В Р РЋРІР‚СњР В Р’В Р РЋРІР‚СћР В Р’В Р РЋР’ВР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ў.", "You have no active rooms."))}</div>`}</div></article>
+          <article class="social-checkers-panel"><div class="social-checkers-section-head"><div><h5>${esc(t("Р В Р’В Р РЋРІР‚С”Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚СњР В Р Р‹Р В РІР‚С™Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р вЂ™Р’Вµ Р В Р’В Р РЋРІР‚СњР В Р’В Р РЋРІР‚СћР В Р’В Р РЋР’ВР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†Р вЂљРІвЂћвЂ“", "Public rooms"))}</h5></div></div><div class="social-checkers-room-list">${publicRooms.length ? publicRooms.map((r)=>roomCard(r,false)).join("") : `<div class="social-checkers-empty">${esc(t("Р В Р’В Р В Р вЂ№Р В Р’В Р вЂ™Р’ВµР В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р Р‹Р Р†Р вЂљР Р‹Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р В РЎвЂњ Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’ВµР В Р Р‹Р Р†Р вЂљРЎв„ў Р В Р’В Р РЋРІР‚СћР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚СњР В Р Р‹Р В РІР‚С™Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р Р‹Р Р†Р вЂљР’В¦ Р В Р’В Р РЋРІР‚СњР В Р’В Р РЋРІР‚СћР В Р’В Р РЋР’ВР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ў.", "No public rooms."))}</div>`}</div></article>
         </section>
-        <aside class="social-checkers-sidebar"><section class="social-checkers-panel"><div class="social-checkers-section-head"><div><h5>${esc(t("Топ игроков", "Top players"))}</h5></div></div>${leaderboardPreview(leaderboard)}</section><section class="social-checkers-panel"><div class="social-checkers-section-head"><div><h5>${esc(t("Подсказки", "Tips"))}</h5></div></div><div class="hint">${esc(t("Доска автоматически разворачивается под ваш цвет.", "Board auto-flips to your side."))}</div><div class="actions social-checkers-actions-stack"><button class="btn-secondary" type="button" onclick="socialChessShowTips()">${esc(t("Как играть", "How to play"))}</button></div></section></aside>
+        <aside class="social-checkers-sidebar"><section class="social-checkers-panel"><div class="social-checkers-section-head"><div><h5>${esc(t("Р В Р’В Р РЋРЎвЂєР В Р’В Р РЋРІР‚СћР В Р’В Р РЋРІР‚вЂќ Р В Р’В Р РЋРІР‚ВР В Р’В Р РЋРІР‚вЂњР В Р Р‹Р В РІР‚С™Р В Р’В Р РЋРІР‚СћР В Р’В Р РЋРІР‚СњР В Р’В Р РЋРІР‚СћР В Р’В Р В РІР‚В ", "Top players"))}</h5></div></div>${leaderboardPreview(leaderboard)}</section><section class="social-checkers-panel"><div class="social-checkers-section-head"><div><h5>${esc(t("Р В Р’В Р РЋРЎСџР В Р’В Р РЋРІР‚СћР В Р’В Р СћРІР‚ВР В Р Р‹Р В РЎвЂњР В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В·Р В Р’В Р РЋРІР‚СњР В Р’В Р РЋРІР‚В", "Tips"))}</h5></div></div><div class="hint">${esc(t("Р В Р’В Р Р†Р вЂљРЎСљР В Р’В Р РЋРІР‚СћР В Р Р‹Р В РЎвЂњР В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В° Р В Р’В Р вЂ™Р’В°Р В Р’В Р В РІР‚В Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚СћР В Р’В Р РЋР’ВР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚ВР В Р Р‹Р Р†Р вЂљР Р‹Р В Р’В Р вЂ™Р’ВµР В Р Р‹Р В РЎвЂњР В Р’В Р РЋРІР‚СњР В Р’В Р РЋРІР‚В Р В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В·Р В Р’В Р В РІР‚В Р В Р’В Р РЋРІР‚СћР В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљР Р‹Р В Р’В Р РЋРІР‚ВР В Р’В Р В РІР‚В Р В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’ВµР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В РЎвЂњР В Р Р‹Р В Р РЏ Р В Р’В Р РЋРІР‚вЂќР В Р’В Р РЋРІР‚СћР В Р’В Р СћРІР‚В Р В Р’В Р В РІР‚В Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†РІР‚С™Р’В¬ Р В Р Р‹Р Р†Р вЂљР’В Р В Р’В Р В РІР‚В Р В Р’В Р вЂ™Р’ВµР В Р Р‹Р Р†Р вЂљРЎв„ў.", "Board auto-flips to your side."))}</div><div class="actions social-checkers-actions-stack"><button class="btn-secondary" type="button" onclick="socialChessShowTips()">${esc(t("Р В Р’В Р РЋРІвЂћСћР В Р’В Р вЂ™Р’В°Р В Р’В Р РЋРІР‚Сњ Р В Р’В Р РЋРІР‚ВР В Р’В Р РЋРІР‚вЂњР В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В Р вЂ°", "How to play"))}</button></div></section></aside>
       </div>
       `
     );
@@ -204,20 +217,20 @@
       state.selectedFrom = "";
       openRoomPayload(room);
     } catch (e) {
-      toast(humanError(e, t("Не удалось создать комнату.", "Failed to create room.")), "error");
+      toast(humanError(e, t("Р В Р’В Р РЋРЎС™Р В Р’В Р вЂ™Р’Вµ Р В Р Р‹Р РЋРІР‚СљР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В»Р В Р’В Р РЋРІР‚СћР В Р Р‹Р В РЎвЂњР В Р Р‹Р В Р вЂ° Р В Р Р‹Р В РЎвЂњР В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В·Р В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В Р вЂ° Р В Р’В Р РЋРІР‚СњР В Р’В Р РЋРІР‚СћР В Р’В Р РЋР’ВР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р РЋРІР‚Сљ.", "Failed to create room.")), "error");
     }
   }
 
   async function socialChessJoinRoom(roomId) {
     const id = Number(roomId || 0); if (!id) return;
     try { openRoomPayload(await socialRequest(`/api/social/games/chess/rooms/${id}/join`, { method: "POST", body: JSON.stringify({}) })); }
-    catch (e) { toast(humanError(e, t("Не удалось подключиться к комнате.", "Failed to join room.")), "error"); }
+    catch (e) { toast(humanError(e, t("Р В Р’В Р РЋРЎС™Р В Р’В Р вЂ™Р’Вµ Р В Р Р‹Р РЋРІР‚СљР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В»Р В Р’В Р РЋРІР‚СћР В Р Р‹Р В РЎвЂњР В Р Р‹Р В Р вЂ° Р В Р’В Р РЋРІР‚вЂќР В Р’В Р РЋРІР‚СћР В Р’В Р СћРІР‚ВР В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В РІР‚в„–Р В Р Р‹Р Р†Р вЂљР Р‹Р В Р’В Р РЋРІР‚ВР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В Р вЂ°Р В Р Р‹Р В РЎвЂњР В Р Р‹Р В Р РЏ Р В Р’В Р РЋРІР‚Сњ Р В Р’В Р РЋРІР‚СњР В Р’В Р РЋРІР‚СћР В Р’В Р РЋР’ВР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р вЂ™Р’Вµ.", "Failed to join room.")), "error"); }
   }
 
   async function socialChessOpenRoom(roomId) {
     const id = Number(roomId || 0); if (!id) return;
     try { openRoomPayload(await socialRequest(`/api/social/games/chess/rooms/${id}`)); }
-    catch (e) { toast(humanError(e, t("Не удалось открыть комнату.", "Failed to open room.")), "error"); }
+    catch (e) { toast(humanError(e, t("Р В Р’В Р РЋРЎС™Р В Р’В Р вЂ™Р’Вµ Р В Р Р‹Р РЋРІР‚СљР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В»Р В Р’В Р РЋРІР‚СћР В Р Р‹Р В РЎвЂњР В Р Р‹Р В Р вЂ° Р В Р’В Р РЋРІР‚СћР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚СњР В Р Р‹Р В РІР‚С™Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В Р вЂ° Р В Р’В Р РЋРІР‚СњР В Р’В Р РЋРІР‚СћР В Р’В Р РЋР’ВР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р РЋРІР‚Сљ.", "Failed to open room.")), "error"); }
   }
 
   function legalSelection(room) {
@@ -234,17 +247,17 @@
 
   function playerCard(player, side, active) {
     const p = player && typeof player === "object" ? player : {};
-    return `<article class="social-checkers-player ${active ? "active" : ""}"><div class="social-checkers-room-badges"><span class="social-checkers-badge ${esc(side)}">${esc(side === "white" ? t("Белые", "White") : t("Черные", "Black"))}</span>${p.is_bot ? `<span class="social-checkers-badge bot">${esc(t("ИИ", "AI"))}</span>` : ""}</div><strong>${esc(p.nick || "-")}</strong><div class="social-checkers-player-meta"><span>${esc(t("Рейтинг", "Rating"))}: <b>${Number(p.rating || 1200)}</b></span><span>${esc(t("Партий", "Games"))}: <b>${Number(p.play_count || 0)}</b></span></div></article>`;
+    return `<article class="social-checkers-player ${active ? "active" : ""}"><div class="social-checkers-room-badges"><span class="social-checkers-badge ${esc(side)}">${esc(side === "white" ? t("Р В Р’В Р Р†Р вЂљР’ВР В Р’В Р вЂ™Р’ВµР В Р’В Р вЂ™Р’В»Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р вЂ™Р’Вµ", "White") : t("Р В Р’В Р вЂ™Р’В§Р В Р’В Р вЂ™Р’ВµР В Р Р‹Р В РІР‚С™Р В Р’В Р В РІР‚В¦Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р вЂ™Р’Вµ", "Black"))}</span>${p.is_bot ? `<span class="social-checkers-badge bot">${esc(t("Р В Р’В Р вЂ™Р’ВР В Р’В Р вЂ™Р’В", "AI"))}</span>` : ""}</div><strong>${esc(p.nick || "-")}</strong><div class="social-checkers-player-meta"><span>${esc(t("Р В Р’В Р вЂ™Р’В Р В Р’В Р вЂ™Р’ВµР В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚ВР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚вЂњ", "Rating"))}: <b>${Number(p.rating || 1200)}</b></span><span>${esc(t("Р В Р’В Р РЋРЎСџР В Р’В Р вЂ™Р’В°Р В Р Р‹Р В РІР‚С™Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚ВР В Р’В Р Р†РІР‚С›РІР‚вЂњ", "Games"))}: <b>${Number(p.play_count || 0)}</b></span></div></article>`;
   }
 
   function historyRows(room) {
     const rows = Array.isArray(room?.history) ? room.history.slice().reverse().slice(0, 24) : [];
-    if (!rows.length) return `<div class="social-checkers-empty">${esc(t("История пока пустая.", "No moves yet."))}</div>`;
-    return rows.map((m, idx) => `<div class="social-checkers-history-row"><strong>${Number(rows.length - idx)}</strong><div><span>${esc(String(m?.side || "") === "white" ? t("Белые", "White") : t("Черные", "Black"))}: <b>${esc(historyText(m))}</b></span><small>${esc(dt(m?.at || ""))}</small></div></div>`).join("");
+    if (!rows.length) return `<div class="social-checkers-empty">${esc(t("Р В Р’В Р вЂ™Р’ВР В Р Р‹Р В РЎвЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚СћР В Р Р‹Р В РІР‚С™Р В Р’В Р РЋРІР‚ВР В Р Р‹Р В Р РЏ Р В Р’В Р РЋРІР‚вЂќР В Р’В Р РЋРІР‚СћР В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В° Р В Р’В Р РЋРІР‚вЂќР В Р Р‹Р РЋРІР‚СљР В Р Р‹Р В РЎвЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р вЂ™Р’В°Р В Р Р‹Р В Р РЏ.", "No moves yet."))}</div>`;
+    return rows.map((m, idx) => `<div class="social-checkers-history-row"><strong>${Number(rows.length - idx)}</strong><div><span>${esc(String(m?.side || "") === "white" ? t("Р В Р’В Р Р†Р вЂљР’ВР В Р’В Р вЂ™Р’ВµР В Р’В Р вЂ™Р’В»Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р вЂ™Р’Вµ", "White") : t("Р В Р’В Р вЂ™Р’В§Р В Р’В Р вЂ™Р’ВµР В Р Р‹Р В РІР‚С™Р В Р’В Р В РІР‚В¦Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р вЂ™Р’Вµ", "Black"))}: <b>${esc(historyText(m))}</b></span><small>${esc(dt(m?.at || ""))}</small></div></div>`).join("");
   }
 
   function openRoomPayload(room) {
-    if (!room || typeof room !== "object") { toast(t("Комната недоступна.", "Room unavailable."), "error"); return; }
+    if (!room || typeof room !== "object") { toast(t("Р В Р’В Р РЋРІвЂћСћР В Р’В Р РЋРІР‚СћР В Р’В Р РЋР’ВР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р вЂ™Р’В° Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’ВµР В Р’В Р СћРІР‚ВР В Р’В Р РЋРІР‚СћР В Р Р‹Р В РЎвЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р РЋРІР‚СљР В Р’В Р РЋРІР‚вЂќР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°.", "Room unavailable."), "error"); return; }
     state.room = room;
     const sel = legalSelection(room);
     const board = Array.isArray(room.board) ? room.board : [];
@@ -271,23 +284,23 @@
     const players = room.players && typeof room.players === "object" ? room.players : {};
     const white = players.white || {};
     const black = players.black || {};
-    const title = String(room.title || `${t("Комната", "Room")} ${room.room_code || ""}`).trim();
+    const title = String(room.title || `${t("Р В Р’В Р РЋРІвЂћСћР В Р’В Р РЋРІР‚СћР В Р’В Р РЋР’ВР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р вЂ™Р’В°", "Room")} ${room.room_code || ""}`).trim();
     const note = resultText(room) || String(room.note || "").trim();
-    const myStatus = room.my_side ? (String(room.my_side) === "white" ? t("Белые", "White") : t("Черные", "Black")) : t("Наблюдатель", "Viewer");
+    const myStatus = room.my_side ? (String(room.my_side) === "white" ? t("Р В Р’В Р Р†Р вЂљР’ВР В Р’В Р вЂ™Р’ВµР В Р’В Р вЂ™Р’В»Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р вЂ™Р’Вµ", "White") : t("Р В Р’В Р вЂ™Р’В§Р В Р’В Р вЂ™Р’ВµР В Р Р‹Р В РІР‚С™Р В Р’В Р В РІР‚В¦Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р вЂ™Р’Вµ", "Black")) : t("Р В Р’В Р РЋРЎС™Р В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В±Р В Р’В Р вЂ™Р’В»Р В Р Р‹Р В РІР‚в„–Р В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р вЂ™Р’ВµР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В Р вЂ°", "Viewer");
     socialOpenModal(title, `
       <div class="social-checkers-shell">
         <div class="social-checkers-main">
           <section class="social-checkers-panel social-checkers-board-card">
-            <div class="social-checkers-room-head compact"><div class="social-checkers-room-title-wrap"><div class="social-checkers-room-badges"><span class="social-checkers-badge ${esc(String(room.status || "waiting"))}">${esc(statusLabel(room.status))}</span><span class="social-checkers-badge ${String(room.mode || "human") === "bot" ? "bot" : "human"}">${esc(modeLabel(room))}</span>${String(room.mode || "human") === "bot" ? `<span class="social-checkers-badge soft">${esc(difficultyTitle(room.difficulty))}</span>` : ""}</div><strong class="social-checkers-room-title">${esc(title)}</strong><div class="social-checkers-room-meta"><span>#${esc(room.room_code || "-")}</span><span>${esc(t("Создана", "Created"))}: <b>${esc(dt(room.created_at))}</b></span><span>${esc(t("Обновлено", "Updated"))}: <b>${esc(dt(room.updated_at))}</b></span></div></div><div class="social-checkers-turn-pill ${esc(String(room.turn || "white"))}">${esc(String(room.turn || "white") === "white" ? t("Белые", "White") : t("Черные", "Black"))} | ${esc(myStatus)}</div></div>
+            <div class="social-checkers-room-head compact"><div class="social-checkers-room-title-wrap"><div class="social-checkers-room-badges"><span class="social-checkers-badge ${esc(String(room.status || "waiting"))}">${esc(statusLabel(room.status))}</span><span class="social-checkers-badge ${String(room.mode || "human") === "bot" ? "bot" : "human"}">${esc(modeLabel(room))}</span>${String(room.mode || "human") === "bot" ? `<span class="social-checkers-badge soft">${esc(difficultyTitle(room.difficulty))}</span>` : ""}</div><strong class="social-checkers-room-title">${esc(title)}</strong><div class="social-checkers-room-meta"><span>#${esc(room.room_code || "-")}</span><span>${esc(t("Р В Р’В Р В Р вЂ№Р В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В·Р В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°", "Created"))}: <b>${esc(dt(room.created_at))}</b></span><span>${esc(t("Р В Р’В Р РЋРІР‚С”Р В Р’В Р вЂ™Р’В±Р В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚СћР В Р’В Р В РІР‚В Р В Р’В Р вЂ™Р’В»Р В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚Сћ", "Updated"))}: <b>${esc(dt(room.updated_at))}</b></span></div></div><div class="social-checkers-turn-pill ${esc(String(room.turn || "white"))}">${esc(String(room.turn || "white") === "white" ? t("Р В Р’В Р Р†Р вЂљР’ВР В Р’В Р вЂ™Р’ВµР В Р’В Р вЂ™Р’В»Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р вЂ™Р’Вµ", "White") : t("Р В Р’В Р вЂ™Р’В§Р В Р’В Р вЂ™Р’ВµР В Р Р‹Р В РІР‚С™Р В Р’В Р В РІР‚В¦Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р вЂ™Р’Вµ", "Black"))} | ${esc(myStatus)}</div></div>
             ${note ? `<div class="social-checkers-note ${resultText(room) ? "strong" : ""}">${esc(note)}</div>` : ""}
             <div class="social-checkers-board-wrap"><div class="social-checkers-board">${boardHtml}</div></div>
-            <div class="social-checkers-board-footer"><span>${esc(t("Последний ход", "Last move"))}: <b>${esc(historyText(room?.last_move)) || "-"}</b></span><span>${esc(t("Режим", "Mode"))}: <b>${esc(modeLabel(room))}</b></span></div>
+            <div class="social-checkers-board-footer"><span>${esc(t("Р В Р’В Р РЋРЎСџР В Р’В Р РЋРІР‚СћР В Р Р‹Р В РЎвЂњР В Р’В Р вЂ™Р’В»Р В Р’В Р вЂ™Р’ВµР В Р’В Р СћРІР‚ВР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚ВР В Р’В Р Р†РІР‚С›РІР‚вЂњ Р В Р Р‹Р Р†Р вЂљР’В¦Р В Р’В Р РЋРІР‚СћР В Р’В Р СћРІР‚В", "Last move"))}: <b>${esc(historyText(room?.last_move)) || "-"}</b></span><span>${esc(t("Р В Р’В Р вЂ™Р’В Р В Р’В Р вЂ™Р’ВµР В Р’В Р вЂ™Р’В¶Р В Р’В Р РЋРІР‚ВР В Р’В Р РЋР’В", "Mode"))}: <b>${esc(modeLabel(room))}</b></span></div>
           </section>
         </div>
         <aside class="social-checkers-sidebar">
-          <section class="social-checkers-panel"><div class="social-checkers-section-head"><div><h5>${esc(t("Игроки", "Players"))}</h5></div></div><div class="social-checkers-players">${playerCard(white, "white", String(room.turn || "white") === "white")}${playerCard(black, "black", String(room.turn || "white") === "black")}</div></section>
-          <section class="social-checkers-panel"><div class="social-checkers-section-head"><div><h5>${esc(t("Действия", "Actions"))}</h5></div></div><div class="actions social-checkers-actions-stack">${room.can_join ? `<button type="button" onclick="socialChessJoinRoom(${Number(room.id || 0)})">${esc(t("Подключиться", "Join room"))}</button>` : ""}<button class="btn-secondary" type="button" onclick="socialChessRefreshRoom()">${esc(t("Обновить", "Refresh"))}</button><button class="btn-secondary" type="button" onclick="socialChessOpenMenu()">${esc(t("К лобби", "Back to lobby"))}</button>${(room.my_side && (room.status === "waiting" || room.status === "active")) ? `<button type="button" onclick="socialChessLeaveRoom()">${esc(room.status === "waiting" ? t("Закрыть комнату", "Close room") : t("Сдаться", "Resign"))}</button>` : ""}</div><div class="hint">${esc(room.can_move ? t("Нажмите фигуру и выберите клетку назначения.", "Tap piece then destination square.") : t("Если ход не ваш, позиция обновится автоматически.", "If not your turn, board refreshes automatically."))}</div></section>
-          <section class="social-checkers-panel"><div class="social-checkers-section-head"><div><h5>${esc(t("История ходов", "Move history"))}</h5></div></div><div class="social-checkers-history">${historyRows(room)}</div></section>
+          <section class="social-checkers-panel"><div class="social-checkers-section-head"><div><h5>${esc(t("Р В Р’В Р вЂ™Р’ВР В Р’В Р РЋРІР‚вЂњР В Р Р‹Р В РІР‚С™Р В Р’В Р РЋРІР‚СћР В Р’В Р РЋРІР‚СњР В Р’В Р РЋРІР‚В", "Players"))}</h5></div></div><div class="social-checkers-players">${playerCard(white, "white", String(room.turn || "white") === "white")}${playerCard(black, "black", String(room.turn || "white") === "black")}</div></section>
+          <section class="social-checkers-panel"><div class="social-checkers-section-head"><div><h5>${esc(t("Действия", "Actions"))}</h5></div></div><div class="actions social-checkers-actions-stack">${room.can_join ? `<button type="button" onclick="socialChessJoinRoom(${Number(room.id || 0)})">${esc(t("Подключиться", "Join room"))}</button>` : ""}<button class="btn-secondary" type="button" onclick="socialChessRefreshRoom()">${esc(t("Обновить", "Refresh"))}</button><button class="btn-secondary" type="button" onclick="socialChessOpenMenu()">${esc(t("К лобби", "Back to lobby"))}</button>${(room.my_side && (room.status === "waiting" || room.status === "active")) ? `<button type="button" onclick="socialChessLeaveRoom()">${esc(room.status === "waiting" ? t("Закрыть комнату", "Close room") : t("Сдаться", "Resign"))}</button>` : ""}${room.can_delete ? `<button class="btn-danger" type="button" onclick="socialChessDeleteRoom(${Number(room.id || 0)})">${esc(t("\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u043a\u043e\u043c\u043d\u0430\u0442\u0443", "Delete room"))}</button>` : ""}</div><div class="hint">${esc(room.can_move ? t("Нажмите фигуру и выберите клетку назначения.", "Tap piece then destination square.") : t("Если ход не ваш, позиция обновится автоматически.", "If not your turn, board refreshes automatically."))}</div></section>
+          <section class="social-checkers-panel"><div class="social-checkers-section-head"><div><h5>${esc(t("Р В Р’В Р вЂ™Р’ВР В Р Р‹Р В РЎвЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚СћР В Р Р‹Р В РІР‚С™Р В Р’В Р РЋРІР‚ВР В Р Р‹Р В Р РЏ Р В Р Р‹Р Р†Р вЂљР’В¦Р В Р’В Р РЋРІР‚СћР В Р’В Р СћРІР‚ВР В Р’В Р РЋРІР‚СћР В Р’В Р В РІР‚В ", "Move history"))}</h5></div></div><div class="social-checkers-history">${historyRows(room)}</div></section>
         </aside>
       </div>
     `);
@@ -309,7 +322,7 @@
     const id = Number(state.room?.id || 0);
     if (!id) { if (!silent) socialChessOpenMenu(); return; }
     try { openRoomPayload(await socialRequest(`/api/social/games/chess/rooms/${id}`)); }
-    catch (e) { if (!silent) toast(humanError(e, t("Не удалось обновить комнату.", "Failed to refresh room.")), "error"); }
+    catch (e) { if (!silent) toast(humanError(e, t("Р В Р’В Р РЋРЎС™Р В Р’В Р вЂ™Р’Вµ Р В Р Р‹Р РЋРІР‚СљР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В»Р В Р’В Р РЋРІР‚СћР В Р Р‹Р В РЎвЂњР В Р Р‹Р В Р вЂ° Р В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В±Р В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚СћР В Р’В Р В РІР‚В Р В Р’В Р РЋРІР‚ВР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В Р вЂ° Р В Р’В Р РЋРІР‚СњР В Р’В Р РЋРІР‚СћР В Р’В Р РЋР’ВР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р РЋРІР‚Сљ.", "Failed to refresh room.")), "error"); }
   }
 
   async function sendMove(fromPos, toPos) {
@@ -322,7 +335,7 @@
       state.selectedFrom = "";
       openRoomPayload(room);
     } catch (e) {
-      toast(humanError(e, t("Не удалось выполнить ход.", "Failed to make move.")), "error");
+      toast(humanError(e, t("Р В Р’В Р РЋРЎС™Р В Р’В Р вЂ™Р’Вµ Р В Р Р‹Р РЋРІР‚СљР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В»Р В Р’В Р РЋРІР‚СћР В Р Р‹Р В РЎвЂњР В Р Р‹Р В Р вЂ° Р В Р’В Р В РІР‚В Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р РЋРІР‚вЂќР В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В»Р В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚ВР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В Р вЂ° Р В Р Р‹Р Р†Р вЂљР’В¦Р В Р’В Р РЋРІР‚СћР В Р’В Р СћРІР‚В.", "Failed to make move.")), "error");
     } finally {
       state.pendingMove = false;
     }
@@ -347,14 +360,33 @@
     const id = Number(state.room?.id || 0);
     if (!id) return;
     const room = state.room || {};
-    const ask = room.status === "waiting" ? t("Закрыть эту комнату?", "Close this room?") : t("Сдаться в партии?", "Resign from this match?");
+    const ask = room.status === "waiting" ? t("Р В Р’В Р Р†Р вЂљРІР‚СњР В Р’В Р вЂ™Р’В°Р В Р’В Р РЋРІР‚СњР В Р Р‹Р В РІР‚С™Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В Р вЂ° Р В Р Р‹Р В Р Р‰Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р РЋРІР‚Сљ Р В Р’В Р РЋРІР‚СњР В Р’В Р РЋРІР‚СћР В Р’В Р РЋР’ВР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р РЋРІР‚Сљ?", "Close this room?") : t("Р В Р’В Р В Р вЂ№Р В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В Р вЂ°Р В Р Р‹Р В РЎвЂњР В Р Р‹Р В Р РЏ Р В Р’В Р В РІР‚В  Р В Р’В Р РЋРІР‚вЂќР В Р’В Р вЂ™Р’В°Р В Р Р‹Р В РІР‚С™Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚ВР В Р’В Р РЋРІР‚В?", "Resign from this match?");
     if (!window.confirm(ask)) return;
     try { openRoomPayload(await socialRequest(`/api/social/games/chess/rooms/${id}/leave`, { method: "POST", body: JSON.stringify({}) })); }
-    catch (e) { toast(humanError(e, t("Не удалось завершить комнату.", "Failed to finish room.")), "error"); }
+    catch (e) { toast(humanError(e, t("Р В Р’В Р РЋРЎС™Р В Р’В Р вЂ™Р’Вµ Р В Р Р‹Р РЋРІР‚СљР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В»Р В Р’В Р РЋРІР‚СћР В Р Р‹Р В РЎвЂњР В Р Р‹Р В Р вЂ° Р В Р’В Р вЂ™Р’В·Р В Р’В Р вЂ™Р’В°Р В Р’В Р В РІР‚В Р В Р’В Р вЂ™Р’ВµР В Р Р‹Р В РІР‚С™Р В Р Р‹Р Р†РІР‚С™Р’В¬Р В Р’В Р РЋРІР‚ВР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В Р вЂ° Р В Р’В Р РЋРІР‚СњР В Р’В Р РЋРІР‚СћР В Р’В Р РЋР’ВР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р РЋРІР‚Сљ.", "Failed to finish room.")), "error"); }
+  }
+
+  async function socialChessDeleteRoom(roomId = 0) {
+    const id = Number(roomId || state.room?.id || 0);
+    if (!id) return;
+    const room = findRoomById(id) || state.room || {};
+    const title = String(room?.title || room?.room_code || "").trim();
+    const ask = title
+      ? t(`\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u043a\u043e\u043c\u043d\u0430\u0442\u0443 "${title}"?`, `Delete room "${title}"?`)
+      : t("\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u044d\u0442\u0443 \u043a\u043e\u043c\u043d\u0430\u0442\u0443?", "Delete this room?");
+    if (!window.confirm(ask)) return;
+    try {
+      await socialRequest(`/api/social/games/chess/rooms/${id}`, { method: "DELETE", body: JSON.stringify({}) });
+      state.room = null;
+      state.selectedFrom = "";
+      await socialChessOpenMenu();
+    } catch (e) {
+      toast(humanError(e, t("\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u043a\u043e\u043c\u043d\u0430\u0442\u0443.", "Failed to delete room.")), "error");
+    }
   }
 
   function socialChessShowTips() {
-    socialOpenModal(t("Шахматы: как играть", "Chess: how to play"), `<div class="social-checkers-panel"><div class="hint">${esc(t("1) Белые ходят первыми. Нажмите фигуру и затем клетку назначения.", "1) White moves first. Tap a piece then destination."))}</div><div class="hint">${esc(t("2) В сетевой игре доска разворачивается под ваш цвет.", "2) In online games board is flipped to your color."))}</div><div class="hint">${esc(t("3) В лобби доступны ИИ-уровни и глобальный рейтинг.", "3) Lobby has AI levels and global ranking."))}</div><div class="actions"><button type="button" onclick="socialChessOpenMenu()">${esc(t("Назад", "Back"))}</button></div></div>`);
+    socialOpenModal(t("Р В Р’В Р В Р С“Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљР’В¦Р В Р’В Р РЋР’ВР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†Р вЂљРІвЂћвЂ“: Р В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В°Р В Р’В Р РЋРІР‚Сњ Р В Р’В Р РЋРІР‚ВР В Р’В Р РЋРІР‚вЂњР В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В Р вЂ°", "Chess: how to play"), `<div class="social-checkers-panel"><div class="hint">${esc(t("1) Р В Р’В Р Р†Р вЂљР’ВР В Р’В Р вЂ™Р’ВµР В Р’В Р вЂ™Р’В»Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р вЂ™Р’Вµ Р В Р Р‹Р Р†Р вЂљР’В¦Р В Р’В Р РЋРІР‚СћР В Р’В Р СћРІР‚ВР В Р Р‹Р В Р РЏР В Р Р‹Р Р†Р вЂљРЎв„ў Р В Р’В Р РЋРІР‚вЂќР В Р’В Р вЂ™Р’ВµР В Р Р‹Р В РІР‚С™Р В Р’В Р В РІР‚В Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р РЋР’ВР В Р’В Р РЋРІР‚В. Р В Р’В Р РЋРЎС™Р В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В¶Р В Р’В Р РЋР’ВР В Р’В Р РЋРІР‚ВР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р вЂ™Р’Вµ Р В Р Р‹Р Р†Р вЂљРЎвЂєР В Р’В Р РЋРІР‚ВР В Р’В Р РЋРІР‚вЂњР В Р Р‹Р РЋРІР‚СљР В Р Р‹Р В РІР‚С™Р В Р Р‹Р РЋРІР‚Сљ Р В Р’В Р РЋРІР‚В Р В Р’В Р вЂ™Р’В·Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р вЂ™Р’ВµР В Р’В Р РЋР’В Р В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В»Р В Р’В Р вЂ™Р’ВµР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚СњР В Р Р‹Р РЋРІР‚Сљ Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В·Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљР Р‹Р В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚ВР В Р Р‹Р В Р РЏ.", "1) White moves first. Tap a piece then destination."))}</div><div class="hint">${esc(t("2) Р В Р’В Р Р†Р вЂљРІвЂћСћ Р В Р Р‹Р В РЎвЂњР В Р’В Р вЂ™Р’ВµР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В Р В Р’В Р РЋРІР‚СћР В Р’В Р Р†РІР‚С›РІР‚вЂњ Р В Р’В Р РЋРІР‚ВР В Р’В Р РЋРІР‚вЂњР В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’Вµ Р В Р’В Р СћРІР‚ВР В Р’В Р РЋРІР‚СћР В Р Р‹Р В РЎвЂњР В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В° Р В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В·Р В Р’В Р В РІР‚В Р В Р’В Р РЋРІР‚СћР В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљР Р‹Р В Р’В Р РЋРІР‚ВР В Р’В Р В РІР‚В Р В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’ВµР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В РЎвЂњР В Р Р‹Р В Р РЏ Р В Р’В Р РЋРІР‚вЂќР В Р’В Р РЋРІР‚СћР В Р’В Р СћРІР‚В Р В Р’В Р В РІР‚В Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†РІР‚С™Р’В¬ Р В Р Р‹Р Р†Р вЂљР’В Р В Р’В Р В РІР‚В Р В Р’В Р вЂ™Р’ВµР В Р Р‹Р Р†Р вЂљРЎв„ў.", "2) In online games board is flipped to your color."))}</div><div class="hint">${esc(t("3) Р В Р’В Р Р†Р вЂљРІвЂћСћ Р В Р’В Р вЂ™Р’В»Р В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В±Р В Р’В Р вЂ™Р’В±Р В Р’В Р РЋРІР‚В Р В Р’В Р СћРІР‚ВР В Р’В Р РЋРІР‚СћР В Р Р‹Р В РЎвЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р РЋРІР‚СљР В Р’В Р РЋРІР‚вЂќР В Р’В Р В РІР‚В¦Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“ Р В Р’В Р вЂ™Р’ВР В Р’В Р вЂ™Р’В-Р В Р Р‹Р РЋРІР‚СљР В Р Р‹Р В РІР‚С™Р В Р’В Р РЋРІР‚СћР В Р’В Р В РІР‚В Р В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚В Р В Р’В Р РЋРІР‚В Р В Р’В Р РЋРІР‚вЂњР В Р’В Р вЂ™Р’В»Р В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В±Р В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В»Р В Р Р‹Р В Р вЂ°Р В Р’В Р В РІР‚В¦Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р Р†РІР‚С›РІР‚вЂњ Р В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’ВµР В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚ВР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚вЂњ.", "3) Lobby has AI levels and global ranking."))}</div><div class="actions"><button type="button" onclick="socialChessOpenMenu()">${esc(t("Р В Р’В Р РЋРЎС™Р В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В·Р В Р’В Р вЂ™Р’В°Р В Р’В Р СћРІР‚В", "Back"))}</button></div></div>`);
     arm();
   }
 
@@ -362,20 +394,20 @@
     try {
       const data = await socialRequest("/api/social/games/chess/leaderboard?limit=100");
       const rows = Array.isArray(data?.rows) ? data.rows : [];
-      socialOpenModal(t("Рейтинг шахмат", "Chess leaderboard"), `<div class="social-checkers-scroll-table"><table><thead><tr><th>#</th><th>${esc(t("Игрок", "Player"))}</th><th>${esc(t("Рейтинг", "Rating"))}</th><th>${esc(t("Победы", "Wins"))}</th><th>${esc(t("Поражения", "Losses"))}</th><th>${esc(t("Ничьи", "Draws"))}</th></tr></thead><tbody>${rows.length ? rows.map((r)=>`<tr class="${r.is_me ? "social-me-row" : ""}"><td>${Number(r.rank || 0)}</td><td>${esc(r.nick || "-")}</td><td>${Number(r.rating || 1200)}</td><td>${Number(r.wins || 0)}</td><td>${Number(r.losses || 0)}</td><td>${Number(r.draws || 0)}</td></tr>`).join("") : `<tr><td colspan="6">${esc(t("Пока нет результатов", "No results yet"))}</td></tr>`}</tbody></table></div><div class="hint">${esc(t("Ваше место", "Your rank"))}: <b>${data?.my_rank ? `#${Number(data.my_rank)}` : "—"}</b> | ${esc(t("Ваш рейтинг", "Your rating"))}: <b>${Number(data?.my_rating || 1200)}</b></div><div class="actions"><button type="button" onclick="socialChessOpenMenu()">${esc(t("Назад", "Back"))}</button></div>`);
+      socialOpenModal(t("Р В Р’В Р вЂ™Р’В Р В Р’В Р вЂ™Р’ВµР В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚ВР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚вЂњ Р В Р Р‹Р Р†РІР‚С™Р’В¬Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљР’В¦Р В Р’В Р РЋР’ВР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ў", "Chess leaderboard"), `<div class="social-checkers-scroll-table"><table><thead><tr><th>#</th><th>${esc(t("Р В Р’В Р вЂ™Р’ВР В Р’В Р РЋРІР‚вЂњР В Р Р‹Р В РІР‚С™Р В Р’В Р РЋРІР‚СћР В Р’В Р РЋРІР‚Сњ", "Player"))}</th><th>${esc(t("Р В Р’В Р вЂ™Р’В Р В Р’В Р вЂ™Р’ВµР В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚ВР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚вЂњ", "Rating"))}</th><th>${esc(t("Р В Р’В Р РЋРЎСџР В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В±Р В Р’В Р вЂ™Р’ВµР В Р’В Р СћРІР‚ВР В Р Р‹Р Р†Р вЂљРІвЂћвЂ“", "Wins"))}</th><th>${esc(t("Р В Р’В Р РЋРЎСџР В Р’В Р РЋРІР‚СћР В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В¶Р В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚ВР В Р Р‹Р В Р РЏ", "Losses"))}</th><th>${esc(t("Р В Р’В Р РЋРЎС™Р В Р’В Р РЋРІР‚ВР В Р Р‹Р Р†Р вЂљР Р‹Р В Р Р‹Р В Р вЂ°Р В Р’В Р РЋРІР‚В", "Draws"))}</th></tr></thead><tbody>${rows.length ? rows.map((r)=>`<tr class="${r.is_me ? "social-me-row" : ""}"><td>${Number(r.rank || 0)}</td><td>${esc(r.nick || "-")}</td><td>${Number(r.rating || 1200)}</td><td>${Number(r.wins || 0)}</td><td>${Number(r.losses || 0)}</td><td>${Number(r.draws || 0)}</td></tr>`).join("") : `<tr><td colspan="6">${esc(t("Р В Р’В Р РЋРЎСџР В Р’В Р РЋРІР‚СћР В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В° Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’ВµР В Р Р‹Р Р†Р вЂљРЎв„ў Р В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’ВµР В Р’В Р вЂ™Р’В·Р В Р Р‹Р РЋРІР‚СљР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В Р вЂ°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚СћР В Р’В Р В РІР‚В ", "No results yet"))}</td></tr>`}</tbody></table></div><div class="hint">${esc(t("Р В Р’В Р Р†Р вЂљРІвЂћСћР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†РІР‚С™Р’В¬Р В Р’В Р вЂ™Р’Вµ Р В Р’В Р РЋР’ВР В Р’В Р вЂ™Р’ВµР В Р Р‹Р В РЎвЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚Сћ", "Your rank"))}: <b>${data?.my_rank ? `#${Number(data.my_rank)}` : "Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ"}</b> | ${esc(t("Р В Р’В Р Р†Р вЂљРІвЂћСћР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†РІР‚С™Р’В¬ Р В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’ВµР В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚ВР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚вЂњ", "Your rating"))}: <b>${Number(data?.my_rating || 1200)}</b></div><div class="actions"><button type="button" onclick="socialChessOpenMenu()">${esc(t("Р В Р’В Р РЋРЎС™Р В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В·Р В Р’В Р вЂ™Р’В°Р В Р’В Р СћРІР‚В", "Back"))}</button></div>`);
       arm();
     } catch (e) {
-      toast(humanError(e, t("Не удалось загрузить рейтинг.", "Failed to load leaderboard.")), "error");
+      toast(humanError(e, t("Р В Р’В Р РЋРЎС™Р В Р’В Р вЂ™Р’Вµ Р В Р Р‹Р РЋРІР‚СљР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В»Р В Р’В Р РЋРІР‚СћР В Р Р‹Р В РЎвЂњР В Р Р‹Р В Р вЂ° Р В Р’В Р вЂ™Р’В·Р В Р’В Р вЂ™Р’В°Р В Р’В Р РЋРІР‚вЂњР В Р Р‹Р В РІР‚С™Р В Р Р‹Р РЋРІР‚СљР В Р’В Р вЂ™Р’В·Р В Р’В Р РЋРІР‚ВР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В Р вЂ° Р В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’ВµР В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚ВР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚вЂњ.", "Failed to load leaderboard.")), "error");
     }
   }
 
   function socialChessQuickStart(level = "medium") {
     const difficulty = String(level || "medium").trim().toLowerCase() || "medium";
-    socialOpenModal(t("Шахматы", "Chess"), `<div class="social-checkers-loading">${esc(t("Создаю матч с ИИ...", "Creating AI match..."))}</div>`);
+    socialOpenModal(t("Р В Р’В Р В Р С“Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљР’В¦Р В Р’В Р РЋР’ВР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†Р вЂљРІвЂћвЂ“", "Chess"), `<div class="social-checkers-loading">${esc(t("Р В Р’В Р В Р вЂ№Р В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В·Р В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р Р‹Р В РІР‚в„– Р В Р’В Р РЋР’ВР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†Р вЂљР Р‹ Р В Р Р‹Р В РЎвЂњ Р В Р’В Р вЂ™Р’ВР В Р’В Р вЂ™Р’В...", "Creating AI match..."))}</div>`);
     arm();
     socialRequest("/api/social/games/chess/rooms", { method: "POST", body: JSON.stringify({ mode: "bot", difficulty, is_public: false }) })
       .then((room) => openRoomPayload(room))
-      .catch((e) => { toast(humanError(e, t("Не удалось создать матч с ИИ.", "Failed to create AI match.")), "error"); socialChessOpenMenu(); });
+      .catch((e) => { toast(humanError(e, t("Р В Р’В Р РЋРЎС™Р В Р’В Р вЂ™Р’Вµ Р В Р Р‹Р РЋРІР‚СљР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В»Р В Р’В Р РЋРІР‚СћР В Р Р‹Р В РЎвЂњР В Р Р‹Р В Р вЂ° Р В Р Р‹Р В РЎвЂњР В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В·Р В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В Р вЂ° Р В Р’В Р РЋР’ВР В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†Р вЂљР Р‹ Р В Р Р‹Р В РЎвЂњ Р В Р’В Р вЂ™Р’ВР В Р’В Р вЂ™Р’В.", "Failed to create AI match.")), "error"); socialChessOpenMenu(); });
   }
 
   window.socialChessOpenMenu = socialChessOpenMenu;
@@ -388,4 +420,5 @@
   window.socialChessRefreshRoom = socialChessRefreshRoom;
   window.socialChessHandleCell = socialChessHandleCell;
   window.socialChessLeaveRoom = socialChessLeaveRoom;
+  window.socialChessDeleteRoom = socialChessDeleteRoom;
 })();

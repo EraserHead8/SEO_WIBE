@@ -1224,22 +1224,28 @@ class SocialCalendarEventIn(BaseModel):
     start_at: str
     end_at: str | None = None
     is_public: bool = False
-    entry_type: str = "event"
-    is_all_day: bool = False
-    color: str | None = None
+    recurrence_kind: str = "none"
+    recurrence_interval: int = 1
+    reminder_enabled: bool = True
+    reminder_offsets_min: list[int] = Field(default_factory=lambda: [10])
 
 
 class SocialCalendarEventOut(BaseModel):
     id: int
+    source_event_id: int | None = None
+    instance_key: str = ""
+    occurrence_index: int = 0
     title: str
     details: str = ""
     start_at: str
     end_at: str | None = None
     created_at: str
     is_public: bool = False
-    entry_type: str = "event"
-    is_all_day: bool = False
-    color: str | None = None
+    recurrence_kind: str = "none"
+    recurrence_interval: int = 1
+    is_recurring: bool = False
+    reminder_enabled: bool = True
+    reminder_offsets_min: list[int] = Field(default_factory=list)
 
 
 class SocialCalendarGoogleSyncIn(BaseModel):

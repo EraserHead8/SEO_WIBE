@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 import math
@@ -154,11 +154,11 @@ def fetch_ozon_questions(
 def probe_wb_feedback_access(api_key: str, feedback_kind: str = "reviews") -> tuple[bool, str]:
     token = (api_key or "").strip()
     if not token:
-        return False, "WB API ключ не задан."
+        return False, "WB API РєР»СЋС‡ РЅРµ Р·Р°РґР°РЅ."
     kind = (feedback_kind or "reviews").strip().lower()
     endpoint = "https://feedbacks-api.wildberries.ru/api/v1/questions" if kind == "questions" else "https://feedbacks-api.wildberries.ru/api/v1/feedbacks"
     params = {"take": 1, "skip": 0}
-    last_error = "WB feedback API недоступен."
+    last_error = "WB feedback API РЅРµРґРѕСЃС‚СѓРїРµРЅ."
     for auth_value in (token, f"Bearer {token}"):
         headers = {"Authorization": auth_value, "Content-Type": "application/json"}
         try:
@@ -169,12 +169,12 @@ def probe_wb_feedback_access(api_key: str, feedback_kind: str = "reviews") -> tu
         if response.status_code < 400:
             return True, "ok"
         if response.status_code in {401, 403}:
-            last_error = "WB feedback API отклонил ключ (401/403). Проверьте тип ключа и права."
+            last_error = "WB feedback API РѕС‚РєР»РѕРЅРёР» РєР»СЋС‡ (401/403). РџСЂРѕРІРµСЂСЊС‚Рµ С‚РёРї РєР»СЋС‡Р° Рё РїСЂР°РІР°."
             continue
         if response.status_code in {400, 404, 405, 422}:
             return True, "ok"
         if response.status_code == 429:
-            return False, "WB feedback API вернул 429 (лимит запросов). Повторите позже."
+            return False, "WB feedback API РІРµСЂРЅСѓР» 429 (Р»РёРјРёС‚ Р·Р°РїСЂРѕСЃРѕРІ). РџРѕРІС‚РѕСЂРёС‚Рµ РїРѕР·Р¶Рµ."
         body = _safe_response_text(response)
         if body:
             return False, f"WB feedback API error {response.status_code}: {body}"
@@ -187,21 +187,21 @@ def probe_ozon_feedback_access(api_key: str, feedback_kind: str = "reviews") -> 
     endpoint = "https://api-seller.ozon.ru/v1/question/list" if kind == "questions" else "https://api-seller.ozon.ru/v1/review/list"
     headers = _build_ozon_headers(api_key)
     if not headers:
-        return False, "Ozon ключ должен быть в формате client_id:api_key."
+        return False, "Ozon РєР»СЋС‡ РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ РІ С„РѕСЂРјР°С‚Рµ client_id:api_key."
     payload = {"limit": 1, "last_id": "", "sort_dir": "DESC", "status": "ALL"}
     try:
         with httpx.Client(timeout=OZON_TIMEOUT, follow_redirects=True) as client:
             response = client.post(endpoint, headers=headers, json=payload)
     except Exception:
-        return False, "Ozon API недоступен."
+        return False, "Ozon API РЅРµРґРѕСЃС‚СѓРїРµРЅ."
     if response.status_code < 400:
         return True, "ok"
     if response.status_code in {401, 403}:
-        return False, "Ozon API отклонил ключ (401/403). Проверьте client_id и api_key."
+        return False, "Ozon API РѕС‚РєР»РѕРЅРёР» РєР»СЋС‡ (401/403). РџСЂРѕРІРµСЂСЊС‚Рµ client_id Рё api_key."
     if response.status_code in {400, 404, 405, 422}:
         return True, "ok"
     if response.status_code == 429:
-        return False, "Ozon API вернул 429 (лимит запросов). Повторите позже."
+        return False, "Ozon API РІРµСЂРЅСѓР» 429 (Р»РёРјРёС‚ Р·Р°РїСЂРѕСЃРѕРІ). РџРѕРІС‚РѕСЂРёС‚Рµ РїРѕР·Р¶Рµ."
     body = _safe_response_text(response)
     if body:
         return False, f"Ozon API error {response.status_code}: {body}"
@@ -252,17 +252,17 @@ def fetch_wb_campaign_details(api_key: str, campaign_id: int) -> dict[str, Any]:
 
 def post_wb_review_reply(api_key: str, feedback_id: str, text: str) -> tuple[bool, str]:
     if not feedback_id.strip():
-        return False, "Не указан ID отзыва"
+        return False, "РќРµ СѓРєР°Р·Р°РЅ ID РѕС‚Р·С‹РІР°"
     reply = " ".join(text.split())
     if len(reply) < 2:
-        return False, "Ответ слирком короткий"
+        return False, "РћС‚РІРµС‚ СЃР»РёС€РєРѕРј РєРѕСЂРѕС‚РєРёР№"
     if len(reply) > 3000:
-        return False, "Ответ слирком длинный (максимум 3000 символов)"
+        return False, "РћС‚РІРµС‚ СЃР»РёС€РєРѕРј РґР»РёРЅРЅС‹Р№ (РјР°РєСЃРёРјСѓРј 3000 СЃРёРјРІРѕР»РѕРІ)"
 
     endpoint = "https://feedbacks-api.wildberries.ru/api/v1/feedbacks/answer"
     payload = {"id": feedback_id.strip(), "text": reply}
 
-    # WB endpoints могут принимать и plain token, и Bearer token.
+    # WB endpoints РјРѕРіСѓС‚ РїСЂРёРЅРёРјР°С‚СЊ Рё plain token, Рё Bearer token.
     for auth_value in (api_key.strip(), f"Bearer {api_key.strip()}"):
         headers = {"Authorization": auth_value, "Content-Type": "application/json"}
         for attempt in range(3):
@@ -278,112 +278,139 @@ def post_wb_review_reply(api_key: str, feedback_id: str, text: str) -> tuple[boo
                     continue
                 break
             if response.status_code in {200, 204}:
-                return True, "Ответ отправлен"
+                return True, "РћС‚РІРµС‚ РѕС‚РїСЂР°РІР»РµРЅ"
             if response.status_code in {401, 403}:
                 break
             if response.status_code in {408, 425, 429, 500, 502, 503, 504} and attempt < 2:
                 time.sleep(0.45 * (attempt + 1))
                 continue
             body = _safe_response_text(response)
-            return False, f"WB API вернул {response.status_code}: {body}"
-    return False, "Не удалось авторизоваться в WB API"
+            return False, f"WB API РІРµСЂРЅСѓР» {response.status_code}: {body}"
+    return False, "РќРµ СѓРґР°Р»РѕСЃСЊ Р°РІС‚РѕСЂРёР·РѕРІР°С‚СЊСЃСЏ РІ WB API"
 
 
-def post_wb_question_reply(api_key: str, question_id: str | int, text: str, state: str = "") -> tuple[bool, str]:
-    qid = str(question_id or "").strip()
-    if not qid:
-        return False, "\u041d\u0435 \u0443\u043a\u0430\u0437\u0430\u043d ID \u0432\u043e\u043f\u0440\u043e\u0441\u0430"
+def post_wb_question_reply(api_key: str, question_id: str | int, text: str, *, state: str | None = None) -> tuple[bool, str]:
+    raw_id = str(question_id or "").strip()
+    if not raw_id:
+        return False, "Question ID is missing"
+
+    token = str(api_key or "").strip()
+    if not token:
+        return False, "WB API key is missing"
+
     reply = " ".join(str(text or "").split())
     if len(reply) < 2:
-        return False, "\u041e\u0442\u0432\u0435\u0442 \u0441\u043b\u0438\u0448\u043a\u043e\u043c \u043a\u043e\u0440\u043e\u0442\u043a\u0438\u0439"
+        return False, "Reply is too short"
     if len(reply) > 3000:
-        return False, "\u041e\u0442\u0432\u0435\u0442 \u0441\u043b\u0438\u0448\u043a\u043e\u043c \u0434\u043b\u0438\u043d\u043d\u044b\u0439 (\u043c\u0430\u043a\u0441\u0438\u043c\u0443\u043c 3000 \u0441\u0438\u043c\u0432\u043e\u043b\u043e\u0432)"
+        return False, "Reply is too long (maximum 3000 characters)"
 
-    state_value = str(state or "").strip()
-    payloads: list[dict[str, Any]] = [
-        {"id": qid, "text": reply},
-        {"questionId": qid, "text": reply},
-    ]
-    if state_value:
-        payloads.extend(
-            [
-                {"id": qid, "text": reply, "state": state_value},
-                {"questionId": qid, "text": reply, "state": state_value},
-            ]
-        )
+    safe_state = str(state or "").strip().lower()
+    int_id = None
+    try:
+        int_id = int(raw_id)
+    except Exception:
+        int_id = None
 
-    requests_plan = [
+    payloads: list[dict[str, Any]] = []
+    base_variants: list[dict[str, Any]] = []
+    for key in ("id", "questionId", "question_id"):
+        base_variants.append({key: raw_id})
+    if int_id is not None:
+        for key in ("id", "questionId", "question_id"):
+            base_variants.append({key: int_id})
+
+    text_fields = ("text", "answerText", "answer", "reply", "response", "content")
+    nested_fields = (
+        {"answer": {"text": reply}},
+        {"answer": {"body": reply}},
+        {"response": {"text": reply}},
+        {"reply": {"text": reply}},
+    )
+
+    for base in base_variants:
+        for field in text_fields:
+            payloads.append({**base, field: reply})
+        for nested in nested_fields:
+            payloads.append({**base, **nested})
+
+    if safe_state:
+        payloads_with_state: list[dict[str, Any]] = []
+        for payload in payloads:
+            payloads_with_state.append(payload)
+            payloads_with_state.append({**payload, "state": safe_state})
+            payloads_with_state.append({**payload, "status": safe_state})
+        payloads = payloads_with_state
+
+    seen_payloads: set[str] = set()
+    unique_payloads: list[dict[str, Any]] = []
+    for payload in payloads:
+        try:
+            marker = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        except Exception:
+            marker = str(payload)
+        if marker in seen_payloads:
+            continue
+        seen_payloads.add(marker)
+        unique_payloads.append(payload)
+
+    request_matrix = [
         ("PATCH", "https://feedbacks-api.wildberries.ru/api/v1/questions"),
+        ("PATCH", "https://feedbacks-api.wildberries.ru/api/v1/questions/answer"),
         ("POST", "https://feedbacks-api.wildberries.ru/api/v1/questions/answer"),
+        ("PUT", "https://feedbacks-api.wildberries.ru/api/v1/questions/answer"),
         ("POST", "https://feedbacks-api.wildberries.ru/api/v1/question/answer"),
     ]
+    header_variants = [
+        {"Authorization": token, "Content-Type": "application/json"},
+        {"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        {"HeaderApiKey": token, "Content-Type": "application/json"},
+        {"X-Api-Key": token, "Content-Type": "application/json"},
+    ]
 
-    last_error = "Не удалось отправить ответ в WB API"
-    last_method = ""
-    last_endpoint = ""
-    last_status = 0
-
-    for method, endpoint in requests_plan:
-        for payload in payloads:
-            for auth_value in (api_key.strip(), f"Bearer {api_key.strip()}"):
-                headers = {"Authorization": auth_value, "Content-Type": "application/json"}
+    last_error = "Failed to send reply to WB API"
+    for method, endpoint in request_matrix:
+        for payload in unique_payloads:
+            for headers in header_variants:
                 for attempt in range(3):
                     response = None
                     try:
                         with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
-                            response = client.request(method, endpoint, headers=headers, json=payload)
+                            if method == "PATCH":
+                                response = client.patch(endpoint, headers=headers, json=payload)
+                            elif method == "PUT":
+                                response = client.put(endpoint, headers=headers, json=payload)
+                            else:
+                                response = client.post(endpoint, headers=headers, json=payload)
                     except Exception:
                         response = None
-
                     if response is None:
                         if attempt < 2:
                             time.sleep(0.35 * (attempt + 1))
                             continue
                         break
-
-                    status = int(response.status_code)
-                    last_method = method
-                    last_endpoint = endpoint.replace("https://feedbacks-api.wildberries.ru", "")
-                    last_status = status
-
-                    if status in {200, 204}:
-                        return True, "Ответ отправлен"
-
-                    if status in {401, 403}:
-                        last_error = "WB API отклонил ключ (401/403). Проверьте права feedbacks/questions."
+                    if response.status_code < 300:
+                        return True, "Reply sent"
+                    if response.status_code in {401, 403}:
                         break
-
-                    if status in {404, 405}:
+                    if response.status_code in {404, 405}:
                         body = _safe_response_text(response)
-                        if body:
-                            last_error = f"WB API вернул {status}: {body}"
-                        else:
-                            last_error = f"WB API вернул {status} на {last_endpoint}"
+                        last_error = f"WB API returned {response.status_code}: {body}" if body else f"WB API returned {response.status_code}"
                         break
-
-                    if status in {408, 425, 429, 500, 502, 503, 504} and attempt < 2:
+                    if response.status_code in {408, 409, 425, 429, 500, 502, 503, 504} and attempt < 2:
                         time.sleep(0.45 * (attempt + 1))
                         continue
-
                     body = _safe_response_text(response)
-                    if body:
-                        last_error = f"WB API вернул {status}: {body}"
-                    else:
-                        last_error = f"WB API вернул {status}"
+                    last_error = f"WB API returned {response.status_code}: {body}" if body else f"WB API returned {response.status_code}"
                     break
-
-    if last_method and last_endpoint and last_status:
-        return False, f"{last_error} [{last_method} {last_endpoint} -> {last_status}]"
     return False, last_error
-
 def post_ozon_review_reply(api_key: str, review_id: str, text: str) -> tuple[bool, str]:
     if not review_id.strip():
-        return False, "Не указан ID отзыва"
+        return False, "РќРµ СѓРєР°Р·Р°РЅ ID РѕС‚Р·С‹РІР°"
     reply = " ".join(text.split())
     if len(reply) < 2:
-        return False, "Ответ слирком короткий"
+        return False, "РћС‚РІРµС‚ СЃР»РёС€РєРѕРј РєРѕСЂРѕС‚РєРёР№"
     if len(reply) > 3000:
-        return False, "Ответ слирком длинный (максимум 3000 символов)"
+        return False, "РћС‚РІРµС‚ СЃР»РёС€РєРѕРј РґР»РёРЅРЅС‹Р№ (РјР°РєСЃРёРјСѓРј 3000 СЃРёРјРІРѕР»РѕРІ)"
 
     raw_id = review_id.strip()
     int_id = None
@@ -409,7 +436,7 @@ def post_ozon_review_reply(api_key: str, review_id: str, text: str) -> tuple[boo
         "https://api-seller.ozon.ru/v1/review/comment/update",
         "https://api-seller.ozon.ru/v1/review/comment",
     ]
-    last_error = "Не удалось отправить ответ в Ozon API"
+    last_error = "РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РїСЂР°РІРёС‚СЊ РѕС‚РІРµС‚ РІ Ozon API"
     for endpoint in endpoints:
         for payload in payloads:
             for attempt in range(3):
@@ -420,13 +447,13 @@ def post_ozon_review_reply(api_key: str, review_id: str, text: str) -> tuple[boo
                         continue
                     break
                 if response.status_code < 400:
-                    return True, "Ответ отправлен"
+                    return True, "РћС‚РІРµС‚ РѕС‚РїСЂР°РІР»РµРЅ"
                 if response.status_code in {408, 425, 429, 500, 502, 503, 504} and attempt < 2:
                     time.sleep(0.45 * (attempt + 1))
                     continue
                 body = _safe_response_text(response)
                 if body:
-                    last_error = f"Ozon API вернул {response.status_code}: {body}"
+                    last_error = f"Ozon API РІРµСЂРЅСѓР» {response.status_code}: {body}"
                 break
     return False, last_error
 
@@ -439,12 +466,12 @@ def post_ozon_question_reply(
     sku: int | None = None,
 ) -> tuple[bool, str]:
     if not question_id.strip():
-        return False, "Не указан ID вопроса"
+        return False, "РќРµ СѓРєР°Р·Р°РЅ ID РІРѕРїСЂРѕСЃР°"
     reply = " ".join(text.split())
     if len(reply) < 2:
-        return False, "Ответ слирком короткий"
+        return False, "РћС‚РІРµС‚ СЃР»РёС€РєРѕРј РєРѕСЂРѕС‚РєРёР№"
     if len(reply) > 3000:
-        return False, "Ответ слирком длинный (максимум 3000 символов)"
+        return False, "РћС‚РІРµС‚ СЃР»РёС€РєРѕРј РґР»РёРЅРЅС‹Р№ (РјР°РєСЃРёРјСѓРј 3000 СЃРёРјРІРѕР»РѕРІ)"
 
     raw_id = question_id.strip()
     int_id = None
@@ -476,7 +503,7 @@ def post_ozon_question_reply(
         "https://api-seller.ozon.ru/v1/question/answer/update",
         "https://api-seller.ozon.ru/v1/question/answer",
     ]
-    last_error = "Не удалось отправить ответ в Ozon API"
+    last_error = "РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РїСЂР°РІРёС‚СЊ РѕС‚РІРµС‚ РІ Ozon API"
     for endpoint in endpoints:
         for payload in payloads:
             for attempt in range(3):
@@ -487,13 +514,13 @@ def post_ozon_question_reply(
                         continue
                     break
                 if response.status_code < 400:
-                    return True, "Ответ отправлен"
+                    return True, "РћС‚РІРµС‚ РѕС‚РїСЂР°РІР»РµРЅ"
                 if response.status_code in {408, 425, 429, 500, 502, 503, 504} and attempt < 2:
                     time.sleep(0.45 * (attempt + 1))
                     continue
                 body = _safe_response_text(response)
                 if body:
-                    last_error = f"Ozon API вернул {response.status_code}: {body}"
+                    last_error = f"Ozon API РІРµСЂРЅСѓР» {response.status_code}: {body}"
                 break
     return False, last_error
 
@@ -514,7 +541,7 @@ def generate_review_reply(
     trace: dict[str, Any] | None = None,
 ) -> str:
     review = (review_text or "").strip()
-    product = (product_name or "").strip() or "товар"
+    product = (product_name or "").strip() or "С‚РѕРІР°СЂ"
     rating = stars if isinstance(stars, int) else None
     custom_prompt = (prompt or "").strip()
     customer_name = _sanitize_person_name(reviewer_name)
@@ -525,34 +552,34 @@ def generate_review_reply(
 
     if kind == "question":
         system_prompt = custom_prompt or (
-            "Ты менеджер магазина на маркетплейсе. Отвечай на вопрос покупателя о товаре вежливо и конкретно, на русском. "
-            "Не выдумывай характеристики, которых нет в вопросе или названии товара. "
-            "Если недостаточно данных, предложи уточнить параметры. "
-            "Не спорь с клиентом. "
-            "Ответ должен быть коротким, полезным и готовым к отправке. "
-            "Если имя клиента известно, используй его в приветствии."
+            "РўС‹ РјРµРЅРµРґР¶РµСЂ РјР°РіР°Р·РёРЅР° РЅР° РјР°СЂРєРµС‚РїР»РµР№СЃРµ. РћС‚РІРµС‡Р°Р№ РЅР° РІРѕРїСЂРѕСЃ РїРѕРєСѓРїР°С‚РµР»СЏ Рѕ С‚РѕРІР°СЂРµ РІРµР¶Р»РёРІРѕ Рё РєРѕРЅРєСЂРµС‚РЅРѕ, РЅР° СЂСѓСЃСЃРєРѕРј. "
+            "РќРµ РІС‹РґСѓРјС‹РІР°Р№ С…Р°СЂР°РєС‚РµСЂРёСЃС‚РёРєРё, РєРѕС‚РѕСЂС‹С… РЅРµС‚ РІ РІРѕРїСЂРѕСЃРµ РёР»Рё РЅР°Р·РІР°РЅРёРё С‚РѕРІР°СЂР°. "
+            "Р•СЃР»Рё РЅРµРґРѕСЃС‚Р°С‚РѕС‡РЅРѕ РґР°РЅРЅС‹С…, РїСЂРµРґР»РѕР¶Рё СѓС‚РѕС‡РЅРёС‚СЊ РїР°СЂР°РјРµС‚СЂС‹. "
+            "РќРµ СЃРїРѕСЂСЊ СЃ РєР»РёРµРЅС‚РѕРј. "
+            "РћС‚РІРµС‚ РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ РєРѕСЂРѕС‚РєРёРј, РїРѕР»РµР·РЅС‹Рј Рё РіРѕС‚РѕРІС‹Рј Рє РѕС‚РїСЂР°РІРєРµ. "
+            "Р•СЃР»Рё РёРјСЏ РєР»РёРµРЅС‚Р° РёР·РІРµСЃС‚РЅРѕ, РёСЃРїРѕР»СЊР·СѓР№ РµРіРѕ РІ РїСЂРёРІРµС‚СЃС‚РІРёРё."
         )
         user_prompt = (
-            f"Вопрос клиента:\n{review or '[текста нет]'}\n\n"
-            f"Имя клиента: {customer_name or '[не указано]'}\n"
-            f"Товар: {product}\n"
-            f"Маркетплейс: {mp}\n\n"
-            "Сформируй только текст ответа клиенту."
+            f"Р’РѕРїСЂРѕСЃ РєР»РёРµРЅС‚Р°:\n{review or '[С‚РµРєСЃС‚Р° РЅРµС‚]'}\n\n"
+            f"РРјСЏ РєР»РёРµРЅС‚Р°: {customer_name or '[РЅРµ СѓРєР°Р·Р°РЅРѕ]'}\n"
+            f"РўРѕРІР°СЂ: {product}\n"
+            f"РњР°СЂРєРµС‚РїР»РµР№СЃ: {mp}\n\n"
+            "РЎС„РѕСЂРјРёСЂСѓР№ С‚РѕР»СЊРєРѕ С‚РµРєСЃС‚ РѕС‚РІРµС‚Р° РєР»РёРµРЅС‚Сѓ."
         )
     else:
         system_prompt = custom_prompt or (
-            "Ты менеджер маркетплейса. Пири вежливо, коротко, по делу, на русском. "
-            "Не выдумывай факты. Не обвиняй клиента. "
-            "Ответ должен быть готов к отправке и содержать название товара. "
-            "Если имя клиента известно, используй его в приветствии."
+            "РўС‹ РјРµРЅРµРґР¶РµСЂ РјР°СЂРєРµС‚РїР»РµР№СЃР°. РџРёС€Рё РІРµР¶Р»РёРІРѕ, РєРѕСЂРѕС‚РєРѕ, РїРѕ РґРµР»Сѓ, РЅР° СЂСѓСЃСЃРєРѕРј. "
+            "РќРµ РІС‹РґСѓРјС‹РІР°Р№ С„Р°РєС‚С‹. РќРµ РѕР±РІРёРЅСЏР№ РєР»РёРµРЅС‚Р°. "
+            "РћС‚РІРµС‚ РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ РіРѕС‚РѕРІ Рє РѕС‚РїСЂР°РІРєРµ Рё СЃРѕРґРµСЂР¶Р°С‚СЊ РЅР°Р·РІР°РЅРёРµ С‚РѕРІР°СЂР°. "
+            "Р•СЃР»Рё РёРјСЏ РєР»РёРµРЅС‚Р° РёР·РІРµСЃС‚РЅРѕ, РёСЃРїРѕР»СЊР·СѓР№ РµРіРѕ РІ РїСЂРёРІРµС‚СЃС‚РІРёРё."
         )
         user_prompt = (
-            f"Отзыв клиента:\n{review or '[текста нет]'}\n\n"
-            f"Имя клиента: {customer_name or '[не указано]'}\n"
-            f"Товар: {product}\n"
-            f"Маркетплейс: {mp}\n"
-            f"Оценка: {rating if rating is not None else 'не указана'}\n\n"
-            "Сформируй только текст ответа клиенту."
+            f"РћС‚Р·С‹РІ РєР»РёРµРЅС‚Р°:\n{review or '[С‚РµРєСЃС‚Р° РЅРµС‚]'}\n\n"
+            f"РРјСЏ РєР»РёРµРЅС‚Р°: {customer_name or '[РЅРµ СѓРєР°Р·Р°РЅРѕ]'}\n"
+            f"РўРѕРІР°СЂ: {product}\n"
+            f"РњР°СЂРєРµС‚РїР»РµР№СЃ: {mp}\n"
+            f"РћС†РµРЅРєР°: {rating if rating is not None else 'РЅРµ СѓРєР°Р·Р°РЅР°'}\n\n"
+            "РЎС„РѕСЂРјРёСЂСѓР№ С‚РѕР»СЊРєРѕ С‚РµРєСЃС‚ РѕС‚РІРµС‚Р° РєР»РёРµРЅС‚Сѓ."
         )
     payload = {
         "messages": [
@@ -725,8 +752,8 @@ def generate_help_assistant_reply(
     if len(ctx) > 24000:
         ctx = ctx[:24000]
     fallback = (
-        "Я помогу с этим вопросом. Уточните модуль и желаемый результат, "
-        "и я дам пораговый ответ с учетом варей базы знаний."
+        "РЇ РїРѕРјРѕРіСѓ СЃ СЌС‚РёРј РІРѕРїСЂРѕСЃРѕРј. РЈС‚РѕС‡РЅРёС‚Рµ РјРѕРґСѓР»СЊ Рё Р¶РµР»Р°РµРјС‹Р№ СЂРµР·СѓР»СЊС‚Р°С‚, "
+        "Рё СЏ РґР°Рј РїРѕС€Р°РіРѕРІС‹Р№ РѕС‚РІРµС‚ СЃ СѓС‡РµС‚РѕРј РІР°С€РµР№ Р±Р°Р·С‹ Р·РЅР°РЅРёР№."
     )
     token = str(api_key or settings.openai_api_key or "").strip()
     if not token:
@@ -738,7 +765,7 @@ def generate_help_assistant_reply(
     endpoint = _resolve_ai_chat_endpoint(effective_provider, base_url)
     system_prompt = (
         (prompt or "").strip()
-        or "Ты AI-помощник сервиса продавца маркетплейсов. Отвечай кратко, структурно и по делу на русском языке."
+        or "РўС‹ AI-РїРѕРјРѕС‰РЅРёРє СЃРµСЂРІРёСЃР° РїСЂРѕРґР°РІС†Р° РјР°СЂРєРµС‚РїР»РµР№СЃРѕРІ. РћС‚РІРµС‡Р°Р№ РєСЂР°С‚РєРѕ, СЃС‚СЂСѓРєС‚СѓСЂРЅРѕ Рё РїРѕ РґРµР»Сѓ РЅР° СЂСѓСЃСЃРєРѕРј СЏР·С‹РєРµ."
     )
     payload = {
         "model": effective_model,
@@ -747,9 +774,9 @@ def generate_help_assistant_reply(
             {
                 "role": "user",
                 "content": (
-                    f"Вопрос пользователя:\n{q or '[без текста]'}\n\n"
-                    f"Контекст:\n{ctx or '[контекст не передан]'}\n\n"
-                    "Сформируй полезный ответ по рагам."
+                    f"Р’РѕРїСЂРѕСЃ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ:\n{q or '[Р±РµР· С‚РµРєСЃС‚Р°]'}\n\n"
+                    f"РљРѕРЅС‚РµРєСЃС‚:\n{ctx or '[РєРѕРЅС‚РµРєСЃС‚ РЅРµ РїРµСЂРµРґР°РЅ]'}\n\n"
+                    "РЎС„РѕСЂРјРёСЂСѓР№ РїРѕР»РµР·РЅС‹Р№ РѕС‚РІРµС‚ РїРѕ С€Р°РіР°Рј."
                 ),
             },
         ],
@@ -809,7 +836,7 @@ def fetch_wb_returns(
                 "posting.number",
             )
             rid = str(rid or "").strip()
-            if (not rid) or rid in {"0", "-", "—"} or rid in seen_ids:
+            if (not rid) or rid in {"0", "-", "вЂ”"} or rid in seen_ids:
                 continue
             created = _pick_first_path_text(
                 raw,
@@ -1017,7 +1044,7 @@ def fetch_wb_return_details(api_key: str, return_id: str) -> dict[str, Any]:
 def action_wb_return(api_key: str, return_id: str, action: str, comment: str | None = None) -> tuple[bool, str, dict[str, Any] | None]:
     rid = str(return_id or "").strip()
     if not rid:
-        return False, "Некорректный ID возврата", None
+        return False, "РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ ID РІРѕР·РІСЂР°С‚Р°", None
     action_raw = str(action or "").strip().lower()
     action_map = {
         "accept": "approve",
@@ -1038,8 +1065,8 @@ def action_wb_return(api_key: str, return_id: str, action: str, comment: str | N
     for method, endpoint, request_payload in attempts:
         data = _request_wb_json(method, endpoint, api_key=api_key, payload=request_payload)
         if data is not None:
-            return True, "Действие по возврату отправлено", data if isinstance(data, dict) else {"data": data}
-    return False, "WB API не принял действие по возврату", None
+            return True, "Р”РµР№СЃС‚РІРёРµ РїРѕ РІРѕР·РІСЂР°С‚Сѓ РѕС‚РїСЂР°РІР»РµРЅРѕ", data if isinstance(data, dict) else {"data": data}
+    return False, "WB API РЅРµ РїСЂРёРЅСЏР» РґРµР№СЃС‚РІРёРµ РїРѕ РІРѕР·РІСЂР°С‚Сѓ", None
 
 
 def fetch_ozon_ads_campaigns(api_key: str) -> dict[str, Any]:
@@ -1358,52 +1385,6 @@ def fetch_wb_campaigns(
     return _enrich_wb_campaign_rows(api_key, [{"advertId": cid} for cid in ids])
 
 
-def _campaign_name_is_placeholder(value: Any, campaign_id: int | None = None) -> bool:
-    text = str(value or "").strip().lower()
-    if not text or text in {"-", "—"}:
-        return True
-    compact = re.sub(r"\s+", " ", text).strip()
-    if re.fullmatch(r"\d{4,}", compact):
-        return True
-
-    ru_campaign_root = "\u043a\u0430\u043c\u043f\u0430\u043d"
-    ru_ad_root = "\u0440\u0435\u043a\u043b\u0430\u043c"
-    generic_re = rf"(campaign|camp|advert|advertising|ads?|{ru_ad_root}[\w\u0400-\u04ff]*|{ru_campaign_root}[\w\u0400-\u04ff]*)"
-    if re.fullmatch(rf"{generic_re}\s*[#№:\-]?\s*\d+", compact):
-        return True
-    if re.fullmatch(rf"{generic_re}\s+{generic_re}\s*[#№:\-]?\s*\d+", compact):
-        return True
-
-    cid = int(campaign_id or 0)
-    if cid > 0:
-        cid_text = str(cid)
-        if compact == cid_text:
-            return True
-        if re.search(rf"\b{re.escape(cid_text)}\b", compact):
-            reduced = re.sub(rf"\b{re.escape(cid_text)}\b", " ", compact)
-            reduced = re.sub(r"[#№:;,_\-.()\[\]/]+", " ", reduced)
-            reduced = re.sub(r"\s+", " ", reduced).strip()
-            if not reduced:
-                return True
-            words = re.findall(r"[a-z\u0400-\u04ff]+", reduced)
-            if words:
-                generic_words = {
-                    "campaign",
-                    "camp",
-                    "advert",
-                    "advertising",
-                    "ad",
-                    "ads",
-                    "\u043a\u0430\u043c\u043f\u0430\u043d\u0438\u044f",
-                    "\u043a\u0430\u043c\u043f\u0430\u043d\u0438\u0438",
-                    "\u0440\u0435\u043a\u043b\u0430\u043c\u0430",
-                    "\u0440\u0435\u043a\u043b\u0430\u043c\u043d\u0430\u044f",
-                }
-                if all(word in generic_words or word.startswith(ru_campaign_root) or word.startswith(ru_ad_root) for word in words):
-                    return True
-    return False
-
-
 def _summary_needs_enrichment(summary: dict[str, Any] | None, campaign_id: int) -> bool:
     if not isinstance(summary, dict):
         return True
@@ -1413,13 +1394,15 @@ def _summary_needs_enrichment(summary: dict[str, Any] | None, campaign_id: int) 
     budget = str(summary.get("budget") or "").strip()
     if not text:
         return True
-    if _campaign_name_is_placeholder(text, campaign_id):
+    if text in {f"РєР°РјРїР°РЅРёСЏ {int(campaign_id or 0)}", "campaign", "advert", "ad"}:
         return True
-    if status not in {"", "-", "—"}:
+    if text.startswith("РєР°РјРїР°РЅРёСЏ ") or text.startswith("campaign "):
+        return True
+    if status not in {"", "-", "вЂ”"}:
         return False
-    if ctype not in {"", "-", "—"}:
+    if ctype not in {"", "-", "вЂ”"}:
         return False
-    if budget not in {"", "-", "—"}:
+    if budget not in {"", "-", "вЂ”"}:
         return False
     return True
 
@@ -2127,7 +2110,7 @@ def update_wb_campaign_state(api_key: str, campaign_id: int, action: str) -> tup
     }
     endpoint = endpoint_map.get(operation)
     if not endpoint:
-        return False, "Неизвестное действие. Используйте start, pause или stop.", None
+        return False, "РќРµРёР·РІРµСЃС‚РЅРѕРµ РґРµР№СЃС‚РІРёРµ. РСЃРїРѕР»СЊР·СѓР№С‚Рµ start, pause РёР»Рё stop.", None
 
     payloads: list[dict[str, Any] | list[int]] = [
         [campaign_id],
@@ -2140,8 +2123,8 @@ def update_wb_campaign_state(api_key: str, campaign_id: int, action: str) -> tup
     for payload in payloads:
         data = _request_wb_json("POST", endpoint, api_key=api_key, payload=payload)
         if data is not None:
-            return True, "Операция отправлена", data if isinstance(data, dict) else {"raw": data}
-    return False, "Не удалось выполнить операцию в API WB", None
+            return True, "РћРїРµСЂР°С†РёСЏ РѕС‚РїСЂР°РІР»РµРЅР°", data if isinstance(data, dict) else {"raw": data}
+    return False, "РќРµ СѓРґР°Р»РѕСЃСЊ РІС‹РїРѕР»РЅРёС‚СЊ РѕРїРµСЂР°С†РёСЋ РІ API WB", None
 
 
 def _campaign_detail_requests(campaign_id: int) -> list[dict[str, Any]]:
@@ -2174,7 +2157,7 @@ def _merge_detail_rows(base: dict[str, Any] | None, extra: dict[str, Any] | None
             continue
         if isinstance(value, str):
             text = value.strip()
-            if not text or text in {"-", "—"}:
+            if not text or text in {"-", "вЂ”"}:
                 continue
         out[key] = value
     return out
@@ -2182,8 +2165,10 @@ def _merge_detail_rows(base: dict[str, Any] | None, extra: dict[str, Any] | None
 
 def _merge_campaign_summary(base: dict[str, Any], extra: dict[str, Any]) -> dict[str, Any]:
     def _is_placeholder_name(value: Any) -> bool:
-        cid = _to_int(base.get("campaign_id") or extra.get("campaign_id"))
-        return _campaign_name_is_placeholder(value, cid if cid and cid > 0 else None)
+        text = str(value or "").strip().lower()
+        if not text or text == "-":
+            return True
+        return text.startswith("РєР°РјРїР°РЅРёСЏ ") or text.startswith("campaign ")
 
     merged = dict(base)
     for key, value in extra.items():
@@ -2246,7 +2231,7 @@ def _extract_campaign_summary(data: dict[str, Any] | list[dict[str, Any]], campa
         if not text:
             continue
         low = text.lower()
-        if low.startswith("кампания ") or low.startswith("campaign "):
+        if low.startswith("РєР°РјРїР°РЅРёСЏ ") or low.startswith("campaign "):
             if not name:
                 name = text
             continue
@@ -2299,7 +2284,7 @@ def _extract_campaign_summary(data: dict[str, Any] | list[dict[str, Any]], campa
     )
     summary.update(
         {
-            "name": name or f"Кампания {campaign_id}",
+            "name": name or f"РљР°РјРїР°РЅРёСЏ {campaign_id}",
             "status": status or "-",
             "type": ctype or "-",
             "budget": budget or "-",
@@ -2763,6 +2748,7 @@ def _normalize_review_row(row: dict[str, Any], is_answered: bool) -> dict[str, A
         "text": text,
         "user": user_name,
         "answer": answer_text.strip(),
+        "state": _pick_first_str(row.get("state"), row.get("status"), row.get("wbState")).strip().lower(),
         "is_answered": effective_answered,
         "photos": photos,
     }
@@ -2870,7 +2856,7 @@ def _normalize_ozon_review_row(
         "id": review_id,
         "date": created[:10] if created else "",
         "created_at": created,
-        "product": product_name or "Товар Ozon",
+        "product": product_name or "РўРѕРІР°СЂ Ozon",
         "article": article,
         "barcode": barcode,
         "stars": stars,
@@ -2928,13 +2914,14 @@ def _normalize_wb_question_row(row: dict[str, Any], is_answered: bool) -> dict[s
         "id": _pick_first_str(row.get("id"), row.get("questionId"), row.get("question_id")),
         "date": created[:10] if created else "",
         "created_at": created,
-        "product": str(product.get("productName") or product.get("nmId") or row.get("productName") or "Товар WB"),
+        "product": str(product.get("productName") or product.get("nmId") or row.get("productName") or "РўРѕРІР°СЂ WB"),
         "article": str(product.get("nmId") or row.get("nmId") or row.get("offerId") or ""),
         "barcode": _pick_first_str(product.get("barcode"), row.get("barcode")),
         "stars": stars,
         "text": text,
         "user": user_name,
         "answer": answer_text.strip(),
+        "state": _pick_first_str(row.get("state"), row.get("status"), row.get("wbState")).strip().lower(),
         "is_answered": effective_answered,
         "photos": photos,
     }
@@ -3036,7 +3023,7 @@ def _normalize_ozon_question_row(
         "id": item_id,
         "date": created[:10] if created else "",
         "created_at": created,
-        "product": product_name or "Товар Ozon",
+        "product": product_name or "РўРѕРІР°СЂ Ozon",
         "article": article,
         "barcode": barcode,
         "stars": stars,
@@ -3304,13 +3291,17 @@ def _has_campaign_context(row: dict[str, Any]) -> bool:
     def _clean_text(value: Any) -> str:
         text = str(value or "").strip()
         low = text.lower()
-        if not text or low in {"-", "—", "null", "none", "undefined", "n/a"}:
+        if not text or low in {"-", "вЂ”", "null", "none", "undefined", "n/a"}:
             return ""
         return text
 
     def _is_placeholder_name(value: Any) -> bool:
-        cid = _to_int(_campaign_id_from_row(row))
-        return _campaign_name_is_placeholder(_clean_text(value), cid if cid and cid > 0 else None)
+        text = _clean_text(value).lower()
+        if not text:
+            return True
+        if text in {"campaign", "advert", "ad"}:
+            return True
+        return text.startswith("campaign ") or text.startswith("РєР°РјРїР°РЅРёСЏ ")
 
     candidate_nodes: list[dict[str, Any]] = [row]
     for key in ("settings", "advert", "campaign", "summary", "params"):
@@ -3760,20 +3751,20 @@ def _fallback_reply(review_text: str, product_name: str, stars: int | None, revi
     clean_product = product_name.replace('"', " ").replace("'", " ").replace("\\", " ").strip()
     greeting = _build_greeting(reviewer_name)
     if stars is None:
-        return f"{greeting} Спасибо за отзыв о товаре {clean_product}. Мы ценим обратную связь и обязательно разберемся в варем вопросе."
+        return f"{greeting} РЎРїР°СЃРёР±Рѕ Р·Р° РѕС‚Р·С‹РІ Рѕ С‚РѕРІР°СЂРµ {clean_product}. РњС‹ С†РµРЅРёРј РѕР±СЂР°С‚РЅСѓСЋ СЃРІСЏР·СЊ Рё РѕР±СЏР·Р°С‚РµР»СЊРЅРѕ СЂР°Р·Р±РµСЂРµРјСЃСЏ РІ РІР°С€РµРј РІРѕРїСЂРѕСЃРµ."
     if stars >= 5:
-        return f"{greeting} Спасибо за высокую оценку товара {clean_product}. Благодарим, что выбрали нас."
+        return f"{greeting} РЎРїР°СЃРёР±Рѕ Р·Р° РІС‹СЃРѕРєСѓСЋ РѕС†РµРЅРєСѓ С‚РѕРІР°СЂР° {clean_product}. Р‘Р»Р°РіРѕРґР°СЂРёРј, С‡С‚Рѕ РІС‹Р±СЂР°Р»Рё РЅР°СЃ."
     if stars == 4:
-        return f"{greeting} Спасибо за отзыв о товаре {clean_product}. Благодарим за оценку и будем признательны, если подскажете, что можно улучрить."
+        return f"{greeting} РЎРїР°СЃРёР±Рѕ Р·Р° РѕС‚Р·С‹РІ Рѕ С‚РѕРІР°СЂРµ {clean_product}. Р‘Р»Р°РіРѕРґР°СЂРёРј Р·Р° РѕС†РµРЅРєСѓ Рё Р±СѓРґРµРј РїСЂРёР·РЅР°С‚РµР»СЊРЅС‹, РµСЃР»Рё РїРѕРґСЃРєР°Р¶РµС‚Рµ, С‡С‚Рѕ РјРѕР¶РЅРѕ СѓР»СѓС‡С€РёС‚СЊ."
     if stars <= 2:
         return (
-            f"{greeting} Спасибо за отзыв о товаре {clean_product}. "
-            "Сожалеем, что возникла такая ситуация. Пожалуйста, оформите возврат по браку через личный кабинет, "
-            "мы направим товар на проверку и разберемся в причине."
+            f"{greeting} РЎРїР°СЃРёР±Рѕ Р·Р° РѕС‚Р·С‹РІ Рѕ С‚РѕРІР°СЂРµ {clean_product}. "
+            "РЎРѕР¶Р°Р»РµРµРј, С‡С‚Рѕ РІРѕР·РЅРёРєР»Р° С‚Р°РєР°СЏ СЃРёС‚СѓР°С†РёСЏ. РџРѕР¶Р°Р»СѓР№СЃС‚Р°, РѕС„РѕСЂРјРёС‚Рµ РІРѕР·РІСЂР°С‚ РїРѕ Р±СЂР°РєСѓ С‡РµСЂРµР· Р»РёС‡РЅС‹Р№ РєР°Р±РёРЅРµС‚, "
+            "РјС‹ РЅР°РїСЂР°РІРёРј С‚РѕРІР°СЂ РЅР° РїСЂРѕРІРµСЂРєСѓ Рё СЂР°Р·Р±РµСЂРµРјСЃСЏ РІ РїСЂРёС‡РёРЅРµ."
         )
     return (
-        f"{greeting} Спасибо за отзыв о товаре {clean_product}. "
-        "Нам важно варе мнение, пожалуйста, уточните детали, чтобы мы могли улучрить качество."
+        f"{greeting} РЎРїР°СЃРёР±Рѕ Р·Р° РѕС‚Р·С‹РІ Рѕ С‚РѕРІР°СЂРµ {clean_product}. "
+        "РќР°Рј РІР°Р¶РЅРѕ РІР°С€Рµ РјРЅРµРЅРёРµ, РїРѕР¶Р°Р»СѓР№СЃС‚Р°, СѓС‚РѕС‡РЅРёС‚Рµ РґРµС‚Р°Р»Рё, С‡С‚РѕР±С‹ РјС‹ РјРѕРіР»Рё СѓР»СѓС‡С€РёС‚СЊ РєР°С‡РµСЃС‚РІРѕ."
     )
 
 
@@ -3782,11 +3773,11 @@ def _fallback_question_reply(question_text: str, product_name: str, reviewer_nam
     greeting = _build_greeting(reviewer_name)
     q = " ".join((question_text or "").split())
     if not q:
-        return f"{greeting} Спасибо за вопрос по товару {clean_product}. Уточните, пожалуйста, детали, и мы подскажем точнее."
+        return f"{greeting} РЎРїР°СЃРёР±Рѕ Р·Р° РІРѕРїСЂРѕСЃ РїРѕ С‚РѕРІР°СЂСѓ {clean_product}. РЈС‚РѕС‡РЅРёС‚Рµ, РїРѕР¶Р°Р»СѓР№СЃС‚Р°, РґРµС‚Р°Р»Рё, Рё РјС‹ РїРѕРґСЃРєР°Р¶РµРј С‚РѕС‡РЅРµРµ."
     return (
-        f"{greeting} Спасибо за вопрос по товару {clean_product}. "
-        "Проверим по варей ситуации и подскажем точные параметры. "
-        "Если можете, уточните нужный размер/модель и условия использования."
+        f"{greeting} РЎРїР°СЃРёР±Рѕ Р·Р° РІРѕРїСЂРѕСЃ РїРѕ С‚РѕРІР°СЂСѓ {clean_product}. "
+        "РџСЂРѕРІРµСЂРёРј РїРѕ РІР°С€РµР№ СЃРёС‚СѓР°С†РёРё Рё РїРѕРґСЃРєР°Р¶РµРј С‚РѕС‡РЅС‹Рµ РїР°СЂР°РјРµС‚СЂС‹. "
+        "Р•СЃР»Рё РјРѕР¶РµС‚Рµ, СѓС‚РѕС‡РЅРёС‚Рµ РЅСѓР¶РЅС‹Р№ СЂР°Р·РјРµСЂ/РјРѕРґРµР»СЊ Рё СѓСЃР»РѕРІРёСЏ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёСЏ."
     )
 
 
@@ -3828,8 +3819,8 @@ def _parse_ozon_credentials(api_key: str) -> tuple[str, str] | None:
 def _build_greeting(reviewer_name: str) -> str:
     safe_name = _sanitize_person_name(reviewer_name)
     if safe_name:
-        return f"Здравствуйте, {safe_name}!"
-    return "Здравствуйте!"
+        return f"Р—РґСЂР°РІСЃС‚РІСѓР№С‚Рµ, {safe_name}!"
+    return "Р—РґСЂР°РІСЃС‚РІСѓР№С‚Рµ!"
 
 
 def _sanitize_person_name(value: str) -> str:
@@ -3977,7 +3968,7 @@ def _normalize_scalar_text(value: Any) -> str:
     else:
         text = ""
     low = text.strip().lower()
-    if low in {"", "-", "—", "null", "none", "undefined"}:
+    if low in {"", "-", "вЂ”", "null", "none", "undefined"}:
         return ""
     return text.strip()
 
@@ -4005,5 +3996,6 @@ def _is_truthy(value: Any) -> bool:
     if isinstance(value, str):
         return value.strip().lower() in {"true", "1", "yes", "y", "ok"}
     return False
+
 
 

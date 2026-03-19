@@ -220,7 +220,7 @@ body {
 }
 
 body[data-theme="newyear"] .app-bg::before {
-  content: "СЂСџР‹вЂћ СЂСџР‹Рѓ СЂСџВ¦Р‰ РІСљРЃ СЂСџР‹вЂћ СЂСџР‹вЂ¦ РІСњвЂћ СЂСџР‹Рѓ РІСљРЃ СЂСџВ¦Р‰";
+  content: "🎄 🎁 🦊 ✨ 🎄 🎅 ❄ 🎁 ✨ 🦊";
   position: absolute;
   inset: 8% -20% auto;
   font-size: clamp(18px, 2.1vw, 34px);
@@ -231,7 +231,7 @@ body[data-theme="newyear"] .app-bg::before {
 }
 
 body[data-theme="newyear"] .app-bg::after {
-  content: "СЂСџР‹вЂћ СЂСџР‹Рѓ СЂСџВ¦Р‰ РІСљРЃ СЂСџР‹вЂћ СЂСџР‹вЂ¦ РІСњвЂћ СЂСџР‹Рѓ РІСљРЃ СЂСџВ¦Р‰";
+  content: "🎄 🎁 🦊 ✨ 🎄 🎅 ❄ 🎁 ✨ 🦊";
   position: absolute;
   inset: 0;
   background-image: radial-gradient(circle, rgba(255, 255, 255, 0.95) 1px, transparent 1.6px);
@@ -241,7 +241,7 @@ body[data-theme="newyear"] .app-bg::after {
 }
 
 body[data-theme="japan"] .app-bg::before {
-  content: "РІвЂєВ©РїС‘РЏ СЂСџРЉС‘ СЂСџРЏР‡ СЂСџРЊР€ СЂСџвЂ”В» РІСљРЃ";
+  content: "⛩️ 🌸 🏯 🍣 🗻 ✨";
   position: absolute;
   inset: 9% -20% auto;
   letter-spacing: 2.1vw;
@@ -252,7 +252,7 @@ body[data-theme="japan"] .app-bg::before {
 }
 
 body[data-theme="greenland"] .app-bg::before {
-  content: "СЂСџРЉР† РІСњвЂћРїС‘РЏ СЂСџВ§Р‰ СЂСџС’В»РІР‚РЊРІСњвЂћРїС‘РЏ РІСљРЃ СЂСџРЉРЉ";
+  content: "🌲 ❄️ 🧊 🐻‍❄️ ✨ 🌌";
   position: absolute;
   inset: 8% -16% auto;
   letter-spacing: 2vw;
@@ -6629,14 +6629,19 @@ body[data-theme="dark"] .landing-band .band-stats span {
   overflow: auto;
   padding: 4px 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0;
+  align-content: start;
+  grid-auto-rows: max-content;
+  min-height: 0;
 }
 
 .social-thread-item {
   border: 0;
   border-bottom: 1px solid var(--line);
   background: transparent;
-  padding: 10px 14px;
+  padding: 12px 14px;
+  min-height: 78px;
   text-align: left;
   display: grid;
   grid-template-columns: 48px 1fr auto;
@@ -7259,7 +7264,6 @@ body.social-image-viewer-open {
   gap: 10px;
   align-items: center;
   background: color-mix(in oklab, var(--panel-bg) 88%, #ffffff);
-  overflow: visible;
 }
 
 .social-chat-reply {
@@ -7306,7 +7310,6 @@ body.social-image-viewer-open {
   border: 1px solid var(--line);
   border-radius: 18px;
   padding: 6px 8px;
-  overflow: visible;
 }
 
 .social-chat-compose textarea {
@@ -7397,6 +7400,83 @@ body.social-image-viewer-open {
   display: none;
 }
 
+.social-calendar-edit-grid {
+  align-items: start;
+  gap: 12px;
+}
+
+.social-calendar-edit-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.social-calendar-edit-grid label.full {
+  grid-column: 1 / -1;
+}
+
+.social-calendar-edit-check {
+  align-self: end;
+  min-height: 42px;
+}
+
+.social-calendar-edit-section {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid color-mix(in oklab, var(--line) 88%, transparent);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--panel-bg) 96%, #fff), color-mix(in oklab, var(--panel-bg-soft) 94%, #fff));
+}
+
+.social-calendar-edit-section-head {
+  display: grid;
+  gap: 4px;
+}
+
+.social-calendar-edit-section-head strong {
+  font-size: 15px;
+}
+
+.social-calendar-inline-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.social-calendar-reminder-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.social-calendar-reminder-presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.social-calendar-reminder-choice {
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklab, var(--line) 88%, transparent);
+  background: color-mix(in oklab, var(--panel-bg-soft) 74%, #ffffff);
+}
+
+.social-calendar-reminder-custom-list {
+  display: grid;
+  gap: 10px;
+}
+
+.social-calendar-reminder-custom-row {
+  display: grid;
+  grid-template-columns: minmax(84px, 96px) minmax(130px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.social-calendar-edit-footer {
+  justify-content: flex-end;
+}
 .social-chat-context {
   position: absolute;
   z-index: 2200;
@@ -7529,7 +7609,7 @@ body.social-image-viewer-open {
   padding: 8px;
   display: grid;
   gap: 8px;
-  z-index: 2400;
+  z-index: 30;
 }
 
 .social-emoji-tabs {
@@ -7927,7 +8007,7 @@ body.social-image-viewer-open {
 }
 
 .social-day.has-event b::after {
-  content: "РІР‚Сћ";
+  content: "•";
   position: absolute;
   right: 0;
   top: -2px;
@@ -7935,7 +8015,7 @@ body.social-image-viewer-open {
 }
 
 .social-day.has-task b::before {
-  content: "РІР‚Сћ";
+  content: "•";
   position: absolute;
   right: 8px;
   top: -2px;
@@ -8161,107 +8241,57 @@ body[data-theme="light"] .social-calc-eq {
 
 .social-notes-layout {
   display: grid;
-  grid-template-columns: 260px 1fr;
-  gap: 12px;
+  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
 }
 
 .social-notes-sidebar {
   border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 10px;
-  background: var(--panel-bg-soft);
+  border-radius: 20px;
+  padding: 12px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--panel-bg-soft) 92%, #fff), color-mix(in oklab, var(--panel-bg) 90%, #fff));
   display: grid;
-  grid-template-rows: auto 1fr;
-  gap: 10px;
-  min-height: 520px;
-}
-
-.profile-avatar-grid {
-  display: grid;
-  grid-template-columns: 120px 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
-  align-items: start;
-}
-.profile-avatar-preview {
-  width: 110px;
-  height: 110px;
-  border-radius: 16px;
-  border: 1px solid var(--line);
-  background: color-mix(in oklab, var(--panel-bg) 75%, var(--line));
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-  color: var(--text);
-  overflow: hidden;
-}
-.profile-avatar-controls {
-  display: grid;
-  gap: 10px;
-}
-.profile-avatar-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-.avatar-picker {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(56px, 1fr));
-  gap: 8px;
-}
-.avatar-chip {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 4px;
-  background: color-mix(in oklab, var(--panel-bg) 88%, var(--line));
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-}
-.avatar-chip img {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  object-fit: cover;
-}
-.avatar-chip.active {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 45%, transparent);
-  transform: translateY(-1px);
-}
-.team-avatar-row {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: 90px 1fr;
-  gap: 10px;
-  align-items: center;
-}
-.team-avatar-controls {
-  display: grid;
-  gap: 8px;
+  min-height: 560px;
+  min-width: 0;
 }
 
 .social-notes-list {
   overflow: auto;
   display: grid;
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(158px, 176px));
+  justify-content: start;
+  gap: 12px;
+  align-content: start;
+  grid-auto-rows: max-content;
+  padding-right: 4px;
 }
 
 .social-note-row {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--panel-bg);
-  padding: 8px;
+  position: relative;
+  border: 1px solid color-mix(in oklab, var(--line) 88%, transparent);
+  border-radius: 20px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--panel-bg) 97%, #fff), color-mix(in oklab, var(--panel-bg-soft) 95%, #fff));
+  padding: 14px 14px 12px;
+  min-height: 176px;
   text-align: left;
   display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 8px;
+  grid-template-rows: 1fr auto;
+  gap: 10px;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.social-note-row:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);
 }
 
 .social-note-row.active {
-  border-color: var(--accent);
+  border-color: color-mix(in oklab, var(--accent) 72%, white);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 22%, transparent), 0 18px 30px rgba(15, 23, 42, 0.14);
 }
 
 .social-note-main {
@@ -8269,22 +8299,87 @@ body[data-theme="light"] .social-calc-eq {
   background: transparent;
   text-align: left;
   display: grid;
-  gap: 4px;
+  align-content: start;
+  gap: 10px;
   width: 100%;
+  min-height: 0;
   color: inherit;
 }
 
+.social-note-main b {
+  font-size: 16px;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.social-note-snippet {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.social-note-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .social-note-delete {
-  padding: 6px 8px;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .social-notes-editor {
   border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 12px;
-  background: var(--panel-bg-soft);
+  border-radius: 24px;
+  padding: 16px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--panel-bg-soft) 96%, #fff), color-mix(in oklab, var(--panel-bg) 94%, #fff));
   display: grid;
-  gap: 10px;
+  grid-template-rows: auto minmax(320px, 1fr) auto auto;
+  gap: 12px;
+  min-height: 560px;
+}
+
+.social-notes-editor.is-empty {
+  opacity: 0.78;
+}
+
+#socialNoteTitle,
+#socialNoteContent {
+  background: color-mix(in oklab, var(--panel-bg) 96%, #fff);
+  border-radius: 18px;
+}
+
+#socialNoteTitle {
+  min-height: 54px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+#socialNoteContent {
+  min-height: 320px;
+  height: 100%;
+  resize: vertical;
+  line-height: 1.6;
 }
 
 .social-note-files-toolbar {
@@ -9333,6 +9428,21 @@ button,
 }
 
 /* 2026-03 compact topbar + readable sidebar labels on narrow screens */
+@media (max-width: 980px) {
+  .accounting-month-row-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .accounting-month-row-summary {
+    justify-content: flex-start;
+  }
+
+  .accounting-month-row-grid,
+  .accounting-month-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+}
 @media (max-width: 1200px) and (min-width: 981px) {
   #appSection.app-shell {
     grid-template-columns: minmax(220px, 248px) minmax(0, 1fr);
@@ -10620,6 +10730,14 @@ body.mobile-apk-mode #sales > .panel:first-of-type #salesExtraWrap {
     grid-template-columns: 1fr;
   }
 
+  .social-calendar-inline-row {
+    grid-template-columns: 1fr;
+  }
+
+  .social-calendar-reminder-custom-row {
+    grid-template-columns: 1fr;
+  }
+
   .social-calendar-sync-card {
     position: static;
   }
@@ -11815,6 +11933,7 @@ body.mobile-client-mode .social-checkers-board-wrap {
   }
 }
 
+
 .social-task-toolbar--v2 {
   display: flex;
   justify-content: space-between;
@@ -12030,1036 +12149,3 @@ body.mobile-client-mode .social-checkers-board-wrap {
   padding: 6px 4px;
 }
 
-
-/* 2026-03-16 tasks mobile/apk stability + notification center */
-.social-task-row {
-  grid-template-columns: 36px minmax(0, 1fr) auto;
-  align-items: start;
-}
-
-.social-task-main {
-  min-width: 0;
-}
-
-.social-task-check {
-  border: 1px solid var(--line);
-  background: var(--panel-bg);
-  border-radius: 10px;
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
-  min-height: 34px;
-  padding: 0;
-  font-size: 18px;
-  line-height: 1;
-  color: var(--text-muted);
-}
-
-.social-task-check.is-done {
-  color: #16a34a;
-  border-color: color-mix(in srgb, #22c55e 64%, var(--line));
-  background: color-mix(in srgb, #22c55e 14%, var(--panel-bg));
-}
-
-.social-task-title {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-}
-
-.social-task-title > b {
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.social-task-row.is-done .social-task-title > b {
-  text-decoration: line-through;
-  opacity: .78;
-}
-
-.social-task-kind-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  padding: 3px 8px;
-  font-size: 11px;
-  font-weight: 700;
-  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
-  max-width: 190px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.social-task-kind-badge.personal {
-  background: color-mix(in srgb, #3b82f6 18%, transparent);
-  color: #1d4ed8;
-}
-
-.social-task-kind-badge.company {
-  background: color-mix(in srgb, #f59e0b 17%, transparent);
-  color: #92400e;
-}
-
-.social-task-pending-hint {
-  font-size: 11px;
-  color: color-mix(in srgb, #f59e0b 78%, var(--text));
-}
-
-.social-notif-center {
-  position: fixed;
-  right: 12px;
-  top: 72px;
-  width: min(390px, calc(100vw - 20px));
-  max-height: min(72vh, 660px);
-  display: grid;
-  grid-template-rows: auto minmax(120px, 1fr);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--panel-bg) 94%, #ffffff 6%);
-  box-shadow: 0 18px 36px rgba(9, 18, 48, 0.24);
-  z-index: 1250;
-  overflow: hidden;
-}
-
-.social-notif-center.hidden {
-  display: none;
-}
-
-.social-notif-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--panel-bg-soft) 70%, var(--panel-bg) 30%);
-}
-
-.social-notif-list {
-  overflow: auto;
-  display: grid;
-  gap: 8px;
-  padding: 10px;
-}
-
-.social-notif-item {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--panel-bg-soft);
-  padding: 10px;
-  text-align: left;
-  display: grid;
-  gap: 5px;
-  width: 100%;
-}
-
-.social-notif-item-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.social-notif-kind {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-}
-
-.social-notif-item p {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 13px;
-}
-
-.social-notif-item b {
-  font-size: 14px;
-  color: var(--text);
-}
-
-.social-notif-item.is-unread.kind-chat {
-  border-color: color-mix(in srgb, #3b82f6 62%, var(--line));
-  background: color-mix(in srgb, #3b82f6 11%, var(--panel-bg-soft));
-}
-
-.social-notif-item.is-unread.kind-task {
-  border-color: color-mix(in srgb, #16a34a 62%, var(--line));
-  background: color-mix(in srgb, #16a34a 11%, var(--panel-bg-soft));
-}
-
-.social-notif-item.is-unread.kind-calendar {
-  border-color: color-mix(in srgb, #f59e0b 62%, var(--line));
-  background: color-mix(in srgb, #f59e0b 11%, var(--panel-bg-soft));
-}
-
-.social-notif-item.is-unread.kind-system {
-  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
-}
-
-.social-notif-item.is-read {
-  opacity: .68;
-  filter: grayscale(.2);
-}
-
-@media (max-width: 980px) {
-  .social-task-row {
-    grid-template-columns: 34px minmax(0, 1fr);
-    gap: 8px;
-  }
-
-  .social-task-actions {
-    grid-column: 1 / -1;
-    justify-content: flex-end;
-  }
-}
-
-body.mobile-apk-mode #socialSubtabTasks .social-task-row,
-body.mobile-client-mode #socialSubtabTasks .social-task-row {
-  padding: 9px 8px;
-}
-
-body.mobile-apk-mode #socialSubtabTasks .social-task-title > b,
-body.mobile-client-mode #socialSubtabTasks .social-task-title > b {
-  font-size: 15px;
-}
-
-body.mobile-apk-mode .social-notif-center,
-body.mobile-client-mode .social-notif-center {
-  left: 10px;
-  right: 10px;
-  width: auto;
-  top: calc(env(safe-area-inset-top, 0px) + 62px);
-  max-height: min(70vh, 560px);
-}
-
-
-/* 2026-03-16 tasks follow-up: visibility + notifications */
-.social-task-check {
-  color: #94a3b8;
-  font-weight: 800;
-  border-color: color-mix(in srgb, #94a3b8 45%, var(--line));
-}
-
-.social-task-check:not(.is-done) {
-  background: color-mix(in srgb, #cbd5e1 8%, var(--panel-bg));
-}
-
-.social-task-actions {
-  min-width: 92px;
-  justify-content: flex-end;
-}
-
-.social-task-actions:empty {
-  display: none;
-}
-
-.social-task-meta {
-  align-items: center;
-  row-gap: 6px;
-}
-
-.social-task-assignee {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.social-task-assignee .tg-avatar {
-  width: 22px;
-  height: 22px;
-  min-width: 22px;
-  min-height: 22px;
-}
-
-.social-task-assignee-name {
-  color: #2563eb;
-  font-weight: 700;
-  max-width: 170px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.social-notif-center {
-  background: color-mix(in srgb, var(--panel-bg) 97%, #ffffff 3%);
-  border-color: color-mix(in srgb, var(--line) 75%, #7ea6ff 25%);
-  box-shadow: 0 22px 42px rgba(8, 16, 42, 0.28);
-}
-
-.social-notif-list {
-  gap: 10px;
-}
-
-.social-notif-item {
-  line-height: 1.35;
-  white-space: normal;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-}
-
-.social-notif-item b {
-  display: block;
-  line-height: 1.35;
-  margin-bottom: 2px;
-}
-
-.social-notif-item p {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  line-height: 1.35;
-}
-
-body.mobile-apk-mode .social-notif-center,
-body.mobile-client-mode .social-notif-center {
-  left: 8px;
-  right: 8px;
-  max-height: min(74vh, 620px);
-}
-
-/* 2026-03-17 tasks + notifications stabilization */
-.social-notif-center {
-  background: #ffffff;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  border-color: color-mix(in srgb, var(--line) 70%, #4f7ef7 30%);
-}
-
-.social-notif-head {
-  background: #f8fbff;
-}
-
-.social-notif-item {
-  background: #ffffff;
-  border-color: color-mix(in srgb, var(--line) 80%, #c2d4ff 20%);
-}
-
-.social-notif-item b {
-  color: #142744;
-  font-weight: 800;
-}
-
-.social-notif-item p {
-  color: #334155;
-}
-
-.social-notif-item.is-read {
-  opacity: 0.92;
-  filter: grayscale(0.18);
-  background: #f5f7fb;
-}
-
-.social-notif-item.is-unread {
-  opacity: 1;
-}
-
-.social-task-item {
-  grid-template-columns: 34px minmax(0, 1fr) 30px;
-}
-
-.social-task-delete {
-  width: 30px;
-  height: 30px;
-  min-width: 30px;
-  min-height: 30px;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: color-mix(in srgb, #ef4444 78%, var(--text));
-  background: color-mix(in srgb, #ef4444 9%, var(--panel-bg));
-  border: 1px solid color-mix(in srgb, #ef4444 40%, var(--line));
-}
-
-.social-task-delete:hover {
-  background: color-mix(in srgb, #ef4444 14%, var(--panel-bg));
-}
-
-body.mobile-apk-mode #socialSubtabTasks .social-tasks-board,
-body.mobile-client-mode #socialSubtabTasks .social-tasks-board {
-  max-height: none;
-  overflow: visible;
-}
-
-body.mobile-apk-mode #socialSubtabTasks .social-task-board-v2,
-body.mobile-client-mode #socialSubtabTasks .social-task-board-v2 {
-  gap: 10px;
-}
-
-body.mobile-apk-mode #socialSubtabTasks .social-task-item,
-body.mobile-client-mode #socialSubtabTasks .social-task-item {
-  grid-template-columns: 32px minmax(0, 1fr) 28px;
-}
-/* 2026-03-17 mobile notification + task title clipping hotfix */
-.social-task-content {
-  min-width: 0;
-  overflow: hidden;
-}
-
-.social-task-title-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.social-task-title-text {
-  display: block;
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.social-notif-item-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-}
-
-.social-notif-kind {
-  display: inline-block;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.social-notif-item-head small {
-  white-space: nowrap;
-}
-
-body.mobile-apk-mode .social-notif-center,
-body.mobile-client-mode .social-notif-center {
-  left: 8px !important;
-  right: 8px !important;
-  width: auto !important;
-  max-width: none !important;
-}
-
-body.mobile-apk-mode .social-notif-list,
-body.mobile-client-mode .social-notif-list {
-  max-height: calc(74vh - 58px);
-}
-
-
-/* 2026-03-18 mobile notification center lock */
-body.mobile-apk-mode .social-notif-center.mobile-open,
-body.mobile-client-mode .social-notif-center.mobile-open {
-  left: 8px !important;
-  right: 8px !important;
-  width: auto !important;
-  max-width: none !important;
-  top: calc(env(safe-area-inset-top, 0px) + 56px) !important;
-  bottom: 8px !important;
-  max-height: none !important;
-  min-height: 320px !important;
-  grid-template-rows: auto minmax(0, 1fr) !important;
-  z-index: 2800 !important;
-}
-
-body.mobile-apk-mode .social-notif-center.mobile-open .social-notif-list,
-body.mobile-client-mode .social-notif-center.mobile-open .social-notif-list {
-  max-height: none !important;
-  min-height: 0 !important;
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-}
-
-body.mobile-apk-mode .social-notif-center.mobile-open .social-notif-item,
-body.mobile-client-mode .social-notif-center.mobile-open .social-notif-item {
-  background: #ffffff !important;
-  opacity: 1 !important;
-}
-
-
-/* 2026-03-18 mobile notification readability hotfix (final) */
-body.mobile-apk-mode .social-notif-center.mobile-open,
-body.mobile-client-mode .social-notif-center.mobile-open {
-  left: calc(env(safe-area-inset-left, 0px) + 8px) !important;
-  right: calc(env(safe-area-inset-right, 0px) + 8px) !important;
-  width: auto !important;
-  max-width: none !important;
-  top: calc(env(safe-area-inset-top, 0px) + 56px) !important;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 8px) !important;
-  min-height: 320px !important;
-  max-height: none !important;
-  background: #ffffff !important;
-  border-color: color-mix(in srgb, var(--line) 72%, #4f7ef7 28%) !important;
-  box-shadow: 0 20px 44px rgba(11, 20, 46, 0.33) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  z-index: 3200 !important;
-}
-
-body.mobile-apk-mode .social-notif-center.mobile-open .social-notif-list,
-body.mobile-client-mode .social-notif-center.mobile-open .social-notif-list {
-  padding: 10px !important;
-  gap: 10px !important;
-  max-height: none !important;
-  min-height: 0 !important;
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-  overscroll-behavior: contain !important;
-}
-
-body.mobile-apk-mode .social-notif-center.mobile-open .social-notif-item,
-body.mobile-client-mode .social-notif-center.mobile-open .social-notif-item {
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: stretch !important;
-  justify-content: flex-start !important;
-  gap: 6px !important;
-  min-height: 88px !important;
-  padding: 10px 11px !important;
-  text-align: left !important;
-  line-height: 1.35 !important;
-  overflow: hidden !important;
-  background: #ffffff !important;
-  opacity: 1 !important;
-}
-
-body.mobile-apk-mode .social-notif-center.mobile-open .social-notif-item-head,
-body.mobile-client-mode .social-notif-center.mobile-open .social-notif-item-head {
-  width: 100% !important;
-  display: grid !important;
-  grid-template-columns: minmax(0, 1fr) auto !important;
-  align-items: center !important;
-  gap: 8px !important;
-}
-
-body.mobile-apk-mode .social-notif-center.mobile-open .social-notif-kind,
-body.mobile-client-mode .social-notif-center.mobile-open .social-notif-kind {
-  display: inline-block !important;
-  min-width: 0 !important;
-  max-width: 100% !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
-}
-
-body.mobile-apk-mode .social-notif-center.mobile-open .social-notif-item-head small,
-body.mobile-client-mode .social-notif-center.mobile-open .social-notif-item-head small {
-  justify-self: end !important;
-  white-space: nowrap !important;
-  font-size: 12px !important;
-  line-height: 1.2 !important;
-}
-
-body.mobile-apk-mode .social-notif-center.mobile-open .social-notif-item b,
-body.mobile-client-mode .social-notif-center.mobile-open .social-notif-item b,
-body.mobile-apk-mode .social-notif-center.mobile-open .social-notif-item p,
-body.mobile-client-mode .social-notif-center.mobile-open .social-notif-item p {
-  width: 100% !important;
-  margin: 0 !important;
-  white-space: normal !important;
-  word-break: break-word !important;
-  overflow-wrap: anywhere !important;
-}
-
-body.mobile-apk-mode .social-notif-center.mobile-open .social-notif-item p,
-body.mobile-client-mode .social-notif-center.mobile-open .social-notif-item p {
-  display: -webkit-box !important;
-  -webkit-line-clamp: 3 !important;
-  -webkit-box-orient: vertical !important;
-  overflow: hidden !important;
-}
-
-
-/* 2026-03-18 samsung calendar redesign + notif clarity final */
-#socialSubtabCalendar .social-calendar-shell--samsung {
-  position: relative;
-  display: grid;
-  gap: 12px;
-  padding-bottom: 72px;
-  overflow: visible;
-  border-radius: 18px;
-  background: linear-gradient(180deg, color-mix(in oklab, var(--panel-bg-soft) 88%, #ffffff), color-mix(in oklab, var(--panel-bg) 94%, #ffffff));
-}
-
-#socialSubtabCalendar .social-calendar-topbar {
-  display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) 42px;
-  align-items: center;
-  gap: 10px;
-}
-
-#socialSubtabCalendar .social-calendar-topbar h3 {
-  margin: 0;
-  text-align: center;
-  font-size: clamp(24px, 3vw, 34px);
-  line-height: 1.12;
-}
-
-
-#socialSubtabCalendar .social-calendar-grid--samsung .social-day {
-  min-height: 92px;
-  align-items: flex-start;
-}
-
-#socialSubtabCalendar .social-calendar-grid--samsung .social-day b {
-  font-size: 13px;
-  line-height: 1;
-}
-
-#socialSubtabCalendar .social-day-snippets {
-  display: grid;
-  gap: 4px;
-  width: 100%;
-  min-width: 0;
-}
-
-#socialSubtabCalendar .social-day-snippet {
-  position: relative;
-  display: block;
-  width: 100%;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 2px 7px 2px 10px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--entry-color, #0ea5e9) 16%, #ffffff 84%);
-  font-size: 11px;
-  line-height: 1.24;
-  font-weight: 600;
-  color: color-mix(in oklab, var(--text-color) 88%, #10233d);
-}
-
-#socialSubtabCalendar .social-day-snippet::before {
-  content: "";
-  position: absolute;
-  left: 4px;
-  top: 50%;
-  width: 4px;
-  height: 4px;
-  border-radius: 999px;
-  transform: translateY(-50%);
-  background: var(--entry-color, #0ea5e9);
-}
-
-#socialSubtabCalendar .social-day-more {
-  display: inline-flex;
-  width: fit-content;
-  margin-top: 2px;
-  padding: 0 6px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in oklab, var(--line) 84%, transparent);
-  background: color-mix(in oklab, var(--panel-bg) 84%, #ffffff);
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--text-muted);
-}
-
-#socialSubtabCalendar .social-calendar-day-sheet-backdrop {
-  position: absolute;
-  inset: 0;
-  z-index: 16;
-  border-radius: 18px;
-  background: rgba(245, 249, 255, 0.72);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-}
-
-#socialSubtabCalendar .social-calendar-day-sheet {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 14px;
-  z-index: 17;
-  display: grid;
-  gap: 12px;
-  max-height: min(70vh, 560px);
-  padding: 14px;
-  border: 1px solid color-mix(in oklab, var(--line) 82%, var(--accent) 18%);
-  border-radius: 24px;
-  background: color-mix(in oklab, var(--panel-bg) 96%, #ffffff);
-  box-shadow: 0 28px 50px rgba(14, 27, 54, 0.22);
-}
-
-#socialSubtabCalendar .social-calendar-day-sheet.hidden,
-#socialSubtabCalendar .social-calendar-day-sheet-backdrop.hidden {
-  display: none;
-}
-
-#socialSubtabCalendar .social-calendar-day-sheet-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-#socialSubtabCalendar .social-calendar-day-sheet-title {
-  min-width: 0;
-}
-
-#socialSubtabCalendar .social-calendar-day-sheet-head span {
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-}
-
-#socialSubtabCalendar .social-calendar-day-sheet-head h4 {
-  margin: 2px 0 0;
-  font-size: clamp(20px, 2.2vw, 28px);
-}
-
-#socialSubtabCalendar .social-calendar-day-sheet-close {
-  width: 40px;
-  height: 40px;
-  border: 1px solid color-mix(in oklab, var(--line) 82%, transparent);
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--panel-bg-soft) 92%, #ffffff);
-  font-size: 24px;
-  line-height: 1;
-  color: var(--text-color);
-}
-
-#socialSubtabCalendar .social-calendar-day-list {
-  display: grid;
-  gap: 10px;
-  min-height: 0;
-  overflow: auto;
-}
-
-#socialSubtabCalendar .social-calendar-day-entry {
-  display: grid;
-  grid-template-columns: 12px minmax(0, 1fr);
-  gap: 10px;
-  align-items: flex-start;
-  width: 100%;
-  border: 1px solid color-mix(in srgb, var(--entry-color, #0ea5e9) 24%, var(--line) 76%);
-  border-radius: 16px;
-  padding: 12px;
-  background: color-mix(in srgb, var(--entry-color, #0ea5e9) 10%, #ffffff 90%);
-  text-align: left;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
-}
-
-#socialSubtabCalendar .social-calendar-day-entry-dot {
-  width: 8px;
-  height: 8px;
-  margin-top: 6px;
-  border-radius: 999px;
-  background: var(--entry-color, #0ea5e9);
-}
-
-#socialSubtabCalendar .social-calendar-day-entry-main {
-  min-width: 0;
-  display: grid;
-  gap: 4px;
-}
-
-#socialSubtabCalendar .social-calendar-day-entry-main b,
-#socialSubtabCalendar .social-calendar-day-entry-main small {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-#socialSubtabCalendar .social-calendar-day-entry-main b {
-  font-size: 18px;
-}
-
-#socialSubtabCalendar .social-calendar-day-entry-main small {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-#socialSubtabCalendar .social-calendar-day-empty {
-  color: var(--text-muted);
-  font-size: 14px;
-}
-
-#socialSubtabCalendar .social-calendar-day-sheet-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
-#socialSubtabCalendar .social-calendar-day-sheet-add {
-  width: 54px;
-  height: 54px;
-  border: 0;
-  border-radius: 50%;
-  font-size: 30px;
-  line-height: 1;
-  color: #ffffff;
-  background: linear-gradient(145deg, #9acb43, #79b021);
-  box-shadow: 0 16px 28px rgba(79, 133, 28, 0.28);
-}
-
-#socialSubtabCalendar .social-calendar-fab {
-  position: absolute;
-  right: 14px;
-  bottom: 12px;
-  width: 52px;
-  height: 52px;
-  border: 0;
-  border-radius: 50%;
-  font-size: 30px;
-  line-height: 1;
-  color: #ffffff;
-  background: linear-gradient(145deg, #4fa7ff, #1f7ef3);
-  box-shadow: 0 16px 28px rgba(29, 80, 156, 0.34);
-}
-
-.social-calendar-quick-add-menu {
-  display: grid;
-  gap: 8px;
-}
-
-.social-calendar-quick-add-menu button {
-  width: 100%;
-}
-
-.social-calendar-detail-grid {
-  display: grid;
-  gap: 8px;
-}
-
-.social-calendar-detail-grid h3 {
-  margin: 0;
-  font-size: 22px;
-}
-
-.social-calendar-detail-grid p {
-  margin: 0;
-  color: var(--text-muted);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.social-calendar-detail-meta {
-  display: grid;
-  gap: 4px;
-}
-
-.social-calendar-detail-actions {
-  justify-content: flex-end;
-}
-
-@media (max-width: 980px) {
-  #socialSubtabCalendar .social-calendar-grid--samsung .social-day {
-    min-height: 72px;
-    padding: 5px;
-  }
-
-  #socialSubtabCalendar .social-day-snippet {
-    font-size: 10px;
-  }
-
-  #socialSubtabCalendar .social-calendar-day-sheet {
-    left: 8px;
-    right: 8px;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
-    max-height: min(76vh, 580px);
-    padding: 12px;
-  }
-
-  #socialSubtabCalendar .social-calendar-day-sheet-head {
-    align-items: flex-start;
-  }
-
-  #socialSubtabCalendar .social-calendar-day-entry-main b {
-    font-size: 16px;
-  }
-
-  #socialSubtabCalendar .social-calendar-fab {
-    width: 50px;
-    height: 50px;
-    right: 10px;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
-  }
-}
-/* Notification center readability and no overlap (web + APK) */
-#socialNotificationCenter.social-notif-center {
-  background: #ffffff !important;
-  border-color: color-mix(in srgb, var(--line) 72%, #4f7ef7 28%) !important;
-  box-shadow: 0 20px 40px rgba(10, 20, 46, 0.32) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-
-#socialNotificationCenter .social-notif-head {
-  background: #f6faff !important;
-}
-
-#socialNotificationCenter .social-notif-item {
-  opacity: 1 !important;
-  background: #ffffff !important;
-  border-color: color-mix(in srgb, var(--line) 78%, #c4d7ff 22%) !important;
-}
-
-#socialNotificationCenter .social-notif-item b {
-  color: #102846 !important;
-  font-weight: 800;
-}
-
-#socialNotificationCenter .social-notif-item p {
-  color: #2f425d !important;
-}
-
-#socialNotificationCenter .social-notif-item.is-read {
-  background: #f3f6fb !important;
-  opacity: .94 !important;
-  filter: grayscale(.12);
-}
-
-body.mobile-apk-mode #socialNotificationCenter.social-notif-center.mobile-open,
-body.mobile-client-mode #socialNotificationCenter.social-notif-center.mobile-open {
-  left: calc(env(safe-area-inset-left, 0px) + 8px) !important;
-  right: calc(env(safe-area-inset-right, 0px) + 8px) !important;
-  top: calc(env(safe-area-inset-top, 0px) + 56px) !important;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 8px) !important;
-  max-height: none !important;
-  z-index: 4200 !important;
-}
-
-body.mobile-apk-mode #socialNotificationCenter.social-notif-center.mobile-open .social-notif-list,
-body.mobile-client-mode #socialNotificationCenter.social-notif-center.mobile-open .social-notif-list {
-  max-height: none !important;
-  min-height: 0 !important;
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-}
-
-body.mobile-apk-mode #socialNotificationCenter .social-notif-item,
-body.mobile-client-mode #socialNotificationCenter .social-notif-item {
-  min-height: 96px;
-}
-
-/* Task title clipping in APK/client */
-body.mobile-apk-mode #socialSubtabTasks .social-task-title-text,
-body.mobile-client-mode #socialSubtabTasks .social-task-title-text {
-  display: block;
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-body.mobile-apk-mode #socialSubtabTasks .social-task-content,
-body.mobile-client-mode #socialSubtabTasks .social-task-content {
-  min-width: 0;
-  overflow: hidden;
-}
-
-/* 2026-03-18 hardening: notification center readability + task title clamp */
-#socialNotificationCenter.social-notif-center,
-body.mobile-apk-mode #socialNotificationCenter.social-notif-center,
-body.mobile-client-mode #socialNotificationCenter.social-notif-center {
-  opacity: 1 !important;
-  background: #ffffff !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-
-#socialNotificationCenter .social-notif-list {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 10px !important;
-  padding: 10px !important;
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-}
-
-#socialNotificationCenter .social-notif-item {
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: stretch !important;
-  justify-content: flex-start !important;
-  gap: 6px !important;
-  min-height: 94px !important;
-  height: auto !important;
-  overflow: hidden !important;
-  text-align: left !important;
-}
-
-#socialNotificationCenter .social-notif-item-head {
-  display: grid !important;
-  grid-template-columns: minmax(0, 1fr) auto !important;
-  align-items: center !important;
-  gap: 8px !important;
-}
-
-#socialNotificationCenter .social-notif-kind {
-  max-width: 100% !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
-}
-
-#socialNotificationCenter .social-notif-item b,
-#socialNotificationCenter .social-notif-item p {
-  margin: 0 !important;
-  min-width: 0 !important;
-  width: 100% !important;
-  white-space: normal !important;
-  word-break: break-word !important;
-  overflow-wrap: anywhere !important;
-  line-height: 1.35 !important;
-}
-
-#socialNotificationCenter .social-notif-item p {
-  display: -webkit-box !important;
-  -webkit-line-clamp: 3 !important;
-  -webkit-box-orient: vertical !important;
-  overflow: hidden !important;
-}
-
-body.mobile-apk-mode #socialNotificationCenter.social-notif-center.mobile-open,
-body.mobile-client-mode #socialNotificationCenter.social-notif-center.mobile-open {
-  left: calc(env(safe-area-inset-left, 0px) + 8px) !important;
-  right: calc(env(safe-area-inset-right, 0px) + 8px) !important;
-  top: calc(env(safe-area-inset-top, 0px) + 56px) !important;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 8px) !important;
-  max-height: none !important;
-  min-height: 320px !important;
-  z-index: 4400 !important;
-}
-
-#socialSubtabTasks .social-task-title-row {
-  display: grid !important;
-  grid-template-columns: minmax(0, 1fr) auto !important;
-  align-items: center !important;
-  gap: 8px !important;
-  min-width: 0 !important;
-}
-
-#socialSubtabTasks .social-task-title-text {
-  display: block !important;
-  min-width: 0 !important;
-  max-width: 100% !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
-}
-
-#socialSubtabTasks .social-task-kind {
-  max-width: 96px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-body.mobile-apk-mode #socialSubtabTasks .social-task-item,
-body.mobile-client-mode #socialSubtabTasks .social-task-item {
-  overflow: hidden;
-}
