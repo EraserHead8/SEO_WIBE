@@ -412,6 +412,12 @@
     if (shouldRepair) queueCopy();
   });
 
+  function markReady() {
+    if (!document.body) return;
+    document.body.classList.remove("text-fix-pending");
+    document.body.classList.add("text-fix-ready");
+  }
+
   function start() {
     queueRepair();
     queueCopy();
@@ -424,6 +430,8 @@
         attributeFilter: TEXT_ATTRS,
       });
     }
+    requestAnimationFrame(() => requestAnimationFrame(markReady));
+    window.addEventListener("load", markReady, { once: true });
   }
 
   if (document.readyState === "loading") {

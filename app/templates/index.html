@@ -11,8 +11,17 @@
   <link rel="manifest" href="/site.webmanifest" />
   <link rel="stylesheet" href="/static/styles.css?v={{ static_v('styles.css') }}" />
   <link rel="stylesheet" href="/static/social_overrides.css?v={{ static_v('social_overrides.css') }}" />
+  <style>
+    body.text-fix-pending {
+      visibility: hidden;
+    }
+
+    body.text-fix-ready {
+      visibility: visible;
+    }
+  </style>
 </head>
-<body>
+<body class="text-fix-pending">
   <div class="app-bg"></div>
 
   <section id="authSection" class="auth-wrap">
