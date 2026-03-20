@@ -1,4 +1,4 @@
-﻿(function textOverridesV20260320() {
+(function textOverridesV20260320() {
   if (typeof window === "undefined") return;
   if (window.__textOverridesV20260320) return;
   window.__textOverridesV20260320 = true;
@@ -464,6 +464,7 @@
     "socialOpenModal",
   ].forEach(wrapAfter);
 
+  const enableMojibakeObserver = Boolean(window.__enableTextMutationObserver);
   const observer = new MutationObserver((mutations) => {
     let shouldRepair = false;
     for (const mutation of mutations) {
@@ -494,7 +495,7 @@
   function start() {
     queueRepair();
     queueCopy();
-    if (document.body) {
+    if (enableMojibakeObserver && document.body) {
       observer.observe(document.body, {
         childList: true,
         subtree: true,
@@ -602,13 +603,14 @@
     "switchReviewsSubtab",
   ].forEach(wrapAfter);
 
+  const enableHotfixObserver = Boolean(window.__enableTextHotfixObserver);
   const observer = new MutationObserver(() => {
     requestAnimationFrame(applyHotfixText);
   });
 
   function start() {
     applyHotfixText();
-    if (document.body) {
+    if (enableHotfixObserver && document.body) {
       observer.observe(document.body, { childList: true, subtree: true });
     }
     window.addEventListener("load", applyHotfixText, { once: true });

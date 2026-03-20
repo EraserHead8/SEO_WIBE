@@ -1,4 +1,4 @@
-﻿(function socialOverridesV20260320() {
+(function socialOverridesV20260320() {
   if (typeof window === "undefined") return;
   if (window.__socialOverridesV20260320) return;
   window.__socialOverridesV20260320 = true;
@@ -234,6 +234,12 @@
         return `<article class="${classes.join(" ")}" data-task-id="${id}" draggable="true" ondragstart="socialTaskDragStart(event, ${id})"><button class="social-task-check ${isDone ? "is-done" : ""}" type="button" onclick="socialToggleTaskDone(${id}); event.stopPropagation();" title="${escapeHtml(tr("РћС‚РјРµС‚РёС‚СЊ РІС‹РїРѕР»РЅРµРЅРЅРѕР№", "Mark as done"))}">${isDone ? "✓" : ""}</button><div class="social-task-content" onclick="socialOpenTaskModal(${id})"><div class="social-task-title-row"><b class="social-task-title-text">${escapeHtml(task?.title || "-")}</b><span class="social-task-kind ${String(task?.task_kind || "company").trim().toLowerCase() === "personal" ? "personal" : "company"}">${escapeHtml(taskProjectMeta(task))}</span></div><div class="social-task-subline"><span>${escapeHtml(socialTaskDueLabel(task))}</span>${socialTaskAssigneeMeta(task)}</div><div class="social-task-subline social-task-subline--secondary"><span>${escapeHtml(taskStatusLabel(task?.status))}</span>${String(task?.description || "").trim() ? `<span class="social-task-meta-trim">${escapeHtml(String(task.description || "").replace(/\s+/g, " ").trim())}</span>` : `<span class="social-task-meta-trim">${escapeHtml(tr("Р‘РµР· РѕРїРёСЃР°РЅРёСЏ", "No description"))}</span>`}</div>${pending ? `<span class="social-task-pending">${escapeHtml(tr("Р•С‰Рµ 5 СЃРµРєСѓРЅРґ РјРѕР¶РЅРѕ РѕС‚РјРµРЅРёС‚СЊ РїРѕРІС‚РѕСЂРЅС‹Рј РЅР°Р¶Р°С‚РёРµРј.", "You can undo within 5 seconds by tapping again."))}</span>` : ""}</div><button class="social-task-delete" type="button" onclick="socialDeleteTask(${id}); event.stopPropagation();" title="${escapeHtml(tr("РЈРґР°Р»РёС‚СЊ", "Delete"))}">✕</button></article>`;
       }).join("")}</div></section>`;
     }).join("")}</div>`;
+    if ((typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell()) || (typeof socialIsMobileClientShell === "function" && socialIsMobileClientShell()) || Boolean(window.mobileClientMode) || (typeof socialHasCoarsePointer === "function" && socialHasCoarsePointer())) {
+      host.querySelectorAll(".social-task-item").forEach((item) => {
+        item.setAttribute("draggable", "false");
+        item.removeAttribute("ondragstart");
+      });
+    }
   };
 
   socialOpenTaskModal = function socialOpenTaskModalOverride(taskId = 0, forcedKind = "") {
@@ -702,9 +708,7 @@
   }
 
   function currentMode() {
-    const mode = String(socialState?.calendarTaskFilter || "events").trim().toLowerCase();
-    if (mode === "tasks") return "tasks";
-    if (mode === "my_tasks") return "my_tasks";
+    // Samsung-like calendar keeps a single month view with merged records.
     return "events";
   }
 
@@ -723,37 +727,42 @@
   function eventRowsForDay(day) {
     return (socialState?.calendarEvents || [])
       .filter((row) => dayKey(row?.start_at || "") === day)
+      .map((row) => ({ ...row, __swMode: "events" }))
       .sort((a, b) => (normDate(a?.start_at)?.getTime() || 0) - (normDate(b?.start_at)?.getTime() || 0));
   }
 
-  function taskRowsForDay(day, mode) {
+  function taskRowsForDay(day) {
     return (socialState?.tasks || [])
       .filter((row) => dayKey(row?.due_date || "") === day)
-      .filter((row) => mode !== "my_tasks" || String(row?.task_kind || "").trim().toLowerCase() === "personal")
+      .map((row) => ({ ...row, __swMode: "tasks" }))
       .sort((a, b) => (normDate(a?.due_date)?.getTime() || 0) - (normDate(b?.due_date)?.getTime() || 0));
   }
 
-  function rowsForDay(day, mode) {
-    if (mode === "events") return eventRowsForDay(day);
-    return taskRowsForDay(day, mode);
+  function rowsForDay(day) {
+    const merged = [...eventRowsForDay(day), ...taskRowsForDay(day)];
+    merged.sort((a, b) => {
+      const left = normDate(a?.start_at || a?.due_date || "")?.getTime() || 0;
+      const right = normDate(b?.start_at || b?.due_date || "")?.getTime() || 0;
+      if (left !== right) return left - right;
+      return String(a?.title || "").localeCompare(String(b?.title || ""), currentLang === "en" ? "en" : "ru");
+    });
+    return merged;
   }
 
-  function renderCellChip(row, mode) {
+  function renderCellChip(row) {
+    const mode = String(row?.__swMode || "events").trim().toLowerCase();
     const title = String(row?.title || "-").trim() || "-";
-    const isEvent = mode === "events";
+    const itemMode = String(row?.__swMode || mode || "events").trim().toLowerCase();
+    const isEvent = itemMode === "events";
     const rawTime = isEvent ? String(row?.start_at || "").trim() : String(row?.due_date || "").trim();
     const time = rawTime ? timeLabel(rawTime) : "";
     const style = `style="--sw-chip-color:${escapeHtml(rowColor(row, mode))}"`;
     return `<span class="sw-calendar-chip ${isEvent ? "is-event" : "is-task"}" ${style}><span class="sw-calendar-chip-title">${escapeHtml(time ? `${time} ${title}` : title)}</span></span>`;
   }
 
-  function setModeButtonsState(mode) {
+  function setModeButtonsState() {
     const host = document.getElementById("socialCalendarTaskMode");
-    if (!host) return;
-    host.querySelectorAll("[data-mode]").forEach((btn) => {
-      const key = String(btn.getAttribute("data-mode") || "").trim().toLowerCase();
-      btn.classList.toggle("is-active", key === mode);
-    });
+    if (host) host.style.display = "none";
   }
 
   function calendarMonthTitle(date) {
@@ -783,10 +792,15 @@
     const root = document.getElementById("socialSubtabCalendar");
     if (!root) return;
     root.classList.add("social-calendar-samsung-mode");
+    const modeHost = document.getElementById("socialCalendarTaskMode");
+    if (modeHost) modeHost.style.display = "none";
+    const toolbar = root.querySelector(".social-calendar-toolbar--clean");
+    if (toolbar) toolbar.style.display = "none";
   }
 
   function buildDayItem(row, mode, index, selectedDay) {
-    const isEvent = mode === "events";
+    const itemMode = String(row?.__swMode || mode || "events").trim().toLowerCase();
+    const isEvent = itemMode === "events";
     const rowId = isEvent ? eventBaseId(row) : Number(row?.id || 0);
     const key = `${mode}:${rowId}:${index}:${selectedDay}`;
     const expanded = String(socialState?.calendarExpandedItemKey || "") === key;
@@ -817,7 +831,7 @@
           assignee,
         ].filter(Boolean);
     const meta = metaBits.join(" · ");
-    const color = rowColor(row, mode);
+    const color = rowColor(row, itemMode);
     const openFn = isEvent ? `socialOpenCalendarModal(${rowId})` : `socialOpenTaskModal(${rowId})`;
     const deleteFn = isEvent ? `socialDeleteEvent(${rowId})` : `socialDeleteTask(${rowId})`;
 
@@ -853,13 +867,7 @@
   }
 
   window.socialCalendarSamsungOpenCreate = function socialCalendarSamsungOpenCreate() {
-    const mode = currentMode();
-    if (mode === "events") {
-      socialOpenCalendarModal();
-      return;
-    }
-    socialState.taskDraftKind = mode === "my_tasks" ? "personal" : "company";
-    socialOpenTaskModal(0, socialState.taskDraftKind);
+    socialOpenCalendarModal();
   };
 
   window.socialToggleCalendarItemExpanded = function socialToggleCalendarItemExpanded(key) {
@@ -885,7 +893,7 @@
     const lastDay = new Date(year, month + 1, 0, 0, 0, 0, 0);
     const shift = (firstDay.getDay() + 6) % 7;
     const days = lastDay.getDate();
-    const mode = currentMode();
+    const mode = "events";
     const todayKey = dayKey(new Date());
     const compact = typeof window.matchMedia === "function" && window.matchMedia("(max-width: 980px)").matches;
     const previewLimit = compact ? 2 : 3;
@@ -909,8 +917,8 @@
 
     for (let day = 1; day <= days; day += 1) {
       const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-      const rows = rowsForDay(key, mode);
-      const preview = rows.slice(0, previewLimit).map((row) => renderCellChip(row, mode)).join("");
+      const rows = rowsForDay(key);
+      const preview = rows.slice(0, previewLimit).map((row) => renderCellChip(row)).join("");
       const more = rows.length - previewLimit;
       const active = String(socialState?.calendarSelectedDay || "") === key ? "active" : "";
       const today = todayKey === key ? "today" : "";
@@ -931,22 +939,22 @@
   socialShowDay = function socialShowDaySamsungOverride(day) {
     const list = document.getElementById("socialCalendarEvents");
     if (!list) return;
-    const mode = currentMode();
+    const mode = "events";
     const selectedDay = String(day || "").trim();
     socialState.calendarSelectedDay = selectedDay;
 
-    const rows = rowsForDay(selectedDay, mode);
+    const rows = rowsForDay(selectedDay);
     const title = dayLabel(selectedDay);
     const cards = rows.length
       ? rows.map((row, idx) => buildDayItem(row, mode, idx, selectedDay)).join("")
-      : `<div class="social-note-empty">${escapeHtml(mode === "events" ? i18n("На этот день событий нет.", "No events for this day.") : i18n("На этот день задач нет.", "No tasks for this day."))}</div>`;
+      : `<div class="social-note-empty">${escapeHtml(i18n("На этот день записей нет.", "No records for this day."))}</div>`;
 
     list.innerHTML = `
       <section class="sw-day-sheet">
         <header class="sw-day-sheet-head">
           <div class="sw-day-sheet-kicker">${escapeHtml(i18n("Выбранный день", "Selected day"))}</div>
           <h4 class="sw-day-sheet-date">${escapeHtml(title)}</h4>
-          <div class="sw-day-sheet-stat">${escapeHtml(`${rows.length}`)} ${escapeHtml(mode === "events" ? i18n("событий", "events") : i18n("задач", "tasks"))}</div>
+          <div class="sw-day-sheet-stat">${escapeHtml(`${rows.length}`)} ${escapeHtml(i18n("записей", "records"))}</div>
         </header>
         <div class="sw-day-sheet-list">${cards}</div>
       </section>
@@ -987,3 +995,4 @@
   hideLegacyCalendarControls();
   ensureCalendarFab();
 })();
+
