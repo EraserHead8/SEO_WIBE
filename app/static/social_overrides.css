@@ -1,4 +1,4 @@
-.social-task-bucket-list {
+﻿.social-task-bucket-list {
   gap: 10px;
 }
 
@@ -395,5 +395,439 @@
   .social-calendar-day-card,
   .social-calendar-day-card.is-task {
     grid-template-columns: 1fr;
+  }
+}
+.social-calendar-sync-card,
+#socialCalendarGoogleConnectBtn,
+#socialCalendarGoogleStatus,
+#socialCalendarGoogleMeta,
+#socialCalendarSyncMessage,
+#socialCalendarGoogleIcs,
+#socialCalendarGoogleReplace,
+.social-calendar-sync-actions,
+.social-calendar-setup-note {
+  display: none !important;
+}
+
+.social-calendar-shell--clean {
+  gap: 14px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--panel-bg-soft) 82%, #ffffff) 0%, #ffffff 100%);
+}
+
+.social-calendar-topbar-clean {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.social-calendar-toolbar--clean {
+  align-items: center;
+}
+
+.social-calendar-nav--simple {
+  align-items: center;
+}
+
+.social-calendar-main--stack {
+  display: grid;
+  gap: 14px;
+}
+
+.social-calendar-task-mode {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.social-calendar-task-mode .chip-btn.is-active {
+  background: color-mix(in oklab, var(--accent) 18%, #ffffff);
+  border-color: color-mix(in oklab, var(--accent) 54%, var(--line));
+  color: color-mix(in oklab, var(--accent) 82%, var(--text-color));
+}
+
+.social-day.rich {
+  min-height: 102px;
+  gap: 6px;
+  padding: 8px;
+  overflow: hidden;
+}
+
+.social-day-head b {
+  font-size: 18px;
+}
+
+.social-day-preview-stack {
+  gap: 4px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.social-day-preview-pill {
+  min-width: 0;
+  overflow: hidden;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border-left: 3px solid var(--social-preview-color, #9dc4ff);
+  background: color-mix(in oklab, var(--social-preview-color, #dbeafe) 30%, #ffffff);
+}
+
+.social-day-preview-pill.is-event,
+.social-day-preview-pill.is-task,
+.social-day-preview-pill.is-task.is-personal {
+  background: color-mix(in oklab, var(--social-preview-color, #dbeafe) 30%, #ffffff);
+}
+
+.social-day-preview-time {
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.social-day-preview-title {
+  font-size: 12px;
+}
+
+.social-calendar-day-card {
+  border-left: 4px solid var(--social-preview-color, color-mix(in oklab, var(--accent) 40%, var(--line)));
+  padding: 12px 14px;
+}
+
+.social-calendar-day-card-body h5 {
+  font-size: 16px;
+}
+
+.social-task-item {
+  grid-template-columns: 30px 1fr 28px;
+  gap: 8px;
+  border-radius: 14px;
+  padding: 8px 10px;
+  box-shadow: none;
+}
+
+.social-task-check,
+.social-task-delete,
+.social-calendar-day-card-check {
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: 999px;
+  font-size: 14px;
+}
+
+.social-task-content {
+  gap: 4px;
+}
+
+.social-task-title-text {
+  font-size: 14px;
+}
+
+.social-task-subline {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.social-task-subline--secondary {
+  display: none;
+}
+
+.social-task-pending {
+  font-size: 11px;
+}
+
+.social-notes-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+.social-note-card,
+.social-note-card-main {
+  height: 100%;
+}
+
+.social-note-card-main {
+  display: flex;
+  flex-direction: column;
+}
+
+.social-note-card-surface {
+  min-height: 168px;
+  height: 168px;
+  padding: 14px 12px 12px;
+  gap: 8px;
+}
+
+.social-note-card-title {
+  font-size: 16px;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.social-note-card-snippet {
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-line-clamp: 6;
+}
+
+.social-note-card-meta {
+  display: grid;
+  gap: 4px;
+  justify-content: stretch;
+  padding: 10px 12px 12px;
+}
+
+.social-event-color-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.social-event-color-row input[type="color"] {
+  width: 48px;
+  min-width: 48px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: transparent;
+}
+
+@media (max-width: 980px) {
+  .social-calendar-topbar-clean {
+    align-items: stretch;
+  }
+
+  .social-calendar-toolbar--clean {
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .social-calendar-nav--simple {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .social-calendar-month-picker {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .social-calendar-task-mode {
+    justify-content: flex-start;
+  }
+
+  .social-day.rich {
+    min-height: 84px;
+    padding: 6px;
+  }
+
+  .social-day-head b {
+    font-size: 16px;
+  }
+
+  .social-day-badge {
+    display: none;
+  }
+
+  .social-day-preview-title {
+    font-size: 11px;
+  }
+
+  .social-note-card-surface {
+    min-height: 150px;
+    height: 150px;
+    padding: 12px 10px 10px;
+  }
+
+  .social-note-card-title {
+    font-size: 14px;
+  }
+
+  .social-note-card-snippet {
+    font-size: 12px;
+    line-height: 1.35;
+    -webkit-line-clamp: 5;
+  }
+
+  .social-note-card-meta {
+    font-size: 10px;
+    padding: 8px 10px 10px;
+  }
+
+  .social-task-bucket > header h4 {
+    font-size: 16px;
+  }
+
+  .social-task-item {
+    grid-template-columns: 28px 1fr 24px;
+    padding: 7px 8px;
+  }
+
+  .social-task-title-row {
+    gap: 4px;
+  }
+
+  .social-task-kind {
+    font-size: 10px;
+    padding: 2px 6px;
+  }
+
+  .social-calendar-day-card,
+  .social-calendar-day-card.is-task {
+    grid-template-columns: 1fr;
+  }
+}
+
+[id*="socialCalendarGoogle"],
+[id*="socialCalendarIcs"],
+[id*="socialCalendarOAuth"],
+[id*="socialCalendarOauth"],
+.social-calendar-google-card,
+.social-calendar-ics-card,
+.social-calendar-sync-panel,
+.social-calendar-source-panel,
+.social-calendar-import-panel {
+  display: none !important;
+}
+
+.social-calendar-cells {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  align-items: stretch;
+}
+
+.social-day.rich {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.social-day-head,
+.social-day-preview-stack,
+.social-day-preview-pill,
+.social-day-preview-title,
+.social-day-preview-time,
+.social-calendar-day-card,
+.social-calendar-day-card-body,
+.social-calendar-day-card-desc,
+.social-note-card,
+.social-note-card-main,
+.social-note-card-surface,
+.social-note-card-title,
+.social-note-card-snippet,
+.social-note-card-meta {
+  min-width: 0;
+}
+
+.social-day-preview-stack {
+  flex: 1 1 auto;
+  max-height: 58px;
+}
+
+.social-day-preview-pill {
+  max-width: 100%;
+}
+
+.social-day-preview-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.social-calendar-day-sheet-date {
+  font-size: clamp(22px, 5vw, 34px);
+}
+
+.social-calendar-day-card {
+  grid-template-columns: 1fr auto;
+}
+
+.social-calendar-day-card-actions {
+  align-self: start;
+}
+
+.social-task-bucket-list {
+  gap: 8px;
+}
+
+.social-task-item {
+  align-items: start;
+}
+
+.social-note-card-delete {
+  top: 8px;
+  right: 8px;
+}
+
+.social-notes-grid > * {
+  min-width: 0;
+}
+
+@media (max-width: 980px) {
+  .social-calendar-cells {
+    gap: 6px;
+  }
+
+  .social-day.rich {
+    min-height: 78px;
+  }
+
+  .social-day-preview-stack {
+    max-height: 42px;
+  }
+
+  .social-day-preview-pill {
+    padding: 5px 6px;
+    border-radius: 10px;
+  }
+
+  .social-day-preview-time {
+    font-size: 9px;
+  }
+
+  .social-day-preview-title {
+    font-size: 10px;
+  }
+
+  .social-calendar-day-sheet {
+    padding: 14px;
+  }
+
+  .social-calendar-day-sheet-head {
+    align-items: start;
+  }
+
+  .social-calendar-day-sheet-stat {
+    font-size: 12px;
+  }
+
+  .social-notes-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .social-note-card-surface {
+    min-height: 144px;
+    height: 144px;
+  }
+
+  .social-note-card-title {
+    font-size: 13px;
+  }
+
+  .social-note-card-snippet {
+    font-size: 11px;
+    -webkit-line-clamp: 5;
   }
 }

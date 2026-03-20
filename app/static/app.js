@@ -300,14 +300,14 @@ const authHeadersStrict = () => {
 
 const TAB_TITLES = {
   products: { ru: ["РўРѕРІР°СЂС‹", "РРјРїРѕСЂС‚, РѕР±РЅРѕРІР»РµРЅРёРµ Рё РїСЂРѕРІРµСЂРєР° РїРѕР·РёС†РёР№"], en: ["Products", "Import, refresh and ranking checks"] },
-  sales: { ru: ["РЎС‚Р°С‚РёСЃС‚РёРєР° Рё РґР°С€Р±РѕСЂРґ", "РџСЂРѕРґР°Р¶Рё, KPI Рё РґРёРЅР°РјРёРєР° РІ РѕРґРЅРѕРј РјРѕРґСѓР»Рµ"], en: ["Statistics & Dashboard", "Sales, KPIs and trends in one module"] },
+  sales: { ru: ["Статистика и дашборд", "Продажи, KPI и динамика в одном модуле"], en: ["Statistics & Dashboard", "Sales, KPIs and trends in one module"] },
   reviews: { ru: ["РћС‚Р·С‹РІС‹/Р’РѕРїСЂРѕСЃС‹", "Р•РґРёРЅС‹Р№ РјРѕРґСѓР»СЊ РѕР±СЂР°С‚РЅРѕР№ СЃРІСЏР·Рё"], en: ["Reviews/Questions", "Unified customer feedback module"] },
   accounting: { ru: ["Р‘СѓС…РіР°Р»С‚РµСЂРёСЏ", "РџСЂРёР±С‹Р»СЊ, СЂР°СЃС…РѕРґС‹ Рё СЌРєРѕРЅРѕРјРёРєР° WB/Ozon"], en: ["Accounting", "Profit, costs, and WB/Ozon economics"] },
-  ads: { ru: ["Р РµРєР»Р°РјР° WB/Ozon", "РљР°РјРїР°РЅРёРё, Р°РЅР°Р»РёС‚РёРєР° Рё СЂРµРєРѕРјРµРЅРґР°С†РёРё"], en: ["WB/Ozon Ads", "Campaigns, analytics and recommendations"] },
-  social: { ru: ["РЎРѕС†РёР°Р»СЊРЅС‹Р№", "РџР°СѓР·Р°, РІР·Р°РёРјРѕРґРµР№СЃС‚РІРёРµ Рё РєРѕРјР°РЅРґРЅР°СЏ СЂР°Р±РѕС‚Р°"], en: ["Social Hub", "Break, communication and teamwork"] },
+  ads: { ru: ["Реклама WB/Ozon", "Кампании, аналитика и рекомендации"], en: ["WB/Ozon Ads", "Campaigns, analytics and recommendations"] },
+  social: { ru: ["Социальный", "Чаты, задачи, календарь и командная работа"], en: ["Social Hub", "Break, communication and teamwork"] },
   profile: { ru: ["РџСЂРѕС„РёР»СЊ", "РџСЂРѕС„РёР»СЊ РєРѕРјРїР°РЅРёРё, РґРѕСЃС‚СѓРїС‹ РєРѕРјР°РЅРґС‹ Рё РёРЅС‚РµРіСЂР°С†РёРё"], en: ["Profile", "Company profile, team access and integrations"] },
   billing: { ru: ["Р‘РёР»Р»РёРЅРі", "РўР°СЂРёС„С‹, Р»РёРјРёС‚С‹, РїСЂРѕРґР»РµРЅРёРµ Рё РёСЃС‚РѕСЂРёСЏ РѕРїРµСЂР°С†РёР№"], en: ["Billing", "Plans, limits, renewals and history"] },
-  help: { ru: ["РЎРїСЂР°РІРєР°", "Р”РѕРєСѓРјРµРЅС‚Р°С†РёСЏ РїРѕ РјРѕРґСѓР»СЏРј"], en: ["Help Center", "Module usage documentation"] },
+  help: { ru: ["Справка", "Документация по модулям"], en: ["Help Center", "Module usage documentation"] },
   admin: { ru: ["РђРґРјРёРЅРєР°", "РЈРїСЂР°РІР»РµРЅРёРµ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏРјРё Рё РјРѕРґСѓР»СЏРјРё"], en: ["Admin", "Users and modules management"] },
 };
 
@@ -323,28 +323,28 @@ const SUBTAB_TITLES = {
   },
   accounting: {
     overview: { ru: ["Р‘СѓС…РіР°Р»С‚РµСЂРёСЏ", "KPI, РїСЂРёР±С‹Р»СЊ Рё СЌРєРѕРЅРѕРјРёРєР° РїРѕ РїРµСЂРёРѕРґР°Рј"], en: ["Accounting", "KPIs, profit, and period economics"] },
-    analysis: { ru: ["РђРЅР°Р»РёС‚РёРєР° РїСЂРёР±С‹Р»Рё", "Р Р°Р·Р±РѕСЂ РґРѕС…РѕРґРѕРІ, СЂР°СЃС…РѕРґРѕРІ Рё РјР°СЂР¶Рё"], en: ["Profit Analysis", "Revenue, costs, and margin breakdown"] },
-    monthly: { ru: ["РџРѕРјРµСЃСЏС‡РЅР°СЏ РїСЂРёР±С‹Р»СЊ", "РЎСЂР°РІРЅРµРЅРёРµ WB Рё Ozon РїРѕ РјРµСЃСЏС†Р°Рј Р·Р° 12 РїРµСЂРёРѕРґРѕРІ"], en: ["Monthly Profit", "WB and Ozon comparison across the last 12 months"] },
-    expenses: { ru: ["Р Р°СЃС…РѕРґС‹", "РЈС‡РµС‚ СЂР°СЃС…РѕРґРѕРІ Рё СЂР°СЃРїСЂРµРґРµР»РµРЅРёРµ РїРѕ РєР°С‚РµРіРѕСЂРёСЏРј"], en: ["Expenses", "Expense tracking and category split"] },
+    analysis: { ru: ["Анализ прибыли", "Выручка, расходы и маржа"], en: ["Profit Analysis", "Revenue, costs, and margin breakdown"] },
+    monthly: { ru: ["Помесячная прибыль", "WB и Ozon по месяцам за год"], en: ["Monthly Profit", "WB and Ozon comparison across the last 12 months"] },
+    expenses: { ru: ["Расходы", "Учет расходов и категорий"], en: ["Expenses", "Expense tracking and category split"] },
     settings: { ru: ["РќР°СЃС‚СЂРѕР№РєРё Р±СѓС…РіР°Р»С‚РµСЂРёРё", "РЁР°Р±Р»РѕРЅС‹, СЃС‚Р°РІРєРё Рё РїСЂР°РІРёР»Р° СЂР°СЃС‡РµС‚Р°"], en: ["Accounting Settings", "Templates, rates, and calculation rules"] },
   },
   ads: {
-    campaigns: { ru: ["Р РµРєР»Р°РјРЅС‹Рµ РєР°РјРїР°РЅРёРё", "РљР°РјРїР°РЅРёРё WB СЃ Р±СЋРґР¶РµС‚Р°РјРё, СЃС‚Р°С‚СѓСЃР°РјРё Рё РјРµС‚СЂРёРєР°РјРё"], en: ["Ad Campaigns", "WB campaigns with budgets, statuses, and metrics"] },
+    campaigns: { ru: ["Рекламные кампании", "WB кампании с бюджетами, статусами и метриками"], en: ["Ad Campaigns", "WB campaigns with budgets, statuses, and metrics"] },
     analytics: { ru: ["РђРЅР°Р»РёС‚РёРєР° СЂРµРєР»Р°РјС‹", "РџРѕРєР°Р·С‹, РєР»РёРєРё, Р·Р°РєР°Р·С‹ Рё СЂР°СЃС…РѕРґС‹ РїРѕ РєР°РјРїР°РЅРёСЏРј"], en: ["Ads Analytics", "Views, clicks, orders, and spend by campaign"] },
-    recommendations: { ru: ["Р РµРєРѕРјРµРЅРґР°С†РёРё РїРѕ СЂРµРєР»Р°РјРµ", "РџРѕРґСЃРєР°Р·РєРё РїРѕ СЃС‚Р°РІРєР°Рј Рё РЅРµСЌС„С„РµРєС‚РёРІРЅС‹Рј РєР°РјРїР°РЅРёСЏРј"], en: ["Ads Recommendations", "Bid and efficiency recommendations"] },
+    recommendations: { ru: ["Рекомендации по рекламе", "Ставки и резервы для оптимизации"], en: ["Ads Recommendations", "Bid and efficiency recommendations"] },
     bidder: { ru: ["Р‘РёРґРµСЂ WB Ads", "РђРІС‚РѕРјР°С‚РёС‡РµСЃРєРѕРµ СѓРїСЂР°РІР»РµРЅРёРµ СЃС‚Р°РІРєР°РјРё РїРѕ РїСЂР°РІРёР»Р°Рј"], en: ["WB Ads Bidder", "Automatic bid management by rules"] },
-    ozon: { ru: ["Р РµРєР»Р°РјР° Ozon", "РљР°РјРїР°РЅРёРё Рё СЃС‚Р°РІРєРё Ozon"], en: ["Ozon Ads", "Ozon campaigns and bids"] },
+    ozon: { ru: ["??????? Ozon", "???????? ? ?????? Ozon"], en: ["Ozon Ads", "Ozon campaigns and bids"] },
   },
   social: {
     chat: { ru: ["Р§Р°С‚С‹", "РљРѕРјР°РЅРґРЅС‹Рµ Рё Р»РёС‡РЅС‹Рµ РїРµСЂРµРїРёСЃРєРё"], en: ["Chats", "Team and direct conversations"] },
     tasks: { ru: ["Р—Р°РґР°С‡Рё", "РљРѕРјР°РЅРґРЅС‹Рµ Р·Р°РґР°С‡Рё, РґРµРґР»Р°Р№РЅС‹ Рё РєРѕРЅС‚СЂРѕР»СЊ"], en: ["Tasks", "Team tasks, deadlines, and control"] },
-    calendar: { ru: ["РљР°Р»РµРЅРґР°СЂСЊ", "РЎРѕР±С‹С‚РёСЏ, РґРµРґР»Р°Р№РЅС‹ Рё СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ СЃ Google"], en: ["Calendar", "Events, deadlines, and Google sync"] },
+    calendar: { ru: ["Календарь", "События, задачи и напоминания"], en: ["Calendar", "Events, deadlines, and reminders"] },
     calculator: { ru: ["РљР°Р»СЊРєСѓР»СЏС‚РѕСЂ", "Р‘С‹СЃС‚СЂС‹Рµ СЂР°СЃС‡РµС‚С‹ Рё РєРѕРЅРІРµСЂС‚Р°С†РёСЏ"], en: ["Calculator", "Quick calculations and conversion"] },
     notes: { ru: ["Р—Р°РјРµС‚РєРё", "Р›РёС‡РЅС‹Рµ Рё РєРѕРјР°РЅРґРЅС‹Рµ Р·Р°РјРµС‚РєРё"], en: ["Notes", "Personal and team notes"] },
     games: { ru: ["РРіСЂС‹", "РќРµР±РѕР»СЊС€Р°СЏ РїР°СѓР·Р° РІРЅСѓС‚СЂРё РїСЂРёР»РѕР¶РµРЅРёСЏ"], en: ["Games", "A short break inside the app"] },
   },
   help: {
-    docs: { ru: ["РЎРїСЂР°РІРєР°", "Р”РѕРєСѓРјРµРЅС‚Р°С†РёСЏ РїРѕ РјРѕРґСѓР»СЏРј Рё РїРѕРґСЃРєР°Р·РєРё"], en: ["Help Center", "Module documentation and tips"] },
+    docs: { ru: ["???????", "???????????? ?? ??????? ? ?????????"], en: ["Help Center", "Module documentation and tips"] },
     assistant: { ru: ["AI-РїРѕРјРѕС‰РЅРёРє", "РћС‚РІРµС‚С‹ РїРѕ СЂР°Р±РѕС‚Рµ СЃРµСЂРІРёСЃР° Рё РјРѕРґСѓР»РµР№"], en: ["AI Assistant", "Answers about the service and modules"] },
     downloads: { ru: ["Р—Р°РіСЂСѓР·РєРё", "APK, РѕР±РЅРѕРІР»РµРЅРёСЏ Рё РёСЃС‚РѕСЂРёСЏ СЂРµР»РёР·РѕРІ"], en: ["Downloads", "APK, updates, and release history"] },
   },
@@ -434,24 +434,24 @@ const NAV_BUTTON_ICONS = {
 
 const UI_TEXT = {
   ru: {
-    nav_products: "РўРѕРІР°СЂС‹",
-    nav_sales: "РЎС‚Р°С‚РёСЃС‚РёРєР° Рё РґР°С€Р±РѕСЂРґ",
-    nav_reviews: "РћС‚Р·С‹РІС‹/Р’РѕРїСЂРѕСЃС‹",
+    nav_products: "Р СћР С•Р Р†Р В°РЎР‚РЎвЂ№",
+    nav_sales: "?????????? ? ???????",
+    nav_reviews: "Р С›РЎвЂљР В·РЎвЂ№Р Р†РЎвЂ№/Р вЂ™Р С•Р С—РЎР‚Р С•РЎРѓРЎвЂ№",
     nav_accounting: "Р‘СѓС…РіР°Р»С‚РµСЂРёСЏ",
-    nav_ads: "Р РµРєР»Р°РјР° WB/Ozon",
-    nav_social: "РЎРѕС†РёР°Р»СЊРЅС‹Р№",
+    nav_ads: "Р В Р ВµР С”Р В»Р В°Р СР В° WB/Ozon",
+    nav_social: "??????????",
     nav_profile: "РџСЂРѕС„РёР»СЊ",
-    nav_help: "РЎРїСЂР°РІРєР°",
+    nav_help: "Р РЋР С—РЎР‚Р В°Р Р†Р С”Р В°",
     logout: "Р’С‹Р№С‚Рё",
     theme_classic: "РљР»Р°СЃСЃРёРєР°",
-    theme_dark: "РўРµРјРЅР°СЏ",
-    theme_light: "РЎРІРµС‚Р»Р°СЏ",
-    theme_moon: "Р›СѓРЅР°",
-    theme_newyear: "РќРѕРІРѕРіРѕРґРЅСЏСЏ",
-    theme_summer: "Р›РµС‚Рѕ",
-    theme_autumn: "РћСЃРµРЅСЊ",
+    theme_dark: "Р СћР ВµР СР Р…Р В°РЎРЏ",
+    theme_light: "Р РЋР Р†Р ВµРЎвЂљР В»Р В°РЎРЏ",
+    theme_moon: "Р вЂєРЎС“Р Р…Р В°",
+    theme_newyear: "Р СњР С•Р Р†Р С•Р С–Р С•Р Т‘Р Р…РЎРЏРЎРЏ",
+    theme_summer: "Р вЂєР ВµРЎвЂљР С•",
+    theme_autumn: "Р С›РЎРѓР ВµР Р…РЎРЉ",
     theme_winter: "Р—РёРјР°",
-    theme_spring: "Р’РµСЃРЅР°",
+    theme_spring: "Р вЂ™Р ВµРЎРѓР Р…Р В°",
     theme_japan: "РЇРїРѕРЅРёСЏ",
     theme_greenland: "Р“СЂРµРЅР»Р°РЅРґРёСЏ",
   },
@@ -491,7 +491,7 @@ function _mojibakeScore(text) {
   const layeredScore = layeredMatches
     ? layeredMatches.reduce((acc, chunk) => acc + Math.max(1, Math.round(chunk.length / 2)), 0)
     : 0;
-  const markerMatches = value.match(/(?:рџ|вЂ|вЉ|в‹|В«|В»|В±|Г·|Г—|\u00d0.|\u00d1.)/g);
+  const markerMatches = value.match(/(?:СЂСџ|РІР‚|РІР‰|РІвЂ№|Р’В«|Р’В»|Р’В±|Р“В·|Р“вЂ”|\u00d0.|\u00d1.)/g);
   const markerScore = markerMatches ? markerMatches.length * 2 : 0;
   const replacementScore = (value.match(/\uFFFD/g) || []).length * 3;
   const questionScore = (value.match(/\?{2,}/g) || [])
@@ -768,22 +768,22 @@ async function trackUiActivity(action, moduleCode = "", details = "", options = 
 function moduleLabel(code) {
   const key = String(code || "").trim().toLowerCase();
   const labels = {
-    products: tr("РўРѕРІР°СЂС‹", "Products"),
+    products: tr("Р СћР С•Р Р†Р В°РЎР‚РЎвЂ№", "Products"),
     seo_generation: tr("SEO Р·Р°РґР°С‡Рё", "SEO Jobs"),
-    sales_stats: tr("РЎС‚Р°С‚РёСЃС‚РёРєР° РїСЂРѕРґР°Р¶", "Sales Statistics"),
+    sales_stats: tr("Статистика продаж", "Sales Statistics"),
     accounting: tr("Р‘СѓС…РіР°Р»С‚РµСЂРёСЏ", "Accounting"),
-    wb_reviews_ai: tr("РћС‚Р·С‹РІС‹", "Reviews"),
-    wb_questions_ai: tr("Р’РѕРїСЂРѕСЃС‹", "Questions"),
-    returns: tr("Р’РѕР·РІСЂР°С‚С‹", "Returns"),
-    wb_ads: tr("Р РµРєР»Р°РјР°", "Ads"),
-    ads_campaigns: tr("Р РµРєР»Р°РјРЅС‹Рµ РєР°РјРїР°РЅРёРё", "Ad Campaigns"),
+    wb_reviews_ai: tr("Р С›РЎвЂљР В·РЎвЂ№Р Р†РЎвЂ№", "Reviews"),
+    wb_questions_ai: tr("Р вЂ™Р С•Р С—РЎР‚Р С•РЎРѓРЎвЂ№", "Questions"),
+    returns: tr("Р вЂ™Р С•Р В·Р Р†РЎР‚Р В°РЎвЂљРЎвЂ№", "Returns"),
+    wb_ads: tr("Р В Р ВµР С”Р В»Р В°Р СР В°", "Ads"),
+    ads_campaigns: tr("????????? ????????", "Ad Campaigns"),
     ads_bidder: tr("Р‘РёРґРµСЂ WB", "WB Bidder"),
     wb_ads_analytics: tr("РђРЅР°Р»РёС‚РёРєР° Ads", "Ads Analytics"),
-    wb_ads_recommendations: tr("Р РµРєРѕРјРµРЅРґР°С†РёРё Ads", "Ads Recommendations"),
+    wb_ads_recommendations: tr("Рекомендации Ads", "Ads Recommendations"),
     user_profile: tr("РџСЂРѕС„РёР»СЊ", "Profile"),
-    help_center: tr("РЎРїСЂР°РІРєР°", "Help"),
+    help_center: tr("Р РЋР С—РЎР‚Р В°Р Р†Р С”Р В°", "Help"),
     ai_assistant: tr("AI РїРѕРјРѕС‰РЅРёРє", "AI Assistant"),
-    social_hub: tr("РЎРѕС†РёР°Р»СЊРЅС‹Р№", "Social Hub"),
+    social_hub: tr("??????????", "Social Hub"),
   };
   return labels[key] || key;
 }
@@ -877,9 +877,9 @@ function toolbarIconSvg(name) {
 
 function applyProductToolbarIcons(isEn) {
   const items = [
-    { id: "productsImportBtn", icon: toolbarIconSvg("import"), ru: "РРјРїРѕСЂС‚", en: "Import" },
+    { id: "productsImportBtn", icon: toolbarIconSvg("import"), ru: "Р ВР СР С—Р С•РЎР‚РЎвЂљ", en: "Import" },
     { id: "productsReloadBtn", icon: toolbarIconSvg("refresh"), ru: "РџРµСЂРµР·Р°РіСЂСѓР·РёС‚СЊ Р±Р°Р·Сѓ", en: "Reload Catalog" },
-    { id: "productsSelectAllBtn", icon: toolbarIconSvg("select"), ru: "Р’С‹Р±СЂР°С‚СЊ РІСЃРµ", en: "Select All" },
+    { id: "productsSelectAllBtn", icon: toolbarIconSvg("select"), ru: "Р вЂ™РЎвЂ№Р В±РЎР‚Р В°РЎвЂљРЎРЉ Р Р†РЎРѓР Вµ", en: "Select All" },
     { id: "productsCheckSelectedBtn", icon: toolbarIconSvg("search"), ru: "РџСЂРѕРІРµСЂРёС‚СЊ РІС‹Р±СЂР°РЅРЅС‹Рµ", en: "Check Selected" },
     { id: "productsCheckAllBtn", icon: toolbarIconSvg("rocket"), ru: "РџСЂРѕРІРµСЂРёС‚СЊ РІСЃРµ", en: "Check All" },
   ];
@@ -898,16 +898,16 @@ function iconByButtonLabel(labelRaw) {
   const label = String(labelRaw || "").trim().toLowerCase();
   if (!label) return "";
   const rules = [
-    [/РѕР±РЅРѕРІ|refresh|reload|renew/, "в†»"],
-    [/Р·Р°РіСЂСѓР·|load|import/, "в‡©"],
-    [/СЃРѕС…СЂР°РЅ|save/, "вЋ"],
-    [/СѓРґР°Р»|delete|clear/, "вњ–"],
+    [/Р С•Р В±Р Р…Р С•Р Р†|refresh|reload|renew/, "РІвЂ В»"],
+    [/Р В·Р В°Р С–РЎР‚РЎС“Р В·|load|import/, "РІвЂЎВ©"],
+    [/РЎРѓР С•РЎвЂ¦РЎР‚Р В°Р Р…|save/, "РІР‹В"],
+    [/РЎС“Р Т‘Р В°Р В»|delete|clear/, "РІСљвЂ“"],
     [/РїСЂРёРјРµРЅ|apply|publish/, "вњ“"],
-    [/РїСЂРѕРІРµСЂ|check|test|audit/, "вЊ•"],
-    [/РіРµРЅРµСЂ|generate|ai/, "вљЎ"],
-    [/РѕС‚РїСЂР°РІ|send|reply/, "вћ¤"],
+    [/Р С—РЎР‚Р С•Р Р†Р ВµРЎР‚|check|test|audit/, "РІРЉвЂў"],
+    [/Р С–Р ВµР Р…Р ВµРЎР‚|generate|ai/, "РІС™РЋ"],
+    [/Р С•РЎвЂљР С—РЎР‚Р В°Р Р†|send|reply/, "РІС›В¤"],
     [/СЃРјРµРЅРёС‚СЊ|change|switch/, "в‡„"],
-    [/РІС‹Р±СЂР°С‚СЊ|select/, "в‘"],
+    [/Р Р†РЎвЂ№Р В±РЎР‚Р В°РЎвЂљРЎРЉ|select/, "РІВвЂ"],
     [/РїРѕСЃС‚СЂРѕРёС‚СЊ|build|report|recommend/, "в—€"],
     [/СЃС‚Р°С‚РёСЃС‚|sales/, "в—·"],
   ];
@@ -928,7 +928,7 @@ function applyNavIcons() {
     if (currentIcon === iconSrc && currentLabel === label) return;
     const iconHtml = iconSrc
       ? `<span class="nav-icon" aria-hidden="true"><img src="${iconSrc}" alt="" loading="eager" decoding="async" /></span>`
-      : `<span class="nav-icon" aria-hidden="true">вЂў</span>`;
+      : `<span class="nav-icon" aria-hidden="true">РІР‚Сћ</span>`;
     btn.innerHTML = `${iconHtml}<span class="nav-label">${escapeHtml(label)}</span>`;
   });
 }
@@ -943,10 +943,10 @@ function applySidebarMode() {
   if (shell) shell.classList.toggle("sidebar-compact", compact);
   const toggle = sidebar.querySelector(".sidebar-toggle");
   if (toggle) {
-    toggle.textContent = compact ? "в°" : "в‡„";
+    toggle.textContent = compact ? "РІВВ°" : "РІвЂЎвЂћ";
     toggle.dataset.tip = compact
       ? tr("РџРѕРєР°Р·Р°С‚СЊ РїРѕРґРїРёСЃРё", "Show labels")
-      : tr("РЎРєСЂС‹С‚СЊ РїРѕРґРїРёСЃРё", "Hide labels");
+      : tr("?????? ???????", "Hide labels");
     toggle.title = toggle.dataset.tip;
   }
 }
@@ -1060,25 +1060,25 @@ function applyUiLanguage() {
   applyNavIcons();
   applySidebarMode();
   setText(".btn-danger.full", t("logout"));
-  setText("#authToolbarSubtitle", lang === "en" ? "Marketplace Seller OS" : "РЎРµСЂРІРёСЃ РґР»СЏ РјР°СЂРєРµС‚РїР»РµР№СЃРѕРІ");
-  setText("#authToolbarLoginBtn", lang === "en" ? "Login" : "Р’С…РѕРґ");
-  setText("#authToolbarRegisterBtn", lang === "en" ? "Sign up" : "Р РµРіРёСЃС‚СЂР°С†РёСЏ");
-  setText("#authModeLoginBtn", lang === "en" ? "Login" : "Р’С…РѕРґ");
-  setText("#authModeRegisterBtn", lang === "en" ? "Sign up" : "Р РµРіРёСЃС‚СЂР°С†РёСЏ");
-  setText("#authLoginTitle", lang === "en" ? "Login" : "Р’С…РѕРґ");
+  setText("#authToolbarSubtitle", lang === "en" ? "Marketplace Seller OS" : "?????? ??? ?????????????");
+  setText("#authToolbarLoginBtn", lang === "en" ? "Login" : "Р вЂ™РЎвЂ¦Р С•Р Т‘");
+  setText("#authToolbarRegisterBtn", lang === "en" ? "Sign up" : "???????????");
+  setText("#authModeLoginBtn", lang === "en" ? "Login" : "Р вЂ™РЎвЂ¦Р С•Р Т‘");
+  setText("#authModeRegisterBtn", lang === "en" ? "Sign up" : "???????????");
+  setText("#authLoginTitle", lang === "en" ? "Login" : "Р вЂ™РЎвЂ¦Р С•Р Т‘");
   setText("#authLoginHint", lang === "en" ? "Use owner or employee email to enter workspace." : "РСЃРїРѕР»СЊР·СѓР№С‚Рµ email РІР»Р°РґРµР»СЊС†Р° РёР»Рё СЃРѕС‚СЂСѓРґРЅРёРєР°.");
-  setText("#authRegisterTitle", lang === "en" ? "Registration" : "Р РµРіРёСЃС‚СЂР°С†РёСЏ");
-  setText("#authRegisterHint", lang === "en" ? "Create owner account first. Team members are added in profile." : "РЎРѕР·РґР°Р№С‚Рµ РєР°Р±РёРЅРµС‚ РІР»Р°РґРµР»СЊС†Р°. РЎРѕС‚СЂСѓРґРЅРёРєРѕРІ РґРѕР±Р°РІРёС‚Рµ РїРѕР·Р¶Рµ РІ РїСЂРѕС„РёР»Рµ.");
+  setText("#authRegisterTitle", lang === "en" ? "Registration" : "???????????");
+  setText("#authRegisterHint", lang === "en" ? "Create owner account first. Team members are added in profile." : "???????? ??????? ?????????. ??????????? ???????? ????? ? ???????.");
   setText("#authLoginSubmitBtn", lang === "en" ? "Sign In" : "Р’РѕР№С‚Рё РІ РєР°Р±РёРЅРµС‚");
-  setText("#authRegisterSubmitBtn", lang === "en" ? "Create Account" : "РЎРѕР·РґР°С‚СЊ Р°РєРєР°СѓРЅС‚");
-  setText("#authToRegisterBtn", lang === "en" ? "No account? Sign up" : "РќРµС‚ Р°РєРєР°СѓРЅС‚Р°? Р РµРіРёСЃС‚СЂР°С†РёСЏ");
-  setText("#authToLoginBtn", lang === "en" ? "Already have account? Login" : "РЈР¶Рµ РµСЃС‚СЊ Р°РєРєР°СѓРЅС‚? Р’С…РѕРґ");
+  setText("#authRegisterSubmitBtn", lang === "en" ? "Create Account" : "Р РЋР С•Р В·Р Т‘Р В°РЎвЂљРЎРЉ Р В°Р С”Р С”Р В°РЎС“Р Р…РЎвЂљ");
+  setText("#authToRegisterBtn", lang === "en" ? "No account? Sign up" : "??? ????????? ???????????");
+  setText("#authToLoginBtn", lang === "en" ? "Already have account? Login" : "Р Р€Р В¶Р Вµ Р ВµРЎРѓРЎвЂљРЎРЉ Р В°Р С”Р С”Р В°РЎС“Р Р…РЎвЂљ? Р вЂ™РЎвЂ¦Р С•Р Т‘");
   setText("#authLeadText", lang === "en" ? "Marketplace operations center for WB/Ozon: sales, catalog, ads, support and team workflows in one interface." : "РћРїРµСЂР°С†РёРѕРЅРЅС‹Р№ С†РµРЅС‚СЂ РїСЂРѕРґР°РІС†Р° WB/Ozon: РїСЂРѕРґР°Р¶Рё, РєР°С‚Р°Р»РѕРі, СЂРµРєР»Р°РјР°, РїРѕРґРґРµСЂР¶РєР° Рё РєРѕРјР°РЅРґРЅС‹Рµ РїСЂРѕС†РµСЃСЃС‹ РІ РѕРґРЅРѕРј РёРЅС‚РµСЂС„РµР№СЃРµ.");
   setText("#authWhatTitle", lang === "en" ? "What you get" : "Р§С‚Рѕ РґР°РµС‚ СЃРµСЂРІРёСЃ");
   setText("#authWhatItem1", lang === "en" ? "One timeline for revenue, ad costs, returns and penalties." : "РћРґРЅР° Р»РµРЅС‚Р° РґР»СЏ РІС‹СЂСѓС‡РєРё, СЂРµРєР»Р°РјРЅС‹С… СЂР°СЃС…РѕРґРѕРІ, РІРѕР·РІСЂР°С‚РѕРІ Рё С€С‚СЂР°С„РѕРІ.");
   setText("#authWhatItem2", lang === "en" ? "Bulk card updates and SEO routines without manual chaos." : "РњР°СЃСЃРѕРІС‹Рµ РѕР±РЅРѕРІР»РµРЅРёСЏ РєР°СЂС‚РѕС‡РµРє Рё SEO-СЂСѓС‚РёРЅС‹ Р±РµР· СЂСѓС‡РЅРѕРіРѕ С…Р°РѕСЃР°.");
   setText("#authWhatItem3", lang === "en" ? "AI-assisted review/question handling with predictable quality." : "AI-РѕР±СЂР°Р±РѕС‚РєР° РѕС‚Р·С‹РІРѕРІ Рё РІРѕРїСЂРѕСЃРѕРІ СЃ РїСЂРµРґСЃРєР°Р·СѓРµРјС‹Рј РєР°С‡РµСЃС‚РІРѕРј.");
-  setText("#authStartTitle", lang === "en" ? "How to start quickly" : "РљР°Рє Р±С‹СЃС‚СЂРѕ СЃС‚Р°СЂС‚РѕРІР°С‚СЊ");
+  setText("#authStartTitle", lang === "en" ? "How to start quickly" : "Р С™Р В°Р С” Р В±РЎвЂ№РЎРѓРЎвЂљРЎР‚Р С• РЎРѓРЎвЂљР В°РЎР‚РЎвЂљР С•Р Р†Р В°РЎвЂљРЎРЉ");
   setText("#authStartItem1", lang === "en" ? "Sign in as owner or create a new workspace." : "Р’РѕР№РґРёС‚Рµ РєР°Рє РІР»Р°РґРµР»РµС† РёР»Рё СЃРѕР·РґР°Р№С‚Рµ РЅРѕРІС‹Р№ РєР°Р±РёРЅРµС‚.");
   setText(
     "#authStartItem2",
@@ -1091,16 +1091,16 @@ function applyUiLanguage() {
   setText("#landingCard1Title", lang === "en" ? "Revenue control center" : "Р¦РµРЅС‚СЂ СѓРїСЂР°РІР»РµРЅРёСЏ РІС‹СЂСѓС‡РєРѕР№");
   setText("#landingCard1Text", lang === "en" ? "Monitor orders, units, returns, penalties and ad costs in one timeline and quickly find growth bottlenecks." : "РљРѕРЅС‚СЂРѕР»РёСЂСѓР№С‚Рµ Р·Р°РєР°Р·С‹, С€С‚СѓРєРё, РІРѕР·РІСЂР°С‚С‹, С€С‚СЂР°С„С‹ Рё СЂРµРєР»Р°РјРЅС‹Рµ СЂР°СЃС…РѕРґС‹ РІ РѕРґРЅРѕР№ Р»РµРЅС‚Рµ, С‡С‚РѕР±С‹ Р±С‹СЃС‚СЂРѕ РЅР°С…РѕРґРёС‚СЊ С‚РѕС‡РєРё СЂРѕСЃС‚Р°.");
   setText("#landingCard2Title", lang === "en" ? "Catalog performance" : "Р­С„С„РµРєС‚РёРІРЅРѕСЃС‚СЊ РєР°С‚Р°Р»РѕРіР°");
-  setText("#landingCard2Text", lang === "en" ? "Sync WB/Ozon cards, enrich content, run SEO tasks and keep product visibility under control." : "РЎРёРЅС…СЂРѕРЅРёР·РёСЂСѓР№С‚Рµ РєР°СЂС‚РѕС‡РєРё WB/Ozon, СѓР»СѓС‡С€Р°Р№С‚Рµ РєРѕРЅС‚РµРЅС‚, Р·Р°РїСѓСЃРєР°Р№С‚Рµ SEO-Р·Р°РґР°С‡Рё Рё РґРµСЂР¶РёС‚Рµ РІРёРґРёРјРѕСЃС‚СЊ С‚РѕРІР°СЂРѕРІ РїРѕРґ РєРѕРЅС‚СЂРѕР»РµРј.");
+  setText("#landingCard2Text", lang === "en" ? "Sync WB/Ozon cards, enrich content, run SEO tasks and keep product visibility under control." : "??????????????? ???????? WB/Ozon, ????????? ???????, ?????????? SEO-?????? ? ??????? ????????? ??????? ??? ?????????.");
   setText("#landingCard3Title", lang === "en" ? "Team productivity" : "РџСЂРѕРґСѓРєС‚РёРІРЅРѕСЃС‚СЊ РєРѕРјР°РЅРґС‹");
   setText("#landingCard3Quote1", lang === "en" ? "Owner has full control, employees work only within assigned modules." : "В«Р’Р»Р°РґРµР»РµС† РєРѕРЅС‚СЂРѕР»РёСЂСѓРµС‚ РІРµСЃСЊ РєР°Р±РёРЅРµС‚, СЃРѕС‚СЂСѓРґРЅРёРєРё СЂР°Р±РѕС‚Р°СЋС‚ С‚РѕР»СЊРєРѕ РІ РЅР°Р·РЅР°С‡РµРЅРЅС‹С… РјРѕРґСѓР»СЏС…В»");
   setText("#landingCard3Meta1", lang === "en" ? "Granular permissions + action history" : "Р“РёР±РєРёРµ РїСЂР°РІР° + РёСЃС‚РѕСЂРёСЏ РґРµР№СЃС‚РІРёР№");
   setText("#landingCard3Quote2", lang === "en" ? "AI keeps response quality high while reducing routine workload." : "В«AI СЃРѕС…СЂР°РЅСЏРµС‚ РєР°С‡РµСЃС‚РІРѕ РѕС‚РІРµС‚РѕРІ Рё СЃРЅРёР¶Р°РµС‚ СЂСѓС‚РёРЅРЅСѓСЋ РЅР°РіСЂСѓР·РєСѓ РєРѕРјР°РЅРґС‹В»");
   setText("#landingCard3Meta2", lang === "en" ? "Reply templates + knowledge snippets" : "РЁР°Р±Р»РѕРЅС‹ РѕС‚РІРµС‚РѕРІ + Р±Р°Р·Р° Р·РЅР°РЅРёР№");
-  setText("#landingCard4Title", lang === "en" ? "Execution modules" : "Р Р°Р±РѕС‡РёРµ РјРѕРґСѓР»Рё");
+  setText("#landingCard4Title", lang === "en" ? "Execution modules" : "??????? ??????");
   setText("#landingCard4Item1", lang === "en" ? "Products: import, editing, media and ranking checkpoints." : "РўРѕРІР°СЂС‹: РёРјРїРѕСЂС‚, СЂРµРґР°РєС‚РёСЂРѕРІР°РЅРёРµ, РјРµРґРёР° Рё РєРѕРЅС‚СЂРѕР»СЊ РїРѕР·РёС†РёР№.");
   setText("#landingCard4Item2", lang === "en" ? "Feedback: reviews, questions and returns in one operational queue." : "РћР±СЂР°С‚РЅР°СЏ СЃРІСЏР·СЊ: РѕС‚Р·С‹РІС‹, РІРѕРїСЂРѕСЃС‹ Рё РІРѕР·РІСЂР°С‚С‹ РІ РµРґРёРЅРѕР№ СЂР°Р±РѕС‡РµР№ РѕС‡РµСЂРµРґРё.");
-  setText("#landingCard4Item3", lang === "en" ? "Ads: campaign table, analytics and actionable recommendations." : "Р РµРєР»Р°РјР°: РєР°РјРїР°РЅРёРё, Р°РЅР°Р»РёС‚РёРєР° Рё СЂРµРєРѕРјРµРЅРґР°С†РёРё РґР»СЏ СЂРѕСЃС‚Р° СЌС„С„РµРєС‚РёРІРЅРѕСЃС‚Рё.");
+  setText("#landingCard4Item3", lang === "en" ? "Ads: campaign table, analytics and actionable recommendations." : "Реклама: кампании, аналитика и рекомендации для команды.");
   setText("#landingBandTitle", lang === "en" ? "Commercial outcome" : "РљРѕРјРјРµСЂС‡РµСЃРєРёР№ СЂРµР·СѓР»СЊС‚Р°С‚");
   setText("#landingBandText", lang === "en" ? "SEO WIBE shortens the cycle from data to action, reduces manual operations and helps teams scale marketplace turnover with less operational risk." : "SEO WIBE СЃРѕРєСЂР°С‰Р°РµС‚ РїСѓС‚СЊ РѕС‚ РґР°РЅРЅС‹С… Рє РґРµР№СЃС‚РІРёСЋ, СѓРјРµРЅСЊС€Р°РµС‚ СЂСѓС‡РЅС‹Рµ РѕРїРµСЂР°С†РёРё Рё РїРѕРјРѕРіР°РµС‚ РєРѕРјР°РЅРґР°Рј РјР°СЃС€С‚Р°Р±РёСЂРѕРІР°С‚СЊ РѕР±РѕСЂРѕС‚ РЅР° РјР°СЂРєРµС‚РїР»РµР№СЃР°С… СЃ РјРµРЅСЊС€РёРјРё РѕРїРµСЂР°С†РёРѕРЅРЅС‹РјРё СЂРёСЃРєР°РјРё.");
 
@@ -1114,7 +1114,7 @@ function applyUiLanguage() {
   if (importMarketplace) {
     const currentValue = String(importMarketplace.value || "all");
     importMarketplace.innerHTML = `
-      <option value="all">${isEn ? "All marketplaces" : "Р’СЃРµ РјР°СЂРєРµС‚РїР»РµР№СЃС‹"}</option>
+      <option value="all">${isEn ? "All marketplaces" : "Р вЂ™РЎРѓР Вµ Р СР В°РЎР‚Р С”Р ВµРЎвЂљР С—Р В»Р ВµР в„–РЎРѓРЎвЂ№"}</option>
       <option value="wb">WB</option>
       <option value="ozon">Ozon</option>
     `;
@@ -1135,156 +1135,156 @@ function applyUiLanguage() {
   setText("#productsNextTopBtn", isEn ? "Next" : "\u0414\u0430\u043b\u0435\u0435");
   setText("#productsPrevBottomBtn", isEn ? "Prev" : "\u041d\u0430\u0437\u0430\u0434");
   setText("#productsNextBottomBtn", isEn ? "Next" : "\u0414\u0430\u043b\u0435\u0435");
-  setText("#seo .panel .grid-4 button:nth-of-type(4)", isEn ? "Select all products" : "Р’С‹Р±СЂР°С‚СЊ РІСЃРµ С‚РѕРІР°СЂС‹");
-  setText("#seo .panel .grid-5 button:nth-of-type(1)", isEn ? "Generate Selected" : "РЎРіРµРЅРµСЂРёСЂРѕРІР°С‚СЊ РґР»СЏ РІС‹Р±СЂР°РЅРЅС‹С…");
-  setText("#seo .panel .grid-5 button:nth-of-type(2)", isEn ? "Generate All" : "РЎРіРµРЅРµСЂРёСЂРѕРІР°С‚СЊ РґР»СЏ РІСЃРµС…");
+  setText("#seo .panel .grid-4 button:nth-of-type(4)", isEn ? "Select all products" : "Р вЂ™РЎвЂ№Р В±РЎР‚Р В°РЎвЂљРЎРЉ Р Р†РЎРѓР Вµ РЎвЂљР С•Р Р†Р В°РЎР‚РЎвЂ№");
+  setText("#seo .panel .grid-5 button:nth-of-type(1)", isEn ? "Generate Selected" : "????????????? ??? ?????????");
+  setText("#seo .panel .grid-5 button:nth-of-type(2)", isEn ? "Generate All" : "????????????? ??? ????");
   setText("#seo .panel .grid-5 button:nth-of-type(3)", isEn ? "Apply" : "РџСЂРёРјРµРЅРёС‚СЊ");
-  setText("#sales .panel:nth-of-type(4) h3", isEn ? "Sales Statistics" : "РЎС‚Р°С‚РёСЃС‚РёРєР° РїСЂРѕРґР°Р¶");
+  setText("#sales .panel:nth-of-type(4) h3", isEn ? "Sales Statistics" : "Статистика продаж");
   setText("#sales .panel:nth-of-type(4) .grid-4 button", isEn ? "Load Stats" : "Р—Р°РіСЂСѓР·РёС‚СЊ СЃС‚Р°С‚РёСЃС‚РёРєСѓ");
-  setText("#sales [data-sales-range='day']", isEn ? "Day" : "Р”РµРЅСЊ");
-  setText("#sales [data-sales-range='week']", isEn ? "Week" : "РќРµРґРµР»СЏ");
-  setText("#sales [data-sales-range='month']", isEn ? "Month" : "РњРµСЃСЏС†");
-  setText("#sales [data-sales-range='quarter']", isEn ? "Quarter" : "РљРІР°СЂС‚Р°Р»");
-  setText("#sales [data-sales-range='halfyear']", isEn ? "6 months" : "6 РјРµСЃСЏС†РµРІ");
-  setText("#sales [data-sales-range='year']", isEn ? "Year" : "Р“РѕРґ");
+  setText("#sales [data-sales-range='day']", isEn ? "Day" : "Р вЂќР ВµР Р…РЎРЉ");
+  setText("#sales [data-sales-range='week']", isEn ? "Week" : "Р СњР ВµР Т‘Р ВµР В»РЎРЏ");
+  setText("#sales [data-sales-range='month']", isEn ? "Month" : "Р СљР ВµРЎРѓРЎРЏРЎвЂ ");
+  setText("#sales [data-sales-range='quarter']", isEn ? "Quarter" : "Р С™Р Р†Р В°РЎР‚РЎвЂљР В°Р В»");
+  setText("#sales [data-sales-range='halfyear']", isEn ? "6 months" : "6 Р СР ВµРЎРѓРЎРЏРЎвЂ Р ВµР Р†");
+  setText("#sales [data-sales-range='year']", isEn ? "Year" : "Р вЂњР С•Р Т‘");
   setText("#salesExtraHint", isEn ? "Additional metrics" : "Р”РѕРїРѕР»РЅРёС‚РµР»СЊРЅС‹Рµ РјРµС‚СЂРёРєРё");
-  setText("#reviews .panel h3", isEn ? "Reviews WB/Ozon" : "РћС‚Р·С‹РІС‹ WB/Ozon");
+  setText("#reviews .panel h3", isEn ? "Reviews WB/Ozon" : "Р С›РЎвЂљР В·РЎвЂ№Р Р†РЎвЂ№ WB/Ozon");
   setText("#reviewsSubtabQuestions .panel h3", isEn ? "Questions & Replies WB/Ozon" : "Р’РѕРїСЂРѕСЃС‹ Рё РѕС‚РІРµС‚С‹ WB/Ozon");
-  setText("#ads .panel h3", isEn ? "WB Ad Campaigns" : "Р РµРєР»Р°РјРЅС‹Рµ РєР°РјРїР°РЅРёРё WB");
+  setText("#ads .panel h3", isEn ? "WB Ad Campaigns" : "????????? ???????? WB");
   setText("#ads .grid-4 button:nth-of-type(1)", isEn ? "Load Campaigns" : "Р—Р°РіСЂСѓР·РёС‚СЊ РєР°РјРїР°РЅРёРё");
   setText("#ads .grid-4 button:nth-of-type(2)", isEn ? "Get Rates" : "РџРѕР»СѓС‡РёС‚СЊ СЃС‚Р°РІРєРё");
-  setText("#ads .grid-3 button", isEn ? "Reset Filters" : "РЎР±СЂРѕСЃРёС‚СЊ С„РёР»СЊС‚СЂС‹");
+  setText("#ads .grid-3 button", isEn ? "Reset Filters" : "???????? ???????");
   setText("#adsSubtabAnalytics .panel h3", isEn ? "WB Ads Analytics" : "РђРЅР°Р»РёС‚РёРєР° СЂРµРєР»Р°РјС‹ WB");
   setText("#adsSubtabAnalytics .grid-4 button", isEn ? "Build Report" : "РџРѕСЃС‚СЂРѕРёС‚СЊ РѕС‚С‡РµС‚");
-  setText("#adsSubtabRecommendations .panel h3", isEn ? "WB Ads Recommendations" : "Р РµРєРѕРјРµРЅРґР°С†РёРё WB Ads");
+  setText("#adsSubtabRecommendations .panel h3", isEn ? "WB Ads Recommendations" : "Рекомендации WB Ads");
   setText("#adsSubtabRecommendations .grid-4 button", isEn ? "Build Recommendations" : "РџРѕСЃС‚СЂРѕРёС‚СЊ СЂРµРєРѕРјРµРЅРґР°С†РёРё");
   setText("#adsSubtabBidder .panel h3", isEn ? "WB Ads Bidder" : "Р‘РёРґРµСЂ WB Ads");
   applyWbBidderFieldHints();
-  setText("#adsSubtabOzon .panel h3", isEn ? "Ozon Ads (beta)" : "Р РµРєР»Р°РјР° Ozon (Р±РµС‚Р°)");
+  setText("#adsSubtabOzon .panel h3", isEn ? "Ozon Ads (beta)" : "Р В Р ВµР С”Р В»Р В°Р СР В° Ozon (Р В±Р ВµРЎвЂљР В°)");
   setText("#profileCompanyHeader", isEn ? "Company Profile" : "РџСЂРѕС„РёР»СЊ РєРѕРјРїР°РЅРёРё");
   setText("#profileMainPanel h3", isEn ? "Company Profile" : "РџСЂРѕС„РёР»СЊ РєРѕРјРїР°РЅРёРё");
   setText("#profileMenuCompanyTitle", isEn ? "Company" : "РљРѕРјРїР°РЅРёСЏ");
-  setText("#profileMenuCompanyMeta", isEn ? "Company legal details and owner identity" : "Р РµРєРІРёР·РёС‚С‹ Рё РґР°РЅРЅС‹Рµ РґРёСЂРµРєС‚РѕСЂР°/РРџ");
+  setText("#profileMenuCompanyMeta", isEn ? "Company legal details and owner identity" : "????????? ? ?????? ?????????/??");
   setText("#profileMenuPlanTitle", isEn ? "Plan" : "РўР°СЂРёС„");
   setText("#profileMenuPlanMeta", isEn ? "Subscription, renewal and status" : "РџР»Р°РЅ, РїСЂРѕРґР»РµРЅРёРµ Рё СЃС‚Р°С‚СѓСЃ");
   setText("#profileMenuKeysTitle", isEn ? "API Keys" : "API РєР»СЋС‡Рё");
   setText("#profileMenuKeysMeta", isEn ? "WB/Ozon integration keys" : "РџРѕРґРєР»СЋС‡РµРЅРёРµ WB Рё Ozon");
   setText("#profileMenuAiTitle", isEn ? "AI Services" : "AI СЃРµСЂРІРёСЃС‹");
   setText("#profileMenuAiMeta", isEn ? "AI source and custom providers" : "РСЃС‚РѕС‡РЅРёРє AI Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊСЃРєРёРµ СЃРµСЂРІРёСЃС‹");
-  setText("#profileMenuTeamTitle", isEn ? "Employees" : "РЎРѕС‚СЂСѓРґРЅРёРєРё");
+  setText("#profileMenuTeamTitle", isEn ? "Employees" : "??????????");
   setText("#profileMenuTeamMeta", isEn ? "Roles and module access" : "Р”РѕСЃС‚СѓРїС‹ Рё СЂРѕР»Рё РєРѕРјР°РЅРґС‹");
   setText("#profileSectionsIntroTitle", isEn ? "User profile settings" : "РќР°СЃС‚СЂРѕР№РєРё РїСЂРѕС„РёР»СЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ");
   setText("#profileSectionsIntroLabel", isEn ? "Current user:" : "РўРµРєСѓС‰РёР№ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ:");
-  setText("#profileMainPanel .grid-3 button:nth-of-type(1)", isEn ? "Save Profile" : "РЎРѕС…СЂР°РЅРёС‚СЊ РїСЂРѕС„РёР»СЊ");
+  setText("#profileMainPanel .grid-3 button:nth-of-type(1)", isEn ? "Save Profile" : "????????? ???????");
   setText("#profileMainPanel .grid-3 button:nth-of-type(2)", isEn ? "Refresh Profile" : "РћР±РЅРѕРІРёС‚СЊ РїСЂРѕС„РёР»СЊ");
   setText("#profileAvatarUploadBtn", isEn ? "Upload photo" : "Р—Р°РіСЂСѓР·РёС‚СЊ С„РѕС‚Рѕ");
   setText("#teamAvatarUploadBtn", isEn ? "Upload photo" : "Р—Р°РіСЂСѓР·РёС‚СЊ С„РѕС‚Рѕ");
   setText("#profilePlanPanel h3", isEn ? "Plan" : "РўР°СЂРёС„");
-  setText("#profilePlanPanel .grid-4 button:nth-of-type(1)", isEn ? "Change Plan" : "РЎРјРµРЅРёС‚СЊ С‚Р°СЂРёС„");
+  setText("#profilePlanPanel .grid-4 button:nth-of-type(1)", isEn ? "Change Plan" : "??????? ?????");
   setText("#profilePlanPanel .grid-4 button:nth-of-type(2)", isEn ? "Renew for 30 days" : "РџСЂРѕРґР»РёС‚СЊ РЅР° 30 РґРЅРµР№");
   setText("#profilePlanPanel .grid-4 button:nth-of-type(3)", isEn ? "Refresh" : "РћР±РЅРѕРІРёС‚СЊ");
   setText("#profileKeysPanel h3", isEn ? "API Keys" : "API РєР»СЋС‡Рё");
   setText("#profileAiPanel h3", isEn ? "AI Services" : "AI СЃРµСЂРІРёСЃС‹");
-  setText("#profileAiPanel .grid-4 button:nth-of-type(1)", isEn ? "Save AI Selection" : "РЎРѕС…СЂР°РЅРёС‚СЊ РІС‹Р±РѕСЂ AI");
+  setText("#profileAiPanel .grid-4 button:nth-of-type(1)", isEn ? "Save AI Selection" : "????????? ????? AI");
   setText("#profileAiPanel .grid-4 button:nth-of-type(2)", isEn ? "Refresh AI" : "РћР±РЅРѕРІРёС‚СЊ AI");
   setText("#profileAiPanel .grid-6 button", isEn ? "Add AI Service" : "Р”РѕР±Р°РІРёС‚СЊ AI СЃРµСЂРІРёСЃ");
-  setText("#profileTeamPanel h3", isEn ? "Workspace Team" : "РЎРѕС‚СЂСѓРґРЅРёРєРё РєР°Р±РёРЅРµС‚Р°");
+  setText("#profileTeamPanel h3", isEn ? "Workspace Team" : "?????????? ????????");
   setText("#teamPanelHint", isEn ? "Add or edit employees via popup window." : "Р”РѕР±Р°РІР»РµРЅРёРµ Рё СЂРµРґР°РєС‚РёСЂРѕРІР°РЅРёРµ СЃРѕС‚СЂСѓРґРЅРёРєР° РІС‹РїРѕР»РЅСЏРµС‚СЃСЏ С‡РµСЂРµР· pop-up РѕРєРЅРѕ.");
   setText("#teamAddMemberBtn", isEn ? "Add employee" : "Р”РѕР±Р°РІРёС‚СЊ СЃРѕС‚СЂСѓРґРЅРёРєР°");
-  setText("#helpSubtabDocs .panel h3", isEn ? "Module Help Center" : "РЎРїСЂР°РІРєР° РїРѕ РјРѕРґСѓР»СЏРј");
+  setText("#helpSubtabDocs .panel h3", isEn ? "Module Help Center" : "Р РЋР С—РЎР‚Р В°Р Р†Р С”Р В° Р С—Р С• Р СР С•Р Т‘РЎС“Р В»РЎРЏР С");
   setText("#helpSubtabDocs .grid-2 button", isEn ? "Refresh Help" : "РћР±РЅРѕРІРёС‚СЊ СЃРїСЂР°РІРєСѓ");
   setText("#helpSubtabAssistant .panel h3", isEn ? "AI assistant (any question)" : "AI РїРѕРјРѕС‰РЅРёРє (Р»СЋР±РѕР№ РІРѕРїСЂРѕСЃ)");
-  setText("#helpSubtabAssistant .grid-3 button", isEn ? "Ask" : "РЎРїСЂРѕСЃРёС‚СЊ");
+  setText("#helpSubtabAssistant .grid-3 button", isEn ? "Ask" : "????????");
   setText("#helpSubtabDownloads .panel h3", isEn ? "Android APK versions" : "Android APK РІРµСЂСЃРёРё");
-  setText("#teamModalSaveBtn", isEn ? "Save" : "РЎРѕС…СЂР°РЅРёС‚СЊ");
+  setText("#teamModalSaveBtn", isEn ? "Save" : "?????????");
   setText("#teamModalDeleteBtn", isEn ? "Delete" : "РЈРґР°Р»РёС‚СЊ");
-  setText("#teamMemberEditModal .actions .btn-secondary", isEn ? "Cancel" : "РћС‚РјРµРЅР°");
-  setText("#helpSubtabDocsBtn", isEn ? "Help" : "РЎРїСЂР°РІРєР°");
+  setText("#teamMemberEditModal .actions .btn-secondary", isEn ? "Cancel" : "Р С›РЎвЂљР СР ВµР Р…Р В°");
+  setText("#helpSubtabDocsBtn", isEn ? "Help" : "Р РЋР С—РЎР‚Р В°Р Р†Р С”Р В°");
   setText("#helpSubtabAssistantBtn", isEn ? "AI assistant" : "AI РїРѕРјРѕС‰РЅРёРє");
   setText("#helpSubtabDownloadsBtn", isEn ? "Downloads" : "Р—Р°РіСЂСѓР·РєРё");
-  setText("#mobileDrawerQuickNavLabel", isEn ? "Section" : "Р Р°Р·РґРµР»");
-  setText("#reviewsSubtabReviewsBtn", isEn ? "Reviews" : "РћС‚Р·С‹РІС‹");
-  setText("#reviewsSubtabQuestionsBtn", isEn ? "Questions" : "Р’РѕРїСЂРѕСЃС‹");
-  setText("#reviewsSubtabReturnsBtn", isEn ? "Returns" : "Р’РѕР·РІСЂР°С‚С‹");
-  setText("#productsSubtabCatalogBtn", isEn ? "Products" : "РўРѕРІР°СЂС‹");
+  setText("#mobileDrawerQuickNavLabel", isEn ? "Section" : "Р В Р В°Р В·Р Т‘Р ВµР В»");
+  setText("#reviewsSubtabReviewsBtn", isEn ? "Reviews" : "Р С›РЎвЂљР В·РЎвЂ№Р Р†РЎвЂ№");
+  setText("#reviewsSubtabQuestionsBtn", isEn ? "Questions" : "Р вЂ™Р С•Р С—РЎР‚Р С•РЎРѓРЎвЂ№");
+  setText("#reviewsSubtabReturnsBtn", isEn ? "Returns" : "Р вЂ™Р С•Р В·Р Р†РЎР‚Р В°РЎвЂљРЎвЂ№");
+  setText("#productsSubtabCatalogBtn", isEn ? "Products" : "Р СћР С•Р Р†Р В°РЎР‚РЎвЂ№");
   setText("#productsSubtabSeoBtn", isEn ? "SEO Jobs" : "SEO Р·Р°РґР°С‡Рё");
   setText("#adsSubtabCampaignsBtn", isEn ? "Campaigns" : "РљР°РјРїР°РЅРёРё");
   setText("#adsSubtabAnalyticsBtn", isEn ? "Analytics" : "РђРЅР°Р»РёС‚РёРєР°");
-  setText("#adsSubtabRecommendationsBtn", isEn ? "Recommendations" : "Р РµРєРѕРјРµРЅРґР°С†РёРё");
+  setText("#adsSubtabRecommendationsBtn", isEn ? "Recommendations" : "Рекомендации");
   setText("#adsSubtabBidderBtn", isEn ? "Bidder" : "Р‘РёРґРµСЂ");
-  setText("#adsSubtabOzonBtn", isEn ? "Ozon Ads" : "Р РµРєР»Р°РјР° Ozon");
-  setText("#socialSubtabGamesBtn", isEn ? "Games" : "РРіСЂС‹");
-  setText("#socialSubtabChatBtn", isEn ? "Chat" : "Р§Р°С‚");
+  setText("#adsSubtabOzonBtn", isEn ? "Ozon Ads" : "Р В Р ВµР С”Р В»Р В°Р СР В° Ozon");
+  setText("#socialSubtabGamesBtn", isEn ? "Games" : "Р ВР С–РЎР‚РЎвЂ№");
+  setText("#socialSubtabChatBtn", isEn ? "Chat" : "Р В§Р В°РЎвЂљ");
   setText("#socialSubtabTasksBtn", isEn ? "Tasks" : "Р—Р°РґР°С‡Рё");
-  setText("#socialSubtabCalendarBtn", isEn ? "Calendar" : "РљР°Р»РµРЅРґР°СЂСЊ");
-  setText("#socialSubtabCalculatorBtn", isEn ? "Calculator" : "РљР°Р»СЊРєСѓР»СЏС‚РѕСЂ");
+  setText("#socialSubtabCalendarBtn", isEn ? "Calendar" : "Р С™Р В°Р В»Р ВµР Р…Р Т‘Р В°РЎР‚РЎРЉ");
+  setText("#socialSubtabCalculatorBtn", isEn ? "Calculator" : "Р С™Р В°Р В»РЎРЉР С”РЎС“Р В»РЎРЏРЎвЂљР С•РЎР‚");
   setText("#socialSubtabNotesBtn", isEn ? "Notes" : "Р—Р°РјРµС‚РєРё");
   setText("#reviews .grid-6 button.btn-secondary", isEn ? "Refresh Reviews" : "РћР±РЅРѕРІРёС‚СЊ РѕС‚Р·С‹РІС‹");
-  setText("#reviews .grid-2 button", isEn ? "Save AI Settings" : "РЎРѕС…СЂР°РЅРёС‚СЊ AI-РЅР°СЃС‚СЂРѕР№РєРё");
+  setText("#reviews .grid-2 button", isEn ? "Save AI Settings" : "????????? AI-?????????");
   setText("#reviewsSubtabQuestions .grid-6 button.btn-secondary", isEn ? "Refresh Questions" : "РћР±РЅРѕРІРёС‚СЊ РІРѕРїСЂРѕСЃС‹");
-  setText("#reviewsSubtabQuestions .grid-2 button", isEn ? "Save AI Settings" : "РЎРѕС…СЂР°РЅРёС‚СЊ AI-РЅР°СЃС‚СЂРѕР№РєРё");
+  setText("#reviewsSubtabQuestions .grid-2 button", isEn ? "Save AI Settings" : "????????? AI-?????????");
   setText("#reviewsSubtabQuestions .grid-4 button:nth-of-type(1)", isEn ? "Upload to Knowledge Base" : "Р—Р°РіСЂСѓР·РёС‚СЊ РІ Р±Р°Р·Сѓ Р·РЅР°РЅРёР№");
   setText("#reviewsSubtabQuestions .grid-4 button:nth-of-type(2)", isEn ? "Delete Selected Document" : "РЈРґР°Р»РёС‚СЊ РІС‹Р±СЂР°РЅРЅС‹Р№ РґРѕРєСѓРјРµРЅС‚");
   setText("#campaignDetailModal .campaign-modal-head h3", isEn ? "WB Campaign Details" : "Р”РµС‚Р°Р»Рё РєР°РјРїР°РЅРёРё WB");
   setText("#campaignDetailModal .actions button:nth-of-type(1)", isEn ? "Start" : "Р—Р°РїСѓСЃС‚РёС‚СЊ");
-  setText("#campaignDetailModal .actions button:nth-of-type(2)", isEn ? "Pause" : "РџР°СѓР·Р°");
+  setText("#campaignDetailModal .actions button:nth-of-type(2)", isEn ? "Pause" : "Р СџР В°РЎС“Р В·Р В°");
   setText("#campaignDetailModal .actions button:nth-of-type(3)", isEn ? "Stop" : "РћСЃС‚Р°РЅРѕРІРёС‚СЊ");
   setText("#campaignDetailModal .actions button:nth-of-type(4)", isEn ? "Refresh details" : "РћР±РЅРѕРІРёС‚СЊ РґРµС‚Р°Р»Рё");
   setText("#productViewRefreshBtn", isEn ? "Refresh from API" : "РћР±РЅРѕРІРёС‚СЊ РёР· API");
-  setText("#productViewEditBtn", isEn ? "Edit" : "Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ");
+  setText("#productViewEditBtn", isEn ? "Edit" : "?????????????");
   setText("#productEditPhotoAddBtn", isEn ? "Add photo" : "Р”РѕР±Р°РІРёС‚СЊ С„РѕС‚Рѕ");
   setText("#productEditPhotoAddUrlBtn", isEn ? "Add URL" : "Р”РѕР±Р°РІРёС‚СЊ URL");
-  setText("#productEditPhotoPickBtn", isEn ? "Choose files" : "Р’С‹Р±СЂР°С‚СЊ С„Р°Р№Р»С‹");
-  setText("#reviews thead th:nth-child(1)", isEn ? "Status" : "РЎС‚Р°С‚СѓСЃ");
-  setText("#reviews thead th:nth-child(2)", isEn ? "Date" : "Р”Р°С‚Р°");
-  setText("#reviews thead th:nth-child(3)", isEn ? "Product" : "РўРѕРІР°СЂ");
-  setText("#reviews thead th:nth-child(4)", isEn ? "Rating" : "РћС†РµРЅРєР°");
-  setText("#reviews thead th:nth-child(5)", isEn ? "Review" : "РћС‚Р·С‹РІ");
-  setText("#reviews thead th:nth-child(6)", isEn ? "Reply" : "РћС‚РІРµС‚");
+  setText("#productEditPhotoPickBtn", isEn ? "Choose files" : "Р вЂ™РЎвЂ№Р В±РЎР‚Р В°РЎвЂљРЎРЉ РЎвЂћР В°Р в„–Р В»РЎвЂ№");
+  setText("#reviews thead th:nth-child(1)", isEn ? "Status" : "Р РЋРЎвЂљР В°РЎвЂљРЎС“РЎРѓ");
+  setText("#reviews thead th:nth-child(2)", isEn ? "Date" : "Р вЂќР В°РЎвЂљР В°");
+  setText("#reviews thead th:nth-child(3)", isEn ? "Product" : "Р СћР С•Р Р†Р В°РЎР‚");
+  setText("#reviews thead th:nth-child(4)", isEn ? "Rating" : "Р С›РЎвЂ Р ВµР Р…Р С”Р В°");
+  setText("#reviews thead th:nth-child(5)", isEn ? "Review" : "Р С›РЎвЂљР В·РЎвЂ№Р Р†");
+  setText("#reviews thead th:nth-child(6)", isEn ? "Reply" : "Р С›РЎвЂљР Р†Р ВµРЎвЂљ");
   setText("#reviews thead th:nth-child(7)", isEn ? "Actions" : "Р”РµР№СЃС‚РІРёСЏ");
-  setText("#reviewsSubtabQuestions thead th:nth-child(1)", isEn ? "Status" : "РЎС‚Р°С‚СѓСЃ");
-  setText("#reviewsSubtabQuestions thead th:nth-child(2)", isEn ? "Date" : "Р”Р°С‚Р°");
-  setText("#reviewsSubtabQuestions thead th:nth-child(3)", isEn ? "Product" : "РўРѕРІР°СЂ");
-  setText("#reviewsSubtabQuestions thead th:nth-child(4)", isEn ? "Question" : "Р’РѕРїСЂРѕСЃ");
-  setText("#reviewsSubtabQuestions thead th:nth-child(5)", isEn ? "Reply" : "РћС‚РІРµС‚");
+  setText("#reviewsSubtabQuestions thead th:nth-child(1)", isEn ? "Status" : "Р РЋРЎвЂљР В°РЎвЂљРЎС“РЎРѓ");
+  setText("#reviewsSubtabQuestions thead th:nth-child(2)", isEn ? "Date" : "Р вЂќР В°РЎвЂљР В°");
+  setText("#reviewsSubtabQuestions thead th:nth-child(3)", isEn ? "Product" : "Р СћР С•Р Р†Р В°РЎР‚");
+  setText("#reviewsSubtabQuestions thead th:nth-child(4)", isEn ? "Question" : "Р вЂ™Р С•Р С—РЎР‚Р С•РЎРѓ");
+  setText("#reviewsSubtabQuestions thead th:nth-child(5)", isEn ? "Reply" : "Р С›РЎвЂљР Р†Р ВµРЎвЂљ");
   setText("#reviewsSubtabQuestions thead th:nth-child(6)", isEn ? "Actions" : "Р”РµР№СЃС‚РІРёСЏ");
   setText("#ads thead th:nth-child(1)", "ID");
   setText("#ads thead th:nth-child(2)", isEn ? "Name" : "РќР°Р·РІР°РЅРёРµ");
-  setText("#ads thead th:nth-child(3)", isEn ? "Status" : "РЎС‚Р°С‚СѓСЃ");
+  setText("#ads thead th:nth-child(3)", isEn ? "Status" : "Р РЋРЎвЂљР В°РЎвЂљРЎС“РЎРѓ");
   setText("#ads thead th:nth-child(4)", isEn ? "Type" : "РўРёРї");
-  setText("#ads thead th:nth-child(5)", isEn ? "Budget" : "Р‘СЋРґР¶РµС‚");
-  setText("#ads thead th:nth-child(6)", isEn ? "Running" : "Р Р°Р±РѕС‚Р°РµС‚");
-  setText("#ads thead th:nth-child(7)", isEn ? "Views" : "РџРѕРєР°Р·С‹");
+  setText("#ads thead th:nth-child(5)", isEn ? "Budget" : "Р вЂРЎР‹Р Т‘Р В¶Р ВµРЎвЂљ");
+  setText("#ads thead th:nth-child(6)", isEn ? "Running" : "Р В Р В°Р В±Р С•РЎвЂљР В°Р ВµРЎвЂљ");
+  setText("#ads thead th:nth-child(7)", isEn ? "Views" : "Р СџР С•Р С”Р В°Р В·РЎвЂ№");
   setText("#ads thead th:nth-child(8)", isEn ? "Clicks" : "РљР»РёРєРё");
   setText("#ads thead th:nth-child(9)", "CTR");
-  setText("#ads thead th:nth-child(10)", isEn ? "Orders" : "Р—Р°РєР°Р·С‹");
-  setText("#ads thead th:nth-child(11)", isEn ? "Spend" : "Р Р°СЃС…РѕРґ");
+  setText("#ads thead th:nth-child(10)", isEn ? "Orders" : "Р вЂ”Р В°Р С”Р В°Р В·РЎвЂ№");
+  setText("#ads thead th:nth-child(11)", isEn ? "Spend" : "Р В Р В°РЎРѓРЎвЂ¦Р С•Р Т‘");
   setText("#adsSubtabRecommendations thead th:nth-child(1)", "ID");
   setText("#adsSubtabRecommendations thead th:nth-child(2)", isEn ? "Name" : "РќР°Р·РІР°РЅРёРµ");
-  setText("#adsSubtabRecommendations thead th:nth-child(3)", isEn ? "Status" : "РЎС‚Р°С‚СѓСЃ");
+  setText("#adsSubtabRecommendations thead th:nth-child(3)", isEn ? "Status" : "Р РЋРЎвЂљР В°РЎвЂљРЎС“РЎРѓ");
   setText("#adsSubtabRecommendations thead th:nth-child(4)", isEn ? "Type" : "РўРёРї");
-  setText("#adsSubtabRecommendations thead th:nth-child(5)", isEn ? "Views" : "РџРѕРєР°Р·С‹");
+  setText("#adsSubtabRecommendations thead th:nth-child(5)", isEn ? "Views" : "Р СџР С•Р С”Р В°Р В·РЎвЂ№");
   setText("#adsSubtabRecommendations thead th:nth-child(6)", isEn ? "Clicks" : "РљР»РёРєРё");
   setText("#adsSubtabRecommendations thead th:nth-child(7)", "CTR");
-  setText("#adsSubtabRecommendations thead th:nth-child(8)", isEn ? "Orders" : "Р—Р°РєР°Р·С‹");
-  setText("#adsSubtabRecommendations thead th:nth-child(9)", isEn ? "Spend" : "Р Р°СЃС…РѕРґ");
+  setText("#adsSubtabRecommendations thead th:nth-child(8)", isEn ? "Orders" : "Р вЂ”Р В°Р С”Р В°Р В·РЎвЂ№");
+  setText("#adsSubtabRecommendations thead th:nth-child(9)", isEn ? "Spend" : "Р В Р В°РЎРѓРЎвЂ¦Р С•Р Т‘");
   setText("#adsSubtabRecommendations thead th:nth-child(10)", "CPC");
   setText("#adsSubtabRecommendations thead th:nth-child(11)", "CPO");
   setText("#adsSubtabRecommendations thead th:nth-child(12)", isEn ? "Priority" : "РџСЂРёРѕСЂРёС‚РµС‚");
-  setText("#adsSubtabRecommendations thead th:nth-child(13)", isEn ? "Recommendation" : "Р РµРєРѕРјРµРЅРґР°С†РёСЏ");
+  setText("#adsSubtabRecommendations thead th:nth-child(13)", isEn ? "Recommendation" : "????????????");
   setText("#adsSubtabRecommendations thead th:nth-child(14)", isEn ? "Reason" : "РџСЂРёС‡РёРЅР°");
-  setText("#sales thead th:nth-child(1)", isEn ? "Date" : "Р”Р°С‚Р°");
-  setText("#sales thead th:nth-child(2)", isEn ? "Marketplace" : "РњРџ");
-  setText("#sales thead th:nth-child(3)", isEn ? "Orders" : "Р—Р°РєР°Р·С‹");
+  setText("#sales thead th:nth-child(1)", isEn ? "Date" : "Р вЂќР В°РЎвЂљР В°");
+  setText("#sales thead th:nth-child(2)", isEn ? "Marketplace" : "Р СљР Сџ");
+  setText("#sales thead th:nth-child(3)", isEn ? "Orders" : "Р вЂ”Р В°Р С”Р В°Р В·РЎвЂ№");
   setText("#sales thead th:nth-child(4)", isEn ? "Units" : "РЁС‚.");
-  setText("#sales thead th:nth-child(5)", isEn ? "Buyouts" : "Р’С‹РєСѓРїС‹");
-  setText("#sales thead th:nth-child(6)", isEn ? "Revenue" : "Р’С‹СЂСѓС‡РєР°");
-  setText("#sales thead th:nth-child(7)", isEn ? "Returns" : "РћС‚РєР°Р·С‹");
-  setText("#sales thead th:nth-child(8)", isEn ? "Ads Spend" : "Р РµРєР»Р°РјР°");
+  setText("#sales thead th:nth-child(5)", isEn ? "Buyouts" : "Р вЂ™РЎвЂ№Р С”РЎС“Р С—РЎвЂ№");
+  setText("#sales thead th:nth-child(6)", isEn ? "Revenue" : "Р вЂ™РЎвЂ№РЎР‚РЎС“РЎвЂЎР С”Р В°");
+  setText("#sales thead th:nth-child(7)", isEn ? "Returns" : "Р С›РЎвЂљР С”Р В°Р В·РЎвЂ№");
+  setText("#sales thead th:nth-child(8)", isEn ? "Ads Spend" : "Р В Р ВµР С”Р В»Р В°Р СР В°");
   setText("#sales thead th:nth-child(9)", isEn ? "Penalties" : "РЁС‚СЂР°С„С‹");
   setText("#profileKeysPanel .cols-2 > div:nth-of-type(1) h3", "WB");
   setText("#profileKeysPanel .cols-2 > div:nth-of-type(2) h3", "Ozon");
-  setTextAll("#profileKeysPanel .actions button:nth-of-type(1)", isEn ? "Save" : "РЎРѕС…СЂР°РЅРёС‚СЊ");
+  setTextAll("#profileKeysPanel .actions button:nth-of-type(1)", isEn ? "Save" : "?????????");
   setTextAll("#profileKeysPanel .actions button:nth-of-type(2)", isEn ? "Test" : "РџСЂРѕРІРµСЂРёС‚СЊ");
   setTextAll("#profileKeysPanel .actions button:nth-of-type(3)", isEn ? "Delete" : "РЈРґР°Р»РёС‚СЊ");
 
@@ -1293,47 +1293,47 @@ function applyUiLanguage() {
     "5", "4", "3", "2", "1",
   ]);
   setOptions("#reviewStatusFilter", [
-    isEn ? "All" : "Р’СЃРµ",
-    isEn ? "New" : "РќРѕРІС‹Рµ",
-    isEn ? "Unanswered" : "РќРµРѕС‚РІРµС‡РµРЅРЅС‹Рµ",
-    isEn ? "Answered" : "РћС‚РІРµС‡РµРЅРЅС‹Рµ",
+    isEn ? "All" : "Р вЂ™РЎРѓР Вµ",
+    isEn ? "New" : "Р СњР С•Р Р†РЎвЂ№Р Вµ",
+    isEn ? "Unanswered" : "Р СњР ВµР С•РЎвЂљР Р†Р ВµРЎвЂЎР ВµР Р…Р Р…РЎвЂ№Р Вµ",
+    isEn ? "Answered" : "Р С›РЎвЂљР Р†Р ВµРЎвЂЎР ВµР Р…Р Р…РЎвЂ№Р Вµ",
   ]);
   setOptions("#reviewDateSort", [
-    isEn ? "Newest first" : "РЎРЅР°С‡Р°Р»Р° РЅРѕРІС‹Рµ",
-    isEn ? "Oldest first" : "РЎРЅР°С‡Р°Р»Р° СЃС‚Р°СЂС‹Рµ",
+    isEn ? "Newest first" : "Р РЋР Р…Р В°РЎвЂЎР В°Р В»Р В° Р Р…Р С•Р Р†РЎвЂ№Р Вµ",
+    isEn ? "Oldest first" : "Р РЋР Р…Р В°РЎвЂЎР В°Р В»Р В° РЎРѓРЎвЂљР В°РЎР‚РЎвЂ№Р Вµ",
   ]);
   setOptions("#questionStatusFilter", [
-    isEn ? "All" : "Р’СЃРµ",
-    isEn ? "New" : "РќРѕРІС‹Рµ",
-    isEn ? "Unanswered" : "РќРµРѕС‚РІРµС‡РµРЅРЅС‹Рµ",
-    isEn ? "Answered" : "РћС‚РІРµС‡РµРЅРЅС‹Рµ",
+    isEn ? "All" : "Р вЂ™РЎРѓР Вµ",
+    isEn ? "New" : "Р СњР С•Р Р†РЎвЂ№Р Вµ",
+    isEn ? "Unanswered" : "Р СњР ВµР С•РЎвЂљР Р†Р ВµРЎвЂЎР ВµР Р…Р Р…РЎвЂ№Р Вµ",
+    isEn ? "Answered" : "Р С›РЎвЂљР Р†Р ВµРЎвЂЎР ВµР Р…Р Р…РЎвЂ№Р Вµ",
   ]);
   setOptions("#questionDateSort", [
-    isEn ? "Newest first" : "РЎРЅР°С‡Р°Р»Р° РЅРѕРІС‹Рµ",
-    isEn ? "Oldest first" : "РЎРЅР°С‡Р°Р»Р° СЃС‚Р°СЂС‹Рµ",
+    isEn ? "Newest first" : "Р РЋР Р…Р В°РЎвЂЎР В°Р В»Р В° Р Р…Р С•Р Р†РЎвЂ№Р Вµ",
+    isEn ? "Oldest first" : "Р РЋР Р…Р В°РЎвЂЎР В°Р В»Р В° РЎРѓРЎвЂљР В°РЎР‚РЎвЂ№Р Вµ",
   ]);
   setOptions("#reviewAiMode", ["manual", "suggest", "auto"]);
   setOptions("#questionAiMode", ["manual", "suggest", "auto"]);
   setOptions("#profileAiSourceSelect", [
     isEn ? "Global default (admin)" : "Р“Р»РѕР±Р°Р»СЊРЅС‹Р№ default (Р°РґРјРёРЅ)",
-    isEn ? "Built-in OpenAI" : "Р’СЃС‚СЂРѕРµРЅРЅС‹Р№ OpenAI",
+    isEn ? "Built-in OpenAI" : "Р вЂ™РЎРѓРЎвЂљРЎР‚Р С•Р ВµР Р…Р Р…РЎвЂ№Р в„– OpenAI",
     isEn ? "Global service" : "Р“Р»РѕР±Р°Р»СЊРЅС‹Р№ СЃРµСЂРІРёСЃ",
     isEn ? "My service" : "РњРѕР№ СЃРµСЂРІРёСЃ",
   ]);
   setOptions("#wbAdsStatusFilter", [
-    isEn ? "All statuses" : "Р’СЃРµ СЃС‚Р°С‚СѓСЃС‹",
-    isEn ? "-1 deleted" : "-1 СѓРґР°Р»РµРЅР°",
+    isEn ? "All statuses" : "Р вЂ™РЎРѓР Вµ РЎРѓРЎвЂљР В°РЎвЂљРЎС“РЎРѓРЎвЂ№",
+    isEn ? "-1 deleted" : "-1 РЎС“Р Т‘Р В°Р В»Р ВµР Р…Р В°",
     isEn ? "1 draft (media)" : "1 С‡РµСЂРЅРѕРІРёРє (РјРµРґРёР°)",
     isEn ? "2 moderation (media)" : "2 РјРѕРґРµСЂР°С†РёСЏ (РјРµРґРёР°)",
     isEn ? "3 rejected (media)" : "3 РѕС‚РєР»РѕРЅРµРЅР° (РјРµРґРёР°)",
-    isEn ? "4 ready to start" : "4 РіРѕС‚РѕРІР° Рє Р·Р°РїСѓСЃРєСѓ",
+    isEn ? "4 ready to start" : "4 Р С–Р С•РЎвЂљР С•Р Р†Р В° Р С” Р В·Р В°Р С—РЎС“РЎРѓР С”РЎС“",
     isEn ? "5 scheduled (media)" : "5 Р·Р°РїР»Р°РЅРёСЂРѕРІР°РЅР° (РјРµРґРёР°)",
     isEn ? "6 running (media)" : "6 РёРґСѓС‚ РїРѕРєР°Р·С‹ (РјРµРґРёР°)",
-    isEn ? "7 completed" : "7 Р·Р°РІРµСЂС€РµРЅР°",
-    isEn ? "8 canceled" : "8 РѕС‚РјРµРЅРµРЅР°",
+    isEn ? "7 completed" : "7 Р В·Р В°Р Р†Р ВµРЎР‚РЎв‚¬Р ВµР Р…Р В°",
+    isEn ? "8 canceled" : "8 Р С•РЎвЂљР СР ВµР Р…Р ВµР Р…Р В°",
     isEn ? "9 active" : "9 Р°РєС‚РёРІРЅР°",
     isEn ? "10 day-limit pause (media)" : "10 РґРЅРµРІРЅРѕР№ Р»РёРјРёС‚ (РјРµРґРёР°)",
-    isEn ? "11 paused" : "11 РїР°СѓР·Р°",
+    isEn ? "11 paused" : "11 Р С—Р В°РЎС“Р В·Р В°",
   ]);
   setOptions("#wbAdsTypeFilter", [
     isEn ? "All types" : "Р’СЃРµ С‚РёРїС‹",
@@ -1349,22 +1349,22 @@ function applyUiLanguage() {
     "auto-cpm",
   ]);
   setOptions("#wbAdsWorkingFilter", [
-    isEn ? "Running: all" : "Р Р°Р±РѕС‚Р°РµС‚: РІСЃРµ",
-    isEn ? "Only running" : "РўРѕР»СЊРєРѕ СЂР°Р±РѕС‚Р°РµС‚",
-    isEn ? "Only stopped" : "РўРѕР»СЊРєРѕ РЅРµ СЂР°Р±РѕС‚Р°РµС‚",
+    isEn ? "Running: all" : "Р В Р В°Р В±Р С•РЎвЂљР В°Р ВµРЎвЂљ: Р Р†РЎРѓР Вµ",
+    isEn ? "Only running" : "Р СћР С•Р В»РЎРЉР С”Р С• РЎР‚Р В°Р В±Р С•РЎвЂљР В°Р ВµРЎвЂљ",
+    isEn ? "Only stopped" : "Р СћР С•Р В»РЎРЉР С”Р С• Р Р…Р Вµ РЎР‚Р В°Р В±Р С•РЎвЂљР В°Р ВµРЎвЂљ",
   ]);
   setOptions("#wbAdsSortBy", [
-    isEn ? "ID: newest first" : "ID: РЅРѕРІС‹Рµ СЃРІРµСЂС…Сѓ",
-    isEn ? "ID: oldest first" : "ID: СЃС‚Р°СЂС‹Рµ СЃРІРµСЂС…Сѓ",
-    isEn ? "Budget: high to low" : "Р‘СЋРґР¶РµС‚: Р±РѕР»СЊС€Рµ -> РјРµРЅСЊС€Рµ",
-    isEn ? "Budget: low to high" : "Р‘СЋРґР¶РµС‚: РјРµРЅСЊС€Рµ -> Р±РѕР»СЊС€Рµ",
+    isEn ? "ID: newest first" : "ID: Р Р…Р С•Р Р†РЎвЂ№Р Вµ РЎРѓР Р†Р ВµРЎР‚РЎвЂ¦РЎС“",
+    isEn ? "ID: oldest first" : "ID: РЎРѓРЎвЂљР В°РЎР‚РЎвЂ№Р Вµ РЎРѓР Р†Р ВµРЎР‚РЎвЂ¦РЎС“",
+    isEn ? "Budget: high to low" : "Р вЂРЎР‹Р Т‘Р В¶Р ВµРЎвЂљ: Р В±Р С•Р В»РЎРЉРЎв‚¬Р Вµ -> Р СР ВµР Р…РЎРЉРЎв‚¬Р Вµ",
+    isEn ? "Budget: low to high" : "Р вЂРЎР‹Р Т‘Р В¶Р ВµРЎвЂљ: Р СР ВµР Р…РЎРЉРЎв‚¬Р Вµ -> Р В±Р С•Р В»РЎРЉРЎв‚¬Р Вµ",
     isEn ? "Name: A -> Z" : "РќР°Р·РІР°РЅРёРµ: Рђ -> РЇ",
     isEn ? "Name: Z -> A" : "РќР°Р·РІР°РЅРёРµ: РЇ -> Рђ",
-    isEn ? "Status: code asc" : "РЎС‚Р°С‚СѓСЃ: РїРѕ РєРѕРґСѓ в†‘",
-    isEn ? "Status: code desc" : "РЎС‚Р°С‚СѓСЃ: РїРѕ РєРѕРґСѓ в†“",
+    isEn ? "Status: code asc" : "Р РЋРЎвЂљР В°РЎвЂљРЎС“РЎРѓ: Р С—Р С• Р С”Р С•Р Т‘РЎС“ РІвЂ вЂ",
+    isEn ? "Status: code desc" : "Р РЋРЎвЂљР В°РЎвЂљРЎС“РЎРѓ: Р С—Р С• Р С”Р С•Р Т‘РЎС“ РІвЂ вЂњ",
   ]);
   setOptions("#salesMarketplace", [
-    isEn ? "All marketplaces" : "Р’СЃРµ РјР°СЂРєРµС‚РїР»РµР№СЃС‹",
+    isEn ? "All marketplaces" : "Р вЂ™РЎРѓР Вµ Р СР В°РЎР‚Р С”Р ВµРЎвЂљР С—Р В»Р ВµР в„–РЎРѓРЎвЂ№",
     "WB",
     "Ozon",
   ]);
@@ -1375,14 +1375,14 @@ function applyUiLanguage() {
   ]);
   setOptions("#salesMetricMode", [
     isEn ? "Units" : "РЁС‚СѓРєРё",
-    isEn ? "Buyouts" : "Р’С‹РєСѓРїС‹",
-    isEn ? "Revenue" : "Р’С‹СЂСѓС‡РєР°",
+    isEn ? "Buyouts" : "Р вЂ™РЎвЂ№Р С”РЎС“Р С—РЎвЂ№",
+    isEn ? "Revenue" : "Р вЂ™РЎвЂ№РЎР‚РЎС“РЎвЂЎР С”Р В°",
     isEn ? "Income" : "РџСЂРёС…РѕРґ",
-    isEn ? "Expense" : "Р Р°СЃС…РѕРґ",
+    isEn ? "Expense" : "Р В Р В°РЎРѓРЎвЂ¦Р С•Р Т‘",
     isEn ? "Net" : "РР·РјРµРЅРµРЅРёРµ Р±Р°Р»Р°РЅСЃР°",
-    isEn ? "Orders" : "Р—Р°РєР°Р·С‹",
-    isEn ? "Returns" : "РћС‚РєР°Р·С‹",
-    isEn ? "Ads Spend" : "Р РµРєР»Р°РјР°",
+    isEn ? "Orders" : "Р вЂ”Р В°Р С”Р В°Р В·РЎвЂ№",
+    isEn ? "Returns" : "Р С›РЎвЂљР С”Р В°Р В·РЎвЂ№",
+    isEn ? "Ads Spend" : "Р В Р ВµР С”Р В»Р В°Р СР В°",
     isEn ? "Penalties" : "РЁС‚СЂР°С„С‹",
   ]);
   setCheckLabel("#sales .sales-chart-controls label:nth-of-type(1)", "WB");
@@ -1391,44 +1391,44 @@ function applyUiLanguage() {
   const placeholders = [
     ["#loginEmail", "Email"],
     ["#regEmail", "Email"],
-    ["#loginPassword", isEn ? "Password" : "РџР°СЂРѕР»СЊ"],
-    ["#regPassword", isEn ? "Password (>=8)" : "РџР°СЂРѕР»СЊ (>=8)"],
+    ["#loginPassword", isEn ? "Password" : "Р СџР В°РЎР‚Р С•Р В»РЎРЉ"],
+    ["#regPassword", isEn ? "Password (>=8)" : "Р СџР В°РЎР‚Р С•Р В»РЎРЉ (>=8)"],
     ["#productFilter", isEn ? "Filter by article/name" : "Р¤РёР»СЊС‚СЂ: Р°СЂС‚РёРєСѓР»/РЅР°Р·РІР°РЅРёРµ"],
     ["#positionKeywords", isEn ? "Ranking keywords (optional)" : "РљР»СЋС‡Рё РґР»СЏ РїСЂРѕРІРµСЂРєРё (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ)"],
     ["#extraKeywords", isEn ? "Extra keywords (optional)" : "Р”РѕРї. РєР»СЋС‡Рё (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ)"],
     ["#seoFilter", isEn ? "Filter: article/product/status" : "Р¤РёР»СЊС‚СЂ: Р°СЂС‚РёРєСѓР»/С‚РѕРІР°СЂ/СЃС‚Р°С‚СѓСЃ"],
     ["#wbAdsSearch", isEn ? "Search by ID/name" : "РџРѕРёСЃРє РїРѕ ID/РЅР°Р·РІР°РЅРёСЋ"],
-    ["#wbAdsBudgetMin", isEn ? "Budget from" : "Р‘СЋРґР¶РµС‚ РѕС‚"],
-    ["#wbAdsBudgetMax", isEn ? "Budget to" : "Р‘СЋРґР¶РµС‚ РґРѕ"],
+    ["#wbAdsBudgetMin", isEn ? "Budget from" : "Р вЂРЎР‹Р Т‘Р В¶Р ВµРЎвЂљ Р С•РЎвЂљ"],
+    ["#wbAdsBudgetMax", isEn ? "Budget to" : "Р вЂРЎР‹Р Т‘Р В¶Р ВµРЎвЂљ Р Т‘Р С•"],
     ["#questionAiPrompt", isEn ? "Optional prompt for question replies" : "РџСЂРѕРјРїС‚ РґР»СЏ РіРµРЅРµСЂР°С†РёРё РѕС‚РІРµС‚РѕРІ РЅР° РІРѕРїСЂРѕСЃС‹ (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ)"],
     ["#reviewAiPrompt", isEn ? "Optional prompt for review replies" : "РџСЂРѕРјРїС‚ РґР»СЏ РіРµРЅРµСЂР°С†РёРё РѕС‚РІРµС‚РѕРІ (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ)"],
     ["#adsAnalyticsCampaignId", isEn ? "campaign_id (optional)" : "campaign_id (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ)"],
     ["#adsRecMinSpent", isEn ? "Min spend" : "РњРёРЅ. СЂР°СЃС…РѕРґ"],
     ["#profileFullName", isEn ? "Director / Sole proprietor full name" : "Р¤РРћ РґРёСЂРµРєС‚РѕСЂР°/РРџ"],
-    ["#profilePositionTitle", isEn ? "Position title" : "Р”РѕР»Р¶РЅРѕСЃС‚СЊ"],
+    ["#profilePositionTitle", isEn ? "Position title" : "Р вЂќР С•Р В»Р В¶Р Р…Р С•РЎРѓРЎвЂљРЎРЉ"],
     ["#profileCompanyName", isEn ? "Company name" : "РќР°Р·РІР°РЅРёРµ РєРѕРјРїР°РЅРёРё"],
-    ["#profileCity", isEn ? "City" : "Р“РѕСЂРѕРґ"],
+    ["#profileCity", isEn ? "City" : "Р вЂњР С•РЎР‚Р С•Р Т‘"],
     ["#profileLegalName", isEn ? "Legal entity name" : "Р®СЂРёРґРёС‡РµСЃРєРѕРµ РЅР°РёРјРµРЅРѕРІР°РЅРёРµ"],
     ["#profileLegalAddress", isEn ? "Legal address" : "Р®СЂРёРґРёС‡РµСЃРєРёР№ Р°РґСЂРµСЃ"],
-    ["#profileTaxId", isEn ? "Tax ID" : "РРќРќ"],
-    ["#profileTaxRate", isEn ? "Tax rate, %" : "РќР°Р»РѕРіРѕРІР°СЏ СЃС‚Р°РІРєР°, %"],
-    ["#profilePhone", isEn ? "Phone" : "РўРµР»РµС„РѕРЅ"],
-    ["#profileTeamSize", isEn ? "Team size" : "РЎРѕСЃС‚Р°РІ РєРѕРјРїР°РЅРёРё, С‡РµР»."],
-    ["#profileAvatarUrl", isEn ? "Avatar URL" : "РЎСЃС‹Р»РєР° РЅР° Р°РІР°С‚Р°СЂ"],
-    ["#profileCompanyStructure", isEn ? "Team structure, roles, departments" : "РЎС‚СЂСѓРєС‚СѓСЂР° РєРѕРјРїР°РЅРёРё, СЂРѕР»Рё, РѕС‚РґРµР»С‹"],
+    ["#profileTaxId", isEn ? "Tax ID" : "Р ВР СњР Сњ"],
+    ["#profileTaxRate", isEn ? "Tax rate, %" : "Р СњР В°Р В»Р С•Р С–Р С•Р Р†Р В°РЎРЏ РЎРѓРЎвЂљР В°Р Р†Р С”Р В°, %"],
+    ["#profilePhone", isEn ? "Phone" : "Р СћР ВµР В»Р ВµРЎвЂћР С•Р Р…"],
+    ["#profileTeamSize", isEn ? "Team size" : "?????? ????????, ???."],
+    ["#profileAvatarUrl", isEn ? "Avatar URL" : "Р РЋРЎРѓРЎвЂ№Р В»Р С”Р В° Р Р…Р В° Р В°Р Р†Р В°РЎвЂљР В°РЎР‚"],
+    ["#profileCompanyStructure", isEn ? "Team structure, roles, departments" : "????????? ????????, ????, ??????"],
     ["#teamModalEmail", isEn ? "Employee email" : "Email СЃРѕС‚СЂСѓРґРЅРёРєР°"],
-    ["#teamModalPassword", isEn ? "New password (optional)" : "РќРѕРІС‹Р№ РїР°СЂРѕР»СЊ (РѕРїС†.)"],
-    ["#teamModalPhone", isEn ? "Phone" : "РўРµР»РµС„РѕРЅ"],
-    ["#teamModalFullName", isEn ? "Full name" : "Р¤РРћ"],
-    ["#teamModalCity", isEn ? "City" : "Р“РѕСЂРѕРґ"],
-    ["#teamModalPosition", isEn ? "Position title" : "Р”РѕР»Р¶РЅРѕСЃС‚СЊ"],
+    ["#teamModalPassword", isEn ? "New password (optional)" : "Р СњР С•Р Р†РЎвЂ№Р в„– Р С—Р В°РЎР‚Р С•Р В»РЎРЉ (Р С•Р С—РЎвЂ .)"],
+    ["#teamModalPhone", isEn ? "Phone" : "Р СћР ВµР В»Р ВµРЎвЂћР С•Р Р…"],
+    ["#teamModalFullName", isEn ? "Full name" : "Р В¤Р ВР С›"],
+    ["#teamModalCity", isEn ? "City" : "Р вЂњР С•РЎР‚Р С•Р Т‘"],
+    ["#teamModalPosition", isEn ? "Position title" : "Р вЂќР С•Р В»Р В¶Р Р…Р С•РЎРѓРЎвЂљРЎРЉ"],
     ["#teamModalNickname", isEn ? "Nickname" : "РќРёРє"],
-    ["#teamModalAvatar", isEn ? "Avatar URL" : "РЎСЃС‹Р»РєР° РЅР° Р°РІР°С‚Р°СЂ"],
+    ["#teamModalAvatar", isEn ? "Avatar URL" : "Р РЋРЎРѓРЎвЂ№Р В»Р С”Р В° Р Р…Р В° Р В°Р Р†Р В°РЎвЂљР В°РЎР‚"],
     ["#profileAiName", isEn ? "AI service name" : "РќР°Р·РІР°РЅРёРµ AI СЃРµСЂРІРёСЃР°"],
     ["#profileAiModel", isEn ? "Model (e.g. gpt-4o-mini)" : "РњРѕРґРµР»СЊ (РЅР°РїСЂРёРјРµСЂ gpt-4o-mini)"],
     ["#profileAiBaseUrl", isEn ? "Base URL (optional)" : "Base URL (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ)"],
     ["#profileAiApiKey", isEn ? "Service API key" : "API key СЃРµСЂРІРёСЃР°"],
-    ["#helpAssistantQuestion", isEn ? "Ask any question" : "Р—Р°РґР°Р№С‚Рµ Р»СЋР±РѕР№ РІРѕРїСЂРѕСЃ"],
+    ["#helpAssistantQuestion", isEn ? "Ask any question" : "Р вЂ”Р В°Р Т‘Р В°Р в„–РЎвЂљР Вµ Р В»РЎР‹Р В±Р С•Р в„– Р Р†Р С•Р С—РЎР‚Р С•РЎРѓ"],
   ];
   for (const [selector, text] of placeholders) {
     const el = document.querySelector(selector);
@@ -1672,7 +1672,7 @@ async function requestJson(url, opts = {}) {
         if (!parsed.hasBody) return {};
         if (parsed.ok) return parsed.payload;
         throw makeRequestError(
-          currentLang === "en" ? "Server returned an invalid response." : "РЎРµСЂРІРµСЂ РІРµСЂРЅСѓР» РЅРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ РѕС‚РІРµС‚.",
+          currentLang === "en" ? "Server returned an invalid response." : "Р РЋР ВµРЎР‚Р Р†Р ВµРЎР‚ Р Р†Р ВµРЎР‚Р Р…РЎС“Р В» Р Р…Р ВµР С”Р С•РЎР‚РЎР‚Р ВµР С”РЎвЂљР Р…РЎвЂ№Р в„– Р С•РЎвЂљР Р†Р ВµРЎвЂљ.",
           {
             kind: "parse",
             status: response.status,
@@ -1739,7 +1739,7 @@ async function requestJson(url, opts = {}) {
       }
       if (isFetchNetwork) {
         throw makeRequestError(
-          currentLang === "en" ? "Network error. Check connection and retry." : "РЎРµС‚РµРІР°СЏ РѕС€РёР±РєР°. РџСЂРѕРІРµСЂСЊС‚Рµ СЃРѕРµРґРёРЅРµРЅРёРµ Рё РїРѕРІС‚РѕСЂРёС‚Рµ.",
+          currentLang === "en" ? "Network error. Check connection and retry." : "??????? ??????. ????????? ?????????? ? ?????????.",
           { kind: "network", cause: e }
         );
       }
@@ -1758,7 +1758,7 @@ async function requestJson(url, opts = {}) {
   }
   if (isNetworkError(lastError)) {
     throw makeRequestError(
-      currentLang === "en" ? "Network error. Check connection and retry." : "РЎРµС‚РµРІР°СЏ РѕС€РёР±РєР°. РџСЂРѕРІРµСЂСЊС‚Рµ СЃРѕРµРґРёРЅРµРЅРёРµ Рё РїРѕРІС‚РѕСЂРёС‚Рµ.",
+      currentLang === "en" ? "Network error. Check connection and retry." : "??????? ??????. ????????? ?????????? ? ?????????.",
       { kind: "network", cause: lastError }
     );
   }
@@ -1823,7 +1823,7 @@ function escapeHtml(value) {
 
 function formatPositionValue(value) {
   const num = Number(value || 0);
-  if (!Number.isFinite(num) || num <= 0) return tr("РЅ/Рґ", "n/a");
+  if (!Number.isFinite(num) || num <= 0) return tr("Р Р…/Р Т‘", "n/a");
   if (num > POSITION_LIMIT) return `${POSITION_LIMIT + 1}+`;
   return String(Math.round(num));
 }
@@ -1834,20 +1834,20 @@ const BUTTON_TIPS = {
     "РџРµСЂРµР·Р°РіСЂСѓР·РёС‚СЊ Р±Р°Р·Сѓ": "РџРѕР»РЅРѕСЃС‚СЊСЋ РїРµСЂРµСЃРѕР·РґР°РµС‚ Р»РѕРєР°Р»СЊРЅСѓСЋ Р±Р°Р·Сѓ С‚РѕРІР°СЂРѕРІ РїРѕ РІС‹Р±СЂР°РЅРЅРѕРјСѓ РјР°СЂРєРµС‚РїР»РµР№СЃСѓ.",
     "РџСЂРѕРІРµСЂРёС‚СЊ РІС‹Р±СЂР°РЅРЅС‹Рµ": "РџСЂРѕРІРµСЂСЏРµС‚ РїРѕР·РёС†РёРё С‚РѕР»СЊРєРѕ РІС‹Р±СЂР°РЅРЅС‹С… С‚РѕРІР°СЂРѕРІ РїРѕ СѓРєР°Р·Р°РЅРЅС‹Рј РєР»СЋС‡Р°Рј.",
     "РџСЂРѕРІРµСЂРёС‚СЊ РІСЃРµ": "РџСЂРѕРІРµСЂСЏРµС‚ РїРѕР·РёС†РёРё РІСЃРµС… С‚РѕРІР°СЂРѕРІ РІ Р±Р°Р·Рµ.",
-    "РЎРіРµРЅРµСЂРёСЂРѕРІР°С‚СЊ": "РЎРѕР·РґР°РµС‚ С‡РµСЂРЅРѕРІРёРє РѕС‚РІРµС‚Р° AI РїРѕ С‚РµРєСЃС‚Сѓ РєР»РёРµРЅС‚Р°.",
+    "?????????????": "??????? ???????? ?????? AI ?? ?????? ???????.",
     "РћС‚РїСЂР°РІРёС‚СЊ": "РџСѓР±Р»РёРєСѓРµС‚ РѕС‚РІРµС‚ РІ РјР°СЂРєРµС‚РїР»РµР№СЃ.",
     "РћР±РЅРѕРІРёС‚СЊ": "РћР±РЅРѕРІР»СЏРµС‚ СЂР°РЅРµРµ РѕС‚РїСЂР°РІР»РµРЅРЅС‹Р№ РѕС‚РІРµС‚ РІ РјР°СЂРєРµС‚РїР»РµР№СЃРµ.",
     "Р—Р°РіСЂСѓР·РёС‚СЊ РєР°РјРїР°РЅРёРё": "Р—Р°РіСЂСѓР¶Р°РµС‚ СЃРїРёСЃРѕРє СЂРµРєР»Р°РјРЅС‹С… РєР°РјРїР°РЅРёР№ РёР· РєР°Р±РёРЅРµС‚Р° WB Ads.",
     "РџРѕР»СѓС‡РёС‚СЊ СЃС‚Р°РІРєРё": "Р—Р°РїСЂР°С€РёРІР°РµС‚ СЃС‚Р°РІРєРё РїРѕ РІС‹Р±СЂР°РЅРЅРѕР№ СЂРµРєР»Р°РјРЅРѕР№ РєР°РјРїР°РЅРёРё.",
-    "РЎР±СЂРѕСЃРёС‚СЊ С„РёР»СЊС‚СЂС‹": "РЎР±СЂР°СЃС‹РІР°РµС‚ С„РёР»СЊС‚СЂС‹ Рё СЃРѕСЂС‚РёСЂРѕРІРєСѓ СЂРµРєР»Р°РјРЅС‹С… РєР°РјРїР°РЅРёР№.",
+    "???????? ???????": "?????????? ??????? ? ?????????? ????????? ????????.",
     "РџРѕСЃС‚СЂРѕРёС‚СЊ РѕС‚С‡РµС‚": "Р¤РѕСЂРјРёСЂСѓРµС‚ Р°РЅР°Р»РёС‚РёС‡РµСЃРєРёР№ РѕС‚С‡РµС‚ РїРѕ WB Ads Р·Р° РІС‹Р±СЂР°РЅРЅС‹Р№ РїРµСЂРёРѕРґ.",
     "РџРѕСЃС‚СЂРѕРёС‚СЊ СЂРµРєРѕРјРµРЅРґР°С†РёРё": "Р¤РѕСЂРјРёСЂСѓРµС‚ СЃРїРёСЃРѕРє РїСЂРёРѕСЂРёС‚РµС‚РЅС‹С… РґРµР№СЃС‚РІРёР№ РїРѕ РѕРїС‚РёРјРёР·Р°С†РёРё СЂРµРєР»Р°РјРЅС‹С… РєР°РјРїР°РЅРёР№.",
     "Р—Р°РіСЂСѓР·РёС‚СЊ СЃС‚Р°С‚РёСЃС‚РёРєСѓ": "Р—Р°РіСЂСѓР¶Р°РµС‚ РїСЂРѕРґР°Р¶Рё Р·Р° РІС‹Р±СЂР°РЅРЅС‹Р№ РїРµСЂРёРѕРґ Рё СЃС‚СЂРѕРёС‚ РіСЂР°С„РёРє.",
-    "РЎРѕС…СЂР°РЅРёС‚СЊ РїСЂРѕС„РёР»СЊ": "РЎРѕС…СЂР°РЅСЏРµС‚ Р»РёС‡РЅС‹Рµ Рё СЋСЂРёРґРёС‡РµСЃРєРёРµ РґР°РЅРЅС‹Рµ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ.",
+    "????????? ???????": "????????? ?????? ? ??????????? ?????? ????????????.",
     "РћР±РЅРѕРІРёС‚СЊ РїСЂРѕС„РёР»СЊ": "РџРµСЂРµР·Р°РіСЂСѓР¶Р°РµС‚ РґР°РЅРЅС‹Рµ РїСЂРѕС„РёР»СЏ СЃ СЃРµСЂРІРµСЂР°.",
-    "РЎРјРµРЅРёС‚СЊ С‚Р°СЂРёС„": "РџРµСЂРµРєР»СЋС‡Р°РµС‚ С‚Р°СЂРёС„РЅС‹Р№ РїР»Р°РЅ С‚РµРєСѓС‰РµРіРѕ Р°РєРєР°СѓРЅС‚Р°.",
+    "??????? ?????": "??????????? ???????? ???? ???????? ????????.",
     "РџСЂРѕРґР»РёС‚СЊ РЅР° 30 РґРЅРµР№": "РџСЂРѕРґР»РµРІР°РµС‚ С‚Р°СЂРёС„ РЅР° СЃР»РµРґСѓСЋС‰РёР№ СЂР°СЃС‡РµС‚РЅС‹Р№ РїРµСЂРёРѕРґ.",
-    "РЎРјРµРЅРёС‚СЊ РїР°СЂРѕР»СЊ": "РћР±РЅРѕРІР»СЏРµС‚ РїР°СЂРѕР»СЊ С‚РµРєСѓС‰РµРіРѕ Р°РєРєР°СѓРЅС‚Р°.",
+    "??????? ??????": "????????? ?????? ???????? ????????.",
     "Р—Р°РіСЂСѓР·РёС‚СЊ РІ Р±Р°Р·Сѓ Р·РЅР°РЅРёР№": "Р—Р°РіСЂСѓР¶Р°РµС‚ РґРѕРєСѓРјРµРЅС‚, РєРѕС‚РѕСЂС‹Р№ AI Р±СѓРґРµС‚ СѓС‡РёС‚С‹РІР°С‚СЊ РІ РѕС‚РІРµС‚Р°С….",
     "РЈРґР°Р»РёС‚СЊ РІС‹Р±СЂР°РЅРЅС‹Р№ РґРѕРєСѓРјРµРЅС‚": "РЈРґР°Р»СЏРµС‚ РІС‹Р±СЂР°РЅРЅС‹Р№ РґРѕРєСѓРјРµРЅС‚ РёР· Р±Р°Р·С‹ Р·РЅР°РЅРёР№ AI.",
     "РћР±РЅРѕРІРёС‚СЊ СЃРїСЂР°РІРєСѓ": "РџРµСЂРµР·Р°РіСЂСѓР¶Р°РµС‚ СЃРїСЂР°РІРѕС‡РЅСѓСЋ РёРЅС„РѕСЂРјР°С†РёСЋ РїРѕ РјРѕРґСѓР»СЏРј.",
@@ -1979,7 +1979,7 @@ function renderTrendChart(svgId, metaId, points) {
 
   if (!points.length) {
     clearChartHost(svg);
-    meta.textContent = tr("РџРѕРєР° РЅРµС‚ РґР°РЅРЅС‹С… РїРѕ РїСЂРѕРІРµСЂРєР°Рј.", "No checks data yet.");
+    meta.textContent = tr("Р СџР С•Р С”Р В° Р Р…Р ВµРЎвЂљ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦ Р С—Р С• Р С—РЎР‚Р С•Р Р†Р ВµРЎР‚Р С”Р В°Р С.", "No checks data yet.");
     return;
   }
 
@@ -2061,9 +2061,9 @@ function renderTrendChart(svgId, metaId, points) {
         true
       );
       meta.innerHTML = `
-        <span>${tr("РџСЂРѕРІРµСЂРѕРє", "Checks")}: <b>${checks}</b></span>
-        <span>${tr("РЎСЂРµРґРЅСЏСЏ РїРѕР·РёС†РёСЏ", "Average rank")}: <b>${avgPos}</b></span>
-        <span>${tr("Р’С…РѕРґРѕРІ РІ С‚РѕРї-5", "Top-5 hits")}: <b>${top5}</b></span>
+        <span>${tr("Р СџРЎР‚Р С•Р Р†Р ВµРЎР‚Р С•Р С”", "Checks")}: <b>${checks}</b></span>
+        <span>${tr("??????? ???????", "Average rank")}: <b>${avgPos}</b></span>
+        <span>${tr("Р вЂ™РЎвЂ¦Р С•Р Т‘Р С•Р Р† Р Р† РЎвЂљР С•Р С—-5", "Top-5 hits")}: <b>${top5}</b></span>
       `;
       return;
     }
@@ -2084,9 +2084,9 @@ function renderTrendChart(svgId, metaId, points) {
     svg.innerHTML = `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${fallbackMarkup}</svg>`;
   }
   meta.innerHTML = `
-    <span>${tr("РџСЂРѕРІРµСЂРѕРє", "Checks")}: <b>${checks}</b></span>
-    <span>${tr("РЎСЂРµРґРЅСЏСЏ РїРѕР·РёС†РёСЏ", "Average rank")}: <b>${avgPos}</b></span>
-    <span>${tr("Р’С…РѕРґРѕРІ РІ С‚РѕРї-5", "Top-5 hits")}: <b>${top5}</b></span>
+    <span>${tr("Р СџРЎР‚Р С•Р Р†Р ВµРЎР‚Р С•Р С”", "Checks")}: <b>${checks}</b></span>
+    <span>${tr("??????? ???????", "Average rank")}: <b>${avgPos}</b></span>
+    <span>${tr("Р вЂ™РЎвЂ¦Р С•Р Т‘Р С•Р Р† Р Р† РЎвЂљР С•Р С—-5", "Top-5 hits")}: <b>${top5}</b></span>
   `;
 }
 
@@ -2094,8 +2094,8 @@ function renderSeoKanban(rows) {
   const board = document.getElementById("seoKanban");
   if (!board) return;
   const columns = [
-    { key: "generated", title: tr("РЎРіРµРЅРµСЂРёСЂРѕРІР°РЅРѕ", "Generated"), cls: "generated" },
-    { key: "in_progress", title: tr("Р’ СЂР°Р±РѕС‚Рµ", "In progress"), cls: "in-progress" },
+    { key: "generated", title: tr("?????????????", "Generated"), cls: "generated" },
+    { key: "in_progress", title: tr("Р вЂ™ РЎР‚Р В°Р В±Р С•РЎвЂљР Вµ", "In progress"), cls: "in-progress" },
     { key: "applied", title: tr("РџСЂРёРјРµРЅРµРЅРѕ", "Applied"), cls: "applied" },
     { key: "top_reached", title: tr("РўРѕРї-5 РґРѕСЃС‚РёРіРЅСѓС‚", "Top-5 reached"), cls: "top" },
   ];
@@ -2114,12 +2114,12 @@ function renderSeoKanban(rows) {
                       (i) => `
                 <article class="kanban-item">
                   <div>${escapeHtml(i.product_article || "-")}</div>
-                  <small>${escapeHtml(i.product_name || tr("РўРѕРІР°СЂ", "Product"))}</small>
+                  <small>${escapeHtml(i.product_name || tr("Р СћР С•Р Р†Р В°РЎР‚", "Product"))}</small>
                 </article>
               `
                     )
                     .join("")
-                : `<div class="kanban-empty">${tr("РќРµС‚ Р·Р°РґР°С‡", "No jobs")}</div>`
+                : `<div class="kanban-empty">${tr("Р СњР ВµРЎвЂљ Р В·Р В°Р Т‘Р В°РЎвЂЎ", "No jobs")}</div>`
             }
           </div>
         </section>
@@ -2146,8 +2146,8 @@ async function renderProductPreview(product) {
     <h4>${escapeHtml(product.name)}</h4>
     <div class="preview-grid">
       <span>${tr("РђСЂС‚РёРєСѓР»", "Article")}</span><b>${escapeHtml(product.article)}</b>
-      <span>${tr("Р‘Р°СЂРєРѕРґ", "Barcode")}</span><b>${escapeHtml(product.barcode || "-")}</b>
-      <span>${tr("РњР°СЂРєРµС‚РїР»РµР№СЃ", "Marketplace")}</span><b>${escapeHtml((product.marketplace || "").toUpperCase())}</b>
+      <span>${tr("Р вЂР В°РЎР‚Р С”Р С•Р Т‘", "Barcode")}</span><b>${escapeHtml(product.barcode || "-")}</b>
+      <span>${tr("Р СљР В°РЎР‚Р С”Р ВµРЎвЂљР С—Р В»Р ВµР в„–РЎРѓ", "Marketplace")}</span><b>${escapeHtml((product.marketplace || "").toUpperCase())}</b>
       <span>${tr("РџРѕР·РёС†РёСЏ", "Rank")}</span><b>${escapeHtml(formatPositionValue(product.last_position))}</b>
     </div>
   `;
@@ -2225,7 +2225,7 @@ async function loadSelectedProductDetails(productId = selectedProductId, opts = 
 async function saveSelectedProductDetails() {
   const id = Number(selectedProductId || 0);
   if (!id) {
-    alert(tr("РЎРЅР°С‡Р°Р»Р° РІС‹Р±РµСЂРёС‚Рµ С‚РѕРІР°СЂ РІ С‚Р°Р±Р»РёС†Рµ.", "Select a product in table first."));
+    alert(tr("??????? ???????? ????? ? ???????.", "Select a product in table first."));
     return;
   }
   const payload = {
@@ -2235,7 +2235,7 @@ async function saveSelectedProductDetails() {
     target_keywords: String(document.getElementById("productDetailKeywords")?.value || "").trim(),
   };
   const updated = await withBusy(
-    tr("РЎРѕС…СЂР°РЅСЏРµРј РёР·РјРµРЅРµРЅРёСЏ РєР°СЂС‚РѕС‡РєРё С‚РѕРІР°СЂР°вЂ¦", "Saving product card changes..."),
+    tr("????????? ????????? ???????? ??????", "Saving product card changes..."),
     () => requestJson(`/api/products/${id}`, {
       method: "PATCH",
       headers: authHeaders(),
@@ -2251,7 +2251,7 @@ async function saveSelectedProductDetails() {
   invalidateModuleCache("products", "seo");
   await loadProducts();
   await loadSelectedProductDetails(id, { silent: true });
-  alert(tr("РљР°СЂС‚РѕС‡РєР° С‚РѕРІР°СЂР° РѕР±РЅРѕРІР»РµРЅР°.", "Product card updated."));
+  alert(tr("Р С™Р В°РЎР‚РЎвЂљР С•РЎвЂЎР С”Р В° РЎвЂљР С•Р Р†Р В°РЎР‚Р В° Р С•Р В±Р Р…Р С•Р Р†Р В»Р ВµР Р…Р В°.", "Product card updated."));
 }
 
 async function suggestKeywordsForSelectedProduct(productId) {
@@ -2289,13 +2289,13 @@ function ensureProfileTeamUi() {
   panel.className = "panel";
   panel.id = "profileTeamPanel";
   panel.innerHTML = `
-    <h3>${tr("РЎРѕС‚СЂСѓРґРЅРёРєРё РєР°Р±РёРЅРµС‚Р°", "Workspace Team")}</h3>
+    <h3>${tr("?????????? ????????", "Workspace Team")}</h3>
     <div class="team-member-toolbar">
       <div id="teamPanelHint" class="hint">${tr("Р”РѕР±Р°РІР»РµРЅРёРµ Рё СЂРµРґР°РєС‚РёСЂРѕРІР°РЅРёРµ СЃРѕС‚СЂСѓРґРЅРёРєР° РІС‹РїРѕР»РЅСЏРµС‚СЃСЏ С‡РµСЂРµР· pop-up РѕРєРЅРѕ.", "Add or edit employees via popup window.")}</div>
       <button id="teamAddMemberBtn" class="btn-secondary" type="button" onclick="openTeamMemberCreator()">${tr("Р”РѕР±Р°РІРёС‚СЊ СЃРѕС‚СЂСѓРґРЅРёРєР°", "Add employee")}</button>
     </div>
     <div class="team-member-list" id="teamMembersList">
-      <div class="hint">${tr("РЎРѕС‚СЂСѓРґРЅРёРєРё Р·Р°РіСЂСѓР¶Р°СЋС‚СЃСЏ...", "Loading employees...")}</div>
+      <div class="hint">${tr("?????????? ???????????...", "Loading employees...")}</div>
     </div>
   `;
   profileTab.appendChild(panel);
@@ -2821,29 +2821,29 @@ function getMobileQuickNavOptions() {
     if (!modulesLoaded) return true;
     return enabledModules instanceof Set && enabledModules.has(code);
   };
-  const options = [{ value: "sales_dashboard", label: isEn ? "Statistics" : "РЎС‚Р°С‚РёСЃС‚РёРєР°" }];
+  const options = [{ value: "sales_dashboard", label: isEn ? "Statistics" : "??????????" }];
   if (has("social_hub")) {
-    options.push({ value: "social_chat", label: isEn ? "Chat" : "Р§Р°С‚" });
+    options.push({ value: "social_chat", label: isEn ? "Chat" : "Р В§Р В°РЎвЂљ" });
     options.push({ value: "social_tasks", label: isEn ? "Tasks" : "Р—Р°РґР°С‡Рё" });
     options.push({ value: "social_notes", label: isEn ? "Notes" : "Р—Р°РјРµС‚РєРё" });
-    options.push({ value: "social_calculator", label: isEn ? "Calculator" : "РљР°Р»СЊРєСѓР»СЏС‚РѕСЂ" });
-    options.push({ value: "social_calendar", label: isEn ? "Calendar" : "РљР°Р»РµРЅРґР°СЂСЊ" });
-    options.push({ value: "social_games", label: isEn ? "Games" : "РРіСЂС‹" });
+    options.push({ value: "social_calculator", label: isEn ? "Calculator" : "Р С™Р В°Р В»РЎРЉР С”РЎС“Р В»РЎРЏРЎвЂљР С•РЎР‚" });
+    options.push({ value: "social_calendar", label: isEn ? "Calendar" : "Р С™Р В°Р В»Р ВµР Р…Р Т‘Р В°РЎР‚РЎРЉ" });
+    options.push({ value: "social_games", label: isEn ? "Games" : "Р ВР С–РЎР‚РЎвЂ№" });
   }
   if (has("wb_reviews_ai") || has("wb_questions_ai") || has("returns")) {
-    if (has("wb_reviews_ai")) options.push({ value: "reviews_reviews", label: isEn ? "Review replies" : "РћС‚РІРµС‚С‹ РЅР° РѕС‚Р·С‹РІС‹" });
-    if (has("wb_questions_ai")) options.push({ value: "reviews_questions", label: isEn ? "Question replies" : "РћС‚РІРµС‚С‹ РЅР° РІРѕРїСЂРѕСЃС‹" });
-    if (has("returns")) options.push({ value: "reviews_returns", label: isEn ? "Returns" : "Р’РѕР·РІСЂР°С‚С‹" });
+    if (has("wb_reviews_ai")) options.push({ value: "reviews_reviews", label: isEn ? "Review replies" : "Р С›РЎвЂљР Р†Р ВµРЎвЂљРЎвЂ№ Р Р…Р В° Р С•РЎвЂљР В·РЎвЂ№Р Р†РЎвЂ№" });
+    if (has("wb_questions_ai")) options.push({ value: "reviews_questions", label: isEn ? "Question replies" : "Р С›РЎвЂљР Р†Р ВµРЎвЂљРЎвЂ№ Р Р…Р В° Р Р†Р С•Р С—РЎР‚Р С•РЎРѓРЎвЂ№" });
+    if (has("returns")) options.push({ value: "reviews_returns", label: isEn ? "Returns" : "Р вЂ™Р С•Р В·Р Р†РЎР‚Р В°РЎвЂљРЎвЂ№" });
   }
   if (has("wb_ads") || has("wb_ads_analytics") || has("wb_ads_recommendations")) {
-    if (has("wb_ads")) options.push({ value: "ads_campaigns", label: isEn ? "Ad campaigns" : "Р РµРєР»Р°РјРЅС‹Рµ РєР°РјРїР°РЅРёРё" });
+    if (has("wb_ads")) options.push({ value: "ads_campaigns", label: isEn ? "Ad campaigns" : "????????? ????????" });
     if (has("wb_ads_analytics")) options.push({ value: "ads_analytics", label: isEn ? "Ads analytics" : "РђРЅР°Р»РёС‚РёРєР° СЂРµРєР»Р°РјС‹" });
-    if (has("wb_ads_recommendations")) options.push({ value: "ads_recommendations", label: isEn ? "Recommendations" : "Р РµРєРѕРјРµРЅРґР°С†РёРё" });
+    if (has("wb_ads_recommendations")) options.push({ value: "ads_recommendations", label: isEn ? "Recommendations" : "????????????" });
     if (has("wb_ads")) options.push({ value: "ads_bidder", label: isEn ? "WB Ads bidder" : "Р‘РёРґРµСЂ WB Ads" });
   }
   options.push({ value: "profile_main", label: isEn ? "Profile" : "РџСЂРѕС„РёР»СЊ" });
   if (has("help_center")) {
-    options.push({ value: "help_main", label: isEn ? "Help" : "РЎРїСЂР°РІРєР°" });
+    options.push({ value: "help_main", label: isEn ? "Help" : "Р РЋР С—РЎР‚Р В°Р Р†Р С”Р В°" });
   }
   return options;
 }
@@ -3425,7 +3425,7 @@ function renderTopbarUser() {
   const isOwner = Boolean(me.actor_is_owner);
   const roleText = me.role === "admin"
     ? tr("РђРґРјРёРЅ", "Admin")
-    : (isOwner ? tr("Р’Р»Р°РґРµР»РµС†", "Owner") : tr("РЎРѕС‚СЂСѓРґРЅРёРє", "Member"));
+    : (isOwner ? tr("????????", "Owner") : tr("?????????", "Member"));
   const initials = computeAvatarInitials(name, actorEmail);
   const avatarText = document.getElementById("topbarAvatarText");
   const avatarName = document.getElementById("topbarAvatarName");
@@ -3561,7 +3561,7 @@ function triggerTeamAvatarUpload() {
 
 async function uploadTeamAvatar() {
   if (!activeTeamMemberId) {
-    alert(tr("РЎРЅР°С‡Р°Р»Р° РІС‹Р±РµСЂРёС‚Рµ СЃРѕС‚СЂСѓРґРЅРёРєР°.", "Select a team member first."));
+    alert(tr("??????? ???????? ??????????.", "Select a team member first."));
     return;
   }
   try {
@@ -3651,7 +3651,7 @@ async function loadKeywords() {
   if (!host) return;
   const rows = Array.isArray(data) ? data : [];
   if (!rows.length) {
-    host.innerHTML = `<div class="hint">${tr("РџРѕРєР° РЅРµС‚ СЂСѓС‡РЅС‹С… РєР»СЋС‡РµР№.", "No manual keywords yet.")}</div>`;
+    host.innerHTML = `<div class="hint">${tr("Р СџР С•Р С”Р В° Р Р…Р ВµРЎвЂљ РЎР‚РЎС“РЎвЂЎР Р…РЎвЂ№РЎвЂ¦ Р С”Р В»РЎР‹РЎвЂЎР ВµР в„–.", "No manual keywords yet.")}</div>`;
     return;
   }
   host.innerHTML = rows
@@ -3875,12 +3875,12 @@ function applyFeedbackPromptVisibility(kind) {
   if (wrap) wrap.classList.toggle("hidden", !visible);
   if (btn) {
     btn.textContent = visible
-      ? tr("РЎРєСЂС‹С‚СЊ РїСЂРѕРјРїС‚ РѕР±СѓС‡РµРЅРёСЏ", "Hide training prompt")
+      ? tr("?????? ?????? ????????", "Hide training prompt")
       : tr("РџРѕРєР°Р·Р°С‚СЊ РїСЂРѕРјРїС‚ РѕР±СѓС‡РµРЅРёСЏ", "Show training prompt");
     btn.setAttribute(
       "aria-label",
       visible
-        ? tr("РЎРєСЂС‹С‚СЊ РїСЂРѕРјРїС‚ РѕР±СѓС‡РµРЅРёСЏ", "Hide training prompt")
+        ? tr("?????? ?????? ????????", "Hide training prompt")
         : tr("РџРѕРєР°Р·Р°С‚СЊ РїСЂРѕРјРїС‚ РѕР±СѓС‡РµРЅРёСЏ", "Show training prompt")
     );
   }
@@ -4063,8 +4063,8 @@ function updateReviewLoadStatus(message = "") {
   }
   el.innerHTML = buildLoadStatusHtml({
     title: active
-      ? tr("Р—Р°РіСЂСѓР·РєР° РѕС‚Р·С‹РІРѕРІ", "Loading reviews")
-      : tr("РћС‚Р·С‹РІС‹ Р·Р°РіСЂСѓР¶РµРЅС‹", "Reviews loaded"),
+      ? tr("Р вЂ”Р В°Р С–РЎР‚РЎС“Р В·Р С”Р В° Р С•РЎвЂљР В·РЎвЂ№Р Р†Р С•Р Р†", "Loading reviews")
+      : tr("Р С›РЎвЂљР В·РЎвЂ№Р Р†РЎвЂ№ Р В·Р В°Р С–РЎР‚РЎС“Р В¶Р ВµР Р…РЎвЂ№", "Reviews loaded"),
     loaded,
     total,
     active,
@@ -4090,8 +4090,8 @@ function updateQuestionLoadStatus(message = "") {
   }
   el.innerHTML = buildLoadStatusHtml({
     title: active
-      ? tr("Р—Р°РіСЂСѓР·РєР° РІРѕРїСЂРѕСЃРѕРІ", "Loading questions")
-      : tr("Р’РѕРїСЂРѕСЃС‹ Р·Р°РіСЂСѓР¶РµРЅС‹", "Questions loaded"),
+      ? tr("Р вЂ”Р В°Р С–РЎР‚РЎС“Р В·Р С”Р В° Р Р†Р С•Р С—РЎР‚Р С•РЎРѓР С•Р Р†", "Loading questions")
+      : tr("Р вЂ™Р С•Р С—РЎР‚Р С•РЎРѓРЎвЂ№ Р В·Р В°Р С–РЎР‚РЎС“Р В¶Р ВµР Р…РЎвЂ№", "Questions loaded"),
     loaded,
     total,
     active,
@@ -4102,12 +4102,12 @@ function buildLoadStatusHtml({ title = "", loaded = 0, total = 0, active = false
   const safeTotal = Math.max(0, Number(total || 0));
   const safeLoaded = Math.max(0, Math.min(safeTotal || Number(loaded || 0), Number(loaded || 0)));
   const ratio = safeTotal > 0 ? Math.max(0, Math.min(100, (safeLoaded / safeTotal) * 100)) : (active ? 8 : 0);
-  const progressText = safeTotal > 0 ? `${safeLoaded} / ${safeTotal}` : (active ? tr("РїРѕРґРіРѕС‚РѕРІРєР°", "preparing") : "-");
-  const failedText = failed > 0 ? ` вЂў ${tr("\u043e\u0448\u0438\u0431\u043e\u043a", "errors")}: ${failed}` : "";
+  const progressText = safeTotal > 0 ? `${safeLoaded} / ${safeTotal}` : (active ? tr("Р С—Р С•Р Т‘Р С–Р С•РЎвЂљР С•Р Р†Р С”Р В°", "preparing") : "-");
+  const failedText = failed > 0 ? ` РІР‚Сћ ${tr("\u043e\u0448\u0438\u0431\u043e\u043a", "errors")}: ${failed}` : "";
   return `
     <div class="status-wrap ${active ? "active" : "done"}">
       <div class="status-head">
-        <span>${escapeHtml(title || (active ? tr("Р—Р°РіСЂСѓР·РєР°", "Loading") : tr("Р“РѕС‚РѕРІРѕ", "Done")))}</span>
+        <span>${escapeHtml(title || (active ? tr("Р вЂ”Р В°Р С–РЎР‚РЎС“Р В·Р С”Р В°", "Loading") : tr("Р вЂњР С•РЎвЂљР С•Р Р†Р С•", "Done")))}</span>
         <b>${escapeHtml(progressText)}${escapeHtml(failedText)}</b>
       </div>
       <div class="status-track"><i style="width:${ratio.toFixed(2)}%"></i></div>
@@ -4320,7 +4320,7 @@ async function loadWbReviews() {
   }
   if (!enabledModules.has("wb_reviews_ai")) {
     setTableMessage("wbReviewsTable", 7, tr("РњРѕРґСѓР»СЊ РѕС‚Р·С‹РІРѕРІ РѕС‚РєР»СЋС‡РµРЅ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂРѕРј.", "Reviews module is disabled by admin."));
-    updateReviewLoadStatus(tr("РњРѕРґСѓР»СЊ РѕС‚РєР»СЋС‡РµРЅ.", "Module is disabled."));
+    updateReviewLoadStatus(tr("Р СљР С•Р Т‘РЎС“Р В»РЎРЉ Р С•РЎвЂљР С”Р В»РЎР‹РЎвЂЎР ВµР Р….", "Module is disabled."));
     return;
   }
   reviewLoadToken += 1;
@@ -4347,9 +4347,9 @@ async function loadWbReviews() {
   const endpoint = getReviewsEndpoint(marketplace);
   const raw = document.getElementById("wbReviewsRaw");
   reviewLoadProgress = { active: true, total: 0, loaded: 0 };
-  updateReviewLoadStatus(tr("Р—Р°РїСЂРѕСЃ РѕС‚Р·С‹РІРѕРІ Рє API...", "Requesting reviews from API..."));
-  setTableMessage("wbReviewsTable", 7, tr("Р—Р°РіСЂСѓР¶Р°РµРј РѕС‚Р·С‹РІС‹...", "Loading reviews..."));
-  if (raw) raw.textContent = tr("Р—Р°РіСЂСѓР·РєР° РѕС‚Р·С‹РІРѕРІ...", "Loading reviews...");
+  updateReviewLoadStatus(tr("Р вЂ”Р В°Р С—РЎР‚Р С•РЎРѓ Р С•РЎвЂљР В·РЎвЂ№Р Р†Р С•Р Р† Р С” API...", "Requesting reviews from API..."));
+  setTableMessage("wbReviewsTable", 7, tr("Р вЂ”Р В°Р С–РЎР‚РЎС“Р В¶Р В°Р ВµР С Р С•РЎвЂљР В·РЎвЂ№Р Р†РЎвЂ№...", "Loading reviews..."));
+  if (raw) raw.textContent = tr("Р вЂ”Р В°Р С–РЎР‚РЎС“Р В·Р С”Р В° Р С•РЎвЂљР В·РЎвЂ№Р Р†Р С•Р Р†...", "Loading reviews...");
 
   const applyReviewsPayload = async (payload) => {
     const incoming = [];
@@ -4413,7 +4413,7 @@ async function loadWbReviews() {
     const fastMsg = fastError?.message || "";
     updateReviewLoadStatus(
       fastMsg
-        ? tr(`Р‘С‹СЃС‚СЂР°СЏ Р·Р°РіСЂСѓР·РєР° РЅРµ СѓРґР°Р»Р°СЃСЊ: ${fastMsg}`, `Fast load failed: ${fastMsg}`)
+        ? tr(`Р вЂРЎвЂ№РЎРѓРЎвЂљРЎР‚Р В°РЎРЏ Р В·Р В°Р С–РЎР‚РЎС“Р В·Р С”Р В° Р Р…Р Вµ РЎС“Р Т‘Р В°Р В»Р В°РЎРѓРЎРЉ: ${fastMsg}`, `Fast load failed: ${fastMsg}`)
         : tr("Р‘С‹СЃС‚СЂР°СЏ Р·Р°РіСЂСѓР·РєР° РЅРµ СѓРґР°Р»Р°СЃСЊ, Р·Р°РїСѓСЃРєР°РµРј СЂР°СЃС€РёСЂРµРЅРЅС‹Р№ Р·Р°РїСЂРѕСЃ...", "Fast load failed, running extended request...")
     );
     setTableMessage("wbReviewsTable", 7, tr("Р‘С‹СЃС‚СЂС‹Р№ СЃР»РѕР№ РЅРµРґРѕСЃС‚СѓРїРµРЅ, РІС‹РїРѕР»РЅСЏРµРј СЂР°СЃС€РёСЂРµРЅРЅС‹Р№ Р·Р°РїСЂРѕСЃ...", "Fast layer unavailable, running extended request..."));
@@ -4476,7 +4476,7 @@ async function renderWbReviews() {
     rowEl.innerHTML = `<td colspan="7">${
       wbReviewRows.length
         ? (currentLang === "en" ? "No reviews for current filters." : "РџРѕ С‚РµРєСѓС‰РёРј С„РёР»СЊС‚СЂР°Рј РѕС‚Р·С‹РІС‹ РЅРµ РЅР°Р№РґРµРЅС‹.")
-        : (currentLang === "en" ? "No reviews found." : "РћС‚Р·С‹РІС‹ РЅРµ РЅР°Р№РґРµРЅС‹.")
+        : (currentLang === "en" ? "No reviews found." : "Р С›РЎвЂљР В·РЎвЂ№Р Р†РЎвЂ№ Р Р…Р Вµ Р Р…Р В°Р в„–Р Т‘Р ВµР Р…РЎвЂ№.")
     }</td>`;
     tbody.appendChild(rowEl);
     reviewLoadProgress = { active: false, total: wbReviewRows.length, loaded: wbReviewRows.length };
@@ -4501,8 +4501,8 @@ async function renderWbReviews() {
     const reviewMp = (currentReviewMarketplace || "wb").trim().toLowerCase() === "ozon" ? "ozon" : "wb";
     const pill = document.createElement("span");
     pill.className = "review-type-pill";
-    pill.textContent = status === "new" ? "рџ†•" : "вњ…";
-    pill.dataset.tip = status === "new" ? tr("РќРѕРІС‹Р№ РѕС‚Р·С‹РІ", "New review") : tr("РћС‚РІРµС‡РµРЅРЅС‹Р№ РѕС‚Р·С‹РІ", "Answered review");
+    pill.textContent = status === "new" ? "NEW" : "OK";
+    pill.dataset.tip = status === "new" ? tr("Р СњР С•Р Р†РЎвЂ№Р в„– Р С•РЎвЂљР В·РЎвЂ№Р Р†", "New review") : tr("Р С›РЎвЂљР Р†Р ВµРЎвЂЎР ВµР Р…Р Р…РЎвЂ№Р в„– Р С•РЎвЂљР В·РЎвЂ№Р Р†", "Answered review");
     meta.appendChild(pill);
     const dateBadge = document.createElement("span");
     dateBadge.className = "feedback-meta-badge";
@@ -4515,8 +4515,8 @@ async function renderWbReviews() {
       starBadge.className = "feedback-meta-badge";
       const ratingVal = Math.max(1, Math.min(5, Number(stars || 0)));
       starBadge.classList.add(`feedback-rating-${ratingVal}`);
-      starBadge.textContent = `в… ${stars}`;
-      starBadge.dataset.tip = tr("РћС†РµРЅРєР° РїРѕРєСѓРїР°С‚РµР»СЏ", "Customer rating");
+      starBadge.textContent = `★ ${stars}`;
+      starBadge.dataset.tip = tr("Р С›РЎвЂ Р ВµР Р…Р С”Р В° Р С—Р С•Р С”РЎС“Р С—Р В°РЎвЂљР ВµР В»РЎРЏ", "Customer rating");
       meta.appendChild(starBadge);
     }
     const mpBadge = document.createElement("span");
@@ -4528,7 +4528,7 @@ async function renderWbReviews() {
     if (row?.user) {
       const author = document.createElement("div");
       author.className = "cell-meta-small";
-      author.textContent = `${currentLang === "en" ? "Author" : "РђРІС‚РѕСЂ"}: ${row.user}`;
+      author.textContent = `${currentLang === "en" ? "Author" : "Автор"}: ${row.user}`;
       head.appendChild(author);
     }
     card.appendChild(head);
@@ -4542,7 +4542,7 @@ async function renderWbReviews() {
     textBlock.className = "feedback-text-line";
     const textTitle = document.createElement("span");
     textTitle.className = "cell-meta-small";
-    textTitle.textContent = tr("РћС‚Р·С‹РІ", "Review");
+    textTitle.textContent = tr("Отзыв", "Review");
     textBlock.appendChild(textTitle);
     const body = document.createElement("div");
     body.className = "cell-main-text";
@@ -4567,8 +4567,8 @@ async function renderWbReviews() {
       btnAll.type = "button";
       btnAll.className = "btn-secondary";
       btnAll.textContent = photos.length > 3
-        ? (currentLang === "en" ? `All photos (${photos.length})` : `Р’СЃРµ С„РѕС‚Рѕ (${photos.length})`)
-        : (currentLang === "en" ? "Open photos" : "РћС‚РєСЂС‹С‚СЊ С„РѕС‚Рѕ");
+        ? (currentLang === "en" ? `All photos (${photos.length})` : `Все фото (${photos.length})`)
+        : (currentLang === "en" ? "Open photos" : "Открыть фото");
       btnAll.onclick = () => openReviewPhotoViewer(photos, 0);
       previewWrap.appendChild(btnAll);
       card.appendChild(previewWrap);
@@ -4578,13 +4578,13 @@ async function renderWbReviews() {
     replyBlock.className = "feedback-reply-line";
     const replyTitle = document.createElement("span");
     replyTitle.className = "cell-meta-small";
-    replyTitle.textContent = tr("РћС‚РІРµС‚", "Reply");
+    replyTitle.textContent = tr("Ответ", "Reply");
     replyBlock.appendChild(replyTitle);
     const replyInput = document.createElement("textarea");
     replyInput.rows = 3;
     replyInput.className = "review-reply-input";
     replyInput.dataset.itemId = reviewId;
-    replyInput.placeholder = currentLang === "en" ? "Reply text to customer" : "РўРµРєСЃС‚ РѕС‚РІРµС‚Р° РєР»РёРµРЅС‚Сѓ";
+    replyInput.placeholder = currentLang === "en" ? "Reply text to customer" : "Текст ответа клиенту";
     const draftKey = reviewDraftKey(currentReviewMarketplace, reviewId);
     replyInput.value = wbReviewDrafts.get(draftKey) ?? row?.answer ?? "";
     replyInput.oninput = () => wbReviewDrafts.set(draftKey, replyInput.value);
@@ -4595,7 +4595,7 @@ async function renderWbReviews() {
     wrap.className = "review-actions feedback-actions-row";
     const btnGenerate = makeIconActionButton({
       icon: "&#9889;",
-      tip: tr("РЎРіРµРЅРµСЂРёСЂРѕРІР°С‚СЊ РѕС‚РІРµС‚", "Generate reply"),
+      tip: tr("Сгенерировать ответ", "Generate reply"),
       onClick: () => generateReviewReply(reviewId),
       secondary: true,
     });
@@ -4648,7 +4648,7 @@ async function generateReviewReply(reviewId) {
   if (!reviewIdText) return;
   if (feedbackInFlight.reviewGenerate.has(reviewIdText)) return;
   const row = wbReviewRows.find((x) => String(x?.id || "") === reviewIdText);
-  if (!row) return alert(tr("РћС‚Р·С‹РІ РЅРµ РЅР°Р№РґРµРЅ", "Review not found"));
+  if (!row) return alert(tr("Р С›РЎвЂљР В·РЎвЂ№Р Р† Р Р…Р Вµ Р Р…Р В°Р в„–Р Т‘Р ВµР Р…", "Review not found"));
   const endpoint = `${getReviewsEndpoint(currentReviewMarketplace)}/generate-reply`;
   const mpLabel = currentReviewMarketplace === "ozon" ? "Ozon" : "WB";
   feedbackInFlight.reviewGenerate.add(reviewIdText);
@@ -4696,7 +4696,7 @@ async function sendReviewReply(reviewId) {
   feedbackInFlight.reviewSend.add(reviewIdText);
   try {
     const data = await withBusy(
-      tr(`РћС‚РїСЂР°РІР»СЏРµРј РѕС‚РІРµС‚ РІ ${mpLabel}вЂ¦`, `Sending reply to ${mpLabel}...`),
+      tr(`Р С›РЎвЂљР С—РЎР‚Р В°Р Р†Р В»РЎРЏР ВµР С Р С•РЎвЂљР Р†Р ВµРЎвЂљ Р Р† ${mpLabel}РІР‚В¦`, `Sending reply to ${mpLabel}...`),
       () => requestJson(endpoint, {
         method: "POST",
         headers: authHeaders(),
@@ -4706,7 +4706,7 @@ async function sendReviewReply(reviewId) {
         maxRetries: 3,
         retryBaseDelayMs: 420,
       }),
-      tr("РћС‚РІРµС‚ РѕС‚РїСЂР°РІР»СЏРµС‚СЃСЏ РІ РєР°СЂС‚РѕС‡РєСѓ РѕС‚Р·С‹РІР° С‡РµСЂРµР· API РјР°СЂРєРµС‚РїР»РµР№СЃР°.", "Reply is sent to marketplace review card via API.")
+      tr("Р С›РЎвЂљР Р†Р ВµРЎвЂљ Р С•РЎвЂљР С—РЎР‚Р В°Р Р†Р В»РЎРЏР ВµРЎвЂљРЎРѓРЎРЏ Р Р† Р С”Р В°РЎР‚РЎвЂљР С•РЎвЂЎР С”РЎС“ Р С•РЎвЂљР В·РЎвЂ№Р Р†Р В° РЎвЂЎР ВµРЎР‚Р ВµР В· API Р СР В°РЎР‚Р С”Р ВµРЎвЂљР С—Р В»Р ВµР в„–РЎРѓР В°.", "Reply is sent to marketplace review card via API.")
     ).catch((e) => {
       alert(e.message);
       return null;
@@ -4720,7 +4720,7 @@ async function sendReviewReply(reviewId) {
     }
     wbReviewDrafts.set(key, text);
     applyDraftToVisibleInputs("#wbReviewsTable .review-reply-input", reviewIdText, text);
-    updateReviewLoadStatus(tr("РћС‚РІРµС‚ РѕС‚РїСЂР°РІР»РµРЅ.", "Reply sent."));
+    updateReviewLoadStatus(tr("Р С›РЎвЂљР Р†Р ВµРЎвЂљ Р С•РЎвЂљР С—РЎР‚Р В°Р Р†Р В»Р ВµР Р….", "Reply sent."));
     renderWbReviews();
     scheduleBackgroundReviewsReload(1800);
   } finally {
@@ -4779,7 +4779,7 @@ function isMarketplaceKeyError(message) {
   const lowered = String(message || "").toLowerCase();
   if (!lowered) return false;
   return (
-    lowered.includes("РєР»СЋС‡") ||
+    lowered.includes("Р С”Р В»РЎР‹РЎвЂЎ") ||
     lowered.includes("api key") ||
     lowered.includes("apikey") ||
     lowered.includes("token") ||
@@ -4798,7 +4798,7 @@ function formatReturnsWarnings(warnings = []) {
     if (!text) continue;
     const lowered = text.toLowerCase();
     if (lowered.includes("endpoint unavailable") || lowered.includes("returns endpoint")) {
-      out.push(tr("API РІРѕР·РІСЂР°С‚РѕРІ WB РІСЂРµРјРµРЅРЅРѕ РЅРµРґРѕСЃС‚СѓРїРµРЅ.", "WB returns API is temporarily unavailable."));
+      out.push(tr("API Р Р†Р С•Р В·Р Р†РЎР‚Р В°РЎвЂљР С•Р Р† WB Р Р†РЎР‚Р ВµР СР ВµР Р…Р Р…Р С• Р Р…Р ВµР Т‘Р С•РЎРѓРЎвЂљРЎС“Р С—Р ВµР Р….", "WB returns API is temporarily unavailable."));
       continue;
     }
     if (isMarketplaceKeyError(lowered)) {
@@ -4845,14 +4845,14 @@ async function loadAiDocs() {
   if (sel) {
     sel.innerHTML = rows.length
       ? rows.map((x) => `<option value="${x.id}">#${x.id} ${escapeHtml(x.filename)} (${x.size_chars} ch)</option>`).join("")
-      : `<option value="">${tr("Р”РѕРєСѓРјРµРЅС‚РѕРІ РЅРµС‚", "No documents")}</option>`;
+      : `<option value="">${tr("Р вЂќР С•Р С”РЎС“Р СР ВµР Р…РЎвЂљР С•Р Р† Р Р…Р ВµРЎвЂљ", "No documents")}</option>`;
   }
 }
 
 async function uploadAiDoc() {
   const input = document.getElementById("aiDocUploadInput");
   const file = input?.files?.[0];
-  if (!file) return alert(tr("РЎРЅР°С‡Р°Р»Р° РІС‹Р±РµСЂРёС‚Рµ С„Р°Р№Р».", "Select a file first."));
+  if (!file) return alert(tr("??????? ???????? ????.", "Select a file first."));
   const form = new FormData();
   form.append("file", file);
   const data = await withBusy(
@@ -4874,7 +4874,7 @@ async function uploadAiDoc() {
   if (!data) return;
   if (input) input.value = "";
   await loadAiDocs();
-  alert(tr("Р”РѕРєСѓРјРµРЅС‚ Р·Р°РіСЂСѓР¶РµРЅ.", "Document uploaded."));
+  alert(tr("Р вЂќР С•Р С”РЎС“Р СР ВµР Р…РЎвЂљ Р В·Р В°Р С–РЎР‚РЎС“Р В¶Р ВµР Р….", "Document uploaded."));
 }
 
 async function deleteAiDoc() {
@@ -4920,7 +4920,7 @@ async function loadWbQuestions() {
   }
   if (!enabledModules.has("wb_questions_ai")) {
     setTableMessage("wbQuestionsTable", 6, tr("РњРѕРґСѓР»СЊ РІРѕРїСЂРѕСЃРѕРІ РѕС‚РєР»СЋС‡РµРЅ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂРѕРј.", "Questions module is disabled by admin."));
-    updateQuestionLoadStatus(tr("РњРѕРґСѓР»СЊ РѕС‚РєР»СЋС‡РµРЅ.", "Module is disabled."));
+    updateQuestionLoadStatus(tr("Р СљР С•Р Т‘РЎС“Р В»РЎРЉ Р С•РЎвЂљР С”Р В»РЎР‹РЎвЂЎР ВµР Р….", "Module is disabled."));
     return;
   }
   questionLoadToken += 1;
@@ -4945,9 +4945,9 @@ async function loadWbQuestions() {
   const endpoint = getQuestionsEndpoint(marketplace);
   const raw = document.getElementById("wbQuestionsRaw");
   questionLoadProgress = { active: true, total: 0, loaded: 0 };
-  updateQuestionLoadStatus(tr("Р—Р°РїСЂРѕСЃ РІРѕРїСЂРѕСЃРѕРІ Рє API...", "Requesting questions from API..."));
-  setTableMessage("wbQuestionsTable", 6, tr("Р—Р°РіСЂСѓР¶Р°РµРј РІРѕРїСЂРѕСЃС‹...", "Loading questions..."));
-  if (raw) raw.textContent = tr("Р—Р°РіСЂСѓР·РєР° РІРѕРїСЂРѕСЃРѕРІ...", "Loading questions...");
+  updateQuestionLoadStatus(tr("Р вЂ”Р В°Р С—РЎР‚Р С•РЎРѓ Р Р†Р С•Р С—РЎР‚Р С•РЎРѓР С•Р Р† Р С” API...", "Requesting questions from API..."));
+  setTableMessage("wbQuestionsTable", 6, tr("Р вЂ”Р В°Р С–РЎР‚РЎС“Р В¶Р В°Р ВµР С Р Р†Р С•Р С—РЎР‚Р С•РЎРѓРЎвЂ№...", "Loading questions..."));
+  if (raw) raw.textContent = tr("Р вЂ”Р В°Р С–РЎР‚РЎС“Р В·Р С”Р В° Р Р†Р С•Р С—РЎР‚Р С•РЎРѓР С•Р Р†...", "Loading questions...");
 
   const applyQuestionsPayload = async (payload) => {
     const incoming = [];
@@ -5011,7 +5011,7 @@ async function loadWbQuestions() {
     const fastMsg = fastError?.message || "";
     updateQuestionLoadStatus(
       fastMsg
-        ? tr(`Р‘С‹СЃС‚СЂР°СЏ Р·Р°РіСЂСѓР·РєР° РЅРµ СѓРґР°Р»Р°СЃСЊ: ${fastMsg}`, `Fast load failed: ${fastMsg}`)
+        ? tr(`Р вЂРЎвЂ№РЎРѓРЎвЂљРЎР‚Р В°РЎРЏ Р В·Р В°Р С–РЎР‚РЎС“Р В·Р С”Р В° Р Р…Р Вµ РЎС“Р Т‘Р В°Р В»Р В°РЎРѓРЎРЉ: ${fastMsg}`, `Fast load failed: ${fastMsg}`)
         : tr("Р‘С‹СЃС‚СЂР°СЏ Р·Р°РіСЂСѓР·РєР° РЅРµ СѓРґР°Р»Р°СЃСЊ, Р·Р°РїСѓСЃРєР°РµРј СЂР°СЃС€РёСЂРµРЅРЅС‹Р№ Р·Р°РїСЂРѕСЃ...", "Fast load failed, running extended request...")
     );
     setTableMessage("wbQuestionsTable", 6, tr("Р‘С‹СЃС‚СЂС‹Р№ СЃР»РѕР№ РЅРµРґРѕСЃС‚СѓРїРµРЅ, РІС‹РїРѕР»РЅСЏРµРј СЂР°СЃС€РёСЂРµРЅРЅС‹Р№ Р·Р°РїСЂРѕСЃ...", "Fast layer unavailable, running extended request..."));
@@ -5072,7 +5072,7 @@ async function renderWbQuestions() {
     rowEl.innerHTML = `<td colspan="6">${
       wbQuestionRows.length
         ? (currentLang === "en" ? "No questions for current filters." : "РџРѕ С‚РµРєСѓС‰РёРј С„РёР»СЊС‚СЂР°Рј РІРѕРїСЂРѕСЃС‹ РЅРµ РЅР°Р№РґРµРЅС‹.")
-        : (currentLang === "en" ? "No questions found." : "Р’РѕРїСЂРѕСЃС‹ РЅРµ РЅР°Р№РґРµРЅС‹.")
+        : (currentLang === "en" ? "No questions found." : "Р вЂ™Р С•Р С—РЎР‚Р С•РЎРѓРЎвЂ№ Р Р…Р Вµ Р Р…Р В°Р в„–Р Т‘Р ВµР Р…РЎвЂ№.")
     }</td>`;
     tbody.appendChild(rowEl);
     questionLoadProgress = { active: false, total: wbQuestionRows.length, loaded: wbQuestionRows.length };
@@ -5097,8 +5097,8 @@ async function renderWbQuestions() {
     const questionMp = (currentQuestionMarketplace || "wb").trim().toLowerCase() === "ozon" ? "ozon" : "wb";
     const pill = document.createElement("span");
     pill.className = "review-type-pill";
-    pill.textContent = status === "new" ? "рџ†•" : "вњ…";
-    pill.dataset.tip = status === "new" ? tr("РќРѕРІС‹Р№ РІРѕРїСЂРѕСЃ", "New question") : tr("РћС‚РІРµС‡РµРЅРЅС‹Р№ РІРѕРїСЂРѕСЃ", "Answered question");
+    pill.textContent = status === "new" ? "NEW" : "OK";
+    pill.dataset.tip = status === "new" ? tr("Р СњР С•Р Р†РЎвЂ№Р в„– Р Р†Р С•Р С—РЎР‚Р С•РЎРѓ", "New question") : tr("Р С›РЎвЂљР Р†Р ВµРЎвЂЎР ВµР Р…Р Р…РЎвЂ№Р в„– Р Р†Р С•Р С—РЎР‚Р С•РЎРѓ", "Answered question");
     meta.appendChild(pill);
     const dateBadge = document.createElement("span");
     dateBadge.className = "feedback-meta-badge";
@@ -5115,14 +5115,14 @@ async function renderWbQuestions() {
       const stateBadge = document.createElement("span");
       stateBadge.className = "feedback-meta-badge";
       stateBadge.textContent = stateLabel;
-      stateBadge.dataset.tip = tr("РЎС‚Р°С‚СѓСЃ/СЃРѕСЃС‚РѕСЏРЅРёРµ Р·Р°РїРёСЃРё API", "API record state/status");
+      stateBadge.dataset.tip = tr("Статус записи из API", "API record state/status");
       meta.appendChild(stateBadge);
     }
     head.appendChild(meta);
     if (row?.user) {
       const author = document.createElement("div");
       author.className = "cell-meta-small";
-      author.textContent = `${currentLang === "en" ? "Author" : "РђРІС‚РѕСЂ"}: ${row.user}`;
+      author.textContent = `${currentLang === "en" ? "Author" : "Автор"}: ${row.user}`;
       head.appendChild(author);
     }
     card.appendChild(head);
@@ -5136,7 +5136,7 @@ async function renderWbQuestions() {
     textBlock.className = "feedback-text-line";
     const textTitle = document.createElement("span");
     textTitle.className = "cell-meta-small";
-    textTitle.textContent = tr("Р’РѕРїСЂРѕСЃ", "Question");
+    textTitle.textContent = tr("Вопрос", "Question");
     textBlock.appendChild(textTitle);
     const body = document.createElement("div");
     body.className = "cell-main-text";
@@ -5161,8 +5161,8 @@ async function renderWbQuestions() {
       btnAll.type = "button";
       btnAll.className = "btn-secondary";
       btnAll.textContent = photos.length > 3
-        ? (currentLang === "en" ? `All photos (${photos.length})` : `Р’СЃРµ С„РѕС‚Рѕ (${photos.length})`)
-        : (currentLang === "en" ? "Open photos" : "РћС‚РєСЂС‹С‚СЊ С„РѕС‚Рѕ");
+        ? (currentLang === "en" ? `All photos (${photos.length})` : `Все фото (${photos.length})`)
+        : (currentLang === "en" ? "Open photos" : "Открыть фото");
       btnAll.onclick = () => openReviewPhotoViewer(photos, 0);
       previewWrap.appendChild(btnAll);
       card.appendChild(previewWrap);
@@ -5172,13 +5172,13 @@ async function renderWbQuestions() {
     replyBlock.className = "feedback-reply-line";
     const replyTitle = document.createElement("span");
     replyTitle.className = "cell-meta-small";
-    replyTitle.textContent = tr("РћС‚РІРµС‚", "Reply");
+    replyTitle.textContent = tr("Ответ", "Reply");
     replyBlock.appendChild(replyTitle);
     const replyInput = document.createElement("textarea");
     replyInput.rows = 3;
     replyInput.className = "review-reply-input";
     replyInput.dataset.itemId = questionId;
-    replyInput.placeholder = currentLang === "en" ? "Reply text to customer" : "РўРµРєСЃС‚ РѕС‚РІРµС‚Р° РєР»РёРµРЅС‚Сѓ";
+    replyInput.placeholder = currentLang === "en" ? "Reply text to customer" : "Текст ответа клиенту";
     const draftKey = questionDraftKey(currentQuestionMarketplace, questionId);
     replyInput.value = wbQuestionDrafts.get(draftKey) ?? row?.answer ?? "";
     replyInput.oninput = () => wbQuestionDrafts.set(draftKey, replyInput.value);
@@ -5189,7 +5189,7 @@ async function renderWbQuestions() {
     wrap.className = "review-actions feedback-actions-row";
     const btnGenerate = makeIconActionButton({
       icon: "&#9889;",
-      tip: tr("РЎРіРµРЅРµСЂРёСЂРѕРІР°С‚СЊ РѕС‚РІРµС‚", "Generate reply"),
+      tip: tr("Сгенерировать ответ", "Generate reply"),
       onClick: () => generateQuestionReply(questionId),
       secondary: true,
     });
@@ -5242,7 +5242,7 @@ async function generateQuestionReply(questionId) {
   if (!questionIdText) return;
   if (feedbackInFlight.questionGenerate.has(questionIdText)) return;
   const row = wbQuestionRows.find((x) => String(x?.id || "") === questionIdText);
-  if (!row) return alert(tr("Р’РѕРїСЂРѕСЃ РЅРµ РЅР°Р№РґРµРЅ", "Question not found"));
+  if (!row) return alert(tr("Р вЂ™Р С•Р С—РЎР‚Р С•РЎРѓ Р Р…Р Вµ Р Р…Р В°Р в„–Р Т‘Р ВµР Р…", "Question not found"));
   const endpoint = `${getQuestionsEndpoint(currentQuestionMarketplace)}/generate-reply`;
   const mpLabel = currentQuestionMarketplace === "ozon" ? "Ozon" : "WB";
   feedbackInFlight.questionGenerate.add(questionIdText);
@@ -5283,7 +5283,7 @@ async function sendQuestionReply(questionId) {
   if (!questionIdText) return;
   if (feedbackInFlight.questionSend.has(questionIdText)) return;
   const row = wbQuestionRows.find((x) => String(x?.id || "") === questionIdText);
-  if (!row) return alert(tr("Р’РѕРїСЂРѕСЃ РЅРµ РЅР°Р№РґРµРЅ", "Question not found"));
+  if (!row) return alert(tr("Р вЂ™Р С•Р С—РЎР‚Р С•РЎРѓ Р Р…Р Вµ Р Р…Р В°Р в„–Р Т‘Р ВµР Р…", "Question not found"));
   const key = questionDraftKey(currentQuestionMarketplace, questionIdText);
   const text = (wbQuestionDrafts.get(key) || "").trim();
   if (!text) return alert(tr("Р’РІРµРґРёС‚Рµ РёР»Рё СЃРіРµРЅРµСЂРёСЂСѓР№С‚Рµ С‚РµРєСЃС‚ РѕС‚РІРµС‚Р°", "Enter or generate reply text"));
@@ -5313,7 +5313,7 @@ async function sendQuestionReply(questionId) {
   feedbackInFlight.questionSend.add(questionIdText);
   try {
     const data = await withBusy(
-      tr(`РћС‚РїСЂР°РІР»СЏРµРј РѕС‚РІРµС‚ РІ ${mpLabel}вЂ¦`, `Sending reply to ${mpLabel}...`),
+      tr(`Р С›РЎвЂљР С—РЎР‚Р В°Р Р†Р В»РЎРЏР ВµР С Р С•РЎвЂљР Р†Р ВµРЎвЂљ Р Р† ${mpLabel}РІР‚В¦`, `Sending reply to ${mpLabel}...`),
       () => requestJson(endpoint, {
         method: "POST",
         headers: authHeaders(),
@@ -5323,7 +5323,7 @@ async function sendQuestionReply(questionId) {
         maxRetries: 3,
         retryBaseDelayMs: 420,
       }),
-      tr("РћС‚РІРµС‚ РѕС‚РїСЂР°РІР»СЏРµС‚СЃСЏ РІ РєР°СЂС‚РѕС‡РєСѓ РІРѕРїСЂРѕСЃР° С‡РµСЂРµР· API РјР°СЂРєРµС‚РїР»РµР№СЃР°.", "Reply is sent to marketplace question card via API.")
+      tr("Р С›РЎвЂљР Р†Р ВµРЎвЂљ Р С•РЎвЂљР С—РЎР‚Р В°Р Р†Р В»РЎРЏР ВµРЎвЂљРЎРѓРЎРЏ Р Р† Р С”Р В°РЎР‚РЎвЂљР С•РЎвЂЎР С”РЎС“ Р Р†Р С•Р С—РЎР‚Р С•РЎРѓР В° РЎвЂЎР ВµРЎР‚Р ВµР В· API Р СР В°РЎР‚Р С”Р ВµРЎвЂљР С—Р В»Р ВµР в„–РЎРѓР В°.", "Reply is sent to marketplace question card via API.")
     ).catch((e) => {
       alert(e.message);
       return null;
@@ -5334,7 +5334,7 @@ async function sendQuestionReply(questionId) {
     row._type = "answered";
     wbQuestionDrafts.set(key, text);
     applyDraftToVisibleInputs("#wbQuestionsTable .review-reply-input", questionIdText, text);
-    updateQuestionLoadStatus(tr("РћС‚РІРµС‚ РѕС‚РїСЂР°РІР»РµРЅ.", "Reply sent."));
+    updateQuestionLoadStatus(tr("Р С›РЎвЂљР Р†Р ВµРЎвЂљ Р С•РЎвЂљР С—РЎР‚Р В°Р Р†Р В»Р ВµР Р….", "Reply sent."));
     renderWbQuestions();
     scheduleBackgroundQuestionsReload(1800);
   } finally {
@@ -5365,7 +5365,7 @@ function normalizeReturnRow(rawRow, marketplace, idx) {
       const text = normalizeFeedbackText(getValueByPath(rawRow, path));
       if (!text) continue;
       const low = String(text).trim().toLowerCase();
-      if (!low || low === "-" || low === "вЂ”" || low === "null" || low === "undefined") continue;
+      if (!low || low === "-" || low === "РІР‚вЂќ" || low === "null" || low === "undefined") continue;
       return String(text).trim();
     }
     return "";
@@ -5729,7 +5729,7 @@ function refreshReturnsStatusOptions(rows, preserve = "") {
     const status = String(row?.status || "").trim();
     if (status) uniq.add(status);
   }
-  const options = [`<option value="">${tr("Р’СЃРµ СЃС‚Р°С‚СѓСЃС‹", "All statuses")}</option>`];
+  const options = [`<option value="">${tr("Р вЂ™РЎРѓР Вµ РЎРѓРЎвЂљР В°РЎвЂљРЎС“РЎРѓРЎвЂ№", "All statuses")}</option>`];
   [...uniq].sort((a, b) => a.localeCompare(b)).forEach((status) => {
     options.push(`<option value="${escapeHtml(status)}">${escapeHtml(status)}</option>`);
   });
@@ -5784,7 +5784,7 @@ async function loadReturns() {
   if (!enabledModules.has("returns")) {
     setTableMessage("returnsTable", 6, tr("РњРѕРґСѓР»СЊ РІРѕР·РІСЂР°С‚РѕРІ РѕС‚РєР»СЋС‡РµРЅ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂРѕРј.", "Returns module is disabled by admin."));
     const status = document.getElementById("returnsLoadStatus");
-    if (status) status.textContent = tr("РњРѕРґСѓР»СЊ РѕС‚РєР»СЋС‡РµРЅ.", "Module is disabled.");
+    if (status) status.textContent = tr("Р СљР С•Р Т‘РЎС“Р В»РЎРЉ Р С•РЎвЂљР С”Р В»РЎР‹РЎвЂЎР ВµР Р….", "Module is disabled.");
     return;
   }
   const marketplace = getReturnsMarketplace();
@@ -5799,8 +5799,8 @@ async function loadReturns() {
   const suffix = qp.toString() ? `?${qp.toString()}` : "";
   const endpoint = marketplace === "ozon" ? `/api/ozon/returns${suffix}` : `/api/wb/returns${suffix}`;
   const statusEl = document.getElementById("returnsLoadStatus");
-  if (statusEl) statusEl.textContent = tr("Р—Р°РіСЂСѓР·РєР° РІРѕР·РІСЂР°С‚РѕРІ...", "Loading returns...");
-  setTableMessage("returnsTable", 6, tr("Р—Р°РіСЂСѓР¶Р°РµРј РІРѕР·РІСЂР°С‚С‹...", "Loading returns..."));
+  if (statusEl) statusEl.textContent = tr("Р вЂ”Р В°Р С–РЎР‚РЎС“Р В·Р С”Р В° Р Р†Р С•Р В·Р Р†РЎР‚Р В°РЎвЂљР С•Р Р†...", "Loading returns...");
+  setTableMessage("returnsTable", 6, tr("Р вЂ”Р В°Р С–РЎР‚РЎС“Р В¶Р В°Р ВµР С Р Р†Р С•Р В·Р Р†РЎР‚Р В°РЎвЂљРЎвЂ№...", "Loading returns..."));
   const data = await requestJson(endpoint, { headers: authHeaders(), timeoutMs: 120000 }).catch((e) => {
     const msg = String(e?.message || "").trim();
     if (isMarketplaceKeyError(msg)) {
@@ -5823,10 +5823,10 @@ async function loadReturns() {
     if (warnings.length) {
       const cleaned = formatReturnsWarnings(warnings);
       statusEl.textContent = cleaned.length
-        ? cleaned.join(" вЂў ")
+        ? cleaned.join(" РІР‚Сћ ")
         : tr("Р’РѕР·РІСЂР°С‚С‹ Р·Р°РіСЂСѓР¶РµРЅС‹ СЃ РїСЂРµРґСѓРїСЂРµР¶РґРµРЅРёСЏРјРё.", "Returns loaded with warnings.");
     } else {
-      statusEl.textContent = tr("Р’РѕР·РІСЂР°С‚С‹ Р·Р°РіСЂСѓР¶РµРЅС‹", "Returns loaded");
+      statusEl.textContent = tr("Р вЂ™Р С•Р В·Р Р†РЎР‚Р В°РЎвЂљРЎвЂ№ Р В·Р В°Р С–РЎР‚РЎС“Р В¶Р ВµР Р…РЎвЂ№", "Returns loaded");
     }
   }
   markModuleLoaded("reviews");
@@ -5856,7 +5856,7 @@ function extractReturnDetailContext(detail, returnId = "") {
   const normalizeScalar = (value, options = {}) => {
     const text = String(normalizeProductDetailValue(value) || "").trim();
     const low = text.toLowerCase();
-    if (!text || low === "-" || low === "вЂ”" || low === "вЂ”" || low === "null" || low === "undefined") return "";
+    if (!text || low === "-" || low === "РІР‚вЂќ" || low === "РІР‚вЂќ" || low === "null" || low === "undefined") return "";
     if (!options.allowZero && (low === "0" || low === "0.0")) return "";
     return text;
   };
@@ -6032,30 +6032,30 @@ function renderReturnDetailModal(detail, returnId = "") {
   }
   if (summaryEl) {
     const parts = [
-      ctx.marketplace ? `${tr("РњР°СЂРєРµС‚РїР»РµР№СЃ", "Marketplace")}: ${ctx.marketplace}` : "",
-      ctx.status ? `${tr("РЎС‚Р°С‚СѓСЃ", "Status")}: ${ctx.status}` : "",
-      ctx.createdAt ? `${tr("РЎРѕР·РґР°РЅ", "Created")}: ${ctx.createdAt}` : "",
-      ctx.updatedAt ? `${tr("РћР±РЅРѕРІР»РµРЅ", "Updated")}: ${ctx.updatedAt}` : "",
+      ctx.marketplace ? `${tr("Р СљР В°РЎР‚Р С”Р ВµРЎвЂљР С—Р В»Р ВµР в„–РЎРѓ", "Marketplace")}: ${ctx.marketplace}` : "",
+      ctx.status ? `${tr("Р РЋРЎвЂљР В°РЎвЂљРЎС“РЎРѓ", "Status")}: ${ctx.status}` : "",
+      ctx.createdAt ? `${tr("Р РЋР С•Р В·Р Т‘Р В°Р Р…", "Created")}: ${ctx.createdAt}` : "",
+      ctx.updatedAt ? `${tr("Р С›Р В±Р Р…Р С•Р Р†Р В»Р ВµР Р…", "Updated")}: ${ctx.updatedAt}` : "",
     ].filter(Boolean);
-    summaryEl.textContent = parts.join(" | ") || tr("РљР°СЂС‚РѕС‡РєР° РІРѕР·РІСЂР°С‚Р° Р·Р°РіСЂСѓР¶РµРЅР°.", "Return card loaded.");
+    summaryEl.textContent = parts.join(" | ") || tr("Р С™Р В°РЎР‚РЎвЂљР С•РЎвЂЎР С”Р В° Р Р†Р С•Р В·Р Р†РЎР‚Р В°РЎвЂљР В° Р В·Р В°Р С–РЎР‚РЎС“Р В¶Р ВµР Р…Р В°.", "Return card loaded.");
   }
   if (cardsEl) {
     cardsEl.innerHTML = renderProductInfoGrid(
       [
         { label: "id", value: ctx.id || "-" },
-        { label: tr("РњР°СЂРєРµС‚РїР»РµР№СЃ", "Marketplace"), value: ctx.marketplace || "-" },
-        { label: tr("РЎС‚Р°С‚СѓСЃ", "Status"), value: ctx.status || "-" },
+        { label: tr("Р СљР В°РЎР‚Р С”Р ВµРЎвЂљР С—Р В»Р ВµР в„–РЎРѓ", "Marketplace"), value: ctx.marketplace || "-" },
+        { label: tr("Р РЋРЎвЂљР В°РЎвЂљРЎС“РЎРѓ", "Status"), value: ctx.status || "-" },
         { label: tr("РљРѕРјРјРµРЅС‚Р°СЂРёР№ Рє СЃС‚Р°С‚СѓСЃСѓ", "Status note"), value: ctx.statusNote || "-" },
-        { label: tr("РўРѕРІР°СЂ", "Product"), value: ctx.product || "-" },
+        { label: tr("Р СћР С•Р Р†Р В°РЎР‚", "Product"), value: ctx.product || "-" },
         { label: tr("РђСЂС‚РёРєСѓР»", "Article"), value: ctx.article || "-" },
         { label: tr("Vendor code", "Vendor code"), value: ctx.vendorCode || "-" },
         { label: tr("NM ID", "NM ID"), value: ctx.nmId || "-" },
         { label: tr("РљРѕР»РёС‡РµСЃС‚РІРѕ", "Quantity"), value: ctx.quantity || "-" },
-        { label: tr("РЎСѓРјРјР°", "Amount"), value: ctx.amount || "-" },
-        { label: tr("Р—Р°РєР°Р·", "Order"), value: ctx.orderId || "-" },
-        { label: tr("РЎРєР»Р°Рґ", "Warehouse"), value: ctx.warehouse || "-" },
+        { label: tr("Р РЋРЎС“Р СР СР В°", "Amount"), value: ctx.amount || "-" },
+        { label: tr("Р вЂ”Р В°Р С”Р В°Р В·", "Order"), value: ctx.orderId || "-" },
+        { label: tr("Р РЋР С”Р В»Р В°Р Т‘", "Warehouse"), value: ctx.warehouse || "-" },
       ],
-      tr("РљР»СЋС‡РµРІС‹Рµ РїРѕР»СЏ РѕС‚СЃСѓС‚СЃС‚РІСѓСЋС‚.", "No key fields.")
+      tr("Р С™Р В»РЎР‹РЎвЂЎР ВµР Р†РЎвЂ№Р Вµ Р С—Р С•Р В»РЎРЏ Р С•РЎвЂљРЎРѓРЎС“РЎвЂљРЎРѓРЎвЂљР Р†РЎС“РЎР‹РЎвЂљ.", "No key fields.")
     );
   }
   if (descEl) {
@@ -6182,31 +6182,31 @@ function renderReturns() {
       : `<span class="hint">-</span>`;
     const productMeta = [row.article, row.vendor_code, row.nm_id].map((value) => String(value || "").trim()).filter(Boolean);
     const descriptionMeta = [row.status_note, row.customer_comment, row.seller_comment].map((value) => String(value || "").trim()).filter(Boolean);
-    const dateParts = [row.date || row.created_at || "-", row.updated_at ? `${tr("РѕР±РЅРѕРІР»РµРЅРѕ", "updated")}: ${row.updated_at}` : ""].filter(Boolean);
+    const dateParts = [row.date || row.created_at || "-", row.updated_at ? `${tr("Р С•Р В±Р Р…Р С•Р Р†Р В»Р ВµР Р…Р С•", "updated")}: ${row.updated_at}` : ""].filter(Boolean);
     const fallbackMeta = [];
-    if (String(row.quantity || "").trim()) fallbackMeta.push(`${tr("РљРѕР»-РІРѕ", "Qty")}: ${row.quantity}`);
-    if (String(row.amount || "").trim()) fallbackMeta.push(`${tr("РЎСѓРјРјР°", "Amount")}: ${row.amount}`);
+    if (String(row.quantity || "").trim()) fallbackMeta.push(`${tr("Р С™Р С•Р В»-Р Р†Р С•", "Qty")}: ${row.quantity}`);
+    if (String(row.amount || "").trim()) fallbackMeta.push(`${tr("Р РЋРЎС“Р СР СР В°", "Amount")}: ${row.amount}`);
     const actionButtons = currentReturnsMarketplace === "wb"
       ? `
         <div class="review-actions">
-          <button type="button" class="btn-secondary returns-action-btn" onclick="openReturnDetails('${escapeHtml(rid)}')">${escapeHtml(tr("РћС‚РєСЂС‹С‚СЊ РєР°СЂС‚РѕС‡РєСѓ", "Open card"))}</button>
+          <button type="button" class="btn-secondary returns-action-btn" onclick="openReturnDetails('${escapeHtml(rid)}')">${escapeHtml(tr("Р С›РЎвЂљР С”РЎР‚РЎвЂ№РЎвЂљРЎРЉ Р С”Р В°РЎР‚РЎвЂљР С•РЎвЂЎР С”РЎС“", "Open card"))}</button>
           <button type="button" class="btn-secondary returns-action-btn" onclick="actionReturn('${escapeHtml(rid)}', 'approve')">${escapeHtml(tr("РћРґРѕР±СЂРёС‚СЊ РІРѕР·РІСЂР°С‚", "Approve return"))}</button>
           <button type="button" class="btn-danger returns-action-btn" onclick="actionReturn('${escapeHtml(rid)}', 'reject')">${escapeHtml(tr("РћС‚РєР»РѕРЅРёС‚СЊ РІРѕР·РІСЂР°С‚", "Reject return"))}</button>
         </div>
       `
       : `
         <div class="review-actions">
-          <button type="button" class="btn-secondary returns-action-btn" onclick="openReturnDetails('${escapeHtml(rid)}')">${escapeHtml(tr("РћС‚РєСЂС‹С‚СЊ РєР°СЂС‚РѕС‡РєСѓ", "Open card"))}</button>
-          <button type="button" class="returns-action-btn" disabled>${escapeHtml(tr("РўРѕР»СЊРєРѕ РїСЂРѕСЃРјРѕС‚СЂ (Ozon)", "Read only (Ozon)"))}</button>
+          <button type="button" class="btn-secondary returns-action-btn" onclick="openReturnDetails('${escapeHtml(rid)}')">${escapeHtml(tr("Р С›РЎвЂљР С”РЎР‚РЎвЂ№РЎвЂљРЎРЉ Р С”Р В°РЎР‚РЎвЂљР С•РЎвЂЎР С”РЎС“", "Open card"))}</button>
+          <button type="button" class="returns-action-btn" disabled>${escapeHtml(tr("Р СћР С•Р В»РЎРЉР С”Р С• Р С—РЎР‚Р С•РЎРѓР СР С•РЎвЂљРЎР‚ (Ozon)", "Read only (Ozon)"))}</button>
         </div>
       `;
     trEl.innerHTML = `
-      <td data-label="${escapeHtml(tr("РЎС‚Р°С‚СѓСЃ", "Status"))}">
+      <td data-label="${escapeHtml(tr("Р РЋРЎвЂљР В°РЎвЂљРЎС“РЎРѓ", "Status"))}">
         <span class="review-type-pill return-status-pill">${escapeHtml(statusValue)}</span>
         <div class="cell-meta-small">${escapeHtml(statusNote || "-")}</div>
       </td>
-      <td data-label="${escapeHtml(tr("Р”Р°С‚Р°", "Date"))}" class="cell-meta-small">${escapeHtml(dateParts.join(" | "))}</td>
-      <td data-label="${escapeHtml(tr("РўРѕРІР°СЂ", "Product"))}">
+      <td data-label="${escapeHtml(tr("Р вЂќР В°РЎвЂљР В°", "Date"))}" class="cell-meta-small">${escapeHtml(dateParts.join(" | "))}</td>
+      <td data-label="${escapeHtml(tr("Р СћР С•Р Р†Р В°РЎР‚", "Product"))}">
         <div class="cell-product-name">${escapeHtml(String(row.product || "-"))}</div>
         <div class="cell-meta-small">${escapeHtml(productMeta.join(" | ") || "-")}</div>
       </td>
@@ -6214,8 +6214,8 @@ function renderReturns() {
         <div class="cell-main-text">${escapeHtml(String(row.description || row.reason || "-"))}</div>
         <div class="cell-meta-small">${escapeHtml(descriptionMeta.join(" | ") || fallbackMeta.join(" | ") || "-")}</div>
       </td>
-      <td data-label="${escapeHtml(tr("Р¤РѕС‚Рѕ", "Photos"))}"><div class="review-photo-list">${photosHtml}</div></td>
-      <td data-label="${escapeHtml(tr("Р§С‚Рѕ СЃРґРµР»Р°С‚СЊ", "Actions"))}">${actionButtons}</td>
+      <td data-label="${escapeHtml(tr("Р В¤Р С•РЎвЂљР С•", "Photos"))}"><div class="review-photo-list">${photosHtml}</div></td>
+      <td data-label="${escapeHtml(tr("Р В§РЎвЂљР С• РЎРѓР Т‘Р ВµР В»Р В°РЎвЂљРЎРЉ", "Actions"))}">${actionButtons}</td>
     `;
     tbody.appendChild(trEl);
     if (photos.length) {
@@ -6262,7 +6262,7 @@ async function loadWbAdCampaigns(options = {}) {
       const status = Number(err?.status || 0);
       const msg = String(err?.message || "").trim();
       const low = msg.toLowerCase();
-      if (status === 400 && (low.includes("РєР»СЋС‡") || low.includes("api key") || low.includes("token"))) {
+      if (status === 400 && (low.includes("Р С”Р В»РЎР‹РЎвЂЎ") || low.includes("api key") || low.includes("token"))) {
         return tr(
           "РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РєР°РјРїР°РЅРёРё: РїСЂРѕРІРµСЂСЊС‚Рµ API-РєР»СЋС‡ WB Ads РІ РїСЂРѕС„РёР»Рµ.",
           "Unable to load campaigns: check WB Ads API key in profile."
@@ -6460,8 +6460,8 @@ function isPlaceholderCampaignName(name, campaignId = "") {
     "\u0440\u0435\u043a\u043b\u0430\u043c\u0430",
     "\u0440\u0435\u043a\u043b\u0430\u043c\u043d\u0430\u044f",
   ]);
-  const compactSingle = new RegExp(`^(?:campaign|camp|advert|advertising|ads?|${ruAdRoot}[a-z\u0400-\u04ff0-9_]*|${ruCampaignRoot}[a-z\u0400-\u04ff0-9_]*)\\s*[#в„–:\\-]?\\s*\\d+$`, "iu");
-  const compactDouble = new RegExp(`^(?:${ruAdRoot}[a-z\u0400-\u04ff0-9_]*|advert|advertising|ads?|campaign|camp)\\s+(?:${ruCampaignRoot}[a-z\u0400-\u04ff0-9_]*|campaign|camp)\\s*[#в„–:\\-]?\\s*\\d+$`, "iu");
+  const compactSingle = new RegExp(`^(?:campaign|camp|advert|advertising|ads?|${ruAdRoot}[a-z\u0400-\u04ff0-9_]*|${ruCampaignRoot}[a-z\u0400-\u04ff0-9_]*)\\s*[#РІвЂћвЂ“:\\-]?\\s*\\d+$`, "iu");
+  const compactDouble = new RegExp(`^(?:${ruAdRoot}[a-z\u0400-\u04ff0-9_]*|advert|advertising|ads?|campaign|camp)\\s+(?:${ruCampaignRoot}[a-z\u0400-\u04ff0-9_]*|campaign|camp)\\s*[#РІвЂћвЂ“:\\-]?\\s*\\d+$`, "iu");
   if (compactSingle.test(compact) || compactDouble.test(compact)) return true;
 
   const cidRaw = String(campaignId || "").trim();
@@ -6471,7 +6471,7 @@ function isPlaceholderCampaignName(name, campaignId = "") {
     const cidRe = new RegExp(`\\b${cid}\\b`);
     if (compact === cid || cidRe.test(compact)) {
       let reduced = compact.replace(new RegExp(`\\b${cid}\\b`, "g"), " ");
-      reduced = reduced.replace(/[#в„–:;,_\-.()\[\]/]+/g, " ").replace(/\s+/g, " ").trim();
+      reduced = reduced.replace(/[#РІвЂћвЂ“:;,_\-.()\[\]/]+/g, " ").replace(/\s+/g, " ").trim();
       if (!reduced) return true;
       const words = reduced.match(/[a-z\u0400-\u04ff]+/gi) || [];
       if (words.length && words.every((word) => {
@@ -6710,7 +6710,7 @@ async function enrichWbCampaignRows(runToken) {
         `Campaigns loaded. WB API returned no readable name for ${formatInt(partialSummaryMissingTotal)} campaigns.`
       );
     } else if (partialStatsMissingTotal > 0 || partialSummaryMissingTotal > 0) {
-      msg += ` ${tr("РќРµРїРѕР»РЅС‹Рµ РїРѕР»СЏ", "Incomplete fields")}: ${formatInt(partialStatsMissingTotal + partialSummaryMissingTotal)}.`;
+      msg += ` ${tr("Р СњР ВµР С—Р С•Р В»Р Р…РЎвЂ№Р Вµ Р С—Р С•Р В»РЎРЏ", "Incomplete fields")}: ${formatInt(partialStatsMissingTotal + partialSummaryMissingTotal)}.`;
     }
     updateWbAdsLoadStatus(msg);
   } else if (deferredCount > 0) {
@@ -6747,20 +6747,20 @@ function campaignStatusMeta(value) {
         "11": "paused",
       }
       : {
-        "-1": "СѓРґР°Р»РµРЅР°",
+        "-1": "РЎС“Р Т‘Р В°Р В»Р ВµР Р…Р В°",
         "1": "С‡РµСЂРЅРѕРІРёРє (РјРµРґРёР°)",
         "2": "РЅР° РјРѕРґРµСЂР°С†РёРё (РјРµРґРёР°)",
         "3": "РѕС‚РєР»РѕРЅРµРЅР° (РјРµРґРёР°)",
-        "4": "РіРѕС‚РѕРІР° Рє Р·Р°РїСѓСЃРєСѓ",
+        "4": "Р С–Р С•РЎвЂљР С•Р Р†Р В° Р С” Р В·Р В°Р С—РЎС“РЎРѓР С”РЎС“",
         "5": "Р·Р°РїР»Р°РЅРёСЂРѕРІР°РЅР° (РјРµРґРёР°)",
         "6": "РёРґСѓС‚ РїРѕРєР°Р·С‹ (РјРµРґРёР°)",
-        "7": "Р·Р°РІРµСЂС€РµРЅР°",
-        "8": "РѕС‚РјРµРЅРµРЅР°",
+        "7": "Р В·Р В°Р Р†Р ВµРЎР‚РЎв‚¬Р ВµР Р…Р В°",
+        "8": "Р С•РЎвЂљР СР ВµР Р…Р ВµР Р…Р В°",
         "9": "Р°РєС‚РёРІРЅР°",
         "10": "РїР°СѓР·Р° РїРѕ РґРЅРµРІРЅРѕРјСѓ Р»РёРјРёС‚Сѓ (РјРµРґРёР°)",
-        "11": "РїР°СѓР·Р°",
+        "11": "Р С—Р В°РЎС“Р В·Р В°",
       };
-    const label = dict[String(num)] || (currentLang === "en" ? `status ${num}` : `СЃС‚Р°С‚СѓСЃ ${num}`);
+    const label = dict[String(num)] || (currentLang === "en" ? `status ${num}` : `РЎРѓРЎвЂљР В°РЎвЂљРЎС“РЎРѓ ${num}`);
     const isWorking = num === 6 || num === 9;
     return { code: String(num), label, isWorking };
   }
@@ -6954,8 +6954,8 @@ function renderWbCampaignRows() {
       ?? 0
     );
     const balanceText = wbAdsBalanceData?.data
-      ? (Number.isFinite(extractedBalance) && extractedBalance > 0 ? formatMoney(extractedBalance) : tr("РґРѕСЃС‚СѓРїРµРЅ", "available"))
-      : (currentLang === "en" ? "unavailable" : "РЅРµ РїРѕР»СѓС‡РµРЅ");
+      ? (Number.isFinite(extractedBalance) && extractedBalance > 0 ? formatMoney(extractedBalance) : tr("Р Т‘Р С•РЎРѓРЎвЂљРЎС“Р С—Р ВµР Р…", "available"))
+      : (currentLang === "en" ? "unavailable" : "Р Р…Р Вµ Р С—Р С•Р В»РЎС“РЎвЂЎР ВµР Р…");
     meta.textContent = currentLang === "en"
       ? `Campaigns: ${rows.length}/${wbCampaignRows.length}. Balance: ${balanceText}`
       : `РљР°РјРїР°РЅРёР№: ${rows.length}/${wbCampaignRows.length}. Р‘Р°Р»Р°РЅСЃ: ${balanceText}`;
@@ -6976,7 +6976,7 @@ function renderWbCampaignRows() {
     const status = normalizeCampaignStatus(row.status || row.state || "-");
     const type = normalizeCampaignType(row.type || row.adType || row.campaignType || row.typeId || "-");
     const budget = parseCampaignBudget(row);
-    const workingText = statusMeta.isWorking ? (currentLang === "en" ? "Yes" : "Р”Р°") : (currentLang === "en" ? "No" : "РќРµС‚");
+    const workingText = statusMeta.isWorking ? (currentLang === "en" ? "Yes" : "Р вЂќР В°") : (currentLang === "en" ? "No" : "Р СњР ВµРЎвЂљ");
     const views = parseCampaignMetric(row, "views");
     const clicks = parseCampaignMetric(row, "clicks");
     const ctr = parseCampaignMetric(row, "ctr", 2);
@@ -7108,24 +7108,24 @@ function renderCampaignDetail(data) {
   const cpo = statTotals.orders > 0 ? (statTotals.spent / statTotals.orders) : 0;
   const statusText = normalizeCampaignStatus(summary.status || "-");
   const typeText = normalizeCampaignType(summary.type || "-");
-  const workingText = campaignStatusMeta(summary.status || "-").isWorking ? tr("Р”Р°", "Yes") : tr("РќРµС‚", "No");
+  const workingText = campaignStatusMeta(summary.status || "-").isWorking ? tr("Р вЂќР В°", "Yes") : tr("Р СњР ВµРЎвЂљ", "No");
   const summaryRows = [
     `${tr("ID", "ID")}: ${summary.campaign_id || "-"}`,
     `${tr("РќР°Р·РІР°РЅРёРµ", "Name")}: ${summary.name || "-"}`,
-    `${tr("РЎС‚Р°С‚СѓСЃ", "Status")}: ${statusText}`,
+    `${tr("Р РЋРЎвЂљР В°РЎвЂљРЎС“РЎРѓ", "Status")}: ${statusText}`,
     `${tr("РўРёРї", "Type")}: ${typeText}`,
-    `${tr("Р Р°Р±РѕС‚Р°РµС‚", "Running")}: ${workingText}`,
-    `${tr("Р‘СЋРґР¶РµС‚", "Budget")}: ${summary.budget || "-"}`,
-    `${tr("РџРѕРєР°Р·С‹", "Views")}: ${formatInt(statTotals.views)}`,
+    `${tr("Р В Р В°Р В±Р С•РЎвЂљР В°Р ВµРЎвЂљ", "Running")}: ${workingText}`,
+    `${tr("Р вЂРЎР‹Р Т‘Р В¶Р ВµРЎвЂљ", "Budget")}: ${summary.budget || "-"}`,
+    `${tr("Р СџР С•Р С”Р В°Р В·РЎвЂ№", "Views")}: ${formatInt(statTotals.views)}`,
     `${tr("РљР»РёРєРё", "Clicks")}: ${formatInt(statTotals.clicks)}`,
-    `${tr("Р—Р°РєР°Р·С‹", "Orders")}: ${formatInt(statTotals.orders)}`,
-    `${tr("Р Р°СЃС…РѕРґ", "Spend")}: ${formatMoney(statTotals.spent)}`,
+    `${tr("Р вЂ”Р В°Р С”Р В°Р В·РЎвЂ№", "Orders")}: ${formatInt(statTotals.orders)}`,
+    `${tr("Р В Р В°РЎРѓРЎвЂ¦Р С•Р Т‘", "Spend")}: ${formatMoney(statTotals.spent)}`,
     `CTR: ${Number(ctr || 0).toFixed(2)}%`,
     `CPO: ${formatMoney(cpo)}`,
-    `${tr("РЎРѕР·РґР°РЅР°", "Created")}: ${summary.created_at || "-"}`,
-    `${tr("РћР±РЅРѕРІР»РµРЅР°", "Updated")}: ${summary.updated_at || "-"}`,
+    `${tr("Р РЋР С•Р В·Р Т‘Р В°Р Р…Р В°", "Created")}: ${summary.created_at || "-"}`,
+    `${tr("Р С›Р В±Р Р…Р С•Р Р†Р В»Р ВµР Р…Р В°", "Updated")}: ${summary.updated_at || "-"}`,
   ];
-  summaryEl.textContent = summaryRows.join(" вЂў ");
+  summaryEl.textContent = summaryRows.join(" РІР‚Сћ ");
 
   productsEl.innerHTML = "";
   const products = Array.isArray(data?.products) ? data.products : [];
@@ -7151,26 +7151,26 @@ function renderCampaignDetail(data) {
     const body = payload && typeof payload === "object" ? payload : {};
     const cpm = body.cpm ?? body.bid ?? body.price ?? "-";
     const updated = body.updatedAt ?? body.updated_at ?? body.last_update ?? "-";
-    ratesLines.push(`[${mode}] ${tr("РЎС‚Р°РІРєР°", "Bid")}: ${cpm}; ${tr("РћР±РЅРѕРІР»РµРЅРѕ", "Updated")}: ${updated}`);
+    ratesLines.push(`[${mode}] ${tr("Р РЋРЎвЂљР В°Р Р†Р С”Р В°", "Bid")}: ${cpm}; ${tr("Р С›Р В±Р Р…Р С•Р Р†Р В»Р ВµР Р…Р С•", "Updated")}: ${updated}`);
   }
   if (!ratesLines.length) {
-    ratesLines.push(tr("РЎС‚Р°РІРєРё РЅРµ РїРѕР»СѓС‡РµРЅС‹ РїРѕ API.", "Rates were not returned by API."));
+    ratesLines.push(tr("?????? ?? ???????? ?? API.", "Rates were not returned by API."));
   }
   if (keywordList.length) {
     ratesLines.push("");
-    ratesLines.push(tr("РљР»СЋС‡РµРІС‹Рµ С„СЂР°Р·С‹:", "Keywords:"));
-    ratesLines.push(...keywordList.slice(0, 30).map((x) => `вЂў ${x}`));
+    ratesLines.push(tr("Р С™Р В»РЎР‹РЎвЂЎР ВµР Р†РЎвЂ№Р Вµ РЎвЂћРЎР‚Р В°Р В·РЎвЂ№:", "Keywords:"));
+    ratesLines.push(...keywordList.slice(0, 30).map((x) => `РІР‚Сћ ${x}`));
   }
   if (minusList.length) {
     ratesLines.push("");
     ratesLines.push(tr("РњРёРЅСѓСЃ-СЃР»РѕРІР°:", "Negative keywords:"));
-    ratesLines.push(...minusList.slice(0, 30).map((x) => `вЂў ${x}`));
+    ratesLines.push(...minusList.slice(0, 30).map((x) => `РІР‚Сћ ${x}`));
   }
   ratesEl.textContent = ratesLines.join("\n");
 
   const statsLines = [];
   if (statsRows.length) {
-    statsLines.push(tr(`РЎС‚СЂРѕРє СЃС‚Р°С‚РёСЃС‚РёРєРё: ${statsRows.length}`, `Stats rows: ${statsRows.length}`));
+    statsLines.push(tr(`????? ??????????: ${statsRows.length}`, `Stats rows: ${statsRows.length}`));
     const sorted = [...statsRows]
       .sort((a, b) => Number(b?.spent || 0) - Number(a?.spent || 0))
       .slice(0, 20);
@@ -7183,7 +7183,7 @@ function renderCampaignDetail(data) {
       statsLines.push(`${dateLabel}: ${tr("РїРѕРєР°Р·С‹", "views")} ${views}, ${tr("РєР»РёРєРё", "clicks")} ${clicks}, ${tr("Р·Р°РєР°Р·С‹", "orders")} ${orders}, ${tr("СЂР°СЃС…РѕРґ", "spent")} ${spent}`);
     }
   } else {
-    statsLines.push(tr("РЎС‚Р°С‚РёСЃС‚РёРєР° РЅРµРґРѕСЃС‚СѓРїРЅР° РїРѕ API.", "Stats are unavailable from API."));
+    statsLines.push(tr("?????????? ?????????? ?? API.", "Stats are unavailable from API."));
   }
   statsEl.textContent = statsLines.join("\n");
   rawEl.textContent = JSON.stringify(data?.raw || {}, null, 2);
@@ -7229,7 +7229,7 @@ async function openCampaignDetailModal(campaignId) {
         headers: authHeaders(),
         timeoutMs: 120000,
       }),
-      tr("РЎР±РѕСЂ РґРµС‚Р°Р»РµР№ РёРґРµС‚ С‡РµСЂРµР· РЅРµСЃРєРѕР»СЊРєРѕ РјРµС‚РѕРґРѕРІ API WB.", "Details are fetched via several WB API methods.")
+      tr("???? ??????? ???? ????? ????????? ??????? API WB.", "Details are fetched via several WB API methods.")
     ).catch((e) => {
       alert(e.message);
       return null;
@@ -7292,7 +7292,7 @@ async function loadWbCampaignRates() {
       body: JSON.stringify({ campaign_id, campaign_type }),
       timeoutMs: 60000,
     }),
-    tr("Р—Р°РїСЂРѕСЃ РІС‹РїРѕР»РЅСЏРµС‚СЃСЏ РІ СЂРµРєР»Р°РјРЅС‹Р№ API WB.", "Request is sent to WB Ads API.")
+    tr("Р вЂ”Р В°Р С—РЎР‚Р С•РЎРѓ Р Р†РЎвЂ№Р С—Р С•Р В»Р Р…РЎРЏР ВµРЎвЂљРЎРѓРЎРЏ Р Р† РЎР‚Р ВµР С”Р В»Р В°Р СР Р…РЎвЂ№Р в„– API WB.", "Request is sent to WB Ads API.")
   ).catch((e) => {
     alert(e.message);
     return null;
@@ -7340,10 +7340,10 @@ function buildAdsAnalyticsSummaryText(meta, totals) {
   const lines = [
     `${tr("РџРµСЂРёРѕРґ", "Period")}: ${periodFrom} - ${periodTo}`,
     `${tr("РљР°РјРїР°РЅРёР№ РІ РѕС‚С‡РµС‚Рµ", "Campaigns in report")}: ${formatInt(campaignsLoaded)}`,
-    `${tr("РџРѕРєР°Р·С‹", "Views")}: ${formatInt(totals.views)}`,
+    `${tr("Р СџР С•Р С”Р В°Р В·РЎвЂ№", "Views")}: ${formatInt(totals.views)}`,
     `${tr("РљР»РёРєРё", "Clicks")}: ${formatInt(totals.clicks)}`,
-    `${tr("Р—Р°РєР°Р·С‹", "Orders")}: ${formatInt(totals.orders)}`,
-    `${tr("Р Р°СЃС…РѕРґ", "Spend")}: ${formatMoney(totals.spent)}`,
+    `${tr("Р вЂ”Р В°Р С”Р В°Р В·РЎвЂ№", "Orders")}: ${formatInt(totals.orders)}`,
+    `${tr("Р В Р В°РЎРѓРЎвЂ¦Р С•Р Т‘", "Spend")}: ${formatMoney(totals.spent)}`,
     `CTR: ${Number(totals.ctr || 0).toFixed(2)}%`,
     `CR: ${Number(totals.cr || 0).toFixed(2)}%`,
     `CPC: ${formatMoney(totals.cpc)}`,
@@ -7397,7 +7397,7 @@ function buildAdsAnalyticsMetaLines(meta) {
     ? meta.warnings.map((code) => describeAdsAnalyticsWarning(code)).filter(Boolean)
     : [];
   if (warnings.length) {
-    lines.push(`${tr("РЎРѕСЃС‚РѕСЏРЅРёРµ Р·Р°РіСЂСѓР·РєРё", "Load state")}: ${warnings.join(" | ")}`);
+    lines.push(`${tr("????????? ????????", "Load state")}: ${warnings.join(" | ")}`);
   }
   const sourceParts = [];
   if (Array.isArray(meta.base_sources) && meta.base_sources.length) sourceParts.push(`base=${meta.base_sources.join(",")}`);
@@ -7422,7 +7422,7 @@ function describeAdsAnalyticsLoadFailure(err) {
     return tr("РќРµ СѓРґР°Р»РѕСЃСЊ СЃРІСЏР·Р°С‚СЊСЃСЏ СЃ СЃРµСЂРІРµСЂРѕРј WB Ads. РџСЂРѕРІРµСЂСЊС‚Рµ СЃРѕРµРґРёРЅРµРЅРёРµ Рё РїРѕРІС‚РѕСЂРёС‚Рµ Р·Р°РіСЂСѓР·РєСѓ.", "Could not reach WB Ads. Check the connection and retry.");
   }
   if (kind === "parse") {
-    return tr("РЎРµСЂРІРµСЂ РІРµСЂРЅСѓР» РЅРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ РѕС‚РІРµС‚ WB Ads. РўРµРєСѓС‰РёРµ СЃС‚СЂРѕРєРё РЅРµ Р±С‹Р»Рё РѕС‡РёС‰РµРЅС‹.", "Server returned a malformed WB Ads response. Existing rows were preserved.");
+    return tr("?????? ?????? ???????????? ????? WB Ads. ??????? ?????? ?? ???? ???????.", "Server returned a malformed WB Ads response. Existing rows were preserved.");
   }
   if (status >= 500) {
     return tr(`WB Ads РІСЂРµРјРµРЅРЅРѕ РЅРµРґРѕСЃС‚СѓРїРµРЅ (HTTP ${status}). РўРµРєСѓС‰РёРµ СЃС‚СЂРѕРєРё РЅРµ Р±С‹Р»Рё РѕС‡РёС‰РµРЅС‹.`, `WB Ads is temporarily unavailable (HTTP ${status}). Existing rows were preserved.`);
@@ -7592,7 +7592,7 @@ function renderAdsAnalyticsRows() {
       ? (currentLang === "en" ? "WB Ads temporarily returned no usable analytics for this period." : "WB Ads РІСЂРµРјРµРЅРЅРѕ РЅРµ РІРµСЂРЅСѓР» РїСЂРёРіРѕРґРЅСѓСЋ Р°РЅР°Р»РёС‚РёРєСѓ Р·Р° СЌС‚РѕС‚ РїРµСЂРёРѕРґ.")
       : (Array.isArray(adsAnalyticsMeta?.errors) && adsAnalyticsMeta.errors.length
         ? adsAnalyticsMeta.errors[0]
-        : (currentLang === "en" ? "No data." : "РќРµС‚ РґР°РЅРЅС‹С…."));
+        : (currentLang === "en" ? "No data." : "Р СњР ВµРЎвЂљ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦."));
     rowEl.innerHTML = `<td colspan="12">${escapeHtml(emptyMessage)}</td>`;
     tbody.appendChild(rowEl);
     return;
@@ -7603,7 +7603,7 @@ function renderAdsAnalyticsRows() {
     const rowWarnings = [];
     if (row.summary_has_context === false) rowWarnings.push(currentLang === "en" ? "Name/status still partial" : "РќР°Р·РІР°РЅРёРµ/СЃС‚Р°С‚СѓСЃ РµС‰С‘ С‡Р°СЃС‚РёС‡РЅС‹Рµ");
     if (row.stat_has_context === false) rowWarnings.push(currentLang === "en" ? "Metrics not loaded for selected period" : "РњРµС‚СЂРёРєРё Р·Р° РїРµСЂРёРѕРґ РЅРµ Р·Р°РіСЂСѓР¶РµРЅС‹");
-    if (rowWarnings.length) rowEl.title = rowWarnings.join(" вЂў ");
+    if (rowWarnings.length) rowEl.title = rowWarnings.join(" РІР‚Сћ ");
     rowEl.innerHTML = `
       <td>${escapeHtml(row.campaign_id ?? "-")}</td>
       <td>${escapeHtml(row.name ?? "-")}</td>
@@ -7652,7 +7652,7 @@ function updateAdsRecLoadStatus(message = "") {
   holder.innerHTML = buildLoadStatusHtml({
     title: active
       ? tr("Р”РѕРіСЂСѓР·РєР° СЂРµРєРѕРјРµРЅРґР°С†РёР№", "Loading recommendations")
-      : tr("Р РµРєРѕРјРµРЅРґР°С†РёРё Р·Р°РіСЂСѓР¶РµРЅС‹", "Recommendations loaded"),
+      : tr("???????????? ?????????", "Recommendations loaded"),
     loaded,
     total,
     active,
@@ -7682,8 +7682,8 @@ function updateSalesLoadStatus(message = "") {
     : (state === "error"
       ? tr("РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё СЃС‚Р°С‚РёСЃС‚РёРєРё РїСЂРѕРґР°Р¶", "Sales statistics loading failed")
       : (state === "partial"
-        ? tr("РЎС‚Р°С‚РёСЃС‚РёРєР° РїСЂРѕРґР°Р¶ Р·Р°РіСЂСѓР¶РµРЅР° С‡Р°СЃС‚РёС‡РЅРѕ", "Sales statistics partially loaded")
-        : tr("РЎС‚Р°С‚РёСЃС‚РёРєР° РїСЂРѕРґР°Р¶ Р·Р°РіСЂСѓР¶РµРЅР°", "Sales statistics loaded")));
+        ? tr("?????????? ?????? ????????? ????????", "Sales statistics partially loaded")
+        : tr("?????????? ?????? ?????????", "Sales statistics loaded")));
   holder.innerHTML = buildLoadStatusHtml({
     title,
     loaded,
@@ -7707,11 +7707,11 @@ function renderAdsRecommendationsMeta(payload) {
     [tr("РџРµСЂРёРѕРґ", "Period"), `${payload.date_from || "-"} - ${payload.date_to || "-"}`],
     [tr("РџСЂРѕРІРµСЂРµРЅРѕ РєР°РјРїР°РЅРёР№", "Scanned campaigns"), `${formatInt(payload.campaigns_scanned || 0)} / ${formatInt(payload.total_campaigns || 0)}`],
     [tr("РњРёРЅ. СЂР°СЃС…РѕРґ", "Min spend"), formatMoney(payload.min_spent || 0)],
-    [tr("Р РµРєРѕРјРµРЅРґР°С†РёР№", "Recommendations"), formatInt(payload.recommendations || 0)],
+    [tr("????????????", "Recommendations"), formatInt(payload.recommendations || 0)],
   ];
   if (Number(payload.high || 0) || Number(payload.medium || 0) || Number(payload.low || 0)) {
     rows.push([tr("Р’С‹СЃРѕРєРёР№ РїСЂРёРѕСЂРёС‚РµС‚", "High priority"), formatInt(payload.high || 0)]);
-    rows.push([tr("РЎСЂРµРґРЅРёР№ РїСЂРёРѕСЂРёС‚РµС‚", "Medium priority"), formatInt(payload.medium || 0)]);
+    rows.push([tr("??????? ?????????", "Medium priority"), formatInt(payload.medium || 0)]);
     rows.push([tr("РќРёР·РєРёР№ РїСЂРёРѕСЂРёС‚РµС‚", "Low priority"), formatInt(payload.low || 0)]);
   }
   host.innerHTML = `
@@ -7738,16 +7738,16 @@ function renderAdsRecommendationsInsights() {
     const prio = String(row?.priority || "low").toLowerCase();
     const prioLabel = prio === "high"
       ? tr("Р’С‹СЃРѕРєРёР№", "High")
-      : (prio === "medium" ? tr("РЎСЂРµРґРЅРёР№", "Medium") : tr("РќРёР·РєРёР№", "Low"));
+      : (prio === "medium" ? tr("???????", "Medium") : tr("??????", "Low"));
     const views = Number(row?.views || 0);
     const clicks = Number(row?.clicks || 0);
     const orders = Number(row?.orders || 0);
     const spent = Number(row?.spent || 0);
     const metricBits = [
-      `${tr("РџРѕРєР°Р·С‹", "Views")}: ${formatInt(Number.isFinite(views) ? views : 0)}`,
+      `${tr("Р СџР С•Р С”Р В°Р В·РЎвЂ№", "Views")}: ${formatInt(Number.isFinite(views) ? views : 0)}`,
       `${tr("РљР»РёРєРё", "Clicks")}: ${formatInt(Number.isFinite(clicks) ? clicks : 0)}`,
-      `${tr("Р—Р°РєР°Р·С‹", "Orders")}: ${formatInt(Number.isFinite(orders) ? orders : 0)}`,
-      `${tr("Р Р°СЃС…РѕРґ", "Spend")}: ${formatMoney(Number.isFinite(spent) ? spent : 0)}`,
+      `${tr("Р вЂ”Р В°Р С”Р В°Р В·РЎвЂ№", "Orders")}: ${formatInt(Number.isFinite(orders) ? orders : 0)}`,
+      `${tr("Р В Р В°РЎРѓРЎвЂ¦Р С•Р Т‘", "Spend")}: ${formatMoney(Number.isFinite(spent) ? spent : 0)}`,
     ];
     return `
       <article class="ads-rec-insight-card ${escapeHtml(prio)}">
@@ -7826,10 +7826,10 @@ async function loadAdsRecommendations() {
       );
       if (lastError && !adsRecommendationRows.length) {
         adsRecLoadProgress = { active: false, total: Math.max(0, seenTotal), loaded: Math.max(0, scanned) };
-        updateAdsRecLoadStatus(tr("Р РµРєРѕРјРµРЅРґР°С†РёРё РІСЂРµРјРµРЅРЅРѕ РЅРµРґРѕСЃС‚СѓРїРЅС‹.", "Recommendations are temporarily unavailable."));
+        updateAdsRecLoadStatus(tr("???????????? ???????? ??????????.", "Recommendations are temporarily unavailable."));
         renderAdsRecommendationsMeta({
           error: tr(
-            "Р РµРєРѕРјРµРЅРґР°С†РёРё РїРѕРєР° РЅРµРґРѕСЃС‚СѓРїРЅС‹. РџСЂРѕРІРµСЂСЊС‚Рµ API-РєР»СЋС‡ Рё РїРµСЂРёРѕРґ, Р·Р°С‚РµРј РѕР±РЅРѕРІРёС‚Рµ РјРѕРґСѓР»СЊ.",
+            "???????????? ???? ??????????. ????????? API-???? ? ??????, ????? ???????? ??????.",
             "Recommendations are currently unavailable. Check API key and date range, then refresh the module."
           ),
         });
@@ -7880,9 +7880,9 @@ async function loadAdsRecommendations() {
     return acc;
   }, { high: 0, medium: 0, low: 0 });
   const explain = adsRecommendationRows.length
-    ? tr("Р РµРєРѕРјРµРЅРґР°С†РёРё СЃС„РѕСЂРјРёСЂРѕРІР°РЅС‹ РІ РІРёРґРµ РєР°СЂС‚РѕС‡РµРє Рё С‚Р°Р±Р»РёС†С‹. РќР°С‡РЅРёС‚Рµ СЃ РІС‹СЃРѕРєРѕРіРѕ РїСЂРёРѕСЂРёС‚РµС‚Р°.", "Recommendations are ready in cards and table. Start with high priority.")
+    ? tr("???????????? ???????????? ? ???? ???????? ? ???????. ??????? ? ???????? ??????????.", "Recommendations are ready in cards and table. Start with high priority.")
     : tr(
-      "РќРµС‚ РіРѕС‚РѕРІС‹С… СЂРµРєРѕРјРµРЅРґР°С†РёР№. РЎРµСЂРІРёСЃ РІРµСЂРЅСѓР» РЅРµР№С‚СЂР°Р»СЊРЅСѓСЋ СЃС‚Р°С‚РёСЃС‚РёРєСѓ РёР»Рё РЅРµРґРѕСЃС‚Р°СЋС‰РёРµ РґР°РЅРЅС‹Рµ Р·Р° РїРµСЂРёРѕРґ.",
+      "??? ??????? ????????????. ?????? ?????? ??????????? ?????????? ??? ??????????? ?????? ?? ??????.",
       "No actionable recommendations. Service returned neutral or insufficient data for selected period."
     );
   const finalMeta = {
@@ -7923,7 +7923,7 @@ function renderAdsRecommendationsRows() {
   tbody.innerHTML = "";
   if (!adsRecommendationRows.length) {
     const rowEl = document.createElement("tr");
-    rowEl.innerHTML = `<td colspan="14">${currentLang === "en" ? "No recommendations for selected period." : "Р РµРєРѕРјРµРЅРґР°С†РёР№ Р·Р° РІС‹Р±СЂР°РЅРЅС‹Р№ РїРµСЂРёРѕРґ РЅРµС‚."}</td>`;
+    rowEl.innerHTML = `<td colspan="14">${currentLang === "en" ? "No recommendations for selected period." : "???????????? ?? ????????? ?????? ???."}</td>`;
     tbody.appendChild(rowEl);
     return;
   }
@@ -7936,7 +7936,7 @@ function renderAdsRecommendationsRows() {
     const priorityRaw = String(row.priority || "low").toLowerCase();
     const priorityLabel = priorityRaw === "high"
       ? tr("Р’С‹СЃРѕРєРёР№", "High")
-      : (priorityRaw === "medium" ? tr("РЎСЂРµРґРЅРёР№", "Medium") : tr("РќРёР·РєРёР№", "Low"));
+      : (priorityRaw === "medium" ? tr("???????", "Medium") : tr("??????", "Low"));
     const rowEl = document.createElement("tr");
     rowEl.innerHTML = `
       <td>${escapeHtml(row.campaign_id ?? "-")}</td>
@@ -8066,7 +8066,7 @@ function applyWbBidderFieldHints() {
     isEn ? "nmID of the product card the rule controls" : "nmID РєР°СЂС‚РѕС‡РєРё С‚РѕРІР°СЂР°, РґР»СЏ РєРѕС‚РѕСЂРѕР№ РґРµР№СЃС‚РІСѓРµС‚ РїСЂР°РІРёР»Рѕ"
   );
   setInputHint("wbBidderTargetValue", isEn ? "Search phrase for normquery mode" : "РџРѕРёСЃРєРѕРІР°СЏ С„СЂР°Р·Р° РґР»СЏ СЂРµР¶РёРјР° normquery");
-  setInputHint("wbBidderDesiredBid", isEn ? "Target bid, RUB" : "Р¦РµР»РµРІР°СЏ СЃС‚Р°РІРєР°, в‚Ѕ");
+  setInputHint("wbBidderDesiredBid", isEn ? "Target bid, RUB" : "Р В¦Р ВµР В»Р ВµР Р†Р В°РЎРЏ РЎРѓРЎвЂљР В°Р Р†Р С”Р В°, РІвЂљР…");
   setInputHint("wbBidderMinBid", isEn ? "Minimum bid, RUB" : "РњРёРЅРёРјР°Р»СЊРЅР°СЏ СЃС‚Р°РІРєР°, в‚Ѕ");
   setInputHint("wbBidderMaxBid", isEn ? "Maximum bid, RUB" : "РњР°РєСЃРёРјР°Р»СЊРЅР°СЏ СЃС‚Р°РІРєР°, в‚Ѕ");
   setInputHint("wbBidderStepBid", isEn ? "Bid change step, RUB" : "РЁР°Рі РёР·РјРµРЅРµРЅРёСЏ СЃС‚Р°РІРєРё, в‚Ѕ");
@@ -8078,7 +8078,7 @@ function applyWbBidderFieldHints() {
 
   setOptionText("wbBidderTargetKind", {
     normquery: isEn ? "Search phrase (normquery)" : "РџРѕРёСЃРєРѕРІР°СЏ С„СЂР°Р·Р° (normquery)",
-    nm: isEn ? "Product card (nm)" : "РљР°СЂС‚РѕС‡РєР° С‚РѕРІР°СЂР° (nm)",
+    nm: isEn ? "Product card (nm)" : "Р С™Р В°РЎР‚РЎвЂљР С•РЎвЂЎР С”Р В° РЎвЂљР С•Р Р†Р В°РЎР‚Р В° (nm)",
   });
   setOptionText("wbBidderPlacement", {
     search: isEn ? "Search only" : "РўРѕР»СЊРєРѕ РїРѕРёСЃРє",
@@ -8086,7 +8086,7 @@ function applyWbBidderFieldHints() {
     combined: isEn ? "Search + recommendations" : "РџРѕРёСЃРє + СЂРµРєРѕРјРµРЅРґР°С†РёРё",
   });
   setOptionText("wbBidderStrategy", {
-    optimal: isEn ? "Optimal (auto balance)" : "Optimal (Р°РІС‚Рѕ Р±Р°Р»Р°РЅСЃ)",
+    optimal: isEn ? "Optimal (auto balance)" : "Optimal (Р В°Р Р†РЎвЂљР С• Р В±Р В°Р В»Р В°Р Р…РЎРѓ)",
     position: isEn ? "Position hold" : "Position (РґРµСЂР¶Р°С‚СЊ РїРѕР·РёС†РёСЋ)",
     range: isEn ? "Range hold" : "Range (РґРµСЂР¶Р°С‚СЊ РґРёР°РїР°Р·РѕРЅ)",
     hold: isEn ? "Hold fixed bid" : "Hold (С„РёРєСЃРёСЂРѕРІР°РЅРЅР°СЏ СЃС‚Р°РІРєР°)",
@@ -8096,9 +8096,9 @@ function applyWbBidderFieldHints() {
   ensureFieldCard("wbBidderNmId", isEn ? "Product nmID" : "nmID РєР°СЂС‚РѕС‡РєРё С‚РѕРІР°СЂР°", isEn ? "Use nmID from the same campaign." : "РЈРєР°Р¶РёС‚Рµ nmID РёР· СЌС‚РѕР№ Р¶Рµ РєР°РјРїР°РЅРёРё.");
   ensureFieldCard("wbBidderTargetKind", isEn ? "Target type" : "РўРёРї С†РµР»Рё");
   ensureFieldCard("wbBidderTargetValue", isEn ? "Search phrase (for normquery)" : "РџРѕРёСЃРєРѕРІР°СЏ С„СЂР°Р·Р° (РґР»СЏ normquery)", isEn ? "Used only in normquery mode." : "РСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ С‚РѕР»СЊРєРѕ РІ СЂРµР¶РёРјРµ normquery.");
-  ensureFieldCard("wbBidderPlacement", isEn ? "Placement" : "РџР»РѕС‰Р°РґРєР°");
-  ensureFieldCard("wbBidderStrategy", isEn ? "Strategy" : "РЎС‚СЂР°С‚РµРіРёСЏ");
-  ensureFieldCard("wbBidderDesiredBid", isEn ? "Target bid, RUB" : "Р¦РµР»РµРІР°СЏ СЃС‚Р°РІРєР°, в‚Ѕ");
+  ensureFieldCard("wbBidderPlacement", isEn ? "Placement" : "Р СџР В»Р С•РЎвЂ°Р В°Р Т‘Р С”Р В°");
+  ensureFieldCard("wbBidderStrategy", isEn ? "Strategy" : "?????????");
+  ensureFieldCard("wbBidderDesiredBid", isEn ? "Target bid, RUB" : "Р В¦Р ВµР В»Р ВµР Р†Р В°РЎРЏ РЎРѓРЎвЂљР В°Р Р†Р С”Р В°, РІвЂљР…");
   ensureFieldCard("wbBidderMinBid", isEn ? "Minimum bid, RUB" : "РњРёРЅРёРјР°Р»СЊРЅР°СЏ СЃС‚Р°РІРєР°, в‚Ѕ");
   ensureFieldCard("wbBidderMaxBid", isEn ? "Maximum bid, RUB" : "РњР°РєСЃРёРјР°Р»СЊРЅР°СЏ СЃС‚Р°РІРєР°, в‚Ѕ");
   ensureFieldCard("wbBidderStepBid", isEn ? "Bid step, RUB" : "РЁР°Рі РёР·РјРµРЅРµРЅРёСЏ СЃС‚Р°РІРєРё, в‚Ѕ", isEn ? "How much to increase/decrease bid per step." : "РќР° СЃРєРѕР»СЊРєРѕ СЂСѓР±Р»РµР№ РїРѕРІС‹С€Р°С‚СЊ/РїРѕРЅРёР¶Р°С‚СЊ СЃС‚Р°РІРєСѓ Р·Р° С€Р°Рі.");
@@ -8112,7 +8112,7 @@ function applyWbBidderFieldHints() {
   if (hint) {
     hint.textContent = isEn
       ? "campaign_id = campaign ID, nmID = product card ID. Step/position/clicks/cooldown are optimization controls. Bid values are in RUB."
-      : "campaign_id = ID РєР°РјРїР°РЅРёРё, nmID = ID РєР°СЂС‚РѕС‡РєРё С‚РѕРІР°СЂР°. РџРѕР»СЏ С€Р°Рі/РїРѕР·РёС†РёСЏ/РєР»РёРєРё/cooldown вЂ” СЌС‚Рѕ РїР°СЂР°РјРµС‚СЂС‹ РѕРїС‚РёРјРёР·Р°С†РёРё. РЎС‚Р°РІРєРё СѓРєР°Р·С‹РІР°СЋС‚СЃСЏ РІ СЂСѓР±Р»СЏС….";
+      : "campaign_id = ID ????????, nmID = ID ???????? ??????. ???? ???/???????/?????/cooldown ? ??? ????????? ???????????. ?????? ??????????? ? ??????.";
   }
 }
 
@@ -8221,14 +8221,14 @@ function collectWbBidderPayload() {
 function bidderPlacementLabel(value) {
   const key = String(value || "").trim().toLowerCase();
   if (key === "search") return tr("РџРѕРёСЃРє", "Search");
-  if (key === "recommendations") return tr("Р РµРєРѕРјРµРЅРґР°С†РёРё", "Recommendations");
+  if (key === "recommendations") return tr("????????????", "Recommendations");
   if (key === "combined") return tr("РџРѕРёСЃРє + СЂРµРєРѕРјРµРЅРґР°С†РёРё", "Search + recommendations");
   return key || "-";
 }
 
 function bidderStrategyLabel(value) {
   const key = String(value || "").trim().toLowerCase();
-  if (key === "optimal") return tr("Optimal (Р°РІС‚Рѕ Р±Р°Р»Р°РЅСЃ)", "Optimal (auto balance)");
+  if (key === "optimal") return tr("Optimal (Р В°Р Р†РЎвЂљР С• Р В±Р В°Р В»Р В°Р Р…РЎРѓ)", "Optimal (auto balance)");
   if (key === "position") return tr("Position (РґРµСЂР¶Р°С‚СЊ РїРѕР·РёС†РёСЋ)", "Position hold");
   if (key === "range") return tr("Range (РґРµСЂР¶Р°С‚СЊ РґРёР°РїР°Р·РѕРЅ)", "Range hold");
   if (key === "hold") return tr("Hold (С„РёРєСЃРёСЂРѕРІР°РЅРЅР°СЏ СЃС‚Р°РІРєР°)", "Hold fixed bid");
@@ -8239,16 +8239,16 @@ function bidderRuleTargetText(row) {
   const kind = String(row?.target_kind || "").toLowerCase();
   const nm = Number(row?.nm_id || 0);
   if (kind === "normquery") {
-    return `${tr("nmID", "nmID")}: ${nm} В· ${String(row?.target_value || "-")}`;
+    return `${tr("nmID", "nmID")}: ${nm} Р’В· ${String(row?.target_value || "-")}`;
   }
-  return `${tr("РљР°СЂС‚РѕС‡РєР° nmID", "nmID card")}: ${nm}`;
+  return `${tr("Р С™Р В°РЎР‚РЎвЂљР С•РЎвЂЎР С”Р В° nmID", "nmID card")}: ${nm}`;
 }
 
 function bidderStatusBadge(status) {
   const low = String(status || "").trim().toLowerCase();
   if (low === "ok") return `<span class="ads-bidder-status-ok">${escapeHtml(tr("ok", "ok"))}</span>`;
   if (low === "error") return `<span class="ads-bidder-status-error">${escapeHtml(tr("РѕС€РёР±РєР°", "error"))}</span>`;
-  if (low === "skipped") return `<span class="ads-bidder-status-skipped">${escapeHtml(tr("РїСЂРѕРїСѓСЃРє", "skipped"))}</span>`;
+  if (low === "skipped") return `<span class="ads-bidder-status-skipped">${escapeHtml(tr("Р С—РЎР‚Р С•Р С—РЎС“РЎРѓР С”", "skipped"))}</span>`;
   return escapeHtml(String(status || "-"));
 }
 
@@ -8298,21 +8298,21 @@ function renderWbBidderRules() {
     const trEl = document.createElement("tr");
     trEl.innerHTML = `
       <td>${escapeHtml(String(row.id || "-"))}</td>
-      <td>${row.is_active ? "вњ…" : "вЏёпёЏ"}</td>
+      <td>${row.is_active ? "РІСљвЂ¦" : "РІРЏС‘РїС‘РЏ"}</td>
       <td>${escapeHtml(String(row.campaign_id || "-"))}${campaignName ? `<div class="cell-meta-small">${escapeHtml(campaignName)}</div>` : ""}</td>
       <td>${escapeHtml(bidderRuleTargetText(row))}</td>
-      <td>${escapeHtml(bidderStrategyLabel(row.strategy))} В· ${escapeHtml(bidderPlacementLabel(row.placement))}</td>
-      <td>${escapeHtml(String(row.min_bid || 0))} .. ${escapeHtml(String(row.max_bid || 0))} В· step ${escapeHtml(String(row.step_bid || 0))}</td>
+      <td>${escapeHtml(bidderStrategyLabel(row.strategy))} Р’В· ${escapeHtml(bidderPlacementLabel(row.placement))}</td>
+      <td>${escapeHtml(String(row.min_bid || 0))} .. ${escapeHtml(String(row.max_bid || 0))} Р’В· step ${escapeHtml(String(row.step_bid || 0))}</td>
       <td>${escapeHtml(String(row.target_pos_from || 0))} .. ${escapeHtml(String(row.target_pos_to || 0))}</td>
       <td>${escapeHtml(String(row.cooldown_sec || 0))}s</td>
       <td>${escapeHtml(String(row.last_run_at || "-"))}</td>
       <td>${bidderStatusBadge(row.last_status)}<br><small>${escapeHtml(String(row.last_reason || ""))}</small></td>
       <td>
         <div class="ads-bidder-row-actions">
-          <button type="button" class="btn-secondary" onclick="editWbBidderRule(${Number(row.id || 0)})">вњЋ</button>
-          <button type="button" class="btn-secondary" onclick="runWbBidderRuleNow(${Number(row.id || 0)})">в–¶</button>
-          <button type="button" class="btn-secondary" onclick="toggleWbBidderRule(${Number(row.id || 0)}, ${row.is_active ? "false" : "true"})">${row.is_active ? "вЏё" : "в–¶"}</button>
-          <button type="button" class="btn-danger" onclick="deleteWbBidderRule(${Number(row.id || 0)})">рџ—‘</button>
+          <button type="button" class="btn-secondary" onclick="editWbBidderRule(${Number(row.id || 0)})">РІСљР‹</button>
+          <button type="button" class="btn-secondary" onclick="runWbBidderRuleNow(${Number(row.id || 0)})">РІвЂ“В¶</button>
+          <button type="button" class="btn-secondary" onclick="toggleWbBidderRule(${Number(row.id || 0)}, ${row.is_active ? "false" : "true"})">${row.is_active ? "РІРЏС‘" : "РІвЂ“В¶"}</button>
+          <button type="button" class="btn-danger" onclick="deleteWbBidderRule(${Number(row.id || 0)})">СЂСџвЂ”вЂ</button>
         </div>
       </td>
     `;
@@ -8325,7 +8325,7 @@ function editWbBidderRule(ruleId) {
   if (!row) return;
   fillWbBidderForm(row);
   setWbBidderStatus(
-    tr(`Р РµРґР°РєС‚РёСЂРѕРІР°РЅРёРµ РїСЂР°РІРёР»Р° #${row.id}`, `Editing rule #${row.id}`),
+    tr(`?????????????? ??????? #${row.id}`, `Editing rule #${row.id}`),
     "skipped"
   );
 }
@@ -8466,7 +8466,7 @@ function renderWbBidderRuns() {
       <td>#${escapeHtml(String(row.rule_id || "-"))}</td>
       <td>${escapeHtml(String(row.campaign_id || "-"))}${campaignName ? `<div class="cell-meta-small">${escapeHtml(campaignName)}</div>` : ""}</td>
       <td>${escapeHtml(bidderRuleTargetText(row))}</td>
-      <td>${escapeHtml(String(row.previous_bid || 0))} в†’ ${escapeHtml(String(row.next_bid || 0))}</td>
+      <td>${escapeHtml(String(row.previous_bid || 0))} РІвЂ вЂ™ ${escapeHtml(String(row.next_bid || 0))}</td>
       <td>${escapeHtml(String(row.avg_position || 0))}</td>
       <td>${escapeHtml(String(row.clicks || 0))} / ${escapeHtml(String(row.orders || 0))}</td>
       <td>${bidderStatusBadge(row.status)}</td>
@@ -8644,7 +8644,7 @@ async function reloadProducts() {
   const payload = getImportPayload({ forceAll: true });
   const body = JSON.stringify(payload);
   const data = await withBusy(
-    tr("РћР±РЅРѕРІР»СЏРµРј Р»РѕРєР°Р»СЊРЅСѓСЋ Р±Р°Р·Сѓ С‚РѕРІР°СЂРѕРІвЂ¦", "Refreshing local catalog..."),
+    tr("Р С›Р В±Р Р…Р С•Р Р†Р В»РЎРЏР ВµР С Р В»Р С•Р С”Р В°Р В»РЎРЉР Р…РЎС“РЎР‹ Р В±Р В°Р В·РЎС“ РЎвЂљР С•Р Р†Р В°РЎР‚Р С•Р Р†РІР‚В¦", "Refreshing local catalog..."),
     () => tryRequestChain([
       { url: "/api/products/reload", opts: { method: "POST", headers: authHeaders(), body, timeoutMs: 240000 } },
       { url: "/api/products/refresh", opts: { method: "POST", headers: authHeaders(), body, timeoutMs: 240000 } },
@@ -8665,7 +8665,7 @@ async function reloadProducts() {
   await loadDashboard();
   const safeMp = String(payload.marketplace || "all").toLowerCase();
   await trackUiActivity("products_reload_completed", "products", `marketplace=${safeMp};import_all=${payload.import_all ? 1 : 0};count=${Number(data.length || 0)}`);
-  alert(tr(`Р‘Р°Р·Р° РѕР±РЅРѕРІР»РµРЅР°, С‚РѕРІР°СЂРѕРІ: ${data.length}`, `Catalog refreshed, products: ${data.length}`));
+  alert(tr(`Р вЂР В°Р В·Р В° Р С•Р В±Р Р…Р С•Р Р†Р В»Р ВµР Р…Р В°, РЎвЂљР С•Р Р†Р В°РЎР‚Р С•Р Р†: ${data.length}`, `Catalog refreshed, products: ${data.length}`));
 }
 
 async function loadProducts() {
@@ -8781,7 +8781,7 @@ async function loadProducts() {
     tdActions.className = "product-actions-cell";
     tdActions.innerHTML = `
       <div class="product-row-actions">
-        <button class="btn-secondary btn-row-action btn-row-action-icon" type="button" data-tip="${escapeHtml(tr("РџРѕСЃРјРѕС‚СЂРµС‚СЊ", "View"))}" aria-label="${escapeHtml(tr("РџРѕСЃРјРѕС‚СЂРµС‚СЊ", "View"))}">&#128065;</button>
+        <button class="btn-secondary btn-row-action btn-row-action-icon" type="button" data-tip="${escapeHtml(tr("Р СџР С•РЎРѓР СР С•РЎвЂљРЎР‚Р ВµРЎвЂљРЎРЉ", "View"))}" aria-label="${escapeHtml(tr("Р СџР С•РЎРѓР СР С•РЎвЂљРЎР‚Р ВµРЎвЂљРЎРЉ", "View"))}">&#128065;</button>
         <button class="btn-danger btn-row-action btn-row-action-icon" type="button" data-tip="${escapeHtml(tr("РЈРґР°Р»РёС‚СЊ Р»РѕРєР°Р»СЊРЅРѕ", "Delete local"))}" aria-label="${escapeHtml(tr("РЈРґР°Р»РёС‚СЊ Р»РѕРєР°Р»СЊРЅРѕ", "Delete local"))}">&#128465;</button>
       </div>
     `;
@@ -8821,7 +8821,7 @@ async function loadProducts() {
     if (row) row.classList.add("selected-row");
   }
   if (!currentProducts.length) {
-    tbody.innerHTML = `<tr><td colspan="10">${escapeHtml(tr("РўРѕРІР°СЂС‹ РЅРµ РЅР°Р№РґРµРЅС‹", "No products found"))}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10">${escapeHtml(tr("Р СћР С•Р Р†Р В°РЎР‚РЎвЂ№ Р Р…Р Вµ Р Р…Р В°Р в„–Р Т‘Р ВµР Р…РЎвЂ№", "No products found"))}</td></tr>`;
   }
   markModuleLoaded("products");
 }
@@ -8892,7 +8892,7 @@ async function refreshProductViewModal() {
   const refreshBtn = document.getElementById("productViewRefreshBtn");
   if (refreshBtn) refreshBtn.disabled = true;
   const warnEl = document.getElementById("productViewWarn");
-  if (warnEl) warnEl.textContent = tr("РћР±РЅРѕРІР»СЏРµРј РґР°РЅРЅС‹Рµ РїРѕ APIвЂ¦", "Refreshing data from API...");
+  if (warnEl) warnEl.textContent = tr("Р С›Р В±Р Р…Р С•Р Р†Р В»РЎРЏР ВµР С Р Т‘Р В°Р Р…Р Р…РЎвЂ№Р Вµ Р С—Р С• APIРІР‚В¦", "Refreshing data from API...");
   await openProductViewModal(id, { refresh: true });
   if (refreshBtn) refreshBtn.disabled = false;
   activeProductViewIsRefreshing = false;
@@ -8902,7 +8902,7 @@ function normalizeProductDetailValue(value) {
   if (value === null || value === undefined) return "";
   if (typeof value === "string") {
     const text = value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
-    if (!text || text === "-" || text === "вЂ”") return "";
+    if (!text || text === "-" || text === "РІР‚вЂќ") return "";
     return text;
   }
   if (typeof value === "number") {
@@ -9087,12 +9087,12 @@ function extractProductDetailContext(details, fallbackProduct) {
   );
 
   const summaryItems = [
-    { label: tr("РњР°СЂРєРµС‚РїР»РµР№СЃ", "Marketplace"), value: marketplace },
+    { label: tr("Р СљР В°РЎР‚Р С”Р ВµРЎвЂљР С—Р В»Р ВµР в„–РЎРѓ", "Marketplace"), value: marketplace },
     { label: tr("РљР°С‚РµРіРѕСЂРёСЏ", "Category"), value: category },
-    { label: tr("Р‘СЂРµРЅРґ", "Brand"), value: brand || "-" },
+    { label: tr("Р вЂРЎР‚Р ВµР Р…Р Т‘", "Brand"), value: brand || "-" },
     { label: tr("РђСЂС‚РёРєСѓР»", "Article"), value: article || "-" },
     { label: tr("Р’РЅРµС€РЅРёР№ ID", "External ID"), value: externalId || "-" },
-    { label: tr("Р‘Р°СЂРєРѕРґ", "Barcode"), value: barcode || "-" },
+    { label: tr("Р вЂР В°РЎР‚Р С”Р С•Р Т‘", "Barcode"), value: barcode || "-" },
   ];
 
   const purchasePriceValue = pickPrice(
@@ -9190,28 +9190,28 @@ function extractProductDetailContext(details, fallbackProduct) {
   );
 
   const commerceItems = [
-    { label: tr("Р—Р°РєСѓРїРѕС‡РЅР°СЏ С†РµРЅР°", "Purchase price"), value: purchasePriceValue || "-" },
+    { label: tr("Р вЂ”Р В°Р С”РЎС“Р С—Р С•РЎвЂЎР Р…Р В°РЎРЏ РЎвЂ Р ВµР Р…Р В°", "Purchase price"), value: purchasePriceValue || "-" },
     { label: tr("Р¦РµРЅР° Р±РµР· СЃРєРёРґРєРё", "Base price"), value: priceBaseValue || "-" },
     { label: tr("Р¦РµРЅР° СЃРѕ СЃРєРёРґРєРѕР№", "Discounted price"), value: priceDiscountValue || "-" },
     { label: tr("РњРёРЅ. С†РµРЅР°", "Min price"), value: priceMinValue || "-" },
     { label: tr("РњР°СЂРєРµС‚РёРЅРі С†РµРЅР°", "Marketing price"), value: priceMarketingValue || "-" },
-    { label: tr("Р’Р°Р»СЋС‚Р°", "Currency"), value: pickAny(pickAttr("currency_code", "currency"), pickRaw("currency_code", "currency", "price_info.currency_code", "price_info.price.currency_code")) || "-" },
-    { label: tr("РќР”РЎ", "VAT"), value: pickAny(pickAttr("vat", "vat_rate", "nds"), pickRaw("vat", "vat_rate", "nds", "price_info.vat", "price_info.price.vat")) || "-" },
-    { label: tr("РЎС‚Р°С‚СѓСЃ", "Status"), value: pickAny(pickAttr("state"), pickRaw("state.name", "state")) || "-" },
+    { label: tr("Р вЂ™Р В°Р В»РЎР‹РЎвЂљР В°", "Currency"), value: pickAny(pickAttr("currency_code", "currency"), pickRaw("currency_code", "currency", "price_info.currency_code", "price_info.price.currency_code")) || "-" },
+    { label: tr("Р СњР вЂќР РЋ", "VAT"), value: pickAny(pickAttr("vat", "vat_rate", "nds"), pickRaw("vat", "vat_rate", "nds", "price_info.vat", "price_info.price.vat")) || "-" },
+    { label: tr("Р РЋРЎвЂљР В°РЎвЂљРЎС“РЎРѓ", "Status"), value: pickAny(pickAttr("state"), pickRaw("state.name", "state")) || "-" },
     { label: tr("Р’РёРґРёРјРѕСЃС‚СЊ", "Visibility"), value: pickAny(pickAttr("visibility"), pickRaw("visibility")) || "-" },
   ];
 
   const logisticsItems = [
-    { label: tr("Р’РµСЃ", "Weight"), value: pickAny(pickAttr("weight"), pickRaw("weight")) || "-" },
-    { label: tr("Р•Рґ. РІРµСЃР°", "Weight unit"), value: pickAny(pickAttr("weight_unit"), pickRaw("weight_unit")) || "-" },
+    { label: tr("Р вЂ™Р ВµРЎРѓ", "Weight"), value: pickAny(pickAttr("weight"), pickRaw("weight")) || "-" },
+    { label: tr("Р вЂўР Т‘. Р Р†Р ВµРЎРѓР В°", "Weight unit"), value: pickAny(pickAttr("weight_unit"), pickRaw("weight_unit")) || "-" },
     { label: tr("Р”Р»РёРЅР°", "Length"), value: pickAny(pickAttr("depth"), pickRaw("depth")) || "-" },
     { label: tr("РЁРёСЂРёРЅР°", "Width"), value: pickAny(pickAttr("width"), pickRaw("width")) || "-" },
-    { label: tr("Р’С‹СЃРѕС‚Р°", "Height"), value: pickAny(pickAttr("height"), pickRaw("height")) || "-" },
+    { label: tr("Р вЂ™РЎвЂ№РЎРѓР С•РЎвЂљР В°", "Height"), value: pickAny(pickAttr("height"), pickRaw("height")) || "-" },
     { label: tr("Р•Рґ. РіР°Р±Р°СЂРёС‚РѕРІ", "Dimension unit"), value: pickAny(pickAttr("dimension_unit"), pickRaw("dimension_unit")) || "-" },
-    { label: tr("РЈРїР°РєРѕРІРєР°: РІРµСЃ", "Package: weight"), value: pickAny(pickAttr("package_weight"), pickRaw("package_dimensions.weight")) || "-" },
+    { label: tr("Р Р€Р С—Р В°Р С”Р С•Р Р†Р С”Р В°: Р Р†Р ВµРЎРѓ", "Package: weight"), value: pickAny(pickAttr("package_weight"), pickRaw("package_dimensions.weight")) || "-" },
     { label: tr("РЈРїР°РєРѕРІРєР°: РґР»РёРЅР°", "Package: depth"), value: pickAny(pickAttr("package_depth"), pickRaw("package_dimensions.depth")) || "-" },
     { label: tr("РЈРїР°РєРѕРІРєР°: С€РёСЂРёРЅР°", "Package: width"), value: pickAny(pickAttr("package_width"), pickRaw("package_dimensions.width")) || "-" },
-    { label: tr("РЈРїР°РєРѕРІРєР°: РІС‹СЃРѕС‚Р°", "Package: height"), value: pickAny(pickAttr("package_height"), pickRaw("package_dimensions.height")) || "-" },
+    { label: tr("Р Р€Р С—Р В°Р С”Р С•Р Р†Р С”Р В°: Р Р†РЎвЂ№РЎРѓР С•РЎвЂљР В°", "Package: height"), value: pickAny(pickAttr("package_height"), pickRaw("package_dimensions.height")) || "-" },
   ];
 
   const technicalItems = [
@@ -9256,7 +9256,7 @@ function extractProductDetailContext(details, fallbackProduct) {
     base,
     raw,
     photos,
-    name: name || tr("РўРѕРІР°СЂ", "Product"),
+    name: name || tr("Р СћР С•Р Р†Р В°РЎР‚", "Product"),
     description,
     summaryItems,
     commerceItems,
@@ -9278,7 +9278,7 @@ function renderProductInfoGrid(items, emptyLabel, options = {}) {
   const emptyValueLabel = String(
     options && options.emptyValueLabel !== undefined
       ? options.emptyValueLabel
-      : tr("РЅРµС‚ РґР°РЅРЅС‹С…", "n/a")
+      : tr("Р Р…Р ВµРЎвЂљ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦", "n/a")
   );
   const rows = (Array.isArray(items) ? items : [])
     .map((item) => {
@@ -9312,7 +9312,7 @@ function renderProductAttributeTable(items) {
       <table class="product-attrs-table">
         <thead>
           <tr>
-            <th>${escapeHtml(tr("РџР°СЂР°РјРµС‚СЂ", "Parameter"))}</th>
+            <th>${escapeHtml(tr("Р СџР В°РЎР‚Р В°Р СР ВµРЎвЂљРЎР‚", "Parameter"))}</th>
             <th>${escapeHtml(tr("Р—РЅР°С‡РµРЅРёРµ", "Value"))}</th>
           </tr>
         </thead>
@@ -9330,7 +9330,7 @@ async function openProductViewModal(productId, opts = {}) {
   if (!modal) return;
   activeProductViewId = id;
   const product = currentProducts.find((x) => Number(x.id) === id) || null;
-  const name = product?.name || tr("РўРѕРІР°СЂ", "Product");
+  const name = product?.name || tr("Р СћР С•Р Р†Р В°РЎР‚", "Product");
   const titleEl = modal.querySelector("h3");
   const editBtn = document.getElementById("productViewEditBtn");
   const refreshBtn = document.getElementById("productViewRefreshBtn");
@@ -9339,7 +9339,7 @@ async function openProductViewModal(productId, opts = {}) {
     editBtn.dataset.productId = String(id);
   }
   if (refreshBtn) refreshBtn.disabled = activeProductViewIsRefreshing;
-  if (titleEl) titleEl.textContent = `${tr("РљР°СЂС‚РѕС‡РєР° С‚РѕРІР°СЂР°", "Product card")}: ${name}`;
+  if (titleEl) titleEl.textContent = `${tr("Р С™Р В°РЎР‚РЎвЂљР С•РЎвЂЎР С”Р В° РЎвЂљР С•Р Р†Р В°РЎР‚Р В°", "Product card")}: ${name}`;
   modal.classList.remove("hidden");
   const metaEl = document.getElementById("productViewMeta");
   const warnEl = document.getElementById("productViewWarn");
@@ -9353,7 +9353,7 @@ async function openProductViewModal(productId, opts = {}) {
   const rawEl = document.getElementById("productViewRaw");
   if (metaEl) {
     metaEl.textContent = product
-      ? `${tr("ID", "ID")}: ${product.id} вЂў ${tr("\u041c\u041f", "MP")}: ${String(product.marketplace || "").toUpperCase()} вЂў ${tr("\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f", "Category")}: ${product.category_name || "-"}`
+      ? `${tr("ID", "ID")}: ${product.id} РІР‚Сћ ${tr("\u041c\u041f", "MP")}: ${String(product.marketplace || "").toUpperCase()} РІР‚Сћ ${tr("\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f", "Category")}: ${product.category_name || "-"}`
       : "-";
   }
   if (warnEl) warnEl.textContent = tr("Р—Р°РіСЂСѓР¶Р°РµРј РґРµС‚Р°Р»Рё РєР°СЂС‚РѕС‡РєРёвЂ¦", "Loading product details...");
@@ -9369,7 +9369,7 @@ async function openProductViewModal(productId, opts = {}) {
   const details = await fetchProductDetailsById(id, { silent: true, refresh });
   if (!details || activeProductViewId !== id) return;
   const context = extractProductDetailContext(details, product || {});
-  if (titleEl) titleEl.textContent = `${tr("РљР°СЂС‚РѕС‡РєР° С‚РѕРІР°СЂР°", "Product card")}: ${context.name}`;
+  if (titleEl) titleEl.textContent = `${tr("Р С™Р В°РЎР‚РЎвЂљР С•РЎвЂЎР С”Р В° РЎвЂљР С•Р Р†Р В°РЎР‚Р В°", "Product card")}: ${context.name}`;
   const allPhotos = context.photos;
   if (summaryEl) {
     summaryEl.innerHTML = renderProductInfoGrid(
@@ -9400,7 +9400,7 @@ async function openProductViewModal(productId, opts = {}) {
     commerceEl.innerHTML = renderProductInfoGrid(
       context.commerceItems,
       tr("РљРѕРјРјРµСЂС‡РµСЃРєРёРµ РґР°РЅРЅС‹Рµ РЅРµ РЅР°Р№РґРµРЅС‹.", "Commerce data not found."),
-      { keepEmptyRows: true, emptyValueLabel: tr("РЅРµС‚ РґР°РЅРЅС‹С…", "n/a") }
+      { keepEmptyRows: true, emptyValueLabel: tr("Р Р…Р ВµРЎвЂљ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦", "n/a") }
     );
   }
   if (logisticsEl) {
@@ -9430,7 +9430,7 @@ async function openProductEditModal(productId) {
   activeProductEditId = id;
   const product = currentProducts.find((x) => Number(x.id) === id) || null;
   const titleEl = modal.querySelector("h3");
-  if (titleEl) titleEl.textContent = `${tr("Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ С‚РѕРІР°СЂ", "Edit product")}: ${product?.name || id}`;
+  if (titleEl) titleEl.textContent = `${tr("????????????? ?????", "Edit product")}: ${product?.name || id}`;
   const hintEl = document.getElementById("productEditHint");
   const summaryEl = document.getElementById("productEditSummary");
   const detailsEl = document.getElementById("productEditDetails");
@@ -9448,7 +9448,7 @@ async function openProductEditModal(productId) {
   const context = extractProductDetailContext(details, product || {});
   const base = context.base || product || {};
   const warnings = Array.isArray(details?.warnings) ? details.warnings.filter(Boolean) : [];
-  if (titleEl) titleEl.textContent = `${tr("Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ С‚РѕРІР°СЂ", "Edit product")}: ${context.name || id}`;
+  if (titleEl) titleEl.textContent = `${tr("????????????? ?????", "Edit product")}: ${context.name || id}`;
   if (hintEl) {
     hintEl.textContent = warnings.length
       ? warnings.join(" | ")
@@ -9554,7 +9554,7 @@ function addProductEditPhotoFromInput() {
   }
   const added = addProductEditPhoto(raw);
   if (!added) {
-    alert(tr("Р¤РѕС‚Рѕ СѓР¶Рµ РґРѕР±Р°РІР»РµРЅРѕ.", "Photo is already added."));
+    alert(tr("Р В¤Р С•РЎвЂљР С• РЎС“Р В¶Р Вµ Р Т‘Р С•Р В±Р В°Р Р†Р В»Р ВµР Р…Р С•.", "Photo is already added."));
     return;
   }
   if (input) input.value = "";
@@ -9619,7 +9619,7 @@ async function uploadProductEditPhotos(options = {}) {
   }
   alert(
     tr(
-      `Р—Р°РіСЂСѓР¶РµРЅРѕ С„РѕС‚Рѕ: ${uploadedUrls.length}. Р¤РѕС‚Рѕ СЃСЂР°Р·Сѓ РґРѕР±Р°РІР»РµРЅС‹ РІ РєР°СЂС‚РѕС‡РєСѓ.`,
+      `Р вЂ”Р В°Р С–РЎР‚РЎС“Р В¶Р ВµР Р…Р С• РЎвЂћР С•РЎвЂљР С•: ${uploadedUrls.length}. Р В¤Р С•РЎвЂљР С• РЎРѓРЎР‚Р В°Р В·РЎС“ Р Т‘Р С•Р В±Р В°Р Р†Р В»Р ВµР Р…РЎвЂ№ Р Р† Р С”Р В°РЎР‚РЎвЂљР С•РЎвЂЎР С”РЎС“.`,
       `Uploaded photos: ${uploadedUrls.length}. Photos were added to product card immediately.`
     )
   );
@@ -9654,7 +9654,7 @@ function renderProductEditPhotos() {
         <img src="${escapeHtml(String(url))}" alt="edit-photo-${idx + 1}" loading="lazy" class="product-detail-photo">
         <span class="product-edit-photo-index">${idx + 1}</span>
         <button class="product-edit-photo-remove" type="button" data-remove-idx="${idx}" aria-label="${escapeHtml(tr("РЈРґР°Р»РёС‚СЊ С„РѕС‚Рѕ", "Remove photo"))}">вњ•</button>
-        ${idx === 0 ? `<span class="product-edit-photo-main">${escapeHtml(tr("Р“Р»Р°РІРЅРѕРµ", "Main"))}</span>` : ""}
+        ${idx === 0 ? `<span class="product-edit-photo-main">${escapeHtml(tr("Р вЂњР В»Р В°Р Р†Р Р…Р С•Р Вµ", "Main"))}</span>` : ""}
       </div>
     `)
     .join("");
@@ -9750,7 +9750,7 @@ async function saveProductEditModal() {
     target_keywords: String(document.getElementById("productEditKeywords")?.value || "").trim(),
   };
   const updated = await withBusy(
-    tr("РЎРѕС…СЂР°РЅСЏРµРј РёР·РјРµРЅРµРЅРёСЏ РєР°СЂС‚РѕС‡РєРё С‚РѕРІР°СЂР°вЂ¦", "Saving product card changes..."),
+    tr("????????? ????????? ???????? ??????", "Saving product card changes..."),
     () => requestJson(`/api/products/${id}`, {
       method: "PATCH",
       headers: authHeaders(),
@@ -9767,7 +9767,7 @@ async function saveProductEditModal() {
   productDetailsCache.delete(id);
   await loadProducts();
   closeProductEditModal();
-  alert(tr("РљР°СЂС‚РѕС‡РєР° С‚РѕРІР°СЂР° РѕР±РЅРѕРІР»РµРЅР°.", "Product card updated."));
+  alert(tr("Р С™Р В°РЎР‚РЎвЂљР С•РЎвЂЎР С”Р В° РЎвЂљР С•Р Р†Р В°РЎР‚Р В° Р С•Р В±Р Р…Р С•Р Р†Р В»Р ВµР Р…Р В°.", "Product card updated."));
 }
 
 async function deleteLocalProduct(productId) {
@@ -9889,7 +9889,7 @@ async function checkCurrentPositions(applyToAll) {
   if (withoutPos > 0) {
     alert(tr(`РџСЂРѕРІРµСЂРєР° Р·Р°РІРµСЂС€РµРЅР°. РўРѕРІР°СЂРѕРІ: ${data.length}. Р‘РµР· РґРѕСЃС‚РѕРІРµСЂРЅРѕР№ РїРѕР·РёС†РёРё: ${withoutPos}.`, `Check completed. Products: ${data.length}. Without reliable rank: ${withoutPos}.`));
   } else {
-    alert(tr(`РџСЂРѕРІРµСЂРєР° Р·Р°РІРµСЂС€РµРЅР°. РўРѕРІР°СЂРѕРІ: ${data.length}.`, `Check completed. Products: ${data.length}.`));
+    alert(tr(`Р СџРЎР‚Р С•Р Р†Р ВµРЎР‚Р С”Р В° Р В·Р В°Р Р†Р ВµРЎР‚РЎв‚¬Р ВµР Р…Р В°. Р СћР С•Р Р†Р В°РЎР‚Р С•Р Р†: ${data.length}.`, `Check completed. Products: ${data.length}.`));
   }
 }
 
@@ -9918,14 +9918,14 @@ async function generateSeo(applyToAll) {
   await loadSeoJobs();
   await loadDashboard();
   if (data.length) renderSeoPreview(data[0]);
-  alert(tr(`РЎРіРµРЅРµСЂРёСЂРѕРІР°РЅРѕ Р·Р°РґР°С‡: ${data.length}`, `Generated jobs: ${data.length}`));
+  alert(tr(`????????????? ?????: ${data.length}`, `Generated jobs: ${data.length}`));
 }
 
 function renderSeoPreview(job) {
-  const title = job.product_name || tr("РўРѕРІР°СЂ", "Product");
+  const title = job.product_name || tr("Р СћР С•Р Р†Р В°РЎР‚", "Product");
   const article = job.product_article || "-";
   document.getElementById("seoPreview").textContent = [
-    `${tr("РўРѕРІР°СЂ", "Product")}: ${title} (${article})`,
+    `${tr("Р СћР С•Р Р†Р В°РЎР‚", "Product")}: ${title} (${article})`,
     "",
     job.generated_description || "",
   ].join("\n");
@@ -9939,10 +9939,10 @@ function renderSeoPreview(job) {
   }
   holder.innerHTML = items
     .map((c, idx) => {
-      const name = escapeHtml(c.name || `${tr("РљРѕРЅРєСѓСЂРµРЅС‚", "Competitor")} ${idx + 1}`);
+      const name = escapeHtml(c.name || `${tr("Р С™Р С•Р Р…Р С”РЎС“РЎР‚Р ВµР Р…РЎвЂљ", "Competitor")} ${idx + 1}`);
       const position = escapeHtml(c.position || idx + 1);
       const kws = Array.isArray(c.keywords) ? c.keywords.slice(0, 4).join(", ") : "";
-      const fallbackQ = encodeURIComponent((Array.isArray(c.keywords) && c.keywords.length ? c.keywords[0] : tr("С‚РѕРІР°СЂ wb", "wb product")));
+      const fallbackQ = encodeURIComponent((Array.isArray(c.keywords) && c.keywords.length ? c.keywords[0] : tr("РЎвЂљР С•Р Р†Р В°РЎР‚ wb", "wb product")));
       const href = c.url ? escapeHtml(c.url) : `https://www.wildberries.ru/catalog/0/search.aspx?search=${fallbackQ}`;
       const isLink = href.startsWith("http://") || href.startsWith("https://");
       return `
@@ -9969,7 +9969,7 @@ async function loadSeoJobs() {
 
   for (const j of currentJobs) {
     const article = j.product_article || "-";
-    const name = j.product_name || tr("РўРѕРІР°СЂ", "Product");
+    const name = j.product_name || tr("Р СћР С•Р Р†Р В°РЎР‚", "Product");
     const rowEl = document.createElement("tr");
     rowEl.innerHTML = `
       <td><input type="checkbox" ${selectedJobs.has(j.id) ? "checked" : ""} onchange="toggleJob(${j.id}, this.checked)"></td>
@@ -10068,7 +10068,7 @@ async function applySeo() {
 async function recheckSelected() {
   if (!selectedJobs.size) return alert(tr("Р’С‹Р±РµСЂРёС‚Рµ SEO Р·Р°РґР°С‡Рё РґР»СЏ recheck", "Select SEO jobs for recheck"));
   const data = await withBusy(
-    tr("Р—Р°РїСѓСЃРєР°РµРј recheck РІС‹Р±СЂР°РЅРЅС‹С… Р·Р°РґР°С‡вЂ¦", "Running recheck for selected jobs..."),
+    tr("Р вЂ”Р В°Р С—РЎС“РЎРѓР С”Р В°Р ВµР С recheck Р Р†РЎвЂ№Р В±РЎР‚Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦ Р В·Р В°Р Т‘Р В°РЎвЂЎРІР‚В¦", "Running recheck for selected jobs..."),
     () => requestJson("/api/seo/recheck", {
       method: "POST",
       headers: authHeaders(),
@@ -10084,7 +10084,7 @@ async function recheckSelected() {
   invalidateModuleCache("seo", "products", "sales");
   await loadSeoJobs();
   await loadDashboard();
-  alert(tr(`РџРµСЂРµРѕС†РµРЅРµРЅРѕ Р·Р°РґР°С‡: ${data.length}`, `Rechecked jobs: ${data.length}`));
+  alert(tr(`Р СџР ВµРЎР‚Р ВµР С•РЎвЂ Р ВµР Р…Р ВµР Р…Р С• Р В·Р В°Р Т‘Р В°РЎвЂЎ: ${data.length}`, `Rechecked jobs: ${data.length}`));
 }
 
 async function recheckDue() {
@@ -10105,7 +10105,7 @@ async function recheckDue() {
   invalidateModuleCache("seo", "products", "sales");
   await loadSeoJobs();
   await loadDashboard();
-  alert(tr(`РџРµСЂРµРѕС†РµРЅРµРЅРѕ РїСЂРѕСЃСЂРѕС‡РµРЅРЅС‹С… Р·Р°РґР°С‡: ${data.length}`, `Rechecked overdue jobs: ${data.length}`));
+  alert(tr(`Р СџР ВµРЎР‚Р ВµР С•РЎвЂ Р ВµР Р…Р ВµР Р…Р С• Р С—РЎР‚Р С•РЎРѓРЎР‚Р С•РЎвЂЎР ВµР Р…Р Р…РЎвЂ№РЎвЂ¦ Р В·Р В°Р Т‘Р В°РЎвЂЎ: ${data.length}`, `Rechecked overdue jobs: ${data.length}`));
 }
 
 async function loadDashboard() {
@@ -10113,11 +10113,11 @@ async function loadDashboard() {
   if (!d) return false;
 
   const stats = [
-    [tr("РўРѕРІР°СЂРѕРІ", "Products"), d.total_products],
-    [tr("SEO Р·Р°РґР°С‡", "SEO jobs"), d.total_jobs],
+    [tr("Р СћР С•Р Р†Р В°РЎР‚Р С•Р Р†", "Products"), d.total_products],
+    [tr("SEO Р В·Р В°Р Т‘Р В°РЎвЂЎ", "SEO jobs"), d.total_jobs],
     [tr("РџСЂРёРјРµРЅРµРЅРѕ", "Applied"), d.applied_jobs],
-    [tr("Р’ СЂР°Р±РѕС‚Рµ", "In progress"), d.in_progress_jobs],
-    [tr("РўРѕРї-5", "Top-5"), d.top5_products],
+    [tr("Р вЂ™ РЎР‚Р В°Р В±Р С•РЎвЂљР Вµ", "In progress"), d.in_progress_jobs],
+    [tr("Р СћР С•Р С—-5", "Top-5"), d.top5_products],
   ];
 
   const maxVal = Math.max(...stats.map((x) => x[1]), 1);
@@ -10288,21 +10288,21 @@ function renderSalesTotals() {
   }
   totals.gross_profit = Number(totals.revenue || 0) - Number(totals.ad_spend || 0) - Number(totals.penalties || 0);
   host.innerHTML = `
-    <article class="sales-kpi"><span>${tr("Р—Р°РєР°Р·С‹", "Orders")}</span><strong>${formatInt(totals.orders)}</strong></article>
+    <article class="sales-kpi"><span>${tr("Р вЂ”Р В°Р С”Р В°Р В·РЎвЂ№", "Orders")}</span><strong>${formatInt(totals.orders)}</strong></article>
     <article class="sales-kpi"><span>${tr("РЁС‚СѓРєРё", "Units")}</span><strong>${formatInt(totals.units)}</strong></article>
-    <article class="sales-kpi"><span>${tr("Р’С‹РєСѓРїС‹", "Buyouts")}</span><strong>${formatInt(totals.buyouts)}</strong></article>
-    <article class="sales-kpi"><span>${tr("Р’С‹СЂСѓС‡РєР°", "Revenue")}</span><strong>${formatMoney(totals.revenue)}</strong></article>
-    <article class="sales-kpi"><span>${tr("РћС‚РєР°Р·С‹", "Returns")}</span><strong>${formatInt(totals.returns)}</strong></article>
-    <article class="sales-kpi"><span>${tr("Р РµРєР»Р°РјР°", "Ads spend")}</span><strong>${formatMoney(totals.ad_spend)}</strong></article>
+    <article class="sales-kpi"><span>${tr("Р вЂ™РЎвЂ№Р С”РЎС“Р С—РЎвЂ№", "Buyouts")}</span><strong>${formatInt(totals.buyouts)}</strong></article>
+    <article class="sales-kpi"><span>${tr("Р вЂ™РЎвЂ№РЎР‚РЎС“РЎвЂЎР С”Р В°", "Revenue")}</span><strong>${formatMoney(totals.revenue)}</strong></article>
+    <article class="sales-kpi"><span>${tr("Р С›РЎвЂљР С”Р В°Р В·РЎвЂ№", "Returns")}</span><strong>${formatInt(totals.returns)}</strong></article>
+    <article class="sales-kpi"><span>${tr("Р В Р ВµР С”Р В»Р В°Р СР В°", "Ads spend")}</span><strong>${formatMoney(totals.ad_spend)}</strong></article>
     <article class="sales-kpi"><span>${tr("Р’Р°Р»РѕРІР°СЏ РїСЂРёР±С‹Р»СЊ", "Gross Profit")}</span><strong>${formatMoney(totals.gross_profit)}</strong></article>
   `;
   if (extraHost) {
     extraHost.innerHTML = `
-      <article class="sales-kpi"><span>${tr("РЎСѓРјРјР° Р·Р°РєР°Р·РѕРІ", "Orders amount")}</span><strong>${formatMoney(totals.order_amount)}</strong></article>
-      <article class="sales-kpi"><span>${tr("РЎСѓРјРјР° РІС‹РєСѓРїРѕРІ", "Buyouts amount")}</span><strong>${formatMoney(totals.buyout_amount)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Р РЋРЎС“Р СР СР В° Р В·Р В°Р С”Р В°Р В·Р С•Р Р†", "Orders amount")}</span><strong>${formatMoney(totals.order_amount)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Р РЋРЎС“Р СР СР В° Р Р†РЎвЂ№Р С”РЎС“Р С—Р С•Р Р†", "Buyouts amount")}</span><strong>${formatMoney(totals.buyout_amount)}</strong></article>
       <article class="sales-kpi"><span>${tr("РџСЂРёС…РѕРґ", "Income")}</span><strong>${formatMoney(totals.income)}</strong></article>
-      <article class="sales-kpi"><span>${tr("Р Р°СЃС…РѕРґ", "Expense")}</span><strong>${formatMoney(totals.expense)}</strong></article>
-      <article class="sales-kpi"><span>${tr("РР·Рј. Р±Р°Р»Р°РЅСЃР°", "Net change")}</span><strong>${formatMoney(totals.net)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Р В Р В°РЎРѓРЎвЂ¦Р С•Р Т‘", "Expense")}</span><strong>${formatMoney(totals.expense)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Р ВР В·Р С. Р В±Р В°Р В»Р В°Р Р…РЎРѓР В°", "Net change")}</span><strong>${formatMoney(totals.net)}</strong></article>
       <article class="sales-kpi"><span>${tr("РЁС‚СЂР°С„С‹", "Penalties")}</span><strong>${formatMoney(totals.penalties)}</strong></article>
       <article class="sales-kpi"><span>${tr("РљРѕРјРёСЃСЃРёСЏ", "Commission")}</span><strong>${formatMoney(totals.commission)}</strong></article>
       <article class="sales-kpi"><span>${tr("Р›РѕРіРёСЃС‚РёРєР°", "Logistics")}</span><strong>${formatMoney(totals.logistics)}</strong></article>
@@ -10575,7 +10575,7 @@ function renderSalesChart(points) {
   if (showWb) {
     series.push({
       key: "wb",
-      label: `WB вЂў ${currentLabel}`,
+      label: `WB РІР‚Сћ ${currentLabel}`,
       color: palette.wb.current,
       values: resolveMarketplaceSeries(chartPoints, currentMaps, "wb"),
     });
@@ -10583,7 +10583,7 @@ function renderSalesChart(points) {
   if (showOzon) {
     series.push({
       key: "ozon",
-      label: `Ozon вЂў ${currentLabel}`,
+      label: `Ozon РІР‚Сћ ${currentLabel}`,
       color: palette.ozon.current,
       values: resolveMarketplaceSeries(chartPoints, currentMaps, "ozon"),
     });
@@ -10597,7 +10597,7 @@ function renderSalesChart(points) {
     if (showWb) {
       series.push({
         key: "wb_prev",
-        label: `WB вЂў ${compareLabel}`,
+        label: `WB РІР‚Сћ ${compareLabel}`,
         color: palette.wb.previous,
         values: alignCompareValues("wb"),
       });
@@ -10605,7 +10605,7 @@ function renderSalesChart(points) {
     if (showOzon) {
       series.push({
         key: "ozon_prev",
-        label: `Ozon вЂў ${compareLabel}`,
+        label: `Ozon РІР‚Сћ ${compareLabel}`,
         color: palette.ozon.previous,
         values: alignCompareValues("ozon"),
       });
@@ -10671,16 +10671,16 @@ function renderSalesChart(points) {
   }).join("");
   const metricLabels = {
     units: tr("РЁС‚СѓРєРё", "Units"),
-    orders: tr("Р—Р°РєР°Р·С‹", "Orders"),
-    buyouts: tr("Р’С‹РєСѓРїС‹", "Buyouts"),
-    order_amount: tr("РЎСѓРјРјР° Р·Р°РєР°Р·РѕРІ", "Orders amount"),
-    buyout_amount: tr("РЎСѓРјРјР° РІС‹РєСѓРїРѕРІ", "Buyouts amount"),
-    revenue: tr("Р’С‹СЂСѓС‡РєР°", "Revenue"),
+    orders: tr("Р вЂ”Р В°Р С”Р В°Р В·РЎвЂ№", "Orders"),
+    buyouts: tr("Р вЂ™РЎвЂ№Р С”РЎС“Р С—РЎвЂ№", "Buyouts"),
+    order_amount: tr("Р РЋРЎС“Р СР СР В° Р В·Р В°Р С”Р В°Р В·Р С•Р Р†", "Orders amount"),
+    buyout_amount: tr("Р РЋРЎС“Р СР СР В° Р Р†РЎвЂ№Р С”РЎС“Р С—Р С•Р Р†", "Buyouts amount"),
+    revenue: tr("Р вЂ™РЎвЂ№РЎР‚РЎС“РЎвЂЎР С”Р В°", "Revenue"),
     income: tr("РџСЂРёС…РѕРґ", "Income"),
-    expense: tr("Р Р°СЃС…РѕРґ", "Expense"),
+    expense: tr("Р В Р В°РЎРѓРЎвЂ¦Р С•Р Т‘", "Expense"),
     net: tr("РР·РјРµРЅРµРЅРёРµ Р±Р°Р»Р°РЅСЃР°", "Net change"),
-    returns: tr("РћС‚РєР°Р·С‹", "Returns"),
-    ad_spend: tr("Р РµРєР»Р°РјР°", "Ads Spend"),
+    returns: tr("Р С›РЎвЂљР С”Р В°Р В·РЎвЂ№", "Returns"),
+    ad_spend: tr("Р В Р ВµР С”Р В»Р В°Р СР В°", "Ads Spend"),
     penalties: tr("РЁС‚СЂР°С„С‹", "Penalties"),
     commission: tr("РљРѕРјРёСЃСЃРёСЏ", "Commission"),
     logistics: tr("Р›РѕРіРёСЃС‚РёРєР°", "Logistics"),
@@ -10712,7 +10712,7 @@ function renderSalesChart(points) {
       const total = item.values.reduce((acc, val) => acc + Number(val || 0), 0);
       return `<span class="trend-series-item" style="--series-color:${item.color}">${escapeHtml(item.label)} <b>${escapeHtml(formatValue(total))}</b></span>`;
     })
-    .join(" вЂў ");
+    .join(" РІР‚Сћ ");
   const topSeries = series[0] || { values: [] };
   const topValues = Array.isArray(topSeries.values) ? topSeries.values : [];
   const peak = topValues.length ? Math.max(...topValues) : 0;
@@ -10928,20 +10928,20 @@ function isSalesSourceWarningFatal(source, warnings = []) {
       if (warning.includes("РєР°РјРїР°РЅРёР№ РјРЅРѕРіРѕ")) return false;
       if (warning.includes("РїРѕРєР°Р·Р°РЅС‹ РєСЌС€РёСЂРѕРІР°РЅРЅС‹Рµ РґР°РЅРЅС‹Рµ")) return false;
       return (
-        warning.includes("РєР»СЋС‡") ||
+        warning.includes("Р С”Р В»РЎР‹РЎвЂЎ") ||
         warning.includes("sales api") ||
         warning.includes("429") ||
         warning.includes("error") ||
-        warning.includes("РЅРµРґРѕСЃС‚СѓРї")
+        warning.includes("Р Р…Р ВµР Т‘Р С•РЎРѓРЎвЂљРЎС“Р С—")
       );
     }
     if (!warning.includes("ozon")) return false;
     return (
-      warning.includes("РєР»СЋС‡") ||
+      warning.includes("Р С”Р В»РЎР‹РЎвЂЎ") ||
       warning.includes("client_id") ||
       warning.includes("analytics api") ||
       warning.includes("error") ||
-      warning.includes("РЅРµРґРѕСЃС‚СѓРї")
+      warning.includes("Р Р…Р ВµР Т‘Р С•РЎРѓРЎвЂљРЎС“Р С—")
     );
   });
 }
@@ -11030,10 +11030,10 @@ async function loadSalesStats(retryAttempt = 0, forceRefresh = false) {
       compare_from = toYmd(prevFrom);
       compare_to = toYmd(prevTo);
       salesCurrentLabel = diffDays === 0
-        ? tr("РЎРµРіРѕРґРЅСЏ", "Today")
+        ? tr("Р РЋР ВµР С–Р С•Р Т‘Р Р…РЎРЏ", "Today")
         : tr("РўРµРєСѓС‰РёР№ РїРµСЂРёРѕРґ", "Current period");
       salesCompareLabel = diffDays === 0
-        ? tr("Р’С‡РµСЂР°", "Yesterday")
+        ? tr("Р вЂ™РЎвЂЎР ВµРЎР‚Р В°", "Yesterday")
         : tr("РџСЂРµРґС‹РґСѓС‰РёР№ РїРµСЂРёРѕРґ", "Previous period");
     }
   }
@@ -11068,7 +11068,7 @@ async function loadSalesStats(retryAttempt = 0, forceRefresh = false) {
     && (Date.now() - Number(salesLastLoadedAt || 0)) < 14000
   ) {
     if (meta) meta.textContent = tr(
-      "РџРѕРєР°Р·Р°РЅС‹ Р°РєС‚СѓР°Р»СЊРЅС‹Рµ РґР°РЅРЅС‹Рµ Р±РµР· РїРѕРІС‚РѕСЂРЅРѕРіРѕ Р·Р°РїСЂРѕСЃР° Рє API.",
+      "Р СџР С•Р С”Р В°Р В·Р В°Р Р…РЎвЂ№ Р В°Р С”РЎвЂљРЎС“Р В°Р В»РЎРЉР Р…РЎвЂ№Р Вµ Р Т‘Р В°Р Р…Р Р…РЎвЂ№Р Вµ Р В±Р ВµР В· Р С—Р С•Р Р†РЎвЂљР С•РЎР‚Р Р…Р С•Р С–Р С• Р В·Р В°Р С—РЎР‚Р С•РЎРѓР В° Р С” API.",
       "Showing up-to-date data without another API request."
     );
     salesLoadState = "success";
@@ -11377,9 +11377,9 @@ function renderProfileData(data) {
     const planCode = String(data.plan_code || "-").trim() || "-";
     const monthlyPrice = formatMoney(Number(data.monthly_price || 0));
     planSummaryTable.innerHTML = `
-      <tr><td>${escapeHtml(tr("РџР»Р°РЅ", "Plan"))}</td><td><b>${escapeHtml(planCode)}</b></td></tr>
-      <tr><td>${escapeHtml(tr("РЎС‚Р°С‚СѓСЃ", "Status"))}</td><td>${escapeHtml(planStatus)}</td></tr>
-      <tr><td>${escapeHtml(tr("Р¦РµРЅР°/РјРµСЃ.", "Monthly price"))}</td><td>${escapeHtml(monthlyPrice)}</td></tr>
+      <tr><td>${escapeHtml(tr("Р СџР В»Р В°Р Р…", "Plan"))}</td><td><b>${escapeHtml(planCode)}</b></td></tr>
+      <tr><td>${escapeHtml(tr("Р РЋРЎвЂљР В°РЎвЂљРЎС“РЎРѓ", "Status"))}</td><td>${escapeHtml(planStatus)}</td></tr>
+      <tr><td>${escapeHtml(tr("Р В¦Р ВµР Р…Р В°/Р СР ВµРЎРѓ.", "Monthly price"))}</td><td>${escapeHtml(monthlyPrice)}</td></tr>
       <tr><td>${escapeHtml(tr("РџСЂРѕРґР»РµРЅРёРµ", "Renew date"))}</td><td>${escapeHtml(renewAt || "-")}</td></tr>
     `;
   }
@@ -11411,13 +11411,13 @@ function renderProfileData(data) {
   const companySummary = document.getElementById("profileCompanySummary");
   if (companySummary) {
     const parts = [String(data.company_name || "").trim(), String(data.full_name || "").trim()].filter(Boolean);
-    companySummary.textContent = parts.join(" вЂў ") || "-";
+    companySummary.textContent = parts.join(" РІР‚Сћ ") || "-";
   }
   const planSummaryShort = document.getElementById("profilePlanSummaryShort");
   if (planSummaryShort) {
     const code = String(data.plan_code || "-").trim() || "-";
     const status = String(data.plan_status || "-").trim() || "-";
-    planSummaryShort.textContent = `${code} вЂў ${status}`;
+    planSummaryShort.textContent = `${code} РІР‚Сћ ${status}`;
   }
   const keysSummaryShort = document.getElementById("profileKeysSummaryShort");
   if (keysSummaryShort) {
@@ -11428,8 +11428,8 @@ function renderProfileData(data) {
   if (aiSummaryShort) {
     const effective = profileAiState?.effective || null;
     aiSummaryShort.textContent = effective
-      ? `${effective.provider || "-"} вЂў ${effective.model || "-"}`
-      : tr("РќРµ РІС‹Р±СЂР°РЅ", "Not selected");
+      ? `${effective.provider || "-"} РІР‚Сћ ${effective.model || "-"}`
+      : tr("Р СњР Вµ Р Р†РЎвЂ№Р В±РЎР‚Р В°Р Р…", "Not selected");
   }
   const teamSummaryShort = document.getElementById("profileTeamSummaryShort");
   if (teamSummaryShort) {
@@ -11453,7 +11453,7 @@ function renderProfileAiServiceOptions(forcedMode = "") {
   const prev = String(serviceSelect.value || "").trim();
   serviceSelect.innerHTML = activeRows.length
     ? activeRows.map((row) => `<option value="${Number(row.id || 0)}">#${Number(row.id || 0)} ${escapeHtml(String(row.name || "-"))} (${escapeHtml(String(row.provider || "-"))})</option>`).join("")
-    : `<option value="">${tr("РЎРµСЂРІРёСЃРѕРІ РЅРµС‚", "No services")}</option>`;
+    : `<option value="">${tr("???????? ???", "No services")}</option>`;
   if (prev && [...serviceSelect.options].some((x) => x.value === prev)) {
     serviceSelect.value = prev;
     return;
@@ -11483,7 +11483,7 @@ function renderProfileAiState(data) {
   effectiveBox.textContent = `${tr("Р­С„С„РµРєС‚РёРІРЅС‹Р№ AI", "Effective AI")}: ${effective.mode || "-"} | ${effective.provider || "-"} | ${effective.model || "-"} | ${effective.service_name || "-"}`;
   const aiSummaryShort = document.getElementById("profileAiSummaryShort");
   if (aiSummaryShort) {
-    aiSummaryShort.textContent = `${effective.provider || "-"} вЂў ${effective.model || "-"}`;
+    aiSummaryShort.textContent = `${effective.provider || "-"} РІР‚Сћ ${effective.model || "-"}`;
   }
 
   const merged = [...globalRows, ...userRows];
@@ -11522,7 +11522,7 @@ function renderProfileAiState(data) {
       const addBtn = document.querySelector("button[onclick='addProfileAiService()']");
       if (addBtn) {
         addBtn.dataset.editId = String(id);
-        addBtn.textContent = tr("РЎРѕС…СЂР°РЅРёС‚СЊ РёР·РјРµРЅРµРЅРёСЏ", "Save changes");
+        addBtn.textContent = tr("????????? ?????????", "Save changes");
       }
       document.getElementById("profileAiApiKey")?.focus();
     });
@@ -11557,18 +11557,18 @@ function applyTeamModalHeader(mode, row = null) {
     if (metaEl) metaEl.textContent = tr("Р—Р°РїРѕР»РЅРёС‚Рµ РґР°РЅРЅС‹Рµ Рё РІС‹РґР°Р№С‚Рµ РґРѕСЃС‚СѓРїС‹ Рє РјРѕРґСѓР»СЏРј.", "Fill details and grant module access.");
     if (saveBtn) saveBtn.textContent = tr("Р”РѕР±Р°РІРёС‚СЊ", "Add");
     if (deleteBtn) deleteBtn.classList.add("hidden");
-    if (passLabelEl) passLabelEl.textContent = tr("РџР°СЂРѕР»СЊ", "Password");
+    if (passLabelEl) passLabelEl.textContent = tr("Р СџР В°РЎР‚Р С•Р В»РЎРЉ", "Password");
     if (passEl) passEl.placeholder = tr("РџР°СЂРѕР»СЊ СЃРѕС‚СЂСѓРґРЅРёРєР° (>=8)", "Employee password (>=8)");
     return;
   }
-  if (saveBtn) saveBtn.textContent = tr("РЎРѕС…СЂР°РЅРёС‚СЊ", "Save");
-  if (passLabelEl) passLabelEl.textContent = tr("РќРѕРІС‹Р№ РїР°СЂРѕР»СЊ", "New password");
-  if (passEl) passEl.placeholder = tr("РќРѕРІС‹Р№ РїР°СЂРѕР»СЊ (РѕРїС†.)", "New password (optional)");
+  if (saveBtn) saveBtn.textContent = tr("?????????", "Save");
+  if (passLabelEl) passLabelEl.textContent = tr("Р СњР С•Р Р†РЎвЂ№Р в„– Р С—Р В°РЎР‚Р С•Р В»РЎРЉ", "New password");
+  if (passEl) passEl.placeholder = tr("Р СњР С•Р Р†РЎвЂ№Р в„– Р С—Р В°РЎР‚Р С•Р В»РЎРЉ (Р С•Р С—РЎвЂ .)", "New password (optional)");
   if (!row) return;
   if (titleEl) {
     titleEl.textContent = row.is_owner
       ? tr("Р’Р»Р°РґРµР»РµС† РєР°Р±РёРЅРµС‚Р°", "Workspace owner")
-      : tr("РЎРѕС‚СЂСѓРґРЅРёРє РєР°Р±РёРЅРµС‚Р°", "Workspace employee");
+      : tr("????????? ????????", "Workspace employee");
   }
   const isSelfEmployee = Boolean(
     me
@@ -11578,11 +11578,11 @@ function applyTeamModalHeader(mode, row = null) {
   );
   if (metaEl) {
     const metaText = row.is_owner
-      ? tr("РџСЂР°РІР° РІР»Р°РґРµР»СЊС†Р°", "Owner permissions")
+      ? tr("Р СџРЎР‚Р В°Р Р†Р В° Р Р†Р В»Р В°Р Т‘Р ВµР В»РЎРЉРЎвЂ Р В°", "Owner permissions")
       : (isSelfEmployee
         ? tr("РњРѕР¶РЅРѕ РјРµРЅСЏС‚СЊ С‚РѕР»СЊРєРѕ СЃРІРѕРё Р¤РРћ, С‚РµР»РµС„РѕРЅ, РЅРёРє Рё С„РѕС‚Рѕ.", "You can edit only your own name, phone, nickname and avatar.")
         : tr("РњРѕР¶РЅРѕ РјРµРЅСЏС‚СЊ РґРѕСЃС‚СѓРїС‹ Рё РґР°РЅРЅС‹Рµ", "You can edit access and profile fields"));
-    metaEl.textContent = `#${Number(row.id || 0)} вЂў ${metaText}`;
+    metaEl.textContent = `#${Number(row.id || 0)} РІР‚Сћ ${metaText}`;
   }
   if (deleteBtn) deleteBtn.classList.toggle("hidden", Boolean(row.is_owner || isSelfEmployee));
 }
@@ -11596,7 +11596,7 @@ function findTeamMemberById(memberId) {
 function summarizeTeamAccess(row) {
   if (row?.is_owner) {
     return {
-      title: tr("РџРѕР»РЅС‹Р№ РґРѕСЃС‚СѓРї", "Full access"),
+      title: tr("Р СџР С•Р В»Р Р…РЎвЂ№Р в„– Р Т‘Р С•РЎРѓРЎвЂљРЎС“Р С—", "Full access"),
       details: tr("Р’СЃРµ РјРѕРґСѓР»Рё РґРѕСЃС‚СѓРїРЅС‹ РІР»Р°РґРµР»СЊС†Сѓ РєР°Р±РёРЅРµС‚Р°.", "All modules are available for workspace owner."),
     };
   }
@@ -11605,7 +11605,7 @@ function summarizeTeamAccess(row) {
     : [];
   if (!accessCodes.length) {
     return {
-      title: tr("Р”РѕСЃС‚СѓРї РЅРµ РІС‹РґР°РЅ", "No access"),
+      title: tr("Р вЂќР С•РЎРѓРЎвЂљРЎС“Р С— Р Р…Р Вµ Р Р†РЎвЂ№Р Т‘Р В°Р Р…", "No access"),
       details: tr("РњРѕРґСѓР»Рё РЅРµ РІС‹Р±СЂР°РЅС‹.", "No modules selected."),
     };
   }
@@ -11613,10 +11613,10 @@ function summarizeTeamAccess(row) {
   const shortList = labels.slice(0, 3).join(", ");
   const left = labels.length - 3;
   return {
-    title: shortList || tr("Р”РѕСЃС‚СѓРї РЅР°Р·РЅР°С‡РµРЅ", "Access granted"),
+    title: shortList || tr("Р вЂќР С•РЎРѓРЎвЂљРЎС“Р С— Р Р…Р В°Р В·Р Р…Р В°РЎвЂЎР ВµР Р…", "Access granted"),
     details: left > 0
-      ? tr(`Р РµС‰Рµ РјРѕРґСѓР»РµР№: ${left}`, `And ${left} more modules`)
-      : tr(`РњРѕРґСѓР»РµР№: ${labels.length}`, `Modules: ${labels.length}`),
+      ? tr(`Р В Р ВµРЎвЂ°Р Вµ Р СР С•Р Т‘РЎС“Р В»Р ВµР в„–: ${left}`, `And ${left} more modules`)
+      : tr(`Р СљР С•Р Т‘РЎС“Р В»Р ВµР в„–: ${labels.length}`, `Modules: ${labels.length}`),
   };
 }
 
@@ -11626,7 +11626,7 @@ function renderTeamMembers() {
   host.innerHTML = "";
   if (!Array.isArray(teamMembers) || !teamMembers.length) {
     closeTeamMemberEditor();
-    host.innerHTML = `<div class="hint">${escapeHtml(tr("РЎРѕС‚СЂСѓРґРЅРёРєРѕРІ РїРѕРєР° РЅРµС‚.", "No employees yet."))}</div>`;
+    host.innerHTML = `<div class="hint">${escapeHtml(tr("??????????? ???? ???.", "No employees yet."))}</div>`;
     return;
   }
   for (const row of teamMembers) {
@@ -11634,25 +11634,25 @@ function renderTeamMembers() {
     const card = document.createElement("article");
     card.className = "team-member-row";
     const roleLabel = row.is_owner
-      ? tr("Р’Р»Р°РґРµР»РµС†", "Owner")
-      : tr("РЎРѕС‚СЂСѓРґРЅРёРє", "Employee");
+      ? tr("Р вЂ™Р В»Р В°Р Т‘Р ВµР В»Р ВµРЎвЂ ", "Owner")
+      : tr("?????????", "Employee");
     const roleMeta = row.is_owner
       ? ""
-      : (row.has_password ? tr("РїР°СЂРѕР»СЊ Р·Р°РґР°РЅ", "password set") : tr("РїР°СЂРѕР»СЊ РЅРµ Р·Р°РґР°РЅ", "password missing"));
-    const editLabel = tr("Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ СЃРѕС‚СЂСѓРґРЅРёРєР°", "Edit employee");
+      : (row.has_password ? tr("Р С—Р В°РЎР‚Р С•Р В»РЎРЉ Р В·Р В°Р Т‘Р В°Р Р…", "password set") : tr("Р С—Р В°РЎР‚Р С•Р В»РЎРЉ Р Р…Р Вµ Р В·Р В°Р Т‘Р В°Р Р…", "password missing"));
+    const editLabel = tr("????????????? ??????????", "Edit employee");
     card.innerHTML = `
       <div class="team-member-row-main">
         <div class="team-member-identity">
           <strong>${escapeHtml(String(row.full_name || row.nickname || row.email || "-"))}</strong>
           <div class="hint">${escapeHtml(String(row.email || "-"))}</div>
         </div>
-        <div class="team-member-role">${escapeHtml(roleMeta ? `${roleLabel} вЂў ${roleMeta}` : roleLabel)}</div>
+        <div class="team-member-role">${escapeHtml(roleMeta ? `${roleLabel} РІР‚Сћ ${roleMeta}` : roleLabel)}</div>
         <div class="team-member-access">
           <strong>${escapeHtml(access.title)}</strong>
           <div class="hint">${escapeHtml(access.details)}</div>
         </div>
       </div>
-      <button class="team-row-edit" type="button" title="${escapeHtml(editLabel)}" aria-label="${escapeHtml(editLabel)}" data-team-edit="${Number(row.id || 0)}">вњЋ</button>
+      <button class="team-row-edit" type="button" title="${escapeHtml(editLabel)}" aria-label="${escapeHtml(editLabel)}" data-team-edit="${Number(row.id || 0)}">РІСљР‹</button>
     `;
     card.querySelector(`[data-team-edit="${Number(row.id || 0)}"]`)?.addEventListener("click", () => openTeamMemberEditor(row.id));
     card.addEventListener("dblclick", () => openTeamMemberEditor(row.id));
@@ -11837,7 +11837,7 @@ async function saveProfileAiSelection() {
   });
   if (!data) return;
   renderProfileAiState(data);
-  alert(tr("AI РІС‹Р±РѕСЂ СЃРѕС…СЂР°РЅРµРЅ", "AI selection saved"));
+  alert(tr("AI Р Р†РЎвЂ№Р В±Р С•РЎР‚ РЎРѓР С•РЎвЂ¦РЎР‚Р В°Р Р…Р ВµР Р…", "AI selection saved"));
 }
 
 async function addProfileAiService() {
@@ -12121,7 +12121,7 @@ async function changeProfilePassword() {
   invalidateModuleCache("profile");
   setInputValue("profileCurrentPassword", "");
   setInputValue("profileNewPassword", "");
-  alert(data.message || tr("РџР°СЂРѕР»СЊ РѕР±РЅРѕРІР»РµРЅ", "Password updated"));
+  alert(data.message || tr("Р СџР В°РЎР‚Р С•Р В»РЎРЉ Р С•Р В±Р Р…Р С•Р Р†Р В»Р ВµР Р…", "Password updated"));
 }
 
 function getProfileKeyInput(marketplace) {
@@ -12200,7 +12200,7 @@ async function loadHelpDocs() {
       downloadsCurrent.innerHTML = `<div class="help-empty">${
         lang === "en"
           ? "Downloads are unavailable for your access."
-          : "Р Р°Р·РґРµР» Р·Р°РіСЂСѓР·РѕРє РЅРµРґРѕСЃС‚СѓРїРµРЅ РґР»СЏ РІР°С€РµРіРѕ РґРѕСЃС‚СѓРїР°."
+          : "Р В Р В°Р В·Р Т‘Р ВµР В» Р В·Р В°Р С–РЎР‚РЎС“Р В·Р С•Р С” Р Р…Р ВµР Т‘Р С•РЎРѓРЎвЂљРЎС“Р С—Р ВµР Р… Р Т‘Р В»РЎРЏ Р Р†Р В°РЎв‚¬Р ВµР С–Р С• Р Т‘Р С•РЎРѓРЎвЂљРЎС“Р С—Р В°."
       }</div>`;
     }
     if (downloadsList) downloadsList.innerHTML = "";
@@ -12240,7 +12240,7 @@ async function loadHelpDocs() {
   const view = document.getElementById("helpDocsView");
   if (!view) return;
   if (!rows.length) {
-    view.innerHTML = `<div class="help-empty">${lang === "en" ? "No help data." : "РЎРїСЂР°РІРєР° РЅРµ РЅР°Р№РґРµРЅР°."}</div>`;
+    view.innerHTML = `<div class="help-empty">${lang === "en" ? "No help data." : "Р РЋР С—РЎР‚Р В°Р Р†Р С”Р В° Р Р…Р Вµ Р Р…Р В°Р в„–Р Т‘Р ВµР Р…Р В°."}</div>`;
     return;
   }
   const unique = new Map();
@@ -12275,7 +12275,7 @@ async function loadHelpDocs() {
           </div>
           <div class="help-card-actions">
             <button class="btn-secondary help-open-btn" type="button" onclick="filterHelpModule('${escapeHtml(code)}')">
-              ${lang === "en" ? "Show module help" : "РџРѕРєР°Р·Р°С‚СЊ СЃРїСЂР°РІРєСѓ РјРѕРґСѓР»СЏ"}
+              ${lang === "en" ? "Show module help" : "Р СџР С•Р С”Р В°Р В·Р В°РЎвЂљРЎРЉ РЎРѓР С—РЎР‚Р В°Р Р†Р С”РЎС“ Р СР С•Р Т‘РЎС“Р В»РЎРЏ"}
             </button>
             <button class="help-filter-btn" type="button" onclick="filterHelpModule('${escapeHtml(code)}')">
               ${lang === "en" ? "Highlight module" : "РџРѕРґСЃРІРµС‚РёС‚СЊ РјРѕРґСѓР»СЊ"}
@@ -12286,7 +12286,7 @@ async function loadHelpDocs() {
         <div class="help-checklist">
           <strong>${lang === "en" ? "Quick checklist" : "Р‘С‹СЃС‚СЂС‹Р№ С‡РµРє-Р»РёСЃС‚"}</strong>
           <ol>
-            <li>${lang === "en" ? "Open the module from the left menu." : "РћС‚РєСЂРѕР№С‚Рµ РјРѕРґСѓР»СЊ С‡РµСЂРµР· Р»РµРІРѕРµ РјРµРЅСЋ."}</li>
+            <li>${lang === "en" ? "Open the module from the left menu." : "Р С›РЎвЂљР С”РЎР‚Р С•Р в„–РЎвЂљР Вµ Р СР С•Р Т‘РЎС“Р В»РЎРЉ РЎвЂЎР ВµРЎР‚Р ВµР В· Р В»Р ВµР Р†Р С•Р Вµ Р СР ВµР Р…РЎР‹."}</li>
             <li>${lang === "en" ? "Fill required filters/fields before action." : "Р—Р°РїРѕР»РЅРёС‚Рµ РѕР±СЏР·Р°С‚РµР»СЊРЅС‹Рµ РїРѕР»СЏ/С„РёР»СЊС‚СЂС‹ РїРµСЂРµРґ Р·Р°РїСѓСЃРєРѕРј."}</li>
             <li>${lang === "en" ? "Run action and watch the status bar." : "Р—Р°РїСѓСЃС‚РёС‚Рµ РґРµР№СЃС‚РІРёРµ Рё РєРѕРЅС‚СЂРѕР»РёСЂСѓР№С‚Рµ СЃС‚Р°С‚СѓСЃ-Р±Р°СЂ."}</li>
             <li>${lang === "en" ? "Check resulting table and totals." : "РџСЂРѕРІРµСЂСЊС‚Рµ РёС‚РѕРіРѕРІСѓСЋ С‚Р°Р±Р»РёС†Сѓ Рё СЃРІРѕРґРЅС‹Рµ РїРѕРєР°Р·Р°С‚РµР»Рё."}</li>
@@ -12307,7 +12307,7 @@ async function loadHelpDocs() {
       </div>
       <div class="help-chip-list">${moduleChips}</div>
     </div>
-    <div class="help-card-list">${cards || `<div class="help-empty">${lang === "en" ? "Module help not found." : "РЎРїСЂР°РІРєР° РїРѕ РјРѕРґСѓР»СЋ РЅРµ РЅР°Р№РґРµРЅР°."}</div>`}</div>
+    <div class="help-card-list">${cards || `<div class="help-empty">${lang === "en" ? "Module help not found." : "Р РЋР С—РЎР‚Р В°Р Р†Р С”Р В° Р С—Р С• Р СР С•Р Т‘РЎС“Р В»РЎР‹ Р Р…Р Вµ Р Р…Р В°Р в„–Р Т‘Р ВµР Р…Р В°."}</div>`}</div>
   `;
   renderHelpAssistantModuleOptions();
   markModuleLoaded("help");
@@ -12349,11 +12349,11 @@ async function loadHelpReleases() {
       <header class="help-card-head">
         <div>
           <h4>${lang === "en" ? "Current version" : "РўРµРєСѓС‰Р°СЏ РІРµСЂСЃРёСЏ"} ${currentVersion}</h4>
-          <small>${releaseDate}${currentCode > 0 ? ` вЂў code ${currentCode}` : ""}</small>
+          <small>${releaseDate}${currentCode > 0 ? ` РІР‚Сћ code ${currentCode}` : ""}</small>
         </div>
         <div class="help-card-actions">
           <a class="btn-secondary help-open-btn" href="${escapeHtml(downloadUrl)}" target="_blank" rel="noopener noreferrer">
-            ${lang === "en" ? "Download Android APK" : "РЎРєР°С‡Р°С‚СЊ Android APK"}
+            ${lang === "en" ? "Download Android APK" : "Р РЋР С”Р В°РЎвЂЎР В°РЎвЂљРЎРЉ Android APK"}
           </a>
         </div>
       </header>
@@ -12382,7 +12382,7 @@ async function loadHelpReleases() {
         <header class="help-card-head">
           <div>
             <h4>${version}</h4>
-            <small>${date}${versionCode > 0 ? ` вЂў code ${versionCode}` : ""}</small>
+            <small>${date}${versionCode > 0 ? ` РІР‚Сћ code ${versionCode}` : ""}</small>
           </div>
         </header>
         <div class="help-card-body">
@@ -12419,11 +12419,11 @@ function formatHelpContent(text, lang = "ru") {
     const first = firstRaw.toLowerCase();
 
     const numbered = lines.every((line) => /^\d+[).]\s+/.test(line));
-    const bullets = lines.every((line) => /^[-вЂ“вЂ”]\s+/.test(line));
-    const headerAndBullets = lines.length > 1 && /:\s*$/.test(firstRaw) && lines.slice(1).every((line) => /^[-вЂ“вЂ”]\s+/.test(line));
+    const bullets = lines.every((line) => /^[-РІР‚вЂњРІР‚вЂќ]\s+/.test(line));
+    const headerAndBullets = lines.length > 1 && /:\s*$/.test(firstRaw) && lines.slice(1).every((line) => /^[-РІР‚вЂњРІР‚вЂќ]\s+/.test(line));
 
     if (headerAndBullets) {
-      const items = lines.slice(1).map((line) => `<li>${escapeHtml(line.replace(/^[-вЂ“вЂ”]\s+/, ""))}</li>`).join("");
+      const items = lines.slice(1).map((line) => `<li>${escapeHtml(line.replace(/^[-РІР‚вЂњРІР‚вЂќ]\s+/, ""))}</li>`).join("");
       return `<section class="help-block"><h5>${escapeHtml(firstRaw)}</h5><ul>${items}</ul></section>`;
     }
     if (numbered) {
@@ -12431,7 +12431,7 @@ function formatHelpContent(text, lang = "ru") {
       return `<section class="help-block"><ol>${items}</ol></section>`;
     }
     if (bullets) {
-      const items = lines.map((line) => `<li>${escapeHtml(line.replace(/^[-вЂ“вЂ”]\s+/, ""))}</li>`).join("");
+      const items = lines.map((line) => `<li>${escapeHtml(line.replace(/^[-РІР‚вЂњРІР‚вЂќ]\s+/, ""))}</li>`).join("");
       return `<section class="help-block"><ul>${items}</ul></section>`;
     }
     if (first.startsWith("РЅР°Р·РЅР°С‡РµРЅРёРµ:") || first.startsWith("purpose:")) {
@@ -12440,7 +12440,7 @@ function formatHelpContent(text, lang = "ru") {
     if (first.startsWith("РїСЂРёРјРµСЂ:") || first.startsWith("example:")) {
       return `<section class="help-callout example"><strong>${isRu ? "РџСЂРёРјРµСЂ" : "Example"}:</strong> ${escapeHtml(firstRaw.replace(/^РїСЂРёРјРµСЂ:\s*/i, "").replace(/^example:\s*/i, ""))}</section>`;
     }
-    if (first.startsWith("РІР°Р¶РЅРѕ:") || first.startsWith("important:")) {
+    if (first.startsWith("Р Р†Р В°Р В¶Р Р…Р С•:") || first.startsWith("important:")) {
       return `<section class="help-callout warn"><strong>${escapeHtml(firstRaw)}</strong></section>`;
     }
     return `<section class="help-block"><p>${lines.map((line) => escapeHtml(line)).join("<br>")}</p></section>`;
@@ -12504,7 +12504,7 @@ function renderHelpAssistantHistory() {
   const host = document.getElementById("helpAssistantHistory");
   if (!host) return;
   if (!helpAssistantHistory.length) {
-    host.innerHTML = `<div class="help-empty">${currentLang === "en" ? "Ask your first question." : "Р—Р°РґР°Р№С‚Рµ РїРµСЂРІС‹Р№ РІРѕРїСЂРѕСЃ."}</div>`;
+    host.innerHTML = `<div class="help-empty">${currentLang === "en" ? "Ask your first question." : "Р вЂ”Р В°Р Т‘Р В°Р в„–РЎвЂљР Вµ Р С—Р ВµРЎР‚Р Р†РЎвЂ№Р в„– Р Р†Р С•Р С—РЎР‚Р С•РЎРѓ."}</div>`;
     return;
   }
   host.innerHTML = helpAssistantHistory
@@ -12515,18 +12515,18 @@ function renderHelpAssistantHistory() {
       if (item?.module_code) metaBits.push(`#${String(item.module_code)}`);
       if (item?.provider) metaBits.push(String(item.provider));
       if (item?.service_name) metaBits.push(String(item.service_name));
-      const meta = metaBits.join(" вЂў ");
+      const meta = metaBits.join(" РІР‚Сћ ");
       return `
         <article class="help-card selected">
           <header class="help-card-head">
             <div>
-              <h4>${escapeHtml(tr("Р’РѕРїСЂРѕСЃ", "Question"))}</h4>
+              <h4>${escapeHtml(tr("Р вЂ™Р С•Р С—РЎР‚Р С•РЎРѓ", "Question"))}</h4>
               <small>${escapeHtml(meta || "-")}</small>
             </div>
           </header>
           <div class="help-card-body">
             <section class="help-block"><p>${escapeHtml(String(item?.question || "-"))}</p></section>
-            <section class="help-callout main"><strong>${escapeHtml(tr("РћС‚РІРµС‚", "Answer"))}:</strong> ${escapeHtml(String(item?.answer || "-"))}</section>
+            <section class="help-callout main"><strong>${escapeHtml(tr("Р С›РЎвЂљР Р†Р ВµРЎвЂљ", "Answer"))}:</strong> ${escapeHtml(String(item?.answer || "-"))}</section>
           </div>
         </article>
       `;
@@ -12578,7 +12578,7 @@ async function askHelpAssistant() {
   }
   if (input) input.value = "";
   if (hint) {
-    hint.textContent = `${tr("РћС‚РІРµС‚ РїРѕР»СѓС‡РµРЅ", "Response ready")}: ${data.service_name || data.mode || "-"} | ${data.provider || "-"}`;
+    hint.textContent = `${tr("Р С›РЎвЂљР Р†Р ВµРЎвЂљ Р С—Р С•Р В»РЎС“РЎвЂЎР ВµР Р…", "Response ready")}: ${data.service_name || data.mode || "-"} | ${data.provider || "-"}`;
   }
   renderHelpAssistantHistory();
 }
@@ -12875,4 +12875,6 @@ window.onMobileQuickNavChanged = onMobileQuickNavChanged;
 window.syncMobileQuickNavSelection = syncMobileQuickNavSelection;
 queueMojibakeDomNormalize(typeof document !== "undefined" ? document.body : null);
 installMojibakeDomObserver();
+
+
 

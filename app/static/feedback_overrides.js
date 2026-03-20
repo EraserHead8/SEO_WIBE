@@ -1,4 +1,4 @@
-(function feedbackOverridesV20260320() {
+﻿(function feedbackOverridesV20260320() {
   if (typeof window === "undefined") return;
   if (window.__feedbackOverridesV20260320) return;
   window.__feedbackOverridesV20260320 = true;
@@ -16,6 +16,18 @@
     if (button) button.textContent = currentLang === "en" ? en : ru;
   }
 
+  function setNodeText(selector, ru, en) {
+    document.querySelectorAll(selector).forEach((node) => {
+      node.textContent = currentLang === "en" ? en : ru;
+    });
+  }
+
+  function setPlaceholder(selector, ru, en) {
+    document.querySelectorAll(selector).forEach((node) => {
+      node.setAttribute("placeholder", currentLang === "en" ? en : ru);
+    });
+  }
+
   function setTableHead(selector, labelsRu, labelsEn) {
     const head = document.querySelector(selector);
     if (!head) return;
@@ -27,16 +39,27 @@
   }
 
   function repairFeedbackUiCopy() {
+    setSelectOptionText("reviewStarsFilter", "", "Все оценки", "All ratings");
     setSelectOptionText("reviewStatusFilter", "all", "Все", "All");
+    setSelectOptionText("reviewStatusFilter", "new", "Новые", "New");
+    setSelectOptionText("reviewStatusFilter", "unanswered", "Без ответа", "No reply");
     setSelectOptionText("reviewStatusFilter", "answered", "Отвеченные", "Answered");
     setSelectOptionText("reviewDateSort", "newest", "Сначала новые", "Newest first");
     setSelectOptionText("reviewDateSort", "oldest", "Сначала старые", "Oldest first");
     setSelectOptionText("questionStatusFilter", "all", "Все", "All");
+    setSelectOptionText("questionStatusFilter", "new", "Новые", "New");
+    setSelectOptionText("questionStatusFilter", "unanswered", "Без ответа", "No reply");
     setSelectOptionText("questionStatusFilter", "answered", "Отвеченные", "Answered");
     setSelectOptionText("questionDateSort", "newest", "Сначала новые", "Newest first");
     setSelectOptionText("questionDateSort", "oldest", "Сначала старые", "Oldest first");
     setButtonText("button[onclick='saveReviewAiSettings()']", "Сохранить AI-настройки", "Save AI settings");
     setButtonText("button[onclick='saveQuestionAiSettings()']", "Сохранить AI-настройки", "Save AI settings");
+    setButtonText("#reviewPromptToggleBtn", "Показать промпт обучения", "Show training prompt");
+    setButtonText("#questionPromptToggleBtn", "Показать промпт обучения", "Show training prompt");
+    setNodeText("#reviewsSubtabReviews h3", "Ответы на отзывы WB/Ozon", "Review replies WB/Ozon");
+    setNodeText("#reviewsSubtabQuestions h3", "Ответы на вопросы WB/Ozon", "Question replies WB/Ozon");
+    setPlaceholder("#reviewAiPrompt", "Промпт для генерации ответов (опционально)", "Prompt for reply generation (optional)");
+    setPlaceholder("#questionAiPrompt", "Промпт для генерации ответов на вопросы (опционально)", "Prompt for question replies (optional)");
     setTableHead("#reviewsSubtabReviews thead tr", ["Статус", "Дата", "Товар", "Отзыв", "Ответ", "Автор", "Действия"], ["Status", "Date", "Product", "Review", "Reply", "Author", "Actions"]);
     setTableHead("#reviewsSubtabQuestions thead tr", ["Статус", "Дата", "Товар", "Вопрос", "Ответ", "Действия"], ["Status", "Date", "Product", "Question", "Reply", "Actions"]);
     setTableHead("#reviewsSubtabReturns thead tr", ["Статус", "Дата", "Товар", "Причина / комментарий", "Тип", "Что делать"], ["Status", "Date", "Product", "Reason / comment", "Type", "Action"]);

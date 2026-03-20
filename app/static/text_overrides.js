@@ -1,4 +1,4 @@
-(function textOverridesV20260320() {
+﻿(function textOverridesV20260320() {
   if (typeof window === "undefined") return;
   if (window.__textOverridesV20260320) return;
   window.__textOverridesV20260320 = true;
@@ -237,7 +237,7 @@
       social: {
         chat: { ru: ["\u0427\u0430\u0442\u044b", "\u041a\u043e\u043c\u0430\u043d\u0434\u043d\u044b\u0435 \u0438 \u043b\u0438\u0447\u043d\u044b\u0435 \u043f\u0435\u0440\u0435\u043f\u0438\u0441\u043a\u0438"], en: ["Chats", "Team and direct conversations"] },
         tasks: { ru: ["\u0417\u0430\u0434\u0430\u0447\u0438", "\u041f\u0440\u043e\u0435\u043a\u0442\u043d\u044b\u0435 \u0438 \u043b\u0438\u0447\u043d\u044b\u0435 \u0437\u0430\u0434\u0430\u0447\u0438 \u0441 \u0434\u0435\u0434\u043b\u0430\u0439\u043d\u0430\u043c\u0438"], en: ["Tasks", "Project and personal tasks with deadlines"] },
-        calendar: { ru: ["\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c", "\u0421\u043e\u0431\u044b\u0442\u0438\u044f, \u0434\u0435\u0434\u043b\u0430\u0439\u043d\u044b \u0438 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u044f"], en: ["Calendar", "Events, deadlines, and sync"] },
+        calendar: { ru: ["\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c", "\u0421\u043e\u0431\u044b\u0442\u0438\u044f, \u0437\u0430\u0434\u0430\u0447\u0438 \u0438 \u043d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u044f \u0432 \u043e\u0434\u043d\u043e\u043c \u043a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u0435"], en: ["Calendar", "Events, tasks, and reminders in one calendar"] },
         calculator: { ru: ["\u041a\u0430\u043b\u044c\u043a\u0443\u043b\u044f\u0442\u043e\u0440", "\u0411\u044b\u0441\u0442\u0440\u044b\u0435 \u0440\u0430\u0441\u0447\u0435\u0442\u044b \u0438 \u043a\u043e\u043d\u0432\u0435\u0440\u0442\u0430\u0446\u0438\u044f"], en: ["Calculator", "Quick calculations and conversion"] },
         notes: { ru: ["\u0417\u0430\u043c\u0435\u0442\u043a\u0438", "\u041b\u0438\u0447\u043d\u044b\u0435 \u0438 \u043a\u043e\u043c\u0430\u043d\u0434\u043d\u044b\u0435 \u0437\u0430\u043c\u0435\u0442\u043a\u0438"], en: ["Notes", "Personal and team notes"] },
         games: { ru: ["\u0418\u0433\u0440\u044b", "\u0428\u0430\u0445\u043c\u0430\u0442\u044b, \u043c\u043e\u0440\u0441\u043a\u043e\u0439 \u0431\u043e\u0439 \u0438 \u0448\u0430\u0448\u043a\u0438"], en: ["Games", "Chess, battleship, and checkers"] },
@@ -298,6 +298,79 @@
     setText("#teamMemberEditTitle", "\u0421\u043e\u0442\u0440\u0443\u0434\u043d\u0438\u043a", "Team member");
     setText("#socialModalTitle", "\u0421\u043e\u0446\u0438\u0430\u043b\u044c\u043d\u044b\u0439 \u043c\u043e\u0434\u0443\u043b\u044c", "Social module");
     setText("#productsPageInfoTop, #productsPageInfoBottom", "\u0421\u0442\u0440\u0430\u043d\u0438\u0446\u0430 1 \u0438\u0437 1", "Page 1 of 1");
+    setText(".nav-btn[data-tab='products']", "\u0422\u043e\u0432\u0430\u0440\u044b", "Products");
+    setText(".nav-btn[data-tab='reviews']", "\u041e\u0442\u0437\u044b\u0432\u044b / \u0412\u043e\u043f\u0440\u043e\u0441\u044b", "Reviews / Questions");
+    setText(".nav-btn[data-tab='accounting']", "\u0411\u0443\u0445\u0433\u0430\u043b\u0442\u0435\u0440\u0438\u044f", "Accounting");
+    setText(".nav-btn[data-tab='ads']", "\u0420\u0435\u043a\u043b\u0430\u043c\u0430 WB/Ozon", "WB/Ozon Ads");
+    setText(".nav-btn[data-tab='profile']", "\u041f\u0440\u043e\u0444\u0438\u043b\u044c", "Profile");
+    setText("#mobileDrawerQuickNav option[value='social_games'], #mobileQuickNav option[value='social_games']", "\u0418\u0433\u0440\u044b", "Games");
+    setText("#mobileDrawerQuickNav option[value='social_chat'], #mobileQuickNav option[value='social_chat']", "\u0427\u0430\u0442\u044b", "Chats");
+    setText("#mobileDrawerQuickNav option[value='social_tasks'], #mobileQuickNav option[value='social_tasks']", "\u0417\u0430\u0434\u0430\u0447\u0438", "Tasks");
+    setText("#mobileDrawerQuickNav option[value='social_notes'], #mobileQuickNav option[value='social_notes']", "\u0417\u0430\u043c\u0435\u0442\u043a\u0438", "Notes");
+    setText("#mobileDrawerQuickNav option[value='social_calendar'], #mobileQuickNav option[value='social_calendar']", "\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c", "Calendar");
+    setText("#mobileDrawerQuickNav option[value='reviews_reviews'], #mobileQuickNav option[value='reviews_reviews']", "\u041e\u0442\u0432\u0435\u0442\u044b \u043d\u0430 \u043e\u0442\u0437\u044b\u0432\u044b", "Review replies");
+    setText("#mobileDrawerQuickNav option[value='reviews_questions'], #mobileQuickNav option[value='reviews_questions']", "\u041e\u0442\u0432\u0435\u0442\u044b \u043d\u0430 \u0432\u043e\u043f\u0440\u043e\u0441\u044b", "Question replies");
+    setText("#mobileDrawerQuickNav option[value='reviews_returns'], #mobileQuickNav option[value='reviews_returns']", "\u0412\u043e\u0437\u0432\u0440\u0430\u0442\u044b", "Returns");
+    setText("#mobileDrawerQuickNav option[value='ads_campaigns'], #mobileQuickNav option[value='ads_campaigns']", "\u0420\u0435\u043a\u043b\u0430\u043c\u043d\u044b\u0435 \u043a\u0430\u043c\u043f\u0430\u043d\u0438\u0438", "Ad campaigns");
+    setText("#socialSubtabChatBtn", "\u0427\u0430\u0442", "Chat");
+    setText("#socialSubtabGamesBtn", "\u0418\u0433\u0440\u044b", "Games");
+    setText("#socialSubtabTasksBtn", "\u0417\u0430\u0434\u0430\u0447\u0438", "Tasks");
+    setText("#socialSubtabCalendarBtn", "\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c", "Calendar");
+    setText("#socialSubtabCalculatorBtn", "\u041a\u0430\u043b\u044c\u043a\u0443\u043b\u044f\u0442\u043e\u0440", "Calculator");
+    setText("#socialSubtabNotesBtn", "\u0417\u0430\u043c\u0435\u0442\u043a\u0438", "Notes");
+    setText("#reviewsSubtabReviewsBtn", "\u041e\u0442\u0437\u044b\u0432\u044b", "Reviews");
+    setText("#reviewsSubtabQuestionsBtn", "\u0412\u043e\u043f\u0440\u043e\u0441\u044b", "Questions");
+    setText("#reviewsSubtabReturnsBtn", "\u0412\u043e\u0437\u0432\u0440\u0430\u0442\u044b", "Returns");
+    setText("#reviewsSubtabReviews h3", "\u041e\u0442\u0432\u0435\u0442\u044b \u043d\u0430 \u043e\u0442\u0437\u044b\u0432\u044b WB/Ozon", "Review replies WB/Ozon");
+    setText("#reviewsSubtabQuestions h3", "\u041e\u0442\u0432\u0435\u0442\u044b \u043d\u0430 \u0432\u043e\u043f\u0440\u043e\u0441\u044b WB/Ozon", "Question replies WB/Ozon");
+    setText("button[onclick='saveReviewAiSettings()']", "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c AI-\u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438", "Save AI settings");
+    setText("button[onclick='saveQuestionAiSettings()']", "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c AI-\u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438", "Save AI settings");
+    setText("#reviewPromptToggleBtn", "\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u043f\u0440\u043e\u043c\u043f\u0442 \u043e\u0431\u0443\u0447\u0435\u043d\u0438\u044f", "Show training prompt");
+    setText("#questionPromptToggleBtn", "\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u043f\u0440\u043e\u043c\u043f\u0442 \u043e\u0431\u0443\u0447\u0435\u043d\u0438\u044f", "Show training prompt");
+    setAttr("#reviewAiPrompt", "placeholder", "\u041f\u0440\u043e\u043c\u043f\u0442 \u0434\u043b\u044f \u0433\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u0438 \u043e\u0442\u0432\u0435\u0442\u043e\u0432 (\u043e\u043f\u0446\u0438\u043e\u043d\u0430\u043b\u044c\u043d\u043e)", "Prompt for reply generation (optional)");
+    setAttr("#questionAiPrompt", "placeholder", "\u041f\u0440\u043e\u043c\u043f\u0442 \u0434\u043b\u044f \u0433\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u0438 \u043e\u0442\u0432\u0435\u0442\u043e\u0432 \u043d\u0430 \u0432\u043e\u043f\u0440\u043e\u0441\u044b (\u043e\u043f\u0446\u0438\u043e\u043d\u0430\u043b\u044c\u043d\u043e)", "Prompt for question replies (optional)");
+    setAttr("#mobileNavToggle", "aria-label", "Меню", "Menu");
+    setAttr("#mobileNavToggle", "title", "Меню", "Menu");
+    setText("#mobileDrawerThemeSelect option[value='classic'], #uiThemeSelect option[value='classic']", "Классика", "Classic");
+    setText("#mobileDrawerThemeSelect option[value='dark'], #uiThemeSelect option[value='dark']", "Темная", "Dark");
+    setText("#mobileDrawerThemeSelect option[value='moon'], #uiThemeSelect option[value='moon']", "Луна", "Moon");
+    setText("#mobileDrawerThemeSelect option[value='newyear'], #uiThemeSelect option[value='newyear']", "Новый год", "New Year");
+    setText("#mobileDrawerThemeSelect option[value='summer'], #uiThemeSelect option[value='summer']", "Лето", "Summer");
+    setText("#mobileDrawerThemeSelect option[value='autumn'], #uiThemeSelect option[value='autumn']", "Осень", "Autumn");
+    setText("#mobileDrawerThemeSelect option[value='winter'], #uiThemeSelect option[value='winter']", "Зима", "Winter");
+    setText("#mobileDrawerThemeSelect option[value='spring'], #uiThemeSelect option[value='spring']", "Весна", "Spring");
+    setText("#mobileDrawerThemeSelect option[value='japan'], #uiThemeSelect option[value='japan']", "Япония", "Japan");
+    setText("#mobileDrawerThemeSelect option[value='greenland'], #uiThemeSelect option[value='greenland']", "Гренландия", "Greenland");
+    setText("#mobileDrawerQuickNav option[value='social_calculator'], #mobileQuickNav option[value='social_calculator']", "Калькулятор", "Calculator");
+    setText("#mobileDrawerQuickNav option[value='ads_analytics'], #mobileQuickNav option[value='ads_analytics']", "Аналитика рекламы", "Ads analytics");
+    setText("#mobileDrawerQuickNav option[value='ads_bidder'], #mobileQuickNav option[value='ads_bidder']", "Бидер WB Ads", "WB Ads bidder");
+    setText("#mobileDrawerQuickNav option[value='profile_main'], #mobileQuickNav option[value='profile_main']", "Профиль", "Profile");
+    setText("#reviewStarsFilter option[value='']", "Все оценки", "All ratings");
+    setText("#reviewStatusFilter option[value='all'], #questionStatusFilter option[value='all']", "Все", "All");
+    setText("#reviewStatusFilter option[value='new'], #questionStatusFilter option[value='new']", "Новые", "New");
+    setText("#reviewStatusFilter option[value='unanswered'], #questionStatusFilter option[value='unanswered']", "Без ответа", "No reply");
+    setText("#reviewStatusFilter option[value='answered'], #questionStatusFilter option[value='answered']", "С ответом", "Answered");
+    setText("#reviewDateSort option[value='newest'], #questionDateSort option[value='newest']", "Сначала новые", "Newest first");
+    setText("#reviewDateSort option[value='oldest'], #questionDateSort option[value='oldest']", "Сначала старые", "Oldest first");
+    setText("button[onclick='loadWbReviews()']", "Обновить отзывы", "Refresh reviews");
+    setText("button[onclick='loadWbQuestions()']", "Обновить вопросы", "Refresh questions");
+    setText("#reviewsSubtabReviews .panel > p.hint", "AI может подготовить черновики ответов. Проверьте текст перед отправкой и при необходимости поправьте тон и детали.", "AI can prepare draft replies. Review the text before sending and adjust tone or details if needed.");
+    setText("#reviewsSubtabQuestions .panel > p.hint", "AI может подготовить ответы на вопросы. Перед отправкой проверьте факты, характеристики и ссылки на товар.", "AI can draft question replies. Check facts, specs, and product links before sending.");
+    setText("#reviewsSubtabReviews thead th:nth-child(1), #reviewsSubtabQuestions thead th:nth-child(1), #reviewsSubtabReturns thead th:nth-child(1)", "Статус", "Status");
+    setText("#reviewsSubtabReviews thead th:nth-child(2), #reviewsSubtabQuestions thead th:nth-child(2), #reviewsSubtabReturns thead th:nth-child(2)", "Дата", "Date");
+    setText("#reviewsSubtabReviews thead th:nth-child(3), #reviewsSubtabQuestions thead th:nth-child(3), #reviewsSubtabReturns thead th:nth-child(3)", "Товар", "Product");
+    setText("#reviewsSubtabReviews thead th:nth-child(4), #reviewsSubtabQuestions thead th:nth-child(4)", "Текст", "Text");
+    setText("#reviewsSubtabReviews thead th:nth-child(5), #reviewsSubtabQuestions thead th:nth-child(5)", "Ответ", "Reply");
+    setText("#reviewsSubtabReviews thead th:nth-child(6)", "Оценка", "Rating");
+    setText("#reviewsSubtabReviews thead th:nth-child(7), #reviewsSubtabQuestions thead th:nth-child(6), #reviewsSubtabReturns thead th:nth-child(6)", "Действия", "Actions");
+    setText("#reviewsSubtabReturns h3", "Возвраты WB/Ozon", "Returns WB/Ozon");
+    setText("#reviewsSubtabReturns .returns-hero p", "Показываем статус заявки, товар, причину возврата и доступные действия без лишнего шума.", "Shows return status, product, reason, and available actions without extra clutter.");
+    setText("#reviewsSubtabReturns .returns-field span", "", "");
+    setText("#reviewsSubtabReturns .returns-field:nth-of-type(1) span", "Маркетплейс", "Marketplace");
+    setText("#reviewsSubtabReturns .returns-field:nth-of-type(2) span", "Статус", "Status");
+    setText("#reviewsSubtabReturns .returns-field:nth-of-type(3) span", "Дата от", "Date from");
+    setText("#reviewsSubtabReturns .returns-field:nth-of-type(4) span", "Дата до", "Date to");
+    setText("#reviewsSubtabReturns .returns-field:nth-of-type(5) span", "Что сделать", "What to do");
     applySectionHeadingOverride();
   }
 
@@ -440,3 +513,5 @@
     start();
   }
 })();
+
+

@@ -1,4 +1,4 @@
-from datetime import datetime
+﻿from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -1224,6 +1224,7 @@ class SocialCalendarEventIn(BaseModel):
     start_at: str
     end_at: str | None = None
     is_public: bool = False
+    color: str = ""
     recurrence_kind: str = "none"
     recurrence_interval: int = 1
     reminder_enabled: bool = True
@@ -1241,6 +1242,7 @@ class SocialCalendarEventOut(BaseModel):
     end_at: str | None = None
     created_at: str
     is_public: bool = False
+    color: str = ""
     recurrence_kind: str = "none"
     recurrence_interval: int = 1
     is_recurring: bool = False
@@ -1359,4 +1361,5 @@ class SocialAnnouncementPublicOut(BaseModel):
     body: str = ""
     starts_at: str
     ends_at: str | None = None
+
 
