@@ -657,3 +657,333 @@
 })();
 
 
+
+(function socialSamsungCalendarRefitV20260320() {
+  if (typeof window === "undefined") return;
+  if (window.__socialSamsungCalendarRefitV20260320) return;
+  window.__socialSamsungCalendarRefitV20260320 = true;
+
+  function i18n(ru, en) {
+    return currentLang === "en" ? en : ru;
+  }
+
+  function normDate(value) {
+    if (typeof socialCalendarParseDate === "function") return socialCalendarParseDate(value);
+    const dt = new Date(value);
+    return Number.isNaN(dt.getTime()) ? null : dt;
+  }
+
+  function dayKey(value) {
+    if (typeof socialCalendarDayKey === "function") return socialCalendarDayKey(value);
+    const dt = normDate(value);
+    if (!dt) return "";
+    const m = `${dt.getMonth() + 1}`.padStart(2, "0");
+    const d = `${dt.getDate()}`.padStart(2, "0");
+    return `${dt.getFullYear()}-${m}-${d}`;
+  }
+
+  function timeLabel(value) {
+    if (typeof socialCalendarTimeLabel === "function") return socialCalendarTimeLabel(value);
+    const dt = normDate(value);
+    if (!dt) return "";
+    return dt.toLocaleTimeString(currentLang === "en" ? "en-GB" : "ru-RU", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function dayLabel(value) {
+    if (typeof socialCalendarDayLabel === "function") return socialCalendarDayLabel(value);
+    const dt = normDate(value);
+    if (!dt) return String(value || "");
+    return dt.toLocaleDateString(currentLang === "en" ? "en-US" : "ru-RU", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  }
+
+  function currentMode() {
+    const mode = String(socialState?.calendarTaskFilter || "events").trim().toLowerCase();
+    if (mode === "tasks") return "tasks";
+    if (mode === "my_tasks") return "my_tasks";
+    return "events";
+  }
+
+  function eventBaseId(row) {
+    if (typeof socialCalendarEventBaseId === "function") return Number(socialCalendarEventBaseId(row) || 0);
+    return Number(row?.id || 0);
+  }
+
+  function rowColor(row, mode) {
+    const raw = String(row?.color || "").trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(raw)) return raw.toLowerCase();
+    if (mode === "events") return "#b9d5ff";
+    return String(row?.task_kind || "").trim().toLowerCase() === "personal" ? "#bde5c8" : "#d8e6ff";
+  }
+
+  function eventRowsForDay(day) {
+    return (socialState?.calendarEvents || [])
+      .filter((row) => dayKey(row?.start_at || "") === day)
+      .sort((a, b) => (normDate(a?.start_at)?.getTime() || 0) - (normDate(b?.start_at)?.getTime() || 0));
+  }
+
+  function taskRowsForDay(day, mode) {
+    return (socialState?.tasks || [])
+      .filter((row) => dayKey(row?.due_date || "") === day)
+      .filter((row) => mode !== "my_tasks" || String(row?.task_kind || "").trim().toLowerCase() === "personal")
+      .sort((a, b) => (normDate(a?.due_date)?.getTime() || 0) - (normDate(b?.due_date)?.getTime() || 0));
+  }
+
+  function rowsForDay(day, mode) {
+    if (mode === "events") return eventRowsForDay(day);
+    return taskRowsForDay(day, mode);
+  }
+
+  function renderCellChip(row, mode) {
+    const title = String(row?.title || "-").trim() || "-";
+    const isEvent = mode === "events";
+    const rawTime = isEvent ? String(row?.start_at || "").trim() : String(row?.due_date || "").trim();
+    const time = rawTime ? timeLabel(rawTime) : "";
+    const style = `style="--sw-chip-color:${escapeHtml(rowColor(row, mode))}"`;
+    return `<span class="sw-calendar-chip ${isEvent ? "is-event" : "is-task"}" ${style}><span class="sw-calendar-chip-title">${escapeHtml(time ? `${time} ${title}` : title)}</span></span>`;
+  }
+
+  function setModeButtonsState(mode) {
+    const host = document.getElementById("socialCalendarTaskMode");
+    if (!host) return;
+    host.querySelectorAll("[data-mode]").forEach((btn) => {
+      const key = String(btn.getAttribute("data-mode") || "").trim().toLowerCase();
+      btn.classList.toggle("is-active", key === mode);
+    });
+  }
+
+  function calendarMonthTitle(date) {
+    const dt = normDate(date) || new Date();
+    const month = dt.toLocaleDateString(currentLang === "en" ? "en-US" : "ru-RU", { month: "long" });
+    return String(month || "").toUpperCase();
+  }
+
+  function ensureCalendarFab() {
+    const shell = document.querySelector("#socialSubtabCalendar .social-calendar-shell");
+    if (!shell) return;
+    let fab = document.getElementById("socialCalendarSamsungFab");
+    if (!fab) {
+      fab = document.createElement("button");
+      fab.id = "socialCalendarSamsungFab";
+      fab.className = "social-calendar-samsung-fab";
+      fab.type = "button";
+      fab.textContent = "+";
+      fab.setAttribute("aria-label", i18n("Добавить", "Add"));
+      fab.setAttribute("title", i18n("Добавить", "Add"));
+      fab.setAttribute("onclick", "socialCalendarSamsungOpenCreate()");
+      shell.appendChild(fab);
+    }
+  }
+
+  function hideLegacyCalendarControls() {
+    const root = document.getElementById("socialSubtabCalendar");
+    if (!root) return;
+    root.classList.add("social-calendar-samsung-mode");
+  }
+
+  function buildDayItem(row, mode, index, selectedDay) {
+    const isEvent = mode === "events";
+    const rowId = isEvent ? eventBaseId(row) : Number(row?.id || 0);
+    const key = `${mode}:${rowId}:${index}:${selectedDay}`;
+    const expanded = String(socialState?.calendarExpandedItemKey || "") === key;
+    const title = String(row?.title || "-").trim() || "-";
+    const time = isEvent
+      ? (String(row?.start_at || "").trim() ? `${timeLabel(row.start_at)}${row?.end_at ? ` - ${timeLabel(row.end_at)}` : ""}` : i18n("Весь день", "All day"))
+      : (String(row?.due_date || "").trim() ? timeLabel(row.due_date) : i18n("Без времени", "No time"));
+    const descriptionRaw = isEvent
+      ? (typeof socialCleanCalendarDetails === "function" ? socialCleanCalendarDetails(row?.details || "") : String(row?.details || "").trim())
+      : String(row?.description || "").trim();
+    const description = descriptionRaw || i18n("Без описания", "No description");
+    const recurrence = isEvent && typeof socialCalendarRecurrenceLabel === "function"
+      ? socialCalendarRecurrenceLabel(row?.recurrence_kind, row?.recurrence_interval)
+      : "";
+    const reminder = isEvent && typeof socialCalendarReminderSummary === "function"
+      ? socialCalendarReminderSummary(row?.reminder_offsets_min, row?.reminder_enabled !== false)
+      : "";
+    const taskStatus = !isEvent ? (String(row?.status || "todo").trim().toLowerCase() === "done" ? i18n("Выполнена", "Done") : i18n("К выполнению", "To do")) : "";
+    const assignee = !isEvent ? String(row?.assignee_nick || "").trim() : "";
+    const metaBits = isEvent
+      ? [
+          row?.is_public ? i18n("Общее", "Shared") : i18n("Личное", "Private"),
+          recurrence,
+          reminder,
+        ].filter(Boolean)
+      : [
+          taskStatus,
+          assignee,
+        ].filter(Boolean);
+    const meta = metaBits.join(" · ");
+    const color = rowColor(row, mode);
+    const openFn = isEvent ? `socialOpenCalendarModal(${rowId})` : `socialOpenTaskModal(${rowId})`;
+    const deleteFn = isEvent ? `socialDeleteEvent(${rowId})` : `socialDeleteTask(${rowId})`;
+
+    return `
+      <article class="sw-day-item ${expanded ? "is-expanded" : ""}" style="--sw-chip-color:${escapeHtml(color)}" onclick="socialToggleCalendarItemExpanded('${escapeHtml(key)}')">
+        <div class="sw-day-item-head">
+          <div class="sw-day-item-title-wrap">
+            <div class="sw-day-item-time">${escapeHtml(time)}</div>
+            <h5 class="sw-day-item-title">${escapeHtml(title)}</h5>
+          </div>
+          <span class="sw-day-item-arrow" aria-hidden="true">${expanded ? "v" : ">"}</span>
+        </div>
+        ${expanded ? `
+          <div class="sw-day-item-body">
+            ${meta ? `<div class="sw-day-item-meta">${escapeHtml(meta)}</div>` : ""}
+            <div class="sw-day-item-desc">${escapeHtml(description)}</div>
+            <div class="sw-day-item-actions">
+              <button type="button" onclick="${openFn}; event.stopPropagation();">${escapeHtml(i18n("Редактировать", "Edit"))}</button>
+              <button class="btn-danger" type="button" onclick="${deleteFn}; event.stopPropagation();">${escapeHtml(i18n("Удалить", "Delete"))}</button>
+            </div>
+          </div>
+        ` : ""}
+      </article>
+    `;
+  }
+
+  function selectedDayFallback(year, month, todayKey) {
+    const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}-`;
+    const selected = String(socialState?.calendarSelectedDay || "").trim();
+    if (selected.startsWith(monthPrefix)) return selected;
+    if (todayKey && todayKey.startsWith(monthPrefix)) return todayKey;
+    return `${monthPrefix}01`;
+  }
+
+  window.socialCalendarSamsungOpenCreate = function socialCalendarSamsungOpenCreate() {
+    const mode = currentMode();
+    if (mode === "events") {
+      socialOpenCalendarModal();
+      return;
+    }
+    socialState.taskDraftKind = mode === "my_tasks" ? "personal" : "company";
+    socialOpenTaskModal(0, socialState.taskDraftKind);
+  };
+
+  window.socialToggleCalendarItemExpanded = function socialToggleCalendarItemExpanded(key) {
+    const current = String(socialState?.calendarExpandedItemKey || "");
+    socialState.calendarExpandedItemKey = current === String(key || "") ? "" : String(key || "");
+    const selected = String(socialState?.calendarSelectedDay || "").trim();
+    if (selected) socialShowDay(selected);
+  };
+
+  socialRenderCalendar = function socialRenderCalendarSamsungOverride() {
+    const grid = document.getElementById("socialCalendarGrid");
+    const list = document.getElementById("socialCalendarEvents");
+    const monthLabel = document.getElementById("socialCalendarMonthLabel");
+    if (!grid || !list) return;
+
+    hideLegacyCalendarControls();
+    ensureCalendarFab();
+
+    const date = socialState.calendarDate instanceof Date ? socialState.calendarDate : new Date();
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1, 0, 0, 0, 0);
+    const lastDay = new Date(year, month + 1, 0, 0, 0, 0, 0);
+    const shift = (firstDay.getDay() + 6) % 7;
+    const days = lastDay.getDate();
+    const mode = currentMode();
+    const todayKey = dayKey(new Date());
+    const compact = typeof window.matchMedia === "function" && window.matchMedia("(max-width: 980px)").matches;
+    const previewLimit = compact ? 2 : 3;
+
+    if (monthLabel) monthLabel.textContent = calendarMonthTitle(date);
+    setModeButtonsState(mode);
+
+    let html = `<div class="social-calendar-row head">${[
+      i18n("Пн", "Mon"),
+      i18n("Вт", "Tue"),
+      i18n("Ср", "Wed"),
+      i18n("Чт", "Thu"),
+      i18n("Пт", "Fri"),
+      i18n("Сб", "Sat"),
+      i18n("Вс", "Sun"),
+    ].map((label) => `<span>${escapeHtml(label)}</span>`).join("")}</div><div class="social-calendar-cells">`;
+
+    for (let i = 0; i < shift; i += 1) {
+      html += `<button class="social-day muted rich" type="button" disabled></button>`;
+    }
+
+    for (let day = 1; day <= days; day += 1) {
+      const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      const rows = rowsForDay(key, mode);
+      const preview = rows.slice(0, previewLimit).map((row) => renderCellChip(row, mode)).join("");
+      const more = rows.length - previewLimit;
+      const active = String(socialState?.calendarSelectedDay || "") === key ? "active" : "";
+      const today = todayKey === key ? "today" : "";
+      html += `
+        <button class="social-day rich ${active} ${today} ${rows.length ? "has-preview" : ""}" type="button" data-day-key="${key}" onclick="socialShowDay('${key}')">
+          <div class="social-day-head"><b>${day}</b></div>
+          <div class="social-day-preview-stack">${preview}</div>
+          ${more > 0 ? `<div class="social-day-more">+${more}</div>` : ""}
+        </button>
+      `;
+    }
+
+    html += "</div>";
+    grid.innerHTML = html;
+    socialShowDay(selectedDayFallback(year, month, todayKey));
+  };
+
+  socialShowDay = function socialShowDaySamsungOverride(day) {
+    const list = document.getElementById("socialCalendarEvents");
+    if (!list) return;
+    const mode = currentMode();
+    const selectedDay = String(day || "").trim();
+    socialState.calendarSelectedDay = selectedDay;
+
+    const rows = rowsForDay(selectedDay, mode);
+    const title = dayLabel(selectedDay);
+    const cards = rows.length
+      ? rows.map((row, idx) => buildDayItem(row, mode, idx, selectedDay)).join("")
+      : `<div class="social-note-empty">${escapeHtml(mode === "events" ? i18n("На этот день событий нет.", "No events for this day.") : i18n("На этот день задач нет.", "No tasks for this day."))}</div>`;
+
+    list.innerHTML = `
+      <section class="sw-day-sheet">
+        <header class="sw-day-sheet-head">
+          <div class="sw-day-sheet-kicker">${escapeHtml(i18n("Выбранный день", "Selected day"))}</div>
+          <h4 class="sw-day-sheet-date">${escapeHtml(title)}</h4>
+          <div class="sw-day-sheet-stat">${escapeHtml(`${rows.length}`)} ${escapeHtml(mode === "events" ? i18n("событий", "events") : i18n("задач", "tasks"))}</div>
+        </header>
+        <div class="sw-day-sheet-list">${cards}</div>
+      </section>
+    `;
+
+    const grid = document.getElementById("socialCalendarGrid");
+    if (grid) {
+      grid.querySelectorAll(".social-day[data-day-key]").forEach((btn) => {
+        btn.classList.toggle("active", String(btn.getAttribute("data-day-key") || "") === selectedDay);
+      });
+    }
+  };
+
+  const originalRenderNotesList = typeof socialRenderNotesList === "function" ? socialRenderNotesList : null;
+  socialRenderNotesList = function socialRenderNotesListCompactOverride() {
+    if (originalRenderNotesList) originalRenderNotesList();
+    const root = document.getElementById("socialSubtabNotes");
+    if (!root) return;
+    const hint = root.querySelector(".social-notes-board-copy .hint");
+    if (hint) hint.textContent = i18n("Три карточки в ряд. Откройте заметку нажатием.", "Three cards per row. Tap a card to open it.");
+  };
+
+  const originalSwitchSocialSubtab = typeof switchSocialSubtab === "function" ? switchSocialSubtab : null;
+  if (originalSwitchSocialSubtab && !originalSwitchSocialSubtab.__socialSamsungWrapped) {
+    const wrapped = function wrappedSwitchSocialSubtab() {
+      const result = originalSwitchSocialSubtab.apply(this, arguments);
+      const active = String(arguments[0] || "").trim().toLowerCase();
+      if (active === "calendar") {
+        hideLegacyCalendarControls();
+        ensureCalendarFab();
+      }
+      return result;
+    };
+    wrapped.__socialSamsungWrapped = true;
+    switchSocialSubtab = wrapped;
+  }
+
+  hideLegacyCalendarControls();
+  ensureCalendarFab();
+})();

@@ -1364,12 +1364,12 @@
       <section id="social" class="tab hidden">
         <div class="panel">
           <div class="module-subtabs">
-            <button class="chip-btn active" id="socialSubtabChatBtn" type="button" onclick="switchSocialSubtab('chat')">Р§Р°С‚</button>
-            <button class="chip-btn" id="socialSubtabTasksBtn" type="button" onclick="switchSocialSubtab('tasks')">Р—Р°РґР°С‡Рё</button>
-            <button class="chip-btn" id="socialSubtabCalendarBtn" type="button" onclick="switchSocialSubtab('calendar')">РљР°Р»РµРЅРґР°СЂСЊ</button>
-            <button class="chip-btn" id="socialSubtabCalculatorBtn" type="button" onclick="switchSocialSubtab('calculator')">РљР°Р»СЊРєСѓР»СЏС‚РѕСЂ</button>
-            <button class="chip-btn" id="socialSubtabNotesBtn" type="button" onclick="switchSocialSubtab('notes')">Р—Р°РјРµС‚РєРё</button>
-            <button class="chip-btn" id="socialSubtabGamesBtn" type="button" onclick="switchSocialSubtab('games')">РРіСЂС‹</button>
+            <button class="chip-btn active" id="socialSubtabChatBtn" type="button" onclick="switchSocialSubtab('chat')">Чат</button>
+            <button class="chip-btn" id="socialSubtabTasksBtn" type="button" onclick="switchSocialSubtab('tasks')">Задачи</button>
+            <button class="chip-btn" id="socialSubtabCalendarBtn" type="button" onclick="switchSocialSubtab('calendar')">Календарь</button>
+            <button class="chip-btn" id="socialSubtabCalculatorBtn" type="button" onclick="switchSocialSubtab('calculator')">Калькулятор</button>
+            <button class="chip-btn" id="socialSubtabNotesBtn" type="button" onclick="switchSocialSubtab('notes')">Заметки</button>
+            <button class="chip-btn" id="socialSubtabGamesBtn" type="button" onclick="switchSocialSubtab('games')">Игры</button>
           </div>
         </div>
 
@@ -1462,20 +1462,8 @@
                 <h3 id="socialCalendarMonthLabel">Календарь</h3>
                 <p class="social-calendar-lead">События, задачи и личные напоминания в одном календаре.</p>
               </div>
-              <div class="social-calendar-hero-actions">
-                <button class="btn-secondary" type="button" onclick="socialJumpCalendarToday()">Сегодня</button>
-                <button id="socialCalendarPrimaryAction" type="button" onclick="socialCalendarOpenCreateFromMode('events')">Добавить событие</button>
-              </div>
             </div>
             <div class="social-calendar-toolbar social-calendar-toolbar--modern social-calendar-toolbar--clean">
-              <div class="social-calendar-nav social-calendar-nav--cluster social-calendar-nav--simple">
-                <button class="btn-secondary" type="button" onclick="socialShiftCalendar(-1)">‹</button>
-                <label class="social-calendar-month-picker">
-                  <span>Период</span>
-                  <input id="socialCalendarMonth" type="month" onchange="socialLoadCalendar()" />
-                </label>
-                <button class="btn-secondary" type="button" onclick="socialShiftCalendar(1)">›</button>
-              </div>
               <div id="socialCalendarTaskMode" class="social-calendar-task-mode">
                 <button type="button" class="chip-btn is-active" data-mode="events">События</button>
                 <button type="button" class="chip-btn" data-mode="tasks">Задачи</button>
@@ -1819,6 +1807,7 @@
   <script src="/static/social_battleship.js?v={{ static_v('social_battleship.js') }}"></script>
 </body>
 </html>
+
 
 
 

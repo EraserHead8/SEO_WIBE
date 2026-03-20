@@ -515,3 +515,109 @@
 })();
 
 
+
+(function textOverridesHotfixV20260320b() {
+  if (typeof window === "undefined") return;
+  if (window.__textOverridesHotfixV20260320b) return;
+  window.__textOverridesHotfixV20260320b = true;
+
+  function pick(ru, en) {
+    return currentLang === "en" ? en : ru;
+  }
+
+  function setText(selector, ru, en) {
+    document.querySelectorAll(selector).forEach((node) => {
+      node.textContent = pick(ru, en);
+    });
+  }
+
+  function applyHotfixText() {
+    setText(".nav-btn[data-tab='products']", "Товары", "Products");
+    setText(".nav-btn[data-tab='sales']", "Статистика и дашборд", "Statistics & Dashboard");
+    setText(".nav-btn[data-tab='reviews']", "Отзывы / Вопросы", "Reviews / Questions");
+    setText(".nav-btn[data-tab='accounting']", "Бухгалтерия", "Accounting");
+    setText(".nav-btn[data-tab='ads']", "Реклама WB/Ozon", "WB/Ozon Ads");
+    setText(".nav-btn[data-tab='social']", "Социальный", "Social Hub");
+    setText(".nav-btn[data-tab='profile']", "Профиль", "Profile");
+    setText(".nav-btn[data-tab='help']", "Справка", "Help Center");
+
+    setText("#socialSubtabChatBtn", "Чат", "Chat");
+    setText("#socialSubtabTasksBtn", "Задачи", "Tasks");
+    setText("#socialSubtabCalendarBtn", "Календарь", "Calendar");
+    setText("#socialSubtabCalculatorBtn", "Калькулятор", "Calculator");
+    setText("#socialSubtabNotesBtn", "Заметки", "Notes");
+    setText("#socialSubtabGamesBtn", "Игры", "Games");
+    setText("#socialSubtabChat h3", "Чаты", "Chats");
+    setText("#socialSubtabChat .social-chat-sidebar-head small", "Личные и групповые", "Direct and group chats");
+    setText("#reviewsSubtabReviews h3", "Ответы на отзывы", "Review replies");
+    setText("#reviewsSubtabQuestions h3", "Ответы на вопросы", "Question replies");
+    setText("#reviewsSubtabReturns h3", "Возвраты", "Returns");
+    setText("#reviewsSubtabReviews p.hint", "AI может подготовить черновики ответов. Перед отправкой проверьте текст и поправьте детали.", "AI can draft replies. Check text and adjust details before sending.");
+    setText("#reviewsSubtabQuestions p.hint", "AI может подготовить черновики ответов. Перед отправкой проверьте текст и поправьте детали.", "AI can draft replies. Check text and adjust details before sending.");
+    setText("#socialSubtabCalculator .social-volume-shell h3", "Объем из размеров", "Volume by dimensions");
+    setText("#socialSubtabCalculator .social-conv-shell h3", "Конвертация и валюты", "Conversion and currencies");
+
+    setText("#mobileDrawerQuickList [data-mobile-quick-value='sales_dashboard']", "Статистика", "Statistics");
+    setText("#mobileDrawerQuickList [data-mobile-quick-value='social_chat']", "Чат", "Chat");
+    setText("#mobileDrawerQuickList [data-mobile-quick-value='social_tasks']", "Задачи", "Tasks");
+    setText("#mobileDrawerQuickList [data-mobile-quick-value='social_notes']", "Заметки", "Notes");
+    setText("#mobileDrawerQuickList [data-mobile-quick-value='social_calculator']", "Калькулятор", "Calculator");
+    setText("#mobileDrawerQuickList [data-mobile-quick-value='social_calendar']", "Календарь", "Calendar");
+    setText("#mobileDrawerQuickList [data-mobile-quick-value='social_games']", "Игры", "Games");
+    setText("#mobileDrawerQuickList [data-mobile-quick-value='reviews_reviews']", "Ответы на отзывы", "Review replies");
+    setText("#mobileDrawerQuickList [data-mobile-quick-value='reviews_questions']", "Ответы на вопросы", "Question replies");
+    setText("#mobileDrawerQuickList [data-mobile-quick-value='reviews_returns']", "Возвраты", "Returns");
+    setText("#mobileDrawerQuickList [data-mobile-quick-value='ads_campaigns']", "Рекламные кампании", "Ad campaigns");
+    setText("#mobileDrawerQuickList [data-mobile-quick-value='ads_analytics']", "Аналитика рекламы", "Ads analytics");
+    setText("#mobileDrawerQuickList [data-mobile-quick-value='ads_recommendations']", "Рекомендации", "Recommendations");
+    setText("#mobileDrawerQuickList [data-mobile-quick-value='ads_bidder']", "Бидер WB Ads", "WB Ads bidder");
+    setText("#mobileDrawerQuickList [data-mobile-quick-value='profile_main']", "Профиль", "Profile");
+    setText("#mobileDrawerQuickList [data-mobile-quick-value='help_main']", "Справка", "Help");
+
+    setText("#socialSubtabCalculator h3", "Калькулятор", "Calculator");
+    setText("#socialVolResult", "-", "-");
+  }
+
+  function wrapAfter(name) {
+    if (typeof globalThis[name] !== "function") return;
+    const original = globalThis[name];
+    if (original.__textHotfixWrapped) return;
+    const wrapped = function wrappedTextHotfixFn() {
+      const result = original.apply(this, arguments);
+      requestAnimationFrame(applyHotfixText);
+      return result;
+    };
+    wrapped.__textHotfixWrapped = true;
+    globalThis[name] = wrapped;
+  }
+
+  [
+    "applyUiTexts",
+    "refreshMobileQuickNavOptions",
+    "renderMobileQuickList",
+    "syncMobileDrawerSelectors",
+    "setupMobileClientMode",
+    "showTab",
+    "switchSocialSubtab",
+    "switchReviewsSubtab",
+  ].forEach(wrapAfter);
+
+  const observer = new MutationObserver(() => {
+    requestAnimationFrame(applyHotfixText);
+  });
+
+  function start() {
+    applyHotfixText();
+    if (document.body) {
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
+    window.addEventListener("load", applyHotfixText, { once: true });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start, { once: true });
+  } else {
+    start();
+  }
+})();
+

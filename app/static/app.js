@@ -434,28 +434,27 @@ const NAV_BUTTON_ICONS = {
 
 const UI_TEXT = {
   ru: {
-    nav_products: "Р СћР С•Р Р†Р В°РЎР‚РЎвЂ№",
-    nav_sales: "?????????? ? ???????",
-    nav_reviews: "Р С›РЎвЂљР В·РЎвЂ№Р Р†РЎвЂ№/Р вЂ™Р С•Р С—РЎР‚Р С•РЎРѓРЎвЂ№",
-    nav_accounting: "Р‘СѓС…РіР°Р»С‚РµСЂРёСЏ",
-    nav_ads: "Р В Р ВµР С”Р В»Р В°Р СР В° WB/Ozon",
-    nav_social: "??????????",
-    nav_profile: "РџСЂРѕС„РёР»СЊ",
-    nav_help: "Р РЋР С—РЎР‚Р В°Р Р†Р С”Р В°",
-    logout: "Р’С‹Р№С‚Рё",
-    theme_classic: "РљР»Р°СЃСЃРёРєР°",
-    theme_dark: "Р СћР ВµР СР Р…Р В°РЎРЏ",
-    theme_light: "Р РЋР Р†Р ВµРЎвЂљР В»Р В°РЎРЏ",
-    theme_moon: "Р вЂєРЎС“Р Р…Р В°",
-    theme_newyear: "Р СњР С•Р Р†Р С•Р С–Р С•Р Т‘Р Р…РЎРЏРЎРЏ",
-    theme_summer: "Р вЂєР ВµРЎвЂљР С•",
-    theme_autumn: "Р С›РЎРѓР ВµР Р…РЎРЉ",
-    theme_winter: "Р—РёРјР°",
-    theme_spring: "Р вЂ™Р ВµРЎРѓР Р…Р В°",
-    theme_japan: "РЇРїРѕРЅРёСЏ",
-    theme_greenland: "Р“СЂРµРЅР»Р°РЅРґРёСЏ",
-  },
-  en: {
+    nav_products: "Товары",
+    nav_sales: "Статистика и дашборд",
+    nav_reviews: "Отзывы/Вопросы",
+    nav_accounting: "Бухгалтерия",
+    nav_ads: "Реклама WB/Ozon",
+    nav_social: "Социальный",
+    nav_profile: "Профиль",
+    nav_help: "Справка",
+    logout: "Выйти",
+    theme_classic: "Классика",
+    theme_dark: "Темная",
+    theme_light: "Светлая",
+    theme_moon: "Луна",
+    theme_newyear: "Новый год",
+    theme_summer: "Лето",
+    theme_autumn: "Осень",
+    theme_winter: "Зима",
+    theme_spring: "Весна",
+    theme_japan: "Япония",
+    theme_greenland: "Гренландия",
+  },  en: {
     nav_products: "Products",
     nav_sales: "Statistics & Dashboard",
     nav_reviews: "Reviews/Questions",
@@ -768,22 +767,22 @@ async function trackUiActivity(action, moduleCode = "", details = "", options = 
 function moduleLabel(code) {
   const key = String(code || "").trim().toLowerCase();
   const labels = {
-    products: tr("Р СћР С•Р Р†Р В°РЎР‚РЎвЂ№", "Products"),
-    seo_generation: tr("SEO Р·Р°РґР°С‡Рё", "SEO Jobs"),
+    products: tr("Товары", "Products"),
+    seo_generation: tr("SEO задачи", "SEO Jobs"),
     sales_stats: tr("Статистика продаж", "Sales Statistics"),
-    accounting: tr("Р‘СѓС…РіР°Р»С‚РµСЂРёСЏ", "Accounting"),
-    wb_reviews_ai: tr("Р С›РЎвЂљР В·РЎвЂ№Р Р†РЎвЂ№", "Reviews"),
-    wb_questions_ai: tr("Р вЂ™Р С•Р С—РЎР‚Р С•РЎРѓРЎвЂ№", "Questions"),
-    returns: tr("Р вЂ™Р С•Р В·Р Р†РЎР‚Р В°РЎвЂљРЎвЂ№", "Returns"),
-    wb_ads: tr("Р В Р ВµР С”Р В»Р В°Р СР В°", "Ads"),
-    ads_campaigns: tr("????????? ????????", "Ad Campaigns"),
-    ads_bidder: tr("Р‘РёРґРµСЂ WB", "WB Bidder"),
-    wb_ads_analytics: tr("РђРЅР°Р»РёС‚РёРєР° Ads", "Ads Analytics"),
-    wb_ads_recommendations: tr("Рекомендации Ads", "Ads Recommendations"),
-    user_profile: tr("РџСЂРѕС„РёР»СЊ", "Profile"),
-    help_center: tr("Р РЋР С—РЎР‚Р В°Р Р†Р С”Р В°", "Help"),
-    ai_assistant: tr("AI РїРѕРјРѕС‰РЅРёРє", "AI Assistant"),
-    social_hub: tr("??????????", "Social Hub"),
+    accounting: tr("Бухгалтерия", "Accounting"),
+    wb_reviews_ai: tr("Отзывы", "Reviews"),
+    wb_questions_ai: tr("Вопросы", "Questions"),
+    returns: tr("Возвраты", "Returns"),
+    wb_ads: tr("Реклама", "Ads"),
+    ads_campaigns: tr("Рекламные кампании", "Ad Campaigns"),
+    ads_bidder: tr("Бидер WB", "WB Bidder"),
+    wb_ads_analytics: tr("Аналитика рекламы", "Ads Analytics"),
+    wb_ads_recommendations: tr("Рекомендации", "Ads Recommendations"),
+    user_profile: tr("Профиль", "Profile"),
+    help_center: tr("Справка", "Help"),
+    ai_assistant: tr("AI помощник", "AI Assistant"),
+    social_hub: tr("Социальный", "Social Hub"),
   };
   return labels[key] || key;
 }
@@ -1830,29 +1829,27 @@ function formatPositionValue(value) {
 
 const BUTTON_TIPS = {
   ru: {
-    "РРјРїРѕСЂС‚": "РРјРїРѕСЂС‚РёСЂСѓРµС‚ С‚РѕРІР°СЂС‹ РёР· РІС‹Р±СЂР°РЅРЅРѕРіРѕ РјР°СЂРєРµС‚РїР»РµР№СЃР° РІ Р»РѕРєР°Р»СЊРЅСѓСЋ Р±Р°Р·Сѓ.",
-    "РџРµСЂРµР·Р°РіСЂСѓР·РёС‚СЊ Р±Р°Р·Сѓ": "РџРѕР»РЅРѕСЃС‚СЊСЋ РїРµСЂРµСЃРѕР·РґР°РµС‚ Р»РѕРєР°Р»СЊРЅСѓСЋ Р±Р°Р·Сѓ С‚РѕРІР°СЂРѕРІ РїРѕ РІС‹Р±СЂР°РЅРЅРѕРјСѓ РјР°СЂРєРµС‚РїР»РµР№СЃСѓ.",
-    "РџСЂРѕРІРµСЂРёС‚СЊ РІС‹Р±СЂР°РЅРЅС‹Рµ": "РџСЂРѕРІРµСЂСЏРµС‚ РїРѕР·РёС†РёРё С‚РѕР»СЊРєРѕ РІС‹Р±СЂР°РЅРЅС‹С… С‚РѕРІР°СЂРѕРІ РїРѕ СѓРєР°Р·Р°РЅРЅС‹Рј РєР»СЋС‡Р°Рј.",
-    "РџСЂРѕРІРµСЂРёС‚СЊ РІСЃРµ": "РџСЂРѕРІРµСЂСЏРµС‚ РїРѕР·РёС†РёРё РІСЃРµС… С‚РѕРІР°СЂРѕРІ РІ Р±Р°Р·Рµ.",
-    "?????????????": "??????? ???????? ?????? AI ?? ?????? ???????.",
-    "РћС‚РїСЂР°РІРёС‚СЊ": "РџСѓР±Р»РёРєСѓРµС‚ РѕС‚РІРµС‚ РІ РјР°СЂРєРµС‚РїР»РµР№СЃ.",
-    "РћР±РЅРѕРІРёС‚СЊ": "РћР±РЅРѕРІР»СЏРµС‚ СЂР°РЅРµРµ РѕС‚РїСЂР°РІР»РµРЅРЅС‹Р№ РѕС‚РІРµС‚ РІ РјР°СЂРєРµС‚РїР»РµР№СЃРµ.",
-    "Р—Р°РіСЂСѓР·РёС‚СЊ РєР°РјРїР°РЅРёРё": "Р—Р°РіСЂСѓР¶Р°РµС‚ СЃРїРёСЃРѕРє СЂРµРєР»Р°РјРЅС‹С… РєР°РјРїР°РЅРёР№ РёР· РєР°Р±РёРЅРµС‚Р° WB Ads.",
-    "РџРѕР»СѓС‡РёС‚СЊ СЃС‚Р°РІРєРё": "Р—Р°РїСЂР°С€РёРІР°РµС‚ СЃС‚Р°РІРєРё РїРѕ РІС‹Р±СЂР°РЅРЅРѕР№ СЂРµРєР»Р°РјРЅРѕР№ РєР°РјРїР°РЅРёРё.",
-    "???????? ???????": "?????????? ??????? ? ?????????? ????????? ????????.",
-    "РџРѕСЃС‚СЂРѕРёС‚СЊ РѕС‚С‡РµС‚": "Р¤РѕСЂРјРёСЂСѓРµС‚ Р°РЅР°Р»РёС‚РёС‡РµСЃРєРёР№ РѕС‚С‡РµС‚ РїРѕ WB Ads Р·Р° РІС‹Р±СЂР°РЅРЅС‹Р№ РїРµСЂРёРѕРґ.",
-    "РџРѕСЃС‚СЂРѕРёС‚СЊ СЂРµРєРѕРјРµРЅРґР°С†РёРё": "Р¤РѕСЂРјРёСЂСѓРµС‚ СЃРїРёСЃРѕРє РїСЂРёРѕСЂРёС‚РµС‚РЅС‹С… РґРµР№СЃС‚РІРёР№ РїРѕ РѕРїС‚РёРјРёР·Р°С†РёРё СЂРµРєР»Р°РјРЅС‹С… РєР°РјРїР°РЅРёР№.",
-    "Р—Р°РіСЂСѓР·РёС‚СЊ СЃС‚Р°С‚РёСЃС‚РёРєСѓ": "Р—Р°РіСЂСѓР¶Р°РµС‚ РїСЂРѕРґР°Р¶Рё Р·Р° РІС‹Р±СЂР°РЅРЅС‹Р№ РїРµСЂРёРѕРґ Рё СЃС‚СЂРѕРёС‚ РіСЂР°С„РёРє.",
-    "????????? ???????": "????????? ?????? ? ??????????? ?????? ????????????.",
-    "РћР±РЅРѕРІРёС‚СЊ РїСЂРѕС„РёР»СЊ": "РџРµСЂРµР·Р°РіСЂСѓР¶Р°РµС‚ РґР°РЅРЅС‹Рµ РїСЂРѕС„РёР»СЏ СЃ СЃРµСЂРІРµСЂР°.",
-    "??????? ?????": "??????????? ???????? ???? ???????? ????????.",
-    "РџСЂРѕРґР»РёС‚СЊ РЅР° 30 РґРЅРµР№": "РџСЂРѕРґР»РµРІР°РµС‚ С‚Р°СЂРёС„ РЅР° СЃР»РµРґСѓСЋС‰РёР№ СЂР°СЃС‡РµС‚РЅС‹Р№ РїРµСЂРёРѕРґ.",
-    "??????? ??????": "????????? ?????? ???????? ????????.",
-    "Р—Р°РіСЂСѓР·РёС‚СЊ РІ Р±Р°Р·Сѓ Р·РЅР°РЅРёР№": "Р—Р°РіСЂСѓР¶Р°РµС‚ РґРѕРєСѓРјРµРЅС‚, РєРѕС‚РѕСЂС‹Р№ AI Р±СѓРґРµС‚ СѓС‡РёС‚С‹РІР°С‚СЊ РІ РѕС‚РІРµС‚Р°С….",
-    "РЈРґР°Р»РёС‚СЊ РІС‹Р±СЂР°РЅРЅС‹Р№ РґРѕРєСѓРјРµРЅС‚": "РЈРґР°Р»СЏРµС‚ РІС‹Р±СЂР°РЅРЅС‹Р№ РґРѕРєСѓРјРµРЅС‚ РёР· Р±Р°Р·С‹ Р·РЅР°РЅРёР№ AI.",
-    "РћР±РЅРѕРІРёС‚СЊ СЃРїСЂР°РІРєСѓ": "РџРµСЂРµР·Р°РіСЂСѓР¶Р°РµС‚ СЃРїСЂР°РІРѕС‡РЅСѓСЋ РёРЅС„РѕСЂРјР°С†РёСЋ РїРѕ РјРѕРґСѓР»СЏРј.",
-  },
-  en: {
+    nav_products: "Товары",
+    nav_sales: "Статистика и дашборд",
+    nav_reviews: "Отзывы/Вопросы",
+    nav_accounting: "Бухгалтерия",
+    nav_ads: "Реклама WB/Ozon",
+    nav_social: "Социальный",
+    nav_profile: "Профиль",
+    nav_help: "Справка",
+    logout: "Выйти",
+    theme_classic: "Классика",
+    theme_dark: "Темная",
+    theme_light: "Светлая",
+    theme_moon: "Луна",
+    theme_newyear: "Новый год",
+    theme_summer: "Лето",
+    theme_autumn: "Осень",
+    theme_winter: "Зима",
+    theme_spring: "Весна",
+    theme_japan: "Япония",
+    theme_greenland: "Гренландия",
+  },  en: {
     "Import": "Imports products from selected marketplace into local catalog.",
     "Reload Catalog": "Rebuilds local product catalog for selected marketplace.",
     "Check Selected": "Checks rankings for selected products and keywords.",
@@ -2821,29 +2818,29 @@ function getMobileQuickNavOptions() {
     if (!modulesLoaded) return true;
     return enabledModules instanceof Set && enabledModules.has(code);
   };
-  const options = [{ value: "sales_dashboard", label: isEn ? "Statistics" : "??????????" }];
+  const options = [{ value: "sales_dashboard", label: isEn ? "Statistics" : "Статистика" }];
   if (has("social_hub")) {
-    options.push({ value: "social_chat", label: isEn ? "Chat" : "Р В§Р В°РЎвЂљ" });
-    options.push({ value: "social_tasks", label: isEn ? "Tasks" : "Р—Р°РґР°С‡Рё" });
-    options.push({ value: "social_notes", label: isEn ? "Notes" : "Р—Р°РјРµС‚РєРё" });
-    options.push({ value: "social_calculator", label: isEn ? "Calculator" : "Р С™Р В°Р В»РЎРЉР С”РЎС“Р В»РЎРЏРЎвЂљР С•РЎР‚" });
-    options.push({ value: "social_calendar", label: isEn ? "Calendar" : "Р С™Р В°Р В»Р ВµР Р…Р Т‘Р В°РЎР‚РЎРЉ" });
-    options.push({ value: "social_games", label: isEn ? "Games" : "Р ВР С–РЎР‚РЎвЂ№" });
+    options.push({ value: "social_chat", label: isEn ? "Chat" : "Чат" });
+    options.push({ value: "social_tasks", label: isEn ? "Tasks" : "Задачи" });
+    options.push({ value: "social_notes", label: isEn ? "Notes" : "Заметки" });
+    options.push({ value: "social_calculator", label: isEn ? "Calculator" : "Калькулятор" });
+    options.push({ value: "social_calendar", label: isEn ? "Calendar" : "Календарь" });
+    options.push({ value: "social_games", label: isEn ? "Games" : "Игры" });
   }
   if (has("wb_reviews_ai") || has("wb_questions_ai") || has("returns")) {
-    if (has("wb_reviews_ai")) options.push({ value: "reviews_reviews", label: isEn ? "Review replies" : "Р С›РЎвЂљР Р†Р ВµРЎвЂљРЎвЂ№ Р Р…Р В° Р С•РЎвЂљР В·РЎвЂ№Р Р†РЎвЂ№" });
-    if (has("wb_questions_ai")) options.push({ value: "reviews_questions", label: isEn ? "Question replies" : "Р С›РЎвЂљР Р†Р ВµРЎвЂљРЎвЂ№ Р Р…Р В° Р Р†Р С•Р С—РЎР‚Р С•РЎРѓРЎвЂ№" });
-    if (has("returns")) options.push({ value: "reviews_returns", label: isEn ? "Returns" : "Р вЂ™Р С•Р В·Р Р†РЎР‚Р В°РЎвЂљРЎвЂ№" });
+    if (has("wb_reviews_ai")) options.push({ value: "reviews_reviews", label: isEn ? "Review replies" : "Ответы на отзывы" });
+    if (has("wb_questions_ai")) options.push({ value: "reviews_questions", label: isEn ? "Question replies" : "Ответы на вопросы" });
+    if (has("returns")) options.push({ value: "reviews_returns", label: isEn ? "Returns" : "Возвраты" });
   }
   if (has("wb_ads") || has("wb_ads_analytics") || has("wb_ads_recommendations")) {
-    if (has("wb_ads")) options.push({ value: "ads_campaigns", label: isEn ? "Ad campaigns" : "????????? ????????" });
-    if (has("wb_ads_analytics")) options.push({ value: "ads_analytics", label: isEn ? "Ads analytics" : "РђРЅР°Р»РёС‚РёРєР° СЂРµРєР»Р°РјС‹" });
-    if (has("wb_ads_recommendations")) options.push({ value: "ads_recommendations", label: isEn ? "Recommendations" : "????????????" });
-    if (has("wb_ads")) options.push({ value: "ads_bidder", label: isEn ? "WB Ads bidder" : "Р‘РёРґРµСЂ WB Ads" });
+    if (has("wb_ads")) options.push({ value: "ads_campaigns", label: isEn ? "Ad campaigns" : "Рекламные кампании" });
+    if (has("wb_ads_analytics")) options.push({ value: "ads_analytics", label: isEn ? "Ads analytics" : "Аналитика рекламы" });
+    if (has("wb_ads_recommendations")) options.push({ value: "ads_recommendations", label: isEn ? "Recommendations" : "Рекомендации" });
+    if (has("wb_ads")) options.push({ value: "ads_bidder", label: isEn ? "WB Ads bidder" : "Бидер WB Ads" });
   }
-  options.push({ value: "profile_main", label: isEn ? "Profile" : "РџСЂРѕС„РёР»СЊ" });
+  options.push({ value: "profile_main", label: isEn ? "Profile" : "Профиль" });
   if (has("help_center")) {
-    options.push({ value: "help_main", label: isEn ? "Help" : "Р РЋР С—РЎР‚Р В°Р Р†Р С”Р В°" });
+    options.push({ value: "help_main", label: isEn ? "Help" : "Справка" });
   }
   return options;
 }
@@ -12875,6 +12872,7 @@ window.onMobileQuickNavChanged = onMobileQuickNavChanged;
 window.syncMobileQuickNavSelection = syncMobileQuickNavSelection;
 queueMojibakeDomNormalize(typeof document !== "undefined" ? document.body : null);
 installMojibakeDomObserver();
+
 
 
 
