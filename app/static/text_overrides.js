@@ -1,625 +1,954 @@
-(function textOverridesV20260320() {
-  if (typeof window === "undefined") return;
-  if (window.__textOverridesV20260320) return;
-  window.__textOverridesV20260320 = true;
-
-  const CP1251_TABLE = [
-    "\u0402","\u0403","\u201A","\u0453","\u201E","\u2026","\u2020","\u2021",
-    "\u20AC","\u2030","\u0409","\u2039","\u040A","\u040C","\u040B","\u040F",
-    "\u0452","\u2018","\u2019","\u201C","\u201D","\u2022","\u2013","\u2014",
-    "","\u2122","\u0459","\u203A","\u045A","\u045C","\u045B","\u045F",
-    "\u00A0","\u040E","\u045E","\u0408","\u00A4","\u0490","\u00A6","\u00A7",
-    "\u0401","\u00A9","\u0404","\u00AB","\u00AC","\u00AD","\u00AE","\u0407",
-    "\u00B0","\u00B1","\u0406","\u0456","\u0491","\u00B5","\u00B6","\u00B7",
-    "\u0451","\u2116","\u0454","\u00BB","\u0458","\u0405","\u0455","\u0457",
-  ];
-
-  const CP1251_REVERSE = new Map();
-  for (let index = 0; index < CP1251_TABLE.length; index += 1) {
-    const ch = CP1251_TABLE[index];
-    if (ch) CP1251_REVERSE.set(ch.charCodeAt(0), 0x80 + index);
-  }
+(function textOverridesV20260323s2() {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  if (window.__textOverridesV20260323s2) return;
+  window.__textOverridesV20260323s2 = true;
 
   const TEXT_ATTRS = ["title", "placeholder", "aria-label", "data-tip"];
-  let repairQueued = false;
-  let copyQueued = false;
+  const cp1251Table = new Map();
+  const ruFallbackByEnglish = new Map([
+    ["Dashboard", "Статистика"],
+    ["Products", "Товары"],
+    ["Reviews/Questions", "Отзывы/Вопросы"],
+    ["Accounting", "Бухгалтерия"],
+    ["Ads WB/Ozon", "Реклама WB/Ozon"],
+    ["Social Hub", "Социальный"],
+    ["Profile", "Профиль"],
+    ["Help", "Справка"],
+    ["Chats", "Чаты"],
+    ["Tasks", "Задачи"],
+    ["Notes", "Заметки"],
+    ["Calendar", "Календарь"],
+    ["Calculator", "Калькулятор"],
+    ["Games", "Игры"],
+    ["Reviews", "Отзывы"],
+    ["Questions", "Вопросы"],
+    ["Returns", "Возвраты"],
+    ["Ads WB", "Реклама WB"],
+    ["Ad analytics", "Аналитика рекламы"],
+    ["Recommendations", "Рекомендации"],
+    ["WB Ads bidder", "Бидер WB Ads"],
+    ["Section", "Раздел"],
+    ["Menu", "Меню"],
+    ["Notifications", "Уведомления"],
+    ["Send", "Отправить"],
+    ["Create note", "Создать запись"],
+    ["New task", "Новая задача"],
+    ["New project", "Новый проект"],
+    ["Project members", "Участники проекта"],
+    ["Refresh", "Обновить"],
+    ["Search", "Поиск"],
+    ["Logout", "Выйти"],
+    ["Mark all read", "Прочитать все"],
+    ["No notifications yet.", "Уведомлений пока нет."],
+    ["Notification", "Уведомление"],
+  ]);
+  const brokenQuestionMap = new Map([
+    ["??????????", "Социальный"],
+    ["??????? WB/Ozon", "Реклама WB/Ozon"],
+    ["??????? WB", "Реклама WB"],
+    ["????????????", "Рекомендации"],
+    ["??????? ????????", "Рекламные кампании"],
+    ["???????", "Справка"],
+    ["????????/?????????? ????", "Свернуть/развернуть меню"],
+    ["??????", "Раздел"],
+  ]);
+  (function installDictionaryFixesV20260324a() {
+    const ruFixed = {
+      Dashboard: "\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0430",
+      Products: "\u0422\u043e\u0432\u0430\u0440\u044b",
+      "Reviews/Questions": "\u041e\u0442\u0437\u044b\u0432\u044b/\u0412\u043e\u043f\u0440\u043e\u0441\u044b",
+      Accounting: "\u0411\u0443\u0445\u0433\u0430\u043b\u0442\u0435\u0440\u0438\u044f",
+      "Ads WB/Ozon": "\u0420\u0435\u043a\u043b\u0430\u043c\u0430 WB/Ozon",
+      "Social Hub": "\u0421\u043e\u0446\u0438\u0430\u043b\u044c\u043d\u044b\u0439",
+      Profile: "\u041f\u0440\u043e\u0444\u0438\u043b\u044c",
+      Help: "\u0421\u043f\u0440\u0430\u0432\u043a\u0430",
+      Chats: "\u0427\u0430\u0442\u044b",
+      Tasks: "\u0417\u0430\u0434\u0430\u0447\u0438",
+      Notes: "\u0417\u0430\u043c\u0435\u0442\u043a\u0438",
+      Calendar: "\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c",
+      Calculator: "\u041a\u0430\u043b\u044c\u043a\u0443\u043b\u044f\u0442\u043e\u0440",
+      Games: "\u0418\u0433\u0440\u044b",
+      Reviews: "\u041e\u0442\u0437\u044b\u0432\u044b",
+      Questions: "\u0412\u043e\u043f\u0440\u043e\u0441\u044b",
+      Returns: "\u0412\u043e\u0437\u0432\u0440\u0430\u0442\u044b",
+      "Ads WB": "\u0420\u0435\u043a\u043b\u0430\u043c\u0430 WB",
+      "Ad analytics": "\u0410\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0430 \u0440\u0435\u043a\u043b\u0430\u043c\u044b",
+      Recommendations: "\u0420\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u0430\u0446\u0438\u0438",
+      "WB Ads bidder": "\u0411\u0438\u0434\u0435\u0440 WB Ads",
+      Section: "\u0420\u0430\u0437\u0434\u0435\u043b",
+      Menu: "\u041c\u0435\u043d\u044e",
+      Notifications: "\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f",
+      Send: "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c",
+      "Create note": "\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0437\u0430\u043f\u0438\u0441\u044c",
+      "New task": "\u041d\u043e\u0432\u0430\u044f \u0437\u0430\u0434\u0430\u0447\u0430",
+      "New project": "\u041d\u043e\u0432\u044b\u0439 \u043f\u0440\u043e\u0435\u043a\u0442",
+      "Project members": "\u0423\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0438 \u043f\u0440\u043e\u0435\u043a\u0442\u0430",
+      Refresh: "\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c",
+      Search: "\u041f\u043e\u0438\u0441\u043a",
+      Logout: "\u0412\u044b\u0439\u0442\u0438",
+      "Mark all read": "\u041f\u0440\u043e\u0447\u0438\u0442\u0430\u0442\u044c \u0432\u0441\u0435",
+      "No notifications yet.": "\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u0439 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.",
+      Notification: "\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u0435",
+    };
+    Object.entries(ruFixed).forEach(([key, value]) => {
+      ruFallbackByEnglish.set(String(key), String(value));
+    });
+
+    const brokenFixed = {
+      "??????????": "\u0421\u043e\u0446\u0438\u0430\u043b\u044c\u043d\u044b\u0439",
+      "??????? WB/Ozon": "\u0420\u0435\u043a\u043b\u0430\u043c\u0430 WB/Ozon",
+      "??????? WB": "\u0420\u0435\u043a\u043b\u0430\u043c\u0430 WB",
+      "????????????": "\u0420\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u0430\u0446\u0438\u0438",
+      "??????? ????????": "\u0420\u0435\u043a\u043b\u0430\u043c\u043d\u044b\u0435 \u043a\u0430\u043c\u043f\u0430\u043d\u0438\u0438",
+      "???????": "\u0421\u043f\u0440\u0430\u0432\u043a\u0430",
+      "????????/?????????? ????": "\u0421\u0432\u0435\u0440\u043d\u0443\u0442\u044c/\u0440\u0430\u0437\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u043c\u0435\u043d\u044e",
+      "??????": "\u0420\u0430\u0437\u0434\u0435\u043b",
+    };
+    Object.entries(brokenFixed).forEach(([key, value]) => {
+      brokenQuestionMap.set(String(key), String(value));
+    });
+  })();
+  let queueRaf = 0;
+  const queuedRoots = new Set();
+  let calendarRecoverAt = 0;
+  let domObserver = null;
+  let observerQueued = false;
+
+  function isEn() {
+    return String(window.currentLang || "").trim().toLowerCase() === "en";
+  }
 
   function pick(ru, en) {
-    return currentLang === "en" ? en : ru;
+    const value = isEn() ? String(en || "") : String(ru || "");
+    return repairText(value);
   }
 
-  function countMatches(value, regex) {
-    const match = String(value || "").match(regex);
-    return match ? match.length : 0;
+  function localizeEnglishFallback(enValue) {
+    const key = String(enValue || "").trim();
+    if (!key) return "";
+    return ruFallbackByEnglish.get(key) || key;
   }
 
-  function encodeCp1251(value) {
+  function initCp1251Table() {
+    if (cp1251Table.size || typeof TextDecoder === "undefined") return;
+    const decoder = new TextDecoder("windows-1251");
+    for (let i = 0; i < 256; i += 1) {
+      const ch = decoder.decode(new Uint8Array([i]));
+      if (!cp1251Table.has(ch)) cp1251Table.set(ch, i);
+    }
+  }
+
+  function cyrillicScore(text) {
+    const m = String(text || "").match(/[\u0400-\u04ff]/g);
+    return m ? m.length : 0;
+  }
+
+  function mojibakeScore(text) {
+    const value = String(text || "");
+    if (!value) return 0;
+    const m = value.match(/(?:\u0420[\u0400-\u04ffA-Za-z0-9]|\u0421[\u0400-\u04ffA-Za-z0-9]|\u0412[\u0400-\u04ffA-Za-z0-9]|\u00d0.|\u00d1.|\uFFFD|\?{3,})/g);
+    return m ? m.length : 0;
+  }
+
+  function normalizeArtifacts(text) {
+    return String(text || "")
+      .replace(/[\u0000-\u001F\u007F-\u009F]+/g, " ")
+      .replace(/\u00a0/g, " ")
+      .replace(/([\u0420\u0421\u0412\u00d0\u00d1])(?:\s|\u00A0)+(?=[\u0420\u0421\u0412\u00d0\u00d1\u0400-\u04ffA-Za-z0-9])/g, "$1")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
+  function collapseBrokenSpacing(text) {
+    let out = String(text || "");
+    if (!out) return "";
+    for (let i = 0; i < 4; i += 1) {
+      out = out
+        .replace(/([\u0420\u0421\u0412\u00d0\u00d1][^\s]{0,3})(?:\s|\u00A0)+(?=[\u0420\u0421\u0412\u00d0\u00d1][^\s]{0,3})/g, "$1")
+        .replace(/(\b[\u0420\u0421\u0412\u00d0\u00d1][\u0400-\u04ffA-Za-z0-9'’.,:;!?-]{0,2}\b)(?:\s|\u00A0)+(?=\b[\u0420\u0421\u0412\u00d0\u00d1][\u0400-\u04ffA-Za-z0-9'’.,:;!?-]{0,2}\b)/g, "$1")
+        .replace(/([\u0420\u0421\u0412\u00d0\u00d1])(?:\s|\u00A0)+(?=[\u0400-\u04ffA-Za-z0-9])/g, "$1")
+        .replace(/(?:\b[\u0420\u0421\u0412\u00d0\u00d1]\b(?:\s|\u00A0)+){3,}\b[\u0420\u0421\u0412\u00d0\u00d1]\b/g, (seq) => seq.replace(/[\s\u00A0]+/g, ""))
+        .replace(/\s{2,}/g, " ");
+    }
+    return normalizeArtifacts(out);
+  }
+
+  function looksBroken(text) {
+    const value = String(text || "");
+    if (!value) return false;
+    if (/\?{3,}|\uFFFD/.test(value)) return true;
+    if (mojibakeScore(value) >= 2) return true;
+    if (/(?:\b[\u0420\u0421\u0412\u00d0\u00d1]\b(?:\s|\u00A0)+){4,}/.test(value)) return true;
+    if (/(?:[\u0420\u0421\u0412\u00d0\u00d1](?:\s|\u00A0)+){3,}/.test(value)) return true;
+    if (/(?:[\u0420\u0421\u0412\u00d0\u00d1]\s+){3,}/.test(value)) return true;
+    return false;
+  }
+
+  function decodeCp1251Utf8(text) {
+    initCp1251Table();
+    if (!cp1251Table.size || typeof TextDecoder === "undefined") return "";
     const bytes = [];
-    for (const ch of String(value || "")) {
-      const code = ch.charCodeAt(0);
-      if (code <= 0x7f) {
-        bytes.push(code);
-        continue;
-      }
-      if (code >= 0x0410 && code <= 0x042f) {
-        bytes.push(0xc0 + (code - 0x0410));
-        continue;
-      }
-      if (code >= 0x0430 && code <= 0x044f) {
-        bytes.push(0xe0 + (code - 0x0430));
-        continue;
-      }
-      if (code === 0x0401) {
-        bytes.push(0xa8);
-        continue;
-      }
-      if (code === 0x0451) {
-        bytes.push(0xb8);
-        continue;
-      }
-      const mapped = CP1251_REVERSE.get(code);
-      if (typeof mapped === "number") {
-        bytes.push(mapped);
-        continue;
-      }
-      return null;
+    for (const ch of String(text || "")) {
+      const b = cp1251Table.get(ch);
+      if (b === undefined) return "";
+      bytes.push(b);
     }
-    return new Uint8Array(bytes);
-  }
-
-  function brokenScore(value) {
-    const text = String(value || "");
-    let score = 0;
-    score += countMatches(text, /[\u0402-\u040f\u0452-\u045f\u2018\u2019\u201a\u201c\u201d\u201e\u2020\u2021\u2022\u2026\u2030\u2039\u203a\u20ac\u2122]/g) * 6;
-    score += countMatches(text, /\uFFFD/g) * 8;
-    score += countMatches(text, /\?{3,}/g) * 10;
-    score += countMatches(text, /[\u0420\u0421]/g) * 2;
-    score += countMatches(text, /\u0432\u0402/g) * 5;
-    score += countMatches(text, /[\u00d0\u00d1\u00e2]/g) * 4;
-    return score;
-  }
-
-  function readableScore(value) {
-    const text = String(value || "");
-    let score = 0;
-    score += countMatches(text, /[\u0410-\u042f\u0430-\u044f\u0401\u0451]/g) * 3;
-    score += countMatches(text, /[A-Za-z]/g) * 1;
-    score += countMatches(text, /\d/g) * 0.5;
-    score -= brokenScore(text);
-    return score;
-  }
-
-  function looksBroken(value) {
-    const text = String(value || "");
-    return brokenScore(text) >= 6;
-  }
-
-  function looksLikeUtf8Mojibake(value) {
-    const text = String(value || "");
-    return /(?:[\u0420\u0421][\u0400-\u04ff]){2,}/.test(text);
-  }
-
-  function maybeRepairOnce(value) {
-    const original = String(value || "");
-    const forced = looksLikeUtf8Mojibake(original);
-    if (!original || (!forced && !looksBroken(original))) return original;
-    const bytes = encodeCp1251(original);
-    if (!bytes) return original;
-    let fixed = "";
     try {
-      fixed = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      return new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(bytes));
     } catch (_) {
-      return original;
+      return "";
     }
-    if (!fixed || fixed === original) return original;
-    if (!forced && readableScore(fixed) <= readableScore(original)) return original;
-    return fixed;
   }
 
-  function repairText(value) {
-    let current = String(value ?? "");
-    for (let step = 0; step < 3; step += 1) {
-      const next = maybeRepairOnce(current);
-      if (next === current) break;
-      current = next;
+  function decodeLatin1Utf8(text) {
+    try {
+      return decodeURIComponent(escape(String(text || "")));
+    } catch (_) {
+      return "";
     }
-    return current;
+  }
+
+  function repairText(input) {
+    const raw = String(input == null ? "" : input);
+    if (!raw) return "";
+    const directQuestionFix = brokenQuestionMap.get(raw.trim());
+    if (directQuestionFix) return directQuestionFix;
+    if (!looksBroken(raw)) return normalizeArtifacts(raw);
+    const collapsed = collapseBrokenSpacing(raw);
+    const candidates = [
+      raw,
+      collapsed,
+      decodeCp1251Utf8(raw),
+      decodeCp1251Utf8(collapsed),
+      decodeLatin1Utf8(raw),
+      decodeLatin1Utf8(collapsed),
+      raw.replace(/([A-Za-z\u0400-\u04ff\u0420\u0421\u0412\u00d0\u00d1])(?:\s|\u00A0)+(?=[A-Za-z\u0400-\u04ff\u0420\u0421\u0412\u00d0\u00d1])/g, "$1"),
+    ].filter(Boolean);
+    let best = normalizeArtifacts(raw);
+    let bestBad = mojibakeScore(best);
+    let bestCyr = cyrillicScore(best);
+    candidates.forEach((candRaw) => {
+      let cand = normalizeArtifacts(candRaw);
+      try {
+        if (typeof window.decodePossiblyMojibake === "function") {
+          cand = normalizeArtifacts(window.decodePossiblyMojibake(cand) || cand);
+        }
+      } catch (_) {}
+      const bad = mojibakeScore(cand);
+      const cyr = cyrillicScore(cand);
+      if (bad < bestBad || (bad === bestBad && cyr > bestCyr)) {
+        best = cand;
+        bestBad = bad;
+        bestCyr = cyr;
+      }
+    });
+    return normalizeArtifacts(best);
   }
 
   window.__repairMojibakeText = repairText;
 
   function repairTextNode(node) {
     if (!node || node.nodeType !== Node.TEXT_NODE) return;
-    const original = String(node.nodeValue || "");
-    const fixed = repairText(original);
-    if (fixed !== original) node.nodeValue = fixed;
+    const before = String(node.nodeValue || "");
+    if (!before || !looksBroken(before)) return;
+    const after = repairText(before);
+    if (after && after !== before) node.nodeValue = after;
   }
 
-  function repairElementAttributes(node) {
+  function repairElementAttrs(node) {
     if (!node || node.nodeType !== Node.ELEMENT_NODE) return;
-    if (["SCRIPT", "STYLE", "NOSCRIPT"].includes(node.tagName)) return;
-    TEXT_ATTRS.forEach((attr) => {
-      if (!node.hasAttribute(attr)) return;
-      const original = node.getAttribute(attr) || "";
-      const fixed = repairText(original);
-      if (fixed !== original) node.setAttribute(attr, fixed);
-    });
-    if (node.tagName === "INPUT" || node.tagName === "TEXTAREA") {
-      const type = String(node.getAttribute("type") || "").toLowerCase();
-      if (["button", "submit", "reset"].includes(type)) {
-        const original = node.value || "";
-        const fixed = repairText(original);
-        if (fixed !== original) node.value = fixed;
-      }
+    const tag = String(node.tagName || "");
+    if (tag === "SCRIPT" || tag === "STYLE" || tag === "NOSCRIPT") return;
+    for (const attr of TEXT_ATTRS) {
+      const before = String(node.getAttribute?.(attr) || "");
+      if (!before || !looksBroken(before)) continue;
+      const after = repairText(before);
+      if (after && after !== before) node.setAttribute(attr, after);
     }
   }
 
-  function repairTree(root) {
-    if (!root) return;
-    if (root.nodeType === Node.TEXT_NODE) {
-      repairTextNode(root);
+  function sanitizeTree(root) {
+    const target = root || document.getElementById("appSection") || document.body;
+    if (!target) return;
+    if (target.nodeType === Node.TEXT_NODE) {
+      repairTextNode(target);
       return;
     }
-    if (root.nodeType === Node.ELEMENT_NODE) {
-      repairElementAttributes(root);
-    }
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, null);
+    if (target.nodeType === Node.ELEMENT_NODE) repairElementAttrs(target);
+    const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, null);
     let current = walker.currentNode;
     while (current) {
       if (current.nodeType === Node.TEXT_NODE) repairTextNode(current);
-      if (current.nodeType === Node.ELEMENT_NODE) repairElementAttributes(current);
+      if (current.nodeType === Node.ELEMENT_NODE) repairElementAttrs(current);
       current = walker.nextNode();
     }
   }
 
-  function setText(selector, ru, en) {
-    document.querySelectorAll(selector).forEach((node) => {
-      node.textContent = pick(ru, en);
+  function queueSanitize(root) {
+    const safeRoot = (root && root.nodeType) ? root : (document.getElementById("appSection") || document.body);
+    if (safeRoot) queuedRoots.add(safeRoot);
+    if (queueRaf) return;
+    queueRaf = requestAnimationFrame(() => {
+      queueRaf = 0;
+      const roots = [...queuedRoots];
+      queuedRoots.clear();
+      if (!roots.length) roots.push(document.getElementById("appSection") || document.body);
+      roots.forEach((node) => sanitizeTree(node));
+      applyKnownCopy();
+      normalizeCalendarUi();
+      normalizeNotificationCenter();
+      normalizeNotesGrid();
+      normalizeTasksUi();
+      normalizeGamesUi();
     });
   }
 
-  function setHtml(selector, ru, en) {
-    document.querySelectorAll(selector).forEach((node) => {
-      node.innerHTML = pick(ru, en);
+  function isAppShellMode() {
+    try {
+      if (document.body?.classList?.contains("mobile-apk-mode")) return true;
+      if (document.body?.classList?.contains("mobile-client-mode")) return true;
+      if (typeof window.socialIsAppShellLike === "function") return Boolean(window.socialIsAppShellLike());
+      if (String(window.location?.pathname || "") === "/mobile") return true;
+    } catch (_) {}
+    return false;
+  }
+
+  function calendarBaseDate() {
+    const d = window.socialState?.calendarDate;
+    if (d instanceof Date && !Number.isNaN(d.getTime())) return d;
+    return new Date();
+  }
+
+  function buildCalendarFallbackGrid(root) {
+    const host = root || document.getElementById("socialSubtabCalendar");
+    if (!host) return;
+    const shell = host.querySelector(".social-calendar-shell") || host;
+    let grid = document.getElementById("socialCalendarGrid");
+    if (!grid) {
+      grid = document.createElement("div");
+      grid.id = "socialCalendarGrid";
+      grid.className = "social-calendar-grid social-calendar-grid--samsung";
+      shell.appendChild(grid);
+    }
+    const d = calendarBaseDate();
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    const firstDay = new Date(year, month, 1, 0, 0, 0, 0);
+    const lastDay = new Date(year, month + 1, 0, 0, 0, 0, 0);
+    const shift = (firstDay.getDay() + 6) % 7;
+    const days = Number(lastDay.getDate() || 0);
+    let html = `<div class="social-calendar-row head">${[
+      pick("Пн", "Mon"),
+      pick("Вт", "Tue"),
+      pick("Ср", "Wed"),
+      pick("Чт", "Thu"),
+      pick("Пт", "Fri"),
+      pick("Сб", "Sat"),
+      pick("Вс", "Sun"),
+    ].map((x) => `<span>${x}</span>`).join("")}</div><div class="social-calendar-cells">`;
+    for (let i = 0; i < shift; i += 1) {
+      html += `<button class="social-day muted" disabled></button>`;
+    }
+    for (let day = 1; day <= days; day += 1) {
+      const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      html += `<button class="social-day rich" data-day-key="${key}" type="button" onclick="socialShowDay('${key}')"><div class="social-day-head"><b>${day}</b></div><div class="social-day-preview-stack"></div></button>`;
+    }
+    html += "</div>";
+    grid.innerHTML = html;
+    const monthLabel = document.getElementById("socialCalendarMonthLabel");
+    if (monthLabel && typeof window.socialCalendarMonthLabel === "function") {
+      monthLabel.textContent = String(window.socialCalendarMonthLabel(d) || "");
+    }
+  }
+
+  function buildCalendarFallbackGridV2(root) {
+    const host = root || document.getElementById("socialSubtabCalendar");
+    if (!host) return;
+    const shell = host.querySelector(".social-calendar-shell") || host;
+    let grid = document.getElementById("socialCalendarGrid");
+    if (!grid) {
+      grid = document.createElement("div");
+      grid.id = "socialCalendarGrid";
+      grid.className = "social-calendar-grid social-calendar-grid--samsung";
+      shell.appendChild(grid);
+    } else if (grid.parentElement !== shell) {
+      shell.appendChild(grid);
+    }
+    const d = calendarBaseDate();
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    const firstDay = new Date(year, month, 1, 0, 0, 0, 0);
+    const lastDay = new Date(year, month + 1, 0, 0, 0, 0, 0);
+    const shift = (firstDay.getDay() + 6) % 7;
+    const days = Number(lastDay.getDate() || 0);
+    let html = `<div class="social-calendar-row head">${[
+      pick("\u041f\u043d", "Mon"),
+      pick("\u0412\u0442", "Tue"),
+      pick("\u0421\u0440", "Wed"),
+      pick("\u0427\u0442", "Thu"),
+      pick("\u041f\u0442", "Fri"),
+      pick("\u0421\u0431", "Sat"),
+      pick("\u0412\u0441", "Sun"),
+    ].map((x) => `<span>${x}</span>`).join("")}</div><div class="social-calendar-cells">`;
+    for (let i = 0; i < shift; i += 1) {
+      html += `<button class="social-day muted" disabled></button>`;
+    }
+    for (let day = 1; day <= days; day += 1) {
+      const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      html += `<button class="social-day rich" data-day-key="${key}" type="button" onclick="socialShowDay('${key}')"><div class="social-day-head"><b>${day}</b></div><div class="social-day-preview-stack"></div></button>`;
+    }
+    html += "</div>";
+    grid.innerHTML = html;
+    grid.style.setProperty("display", "block", "important");
+    const head = grid.querySelector(".social-calendar-row.head");
+    if (head) {
+      head.style.setProperty("display", "grid", "important");
+      head.style.setProperty("grid-template-columns", "repeat(7, minmax(0, 1fr))", "important");
+    }
+    const cells = grid.querySelector(".social-calendar-cells");
+    if (cells) {
+      cells.style.setProperty("display", "grid", "important");
+      cells.style.setProperty("grid-template-columns", "repeat(7, minmax(0, 1fr))", "important");
+    }
+    const monthLabel = document.getElementById("socialCalendarMonthLabel");
+    if (monthLabel && typeof window.socialCalendarMonthLabel === "function") {
+      monthLabel.textContent = String(window.socialCalendarMonthLabel(d) || "");
+    }
+  }
+
+  function installObserver() {
+    if (!window.__enableTextMutationObserver) return;
+    if (domObserver) return;
+    const root = document.getElementById("appSection") || document.body;
+    if (!root) return;
+    domObserver = new MutationObserver((mutations) => {
+      if (!Array.isArray(mutations) || !mutations.length) return;
+      if (observerQueued) return;
+      observerQueued = true;
+      requestAnimationFrame(() => {
+        observerQueued = false;
+        mutations.forEach((mutation) => {
+          if (mutation?.target) queueSanitize(mutation.target);
+          if (mutation?.addedNodes?.length) {
+            mutation.addedNodes.forEach((node) => queueSanitize(node));
+          }
+        });
+      });
     });
-  }
-
-  function setAttr(selector, attr, ru, en) {
-    document.querySelectorAll(selector).forEach((node) => {
-      node.setAttribute(attr, pick(ru, en));
+    domObserver.observe(root, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: TEXT_ATTRS,
     });
-  }
-
-  function headingCopy() {
-    const tab = typeof currentTab === "undefined" ? "sales" : String(currentTab || "sales").trim().toLowerCase();
-    const productsSubtab = typeof currentProductsSubtab === "undefined" ? "catalog" : String(currentProductsSubtab || "catalog").trim().toLowerCase();
-    const reviewsSubtab = typeof currentReviewsSubtab === "undefined" ? "reviews" : String(currentReviewsSubtab || "reviews").trim().toLowerCase();
-    const accountingSubtab = typeof currentAccountingSubtab === "undefined" ? "overview" : String(currentAccountingSubtab || "overview").trim().toLowerCase();
-    const adsSubtab = typeof currentAdsSubtab === "undefined" ? "campaigns" : String(currentAdsSubtab || "campaigns").trim().toLowerCase();
-    const socialSubtab = typeof currentSocialSubtab === "undefined" ? "chat" : String(currentSocialSubtab || "chat").trim().toLowerCase();
-    const helpSubtab = typeof currentHelpSubtab === "undefined" ? "docs" : String(currentHelpSubtab || "docs").trim().toLowerCase();
-
-    const main = {
-      sales: { ru: ["\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0430 \u0438 \u0434\u0430\u0448\u0431\u043e\u0440\u0434", "\u041f\u0440\u043e\u0434\u0430\u0436\u0438, KPI \u0438 \u0434\u0438\u043d\u0430\u043c\u0438\u043a\u0430 \u0432 \u043e\u0434\u043d\u043e\u043c \u043c\u043e\u0434\u0443\u043b\u0435"], en: ["Statistics & Dashboard", "Sales, KPIs and trends in one module"] },
-      products: { ru: ["\u0422\u043e\u0432\u0430\u0440\u044b", "\u0418\u043c\u043f\u043e\u0440\u0442, \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0438 \u0438 SEO-\u043f\u0440\u0430\u0432\u043a\u0438"], en: ["Products", "Import, product cards, and SEO updates"] },
-      reviews: { ru: ["\u041e\u0442\u0437\u044b\u0432\u044b / \u0412\u043e\u043f\u0440\u043e\u0441\u044b", "\u041e\u0442\u0432\u0435\u0442\u044b \u043a\u043b\u0438\u0435\u043d\u0442\u0430\u043c \u0438 AI-\u0447\u0435\u0440\u043d\u043e\u0432\u0438\u043a\u0438"], en: ["Reviews / Questions", "Customer replies and AI drafts"] },
-      accounting: { ru: ["\u0411\u0443\u0445\u0433\u0430\u043b\u0442\u0435\u0440\u0438\u044f", "\u041f\u0440\u0438\u0431\u044b\u043b\u044c, \u0440\u0430\u0441\u0445\u043e\u0434\u044b \u0438 \u044d\u043a\u043e\u043d\u043e\u043c\u0438\u043a\u0430 WB/Ozon"], en: ["Accounting", "Profit, costs, and WB/Ozon economics"] },
-      ads: { ru: ["\u0420\u0435\u043a\u043b\u0430\u043c\u0430 WB/Ozon", "\u041a\u0430\u043c\u043f\u0430\u043d\u0438\u0438, \u0430\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0430 \u0438 \u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u0430\u0446\u0438\u0438"], en: ["WB/Ozon Ads", "Campaigns, analytics, and recommendations"] },
-      social: { ru: ["\u0421\u043e\u0446\u0438\u0430\u043b\u044c\u043d\u044b\u0439", "\u0427\u0430\u0442\u044b, \u0437\u0430\u0434\u0430\u0447\u0438, \u043a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c \u0438 \u043a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0440\u0430\u0431\u043e\u0442\u0430"], en: ["Social Hub", "Chats, tasks, calendar, and teamwork"] },
-      profile: { ru: ["\u041f\u0440\u043e\u0444\u0438\u043b\u044c", "\u041f\u0440\u043e\u0444\u0438\u043b\u044c \u043a\u043e\u043c\u043f\u0430\u043d\u0438\u0438, \u0434\u043e\u0441\u0442\u0443\u043f\u044b \u0438 \u0438\u043d\u0442\u0435\u0433\u0440\u0430\u0446\u0438\u0438"], en: ["Profile", "Company profile, access, and integrations"] },
-      help: { ru: ["\u0421\u043f\u0440\u0430\u0432\u043a\u0430", "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f \u0438 \u043f\u043e\u043c\u043e\u0449\u044c \u043f\u043e \u043c\u043e\u0434\u0443\u043b\u044f\u043c"], en: ["Help Center", "Documentation and help by module"] },
-    };
-
-    const subtabs = {
-      products: {
-        catalog: { ru: ["\u0422\u043e\u0432\u0430\u0440\u044b", "\u041a\u0430\u0442\u0430\u043b\u043e\u0433, \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0438 \u0438 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u044f"], en: ["Products", "Catalog, product cards, and sync"] },
-        seo: { ru: ["SEO-\u0437\u0430\u0434\u0430\u0447\u0438", "\u0413\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u044f, \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u0438 \u043f\u0440\u0438\u043c\u0435\u043d\u0435\u043d\u0438\u0435 \u0442\u0435\u043a\u0441\u0442\u043e\u0432"], en: ["SEO Jobs", "Generate, review, and apply texts"] },
-      },
-      reviews: {
-        reviews: { ru: ["\u041e\u0442\u0432\u0435\u0442\u044b \u043d\u0430 \u043e\u0442\u0437\u044b\u0432\u044b", "\u041e\u0442\u0437\u044b\u0432\u044b WB \u0438 Ozon \u0441 AI-\u043e\u0442\u0432\u0435\u0442\u0430\u043c\u0438"], en: ["Review Replies", "WB and Ozon reviews with AI replies"] },
-        questions: { ru: ["\u041e\u0442\u0432\u0435\u0442\u044b \u043d\u0430 \u0432\u043e\u043f\u0440\u043e\u0441\u044b", "\u0412\u043e\u043f\u0440\u043e\u0441\u044b \u043f\u043e\u043a\u0443\u043f\u0430\u0442\u0435\u043b\u0435\u0439 \u0438 \u0431\u044b\u0441\u0442\u0440\u044b\u0435 \u043e\u0442\u0432\u0435\u0442\u044b"], en: ["Question Replies", "Customer questions and quick answers"] },
-        returns: { ru: ["\u0412\u043e\u0437\u0432\u0440\u0430\u0442\u044b", "\u0417\u0430\u044f\u0432\u043a\u0438 \u043d\u0430 \u0432\u043e\u0437\u0432\u0440\u0430\u0442 \u0438 \u043f\u043e\u043d\u044f\u0442\u043d\u044b\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044f"], en: ["Returns", "Return requests and next actions"] },
-      },
-      accounting: {
-        overview: { ru: ["\u0411\u0443\u0445\u0433\u0430\u043b\u0442\u0435\u0440\u0438\u044f", "KPI, \u043f\u0440\u0438\u0431\u044b\u043b\u044c \u0438 \u044d\u043a\u043e\u043d\u043e\u043c\u0438\u043a\u0430 \u043f\u043e \u043f\u0435\u0440\u0438\u043e\u0434\u0430\u043c"], en: ["Accounting", "KPIs, profit, and period economics"] },
-        analysis: { ru: ["\u0410\u043d\u0430\u043b\u0438\u0437 \u043f\u0440\u0438\u0431\u044b\u043b\u0438", "\u0412\u044b\u0440\u0443\u0447\u043a\u0430, \u0440\u0430\u0441\u0445\u043e\u0434\u044b \u0438 \u043c\u0430\u0440\u0436\u0438\u043d\u0430\u043b\u044c\u043d\u043e\u0441\u0442\u044c"], en: ["Profit Analysis", "Revenue, costs, and margin"] },
-        monthly: { ru: ["\u041f\u043e\u043c\u0435\u0441\u044f\u0447\u043d\u0430\u044f \u043f\u0440\u0438\u0431\u044b\u043b\u044c", "\u0421\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435 WB \u0438 Ozon \u043f\u043e 12 \u043c\u0435\u0441\u044f\u0446\u0430\u043c"], en: ["Monthly Profit", "WB and Ozon comparison by 12 months"] },
-        expenses: { ru: ["\u0420\u0430\u0441\u0445\u043e\u0434\u044b", "\u0423\u0447\u0435\u0442 \u0440\u0430\u0441\u0445\u043e\u0434\u043e\u0432 \u0438 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0439"], en: ["Expenses", "Expense tracking and categories"] },
-        settings: { ru: ["\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u0431\u0443\u0445\u0433\u0430\u043b\u0442\u0435\u0440\u0438\u0438", "\u0428\u0430\u0431\u043b\u043e\u043d\u044b, \u0441\u0442\u0430\u0432\u043a\u0438 \u0438 \u043f\u0440\u0430\u0432\u0438\u043b\u0430 \u0440\u0430\u0441\u0447\u0435\u0442\u0430"], en: ["Accounting Settings", "Templates, rates, and rules"] },
-      },
-      ads: {
-        campaigns: { ru: ["\u0420\u0435\u043a\u043b\u0430\u043c\u043d\u044b\u0435 \u043a\u0430\u043c\u043f\u0430\u043d\u0438\u0438", "\u041a\u0430\u043c\u043f\u0430\u043d\u0438\u0438 WB \u0441 \u0431\u044e\u0434\u0436\u0435\u0442\u0430\u043c\u0438 \u0438 \u0441\u0442\u0430\u0442\u0443\u0441\u0430\u043c\u0438"], en: ["Ad Campaigns", "WB campaigns with budgets and statuses"] },
-        analytics: { ru: ["\u0410\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0430 \u0440\u0435\u043a\u043b\u0430\u043c\u044b", "\u041f\u043e\u043a\u0430\u0437\u044b, \u043a\u043b\u0438\u043a\u0438, \u0437\u0430\u043a\u0430\u0437\u044b \u0438 \u0440\u0430\u0441\u0445\u043e\u0434\u044b"], en: ["Ads Analytics", "Views, clicks, orders, and spend"] },
-        recommendations: { ru: ["\u0420\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u0430\u0446\u0438\u0438 \u043f\u043e \u0440\u0435\u043a\u043b\u0430\u043c\u0435", "\u0421\u0442\u0430\u0432\u043a\u0438 \u0438 \u0440\u0435\u0437\u0435\u0440\u0432\u044b \u0434\u043b\u044f \u043e\u043f\u0442\u0438\u043c\u0438\u0437\u0430\u0446\u0438\u0438"], en: ["Ads Recommendations", "Bids and efficiency recommendations"] },
-        bidder: { ru: ["\u0411\u0438\u0434\u0435\u0440 WB Ads", "\u0410\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u043e\u0435 \u0443\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435 \u0441\u0442\u0430\u0432\u043a\u0430\u043c\u0438"], en: ["WB Ads Bidder", "Automatic bid management"] },
-        ozon: { ru: ["\u0420\u0435\u043a\u043b\u0430\u043c\u0430 Ozon", "\u041a\u0430\u043c\u043f\u0430\u043d\u0438\u0438 \u0438 \u0441\u0442\u0430\u0432\u043a\u0438 Ozon"], en: ["Ozon Ads", "Ozon campaigns and bids"] },
-      },
-      social: {
-        chat: { ru: ["\u0427\u0430\u0442\u044b", "\u041a\u043e\u043c\u0430\u043d\u0434\u043d\u044b\u0435 \u0438 \u043b\u0438\u0447\u043d\u044b\u0435 \u043f\u0435\u0440\u0435\u043f\u0438\u0441\u043a\u0438"], en: ["Chats", "Team and direct conversations"] },
-        tasks: { ru: ["\u0417\u0430\u0434\u0430\u0447\u0438", "\u041f\u0440\u043e\u0435\u043a\u0442\u043d\u044b\u0435 \u0438 \u043b\u0438\u0447\u043d\u044b\u0435 \u0437\u0430\u0434\u0430\u0447\u0438 \u0441 \u0434\u0435\u0434\u043b\u0430\u0439\u043d\u0430\u043c\u0438"], en: ["Tasks", "Project and personal tasks with deadlines"] },
-        calendar: { ru: ["\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c", "\u0421\u043e\u0431\u044b\u0442\u0438\u044f, \u0437\u0430\u0434\u0430\u0447\u0438 \u0438 \u043d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u044f \u0432 \u043e\u0434\u043d\u043e\u043c \u043a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u0435"], en: ["Calendar", "Events, tasks, and reminders in one calendar"] },
-        calculator: { ru: ["\u041a\u0430\u043b\u044c\u043a\u0443\u043b\u044f\u0442\u043e\u0440", "\u0411\u044b\u0441\u0442\u0440\u044b\u0435 \u0440\u0430\u0441\u0447\u0435\u0442\u044b \u0438 \u043a\u043e\u043d\u0432\u0435\u0440\u0442\u0430\u0446\u0438\u044f"], en: ["Calculator", "Quick calculations and conversion"] },
-        notes: { ru: ["\u0417\u0430\u043c\u0435\u0442\u043a\u0438", "\u041b\u0438\u0447\u043d\u044b\u0435 \u0438 \u043a\u043e\u043c\u0430\u043d\u0434\u043d\u044b\u0435 \u0437\u0430\u043c\u0435\u0442\u043a\u0438"], en: ["Notes", "Personal and team notes"] },
-        games: { ru: ["\u0418\u0433\u0440\u044b", "\u0428\u0430\u0445\u043c\u0430\u0442\u044b, \u043c\u043e\u0440\u0441\u043a\u043e\u0439 \u0431\u043e\u0439 \u0438 \u0448\u0430\u0448\u043a\u0438"], en: ["Games", "Chess, battleship, and checkers"] },
-      },
-      help: {
-        docs: { ru: ["\u0421\u043f\u0440\u0430\u0432\u043a\u0430", "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f \u043f\u043e \u043c\u043e\u0434\u0443\u043b\u044f\u043c \u0438 \u0441\u0446\u0435\u043d\u0430\u0440\u0438\u044f\u043c"], en: ["Help Center", "Documentation by module and scenario"] },
-        assistant: { ru: ["AI-\u043f\u043e\u043c\u043e\u0449\u043d\u0438\u043a", "\u041e\u0442\u0432\u0435\u0442\u044b \u043f\u043e \u0440\u0430\u0431\u043e\u0442\u0435 \u0441\u0435\u0440\u0432\u0438\u0441\u0430 \u0438 \u043c\u043e\u0434\u0443\u043b\u0435\u0439"], en: ["AI Assistant", "Answers about the service and modules"] },
-        downloads: { ru: ["\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0438", "APK, \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u044f \u0438 \u0438\u0441\u0442\u043e\u0440\u0438\u044f \u0440\u0435\u043b\u0438\u0437\u043e\u0432"], en: ["Downloads", "APK, updates, and release history"] },
-      },
-    };
-
-    if (tab === "products") return subtabs.products[productsSubtab] || main.products;
-    if (tab === "reviews") return subtabs.reviews[reviewsSubtab] || main.reviews;
-    if (tab === "accounting") return subtabs.accounting[accountingSubtab] || main.accounting;
-    if (tab === "ads") return subtabs.ads[adsSubtab] || main.ads;
-    if (tab === "social") return subtabs.social[socialSubtab] || main.social;
-    if (tab === "help") return subtabs.help[helpSubtab] || main.help;
-    return main[tab] || main.sales;
-  }
-
-  function applySectionHeadingOverride() {
-    const titleNode = document.getElementById("sectionTitle");
-    const subtitleNode = document.getElementById("sectionSubtitle");
-    if (!titleNode || !subtitleNode) return;
-    const copy = headingCopy();
-    const [ruTitle, ruSubtitle] = copy.ru || ["", ""];
-    const [enTitle, enSubtitle] = copy.en || ["", ""];
-    titleNode.textContent = pick(ruTitle, enTitle);
-    subtitleNode.textContent = pick(ruSubtitle, enSubtitle);
   }
 
   function applyKnownCopy() {
-    setText("#authToolbarSubtitle", "\u0432\u0441\u0451 \u0434\u043b\u044f \u043c\u0430\u0440\u043a\u0435\u0442\u043f\u043b\u0435\u0439\u0441\u043e\u0432", "everything for marketplaces");
-    setText(".auth-toolbar-nav a[href='#authSection']", "\u041f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u0430", "Platform");
-    setText(".auth-toolbar-nav a[href='#landingModules']", "\u041c\u043e\u0434\u0443\u043b\u0438", "Modules");
-    setText(".auth-toolbar-nav a[href='#authSection'][onclick*='switchAuthMode']", "\u0420\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u044f", "Sign up");
-    setText("#authToolbarLoginBtn, #authModeLoginBtn, #authLoginTitle", "\u0412\u0445\u043e\u0434", "Log in");
-    setText("#authToolbarRegisterBtn, #authModeRegisterBtn, #authRegisterTitle", "\u0420\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u044f", "Sign up");
-    setText("#authLoginHint", "\u0418\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0439\u0442\u0435 email \u0432\u043b\u0430\u0434\u0435\u043b\u044c\u0446\u0430 \u0438\u043b\u0438 \u0441\u043e\u0442\u0440\u0443\u0434\u043d\u0438\u043a\u0430.", "Use the owner or employee email.");
-    setText("#authToRegisterBtn", "\u041d\u0435\u0442 \u0430\u043a\u043a\u0430\u0443\u043d\u0442\u0430? \u0420\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u044f", "Need an account? Sign up");
-    setText("#authRegisterHint", "\u0421\u043e\u0437\u0434\u0430\u0439\u0442\u0435 \u043d\u043e\u0432\u044b\u0439 \u0430\u043a\u043a\u0430\u0443\u043d\u0442. \u041f\u043e\u0441\u043b\u0435 \u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u0438 \u043f\u043e\u044f\u0432\u0438\u0442\u0441\u044f \u0432\u0430\u0448 \u043b\u0438\u0447\u043d\u044b\u0439 \u043a\u0430\u0431\u0438\u043d\u0435\u0442.", "Create a new account. After registration your workspace will be ready.");
-    setText("#authRegisterSubmitBtn", "\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0430\u043a\u043a\u0430\u0443\u043d\u0442", "Create account");
-    setText("#authToLoginBtn", "\u0423\u0436\u0435 \u0435\u0441\u0442\u044c \u0430\u043a\u043a\u0430\u0443\u043d\u0442? \u0412\u0445\u043e\u0434", "Already have an account? Log in");
-    setText("#landingCard3Meta2", "AI-\u043e\u0442\u0432\u0435\u0442\u044b + \u0435\u0434\u0438\u043d\u044b\u0439 \u0438\u043d\u0442\u0435\u0440\u0444\u0435\u0439\u0441", "AI replies + one interface");
-    setHtml("#landingCard4Item3", "<b>\u041a\u043e\u043c\u0430\u043d\u0434\u0430:</b> \u0447\u0430\u0442\u044b, \u0437\u0430\u0434\u0430\u0447\u0438 \u0438 \u043a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c.", "<b>Team:</b> chats, tasks, and calendar.");
-    setAttr(".sidebar-toggle", "title", "\u0421\u0432\u0435\u0440\u043d\u0443\u0442\u044c / \u0440\u0430\u0437\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u043c\u0435\u043d\u044e", "Collapse / expand menu");
-    setText("#mobileDrawerQuickNavLabel", "\u0420\u0430\u0437\u0434\u0435\u043b", "Section");
-    setText(".nav-btn[data-tab='sales']", "\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0430 \u0438 \u0434\u0430\u0448\u0431\u043e\u0440\u0434", "Statistics & Dashboard");
-    setText(".nav-btn[data-tab='social']", "\u0421\u043e\u0446\u0438\u0430\u043b\u044c\u043d\u044b\u0439", "Social Hub");
-    setText(".nav-btn[data-tab='help']", "\u0421\u043f\u0440\u0430\u0432\u043a\u0430", "Help Center");
-    setText("#mobileDrawerQuickNav option[value='sales_dashboard'], #mobileQuickNav option[value='sales_dashboard']", "\u0414\u0430\u0448\u0431\u043e\u0440\u0434", "Dashboard");
-    setText("#mobileDrawerQuickNav option[value='ads_recommendations'], #mobileQuickNav option[value='ads_recommendations']", "\u0420\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u0430\u0446\u0438\u0438", "Recommendations");
-    setText("#mobileDrawerQuickNav option[value='help_main'], #mobileQuickNav option[value='help_main']", "\u0421\u043f\u0440\u0430\u0432\u043a\u0430", "Help Center");
-    setText("#mobileDrawerThemeSelect option[value='light'], #uiThemeSelect option[value='light']", "\u0421\u0432\u0435\u0442\u043b\u0430\u044f", "Light");
-    setAttr("#socialChatHeadCollapseBtn", "title", "\u0421\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u0448\u0430\u043f\u043a\u0443", "Collapse header");
-    setText("button[onclick='socialCalcVolume()']", "\u0420\u0430\u0441\u0441\u0447\u0438\u0442\u0430\u0442\u044c \u043e\u0431\u044a\u0435\u043c", "Calculate volume");
-    setText("#teamModalSaveBtn", "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c", "Save");
-    setText("#teamMemberEditTitle", "\u0421\u043e\u0442\u0440\u0443\u0434\u043d\u0438\u043a", "Team member");
-    setText("#socialModalTitle", "\u0421\u043e\u0446\u0438\u0430\u043b\u044c\u043d\u044b\u0439 \u043c\u043e\u0434\u0443\u043b\u044c", "Social module");
-    setText("#productsPageInfoTop, #productsPageInfoBottom", "\u0421\u0442\u0440\u0430\u043d\u0438\u0446\u0430 1 \u0438\u0437 1", "Page 1 of 1");
-    setText(".nav-btn[data-tab='products']", "\u0422\u043e\u0432\u0430\u0440\u044b", "Products");
-    setText(".nav-btn[data-tab='reviews']", "\u041e\u0442\u0437\u044b\u0432\u044b / \u0412\u043e\u043f\u0440\u043e\u0441\u044b", "Reviews / Questions");
-    setText(".nav-btn[data-tab='accounting']", "\u0411\u0443\u0445\u0433\u0430\u043b\u0442\u0435\u0440\u0438\u044f", "Accounting");
-    setText(".nav-btn[data-tab='ads']", "\u0420\u0435\u043a\u043b\u0430\u043c\u0430 WB/Ozon", "WB/Ozon Ads");
-    setText(".nav-btn[data-tab='profile']", "\u041f\u0440\u043e\u0444\u0438\u043b\u044c", "Profile");
-    setText("#mobileDrawerQuickNav option[value='social_games'], #mobileQuickNav option[value='social_games']", "\u0418\u0433\u0440\u044b", "Games");
-    setText("#mobileDrawerQuickNav option[value='social_chat'], #mobileQuickNav option[value='social_chat']", "\u0427\u0430\u0442\u044b", "Chats");
-    setText("#mobileDrawerQuickNav option[value='social_tasks'], #mobileQuickNav option[value='social_tasks']", "\u0417\u0430\u0434\u0430\u0447\u0438", "Tasks");
-    setText("#mobileDrawerQuickNav option[value='social_notes'], #mobileQuickNav option[value='social_notes']", "\u0417\u0430\u043c\u0435\u0442\u043a\u0438", "Notes");
-    setText("#mobileDrawerQuickNav option[value='social_calendar'], #mobileQuickNav option[value='social_calendar']", "\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c", "Calendar");
-    setText("#mobileDrawerQuickNav option[value='reviews_reviews'], #mobileQuickNav option[value='reviews_reviews']", "\u041e\u0442\u0432\u0435\u0442\u044b \u043d\u0430 \u043e\u0442\u0437\u044b\u0432\u044b", "Review replies");
-    setText("#mobileDrawerQuickNav option[value='reviews_questions'], #mobileQuickNav option[value='reviews_questions']", "\u041e\u0442\u0432\u0435\u0442\u044b \u043d\u0430 \u0432\u043e\u043f\u0440\u043e\u0441\u044b", "Question replies");
-    setText("#mobileDrawerQuickNav option[value='reviews_returns'], #mobileQuickNav option[value='reviews_returns']", "\u0412\u043e\u0437\u0432\u0440\u0430\u0442\u044b", "Returns");
-    setText("#mobileDrawerQuickNav option[value='ads_campaigns'], #mobileQuickNav option[value='ads_campaigns']", "\u0420\u0435\u043a\u043b\u0430\u043c\u043d\u044b\u0435 \u043a\u0430\u043c\u043f\u0430\u043d\u0438\u0438", "Ad campaigns");
-    setText("#socialSubtabChatBtn", "\u0427\u0430\u0442", "Chat");
-    setText("#socialSubtabGamesBtn", "\u0418\u0433\u0440\u044b", "Games");
-    setText("#socialSubtabTasksBtn", "\u0417\u0430\u0434\u0430\u0447\u0438", "Tasks");
-    setText("#socialSubtabCalendarBtn", "\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c", "Calendar");
-    setText("#socialSubtabCalculatorBtn", "\u041a\u0430\u043b\u044c\u043a\u0443\u043b\u044f\u0442\u043e\u0440", "Calculator");
-    setText("#socialSubtabNotesBtn", "\u0417\u0430\u043c\u0435\u0442\u043a\u0438", "Notes");
-    setText("#reviewsSubtabReviewsBtn", "\u041e\u0442\u0437\u044b\u0432\u044b", "Reviews");
-    setText("#reviewsSubtabQuestionsBtn", "\u0412\u043e\u043f\u0440\u043e\u0441\u044b", "Questions");
-    setText("#reviewsSubtabReturnsBtn", "\u0412\u043e\u0437\u0432\u0440\u0430\u0442\u044b", "Returns");
-    setText("#reviewsSubtabReviews h3", "\u041e\u0442\u0432\u0435\u0442\u044b \u043d\u0430 \u043e\u0442\u0437\u044b\u0432\u044b WB/Ozon", "Review replies WB/Ozon");
-    setText("#reviewsSubtabQuestions h3", "\u041e\u0442\u0432\u0435\u0442\u044b \u043d\u0430 \u0432\u043e\u043f\u0440\u043e\u0441\u044b WB/Ozon", "Question replies WB/Ozon");
-    setText("button[onclick='saveReviewAiSettings()']", "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c AI-\u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438", "Save AI settings");
-    setText("button[onclick='saveQuestionAiSettings()']", "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c AI-\u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438", "Save AI settings");
-    setText("#reviewPromptToggleBtn", "\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u043f\u0440\u043e\u043c\u043f\u0442 \u043e\u0431\u0443\u0447\u0435\u043d\u0438\u044f", "Show training prompt");
-    setText("#questionPromptToggleBtn", "\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u043f\u0440\u043e\u043c\u043f\u0442 \u043e\u0431\u0443\u0447\u0435\u043d\u0438\u044f", "Show training prompt");
-    setAttr("#reviewAiPrompt", "placeholder", "\u041f\u0440\u043e\u043c\u043f\u0442 \u0434\u043b\u044f \u0433\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u0438 \u043e\u0442\u0432\u0435\u0442\u043e\u0432 (\u043e\u043f\u0446\u0438\u043e\u043d\u0430\u043b\u044c\u043d\u043e)", "Prompt for reply generation (optional)");
-    setAttr("#questionAiPrompt", "placeholder", "\u041f\u0440\u043e\u043c\u043f\u0442 \u0434\u043b\u044f \u0433\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u0438 \u043e\u0442\u0432\u0435\u0442\u043e\u0432 \u043d\u0430 \u0432\u043e\u043f\u0440\u043e\u0441\u044b (\u043e\u043f\u0446\u0438\u043e\u043d\u0430\u043b\u044c\u043d\u043e)", "Prompt for question replies (optional)");
-    setAttr("#mobileNavToggle", "aria-label", "Меню", "Menu");
-    setAttr("#mobileNavToggle", "title", "Меню", "Menu");
-    setText("#mobileDrawerThemeSelect option[value='classic'], #uiThemeSelect option[value='classic']", "Классика", "Classic");
-    setText("#mobileDrawerThemeSelect option[value='dark'], #uiThemeSelect option[value='dark']", "Темная", "Dark");
-    setText("#mobileDrawerThemeSelect option[value='moon'], #uiThemeSelect option[value='moon']", "Луна", "Moon");
-    setText("#mobileDrawerThemeSelect option[value='newyear'], #uiThemeSelect option[value='newyear']", "Новый год", "New Year");
-    setText("#mobileDrawerThemeSelect option[value='summer'], #uiThemeSelect option[value='summer']", "Лето", "Summer");
-    setText("#mobileDrawerThemeSelect option[value='autumn'], #uiThemeSelect option[value='autumn']", "Осень", "Autumn");
-    setText("#mobileDrawerThemeSelect option[value='winter'], #uiThemeSelect option[value='winter']", "Зима", "Winter");
-    setText("#mobileDrawerThemeSelect option[value='spring'], #uiThemeSelect option[value='spring']", "Весна", "Spring");
-    setText("#mobileDrawerThemeSelect option[value='japan'], #uiThemeSelect option[value='japan']", "Япония", "Japan");
-    setText("#mobileDrawerThemeSelect option[value='greenland'], #uiThemeSelect option[value='greenland']", "Гренландия", "Greenland");
-    setText("#mobileDrawerQuickNav option[value='social_calculator'], #mobileQuickNav option[value='social_calculator']", "Калькулятор", "Calculator");
-    setText("#mobileDrawerQuickNav option[value='ads_analytics'], #mobileQuickNav option[value='ads_analytics']", "Аналитика рекламы", "Ads analytics");
-    setText("#mobileDrawerQuickNav option[value='ads_bidder'], #mobileQuickNav option[value='ads_bidder']", "Бидер WB Ads", "WB Ads bidder");
-    setText("#mobileDrawerQuickNav option[value='profile_main'], #mobileQuickNav option[value='profile_main']", "Профиль", "Profile");
-    setText("#reviewStarsFilter option[value='']", "Все оценки", "All ratings");
-    setText("#reviewStatusFilter option[value='all'], #questionStatusFilter option[value='all']", "Все", "All");
-    setText("#reviewStatusFilter option[value='new'], #questionStatusFilter option[value='new']", "Новые", "New");
-    setText("#reviewStatusFilter option[value='unanswered'], #questionStatusFilter option[value='unanswered']", "Без ответа", "No reply");
-    setText("#reviewStatusFilter option[value='answered'], #questionStatusFilter option[value='answered']", "С ответом", "Answered");
-    setText("#reviewDateSort option[value='newest'], #questionDateSort option[value='newest']", "Сначала новые", "Newest first");
-    setText("#reviewDateSort option[value='oldest'], #questionDateSort option[value='oldest']", "Сначала старые", "Oldest first");
-    setText("button[onclick='loadWbReviews()']", "Обновить отзывы", "Refresh reviews");
-    setText("button[onclick='loadWbQuestions()']", "Обновить вопросы", "Refresh questions");
-    setText("#reviewsSubtabReviews .panel > p.hint", "AI может подготовить черновики ответов. Проверьте текст перед отправкой и при необходимости поправьте тон и детали.", "AI can prepare draft replies. Review the text before sending and adjust tone or details if needed.");
-    setText("#reviewsSubtabQuestions .panel > p.hint", "AI может подготовить ответы на вопросы. Перед отправкой проверьте факты, характеристики и ссылки на товар.", "AI can draft question replies. Check facts, specs, and product links before sending.");
-    setText("#reviewsSubtabReviews thead th:nth-child(1), #reviewsSubtabQuestions thead th:nth-child(1), #reviewsSubtabReturns thead th:nth-child(1)", "Статус", "Status");
-    setText("#reviewsSubtabReviews thead th:nth-child(2), #reviewsSubtabQuestions thead th:nth-child(2), #reviewsSubtabReturns thead th:nth-child(2)", "Дата", "Date");
-    setText("#reviewsSubtabReviews thead th:nth-child(3), #reviewsSubtabQuestions thead th:nth-child(3), #reviewsSubtabReturns thead th:nth-child(3)", "Товар", "Product");
-    setText("#reviewsSubtabReviews thead th:nth-child(4), #reviewsSubtabQuestions thead th:nth-child(4)", "Текст", "Text");
-    setText("#reviewsSubtabReviews thead th:nth-child(5), #reviewsSubtabQuestions thead th:nth-child(5)", "Ответ", "Reply");
-    setText("#reviewsSubtabReviews thead th:nth-child(6)", "Оценка", "Rating");
-    setText("#reviewsSubtabReviews thead th:nth-child(7), #reviewsSubtabQuestions thead th:nth-child(6), #reviewsSubtabReturns thead th:nth-child(6)", "Действия", "Actions");
-    setText("#reviewsSubtabReturns h3", "Возвраты WB/Ozon", "Returns WB/Ozon");
-    setText("#reviewsSubtabReturns .returns-hero p", "Показываем статус заявки, товар, причину возврата и доступные действия без лишнего шума.", "Shows return status, product, reason, and available actions without extra clutter.");
-    setText("#reviewsSubtabReturns .returns-field span", "", "");
-    setText("#reviewsSubtabReturns .returns-field:nth-of-type(1) span", "Маркетплейс", "Marketplace");
-    setText("#reviewsSubtabReturns .returns-field:nth-of-type(2) span", "Статус", "Status");
-    setText("#reviewsSubtabReturns .returns-field:nth-of-type(3) span", "Дата от", "Date from");
-    setText("#reviewsSubtabReturns .returns-field:nth-of-type(4) span", "Дата до", "Date to");
-    setText("#reviewsSubtabReturns .returns-field:nth-of-type(5) span", "Что сделать", "What to do");
-    applySectionHeadingOverride();
-  }
-
-  function queueRepair(root) {
-    if (repairQueued) return;
-    repairQueued = true;
-    requestAnimationFrame(() => {
-      repairQueued = false;
-      repairTree(root || document.body);
+    const copy = [
+      [".sidebar-toggle", "\u2630"],
+      ["#mobileDrawerQuickNavLabel", pick("\u0420\u0430\u0437\u0434\u0435\u043b", "Section")],
+      [".nav-btn[data-tab='sales']", pick("\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0430 \u0438 \u0434\u0430\u0448\u0431\u043e\u0440\u0434", "Dashboard")],
+      [".nav-btn[data-tab='products']", pick("\u0422\u043e\u0432\u0430\u0440\u044b", "Products")],
+      [".nav-btn[data-tab='reviews']", pick("\u041e\u0442\u0437\u044b\u0432\u044b/\u0412\u043e\u043f\u0440\u043e\u0441\u044b", "Reviews/Questions")],
+      [".nav-btn[data-tab='accounting']", pick("\u0411\u0443\u0445\u0433\u0430\u043b\u0442\u0435\u0440\u0438\u044f", "Accounting")],
+      [".nav-btn[data-tab='ads']", pick("\u0420\u0435\u043a\u043b\u0430\u043c\u0430 WB/Ozon", "Ads WB/Ozon")],
+      [".nav-btn[data-tab='social']", pick("\u0421\u043e\u0446\u0438\u0430\u043b\u044c\u043d\u044b\u0439", "Social Hub")],
+      [".nav-btn[data-tab='help']", pick("\u0421\u043f\u0440\u0430\u0432\u043a\u0430", "Help")],
+      [".nav-btn[data-tab='profile']", pick("\u041f\u0440\u043e\u0444\u0438\u043b\u044c", "Profile")],
+      [".btn-danger.full[onclick='logout()']", pick("\u0412\u044b\u0439\u0442\u0438", "Logout")],
+      ["#socialSubtabChatBtn", pick("\u0427\u0430\u0442", "Chat")],
+      ["#socialSubtabTasksBtn", pick("\u0417\u0430\u0434\u0430\u0447\u0438", "Tasks")],
+      ["#socialSubtabCalendarBtn", pick("\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c", "Calendar")],
+      ["#socialSubtabNotesBtn", pick("\u0417\u0430\u043c\u0435\u0442\u043a\u0438", "Notes")],
+      ["#socialSubtabCalculatorBtn", pick("\u041a\u0430\u043b\u044c\u043a\u0443\u043b\u044f\u0442\u043e\u0440", "Calculator")],
+      ["#socialSubtabGamesBtn", pick("\u0418\u0433\u0440\u044b", "Games")],
+      ["#socialModalTitle", pick("\u0421\u043e\u0446\u0438\u0430\u043b\u044c\u043d\u044b\u0439 \u043c\u043e\u0434\u0443\u043b\u044c", "Social module")],
+      ["#socialSubtabChat h3", pick("\u0427\u0430\u0442\u044b", "Chats")],
+      ["#socialSubtabChat .social-chat-sidebar-head small", pick("\u041b\u0438\u0447\u043d\u044b\u0435 \u0438 \u0433\u0440\u0443\u043f\u043f\u043e\u0432\u044b\u0435", "Personal and group")],
+      ["#socialChatHead", pick("\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0447\u0430\u0442", "Choose chat")],
+      ["#socialChatGroupBtn", pick("\u0423\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0438", "Members")],
+      ["#socialChatAvatarBtn", pick("\u0410\u0432\u0430\u0442\u0430\u0440", "Avatar")],
+      ["#socialChatSendFallback", pick("\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c", "Send")],
+      ["#socialSubtabTasks button[onclick='socialOpenProjectModal()']", pick("\u041d\u043e\u0432\u044b\u0439 \u043f\u0440\u043e\u0435\u043a\u0442", "New project")],
+      ["#socialSubtabTasks button[onclick='socialOpenTaskModal()']", pick("\u041d\u043e\u0432\u0430\u044f \u0437\u0430\u0434\u0430\u0447\u0430", "New task")],
+      ["#socialSubtabTasks .social-task-toolbar-side button[onclick='socialOpenProjectMembersModal()']", pick("\u0423\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0438 \u043f\u0440\u043e\u0435\u043a\u0442\u0430", "Project members")],
+      ["#socialSubtabTasks .social-task-toolbar-side button[onclick='socialLoadTasks()']", pick("\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c", "Refresh")],
+      ["#socialSubtabNotes button[onclick='socialCreateNote()']", pick("\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0437\u0430\u043f\u0438\u0441\u044c", "Create note")],
+      ["button[onclick='socialCreateNote()']", pick("\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0437\u0430\u043f\u0438\u0441\u044c", "Create note")],
+      ["#mobileDrawerQuickNav option[value='social_games']", pick("\u0418\u0433\u0440\u044b", "Games")],
+      ["#mobileDrawerQuickNav option[value='sales_dashboard']", pick("\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0430", "Dashboard")],
+      ["#mobileDrawerQuickNav option[value='social_chat']", pick("\u0427\u0430\u0442\u044b", "Chats")],
+      ["#mobileDrawerQuickNav option[value='social_tasks']", pick("\u0417\u0430\u0434\u0430\u0447\u0438", "Tasks")],
+      ["#mobileDrawerQuickNav option[value='social_notes']", pick("\u0417\u0430\u043c\u0435\u0442\u043a\u0438", "Notes")],
+      ["#mobileDrawerQuickNav option[value='social_calendar']", pick("\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c", "Calendar")],
+      ["#mobileDrawerQuickNav option[value='social_calculator']", pick("\u041a\u0430\u043b\u044c\u043a\u0443\u043b\u044f\u0442\u043e\u0440", "Calculator")],
+      ["#mobileDrawerQuickNav option[value='reviews_reviews']", pick("\u041e\u0442\u0437\u044b\u0432\u044b", "Reviews")],
+      ["#mobileDrawerQuickNav option[value='reviews_questions']", pick("\u0412\u043e\u043f\u0440\u043e\u0441\u044b", "Questions")],
+      ["#mobileDrawerQuickNav option[value='reviews_returns']", pick("\u0412\u043e\u0437\u0432\u0440\u0430\u0442\u044b", "Returns")],
+      ["#mobileDrawerQuickNav option[value='ads_campaigns']", pick("\u0420\u0435\u043a\u043b\u0430\u043c\u0430 WB", "Ads WB")],
+      ["#mobileDrawerQuickNav option[value='ads_analytics']", pick("\u0410\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0430 \u0440\u0435\u043a\u043b\u0430\u043c\u044b", "Ad analytics")],
+      ["#mobileDrawerQuickNav option[value='ads_recommendations']", pick("\u0420\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u0430\u0446\u0438\u0438", "Recommendations")],
+      ["#mobileDrawerQuickNav option[value='ads_bidder']", pick("\u0411\u0438\u0434\u0435\u0440 WB Ads", "WB Ads bidder")],
+      ["#mobileDrawerQuickNav option[value='help_main']", pick("\u0421\u043f\u0440\u0430\u0432\u043a\u0430", "Help")],
+      ["#mobileDrawerQuickNav option[value='profile_main']", pick("\u041f\u0440\u043e\u0444\u0438\u043b\u044c", "Profile")],
+      ["#mobileQuickNav option[value='sales_dashboard']", pick("\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0430", "Dashboard")],
+      ["#mobileQuickNav option[value='social_chat']", pick("\u0427\u0430\u0442\u044b", "Chats")],
+      ["#mobileQuickNav option[value='social_tasks']", pick("\u0417\u0430\u0434\u0430\u0447\u0438", "Tasks")],
+      ["#mobileQuickNav option[value='social_notes']", pick("\u0417\u0430\u043c\u0435\u0442\u043a\u0438", "Notes")],
+      ["#mobileQuickNav option[value='social_calendar']", pick("\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c", "Calendar")],
+      ["#mobileQuickNav option[value='social_calculator']", pick("\u041a\u0430\u043b\u044c\u043a\u0443\u043b\u044f\u0442\u043e\u0440", "Calculator")],
+    ];
+    copy.forEach(([selector, value]) => {
+      document.querySelectorAll(selector).forEach((node) => {
+        node.textContent = value;
+      });
     });
-  }
 
-  function queueCopy() {
-    if (copyQueued) return;
-    copyQueued = true;
-    requestAnimationFrame(() => {
-      copyQueued = false;
-      applyKnownCopy();
+    const attrs = [
+      [".sidebar-toggle", "title", pick("\u041c\u0435\u043d\u044e", "Menu")],
+      [".sidebar-toggle", "aria-label", pick("\u041c\u0435\u043d\u044e", "Menu")],
+      ["#socialBellBtn", "title", pick("\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f", "Notifications")],
+      ["#socialBellBtn", "aria-label", pick("\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f", "Notifications")],
+      ["#mobileDrawerBellBtn", "title", pick("\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f", "Notifications")],
+      ["#mobileDrawerBellBtn", "aria-label", pick("\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f", "Notifications")],
+      ["#mobileNavToggle", "title", pick("\u041c\u0435\u043d\u044e", "Menu")],
+      ["#mobileNavToggle", "aria-label", pick("\u041c\u0435\u043d\u044e", "Menu")],
+      ["#socialChatSearch", "placeholder", pick("\u041f\u043e\u0438\u0441\u043a", "Search")],
+      ["#socialChatInput", "placeholder", pick("\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435...", "Type a message...")],
+      ["#socialEmojiBtn", "title", pick("\u042d\u043c\u043e\u0434\u0437\u0438", "Emoji")],
+      ["#socialAttachBtn", "title", pick("\u0424\u0430\u0439\u043b", "File")],
+      ["#socialSendIconBtn", "title", pick("\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c", "Send")],
+      ["#socialSendIconBtn", "aria-label", pick("\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c", "Send")],
+      ["#socialChatHeadCollapseBtn", "title", pick("\u0421\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u0448\u0430\u043f\u043a\u0443", "Collapse header")],
+      ["#socialNoteTitle", "placeholder", pick("\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u0437\u0430\u043c\u0435\u0442\u043a\u0438", "Note title")],
+      ["#socialNoteContent", "placeholder", pick("\u0422\u0435\u043a\u0441\u0442 \u0437\u0430\u043c\u0435\u0442\u043a\u0438...", "Note text...")],
+    ];
+    attrs.forEach(([selector, attr, value]) => {
+      document.querySelectorAll(selector).forEach((node) => node.setAttribute(attr, value));
     });
+    document.querySelectorAll(".bell-emoji").forEach((node) => { node.textContent = "\u{1F514}"; });
   }
 
-  function wrapTranslator(name) {
-    if (typeof globalThis[name] !== "function") return;
-    const original = globalThis[name];
-    if (original.__mojibakeWrapped) return;
-    const wrapped = function wrappedTranslator() {
-      const args = Array.from(arguments).map((value, index) => {
-        if ((index === 0 || index === 1) && typeof value === "string") {
-          return repairText(value);
+  function normalizeCalendarUi() {
+    try {
+      if (typeof window.socialNormalizeCalendarChrome === "function") {
+        window.socialNormalizeCalendarChrome();
+      }
+      if (typeof window.socialEnsureCalendarFab === "function") {
+        window.socialEnsureCalendarFab();
+      }
+    } catch (_) {}
+    const root = document.getElementById("socialSubtabCalendar");
+    if (!root) return;
+    if (!window.socialState || typeof window.socialState !== "object") {
+      window.socialState = {};
+    }
+    if (!(window.socialState.calendarDate instanceof Date) || Number.isNaN(window.socialState.calendarDate.getTime())) {
+      window.socialState.calendarDate = calendarBaseDate();
+    }
+    root.classList.add("sw-calendar-samsung");
+    const shell = root.querySelector(".social-calendar-shell") || root;
+    shell.querySelectorAll("button").forEach((btn) => {
+      if (btn.id === "socialCalendarFab") return;
+      if (btn.classList.contains("social-day")) return;
+      if (btn.classList.contains("social-day-item-button")) return;
+      btn.style.setProperty("display", "none", "important");
+    });
+    root.querySelectorAll("#socialCalendarGrid .social-day").forEach((btn) => {
+      btn.style.setProperty("display", "grid", "important");
+    });
+    const grid = document.getElementById("socialCalendarGrid");
+    if (grid) {
+      grid.style.setProperty("display", "block", "important");
+      const head = grid.querySelector(".social-calendar-row.head");
+      if (head) {
+        head.style.setProperty("display", "grid", "important");
+        head.style.setProperty("grid-template-columns", "repeat(7, minmax(0, 1fr))", "important");
+      }
+      const cells = grid.querySelector(".social-calendar-cells");
+      if (cells) {
+        cells.style.setProperty("display", "grid", "important");
+        cells.style.setProperty("grid-template-columns", "repeat(7, minmax(0, 1fr))", "important");
+      }
+    }
+    const dayCount = root.querySelectorAll("#socialCalendarGrid .social-day[data-day-key]").length;
+    if (dayCount > 0) return;
+    buildCalendarFallbackGridV2(root);
+    const now = Date.now();
+    if (now - calendarRecoverAt < 1300) return;
+    calendarRecoverAt = now;
+    setTimeout(() => {
+      try {
+        if (typeof window.socialRenderCalendar === "function") {
+          window.socialRenderCalendar();
         }
-        return value;
-      });
-      return original.apply(this, args);
-    };
-    wrapped.__mojibakeWrapped = true;
-    globalThis[name] = wrapped;
+        const rebuilt = root.querySelectorAll("#socialCalendarGrid .social-day[data-day-key]").length;
+        if (!rebuilt && typeof window.socialLoadCalendar === "function") {
+          window.socialLoadCalendar();
+        }
+      } catch (_) {}
+    }, 90);
+    setTimeout(() => {
+      const refreshed = root.querySelectorAll("#socialCalendarGrid .social-day[data-day-key]").length;
+      if (!refreshed) buildCalendarFallbackGridV2(root);
+    }, 260);
   }
 
-  function wrapMessageFunction(name) {
-    if (typeof globalThis[name] !== "function") return;
-    const original = globalThis[name];
-    if (original.__mojibakeWrapped) return;
-    const wrapped = function wrappedMessageFn() {
-      const args = Array.from(arguments);
-      if (typeof args[0] === "string") args[0] = repairText(args[0]);
-      if (typeof args[1] === "string") args[1] = repairText(args[1]);
-      return original.apply(this, args);
-    };
-    wrapped.__mojibakeWrapped = true;
-    globalThis[name] = wrapped;
-  }
-
-  function wrapAfter(name) {
-    if (typeof globalThis[name] !== "function") return;
-    const original = globalThis[name];
-    if (original.__copyWrapped) return;
-    const wrapped = function wrappedAfter() {
-      const result = original.apply(this, arguments);
-      queueCopy();
-      queueRepair();
-      return result;
-    };
-    wrapped.__copyWrapped = true;
-    globalThis[name] = wrapped;
-  }
-
-  wrapTranslator("tr");
-  wrapTranslator("t");
-  wrapMessageFunction("alert");
-  wrapMessageFunction("confirm");
-  wrapMessageFunction("showToast");
-  wrapMessageFunction("showGlobalToast");
-
-  [
-    "showTab",
-    "refreshSectionHeading",
-    "switchProductsSubtab",
-    "switchReviewsSubtab",
-    "switchAccountingSubtab",
-    "switchAdsSubtab",
-    "switchSocialSubtab",
-    "switchHelpSubtab",
-    "changeUiLang",
-    "changeUiLangFromDrawer",
-    "changeAuthLang",
-    "renderWbQuestions",
-    "renderWbReviews",
-    "socialRenderTasks",
-    "socialRenderCalendar",
-    "socialRenderNotes",
-    "socialOpenModal",
-  ].forEach(wrapAfter);
-
-  const enableMojibakeObserver = Boolean(window.__enableTextMutationObserver);
-  const observer = new MutationObserver((mutations) => {
-    let shouldRepair = false;
-    for (const mutation of mutations) {
-      if (mutation.type === "characterData") {
-        shouldRepair = true;
-        repairTextNode(mutation.target);
-        continue;
-      }
-      if (mutation.type === "attributes") {
-        shouldRepair = true;
-        repairElementAttributes(mutation.target);
-        continue;
-      }
-      if (mutation.type === "childList" && mutation.addedNodes.length) {
-        shouldRepair = true;
-        mutation.addedNodes.forEach((node) => repairTree(node));
-      }
+  function normalizeNotificationCenter() {
+    const center = document.getElementById("socialNotificationCenter");
+    if (!center) return null;
+    if (center.parentElement !== document.body) document.body.appendChild(center);
+    const mobile = (window.innerWidth || 0) <= 980;
+    center.classList.add("social-notif-center", "social-notification-center");
+    center.style.setProperty("position", "fixed", "important");
+    center.style.setProperty("z-index", "2147483000", "important");
+    center.style.setProperty("bottom", "auto", "important");
+    center.style.setProperty("transform", "none", "important");
+    center.style.setProperty("visibility", "visible", "important");
+    center.style.setProperty("pointer-events", "auto", "important");
+    center.style.setProperty("overflow-y", "auto", "important");
+    if (mobile) {
+      center.style.setProperty("top", "84px", "important");
+      center.style.setProperty("left", "8px", "important");
+      center.style.setProperty("right", "8px", "important");
+      center.style.setProperty("width", "auto", "important");
+      center.style.setProperty("max-height", "calc(100vh - 96px)", "important");
+    } else {
+      center.style.setProperty("top", "72px", "important");
+      center.style.setProperty("left", "auto", "important");
+      center.style.setProperty("right", "12px", "important");
+      center.style.setProperty("width", "min(420px, calc(100vw - 24px))", "important");
+      center.style.setProperty("max-height", "calc(100vh - 84px)", "important");
     }
-    if (shouldRepair) queueCopy();
-  });
-
-  function markReady() {
-    if (!document.body) return;
-    document.body.classList.remove("text-fix-pending");
-    document.body.classList.add("text-fix-ready");
+    return center;
   }
 
-  function start() {
-    queueRepair();
-    queueCopy();
-    if (enableMojibakeObserver && document.body) {
-      observer.observe(document.body, {
-        childList: true,
-        subtree: true,
-        characterData: true,
-        attributes: true,
-        attributeFilter: TEXT_ATTRS,
-      });
-    }
-    requestAnimationFrame(() => requestAnimationFrame(markReady));
-    window.addEventListener("load", markReady, { once: true });
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", start, { once: true });
-  } else {
-    start();
-  }
-})();
-
-
-
-(function textOverridesHotfixV20260320b() {
-  if (typeof window === "undefined") return;
-  if (window.__textOverridesHotfixV20260320b) return;
-  window.__textOverridesHotfixV20260320b = true;
-
-  function pick(ru, en) {
-    return currentLang === "en" ? en : ru;
-  }
-
-  function setText(selector, ru, en) {
-    document.querySelectorAll(selector).forEach((node) => {
-      node.textContent = pick(ru, en);
+  function normalizeNotesGrid() {
+    const host = document.getElementById("socialNotesList");
+    if (!host) return;
+    host.querySelectorAll(
+      ".social-note-delete, [class*='note-delete'], [class*='note-remove'], [class*='note-close'], [data-action='delete'], button[onclick*='socialDeleteNote']"
+    ).forEach((node) => node.remove?.());
+    host.querySelectorAll(".social-note-row[data-note-id], .sw-note-card[data-note-id]").forEach((row) => {
+      const noteId = Number(row.getAttribute("data-note-id") || 0);
+      if (!noteId) return;
+      row.style.cursor = "pointer";
+      row.style.setProperty("width", "100%", "important");
+      row.style.setProperty("max-width", "none", "important");
+      row.style.setProperty("justify-self", "stretch", "important");
+      row.style.setProperty("height", "148px", "important");
+      row.style.setProperty("min-height", "148px", "important");
+      row.style.setProperty("max-height", "148px", "important");
+      const main = row.querySelector(".social-note-main");
+      if (main) {
+        main.style.setProperty("width", "100%", "important");
+        main.style.setProperty("height", "100%", "important");
+      }
+      if (row.dataset.noteOpenBound !== "1") {
+        row.dataset.noteOpenBound = "1";
+        row.addEventListener("click", () => {
+          if (typeof window.socialOpenNoteEditor === "function") {
+            window.socialOpenNoteEditor(noteId);
+            return;
+          }
+          if (typeof window.socialSelectNote === "function") window.socialSelectNote(noteId);
+        });
+      }
+      try {
+        if (typeof window.socialGetNoteCoverColor === "function") {
+          const color = String(window.socialGetNoteCoverColor(noteId) || "").trim();
+          if (color) row.style.setProperty("--sw-note-cover", color);
+        }
+      } catch (_) {}
     });
   }
 
-  function applyHotfixText() {
-    setText(".nav-btn[data-tab='products']", "Товары", "Products");
-    setText(".nav-btn[data-tab='sales']", "Статистика и дашборд", "Statistics & Dashboard");
-    setText(".nav-btn[data-tab='reviews']", "Отзывы / Вопросы", "Reviews / Questions");
-    setText(".nav-btn[data-tab='accounting']", "Бухгалтерия", "Accounting");
-    setText(".nav-btn[data-tab='ads']", "Реклама WB/Ozon", "WB/Ozon Ads");
-    setText(".nav-btn[data-tab='social']", "Социальный", "Social Hub");
-    setText(".nav-btn[data-tab='profile']", "Профиль", "Profile");
-    setText(".nav-btn[data-tab='help']", "Справка", "Help Center");
-
-    setText("#socialSubtabChatBtn", "Чат", "Chat");
-    setText("#socialSubtabTasksBtn", "Задачи", "Tasks");
-    setText("#socialSubtabCalendarBtn", "Календарь", "Calendar");
-    setText("#socialSubtabCalculatorBtn", "Калькулятор", "Calculator");
-    setText("#socialSubtabNotesBtn", "Заметки", "Notes");
-    setText("#socialSubtabGamesBtn", "Игры", "Games");
-    setText("#socialSubtabChat h3", "Чаты", "Chats");
-    setText("#socialSubtabChat .social-chat-sidebar-head small", "Личные и групповые", "Direct and group chats");
-    setText("#reviewsSubtabReviews h3", "Ответы на отзывы", "Review replies");
-    setText("#reviewsSubtabQuestions h3", "Ответы на вопросы", "Question replies");
-    setText("#reviewsSubtabReturns h3", "Возвраты", "Returns");
-    setText("#reviewsSubtabReviews p.hint", "AI может подготовить черновики ответов. Перед отправкой проверьте текст и поправьте детали.", "AI can draft replies. Check text and adjust details before sending.");
-    setText("#reviewsSubtabQuestions p.hint", "AI может подготовить черновики ответов. Перед отправкой проверьте текст и поправьте детали.", "AI can draft replies. Check text and adjust details before sending.");
-    setText("#socialSubtabCalculator .social-volume-shell h3", "Объем из размеров", "Volume by dimensions");
-    setText("#socialSubtabCalculator .social-conv-shell h3", "Конвертация и валюты", "Conversion and currencies");
-
-    setText("#mobileDrawerQuickList [data-mobile-quick-value='sales_dashboard']", "Статистика", "Statistics");
-    setText("#mobileDrawerQuickList [data-mobile-quick-value='social_chat']", "Чат", "Chat");
-    setText("#mobileDrawerQuickList [data-mobile-quick-value='social_tasks']", "Задачи", "Tasks");
-    setText("#mobileDrawerQuickList [data-mobile-quick-value='social_notes']", "Заметки", "Notes");
-    setText("#mobileDrawerQuickList [data-mobile-quick-value='social_calculator']", "Калькулятор", "Calculator");
-    setText("#mobileDrawerQuickList [data-mobile-quick-value='social_calendar']", "Календарь", "Calendar");
-    setText("#mobileDrawerQuickList [data-mobile-quick-value='social_games']", "Игры", "Games");
-    setText("#mobileDrawerQuickList [data-mobile-quick-value='reviews_reviews']", "Ответы на отзывы", "Review replies");
-    setText("#mobileDrawerQuickList [data-mobile-quick-value='reviews_questions']", "Ответы на вопросы", "Question replies");
-    setText("#mobileDrawerQuickList [data-mobile-quick-value='reviews_returns']", "Возвраты", "Returns");
-    setText("#mobileDrawerQuickList [data-mobile-quick-value='ads_campaigns']", "Рекламные кампании", "Ad campaigns");
-    setText("#mobileDrawerQuickList [data-mobile-quick-value='ads_analytics']", "Аналитика рекламы", "Ads analytics");
-    setText("#mobileDrawerQuickList [data-mobile-quick-value='ads_recommendations']", "Рекомендации", "Recommendations");
-    setText("#mobileDrawerQuickList [data-mobile-quick-value='ads_bidder']", "Бидер WB Ads", "WB Ads bidder");
-    setText("#mobileDrawerQuickList [data-mobile-quick-value='profile_main']", "Профиль", "Profile");
-    setText("#mobileDrawerQuickList [data-mobile-quick-value='help_main']", "Справка", "Help");
-
-    setText("#socialSubtabCalculator h3", "Калькулятор", "Calculator");
-    setText("#socialVolResult", "-", "-");
+  function normalizeTasksUi() {
+    const host = document.getElementById("socialTasksBoard");
+    if (!host) return;
+    host.querySelectorAll(".social-task-check").forEach((btn) => {
+      const done = btn.classList.contains("is-done");
+      btn.textContent = done ? "\u2713" : "";
+      btn.setAttribute("title", pick("\u041e\u0442\u043c\u0435\u0442\u0438\u0442\u044c \u0432\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u043d\u043e\u0439", "Mark done"));
+    });
+    host.querySelectorAll(".social-task-delete").forEach((btn) => {
+      btn.textContent = "\u2715";
+      btn.setAttribute("title", pick("\u0423\u0434\u0430\u043b\u0438\u0442\u044c", "Delete"));
+    });
+    host.querySelectorAll(".social-task-pending").forEach((node) => {
+      const before = String(node.textContent || "");
+      if (!before || /[?]{3,}|[\u0420\u0421\u0412\u00d0\u00d1]/.test(before)) {
+        node.textContent = pick("5\u0441: \u043f\u043e\u0432\u0442\u043e\u0440\u043d\u044b\u0439 \u043a\u043b\u0438\u043a \u043e\u0442\u043c\u0435\u043d\u0438\u0442", "5s: click again to undo");
+      }
+    });
   }
 
-  function wrapAfter(name) {
-    if (typeof globalThis[name] !== "function") return;
-    const original = globalThis[name];
-    if (original.__textHotfixWrapped) return;
-    const wrapped = function wrappedTextHotfixFn() {
-      const result = original.apply(this, arguments);
-      requestAnimationFrame(applyHotfixText);
-      return result;
+  function normalizeGamesUi() {
+    const host = document.getElementById("socialGamesGrid");
+    if (!host) return;
+    const iconByCode = {
+      snake: "\u{1F40D}",
+      tetris: "\u{1F9E9}",
+      "2048": "\u{1F522}",
+      checkers: "\u26C0",
+      chess: "\u265C",
+      battleship: "\u2693",
     };
-    wrapped.__textHotfixWrapped = true;
-    globalThis[name] = wrapped;
+    const titleByCode = {
+      snake: pick("\u0417\u043c\u0435\u0439\u043a\u0430", "Snake"),
+      tetris: pick("\u0422\u0435\u0442\u0440\u0438\u0441", "Tetris"),
+      "2048": "2048",
+      checkers: pick("\u0428\u0430\u0448\u043a\u0438", "Checkers"),
+      chess: pick("\u0428\u0430\u0445\u043c\u0430\u0442\u044b", "Chess"),
+      battleship: pick("\u041c\u043e\u0440\u0441\u043a\u043e\u0439 \u0431\u043e\u0439", "Battleship"),
+    };
+    host.querySelectorAll(".social-game-card").forEach((card) => {
+      const onclickRaw = String(card.getAttribute("onclick") || card.getAttribute("ondblclick") || "");
+      const match = onclickRaw.match(/socialOpenGameMenu\('([^']+)'/i);
+      const code = String(match?.[1] || "").trim().toLowerCase();
+      const iconNode = card.querySelector(".social-game-icon");
+      if (iconNode) iconNode.textContent = iconByCode[code] || "\u{1F3AE}";
+      const titleNode = card.querySelector(".social-game-title");
+      if (titleNode) {
+        const cleanFallback = repairText(titleNode.textContent || "");
+        titleNode.textContent = titleByCode[code] || cleanFallback || code;
+      }
+      const hintNode = card.querySelector("small");
+      if (hintNode) hintNode.textContent = pick("\u041d\u0430\u0436\u043c\u0438\u0442\u0435 \u0434\u043b\u044f \u0432\u0445\u043e\u0434\u0430", "Tap to open");
+    });
   }
 
-  [
-    "applyUiTexts",
-    "refreshMobileQuickNavOptions",
-    "renderMobileQuickList",
-    "syncMobileDrawerSelectors",
-    "setupMobileClientMode",
-    "showTab",
-    "switchSocialSubtab",
-    "switchReviewsSubtab",
-  ].forEach(wrapAfter);
+  function bindBellButtons() {
+    document.querySelectorAll("#socialBellBtn, #mobileDrawerBellBtn").forEach((btn) => {
+      if (!btn || btn.dataset.textFixBellBound === "1") return;
+      btn.dataset.textFixBellBound = "1";
+      btn.addEventListener("click", async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation?.();
+        try {
+          if (typeof window.socialToggleNotificationCenter === "function") {
+            await window.socialToggleNotificationCenter();
+          }
+          if (btn.id === "mobileDrawerBellBtn" && typeof window.closeMobileNav === "function") {
+            window.closeMobileNav();
+          }
+        } catch (_) {}
+      }, true);
+    });
+  }
 
-  const enableHotfixObserver = Boolean(window.__enableTextHotfixObserver);
-  const observer = new MutationObserver(() => {
-    requestAnimationFrame(applyHotfixText);
-  });
+  function bindBellDelegated() {
+    if (!document.body?.dataset) return;
+    if (document.body.dataset.textFixBellDelegated === "1") return;
+    document.body.dataset.textFixBellDelegated = "1";
+    document.addEventListener("click", async (event) => {
+      const btn = event?.target?.closest?.("#socialBellBtn, #mobileDrawerBellBtn, .icon-bell-btn");
+      if (!btn) return;
+      event.preventDefault?.();
+      event.stopPropagation?.();
+      event.stopImmediatePropagation?.();
+      try {
+        if (typeof window.socialToggleNotificationCenter === "function") {
+          await window.socialToggleNotificationCenter();
+        }
+        if (btn.id === "mobileDrawerBellBtn" && typeof window.closeMobileNav === "function") {
+          window.closeMobileNav();
+        }
+      } catch (_) {}
+    }, true);
+  }
 
-  function start() {
-    applyHotfixText();
-    if (enableHotfixObserver && document.body) {
-      observer.observe(document.body, { childList: true, subtree: true });
+  function bindTaskTouchGuard() {
+    if (document.body?.dataset?.taskTouchGuardBound === "1") return;
+    if (!document.body?.dataset) return;
+    document.body.dataset.taskTouchGuardBound = "1";
+    const stopTouchDragInApp = (event) => {
+      if (!isAppShellMode()) return;
+      const target = event?.target?.closest?.(".social-task-item");
+      if (!target) return;
+      event.stopPropagation();
+    };
+    document.addEventListener("touchstart", stopTouchDragInApp, true);
+    document.addEventListener("touchmove", stopTouchDragInApp, true);
+    document.addEventListener("touchend", stopTouchDragInApp, true);
+    document.addEventListener("touchcancel", stopTouchDragInApp, true);
+  }
+
+  function wrapFn(name, wrapper) {
+    const original = window[name];
+    if (typeof original !== "function") return;
+    if (original.__textFixWrapped) return;
+    const wrapped = wrapper(original);
+    wrapped.__textFixWrapped = true;
+    window[name] = wrapped;
+  }
+
+  function installWraps() {
+    wrapFn("tr", (original) => function wrappedTr() {
+      const result = original.apply(this, arguments);
+      if (typeof result !== "string") return result;
+      let safe = repairText(result);
+      if (!isEn()) {
+        const enFallback = String(arguments[1] || "").trim();
+        if (enFallback) {
+          const mostlyQuestionMarks = /^\s*[\?]{3,}\s*$/.test(safe) || (safe.includes("?") && !/[\u0400-\u04ff]/.test(safe));
+          if (mostlyQuestionMarks || looksBroken(safe)) {
+            safe = localizeEnglishFallback(enFallback);
+          }
+        }
+      }
+      return safe;
+    });
+
+    wrapFn("socialResolveNotificationText", (original) => function wrappedResolve(row) {
+      const result = original.call(this, row) || {};
+      return {
+        ...result,
+        title: repairText(result.title || ""),
+        body: repairText(result.body || ""),
+      };
+    });
+
+    wrapFn("socialDecodeUiText", (original) => function wrappedDecodeUiText() {
+      const value = original.apply(this, arguments);
+      return repairText(typeof value === "string" ? value : String(value || ""));
+    });
+
+    wrapFn("socialDecodeMaybeUtf8", (original) => function wrappedDecodeMaybeUtf8() {
+      const value = original.apply(this, arguments);
+      return repairText(typeof value === "string" ? value : String(value || ""));
+    });
+
+    wrapFn("socialRenderNotificationCenter", (original) => function wrappedRenderCenter() {
+      const result = original.apply(this, arguments);
+      const center = normalizeNotificationCenter();
+      if (center) queueSanitize(center);
+      return result;
+    });
+
+    wrapFn("socialToggleNotificationCenter", (original) => async function wrappedToggleCenter(forceOpen = null) {
+      const result = await Promise.resolve(original.call(this, forceOpen));
+      const center = normalizeNotificationCenter();
+      if (center) {
+        if (!window.socialState?.notificationCenterOpen) {
+          center.classList.add("hidden");
+          center.style.display = "none";
+        }
+        queueSanitize(center);
+      }
+      return result;
+    });
+
+    wrapFn("socialRenderCalendar", (original) => function wrappedRenderCalendar() {
+      if (!window.socialState || typeof window.socialState !== "object") window.socialState = {};
+      const currentDate = window.socialState.calendarDate;
+      if (!(currentDate instanceof Date) || Number.isNaN(currentDate.getTime())) {
+        window.socialState.calendarDate = calendarBaseDate();
+      }
+      let result = null;
+      try {
+        result = original.apply(this, arguments);
+      } catch (_) {
+        const root = document.getElementById("socialSubtabCalendar");
+        if (root) buildCalendarFallbackGridV2(root);
+      }
+      normalizeCalendarUi();
+      queueSanitize(document.getElementById("socialSubtabCalendar"));
+      return result;
+    });
+
+    wrapFn("socialRenderNotesList", (original) => function wrappedRenderNotesList() {
+      const result = original.apply(this, arguments);
+      normalizeNotesGrid();
+      queueSanitize(document.getElementById("socialSubtabNotes") || document.getElementById("socialNotesList"));
+      return result;
+    });
+
+    wrapFn("socialLoadCalendar", (original) => async function wrappedLoadCalendar() {
+      const result = await Promise.resolve(original.apply(this, arguments));
+      normalizeCalendarUi();
+      queueSanitize(document.getElementById("socialSubtabCalendar"));
+      return result;
+    });
+
+    wrapFn("socialRenderThreads", (original) => function wrappedRenderThreads() {
+      const result = original.apply(this, arguments);
+      queueSanitize(document.getElementById("socialChatThreads"));
+      return result;
+    });
+
+    wrapFn("socialRenderTasks", (original) => function wrappedRenderTasks() {
+      const result = original.apply(this, arguments);
+      normalizeTasksUi();
+      queueSanitize(document.getElementById("socialSubtabTasks") || document.getElementById("socialTasksBoard"));
+      return result;
+    });
+
+    wrapFn("socialRenderGames", (original) => function wrappedRenderGames() {
+      const result = original.apply(this, arguments);
+      normalizeGamesUi();
+      queueSanitize(document.getElementById("socialSubtabGames") || document.getElementById("socialGamesGrid"));
+      return result;
+    });
+
+    wrapFn("socialOpenGameMenu", (original) => async function wrappedOpenGameMenu() {
+      const result = await Promise.resolve(original.apply(this, arguments));
+      queueSanitize(document.getElementById("socialModal"));
+      return result;
+    });
+
+    wrapFn("socialShowGameTips", (original) => function wrappedShowGameTips() {
+      const result = original.apply(this, arguments);
+      queueSanitize(document.getElementById("socialModal"));
+      return result;
+    });
+
+    wrapFn("socialShowLeaderboard", (original) => async function wrappedShowLeaderboard() {
+      const result = await Promise.resolve(original.apply(this, arguments));
+      queueSanitize(document.getElementById("socialModal"));
+      return result;
+    });
+
+    wrapFn("socialSetBell", (original) => function wrappedSetBell() {
+      const result = original.apply(this, arguments);
+      bindBellButtons();
+      bindBellDelegated();
+      return result;
+    });
+  }
+
+  function init() {
+    if (isAppShellMode()) {
+      window.__socialDisableNotificationToasts = true;
     }
-    window.addEventListener("load", applyHotfixText, { once: true });
+    installWraps();
+    applyKnownCopy();
+    bindBellButtons();
+    bindBellDelegated();
+    bindTaskTouchGuard();
+    installObserver();
+    normalizeCalendarUi();
+    normalizeNotificationCenter();
+    normalizeNotesGrid();
+    normalizeTasksUi();
+    normalizeGamesUi();
+    const root = document.getElementById("appSection") || document.body;
+    queueSanitize(root);
+    setTimeout(() => queueSanitize(document.getElementById("socialSection") || root), 320);
+    setTimeout(() => queueSanitize(document.getElementById("socialNotificationCenter") || root), 1200);
+    window.addEventListener("resize", () => {
+      normalizeNotificationCenter();
+      queueSanitize(document.getElementById("socialNotificationCenter"));
+    });
+    document.body?.classList?.remove("text-fix-pending");
+    document.body?.classList?.add("text-fix-ready");
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", start, { once: true });
+    document.addEventListener("DOMContentLoaded", init, { once: true });
   } else {
-    start();
+    init();
   }
 })();
-

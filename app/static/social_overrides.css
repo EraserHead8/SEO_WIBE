@@ -1,546 +1,377 @@
-.social-task-bucket-list {
-  gap: 10px;
-}
+/* Stable social overrides (single-pass, no duplicates) */
 
-.social-task-item {
-  grid-template-columns: 42px 1fr 42px;
-  gap: 10px;
+/* Notifications */
+#socialNotificationCenter.social-notif-center,
+#socialNotificationCenter.social-notification-center {
+  position: fixed !important;
+  top: 72px !important;
+  right: 12px !important;
+  left: auto !important;
+  width: min(420px, calc(100vw - 24px)) !important;
+  max-height: calc(100vh - 84px) !important;
+  z-index: 2147483000 !important;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-radius: 18px;
-  padding: 10px;
-  background: linear-gradient(180deg, color-mix(in oklab, var(--panel-bg-soft) 88%, #ffffff) 0%, #ffffff 100%);
-  box-shadow: 0 12px 24px rgba(12, 30, 74, 0.05);
+  border: 1px solid color-mix(in srgb, var(--line, #d9e2ef) 84%, #fff);
+  background: color-mix(in srgb, var(--panel-bg, #fff) 95%, #f6f9ff);
+  box-shadow: 0 18px 42px rgba(10, 25, 56, 0.24);
 }
 
-.social-task-check,
-.social-task-delete,
-.social-calendar-day-card-check {
-  border-radius: 999px;
-  min-width: 38px;
-  min-height: 38px;
-}
-
-.social-task-content {
-  gap: 8px;
-}
-
-.social-task-title-row {
-  align-items: flex-start;
-}
-
-.social-task-title-text,
-.social-task-meta-trim,
-.social-day-preview-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.social-task-subline--secondary {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.social-task-meta-trim {
-  max-width: 320px;
-}
-
-.social-notes-shell {
-  gap: 18px;
-}
-
-.social-notes-board-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: flex-end;
-}
-
-.social-notes-board-copy {
-  display: grid;
-  gap: 8px;
-}
-
-.social-notes-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
-  align-items: start;
-}
-
-.social-note-card {
-  position: relative;
-}
-
-.social-note-card-main {
-  width: 100%;
-  border: 1px solid color-mix(in oklab, var(--line) 82%, var(--accent));
-  border-radius: 24px;
-  background: transparent;
-  padding: 0;
-  overflow: hidden;
-  text-align: left;
-  box-shadow: 0 20px 36px rgba(11, 26, 68, 0.08);
-}
-
-.social-note-card.active .social-note-card-main {
-  border-color: color-mix(in oklab, var(--accent) 60%, var(--line));
-  box-shadow: 0 22px 40px rgba(67, 138, 255, 0.16);
-}
-
-.social-note-card-surface {
-  min-height: 220px;
-  padding: 20px 18px 18px;
-  background:
-    linear-gradient(180deg, color-mix(in oklab, #fffdf5 78%, #ffffff) 0%, #ffffff 100%),
-    radial-gradient(circle at top right, rgba(142, 198, 255, 0.18), transparent 38%);
-  display: grid;
-  align-content: start;
-  gap: 12px;
-}
-
-.social-note-card-title {
-  margin: 0;
-  font-size: 24px;
-  line-height: 1.1;
-}
-
-.social-note-card-snippet {
-  font-size: 16px;
-  line-height: 1.55;
-  color: var(--text-color);
-  display: -webkit-box;
-  -webkit-line-clamp: 6;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.social-note-card-meta {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 14px 18px 16px;
-  font-size: 12px;
-  color: var(--text-muted);
-  background: color-mix(in oklab, var(--panel-bg-soft) 80%, #ffffff);
-}
-
-.social-note-card-delete {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 2;
-  width: 34px;
-  height: 34px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in oklab, var(--line) 86%, #ffffff);
-  background: rgba(255, 255, 255, 0.92);
-  color: color-mix(in oklab, #ef4444 76%, var(--text-color));
-}
-
-.social-note-empty {
-  padding: 24px;
-  border: 1px dashed var(--line);
-  border-radius: 20px;
-  color: var(--text-muted);
-  background: color-mix(in oklab, var(--panel-bg-soft) 84%, #ffffff);
-}
-
-.social-note-editor-modal {
-  display: grid;
-  gap: 16px;
-}
-
-.social-note-editor-toolbar,
-.social-note-editor-files-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.social-note-editor-meta {
-  display: grid;
-  gap: 4px;
-}
-
-.social-note-editor-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.social-note-editor-body {
-  display: grid;
-  gap: 12px;
-}
-
-.social-note-editor-body input,
-.social-note-editor-body textarea {
-  width: 100%;
-}
-
-.social-note-editor-body textarea {
-  min-height: 360px;
-  resize: vertical;
-}
-
-.social-day.rich {
-  min-height: 126px;
-  align-items: stretch;
-  justify-content: flex-start;
-  gap: 8px;
-  padding: 10px;
-}
-
-.social-day-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  align-items: center;
-}
-
-.social-day-head b {
-  font-size: 22px;
-}
-
-.social-day-badge {
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--accent) 16%, #ffffff);
-  color: color-mix(in oklab, var(--accent) 74%, var(--text-color));
-  font-size: 10px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.social-day-preview-stack {
-  display: grid;
-  gap: 6px;
-  align-content: start;
-}
-
-.social-day-preview-pill {
-  display: grid;
-  gap: 2px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  text-align: left;
-  background: color-mix(in oklab, #b8d2ff 28%, #ffffff);
-}
-
-.social-day-preview-pill.is-event {
-  background: color-mix(in oklab, #b7d9ff 36%, #ffffff);
-}
-
-.social-day-preview-pill.is-task {
-  background: color-mix(in oklab, #d9ecff 52%, #ffffff);
-}
-
-.social-day-preview-pill.is-task.is-personal {
-  background: color-mix(in oklab, #cfe9d5 58%, #ffffff);
-}
-
-.social-day-preview-time {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.social-day-more {
-  margin-top: auto;
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.social-calendar-day-sheet {
-  display: grid;
-  gap: 16px;
-  padding: 18px;
-  border: 1px solid color-mix(in oklab, var(--line) 86%, var(--accent));
-  border-radius: 24px;
-  background: linear-gradient(180deg, color-mix(in oklab, var(--panel-bg-soft) 82%, #ffffff) 0%, #ffffff 100%);
-  box-shadow: 0 20px 42px rgba(11, 25, 63, 0.08);
-}
-
-.social-calendar-day-sheet-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: flex-start;
-}
-
-.social-calendar-day-sheet-kicker {
-  display: inline-block;
-  margin-bottom: 6px;
-  color: var(--text-muted);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.social-calendar-day-sheet-date {
-  margin: 0;
-  font-size: clamp(24px, 3vw, 36px);
-}
-
-.social-calendar-day-sheet-stat {
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--panel-bg-soft) 76%, #ffffff);
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.social-calendar-day-sheet-list {
-  display: grid;
-  gap: 12px;
-}
-
-.social-calendar-day-card {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  padding: 14px 16px;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  background: color-mix(in oklab, var(--panel-bg-soft) 72%, #ffffff);
-}
-
-.social-calendar-day-card.is-task {
-  grid-template-columns: auto minmax(0, 1fr) auto;
-}
-
-.social-calendar-day-card.is-done {
-  background: color-mix(in oklab, #dcfce7 70%, #ffffff);
-}
-
-.social-calendar-day-card-body {
-  display: grid;
-  gap: 8px;
-  cursor: pointer;
-}
-
-.social-calendar-day-card-body h5 {
-  margin: 0;
-  font-size: 18px;
-}
-
-.social-calendar-day-card-meta {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.social-calendar-day-card-desc {
-  color: var(--text-color);
-  line-height: 1.55;
-}
-
-.social-calendar-day-card-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: flex-start;
-}
-
-.social-calendar-day-sheet-footer {
-  display: flex;
-  justify-content: flex-end;
-}
-
-@media (max-width: 980px) {
-  .social-notes-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
-  }
-
-  .social-note-card-surface {
-    min-height: 150px;
-    padding: 14px 12px 12px;
-  }
-
-  .social-note-card-title {
-    font-size: 16px;
-  }
-
-  .social-note-card-snippet {
-    font-size: 13px;
-    line-height: 1.4;
-    -webkit-line-clamp: 5;
-  }
-
-  .social-note-card-meta {
-    padding: 10px 12px 12px;
-    font-size: 11px;
-  }
-
-  .social-task-item {
-    grid-template-columns: 38px 1fr 38px;
-  }
-
-  .social-task-subline {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .social-task-meta-trim {
-    max-width: 100%;
-  }
-
-  .social-day.rich {
-    min-height: 110px;
-    padding: 8px;
-  }
-
-  .social-calendar-day-card,
-  .social-calendar-day-card.is-task {
-    grid-template-columns: 1fr;
-  }
-}
-.social-calendar-sync-card,
-#socialCalendarGoogleConnectBtn,
-#socialCalendarGoogleStatus,
-#socialCalendarGoogleMeta,
-#socialCalendarSyncMessage,
-#socialCalendarGoogleIcs,
-#socialCalendarGoogleReplace,
-.social-calendar-sync-actions,
-.social-calendar-setup-note {
+#socialNotificationCenter.hidden {
   display: none !important;
 }
 
-.social-calendar-shell--clean {
-  gap: 14px;
-  background: linear-gradient(180deg, color-mix(in oklab, var(--panel-bg-soft) 82%, #ffffff) 0%, #ffffff 100%);
+.social-notif-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line, #d9e2ef) 86%, #fff);
 }
 
-.social-calendar-topbar-clean {
+.social-notif-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  overflow: auto;
+}
+
+.social-notif-item {
+  border: 1px solid color-mix(in srgb, var(--line, #d9e2ef) 86%, #fff);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--panel-bg-soft, #f8fbff) 80%, #fff);
+  height: auto !important;
+  min-height: 72px !important;
+  overflow: hidden !important;
+}
+
+.social-notif-item-head {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
-  align-items: flex-end;
-  flex-wrap: wrap;
-}
-
-.social-calendar-toolbar--clean {
   align-items: center;
-}
-
-.social-calendar-nav--simple {
-  align-items: center;
-}
-
-.social-calendar-main--stack {
-  display: grid;
-  gap: 14px;
-}
-
-.social-calendar-task-mode {
-  display: flex;
   gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
 }
 
-.social-calendar-task-mode .chip-btn.is-active {
-  background: color-mix(in oklab, var(--accent) 18%, #ffffff);
-  border-color: color-mix(in oklab, var(--accent) 54%, var(--line));
-  color: color-mix(in oklab, var(--accent) 82%, var(--text-color));
+.social-notif-item p {
+  margin: 6px 0 0;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  display: -webkit-box !important;
+  -webkit-box-orient: vertical !important;
+  -webkit-line-clamp: 4 !important;
+  overflow: hidden !important;
 }
 
-.social-day.rich {
-  min-height: 102px;
-  gap: 6px;
-  padding: 8px;
-  overflow: hidden;
+body.mobile-apk-mode #socialToastHost,
+body.mobile-client-mode #socialToastHost {
+  display: none !important;
 }
 
-.social-day-head b {
-  font-size: 18px;
+/* Calendar (Samsung-like month board + FAB only) */
+#socialSubtabCalendar {
+  position: relative !important;
 }
 
-.social-day-preview-stack {
-  gap: 4px;
-  min-height: 0;
-  overflow: hidden;
+#socialSubtabCalendar .social-calendar-shell {
+  position: relative !important;
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 12px !important;
 }
 
-.social-day-preview-pill {
-  min-width: 0;
-  overflow: hidden;
-  padding: 6px 8px;
-  border-radius: 10px;
-  border-left: 3px solid var(--social-preview-color, #9dc4ff);
-  background: color-mix(in oklab, var(--social-preview-color, #dbeafe) 30%, #ffffff);
+#socialSubtabCalendar .social-calendar-hero {
+  display: block !important;
+  border: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
-.social-day-preview-pill.is-event,
-.social-day-preview-pill.is-task,
-.social-day-preview-pill.is-task.is-personal {
-  background: color-mix(in oklab, var(--social-preview-color, #dbeafe) 30%, #ffffff);
+#socialSubtabCalendar #socialCalendarMonthLabel {
+  margin: 0 !important;
+  font-size: clamp(28px, 3.8vw, 44px) !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
 }
 
-.social-day-preview-time {
-  font-size: 10px;
-  white-space: nowrap;
+#socialSubtabCalendar .social-calendar-toolbar,
+#socialSubtabCalendar .social-calendar-toolbar--modern,
+#socialSubtabCalendar .social-calendar-nav,
+#socialSubtabCalendar .social-calendar-nav--cluster,
+#socialSubtabCalendar .social-calendar-hero-actions,
+#socialSubtabCalendar .social-calendar-sync,
+#socialSubtabCalendar .social-calendar-sync-card,
+#socialSubtabCalendar .social-calendar-sync-panel,
+#socialSubtabCalendar .social-calendar-import-panel,
+#socialSubtabCalendar .social-calendar-source-panel,
+#socialSubtabCalendar [id*="Google"],
+#socialSubtabCalendar [id*="OAuth"],
+#socialSubtabCalendar [id*="Ics"],
+#socialSubtabCalendar [id*="ICS"] {
+  display: none !important;
 }
 
-.social-day-preview-title {
-  font-size: 12px;
+#socialSubtabCalendar button:not(#socialCalendarFab):not(.social-day):not(.social-day-item-button) {
+  display: none !important;
 }
 
-.social-calendar-day-card {
-  border-left: 4px solid var(--social-preview-color, color-mix(in oklab, var(--accent) 40%, var(--line)));
-  padding: 12px 14px;
+#socialSubtabCalendar #socialCalendarGrid {
+  display: block !important;
+  border: 1px solid color-mix(in srgb, var(--line, #d9e2ef) 86%, #fff) !important;
+  border-radius: 18px !important;
+  background: color-mix(in srgb, var(--panel-bg, #fff) 96%, #f8fbff) !important;
+  overflow: hidden !important;
 }
 
-.social-calendar-day-card-body h5 {
-  font-size: 16px;
+#socialSubtabCalendar #socialCalendarGrid .social-calendar-cells {
+  display: grid !important;
 }
 
-.social-task-item {
-  grid-template-columns: 30px 1fr 28px;
-  gap: 8px;
-  border-radius: 14px;
-  padding: 8px 10px;
-  box-shadow: none;
+#socialSubtabCalendar .social-calendar-row.head span {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--text-muted, #6b7a90) !important;
 }
 
-.social-task-check,
-.social-task-delete,
-.social-calendar-day-card-check {
-  min-width: 30px;
-  min-height: 30px;
-  border-radius: 999px;
-  font-size: 14px;
+#socialSubtabCalendar .social-day.rich {
+  min-height: 102px !important;
+  max-height: 128px !important;
+  padding: 6px !important;
+  gap: 4px !important;
+  align-content: start !important;
+  overflow: hidden !important;
 }
 
-.social-task-content {
-  gap: 4px;
+#socialSubtabCalendar .social-day.rich .social-day-head {
+  min-height: 20px !important;
 }
 
-.social-task-title-text {
-  font-size: 14px;
+#socialSubtabCalendar .social-day.rich .social-day-head b {
+  font-size: 28px !important;
+  font-weight: 700 !important;
 }
 
-.social-task-subline {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-  font-size: 12px;
+#socialSubtabCalendar .social-day-preview-stack {
+  display: grid !important;
+  gap: 4px !important;
+  min-height: 0 !important;
+  max-height: 58px !important;
+  overflow: hidden !important;
 }
 
-.social-task-subline--secondary {
-  display: none;
+#socialSubtabCalendar .sw-calendar-chip {
+  display: block !important;
+  max-width: 100% !important;
+  min-height: 16px !important;
+  padding: 1px 6px !important;
+  border-radius: 7px !important;
+  background: color-mix(in srgb, var(--sw-chip-color, #b8d2ff) 78%, #fff) !important;
+  border-left: 3px solid color-mix(in srgb, var(--sw-chip-color, #b8d2ff) 84%, #3b82f6) !important;
 }
 
-.social-task-pending {
-  font-size: 11px;
+#socialSubtabCalendar .sw-calendar-chip-title {
+  display: block !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  font-size: 11px !important;
+  line-height: 1.2 !important;
 }
 
-.social-notes-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+#socialSubtabCalendar .sw-calendar-more {
+  justify-self: end !important;
+  font-size: 11px !important;
+  color: var(--text-muted, #6b7a90) !important;
+}
+
+#socialSubtabCalendar #socialCalendarEvents {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 10px !important;
+}
+
+#socialCalendarFab.social-calendar-fab {
+  position: absolute !important;
+  right: 16px !important;
+  bottom: 16px !important;
+  width: 56px !important;
+  height: 56px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: #8dc63f !important;
+  color: #fff !important;
+  font-size: 34px !important;
+  line-height: 1 !important;
+  box-shadow: 0 10px 26px rgba(76, 138, 16, 0.32) !important;
+  z-index: 1200 !important;
+}
+
+/* Notes (3 fixed cards per row, open by click, no cross in list) */
+#socialSubtabNotes .social-notes-layout {
+  grid-template-columns: 1fr !important;
+}
+
+#socialSubtabNotes .social-notes-editor {
+  display: none !important;
+}
+
+#socialSubtabNotes .social-notes-sidebar {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+#socialSubtabNotes .social-notes-list {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  grid-auto-rows: 148px !important;
+  gap: 10px !important;
+  align-content: start !important;
+  overflow: visible !important;
+  max-height: none !important;
+}
+
+#socialSubtabNotes #socialNotesList .social-note-row,
+#socialSubtabNotes #socialNotesList .sw-note-card {
+  position: relative !important;
+  display: block !important;
+  width: 100% !important;
+  max-width: none !important;
+  inline-size: 100% !important;
+  min-width: 0 !important;
+  height: 148px !important;
+  min-height: 148px !important;
+  max-height: 148px !important;
+  border-radius: 16px !important;
+  overflow: hidden !important;
+  justify-self: stretch !important;
+}
+
+#socialSubtabNotes #socialNotesList .social-note-row::before,
+#socialSubtabNotes #socialNotesList .sw-note-card::before {
+  content: "" !important;
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  width: 100% !important;
+  height: 6px !important;
+  background: var(--sw-note-cover, #c9dcff) !important;
+  pointer-events: none !important;
+}
+
+#socialSubtabNotes #socialNotesList .social-note-main {
+  display: grid !important;
+  grid-template-rows: auto 1fr auto !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  cursor: pointer !important;
+}
+
+#socialSubtabNotes #socialNotesList .social-note-main b {
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2 !important;
+  -webkit-box-orient: vertical !important;
+  overflow: hidden !important;
+}
+
+#socialSubtabNotes #socialNotesList .social-note-snippet {
+  display: -webkit-box !important;
+  -webkit-line-clamp: 4 !important;
+  -webkit-box-orient: vertical !important;
+  overflow: hidden !important;
+}
+
+#socialSubtabNotes #socialNotesList .social-note-delete,
+#socialSubtabNotes #socialNotesList [class*="note-delete"],
+#socialSubtabNotes #socialNotesList [class*="note-remove"],
+#socialSubtabNotes #socialNotesList [class*="note-close"],
+#socialSubtabNotes #socialNotesList [class*="close"],
+#socialSubtabNotes #socialNotesList [data-action="delete"],
+#socialSubtabNotes #socialNotesList button[onclick*="socialDeleteNote"],
+#socialSubtabNotes #socialNotesList .social-note-row > button:not(.social-note-main) {
+  display: none !important;
+}
+
+/* Tasks (mobile app/client: no overflow, no swipe drag behaviour) */
+#socialTasksBoard,
+#socialTasksBoard .social-task-board-v2,
+#socialTasksBoard .social-task-bucket,
+#socialTasksBoard .social-task-bucket-list,
+#socialTasksBoard .social-task-item,
+#socialTasksBoard .social-task-content {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+body.mobile-apk-mode #socialTasksBoard,
+body.mobile-client-mode #socialTasksBoard {
+  overflow-x: hidden !important;
+}
+
+body.mobile-apk-mode #socialTasksBoard .social-task-board-v2,
+body.mobile-client-mode #socialTasksBoard .social-task-board-v2 {
+  grid-template-columns: 1fr !important;
+  gap: 10px !important;
+}
+
+body.mobile-apk-mode #socialTasksBoard .social-task-bucket-list,
+body.mobile-client-mode #socialTasksBoard .social-task-bucket-list {
+  max-height: none !important;
+  overflow-y: visible !important;
+  overflow-x: hidden !important;
+}
+
+body.mobile-apk-mode #socialTasksBoard .social-task-item,
+body.mobile-client-mode #socialTasksBoard .social-task-item {
+  grid-template-columns: 34px minmax(0, 1fr) 34px !important;
+  touch-action: pan-y !important;
+}
+
+body.mobile-apk-mode #socialTasksBoard .social-task-title-text,
+body.mobile-client-mode #socialTasksBoard .social-task-title-text,
+body.mobile-apk-mode #socialTasksBoard .social-task-subline,
+body.mobile-client-mode #socialTasksBoard .social-task-subline,
+body.mobile-apk-mode #socialTasksBoard .social-task-assignee-name,
+body.mobile-client-mode #socialTasksBoard .social-task-assignee-name {
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+
+@media (max-width: 980px) {
+  #socialNotificationCenter.social-notif-center,
+  #socialNotificationCenter.social-notification-center {
+    top: 84px !important;
+    left: 8px !important;
+    right: 8px !important;
+    width: auto !important;
+    max-height: calc(100vh - 96px) !important;
+  }
+
+  #socialSubtabCalendar .social-day.rich {
+    min-height: 96px !important;
+  }
+
+  #socialSubtabCalendar .social-day.rich .social-day-head b {
+    font-size: 24px !important;
+  }
+
+  #socialCalendarFab.social-calendar-fab {
+    position: fixed !important;
+    right: 16px !important;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 86px) !important;
+  }
+}
+-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   align-items: stretch;
 }
@@ -1592,4 +1423,653 @@
 
 #socialSubtabNotes .social-notes-editor {
   display: none !important;
+}
+/* ---- Social overrides: notifications, samsung calendar, notes ---- */
+.social-notif-center {
+  position: fixed;
+  top: 64px;
+  right: 12px;
+  width: min(390px, calc(100vw - 20px));
+  max-height: min(72vh, 640px);
+  z-index: 1200;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(143, 168, 201, 0.45);
+  border-radius: 18px;
+  box-shadow: 0 18px 45px rgba(10, 25, 50, 0.24);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.social-notif-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(143, 168, 201, 0.25);
+  background: rgba(242, 248, 255, 0.95);
+}
+
+.social-notif-list {
+  overflow: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.social-notif-item {
+  border: 1px solid rgba(143, 168, 201, 0.35);
+  border-radius: 12px;
+  background: #fff;
+  text-align: left;
+  width: 100%;
+  padding: 10px 12px;
+}
+
+.social-notif-item.is-unread {
+  border-color: rgba(74, 132, 255, 0.45);
+  background: #f5f9ff;
+}
+
+.social-notif-item-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+  color: #50709b;
+  font-size: 12px;
+}
+
+.social-notif-item p {
+  margin: 4px 0 0;
+  color: #223a56;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+#socialSubtabCalendar .social-calendar-grid--samsung .social-calendar-cells {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+#socialSubtabCalendar .social-calendar-grid--samsung .social-day {
+  min-height: 116px;
+  border-radius: 14px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 8px 6px;
+  overflow: hidden;
+}
+
+#socialSubtabCalendar .social-calendar-grid--samsung .social-day b {
+  font-size: 18px;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+#socialSubtabCalendar .social-calendar-grid--samsung .social-day.muted {
+  opacity: 0.35;
+  min-height: 100px;
+}
+
+.sw-cal-chip-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sw-cal-chip {
+  display: block;
+  max-width: 100%;
+  border-radius: 8px;
+  padding: 2px 6px;
+  font-size: 11px;
+  line-height: 1.2;
+  background: color-mix(in srgb, var(--sw-chip-color, #b8d2ff) 38%, white);
+  color: #1a2f48;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sw-cal-more {
+  align-self: flex-start;
+  font-size: 11px;
+  color: #5275a0;
+  padding: 0 4px;
+}
+
+#socialCalendarDaySheetBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(18, 30, 52, 0.25);
+  z-index: 1180;
+}
+
+#socialCalendarDaySheet {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 20px));
+  max-height: min(80vh, 760px);
+  overflow: auto;
+  z-index: 1190;
+}
+
+.sw-day-sheet-card {
+  background: #fff;
+  border: 1px solid rgba(143, 168, 201, 0.35);
+  border-radius: 24px;
+  padding: 14px;
+  box-shadow: 0 20px 40px rgba(8, 27, 60, 0.22);
+}
+
+.sw-day-sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.sw-day-sheet-head h4 {
+  margin: 2px 0 0;
+  font-size: 28px;
+  line-height: 1.05;
+}
+
+.sw-day-sheet-kicker {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6784ab;
+}
+
+.sw-day-sheet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sw-day-item {
+  border: 1px solid rgba(143, 168, 201, 0.35);
+  border-radius: 16px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--sw-chip-color, #b8d2ff) 30%, white);
+}
+
+.sw-day-item-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sw-day-item-head b {
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.sw-day-item-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #4a668a;
+}
+
+.sw-day-item-desc {
+  margin-top: 8px;
+  font-size: 14px;
+  color: #14293f;
+  white-space: pre-wrap;
+}
+
+.sw-day-item-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.sw-day-sheet-footer {
+  margin-top: 12px;
+  display: flex;
+  justify-content: center;
+}
+
+.sw-calendar-quick-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sw-calendar-quick-menu > button {
+  width: 100%;
+}
+
+.social-calendar-modal-grid {
+  gap: 10px;
+}
+
+.social-reminder-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+#socialSubtabNotes.sw-notes-compact .social-notes-editor {
+  display: none !important;
+}
+
+#socialSubtabNotes.sw-notes-compact .social-notes-sidebar {
+  width: 100%;
+  max-width: none;
+}
+
+#socialSubtabNotes.sw-notes-compact .social-notes-list {
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+.sw-notes-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sw-note-card {
+  border: 1px solid rgba(143, 168, 201, 0.34);
+  border-radius: 16px;
+  background: var(--sw-note-cover, #f8fbff);
+  min-height: 186px;
+  max-height: 186px;
+  padding: 12px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.sw-note-title {
+  font-size: 20px;
+  line-height: 1.15;
+  min-height: 2.3em;
+  overflow: hidden;
+}
+
+.sw-note-snippet {
+  font-size: 14px;
+  color: #2b4563;
+  line-height: 1.35;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+.sw-note-meta {
+  margin-top: auto;
+  font-size: 12px;
+  color: #5d789e;
+}
+
+#socialSubtabNotes .social-note-delete,
+#socialSubtabNotes .social-note-card-delete {
+  display: none !important;
+}
+
+.sw-note-colors {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sw-note-color {
+  height: 30px;
+  border-radius: 999px;
+  border: 1px solid rgba(128, 152, 184, 0.45);
+  background: var(--sw-note-cover, #f8fbff);
+}
+
+.sw-note-color.is-active {
+  box-shadow: inset 0 0 0 2px #2f7cf0;
+}
+
+.sw-note-settings {
+  border: 1px dashed rgba(133, 156, 186, 0.45);
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.sw-note-settings > summary {
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 980px) {
+  .social-notif-center {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    top: 58px;
+    max-height: calc(100vh - 72px);
+  }
+
+  #socialCalendarDaySheet {
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 18px);
+    top: 50%;
+  }
+
+  .sw-day-sheet-head h4 {
+    font-size: 22px;
+  }
+
+  .sw-day-item-head b {
+    font-size: 18px;
+  }
+
+  #socialSubtabCalendar .social-calendar-grid--samsung .social-day {
+    min-height: 96px;
+    padding: 6px 4px;
+  }
+
+  .sw-note-card {
+    min-height: 162px;
+    max-height: 162px;
+    padding: 10px;
+  }
+
+  .sw-note-title {
+    font-size: 14px;
+  }
+
+  .sw-note-snippet {
+    font-size: 12px;
+  }
+}
+
+/* ---- Final stability fixes: bell, calendar, notes ---- */
+#socialNotificationCenter.social-notif-center {
+  position: fixed !important;
+  z-index: 1200 !important;
+  display: flex;
+  flex-direction: column;
+}
+
+#socialNotificationCenter.social-notif-center.hidden {
+  display: none !important;
+}
+
+#socialSubtabCalendar .social-calendar-shell--samsung .social-calendar-topbar {
+  display: grid;
+  grid-template-columns: 52px 1fr 52px;
+  align-items: center;
+  gap: 8px;
+}
+
+#socialSubtabCalendar .social-calendar-shell--samsung .social-calendar-topbar h3 {
+  margin: 0;
+  text-align: center;
+}
+
+#socialSubtabCalendar .social-calendar-grid--samsung {
+  display: block;
+}
+
+#socialSubtabCalendar .social-calendar-grid--samsung .social-calendar-row.head {
+  margin-bottom: 6px;
+}
+
+#socialSubtabCalendar .social-calendar-grid--samsung .social-calendar-cells {
+  display: grid !important;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+#socialSubtabCalendar .social-calendar-grid--samsung .social-day {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  min-height: 108px;
+  padding: 6px 4px;
+  overflow: hidden;
+}
+
+#socialSubtabCalendar .social-calendar-grid--samsung .social-day > b {
+  margin-bottom: 4px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+#socialSubtabCalendar .sw-cal-chip-list {
+  max-height: 62px;
+  overflow: hidden;
+}
+
+#socialSubtabCalendar .sw-cal-chip {
+  max-width: 100%;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+#socialSubtabCalendar .social-calendar-fab {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+}
+
+#socialSubtabNotes.sw-notes-compact .social-notes-layout {
+  display: block !important;
+}
+
+#socialSubtabNotes.sw-notes-compact .social-notes-editor {
+  display: none !important;
+}
+
+#socialSubtabNotes.sw-notes-compact .social-notes-sidebar {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+#socialSubtabNotes.sw-notes-compact #socialNotesList,
+#socialSubtabNotes.sw-notes-compact .sw-notes-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+}
+
+#socialSubtabNotes.sw-notes-compact .sw-note-card {
+  height: 176px !important;
+  min-height: 176px !important;
+  max-height: 176px !important;
+  overflow: hidden;
+}
+
+#socialSubtabNotes .social-note-delete,
+#socialSubtabNotes .social-note-card-delete {
+  display: none !important;
+}
+
+@media (max-width: 980px) {
+  #socialSubtabCalendar .social-calendar-grid--samsung .social-day {
+    min-height: 94px;
+    padding: 5px 3px;
+  }
+
+  #socialSubtabNotes.sw-notes-compact #socialNotesList,
+  #socialSubtabNotes.sw-notes-compact .sw-notes-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  #socialSubtabNotes.sw-notes-compact .sw-note-card {
+    height: 148px !important;
+    min-height: 148px !important;
+    max-height: 148px !important;
+  }
+}
+
+#socialNotificationCenter.social-notification-center {
+  position: fixed !important;
+  z-index: 1200 !important;
+}
+
+
+/* 2026-03-21 final mobile/web stabilization */
+#socialCalendarDaySheet.hidden,
+#socialCalendarDaySheetBackdrop.hidden,
+#socialSubtabCalendar .social-calendar-day-sheet.hidden,
+#socialSubtabCalendar .social-calendar-day-sheet-backdrop.hidden {
+  display: none !important;
+}
+
+#socialSubtabCalendar .sw-cal-chip,
+#socialSubtabCalendar .sw-calendar-chip {
+  display: block;
+  min-height: 16px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#socialSubtabCalendar .sw-cal-chip-text,
+#socialSubtabCalendar .sw-calendar-chip-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.mobile-apk-mode #socialSubtabCalendar .social-calendar-topbar > button,
+body.mobile-client-mode #socialSubtabCalendar .social-calendar-topbar > button {
+  display: none !important;
+}
+
+body.mobile-apk-mode #socialSubtabCalendar .social-calendar-topbar,
+body.mobile-client-mode #socialSubtabCalendar .social-calendar-topbar {
+  grid-template-columns: 1fr !important;
+  justify-items: center;
+}
+
+#socialSubtabNotes.sw-notes-compact .sw-note-card,
+#socialSubtabNotes.sw-notes-compact #socialNotesList .social-note-card-main,
+#socialSubtabNotes.sw-notes-compact #socialNotesList .social-note-main {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 172px !important;
+  height: 172px !important;
+  max-height: 172px !important;
+  overflow: hidden !important;
+}
+
+#socialSubtabNotes.sw-notes-compact .sw-note-title,
+#socialSubtabNotes.sw-notes-compact .sw-note-snippet,
+#socialSubtabNotes.sw-notes-compact #socialNotesList .social-note-main b,
+#socialSubtabNotes.sw-notes-compact #socialNotesList .social-note-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#socialSubtabNotes #socialNotesList [class*="delete"],
+#socialSubtabNotes #socialNotesList [aria-label*="Удал"],
+#socialSubtabNotes #socialNotesList [aria-label*="Delete"],
+#socialSubtabNotes #socialNotesList .social-note-card > button:not(.social-note-card-main):not(.social-note-main) {
+  display: none !important;
+}
+
+body.mobile-apk-mode #socialSubtabTasks .social-task-board-v2,
+body.mobile-client-mode #socialSubtabTasks .social-task-board-v2 {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 10px;
+  overflow-x: hidden !important;
+}
+
+body.mobile-apk-mode #socialSubtabTasks .social-task-bucket,
+body.mobile-client-mode #socialSubtabTasks .social-task-bucket,
+body.mobile-apk-mode #socialSubtabTasks .social-task-bucket-list,
+body.mobile-client-mode #socialSubtabTasks .social-task-bucket-list,
+body.mobile-apk-mode #socialSubtabTasks .social-task-item,
+body.mobile-client-mode #socialSubtabTasks .social-task-item {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  width: 100% !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box;
+}
+
+/* 2026-03-21 samsung parity lock */
+#socialSubtabCalendar .social-calendar-topbar > button,
+#socialSubtabCalendar .social-calendar-nav--simple,
+#socialSubtabCalendar #socialCalendarPrimaryAction,
+#socialSubtabCalendar .social-calendar-hero-actions,
+#socialSubtabCalendar .social-calendar-toolbar--modern,
+#socialSubtabCalendar .social-calendar-toolbar--clean,
+#socialSubtabCalendar .social-calendar-filters {
+  display: none !important;
+}
+
+#socialSubtabCalendar .social-calendar-topbar {
+  grid-template-columns: 1fr !important;
+  justify-items: center;
+}
+
+#socialSubtabCalendar .social-calendar-grid--samsung .social-calendar-cells {
+  display: grid !important;
+  grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+}
+
+#socialSubtabCalendar .social-day {
+  overflow: hidden !important;
+}
+
+#socialSubtabCalendar .sw-cal-chip-list {
+  max-height: 62px !important;
+  overflow: hidden !important;
+}
+
+#socialSubtabNotes.sw-notes-compact #socialNotesList,
+#socialSubtabNotes.sw-notes-compact .sw-notes-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+}
+
+#socialSubtabNotes.sw-notes-compact .sw-note-card,
+#socialSubtabNotes.sw-notes-compact #socialNotesList .social-note-card-main,
+#socialSubtabNotes.sw-notes-compact #socialNotesList .social-note-main {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 172px !important;
+  min-height: 172px !important;
+  max-height: 172px !important;
+  overflow: hidden !important;
+}
+
+#socialSubtabNotes #socialNotesList [class*="delete"],
+#socialSubtabNotes #socialNotesList [class*="remove"],
+#socialSubtabNotes #socialNotesList [aria-label*="Удал"],
+#socialSubtabNotes #socialNotesList [aria-label*="Delete"],
+#socialSubtabNotes #socialNotesList [title*="Удал"],
+#socialSubtabNotes #socialNotesList [title*="Delete"],
+#socialSubtabNotes #socialNotesList .social-note-card-delete,
+#socialSubtabNotes #socialNotesList .social-note-delete,
+#socialSubtabNotes #socialNotesList button[onclick*="DeleteNote"],
+#socialSubtabNotes #socialNotesList button[onclick*="deleteNote"] {
+  display: none !important;
+}
+
+#socialSubtabNotes #socialNotesList .sw-note-card,
+#socialSubtabNotes #socialNotesList .social-note-card-main,
+#socialSubtabNotes #socialNotesList .social-note-main {
+  cursor: pointer;
 }
