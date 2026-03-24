@@ -304,7 +304,7 @@ const TAB_TITLES = {
   reviews: { ru: ["Отзывы/Вопросы", "Единый модуль обратной связи"], en: ["Reviews/Questions", "Unified customer feedback module"] },
   accounting: { ru: ["Бухгалтерия", "Прибыль, расходы и экономика WB/Ozon"], en: ["Accounting", "Profit, costs, and WB/Ozon economics"] },
   ads: { ru: ["Реклама WB/Ozon", "Кампании, аналитика и рекомендации"], en: ["WB/Ozon Ads", "Campaigns, analytics and recommendations"] },
-  social: { ru: ["Социальный", "Пауза, взаимодействие и командная работа"], en: ["Social Hub", "Break, communication and teamwork"] },
+  social: { ru: ["Социальный", "Чаты, коммуникация и совместная работа"], en: ["Social Hub", "Break, communication and teamwork"] },
   profile: { ru: ["Профиль", "Профиль компании, доступы команды и интеграции"], en: ["Profile", "Company profile, team access and integrations"] },
   billing: { ru: ["Биллинг", "Тарифы, лимиты, продление и история операций"], en: ["Billing", "Plans, limits, renewals and history"] },
   help: { ru: ["Справка", "Документация по модулям"], en: ["Help Center", "Module usage documentation"] },
@@ -323,15 +323,15 @@ const SUBTAB_TITLES = {
   },
   accounting: {
     overview: { ru: ["Бухгалтерия", "KPI, прибыль и экономика по периодам"], en: ["Accounting", "KPIs, profit, and period economics"] },
-    analysis: { ru: ["Аналитика прибыли", "Разбор доходов, расходов и маржи"], en: ["Profit Analysis", "Revenue, costs, and margin breakdown"] },
-    monthly: { ru: ["Помесячная прибыль", "Сравнение WB и Ozon по месяцам за 12 периодов"], en: ["Monthly Profit", "WB and Ozon comparison across the last 12 months"] },
-    expenses: { ru: ["Расходы", "Учет расходов и распределение по категориям"], en: ["Expenses", "Expense tracking and category split"] },
+    analysis: { ru: ["Анализ прибыли", "Доходы, расходы и маржинальность"], en: ["Profit Analysis", "Revenue, costs, and margin breakdown"] },
+    monthly: { ru: ["Прибыль по месяцам", "Сравнение WB и Ozon по месяцам за 12 периодов"], en: ["Monthly Profit", "WB and Ozon comparison across the last 12 months"] },
+    expenses: { ru: ["Расходы", "Все расходы и детализация по категориям"], en: ["Expenses", "Expense tracking and category split"] },
     settings: { ru: ["Настройки бухгалтерии", "Шаблоны, ставки и правила расчета"], en: ["Accounting Settings", "Templates, rates, and calculation rules"] },
   },
   ads: {
     campaigns: { ru: ["Рекламные кампании", "Кампании WB с бюджетами, статусами и метриками"], en: ["Ad Campaigns", "WB campaigns with budgets, statuses, and metrics"] },
     analytics: { ru: ["Аналитика рекламы", "Показы, клики, заказы и расходы по кампаниям"], en: ["Ads Analytics", "Views, clicks, orders, and spend by campaign"] },
-    recommendations: { ru: ["Рекомендации по рекламе", "Подсказки по ставкам и неэффективным кампаниям"], en: ["Ads Recommendations", "Bid and efficiency recommendations"] },
+    recommendations: { ru: ["Рекомендации по рекламе", "Подсказки по ставкам и эффективности кампаний"], en: ["Ads Recommendations", "Bid and efficiency recommendations"] },
     bidder: { ru: ["Бидер WB Ads", "Автоматическое управление ставками по правилам"], en: ["WB Ads Bidder", "Automatic bid management by rules"] },
     ozon: { ru: ["Реклама Ozon", "Кампании и ставки Ozon"], en: ["Ozon Ads", "Ozon campaigns and bids"] },
   },
@@ -479,18 +479,59 @@ const UI_TEXT = {
   },
 };
 
+Object.assign(UI_TEXT.ru, {
+  nav_products: "\u0422\u043e\u0432\u0430\u0440\u044b",
+  nav_sales: "\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0430 \u0438 \u0434\u0430\u0448\u0431\u043e\u0440\u0434",
+  nav_reviews: "\u041e\u0442\u0437\u044b\u0432\u044b/\u0412\u043e\u043f\u0440\u043e\u0441\u044b",
+  nav_accounting: "\u0411\u0443\u0445\u0433\u0430\u043b\u0442\u0435\u0440\u0438\u044f",
+  nav_ads: "\u0420\u0435\u043a\u043b\u0430\u043c\u0430 WB/Ozon",
+  nav_social: "\u0421\u043e\u0446\u0438\u0430\u043b\u044c\u043d\u044b\u0439",
+  nav_profile: "\u041f\u0440\u043e\u0444\u0438\u043b\u044c",
+  nav_help: "\u0421\u043f\u0440\u0430\u0432\u043a\u0430",
+  logout: "\u0412\u044b\u0439\u0442\u0438",
+  theme_classic: "\u041a\u043b\u0430\u0441\u0441\u0438\u043a\u0430",
+  theme_dark: "\u0422\u0435\u043c\u043d\u0430\u044f",
+  theme_light: "\u0421\u0432\u0435\u0442\u043b\u0430\u044f",
+  theme_moon: "\u041b\u0443\u043d\u0430",
+  theme_newyear: "\u041d\u043e\u0432\u043e\u0433\u043e\u0434\u043d\u044f\u044f",
+  theme_summer: "\u041b\u0435\u0442\u043e",
+  theme_autumn: "\u041e\u0441\u0435\u043d\u044c",
+  theme_winter: "\u0417\u0438\u043c\u0430",
+  theme_spring: "\u0412\u0435\u0441\u043d\u0430",
+  theme_japan: "\u042f\u043f\u043e\u043d\u0438\u044f",
+  theme_greenland: "\u0413\u0440\u0435\u043d\u043b\u0430\u043d\u0434\u0438\u044f",
+});
+
 function t(key, fallback = "") {
   const pack = UI_TEXT[currentLang] || UI_TEXT.ru;
-  return pack[key] || fallback || key;
+  const ruPack = UI_TEXT.ru || {};
+  const enPack = UI_TEXT.en || {};
+  const source = pack[key] || fallback || key;
+  let value = decodePossiblyMojibake(source);
+  try {
+    if (typeof window !== "undefined" && typeof window.__repairMojibakeText === "function") {
+      value = String(window.__repairMojibakeText(value) || value);
+    }
+  } catch (_) {}
+  if (currentLang !== "en") {
+    const rawRu = String(ruPack[key] || source || "");
+    const broken = /\?{3,}|�|(?:Ð.|Ñ.|вЂ|рџ|[ЃЉЊЋЏђѓљњћџ])/.test(rawRu);
+    if (broken || _mojibakeScore(rawRu) >= 2 || /\uFFFD/.test(rawRu)) {
+      value = decodePossiblyMojibake(enPack[key] || fallback || key);
+    }
+  }
+  return value;
 }
 
 function _mojibakeScore(text) {
   const value = String(text || "");
   if (!value) return 0;
-  const markerMatches = value.match(/(?:\u0420[\u0400-\u04FF]|\u0421[\u0400-\u04FF]|\u00d0.|\u00d1.)/g);
+  const markerMatches = value.match(/(?:\u0420[\u0400-\u04FF\u00A0]|\u0421[\u0400-\u04FF\u00A0]|\u00d0.|\u00d1.)/g);
   const markerScore = markerMatches ? markerMatches.length : 0;
+  const spacedMatches = value.match(/(?:[\u0420\u0421\u0412](?:\s|\u00A0){1,3}[\u0420\u0421\u0412\u0400-\u04FFA-Za-z0-9])/g);
+  const spacedScore = spacedMatches ? spacedMatches.length : 0;
   const replacementScore = (value.match(/\uFFFD/g) || []).length * 3;
-  return markerScore + replacementScore;
+  return markerScore + spacedScore + replacementScore;
 }
 
 function _cyrillicScore(text) {
@@ -537,25 +578,50 @@ function _latin1DecodeUtf8(text) {
   }
 }
 
+function _collapseMojibakeSpacing(text) {
+  const raw = String(text || "");
+  if (!raw) return "";
+  if (!/[\u0420\u0421](?:\s|\u00A0)+[\u0400-\u04FFA-Za-z0-9]/.test(raw)) return raw;
+  return raw
+    .replace(/([\u0420\u0421\u0412])\u00A0(?=[\u0420\u0421\u0412\u0400-\u04FFA-Za-z0-9])/g, "$1")
+    .replace(/(?:\b[\u0420\u0421\u0412]\b(?:\s|\u00A0)+){2,}\b[\u0420\u0421\u0412]\b/g, (seq) => seq.replace(/[\s\u00A0]+/g, ""))
+    .replace(/([\u0420\u0421])\s+(?=[\u0420\u0421])/g, "$1")
+    .replace(/([\u0420\u0421])\s+(?=[\u0400-\u04FFA-Za-z0-9])/g, "$1")
+    .replace(/([\u0420\u0421][^\s]{0,2})(?:\s|\u00A0)+(?=[\u0420\u0421][^\s]{0,2})/g, "$1")
+    .replace(/([\u00d0\u00d1][^\s]{0,2})(?:\s|\u00A0)+(?=[\u00d0\u00d1][^\s]{0,2})/g, "$1")
+    .replace(/([\u0400-\u04FFA-Za-z0-9])\s+(?=[\u0420\u0421][\u0400-\u04FFA-Za-z0-9])/g, "$1")
+    .replace(/([\u0400-\u04FF])\s+(?=[\u0400-\u04FF])/g, "$1")
+    .replace(/\s{2,}/g, " ");
+}
+
 function decodePossiblyMojibake(input) {
   const raw = String(input ?? "");
   if (!raw) return "";
   const cached = _mojibakeDecodeCache.get(raw);
   if (typeof cached === "string") return cached;
+  const collapsed = _collapseMojibakeSpacing(raw);
 
-  const baseScore = _mojibakeScore(raw);
+  const baseScore = Math.max(_mojibakeScore(raw), _mojibakeScore(collapsed));
   if (!baseScore) {
     _mojibakeDecodeCache.set(raw, raw);
     if (_mojibakeDecodeCache.size > 4096) _mojibakeDecodeCache.clear();
     return raw;
   }
 
-  const candidates = [raw, _cp1251DecodeUtf8(raw), _latin1DecodeUtf8(raw)].filter(Boolean);
-  let best = raw;
+  const candidates = [
+    raw,
+    collapsed,
+    _cp1251DecodeUtf8(raw),
+    _cp1251DecodeUtf8(collapsed),
+    _latin1DecodeUtf8(raw),
+    _latin1DecodeUtf8(collapsed),
+  ].filter(Boolean);
+  let best = collapsed || raw;
   let bestScore = baseScore;
-  let bestCyr = _cyrillicScore(raw);
+  let bestCyr = Math.max(_cyrillicScore(raw), _cyrillicScore(collapsed));
   for (const cand of candidates) {
-    const score = _mojibakeScore(cand);
+    const normalized = _collapseMojibakeSpacing(cand);
+    const score = _mojibakeScore(normalized);
     const cyr = _cyrillicScore(cand);
     const shouldUse = (
       score < bestScore
@@ -563,13 +629,14 @@ function decodePossiblyMojibake(input) {
       || (score <= bestScore - 2)
     ) && !(score > bestScore && cyr <= bestCyr);
     if (shouldUse) {
-      best = cand;
+      best = normalized || cand;
       bestScore = score;
       bestCyr = cyr;
     }
   }
 
   _mojibakeDecodeCache.set(raw, best);
+  if (collapsed && collapsed !== raw) _mojibakeDecodeCache.set(collapsed, best);
   if (_mojibakeDecodeCache.size > 4096) _mojibakeDecodeCache.clear();
   return best;
 }
@@ -578,8 +645,67 @@ if (typeof window !== "undefined") {
   window.decodePossiblyMojibake = decodePossiblyMojibake;
 }
 
+function __legacyTr(ru, en) {
+  const rawRu = String(ru == null ? "" : ru);
+  const rawEn = String(en == null ? "" : en);
+  let value = decodePossiblyMojibake(currentLang === "en" ? rawEn : rawRu);
+  try {
+    if (typeof window !== "undefined" && typeof window.__repairMojibakeText === "function") {
+      value = String(window.__repairMojibakeText(value) || value);
+    }
+  } catch (_) {}
+  if (currentLang !== "en") {
+    const broken = /\?{3,}|\uFFFD|(?:\u00D0.|\u00D1.|вЂ|рџ|[ЃЉЊЋЏђѓљњћџ])/u.test(String(value || ""));
+    if ((broken || _mojibakeScore(String(value || "")) >= 2 || /\uFFFD/.test(String(value || ""))) && rawEn.trim()) {
+      value = decodePossiblyMojibake(rawEn);
+    }
+  }
+  return value;
+}
+
+// Harden translation decoding for double-encoded/space-split mojibake variants.
 function tr(ru, en) {
-  return decodePossiblyMojibake(currentLang === "en" ? en : ru);
+  const rawRu = String(ru == null ? "" : ru);
+  const rawEn = String(en == null ? "" : en);
+  const fixSymbols = (input) => String(input == null ? "" : input)
+    .replace(/вЊ«/g, "\u232b")
+    .replace(/В±/g, "\u00b1")
+    .replace(/Г·/g, "\u00f7")
+    .replace(/Г—/g, "\u00d7")
+    .replace(/в€’/g, "\u2212")
+    .replace(/вЂў/g, "\u2022")
+    .replace(/вЂ¦/g, "\u2026");
+  const clean = (input) => String(input == null ? "" : input)
+    .replace(/[\u0000-\u001F\u007F-\u009F]+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  const decodeChain = (input) => {
+    let value = clean(fixSymbols(input));
+    if (!value) return "";
+    for (let i = 0; i < 3; i += 1) {
+      value = clean(decodePossiblyMojibake(value));
+      try {
+        if (typeof window !== "undefined" && typeof window.__repairMojibakeText === "function") {
+          value = clean(window.__repairMojibakeText(value) || value);
+        }
+      } catch (_) {}
+      value = clean(fixSymbols(value));
+    }
+    return clean(fixSymbols(value));
+  };
+  const decodedRu = decodeChain(rawRu);
+  const decodedEn = decodeChain(rawEn);
+  let value = currentLang === "en" ? decodedEn : decodedRu;
+  if (currentLang !== "en") {
+    const current = clean(value);
+    const broken = /\?{3,}|\uFFFD|(?:\u00D0.|\u00D1.|РІР‚|СЂСџ|[РѓР‰РЉР‹РЏС’С“С™СљС›Сџ])/u.test(current)
+      || _mojibakeScore(current) >= 2
+      || /(?:\b[\u0420\u0421\u0412\u00D0\u00D1]\b(?:\s|\u00A0)+){3,}/u.test(current);
+    if (broken && decodedEn) {
+      value = decodedEn;
+    }
+  }
+  return clean(value || (currentLang === "en" ? decodedEn : decodedRu) || rawRu || rawEn);
 }
 
 function shouldTrackUiActivity(key, cooldownMs = 30000) {
@@ -776,7 +902,7 @@ function applyNavIcons() {
     if (currentIcon === iconSrc && currentLabel === label) return;
     const iconHtml = iconSrc
       ? `<span class="nav-icon" aria-hidden="true"><img src="${iconSrc}" alt="" loading="eager" decoding="async" /></span>`
-      : `<span class="nav-icon" aria-hidden="true">•</span>`;
+      : `<span class="nav-icon" aria-hidden="true">?</span>`;
     btn.innerHTML = `${iconHtml}<span class="nav-label">${escapeHtml(label)}</span>`;
   });
 }
@@ -791,7 +917,7 @@ function applySidebarMode() {
   if (shell) shell.classList.toggle("sidebar-compact", compact);
   const toggle = sidebar.querySelector(".sidebar-toggle");
   if (toggle) {
-    toggle.textContent = compact ? "☰" : "⇄";
+    toggle.textContent = compact ? "?" : "?";
     toggle.dataset.tip = compact
       ? tr("Показать подписи", "Show labels")
       : tr("Скрыть подписи", "Hide labels");
@@ -872,29 +998,73 @@ function applyUiLanguage() {
   const authLangSelect = document.getElementById("authLangSelect");
   if (authLangSelect && authLangSelect.value !== lang) authLangSelect.value = lang;
 
+  const normalizeUiText = (value, fallback = "") => {
+    const looksBrokenUiText = (rawValue) => {
+      const raw = String(rawValue == null ? "" : rawValue);
+      if (!raw) return false;
+      if (/\?{3,}|\uFFFD/.test(raw)) return true;
+      try {
+        if (typeof _mojibakeScore === "function" && _mojibakeScore(raw) >= 2) return true;
+      } catch (_) {}
+      return false;
+    };
+    let text = String(value == null ? "" : value);
+    try {
+      if (typeof decodePossiblyMojibake === "function") {
+        text = String(decodePossiblyMojibake(text) || text);
+      }
+    } catch (_) {}
+    try {
+      if (typeof window !== "undefined" && typeof window.__repairMojibakeText === "function") {
+        text = String(window.__repairMojibakeText(text) || text);
+      }
+    } catch (_) {}
+    if (lang !== "en" && looksBrokenUiText(text)) {
+      let fb = String(fallback == null ? "" : fallback);
+      try {
+        if (typeof decodePossiblyMojibake === "function") {
+          fb = String(decodePossiblyMojibake(fb) || fb);
+        }
+      } catch (_) {}
+      try {
+        if (typeof window !== "undefined" && typeof window.__repairMojibakeText === "function") {
+          fb = String(window.__repairMojibakeText(fb) || fb);
+        }
+      } catch (_) {}
+      if (fb && !looksBrokenUiText(fb)) text = fb;
+    }
+    return text;
+  };
   const setText = (selector, value) => {
     const el = document.querySelector(selector);
-    if (el) el.textContent = value;
+    if (!el) return;
+    const normalized = normalizeUiText(value, el.textContent || "");
+    if (normalized) el.textContent = normalized;
   };
   const setTextAll = (selector, value) => {
     document.querySelectorAll(selector).forEach((el) => {
-      el.textContent = value;
+      const normalized = normalizeUiText(value, el.textContent || "");
+      if (normalized) el.textContent = normalized;
     });
   };
   const setOptions = (selector, labels) => {
     const el = document.querySelector(selector);
     if (!el) return;
     labels.forEach((label, idx) => {
-      if (el.options[idx]) el.options[idx].textContent = label;
+      if (el.options[idx]) {
+        const normalized = normalizeUiText(label, el.options[idx].textContent || "");
+        if (normalized) el.options[idx].textContent = normalized;
+      }
     });
   };
   const setCheckLabel = (selector, labelText) => {
     const el = document.querySelector(selector);
     if (!el) return;
     const input = el.querySelector("input");
+    const normalized = normalizeUiText(labelText, el.textContent || "");
     el.textContent = "";
     if (input) el.appendChild(input);
-    el.append(document.createTextNode(` ${labelText}`));
+    el.append(document.createTextNode(` ${normalized}`));
   };
   setText(".nav-btn[data-tab='products']", t("nav_products"));
   setText(".nav-btn[data-tab='sales']", t("nav_sales"));
@@ -908,7 +1078,7 @@ function applyUiLanguage() {
   applyNavIcons();
   applySidebarMode();
   setText(".btn-danger.full", t("logout"));
-  setText("#authToolbarSubtitle", lang === "en" ? "Marketplace Seller OS" : "Сервис для маркетплейсов");
+  setText("#authToolbarSubtitle", lang === "en" ? "Marketplace Seller OS" : "Панель для маркетплейсов");
   setText("#authToolbarLoginBtn", lang === "en" ? "Login" : "Вход");
   setText("#authToolbarRegisterBtn", lang === "en" ? "Sign up" : "Регистрация");
   setText("#authModeLoginBtn", lang === "en" ? "Login" : "Вход");
@@ -916,10 +1086,10 @@ function applyUiLanguage() {
   setText("#authLoginTitle", lang === "en" ? "Login" : "Вход");
   setText("#authLoginHint", lang === "en" ? "Use owner or employee email to enter workspace." : "Используйте email владельца или сотрудника.");
   setText("#authRegisterTitle", lang === "en" ? "Registration" : "Регистрация");
-  setText("#authRegisterHint", lang === "en" ? "Create owner account first. Team members are added in profile." : "Создайте кабинет владельца. Сотрудников добавите позже в профиле.");
+  setText("#authRegisterHint", lang === "en" ? "Create owner account first. Team members are added in profile." : "Сначала создайте аккаунт владельца. Сотрудников можно добавить в профиле.");
   setText("#authLoginSubmitBtn", lang === "en" ? "Sign In" : "Войти в кабинет");
   setText("#authRegisterSubmitBtn", lang === "en" ? "Create Account" : "Создать аккаунт");
-  setText("#authToRegisterBtn", lang === "en" ? "No account? Sign up" : "Нет аккаунта? Регистрация");
+  setText("#authToRegisterBtn", lang === "en" ? "No account? Sign up" : "Нет аккаунта? Зарегистрируйтесь");
   setText("#authToLoginBtn", lang === "en" ? "Already have account? Login" : "Уже есть аккаунт? Вход");
   setText("#authLeadText", lang === "en" ? "Marketplace operations center for WB/Ozon: sales, catalog, ads, support and team workflows in one interface." : "Операционный центр продавца WB/Ozon: продажи, каталог, реклама, поддержка и командные процессы в одном интерфейсе.");
   setText("#authWhatTitle", lang === "en" ? "What you get" : "Что дает сервис");
@@ -939,7 +1109,7 @@ function applyUiLanguage() {
   setText("#landingCard1Title", lang === "en" ? "Revenue control center" : "Центр управления выручкой");
   setText("#landingCard1Text", lang === "en" ? "Monitor orders, units, returns, penalties and ad costs in one timeline and quickly find growth bottlenecks." : "Контролируйте заказы, штуки, возвраты, штрафы и рекламные расходы в одной ленте, чтобы быстро находить точки роста.");
   setText("#landingCard2Title", lang === "en" ? "Catalog performance" : "Эффективность каталога");
-  setText("#landingCard2Text", lang === "en" ? "Sync WB/Ozon cards, enrich content, run SEO tasks and keep product visibility under control." : "Синхронизируйте карточки WB/Ozon, улучшайте контент, запускайте SEO-задачи и держите видимость товаров под контролем.");
+  setText("#landingCard2Text", lang === "en" ? "Sync WB/Ozon cards, enrich content, run SEO tasks and keep product visibility under control." : "Синхронизируйте карточки WB/Ozon, улучшайте контент, запускайте SEO-задачи и контролируйте видимость товаров.");
   setText("#landingCard3Title", lang === "en" ? "Team productivity" : "Продуктивность команды");
   setText("#landingCard3Quote1", lang === "en" ? "Owner has full control, employees work only within assigned modules." : "«Владелец контролирует весь кабинет, сотрудники работают только в назначенных модулях»");
   setText("#landingCard3Meta1", lang === "en" ? "Granular permissions + action history" : "Гибкие права + история действий");
@@ -948,7 +1118,7 @@ function applyUiLanguage() {
   setText("#landingCard4Title", lang === "en" ? "Execution modules" : "Рабочие модули");
   setText("#landingCard4Item1", lang === "en" ? "Products: import, editing, media and ranking checkpoints." : "Товары: импорт, редактирование, медиа и контроль позиций.");
   setText("#landingCard4Item2", lang === "en" ? "Feedback: reviews, questions and returns in one operational queue." : "Обратная связь: отзывы, вопросы и возвраты в единой рабочей очереди.");
-  setText("#landingCard4Item3", lang === "en" ? "Ads: campaign table, analytics and actionable recommendations." : "Реклама: кампании, аналитика и рекомендации для роста эффективности.");
+  setText("#landingCard4Item3", lang === "en" ? "Ads: campaign table, analytics and actionable recommendations." : "Реклама: таблица кампаний, аналитика и рекомендации для быстрых действий.");
   setText("#landingBandTitle", lang === "en" ? "Commercial outcome" : "Коммерческий результат");
   setText("#landingBandText", lang === "en" ? "SEO WIBE shortens the cycle from data to action, reduces manual operations and helps teams scale marketplace turnover with less operational risk." : "SEO WIBE сокращает путь от данных к действию, уменьшает ручные операции и помогает командам масштабировать оборот на маркетплейсах с меньшими операционными рисками.");
 
@@ -1012,7 +1182,7 @@ function applyUiLanguage() {
   setText("#profileCompanyHeader", isEn ? "Company Profile" : "Профиль компании");
   setText("#profileMainPanel h3", isEn ? "Company Profile" : "Профиль компании");
   setText("#profileMenuCompanyTitle", isEn ? "Company" : "Компания");
-  setText("#profileMenuCompanyMeta", isEn ? "Company legal details and owner identity" : "Реквизиты и данные директора/ИП");
+  setText("#profileMenuCompanyMeta", isEn ? "Company legal details and owner identity" : "Реквизиты и данные владельца/ИП");
   setText("#profileMenuPlanTitle", isEn ? "Plan" : "Тариф");
   setText("#profileMenuPlanMeta", isEn ? "Subscription, renewal and status" : "План, продление и статус");
   setText("#profileMenuKeysTitle", isEn ? "API Keys" : "API ключи");
@@ -1036,7 +1206,7 @@ function applyUiLanguage() {
   setText("#profileAiPanel .grid-4 button:nth-of-type(1)", isEn ? "Save AI Selection" : "Сохранить выбор AI");
   setText("#profileAiPanel .grid-4 button:nth-of-type(2)", isEn ? "Refresh AI" : "Обновить AI");
   setText("#profileAiPanel .grid-6 button", isEn ? "Add AI Service" : "Добавить AI сервис");
-  setText("#profileTeamPanel h3", isEn ? "Workspace Team" : "Сотрудники кабинета");
+  setText("#profileTeamPanel h3", isEn ? "Workspace Team" : "Команда кабинета");
   setText("#teamPanelHint", isEn ? "Add or edit employees via popup window." : "Добавление и редактирование сотрудника выполняется через pop-up окно.");
   setText("#teamAddMemberBtn", isEn ? "Add employee" : "Добавить сотрудника");
   setText("#helpSubtabDocs .panel h3", isEn ? "Module Help Center" : "Справка по модулям");
@@ -1147,8 +1317,8 @@ function applyUiLanguage() {
     isEn ? "Answered" : "Отвеченные",
   ]);
   setOptions("#reviewDateSort", [
-    isEn ? "Newest first" : "Сначала новые",
-    isEn ? "Oldest first" : "Сначала старые",
+    isEn ? "Newest first" : "Новые сверху",
+    isEn ? "Oldest first" : "Старые сверху",
   ]);
   setOptions("#questionStatusFilter", [
     isEn ? "All" : "Все",
@@ -1157,8 +1327,8 @@ function applyUiLanguage() {
     isEn ? "Answered" : "Отвеченные",
   ]);
   setOptions("#questionDateSort", [
-    isEn ? "Newest first" : "Сначала новые",
-    isEn ? "Oldest first" : "Сначала старые",
+    isEn ? "Newest first" : "Новые сверху",
+    isEn ? "Oldest first" : "Старые сверху",
   ]);
   setOptions("#reviewAiMode", ["manual", "suggest", "auto"]);
   setOptions("#questionAiMode", ["manual", "suggest", "auto"]);
@@ -1208,8 +1378,8 @@ function applyUiLanguage() {
     isEn ? "Budget: low to high" : "Бюджет: меньше -> больше",
     isEn ? "Name: A -> Z" : "Название: А -> Я",
     isEn ? "Name: Z -> A" : "Название: Я -> А",
-    isEn ? "Status: code asc" : "Статус: по коду ↑",
-    isEn ? "Status: code desc" : "Статус: по коду ↓",
+    isEn ? "Status: code asc" : "Статус: по коду ^",
+    isEn ? "Status: code desc" : "Статус: по коду v",
   ]);
   setOptions("#salesMarketplace", [
     isEn ? "All marketplaces" : "Все маркетплейсы",
@@ -1261,9 +1431,9 @@ function applyUiLanguage() {
     ["#profileTaxId", isEn ? "Tax ID" : "ИНН"],
     ["#profileTaxRate", isEn ? "Tax rate, %" : "Налоговая ставка, %"],
     ["#profilePhone", isEn ? "Phone" : "Телефон"],
-    ["#profileTeamSize", isEn ? "Team size" : "Состав компании, чел."],
+    ["#profileTeamSize", isEn ? "Team size" : "Размер команды, чел."],
     ["#profileAvatarUrl", isEn ? "Avatar URL" : "Ссылка на аватар"],
-    ["#profileCompanyStructure", isEn ? "Team structure, roles, departments" : "Структура компании, роли, отделы"],
+    ["#profileCompanyStructure", isEn ? "Team structure, roles, departments" : "Структура команды, роли, отделы"],
     ["#teamModalEmail", isEn ? "Employee email" : "Email сотрудника"],
     ["#teamModalPassword", isEn ? "New password (optional)" : "Новый пароль (опц.)"],
     ["#teamModalPhone", isEn ? "Phone" : "Телефон"],
@@ -1517,7 +1687,7 @@ async function requestJson(url, opts = {}) {
         if (!parsed.hasBody) return {};
         if (parsed.ok) return parsed.payload;
         throw makeRequestError(
-          currentLang === "en" ? "Server returned an invalid response." : "Сервер вернул некорректный ответ.",
+          currentLang === "en" ? "Server returned an invalid response." : "?????? ?????? ???????????? ?????.",
           {
             kind: "parse",
             status: response.status,
@@ -1584,7 +1754,7 @@ async function requestJson(url, opts = {}) {
       }
       if (isFetchNetwork) {
         throw makeRequestError(
-          currentLang === "en" ? "Network error. Check connection and retry." : "Сетевая ошибка. Проверьте соединение и повторите.",
+          currentLang === "en" ? "Network error. Check connection and retry." : "??????? ??????. ????????? ?????????? ? ?????????.",
           { kind: "network", cause: e }
         );
       }
@@ -1603,7 +1773,7 @@ async function requestJson(url, opts = {}) {
   }
   if (isNetworkError(lastError)) {
     throw makeRequestError(
-      currentLang === "en" ? "Network error. Check connection and retry." : "Сетевая ошибка. Проверьте соединение и повторите.",
+      currentLang === "en" ? "Network error. Check connection and retry." : "??????? ??????. ????????? ?????????? ? ?????????.",
       { kind: "network", cause: lastError }
     );
   }
@@ -1679,7 +1849,7 @@ const BUTTON_TIPS = {
     "Перезагрузить базу": "Полностью пересоздает локальную базу товаров по выбранному маркетплейсу.",
     "Проверить выбранные": "Проверяет позиции только выбранных товаров по указанным ключам.",
     "Проверить все": "Проверяет позиции всех товаров в базе.",
-    "Сгенерировать": "Создает черновик ответа AI по тексту клиента.",
+    "Сгенерировать": "Создаёт черновик ответа AI по тексту клиента.",
     "Отправить": "Публикует ответ в маркетплейс.",
     "Обновить": "Обновляет ранее отправленный ответ в маркетплейсе.",
     "Загрузить кампании": "Загружает список рекламных кампаний из кабинета WB Ads.",
@@ -1688,11 +1858,11 @@ const BUTTON_TIPS = {
     "Построить отчет": "Формирует аналитический отчет по WB Ads за выбранный период.",
     "Построить рекомендации": "Формирует список приоритетных действий по оптимизации рекламных кампаний.",
     "Загрузить статистику": "Загружает продажи за выбранный период и строит график.",
-    "Сохранить профиль": "Сохраняет личные и юридические данные пользователя.",
+    "Сохранить профиль": "Сохраняет данные профиля и компании пользователя.",
     "Обновить профиль": "Перезагружает данные профиля с сервера.",
-    "Сменить тариф": "Переключает тарифный план текущего аккаунта.",
+    "Сменить план": "Переключает текущий тариф учётной записи.",
     "Продлить на 30 дней": "Продлевает тариф на следующий расчетный период.",
-    "Сменить пароль": "Обновляет пароль текущего аккаунта.",
+    "Сменить пароль": "Изменяет пароль текущего аккаунта.",
     "Загрузить в базу знаний": "Загружает документ, который AI будет учитывать в ответах.",
     "Удалить выбранный документ": "Удаляет выбранный документ из базы знаний AI.",
     "Обновить справку": "Перезагружает справочную информацию по модулям.",
@@ -1727,6 +1897,10 @@ function inferButtonTip(text) {
   if (!cleaned) return "";
   const dict = BUTTON_TIPS[currentLang] || BUTTON_TIPS.ru;
   if (dict[cleaned]) return dict[cleaned];
+  if (currentLang !== "en") return `\u0414\u0435\u0439\u0441\u0442\u0432\u0438\u0435: ${cleaned}`;
+  return `Action: ${cleaned}`;
+  if (currentLang !== "en") return `Действие: ${cleaned}`;
+  return `Action: ${cleaned}`;
   return currentLang === "en" ? `Action: ${cleaned}` : `Действие: ${cleaned}`;
 }
 
@@ -1907,7 +2081,7 @@ function renderTrendChart(svgId, metaId, points) {
       );
       meta.innerHTML = `
         <span>${tr("Проверок", "Checks")}: <b>${checks}</b></span>
-        <span>${tr("Средняя позиция", "Average rank")}: <b>${avgPos}</b></span>
+        <span>${tr("??????? ???????", "Average rank")}: <b>${avgPos}</b></span>
         <span>${tr("Входов в топ-5", "Top-5 hits")}: <b>${top5}</b></span>
       `;
       return;
@@ -1930,7 +2104,7 @@ function renderTrendChart(svgId, metaId, points) {
   }
   meta.innerHTML = `
     <span>${tr("Проверок", "Checks")}: <b>${checks}</b></span>
-    <span>${tr("Средняя позиция", "Average rank")}: <b>${avgPos}</b></span>
+    <span>${tr("??????? ???????", "Average rank")}: <b>${avgPos}</b></span>
     <span>${tr("Входов в топ-5", "Top-5 hits")}: <b>${top5}</b></span>
   `;
 }
@@ -1939,7 +2113,7 @@ function renderSeoKanban(rows) {
   const board = document.getElementById("seoKanban");
   if (!board) return;
   const columns = [
-    { key: "generated", title: tr("Сгенерировано", "Generated"), cls: "generated" },
+    { key: "generated", title: tr("?????????????", "Generated"), cls: "generated" },
     { key: "in_progress", title: tr("В работе", "In progress"), cls: "in-progress" },
     { key: "applied", title: tr("Применено", "Applied"), cls: "applied" },
     { key: "top_reached", title: tr("Топ-5 достигнут", "Top-5 reached"), cls: "top" },
@@ -2070,7 +2244,7 @@ async function loadSelectedProductDetails(productId = selectedProductId, opts = 
 async function saveSelectedProductDetails() {
   const id = Number(selectedProductId || 0);
   if (!id) {
-    alert(tr("Сначала выберите товар в таблице.", "Select a product in table first."));
+    alert(tr("??????? ???????? ????? ? ???????.", "Select a product in table first."));
     return;
   }
   const payload = {
@@ -2080,7 +2254,7 @@ async function saveSelectedProductDetails() {
     target_keywords: String(document.getElementById("productDetailKeywords")?.value || "").trim(),
   };
   const updated = await withBusy(
-    tr("Сохраняем изменения карточки товара…", "Saving product card changes..."),
+    tr("????????? ????????? ???????? ??????", "Saving product card changes..."),
     () => requestJson(`/api/products/${id}`, {
       method: "PATCH",
       headers: authHeaders(),
@@ -2134,13 +2308,13 @@ function ensureProfileTeamUi() {
   panel.className = "panel";
   panel.id = "profileTeamPanel";
   panel.innerHTML = `
-    <h3>${tr("Сотрудники кабинета", "Workspace Team")}</h3>
+    <h3>${tr("?????????? ????????", "Workspace Team")}</h3>
     <div class="team-member-toolbar">
       <div id="teamPanelHint" class="hint">${tr("Добавление и редактирование сотрудника выполняется через pop-up окно.", "Add or edit employees via popup window.")}</div>
       <button id="teamAddMemberBtn" class="btn-secondary" type="button" onclick="openTeamMemberCreator()">${tr("Добавить сотрудника", "Add employee")}</button>
     </div>
     <div class="team-member-list" id="teamMembersList">
-      <div class="hint">${tr("Сотрудники загружаются...", "Loading employees...")}</div>
+      <div class="hint">${tr("?????????? ???????????...", "Loading employees...")}</div>
     </div>
   `;
   profileTab.appendChild(panel);
@@ -2526,10 +2700,12 @@ function showTab(name, btn = null) {
 }
 
 async function openSocialChatFromBell(event = null) {
+  if (event?.preventDefault) event.preventDefault();
+  if (event?.stopPropagation) event.stopPropagation();
   const openCenter = async () => {
     if (typeof window.socialToggleNotificationCenter !== "function") return false;
     try {
-      const opened = await window.socialToggleNotificationCenter(event || null);
+      const opened = await window.socialToggleNotificationCenter(true);
       return opened !== false;
     } catch (_) {
       return false;
@@ -2560,25 +2736,12 @@ async function openSocialChatFromBell(event = null) {
   for (let i = 0; i < 8; i += 1) {
     if (await openCenter()) {
       closeMobileNav();
-      return;
+      return false;
     }
     await new Promise((resolve) => setTimeout(resolve, 120));
   }
-
-  currentSocialSubtab = "chat";
-  showTab("social", socialBtn || null);
   closeMobileNav();
-  const trySwitch = () => {
-    if (typeof window.switchSocialSubtab !== "function") return false;
-    window.switchSocialSubtab("chat", true);
-    return true;
-  };
-  if (trySwitch()) return;
-  let tries = 0;
-  const timer = setInterval(() => {
-    tries += 1;
-    if (trySwitch() || tries >= 10) clearInterval(timer);
-  }, 120);
+  return false;
 }
 
 function handleMobileBackPress() {
@@ -2684,7 +2847,7 @@ function getMobileQuickNavOptions() {
     if (!modulesLoaded) return true;
     return enabledModules instanceof Set && enabledModules.has(code);
   };
-  const options = [{ value: "sales_dashboard", label: isEn ? "Statistics" : "Статистика" }];
+  const options = [{ value: "sales_dashboard", label: isEn ? "Statistics" : "??????????" }];
   if (has("social_hub")) {
     options.push({ value: "social_chat", label: isEn ? "Chat" : "Чат" });
     options.push({ value: "social_tasks", label: isEn ? "Tasks" : "Задачи" });
@@ -2699,17 +2862,52 @@ function getMobileQuickNavOptions() {
     if (has("returns")) options.push({ value: "reviews_returns", label: isEn ? "Returns" : "Возвраты" });
   }
   if (has("wb_ads") || has("wb_ads_analytics") || has("wb_ads_recommendations")) {
-    if (has("wb_ads")) options.push({ value: "ads_campaigns", label: isEn ? "Ad campaigns" : "Рекламные кампании" });
+    if (has("wb_ads")) options.push({ value: "ads_campaigns", label: isEn ? "Ad campaigns" : "????????? ????????" });
     if (has("wb_ads_analytics")) options.push({ value: "ads_analytics", label: isEn ? "Ads analytics" : "Аналитика рекламы" });
-    if (has("wb_ads_recommendations")) options.push({ value: "ads_recommendations", label: isEn ? "Recommendations" : "Рекомендации" });
+    if (has("wb_ads_recommendations")) options.push({ value: "ads_recommendations", label: isEn ? "Recommendations" : "????????????" });
     if (has("wb_ads")) options.push({ value: "ads_bidder", label: isEn ? "WB Ads bidder" : "Бидер WB Ads" });
   }
   options.push({ value: "profile_main", label: isEn ? "Profile" : "Профиль" });
   if (has("help_center")) {
-    options.push({ value: "help_main", label: isEn ? "Help" : "Справка" });
+    options.push({ value: "help_main", label: isEn ? "Help" : "???????" });
   }
   return options;
 }
+
+const __swGetMobileQuickNavOptionsSafe = function getMobileQuickNavOptionsSafe() {
+  const isEn = currentLang === "en";
+  const has = (code) => {
+    if (!modulesLoaded) return true;
+    return enabledModules instanceof Set && enabledModules.has(code);
+  };
+  const options = [{ value: "sales_dashboard", label: isEn ? "Statistics" : "\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0430" }];
+  if (has("social_hub")) {
+    options.push({ value: "social_chat", label: isEn ? "Chat" : "\u0427\u0430\u0442" });
+    options.push({ value: "social_tasks", label: isEn ? "Tasks" : "\u0417\u0430\u0434\u0430\u0447\u0438" });
+    options.push({ value: "social_notes", label: isEn ? "Notes" : "\u0417\u0430\u043c\u0435\u0442\u043a\u0438" });
+    options.push({ value: "social_calculator", label: isEn ? "Calculator" : "\u041a\u0430\u043b\u044c\u043a\u0443\u043b\u044f\u0442\u043e\u0440" });
+    options.push({ value: "social_calendar", label: isEn ? "Calendar" : "\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c" });
+    options.push({ value: "social_games", label: isEn ? "Games" : "\u0418\u0433\u0440\u044b" });
+  }
+  if (has("wb_reviews_ai") || has("wb_questions_ai") || has("returns")) {
+    if (has("wb_reviews_ai")) options.push({ value: "reviews_reviews", label: isEn ? "Review replies" : "\u041e\u0442\u0432\u0435\u0442\u044b \u043d\u0430 \u043e\u0442\u0437\u044b\u0432\u044b" });
+    if (has("wb_questions_ai")) options.push({ value: "reviews_questions", label: isEn ? "Question replies" : "\u041e\u0442\u0432\u0435\u0442\u044b \u043d\u0430 \u0432\u043e\u043f\u0440\u043e\u0441\u044b" });
+    if (has("returns")) options.push({ value: "reviews_returns", label: isEn ? "Returns" : "\u0412\u043e\u0437\u0432\u0440\u0430\u0442\u044b" });
+  }
+  if (has("wb_ads") || has("wb_ads_analytics") || has("wb_ads_recommendations")) {
+    if (has("wb_ads")) options.push({ value: "ads_campaigns", label: isEn ? "Ad campaigns" : "\u0420\u0435\u043a\u043b\u0430\u043c\u043d\u044b\u0435 \u043a\u0430\u043c\u043f\u0430\u043d\u0438\u0438" });
+    if (has("wb_ads_analytics")) options.push({ value: "ads_analytics", label: isEn ? "Ads analytics" : "\u0410\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0430 \u0440\u0435\u043a\u043b\u0430\u043c\u044b" });
+    if (has("wb_ads_recommendations")) options.push({ value: "ads_recommendations", label: isEn ? "Recommendations" : "\u0420\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u0430\u0446\u0438\u0438" });
+    if (has("wb_ads")) options.push({ value: "ads_bidder", label: isEn ? "WB Ads bidder" : "\u0411\u0438\u0434\u0435\u0440 WB Ads" });
+  }
+  options.push({ value: "profile_main", label: isEn ? "Profile" : "\u041f\u0440\u043e\u0444\u0438\u043b\u044c" });
+  if (has("help_center")) {
+    options.push({ value: "help_main", label: isEn ? "Help" : "\u0421\u043f\u0440\u0430\u0432\u043a\u0430" });
+  }
+  return options;
+};
+getMobileQuickNavOptions = __swGetMobileQuickNavOptionsSafe;
+window.getMobileQuickNavOptions = __swGetMobileQuickNavOptionsSafe;
 
 function getCurrentMobileQuickValue() {
   if (currentTab === "sales") return "sales_dashboard";
@@ -3288,7 +3486,7 @@ function renderTopbarUser() {
   const isOwner = Boolean(me.actor_is_owner);
   const roleText = me.role === "admin"
     ? tr("Админ", "Admin")
-    : (isOwner ? tr("Владелец", "Owner") : tr("Сотрудник", "Member"));
+    : (isOwner ? tr("????????", "Owner") : tr("?????????", "Member"));
   const initials = computeAvatarInitials(name, actorEmail);
   const avatarText = document.getElementById("topbarAvatarText");
   const avatarName = document.getElementById("topbarAvatarName");
@@ -3424,7 +3622,7 @@ function triggerTeamAvatarUpload() {
 
 async function uploadTeamAvatar() {
   if (!activeTeamMemberId) {
-    alert(tr("Сначала выберите сотрудника.", "Select a team member first."));
+    alert(tr("??????? ???????? ??????????.", "Select a team member first."));
     return;
   }
   try {
@@ -3966,7 +4164,7 @@ function buildLoadStatusHtml({ title = "", loaded = 0, total = 0, active = false
   const safeLoaded = Math.max(0, Math.min(safeTotal || Number(loaded || 0), Number(loaded || 0)));
   const ratio = safeTotal > 0 ? Math.max(0, Math.min(100, (safeLoaded / safeTotal) * 100)) : (active ? 8 : 0);
   const progressText = safeTotal > 0 ? `${safeLoaded} / ${safeTotal}` : (active ? tr("подготовка", "preparing") : "-");
-  const failedText = failed > 0 ? ` • ${tr("\u043e\u0448\u0438\u0431\u043e\u043a", "errors")}: ${failed}` : "";
+  const failedText = failed > 0 ? ` ? ${tr("\u043e\u0448\u0438\u0431\u043e\u043a", "errors")}: ${failed}` : "";
   return `
     <div class="status-wrap ${active ? "active" : "done"}">
       <div class="status-head">
@@ -4364,7 +4562,7 @@ async function renderWbReviews() {
     const reviewMp = (currentReviewMarketplace || "wb").trim().toLowerCase() === "ozon" ? "ozon" : "wb";
     const pill = document.createElement("span");
     pill.className = "review-type-pill";
-    pill.textContent = status === "new" ? "🆕" : "✅";
+    pill.textContent = status === "new" ? "??" : "?";
     pill.dataset.tip = status === "new" ? tr("Новый отзыв", "New review") : tr("Отвеченный отзыв", "Answered review");
     meta.appendChild(pill);
     const dateBadge = document.createElement("span");
@@ -4378,7 +4576,7 @@ async function renderWbReviews() {
       starBadge.className = "feedback-meta-badge";
       const ratingVal = Math.max(1, Math.min(5, Number(stars || 0)));
       starBadge.classList.add(`feedback-rating-${ratingVal}`);
-      starBadge.textContent = `★ ${stars}`;
+      starBadge.textContent = `? ${stars}`;
       starBadge.dataset.tip = tr("Оценка покупателя", "Customer rating");
       meta.appendChild(starBadge);
     }
@@ -4458,7 +4656,7 @@ async function renderWbReviews() {
     wrap.className = "review-actions feedback-actions-row";
     const btnGenerate = makeIconActionButton({
       icon: "&#9889;",
-      tip: tr("Сгенерировать ответ", "Generate reply"),
+      tip: tr("????????????? ?????", "Generate reply"),
       onClick: () => generateReviewReply(reviewId),
       secondary: true,
     });
@@ -4715,7 +4913,7 @@ async function loadAiDocs() {
 async function uploadAiDoc() {
   const input = document.getElementById("aiDocUploadInput");
   const file = input?.files?.[0];
-  if (!file) return alert(tr("Сначала выберите файл.", "Select a file first."));
+  if (!file) return alert(tr("??????? ???????? ????.", "Select a file first."));
   const form = new FormData();
   form.append("file", file);
   const data = await withBusy(
@@ -4960,7 +5158,7 @@ async function renderWbQuestions() {
     const questionMp = (currentQuestionMarketplace || "wb").trim().toLowerCase() === "ozon" ? "ozon" : "wb";
     const pill = document.createElement("span");
     pill.className = "review-type-pill";
-    pill.textContent = status === "new" ? "🆕" : "✅";
+    pill.textContent = status === "new" ? "??" : "?";
     pill.dataset.tip = status === "new" ? tr("Новый вопрос", "New question") : tr("Отвеченный вопрос", "Answered question");
     meta.appendChild(pill);
     const dateBadge = document.createElement("span");
@@ -4978,7 +5176,7 @@ async function renderWbQuestions() {
       const stateBadge = document.createElement("span");
       stateBadge.className = "feedback-meta-badge";
       stateBadge.textContent = stateLabel;
-      stateBadge.dataset.tip = tr("Статус/состояние записи API", "API record state/status");
+      stateBadge.dataset.tip = tr("??????/????????? ?????? API", "API record state/status");
       meta.appendChild(stateBadge);
     }
     head.appendChild(meta);
@@ -5052,7 +5250,7 @@ async function renderWbQuestions() {
     wrap.className = "review-actions feedback-actions-row";
     const btnGenerate = makeIconActionButton({
       icon: "&#9889;",
-      tip: tr("Сгенерировать ответ", "Generate reply"),
+      tip: tr("????????????? ?????", "Generate reply"),
       onClick: () => generateQuestionReply(questionId),
       secondary: true,
     });
@@ -5228,7 +5426,7 @@ function normalizeReturnRow(rawRow, marketplace, idx) {
       const text = normalizeFeedbackText(getValueByPath(rawRow, path));
       if (!text) continue;
       const low = String(text).trim().toLowerCase();
-      if (!low || low === "-" || low === "—" || low === "null" || low === "undefined") continue;
+      if (!low || low === "-" || low === "?" || low === "null" || low === "undefined") continue;
       return String(text).trim();
     }
     return "";
@@ -5686,7 +5884,7 @@ async function loadReturns() {
     if (warnings.length) {
       const cleaned = formatReturnsWarnings(warnings);
       statusEl.textContent = cleaned.length
-        ? cleaned.join(" • ")
+        ? cleaned.join(" ? ")
         : tr("Возвраты загружены с предупреждениями.", "Returns loaded with warnings.");
     } else {
       statusEl.textContent = tr("Возвраты загружены", "Returns loaded");
@@ -5719,7 +5917,7 @@ function extractReturnDetailContext(detail, returnId = "") {
   const normalizeScalar = (value, options = {}) => {
     const text = String(normalizeProductDetailValue(value) || "").trim();
     const low = text.toLowerCase();
-    if (!text || low === "-" || low === "—" || low === "—" || low === "null" || low === "undefined") return "";
+    if (!text || low === "-" || low === "?" || low === "?" || low === "null" || low === "undefined") return "";
     if (!options.allowZero && (low === "0" || low === "0.0")) return "";
     return text;
   };
@@ -5896,8 +6094,8 @@ function renderReturnDetailModal(detail, returnId = "") {
   if (summaryEl) {
     const parts = [
       ctx.marketplace ? `${tr("Маркетплейс", "Marketplace")}: ${ctx.marketplace}` : "",
-      ctx.status ? `${tr("Статус", "Status")}: ${ctx.status}` : "",
-      ctx.createdAt ? `${tr("Создан", "Created")}: ${ctx.createdAt}` : "",
+      ctx.status ? `${tr("??????", "Status")}: ${ctx.status}` : "",
+      ctx.createdAt ? `${tr("??????", "Created")}: ${ctx.createdAt}` : "",
       ctx.updatedAt ? `${tr("Обновлен", "Updated")}: ${ctx.updatedAt}` : "",
     ].filter(Boolean);
     summaryEl.textContent = parts.join(" | ") || tr("Карточка возврата загружена.", "Return card loaded.");
@@ -5907,16 +6105,16 @@ function renderReturnDetailModal(detail, returnId = "") {
       [
         { label: "id", value: ctx.id || "-" },
         { label: tr("Маркетплейс", "Marketplace"), value: ctx.marketplace || "-" },
-        { label: tr("Статус", "Status"), value: ctx.status || "-" },
+        { label: tr("??????", "Status"), value: ctx.status || "-" },
         { label: tr("Комментарий к статусу", "Status note"), value: ctx.statusNote || "-" },
         { label: tr("Товар", "Product"), value: ctx.product || "-" },
         { label: tr("Артикул", "Article"), value: ctx.article || "-" },
         { label: tr("Vendor code", "Vendor code"), value: ctx.vendorCode || "-" },
         { label: tr("NM ID", "NM ID"), value: ctx.nmId || "-" },
         { label: tr("Количество", "Quantity"), value: ctx.quantity || "-" },
-        { label: tr("Сумма", "Amount"), value: ctx.amount || "-" },
+        { label: tr("?????", "Amount"), value: ctx.amount || "-" },
         { label: tr("Заказ", "Order"), value: ctx.orderId || "-" },
-        { label: tr("Склад", "Warehouse"), value: ctx.warehouse || "-" },
+        { label: tr("?????", "Warehouse"), value: ctx.warehouse || "-" },
       ],
       tr("Ключевые поля отсутствуют.", "No key fields.")
     );
@@ -6048,7 +6246,7 @@ function renderReturns() {
     const dateParts = [row.date || row.created_at || "-", row.updated_at ? `${tr("обновлено", "updated")}: ${row.updated_at}` : ""].filter(Boolean);
     const fallbackMeta = [];
     if (String(row.quantity || "").trim()) fallbackMeta.push(`${tr("Кол-во", "Qty")}: ${row.quantity}`);
-    if (String(row.amount || "").trim()) fallbackMeta.push(`${tr("Сумма", "Amount")}: ${row.amount}`);
+    if (String(row.amount || "").trim()) fallbackMeta.push(`${tr("?????", "Amount")}: ${row.amount}`);
     const actionButtons = currentReturnsMarketplace === "wb"
       ? `
         <div class="review-actions">
@@ -6064,7 +6262,7 @@ function renderReturns() {
         </div>
       `;
     trEl.innerHTML = `
-      <td data-label="${escapeHtml(tr("Статус", "Status"))}">
+      <td data-label="${escapeHtml(tr("??????", "Status"))}">
         <span class="review-type-pill return-status-pill">${escapeHtml(statusValue)}</span>
         <div class="cell-meta-small">${escapeHtml(statusNote || "-")}</div>
       </td>
@@ -6323,8 +6521,8 @@ function isPlaceholderCampaignName(name, campaignId = "") {
     "\u0440\u0435\u043a\u043b\u0430\u043c\u0430",
     "\u0440\u0435\u043a\u043b\u0430\u043c\u043d\u0430\u044f",
   ]);
-  const compactSingle = new RegExp(`^(?:campaign|camp|advert|advertising|ads?|${ruAdRoot}[a-z\u0400-\u04ff0-9_]*|${ruCampaignRoot}[a-z\u0400-\u04ff0-9_]*)\\s*[#№:\\-]?\\s*\\d+$`, "iu");
-  const compactDouble = new RegExp(`^(?:${ruAdRoot}[a-z\u0400-\u04ff0-9_]*|advert|advertising|ads?|campaign|camp)\\s+(?:${ruCampaignRoot}[a-z\u0400-\u04ff0-9_]*|campaign|camp)\\s*[#№:\\-]?\\s*\\d+$`, "iu");
+  const compactSingle = new RegExp(`^(?:campaign|camp|advert|advertising|ads?|${ruAdRoot}[a-z\u0400-\u04ff0-9_]*|${ruCampaignRoot}[a-z\u0400-\u04ff0-9_]*)\\s*[#?:\\-]?\\s*\\d+$`, "iu");
+  const compactDouble = new RegExp(`^(?:${ruAdRoot}[a-z\u0400-\u04ff0-9_]*|advert|advertising|ads?|campaign|camp)\\s+(?:${ruCampaignRoot}[a-z\u0400-\u04ff0-9_]*|campaign|camp)\\s*[#?:\\-]?\\s*\\d+$`, "iu");
   if (compactSingle.test(compact) || compactDouble.test(compact)) return true;
 
   const cidRaw = String(campaignId || "").trim();
@@ -6334,7 +6532,7 @@ function isPlaceholderCampaignName(name, campaignId = "") {
     const cidRe = new RegExp(`\\b${cid}\\b`);
     if (compact === cid || cidRe.test(compact)) {
       let reduced = compact.replace(new RegExp(`\\b${cid}\\b`, "g"), " ");
-      reduced = reduced.replace(/[#№:;,_\-.()\[\]/]+/g, " ").replace(/\s+/g, " ").trim();
+      reduced = reduced.replace(/[#?:;,_\-.()\[\]/]+/g, " ").replace(/\s+/g, " ").trim();
       if (!reduced) return true;
       const words = reduced.match(/[a-z\u0400-\u04ff]+/gi) || [];
       if (words.length && words.every((word) => {
@@ -6975,20 +7173,20 @@ function renderCampaignDetail(data) {
   const summaryRows = [
     `${tr("ID", "ID")}: ${summary.campaign_id || "-"}`,
     `${tr("Название", "Name")}: ${summary.name || "-"}`,
-    `${tr("Статус", "Status")}: ${statusText}`,
+    `${tr("??????", "Status")}: ${statusText}`,
     `${tr("Тип", "Type")}: ${typeText}`,
-    `${tr("Работает", "Running")}: ${workingText}`,
+    `${tr("????????", "Running")}: ${workingText}`,
     `${tr("Бюджет", "Budget")}: ${summary.budget || "-"}`,
     `${tr("Показы", "Views")}: ${formatInt(statTotals.views)}`,
     `${tr("Клики", "Clicks")}: ${formatInt(statTotals.clicks)}`,
     `${tr("Заказы", "Orders")}: ${formatInt(statTotals.orders)}`,
-    `${tr("Расход", "Spend")}: ${formatMoney(statTotals.spent)}`,
+    `${tr("??????", "Spend")}: ${formatMoney(statTotals.spent)}`,
     `CTR: ${Number(ctr || 0).toFixed(2)}%`,
     `CPO: ${formatMoney(cpo)}`,
-    `${tr("Создана", "Created")}: ${summary.created_at || "-"}`,
+    `${tr("???????", "Created")}: ${summary.created_at || "-"}`,
     `${tr("Обновлена", "Updated")}: ${summary.updated_at || "-"}`,
   ];
-  summaryEl.textContent = summaryRows.join(" • ");
+  summaryEl.textContent = summaryRows.join(" ? ");
 
   productsEl.innerHTML = "";
   const products = Array.isArray(data?.products) ? data.products : [];
@@ -7014,26 +7212,26 @@ function renderCampaignDetail(data) {
     const body = payload && typeof payload === "object" ? payload : {};
     const cpm = body.cpm ?? body.bid ?? body.price ?? "-";
     const updated = body.updatedAt ?? body.updated_at ?? body.last_update ?? "-";
-    ratesLines.push(`[${mode}] ${tr("Ставка", "Bid")}: ${cpm}; ${tr("Обновлено", "Updated")}: ${updated}`);
+    ratesLines.push(`[${mode}] ${tr("??????", "Bid")}: ${cpm}; ${tr("?????????", "Updated")}: ${updated}`);
   }
   if (!ratesLines.length) {
-    ratesLines.push(tr("Ставки не получены по API.", "Rates were not returned by API."));
+    ratesLines.push(tr("?????? ?? ???????? ?? API.", "Rates were not returned by API."));
   }
   if (keywordList.length) {
     ratesLines.push("");
     ratesLines.push(tr("Ключевые фразы:", "Keywords:"));
-    ratesLines.push(...keywordList.slice(0, 30).map((x) => `• ${x}`));
+    ratesLines.push(...keywordList.slice(0, 30).map((x) => `? ${x}`));
   }
   if (minusList.length) {
     ratesLines.push("");
     ratesLines.push(tr("Минус-слова:", "Negative keywords:"));
-    ratesLines.push(...minusList.slice(0, 30).map((x) => `• ${x}`));
+    ratesLines.push(...minusList.slice(0, 30).map((x) => `? ${x}`));
   }
   ratesEl.textContent = ratesLines.join("\n");
 
   const statsLines = [];
   if (statsRows.length) {
-    statsLines.push(tr(`Строк статистики: ${statsRows.length}`, `Stats rows: ${statsRows.length}`));
+    statsLines.push(tr(`????? ??????????: ${statsRows.length}`, `Stats rows: ${statsRows.length}`));
     const sorted = [...statsRows]
       .sort((a, b) => Number(b?.spent || 0) - Number(a?.spent || 0))
       .slice(0, 20);
@@ -7046,7 +7244,7 @@ function renderCampaignDetail(data) {
       statsLines.push(`${dateLabel}: ${tr("показы", "views")} ${views}, ${tr("клики", "clicks")} ${clicks}, ${tr("заказы", "orders")} ${orders}, ${tr("расход", "spent")} ${spent}`);
     }
   } else {
-    statsLines.push(tr("Статистика недоступна по API.", "Stats are unavailable from API."));
+    statsLines.push(tr("?????????? ?????????? ?? API.", "Stats are unavailable from API."));
   }
   statsEl.textContent = statsLines.join("\n");
   rawEl.textContent = JSON.stringify(data?.raw || {}, null, 2);
@@ -7092,7 +7290,7 @@ async function openCampaignDetailModal(campaignId) {
         headers: authHeaders(),
         timeoutMs: 120000,
       }),
-      tr("Сбор деталей идет через несколько методов API WB.", "Details are fetched via several WB API methods.")
+      tr("???? ??????? ???? ????? ????????? ??????? API WB.", "Details are fetched via several WB API methods.")
     ).catch((e) => {
       alert(e.message);
       return null;
@@ -7206,7 +7404,7 @@ function buildAdsAnalyticsSummaryText(meta, totals) {
     `${tr("Показы", "Views")}: ${formatInt(totals.views)}`,
     `${tr("Клики", "Clicks")}: ${formatInt(totals.clicks)}`,
     `${tr("Заказы", "Orders")}: ${formatInt(totals.orders)}`,
-    `${tr("Расход", "Spend")}: ${formatMoney(totals.spent)}`,
+    `${tr("??????", "Spend")}: ${formatMoney(totals.spent)}`,
     `CTR: ${Number(totals.ctr || 0).toFixed(2)}%`,
     `CR: ${Number(totals.cr || 0).toFixed(2)}%`,
     `CPC: ${formatMoney(totals.cpc)}`,
@@ -7260,7 +7458,7 @@ function buildAdsAnalyticsMetaLines(meta) {
     ? meta.warnings.map((code) => describeAdsAnalyticsWarning(code)).filter(Boolean)
     : [];
   if (warnings.length) {
-    lines.push(`${tr("Состояние загрузки", "Load state")}: ${warnings.join(" | ")}`);
+    lines.push(`${tr("????????? ????????", "Load state")}: ${warnings.join(" | ")}`);
   }
   const sourceParts = [];
   if (Array.isArray(meta.base_sources) && meta.base_sources.length) sourceParts.push(`base=${meta.base_sources.join(",")}`);
@@ -7285,7 +7483,7 @@ function describeAdsAnalyticsLoadFailure(err) {
     return tr("Не удалось связаться с сервером WB Ads. Проверьте соединение и повторите загрузку.", "Could not reach WB Ads. Check the connection and retry.");
   }
   if (kind === "parse") {
-    return tr("Сервер вернул некорректный ответ WB Ads. Текущие строки не были очищены.", "Server returned a malformed WB Ads response. Existing rows were preserved.");
+    return tr("?????? ?????? ???????????? ????? WB Ads. ??????? ?????? ?? ???? ???????.", "Server returned a malformed WB Ads response. Existing rows were preserved.");
   }
   if (status >= 500) {
     return tr(`WB Ads временно недоступен (HTTP ${status}). Текущие строки не были очищены.`, `WB Ads is temporarily unavailable (HTTP ${status}). Existing rows were preserved.`);
@@ -7466,7 +7664,7 @@ function renderAdsAnalyticsRows() {
     const rowWarnings = [];
     if (row.summary_has_context === false) rowWarnings.push(currentLang === "en" ? "Name/status still partial" : "Название/статус ещё частичные");
     if (row.stat_has_context === false) rowWarnings.push(currentLang === "en" ? "Metrics not loaded for selected period" : "Метрики за период не загружены");
-    if (rowWarnings.length) rowEl.title = rowWarnings.join(" • ");
+    if (rowWarnings.length) rowEl.title = rowWarnings.join(" ? ");
     rowEl.innerHTML = `
       <td>${escapeHtml(row.campaign_id ?? "-")}</td>
       <td>${escapeHtml(row.name ?? "-")}</td>
@@ -7515,7 +7713,7 @@ function updateAdsRecLoadStatus(message = "") {
   holder.innerHTML = buildLoadStatusHtml({
     title: active
       ? tr("Догрузка рекомендаций", "Loading recommendations")
-      : tr("Рекомендации загружены", "Recommendations loaded"),
+      : tr("???????????? ?????????", "Recommendations loaded"),
     loaded,
     total,
     active,
@@ -7545,8 +7743,8 @@ function updateSalesLoadStatus(message = "") {
     : (state === "error"
       ? tr("Ошибка загрузки статистики продаж", "Sales statistics loading failed")
       : (state === "partial"
-        ? tr("Статистика продаж загружена частично", "Sales statistics partially loaded")
-        : tr("Статистика продаж загружена", "Sales statistics loaded")));
+        ? tr("?????????? ?????? ????????? ????????", "Sales statistics partially loaded")
+        : tr("?????????? ?????? ?????????", "Sales statistics loaded")));
   holder.innerHTML = buildLoadStatusHtml({
     title,
     loaded,
@@ -7570,11 +7768,11 @@ function renderAdsRecommendationsMeta(payload) {
     [tr("Период", "Period"), `${payload.date_from || "-"} - ${payload.date_to || "-"}`],
     [tr("Проверено кампаний", "Scanned campaigns"), `${formatInt(payload.campaigns_scanned || 0)} / ${formatInt(payload.total_campaigns || 0)}`],
     [tr("Мин. расход", "Min spend"), formatMoney(payload.min_spent || 0)],
-    [tr("Рекомендаций", "Recommendations"), formatInt(payload.recommendations || 0)],
+    [tr("????????????", "Recommendations"), formatInt(payload.recommendations || 0)],
   ];
   if (Number(payload.high || 0) || Number(payload.medium || 0) || Number(payload.low || 0)) {
     rows.push([tr("Высокий приоритет", "High priority"), formatInt(payload.high || 0)]);
-    rows.push([tr("Средний приоритет", "Medium priority"), formatInt(payload.medium || 0)]);
+    rows.push([tr("??????? ?????????", "Medium priority"), formatInt(payload.medium || 0)]);
     rows.push([tr("Низкий приоритет", "Low priority"), formatInt(payload.low || 0)]);
   }
   host.innerHTML = `
@@ -7601,7 +7799,7 @@ function renderAdsRecommendationsInsights() {
     const prio = String(row?.priority || "low").toLowerCase();
     const prioLabel = prio === "high"
       ? tr("Высокий", "High")
-      : (prio === "medium" ? tr("Средний", "Medium") : tr("Низкий", "Low"));
+      : (prio === "medium" ? tr("???????", "Medium") : tr("??????", "Low"));
     const views = Number(row?.views || 0);
     const clicks = Number(row?.clicks || 0);
     const orders = Number(row?.orders || 0);
@@ -7610,7 +7808,7 @@ function renderAdsRecommendationsInsights() {
       `${tr("Показы", "Views")}: ${formatInt(Number.isFinite(views) ? views : 0)}`,
       `${tr("Клики", "Clicks")}: ${formatInt(Number.isFinite(clicks) ? clicks : 0)}`,
       `${tr("Заказы", "Orders")}: ${formatInt(Number.isFinite(orders) ? orders : 0)}`,
-      `${tr("Расход", "Spend")}: ${formatMoney(Number.isFinite(spent) ? spent : 0)}`,
+      `${tr("??????", "Spend")}: ${formatMoney(Number.isFinite(spent) ? spent : 0)}`,
     ];
     return `
       <article class="ads-rec-insight-card ${escapeHtml(prio)}">
@@ -7689,10 +7887,10 @@ async function loadAdsRecommendations() {
       );
       if (lastError && !adsRecommendationRows.length) {
         adsRecLoadProgress = { active: false, total: Math.max(0, seenTotal), loaded: Math.max(0, scanned) };
-        updateAdsRecLoadStatus(tr("Рекомендации временно недоступны.", "Recommendations are temporarily unavailable."));
+        updateAdsRecLoadStatus(tr("???????????? ???????? ??????????.", "Recommendations are temporarily unavailable."));
         renderAdsRecommendationsMeta({
           error: tr(
-            "Рекомендации пока недоступны. Проверьте API-ключ и период, затем обновите модуль.",
+            "???????????? ???? ??????????. ????????? API-???? ? ??????, ????? ???????? ??????.",
             "Recommendations are currently unavailable. Check API key and date range, then refresh the module."
           ),
         });
@@ -7743,9 +7941,9 @@ async function loadAdsRecommendations() {
     return acc;
   }, { high: 0, medium: 0, low: 0 });
   const explain = adsRecommendationRows.length
-    ? tr("Рекомендации сформированы в виде карточек и таблицы. Начните с высокого приоритета.", "Recommendations are ready in cards and table. Start with high priority.")
+    ? tr("???????????? ???????????? ? ???? ???????? ? ???????. ??????? ? ???????? ??????????.", "Recommendations are ready in cards and table. Start with high priority.")
     : tr(
-      "Нет готовых рекомендаций. Сервис вернул нейтральную статистику или недостающие данные за период.",
+      "??? ??????? ????????????. ?????? ?????? ??????????? ?????????? ??? ??????????? ?????? ?? ??????.",
       "No actionable recommendations. Service returned neutral or insufficient data for selected period."
     );
   const finalMeta = {
@@ -7786,7 +7984,7 @@ function renderAdsRecommendationsRows() {
   tbody.innerHTML = "";
   if (!adsRecommendationRows.length) {
     const rowEl = document.createElement("tr");
-    rowEl.innerHTML = `<td colspan="14">${currentLang === "en" ? "No recommendations for selected period." : "Рекомендаций за выбранный период нет."}</td>`;
+    rowEl.innerHTML = `<td colspan="14">${currentLang === "en" ? "No recommendations for selected period." : "???????????? ?? ????????? ?????? ???."}</td>`;
     tbody.appendChild(rowEl);
     return;
   }
@@ -7799,7 +7997,7 @@ function renderAdsRecommendationsRows() {
     const priorityRaw = String(row.priority || "low").toLowerCase();
     const priorityLabel = priorityRaw === "high"
       ? tr("Высокий", "High")
-      : (priorityRaw === "medium" ? tr("Средний", "Medium") : tr("Низкий", "Low"));
+      : (priorityRaw === "medium" ? tr("???????", "Medium") : tr("??????", "Low"));
     const rowEl = document.createElement("tr");
     rowEl.innerHTML = `
       <td>${escapeHtml(row.campaign_id ?? "-")}</td>
@@ -7960,7 +8158,7 @@ function applyWbBidderFieldHints() {
   ensureFieldCard("wbBidderTargetKind", isEn ? "Target type" : "Тип цели");
   ensureFieldCard("wbBidderTargetValue", isEn ? "Search phrase (for normquery)" : "Поисковая фраза (для normquery)", isEn ? "Used only in normquery mode." : "Используется только в режиме normquery.");
   ensureFieldCard("wbBidderPlacement", isEn ? "Placement" : "Площадка");
-  ensureFieldCard("wbBidderStrategy", isEn ? "Strategy" : "Стратегия");
+  ensureFieldCard("wbBidderStrategy", isEn ? "Strategy" : "?????????");
   ensureFieldCard("wbBidderDesiredBid", isEn ? "Target bid, RUB" : "Целевая ставка, ₽");
   ensureFieldCard("wbBidderMinBid", isEn ? "Minimum bid, RUB" : "Минимальная ставка, ₽");
   ensureFieldCard("wbBidderMaxBid", isEn ? "Maximum bid, RUB" : "Максимальная ставка, ₽");
@@ -7975,7 +8173,7 @@ function applyWbBidderFieldHints() {
   if (hint) {
     hint.textContent = isEn
       ? "campaign_id = campaign ID, nmID = product card ID. Step/position/clicks/cooldown are optimization controls. Bid values are in RUB."
-      : "campaign_id = ID кампании, nmID = ID карточки товара. Поля шаг/позиция/клики/cooldown — это параметры оптимизации. Ставки указываются в рублях.";
+      : "campaign_id = ID ????????, nmID = ID ???????? ??????. ???? ???/???????/?????/cooldown ? ??? ????????? ???????????. ?????? ??????????? ? ??????.";
   }
 }
 
@@ -8084,7 +8282,7 @@ function collectWbBidderPayload() {
 function bidderPlacementLabel(value) {
   const key = String(value || "").trim().toLowerCase();
   if (key === "search") return tr("Поиск", "Search");
-  if (key === "recommendations") return tr("Рекомендации", "Recommendations");
+  if (key === "recommendations") return tr("????????????", "Recommendations");
   if (key === "combined") return tr("Поиск + рекомендации", "Search + recommendations");
   return key || "-";
 }
@@ -8102,7 +8300,7 @@ function bidderRuleTargetText(row) {
   const kind = String(row?.target_kind || "").toLowerCase();
   const nm = Number(row?.nm_id || 0);
   if (kind === "normquery") {
-    return `${tr("nmID", "nmID")}: ${nm} · ${String(row?.target_value || "-")}`;
+    return `${tr("nmID", "nmID")}: ${nm} ? ${String(row?.target_value || "-")}`;
   }
   return `${tr("Карточка nmID", "nmID card")}: ${nm}`;
 }
@@ -8161,21 +8359,21 @@ function renderWbBidderRules() {
     const trEl = document.createElement("tr");
     trEl.innerHTML = `
       <td>${escapeHtml(String(row.id || "-"))}</td>
-      <td>${row.is_active ? "✅" : "⏸️"}</td>
+      <td>${row.is_active ? "?" : "??"}</td>
       <td>${escapeHtml(String(row.campaign_id || "-"))}${campaignName ? `<div class="cell-meta-small">${escapeHtml(campaignName)}</div>` : ""}</td>
       <td>${escapeHtml(bidderRuleTargetText(row))}</td>
-      <td>${escapeHtml(bidderStrategyLabel(row.strategy))} · ${escapeHtml(bidderPlacementLabel(row.placement))}</td>
-      <td>${escapeHtml(String(row.min_bid || 0))} .. ${escapeHtml(String(row.max_bid || 0))} · step ${escapeHtml(String(row.step_bid || 0))}</td>
+      <td>${escapeHtml(bidderStrategyLabel(row.strategy))} ? ${escapeHtml(bidderPlacementLabel(row.placement))}</td>
+      <td>${escapeHtml(String(row.min_bid || 0))} .. ${escapeHtml(String(row.max_bid || 0))} ? step ${escapeHtml(String(row.step_bid || 0))}</td>
       <td>${escapeHtml(String(row.target_pos_from || 0))} .. ${escapeHtml(String(row.target_pos_to || 0))}</td>
       <td>${escapeHtml(String(row.cooldown_sec || 0))}s</td>
       <td>${escapeHtml(String(row.last_run_at || "-"))}</td>
       <td>${bidderStatusBadge(row.last_status)}<br><small>${escapeHtml(String(row.last_reason || ""))}</small></td>
       <td>
         <div class="ads-bidder-row-actions">
-          <button type="button" class="btn-secondary" onclick="editWbBidderRule(${Number(row.id || 0)})">✎</button>
-          <button type="button" class="btn-secondary" onclick="runWbBidderRuleNow(${Number(row.id || 0)})">▶</button>
-          <button type="button" class="btn-secondary" onclick="toggleWbBidderRule(${Number(row.id || 0)}, ${row.is_active ? "false" : "true"})">${row.is_active ? "⏸" : "▶"}</button>
-          <button type="button" class="btn-danger" onclick="deleteWbBidderRule(${Number(row.id || 0)})">🗑</button>
+          <button type="button" class="btn-secondary" onclick="editWbBidderRule(${Number(row.id || 0)})">?</button>
+          <button type="button" class="btn-secondary" onclick="runWbBidderRuleNow(${Number(row.id || 0)})">?</button>
+          <button type="button" class="btn-secondary" onclick="toggleWbBidderRule(${Number(row.id || 0)}, ${row.is_active ? "false" : "true"})">${row.is_active ? "?" : "?"}</button>
+          <button type="button" class="btn-danger" onclick="deleteWbBidderRule(${Number(row.id || 0)})">??</button>
         </div>
       </td>
     `;
@@ -8188,7 +8386,7 @@ function editWbBidderRule(ruleId) {
   if (!row) return;
   fillWbBidderForm(row);
   setWbBidderStatus(
-    tr(`Редактирование правила #${row.id}`, `Editing rule #${row.id}`),
+    tr(`?????????????? ??????? #${row.id}`, `Editing rule #${row.id}`),
     "skipped"
   );
 }
@@ -8329,7 +8527,7 @@ function renderWbBidderRuns() {
       <td>#${escapeHtml(String(row.rule_id || "-"))}</td>
       <td>${escapeHtml(String(row.campaign_id || "-"))}${campaignName ? `<div class="cell-meta-small">${escapeHtml(campaignName)}</div>` : ""}</td>
       <td>${escapeHtml(bidderRuleTargetText(row))}</td>
-      <td>${escapeHtml(String(row.previous_bid || 0))} → ${escapeHtml(String(row.next_bid || 0))}</td>
+      <td>${escapeHtml(String(row.previous_bid || 0))} > ${escapeHtml(String(row.next_bid || 0))}</td>
       <td>${escapeHtml(String(row.avg_position || 0))}</td>
       <td>${escapeHtml(String(row.clicks || 0))} / ${escapeHtml(String(row.orders || 0))}</td>
       <td>${bidderStatusBadge(row.status)}</td>
@@ -8765,7 +8963,7 @@ function normalizeProductDetailValue(value) {
   if (value === null || value === undefined) return "";
   if (typeof value === "string") {
     const text = value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
-    if (!text || text === "-" || text === "—") return "";
+    if (!text || text === "-" || text === "?") return "";
     return text;
   }
   if (typeof value === "number") {
@@ -9060,7 +9258,7 @@ function extractProductDetailContext(details, fallbackProduct) {
     { label: tr("Маркетинг цена", "Marketing price"), value: priceMarketingValue || "-" },
     { label: tr("Валюта", "Currency"), value: pickAny(pickAttr("currency_code", "currency"), pickRaw("currency_code", "currency", "price_info.currency_code", "price_info.price.currency_code")) || "-" },
     { label: tr("НДС", "VAT"), value: pickAny(pickAttr("vat", "vat_rate", "nds"), pickRaw("vat", "vat_rate", "nds", "price_info.vat", "price_info.price.vat")) || "-" },
-    { label: tr("Статус", "Status"), value: pickAny(pickAttr("state"), pickRaw("state.name", "state")) || "-" },
+    { label: tr("??????", "Status"), value: pickAny(pickAttr("state"), pickRaw("state.name", "state")) || "-" },
     { label: tr("Видимость", "Visibility"), value: pickAny(pickAttr("visibility"), pickRaw("visibility")) || "-" },
   ];
 
@@ -9216,7 +9414,7 @@ async function openProductViewModal(productId, opts = {}) {
   const rawEl = document.getElementById("productViewRaw");
   if (metaEl) {
     metaEl.textContent = product
-      ? `${tr("ID", "ID")}: ${product.id} • ${tr("\u041c\u041f", "MP")}: ${String(product.marketplace || "").toUpperCase()} • ${tr("\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f", "Category")}: ${product.category_name || "-"}`
+      ? `${tr("ID", "ID")}: ${product.id} ? ${tr("\u041c\u041f", "MP")}: ${String(product.marketplace || "").toUpperCase()} ? ${tr("\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f", "Category")}: ${product.category_name || "-"}`
       : "-";
   }
   if (warnEl) warnEl.textContent = tr("Загружаем детали карточки…", "Loading product details...");
@@ -9293,7 +9491,7 @@ async function openProductEditModal(productId) {
   activeProductEditId = id;
   const product = currentProducts.find((x) => Number(x.id) === id) || null;
   const titleEl = modal.querySelector("h3");
-  if (titleEl) titleEl.textContent = `${tr("Редактировать товар", "Edit product")}: ${product?.name || id}`;
+  if (titleEl) titleEl.textContent = `${tr("????????????? ?????", "Edit product")}: ${product?.name || id}`;
   const hintEl = document.getElementById("productEditHint");
   const summaryEl = document.getElementById("productEditSummary");
   const detailsEl = document.getElementById("productEditDetails");
@@ -9311,7 +9509,7 @@ async function openProductEditModal(productId) {
   const context = extractProductDetailContext(details, product || {});
   const base = context.base || product || {};
   const warnings = Array.isArray(details?.warnings) ? details.warnings.filter(Boolean) : [];
-  if (titleEl) titleEl.textContent = `${tr("Редактировать товар", "Edit product")}: ${context.name || id}`;
+  if (titleEl) titleEl.textContent = `${tr("????????????? ?????", "Edit product")}: ${context.name || id}`;
   if (hintEl) {
     hintEl.textContent = warnings.length
       ? warnings.join(" | ")
@@ -9613,7 +9811,7 @@ async function saveProductEditModal() {
     target_keywords: String(document.getElementById("productEditKeywords")?.value || "").trim(),
   };
   const updated = await withBusy(
-    tr("Сохраняем изменения карточки товара…", "Saving product card changes..."),
+    tr("????????? ????????? ???????? ??????", "Saving product card changes..."),
     () => requestJson(`/api/products/${id}`, {
       method: "PATCH",
       headers: authHeaders(),
@@ -9781,7 +9979,7 @@ async function generateSeo(applyToAll) {
   await loadSeoJobs();
   await loadDashboard();
   if (data.length) renderSeoPreview(data[0]);
-  alert(tr(`Сгенерировано задач: ${data.length}`, `Generated jobs: ${data.length}`));
+  alert(tr(`????????????? ?????: ${data.length}`, `Generated jobs: ${data.length}`));
 }
 
 function renderSeoPreview(job) {
@@ -10156,15 +10354,15 @@ function renderSalesTotals() {
     <article class="sales-kpi"><span>${tr("Выкупы", "Buyouts")}</span><strong>${formatInt(totals.buyouts)}</strong></article>
     <article class="sales-kpi"><span>${tr("Выручка", "Revenue")}</span><strong>${formatMoney(totals.revenue)}</strong></article>
     <article class="sales-kpi"><span>${tr("Отказы", "Returns")}</span><strong>${formatInt(totals.returns)}</strong></article>
-    <article class="sales-kpi"><span>${tr("Реклама", "Ads spend")}</span><strong>${formatMoney(totals.ad_spend)}</strong></article>
+    <article class="sales-kpi"><span>${tr("???????", "Ads spend")}</span><strong>${formatMoney(totals.ad_spend)}</strong></article>
     <article class="sales-kpi"><span>${tr("Валовая прибыль", "Gross Profit")}</span><strong>${formatMoney(totals.gross_profit)}</strong></article>
   `;
   if (extraHost) {
     extraHost.innerHTML = `
-      <article class="sales-kpi"><span>${tr("Сумма заказов", "Orders amount")}</span><strong>${formatMoney(totals.order_amount)}</strong></article>
-      <article class="sales-kpi"><span>${tr("Сумма выкупов", "Buyouts amount")}</span><strong>${formatMoney(totals.buyout_amount)}</strong></article>
+      <article class="sales-kpi"><span>${tr("????? ???????", "Orders amount")}</span><strong>${formatMoney(totals.order_amount)}</strong></article>
+      <article class="sales-kpi"><span>${tr("????? ???????", "Buyouts amount")}</span><strong>${formatMoney(totals.buyout_amount)}</strong></article>
       <article class="sales-kpi"><span>${tr("Приход", "Income")}</span><strong>${formatMoney(totals.income)}</strong></article>
-      <article class="sales-kpi"><span>${tr("Расход", "Expense")}</span><strong>${formatMoney(totals.expense)}</strong></article>
+      <article class="sales-kpi"><span>${tr("??????", "Expense")}</span><strong>${formatMoney(totals.expense)}</strong></article>
       <article class="sales-kpi"><span>${tr("Изм. баланса", "Net change")}</span><strong>${formatMoney(totals.net)}</strong></article>
       <article class="sales-kpi"><span>${tr("Штрафы", "Penalties")}</span><strong>${formatMoney(totals.penalties)}</strong></article>
       <article class="sales-kpi"><span>${tr("Комиссия", "Commission")}</span><strong>${formatMoney(totals.commission)}</strong></article>
@@ -10438,7 +10636,7 @@ function renderSalesChart(points) {
   if (showWb) {
     series.push({
       key: "wb",
-      label: `WB • ${currentLabel}`,
+      label: `WB ? ${currentLabel}`,
       color: palette.wb.current,
       values: resolveMarketplaceSeries(chartPoints, currentMaps, "wb"),
     });
@@ -10446,7 +10644,7 @@ function renderSalesChart(points) {
   if (showOzon) {
     series.push({
       key: "ozon",
-      label: `Ozon • ${currentLabel}`,
+      label: `Ozon ? ${currentLabel}`,
       color: palette.ozon.current,
       values: resolveMarketplaceSeries(chartPoints, currentMaps, "ozon"),
     });
@@ -10460,7 +10658,7 @@ function renderSalesChart(points) {
     if (showWb) {
       series.push({
         key: "wb_prev",
-        label: `WB • ${compareLabel}`,
+        label: `WB ? ${compareLabel}`,
         color: palette.wb.previous,
         values: alignCompareValues("wb"),
       });
@@ -10468,7 +10666,7 @@ function renderSalesChart(points) {
     if (showOzon) {
       series.push({
         key: "ozon_prev",
-        label: `Ozon • ${compareLabel}`,
+        label: `Ozon ? ${compareLabel}`,
         color: palette.ozon.previous,
         values: alignCompareValues("ozon"),
       });
@@ -10536,14 +10734,14 @@ function renderSalesChart(points) {
     units: tr("Штуки", "Units"),
     orders: tr("Заказы", "Orders"),
     buyouts: tr("Выкупы", "Buyouts"),
-    order_amount: tr("Сумма заказов", "Orders amount"),
-    buyout_amount: tr("Сумма выкупов", "Buyouts amount"),
+    order_amount: tr("????? ???????", "Orders amount"),
+    buyout_amount: tr("????? ???????", "Buyouts amount"),
     revenue: tr("Выручка", "Revenue"),
     income: tr("Приход", "Income"),
-    expense: tr("Расход", "Expense"),
+    expense: tr("??????", "Expense"),
     net: tr("Изменение баланса", "Net change"),
     returns: tr("Отказы", "Returns"),
-    ad_spend: tr("Реклама", "Ads Spend"),
+    ad_spend: tr("???????", "Ads Spend"),
     penalties: tr("Штрафы", "Penalties"),
     commission: tr("Комиссия", "Commission"),
     logistics: tr("Логистика", "Logistics"),
@@ -10575,7 +10773,7 @@ function renderSalesChart(points) {
       const total = item.values.reduce((acc, val) => acc + Number(val || 0), 0);
       return `<span class="trend-series-item" style="--series-color:${item.color}">${escapeHtml(item.label)} <b>${escapeHtml(formatValue(total))}</b></span>`;
     })
-    .join(" • ");
+    .join(" ? ");
   const topSeries = series[0] || { values: [] };
   const topValues = Array.isArray(topSeries.values) ? topSeries.values : [];
   const peak = topValues.length ? Math.max(...topValues) : 0;
@@ -10893,7 +11091,7 @@ async function loadSalesStats(retryAttempt = 0, forceRefresh = false) {
       compare_from = toYmd(prevFrom);
       compare_to = toYmd(prevTo);
       salesCurrentLabel = diffDays === 0
-        ? tr("Сегодня", "Today")
+        ? tr("???????", "Today")
         : tr("Текущий период", "Current period");
       salesCompareLabel = diffDays === 0
         ? tr("Вчера", "Yesterday")
@@ -11241,7 +11439,7 @@ function renderProfileData(data) {
     const monthlyPrice = formatMoney(Number(data.monthly_price || 0));
     planSummaryTable.innerHTML = `
       <tr><td>${escapeHtml(tr("План", "Plan"))}</td><td><b>${escapeHtml(planCode)}</b></td></tr>
-      <tr><td>${escapeHtml(tr("Статус", "Status"))}</td><td>${escapeHtml(planStatus)}</td></tr>
+      <tr><td>${escapeHtml(tr("??????", "Status"))}</td><td>${escapeHtml(planStatus)}</td></tr>
       <tr><td>${escapeHtml(tr("Цена/мес.", "Monthly price"))}</td><td>${escapeHtml(monthlyPrice)}</td></tr>
       <tr><td>${escapeHtml(tr("Продление", "Renew date"))}</td><td>${escapeHtml(renewAt || "-")}</td></tr>
     `;
@@ -11274,13 +11472,13 @@ function renderProfileData(data) {
   const companySummary = document.getElementById("profileCompanySummary");
   if (companySummary) {
     const parts = [String(data.company_name || "").trim(), String(data.full_name || "").trim()].filter(Boolean);
-    companySummary.textContent = parts.join(" • ") || "-";
+    companySummary.textContent = parts.join(" ? ") || "-";
   }
   const planSummaryShort = document.getElementById("profilePlanSummaryShort");
   if (planSummaryShort) {
     const code = String(data.plan_code || "-").trim() || "-";
     const status = String(data.plan_status || "-").trim() || "-";
-    planSummaryShort.textContent = `${code} • ${status}`;
+    planSummaryShort.textContent = `${code} ? ${status}`;
   }
   const keysSummaryShort = document.getElementById("profileKeysSummaryShort");
   if (keysSummaryShort) {
@@ -11291,7 +11489,7 @@ function renderProfileData(data) {
   if (aiSummaryShort) {
     const effective = profileAiState?.effective || null;
     aiSummaryShort.textContent = effective
-      ? `${effective.provider || "-"} • ${effective.model || "-"}`
+      ? `${effective.provider || "-"} ? ${effective.model || "-"}`
       : tr("Не выбран", "Not selected");
   }
   const teamSummaryShort = document.getElementById("profileTeamSummaryShort");
@@ -11316,7 +11514,7 @@ function renderProfileAiServiceOptions(forcedMode = "") {
   const prev = String(serviceSelect.value || "").trim();
   serviceSelect.innerHTML = activeRows.length
     ? activeRows.map((row) => `<option value="${Number(row.id || 0)}">#${Number(row.id || 0)} ${escapeHtml(String(row.name || "-"))} (${escapeHtml(String(row.provider || "-"))})</option>`).join("")
-    : `<option value="">${tr("Сервисов нет", "No services")}</option>`;
+    : `<option value="">${tr("???????? ???", "No services")}</option>`;
   if (prev && [...serviceSelect.options].some((x) => x.value === prev)) {
     serviceSelect.value = prev;
     return;
@@ -11346,7 +11544,7 @@ function renderProfileAiState(data) {
   effectiveBox.textContent = `${tr("Эффективный AI", "Effective AI")}: ${effective.mode || "-"} | ${effective.provider || "-"} | ${effective.model || "-"} | ${effective.service_name || "-"}`;
   const aiSummaryShort = document.getElementById("profileAiSummaryShort");
   if (aiSummaryShort) {
-    aiSummaryShort.textContent = `${effective.provider || "-"} • ${effective.model || "-"}`;
+    aiSummaryShort.textContent = `${effective.provider || "-"} ? ${effective.model || "-"}`;
   }
 
   const merged = [...globalRows, ...userRows];
@@ -11385,7 +11583,7 @@ function renderProfileAiState(data) {
       const addBtn = document.querySelector("button[onclick='addProfileAiService()']");
       if (addBtn) {
         addBtn.dataset.editId = String(id);
-        addBtn.textContent = tr("Сохранить изменения", "Save changes");
+        addBtn.textContent = tr("????????? ?????????", "Save changes");
       }
       document.getElementById("profileAiApiKey")?.focus();
     });
@@ -11424,14 +11622,14 @@ function applyTeamModalHeader(mode, row = null) {
     if (passEl) passEl.placeholder = tr("Пароль сотрудника (>=8)", "Employee password (>=8)");
     return;
   }
-  if (saveBtn) saveBtn.textContent = tr("Сохранить", "Save");
+  if (saveBtn) saveBtn.textContent = tr("?????????", "Save");
   if (passLabelEl) passLabelEl.textContent = tr("Новый пароль", "New password");
   if (passEl) passEl.placeholder = tr("Новый пароль (опц.)", "New password (optional)");
   if (!row) return;
   if (titleEl) {
     titleEl.textContent = row.is_owner
       ? tr("Владелец кабинета", "Workspace owner")
-      : tr("Сотрудник кабинета", "Workspace employee");
+      : tr("????????? ????????", "Workspace employee");
   }
   const isSelfEmployee = Boolean(
     me
@@ -11445,7 +11643,7 @@ function applyTeamModalHeader(mode, row = null) {
       : (isSelfEmployee
         ? tr("Можно менять только свои ФИО, телефон, ник и фото.", "You can edit only your own name, phone, nickname and avatar.")
         : tr("Можно менять доступы и данные", "You can edit access and profile fields"));
-    metaEl.textContent = `#${Number(row.id || 0)} • ${metaText}`;
+    metaEl.textContent = `#${Number(row.id || 0)} ? ${metaText}`;
   }
   if (deleteBtn) deleteBtn.classList.toggle("hidden", Boolean(row.is_owner || isSelfEmployee));
 }
@@ -11489,7 +11687,7 @@ function renderTeamMembers() {
   host.innerHTML = "";
   if (!Array.isArray(teamMembers) || !teamMembers.length) {
     closeTeamMemberEditor();
-    host.innerHTML = `<div class="hint">${escapeHtml(tr("Сотрудников пока нет.", "No employees yet."))}</div>`;
+    host.innerHTML = `<div class="hint">${escapeHtml(tr("??????????? ???? ???.", "No employees yet."))}</div>`;
     return;
   }
   for (const row of teamMembers) {
@@ -11498,24 +11696,24 @@ function renderTeamMembers() {
     card.className = "team-member-row";
     const roleLabel = row.is_owner
       ? tr("Владелец", "Owner")
-      : tr("Сотрудник", "Employee");
+      : tr("?????????", "Employee");
     const roleMeta = row.is_owner
       ? ""
       : (row.has_password ? tr("пароль задан", "password set") : tr("пароль не задан", "password missing"));
-    const editLabel = tr("Редактировать сотрудника", "Edit employee");
+    const editLabel = tr("????????????? ??????????", "Edit employee");
     card.innerHTML = `
       <div class="team-member-row-main">
         <div class="team-member-identity">
           <strong>${escapeHtml(String(row.full_name || row.nickname || row.email || "-"))}</strong>
           <div class="hint">${escapeHtml(String(row.email || "-"))}</div>
         </div>
-        <div class="team-member-role">${escapeHtml(roleMeta ? `${roleLabel} • ${roleMeta}` : roleLabel)}</div>
+        <div class="team-member-role">${escapeHtml(roleMeta ? `${roleLabel} ? ${roleMeta}` : roleLabel)}</div>
         <div class="team-member-access">
           <strong>${escapeHtml(access.title)}</strong>
           <div class="hint">${escapeHtml(access.details)}</div>
         </div>
       </div>
-      <button class="team-row-edit" type="button" title="${escapeHtml(editLabel)}" aria-label="${escapeHtml(editLabel)}" data-team-edit="${Number(row.id || 0)}">✎</button>
+      <button class="team-row-edit" type="button" title="${escapeHtml(editLabel)}" aria-label="${escapeHtml(editLabel)}" data-team-edit="${Number(row.id || 0)}">?</button>
     `;
     card.querySelector(`[data-team-edit="${Number(row.id || 0)}"]`)?.addEventListener("click", () => openTeamMemberEditor(row.id));
     card.addEventListener("dblclick", () => openTeamMemberEditor(row.id));
@@ -12063,7 +12261,7 @@ async function loadHelpDocs() {
       downloadsCurrent.innerHTML = `<div class="help-empty">${
         lang === "en"
           ? "Downloads are unavailable for your access."
-          : "Раздел загрузок недоступен для вашего доступа."
+          : "?????? ???????? ?????????? ??? ?????? ???????."
       }</div>`;
     }
     if (downloadsList) downloadsList.innerHTML = "";
@@ -12103,7 +12301,7 @@ async function loadHelpDocs() {
   const view = document.getElementById("helpDocsView");
   if (!view) return;
   if (!rows.length) {
-    view.innerHTML = `<div class="help-empty">${lang === "en" ? "No help data." : "Справка не найдена."}</div>`;
+    view.innerHTML = `<div class="help-empty">${lang === "en" ? "No help data." : "??????? ?? ???????."}</div>`;
     return;
   }
   const unique = new Map();
@@ -12170,7 +12368,7 @@ async function loadHelpDocs() {
       </div>
       <div class="help-chip-list">${moduleChips}</div>
     </div>
-    <div class="help-card-list">${cards || `<div class="help-empty">${lang === "en" ? "Module help not found." : "Справка по модулю не найдена."}</div>`}</div>
+    <div class="help-card-list">${cards || `<div class="help-empty">${lang === "en" ? "Module help not found." : "??????? ?? ?????? ?? ???????."}</div>`}</div>
   `;
   renderHelpAssistantModuleOptions();
   markModuleLoaded("help");
@@ -12212,7 +12410,7 @@ async function loadHelpReleases() {
       <header class="help-card-head">
         <div>
           <h4>${lang === "en" ? "Current version" : "Текущая версия"} ${currentVersion}</h4>
-          <small>${releaseDate}${currentCode > 0 ? ` • code ${currentCode}` : ""}</small>
+          <small>${releaseDate}${currentCode > 0 ? ` ? code ${currentCode}` : ""}</small>
         </div>
         <div class="help-card-actions">
           <a class="btn-secondary help-open-btn" href="${escapeHtml(downloadUrl)}" target="_blank" rel="noopener noreferrer">
@@ -12245,7 +12443,7 @@ async function loadHelpReleases() {
         <header class="help-card-head">
           <div>
             <h4>${version}</h4>
-            <small>${date}${versionCode > 0 ? ` • code ${versionCode}` : ""}</small>
+            <small>${date}${versionCode > 0 ? ` ? code ${versionCode}` : ""}</small>
           </div>
         </header>
         <div class="help-card-body">
@@ -12282,11 +12480,11 @@ function formatHelpContent(text, lang = "ru") {
     const first = firstRaw.toLowerCase();
 
     const numbered = lines.every((line) => /^\d+[).]\s+/.test(line));
-    const bullets = lines.every((line) => /^[-–—]\s+/.test(line));
-    const headerAndBullets = lines.length > 1 && /:\s*$/.test(firstRaw) && lines.slice(1).every((line) => /^[-–—]\s+/.test(line));
+    const bullets = lines.every((line) => /^[-??]\s+/.test(line));
+    const headerAndBullets = lines.length > 1 && /:\s*$/.test(firstRaw) && lines.slice(1).every((line) => /^[-??]\s+/.test(line));
 
     if (headerAndBullets) {
-      const items = lines.slice(1).map((line) => `<li>${escapeHtml(line.replace(/^[-–—]\s+/, ""))}</li>`).join("");
+      const items = lines.slice(1).map((line) => `<li>${escapeHtml(line.replace(/^[-??]\s+/, ""))}</li>`).join("");
       return `<section class="help-block"><h5>${escapeHtml(firstRaw)}</h5><ul>${items}</ul></section>`;
     }
     if (numbered) {
@@ -12294,7 +12492,7 @@ function formatHelpContent(text, lang = "ru") {
       return `<section class="help-block"><ol>${items}</ol></section>`;
     }
     if (bullets) {
-      const items = lines.map((line) => `<li>${escapeHtml(line.replace(/^[-–—]\s+/, ""))}</li>`).join("");
+      const items = lines.map((line) => `<li>${escapeHtml(line.replace(/^[-??]\s+/, ""))}</li>`).join("");
       return `<section class="help-block"><ul>${items}</ul></section>`;
     }
     if (first.startsWith("назначение:") || first.startsWith("purpose:")) {
@@ -12378,7 +12576,7 @@ function renderHelpAssistantHistory() {
       if (item?.module_code) metaBits.push(`#${String(item.module_code)}`);
       if (item?.provider) metaBits.push(String(item.provider));
       if (item?.service_name) metaBits.push(String(item.service_name));
-      const meta = metaBits.join(" • ");
+      const meta = metaBits.join(" ? ");
       return `
         <article class="help-card selected">
           <header class="help-card-head">

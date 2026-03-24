@@ -28,11 +28,8 @@ let socialState = {
   actors: [],
   projects: [],
   tasks: [],
-  tasksAll: [],
-  tasksCacheKey: "",
-  tasksCacheLoadedAt: 0,
-  tasksLoadSeq: 0,
   calendarEvents: [],
+  calendarEventsLastGood: [],
   calendarDate: new Date(),
   calendarSelectedDay: "",
   notes: [],
@@ -76,6 +73,32 @@ let socialState = {
 };
 if (typeof window !== "undefined") {
   window.socialState = socialState;
+  // Google sync flow is intentionally disabled in Samsung-like calendar UX.
+  window.__socialDisableGoogleCalendarFlow = true;
+  // Keep legacy experimental task/calendar patches disabled to avoid UI regressions.
+  if (typeof window.__socialDisableLegacyTaskCalendarPatches === "undefined") {
+    window.__socialDisableLegacyTaskCalendarPatches = true;
+  }
+  // Disable extra heavy hardening wrapper block; we keep fixes in core flow and lightweight overrides.
+  if (typeof window.__socialDisableHardeningV20260323 === "undefined") {
+    window.__socialDisableHardeningV20260323 = true;
+  }
+  // Disable legacy heavy monkey-patch layers; canonical behavior is in core + lightweight text_overrides.
+  if (typeof window.__socialDisableUiRecoveryV20260323b === "undefined") {
+    window.__socialDisableUiRecoveryV20260323b = true;
+  }
+  if (typeof window.__socialDisableUiFinalV20260323c === "undefined") {
+    window.__socialDisableUiFinalV20260323c = true;
+  }
+  if (typeof window.__socialDisableUiTextFixesV1 === "undefined") {
+    window.__socialDisableUiTextFixesV1 = true;
+  }
+  if (typeof window.__socialDisableCurrencyPatchV2 === "undefined") {
+    window.__socialDisableCurrencyPatchV2 = true;
+  }
+  if (typeof window.__socialDisableTaskGlyphPatchV1 === "undefined") {
+    window.__socialDisableTaskGlyphPatchV1 = true;
+  }
 }
 
 const SOCIAL_POLL_LEADER_KEY = "seo_wibe_social_poll_leader_v1";
@@ -106,12 +129,33 @@ function socialIsMobileApkShell() {
   return false;
 }
 
-function socialHasCoarsePointer() {
+function socialIsAppShellLike() {
   try {
-    return Boolean(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
-  } catch (_) {
-    return false;
-  }
+    if (socialIsMobileClientShell() || socialIsMobileApkShell()) return true;
+  } catch (_) {}
+  try {
+    if (document.body?.classList?.contains("mobile-client-mode")) return true;
+    if (document.body?.classList?.contains("mobile-apk-mode")) return true;
+  } catch (_) {}
+  try {
+    const href = String(window.location?.href || "");
+    const path = String(window.location?.pathname || "");
+    if (path === "/mobile") return true;
+    if (/([?&])mobile_app=1(?:[&#]|$)/i.test(href)) return true;
+  } catch (_) {}
+  try {
+    const ua = String(navigator?.userAgent || "").toLowerCase();
+    if (ua.includes("seowibe") && ua.includes("android")) return true;
+    if (ua.includes("wibeapp")) return true;
+    if (ua.includes("wv") && ua.includes("android")) return true;
+    if (ua.includes("reactnative")) return true;
+  } catch (_) {}
+  try {
+    if (typeof window.ReactNativeWebView !== "undefined") return true;
+    if (window.webkit?.messageHandlers?.seoWibeApp) return true;
+    if (window.AndroidBridge || window.SeoWibeBridge) return true;
+  } catch (_) {}
+  return false;
 }
 
 function socialIsImageFile(file) {
@@ -236,7 +280,7 @@ function socialBuildUploadLargeError(file, limitBytes) {
   const sizeInfo = `${socialFormatFileSize(file?.size || 0)} / ${socialFormatFileSize(limitBytes)}`;
   if (isImage) {
     return tr(
-      `Фото слишком большое для отправки (${sizeInfo}). Сожмите его в галерее или выберите другой размер.`,
+      `Изображение слишком большое для отправки (${sizeInfo}). Сожмите его в галерее или выберите файл меньшего размера.`,
       `Image is too large to send (${sizeInfo}). Compress it in your gallery app or choose a smaller size.`
     );
   }
@@ -261,7 +305,7 @@ function socialBuildUploadErrorMessage(err, fallbackFile) {
   }
   if (/(<html|<body|gateway time-?out|internal server error|bad gateway|traceback)/i.test(message)) {
     return tr(
-      "Сервер временно занят. Повторите отправку через несколько секунд.",
+      "Сервер временно занят. Повторите отправку файла через несколько секунд.",
       "The server is temporarily busy. Please retry in a few seconds."
     );
   }
@@ -376,16 +420,34 @@ function socialCalendarPad(num) {
 }
 
 function socialCalendarParseDate(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const ms = value < 1e12 ? value * 1000 : value;
+    const numericDate = new Date(ms);
+    if (!Number.isNaN(numericDate.getTime())) return numericDate;
+  }
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     return new Date(value.getTime());
   }
   const raw = String(value || "").trim();
   if (!raw) return null;
-  const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (/^\d{10,13}$/.test(raw)) {
+    const num = Number(raw);
+    if (Number.isFinite(num)) {
+      const ms = raw.length <= 10 ? num * 1000 : num;
+      const numericDate = new Date(ms);
+      if (!Number.isNaN(numericDate.getTime())) return numericDate;
+    }
+  }
+  const compact = raw
+    .replace(/\u00a0/g, " ")
+    .replace(/,\s*/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  const dateOnly = compact.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (dateOnly) {
     return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]), 0, 0, 0, 0);
   }
-  const localMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d{1,3}))?$/);
+  const localMatch = compact.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d{1,3}))?$/);
   if (localMatch) {
     return new Date(
       Number(localMatch[1]),
@@ -397,9 +459,38 @@ function socialCalendarParseDate(value) {
       Number(String(localMatch[7] || "0").padEnd(3, "0"))
     );
   }
-  const nativeDate = new Date(raw.replace(" ", "T"));
+  const localTzNoColon = compact.match(/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}:\d{2}(?::\d{2})?)([+\-]\d{4})$/);
+  if (localTzNoColon) {
+    const nativeTz = new Date(`${localTzNoColon[1]}T${localTzNoColon[2]}${localTzNoColon[3].slice(0, 3)}:${localTzNoColon[3].slice(3)}`);
+    if (!Number.isNaN(nativeTz.getTime())) return nativeTz;
+  }
+  const dmyMatch = compact.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (dmyMatch) {
+    return new Date(
+      Number(dmyMatch[3]),
+      Number(dmyMatch[2]) - 1,
+      Number(dmyMatch[1]),
+      Number(dmyMatch[4] || 0),
+      Number(dmyMatch[5] || 0),
+      Number(dmyMatch[6] || 0),
+      0
+    );
+  }
+  const ymdSlash = compact.match(/^(\d{4})[./](\d{1,2})[./](\d{1,2})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (ymdSlash) {
+    return new Date(
+      Number(ymdSlash[1]),
+      Number(ymdSlash[2]) - 1,
+      Number(ymdSlash[3]),
+      Number(ymdSlash[4] || 0),
+      Number(ymdSlash[5] || 0),
+      Number(ymdSlash[6] || 0),
+      0
+    );
+  }
+  const nativeDate = new Date(compact.replace(" ", "T"));
   if (!Number.isNaN(nativeDate.getTime())) return nativeDate;
-  return socialParseDateSafe(raw);
+  return socialParseDateSafe(compact);
 }
 
 function socialCalendarDayKey(value) {
@@ -456,6 +547,287 @@ function socialCalendarRangeParam(value, endOfDay = false) {
   return `${dt.getFullYear()}-${socialCalendarPad(dt.getMonth() + 1)}-${socialCalendarPad(dt.getDate())}T${endOfDay ? "23:59:59" : "00:00:00"}`;
 }
 
+function socialCalendarFirstNonEmpty(source, keys = []) {
+  if (!source || typeof source !== "object") return "";
+  for (const key of keys) {
+    const value = source?.[key];
+    if (value == null) continue;
+    const text = String(value).trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+function socialCalendarNestedFirstNonEmpty(source, containerKeys = [], valueKeys = []) {
+  if (!source || typeof source !== "object") return "";
+  for (const containerKey of containerKeys) {
+    const nested = source?.[containerKey];
+    if (!nested || typeof nested !== "object") continue;
+    const direct = socialCalendarFirstNonEmpty(nested, valueKeys);
+    if (direct) return direct;
+  }
+  return "";
+}
+
+function socialCalendarResolveEventStart(eventRow) {
+  const direct = socialCalendarFirstNonEmpty(eventRow, [
+    "start_at",
+    "occurrence_start",
+    "start_date",
+    "start_datetime",
+    "starts_at",
+    "startAt",
+    "occurrenceStart",
+    "date_from",
+    "from_at",
+    "start",
+    "date",
+    "event_date",
+    "start_day",
+    "day_key",
+    "date_key",
+    "scheduled_for",
+    "scheduled_at",
+  ]);
+  if (direct) return direct;
+  return socialCalendarNestedFirstNonEmpty(eventRow, ["payload", "event", "source"], [
+    "start_at",
+    "occurrence_start",
+    "start_date",
+    "start_datetime",
+    "starts_at",
+    "startAt",
+    "occurrenceStart",
+    "date_from",
+    "from_at",
+    "start",
+    "date",
+    "event_date",
+    "start_day",
+    "day_key",
+    "date_key",
+    "scheduled_for",
+    "scheduled_at",
+  ]);
+}
+
+function socialCalendarResolveEventEnd(eventRow) {
+  const direct = socialCalendarFirstNonEmpty(eventRow, [
+    "end_at",
+    "occurrence_end",
+    "end_date",
+    "end_datetime",
+    "ends_at",
+    "endAt",
+    "occurrenceEnd",
+    "date_to",
+    "to_at",
+    "end",
+    "finish_at",
+  ]);
+  if (direct) return direct;
+  return socialCalendarNestedFirstNonEmpty(eventRow, ["payload", "event", "source"], [
+    "end_at",
+    "occurrence_end",
+    "end_date",
+    "end_datetime",
+    "ends_at",
+    "endAt",
+    "occurrenceEnd",
+    "date_to",
+    "to_at",
+    "end",
+    "finish_at",
+  ]);
+}
+
+function socialCalendarResolveEventTitle(eventRow) {
+  const direct = socialCalendarFirstNonEmpty(eventRow, [
+    "title",
+    "event_title",
+    "name",
+    "summary",
+    "subject",
+    "text",
+    "label",
+  ]);
+  if (direct) return direct;
+  return socialCalendarNestedFirstNonEmpty(eventRow, ["payload", "event", "source"], [
+    "title",
+    "event_title",
+    "name",
+    "summary",
+    "subject",
+    "text",
+    "label",
+  ]);
+}
+
+function socialCalendarResolveTaskDue(taskRow) {
+  const direct = socialCalendarFirstNonEmpty(taskRow, [
+    "due_date",
+    "due_at",
+    "due_datetime",
+    "deadline_at",
+    "deadline",
+    "end_at",
+    "due_on",
+    "planned_date",
+    "day_key",
+    "date_key",
+    "dueAt",
+    "deadlineAt",
+    "date",
+    "planned_at",
+  ]);
+  if (direct) return direct;
+  return socialCalendarNestedFirstNonEmpty(taskRow, ["payload", "task", "source"], [
+    "due_date",
+    "due_at",
+    "due_datetime",
+    "deadline_at",
+    "deadline",
+    "end_at",
+    "due_on",
+    "planned_date",
+    "day_key",
+    "date_key",
+    "dueAt",
+    "deadlineAt",
+    "date",
+    "planned_at",
+  ]);
+}
+
+function socialCalendarResolveTaskTitle(taskRow) {
+  return socialCalendarFirstNonEmpty(taskRow, [
+    "title",
+    "name",
+    "summary",
+    "subject",
+  ]);
+}
+
+function socialCalendarExtractRows(raw) {
+  if (Array.isArray(raw)) return raw.filter((row) => row && typeof row === "object");
+  if (!raw || typeof raw !== "object") return [];
+  const queue = [raw];
+  const visited = new Set();
+  const keysPriority = ["rows", "events", "items", "data", "result", "list", "records"];
+  while (queue.length) {
+    const node = queue.shift();
+    if (!node || typeof node !== "object") continue;
+    if (visited.has(node)) continue;
+    visited.add(node);
+    for (const key of keysPriority) {
+      const value = node[key];
+      if (Array.isArray(value)) {
+        const rows = value.filter((row) => row && typeof row === "object");
+        if (rows.length) return rows;
+      }
+    }
+    const nestedArray = Object.values(node).find((value) => Array.isArray(value) && value.some((row) => row && typeof row === "object"));
+    if (Array.isArray(nestedArray)) {
+      return nestedArray.filter((row) => row && typeof row === "object");
+    }
+    Object.values(node).forEach((value) => {
+      if (value && typeof value === "object" && !Array.isArray(value)) queue.push(value);
+    });
+  }
+  return [];
+}
+
+function socialCalendarNormalizeRecurrenceKind(kindRaw) {
+  const kind = String(kindRaw || "none").trim().toLowerCase();
+  if (!kind || kind === "none" || kind === "never" || kind === "off" || kind === "no") return "none";
+  if (["day", "daily", "each_day", "every_day", "days"].includes(kind)) return "day";
+  if (["week", "weekly", "each_week", "every_week", "weeks"].includes(kind)) return "week";
+  if (["month", "monthly", "each_month", "every_month", "months"].includes(kind)) return "month";
+  if (["year", "yearly", "annual", "annually", "each_year", "every_year", "years"].includes(kind)) return "year";
+  return ["none", "day", "week", "month", "year"].includes(kind) ? kind : "none";
+}
+
+function socialCalendarNormalizeRecurrenceInterval(intervalRaw) {
+  const value = Math.round(Number(intervalRaw || 1));
+  if (!Number.isFinite(value)) return 1;
+  return Math.max(1, Math.min(365, value));
+}
+
+function socialCalendarAdvanceOccurrence(startAt, kindRaw, intervalRaw, indexRaw) {
+  const safeStart = socialCalendarParseDate(startAt);
+  if (!safeStart) return null;
+  const kind = socialCalendarNormalizeRecurrenceKind(kindRaw);
+  const interval = socialCalendarNormalizeRecurrenceInterval(intervalRaw);
+  const index = Math.max(0, Math.round(Number(indexRaw || 0)));
+  if (!index || kind === "none") return safeStart;
+  const out = new Date(safeStart.getTime());
+  if (kind === "day") out.setDate(out.getDate() + index * interval);
+  if (kind === "week") out.setDate(out.getDate() + index * interval * 7);
+  if (kind === "month") out.setMonth(out.getMonth() + index * interval);
+  if (kind === "year") out.setFullYear(out.getFullYear() + index * interval);
+  return out;
+}
+
+function socialCalendarDateToLocalIso(value) {
+  const dt = socialCalendarParseDate(value);
+  if (!dt) return "";
+  return `${dt.getFullYear()}-${socialCalendarPad(dt.getMonth() + 1)}-${socialCalendarPad(dt.getDate())}T${socialCalendarPad(dt.getHours())}:${socialCalendarPad(dt.getMinutes())}:${socialCalendarPad(dt.getSeconds())}`;
+}
+
+function socialCalendarProjectRowsForMonth(rows, baseDate) {
+  const dt = socialCalendarParseDate(baseDate) || new Date();
+  const monthStart = new Date(dt.getFullYear(), dt.getMonth(), 1, 0, 0, 0, 0);
+  const monthEnd = new Date(dt.getFullYear(), dt.getMonth() + 1, 0, 23, 59, 59, 999);
+  const monthPrefix = `${dt.getFullYear()}-${socialCalendarPad(dt.getMonth() + 1)}-`;
+  const projected = [];
+  const sourceRows = Array.isArray(rows) ? rows : [];
+  sourceRows.forEach((row) => {
+    if (!row || typeof row !== "object") return;
+    const startRaw = socialCalendarResolveEventStart(row);
+    const startAt = socialCalendarParseDate(startRaw);
+    if (!startAt) return;
+    const key = socialCalendarDayKey(startAt);
+    if (key.startsWith(monthPrefix)) {
+      projected.push(row);
+      return;
+    }
+    const recurrenceKind = socialCalendarNormalizeRecurrenceKind(
+      socialCalendarFirstNonEmpty(row, ["recurrence_kind", "repeat_kind", "repeat"])
+    );
+    if (recurrenceKind === "none") return;
+    const recurrenceInterval = socialCalendarNormalizeRecurrenceInterval(
+      socialCalendarFirstNonEmpty(row, ["recurrence_interval", "repeat_every", "repeat_interval"]) || 1
+    );
+    const endAt = socialCalendarParseDate(socialCalendarResolveEventEnd(row));
+    const durationMs = endAt ? Math.max(0, endAt.getTime() - startAt.getTime()) : 0;
+    for (let index = 1; index <= 480; index += 1) {
+      const occurrenceStart = socialCalendarAdvanceOccurrence(startAt, recurrenceKind, recurrenceInterval, index);
+      if (!(occurrenceStart instanceof Date) || Number.isNaN(occurrenceStart.getTime())) break;
+      if (occurrenceStart > monthEnd) break;
+      if (occurrenceStart < monthStart) continue;
+      const occurrenceEnd = durationMs > 0 ? new Date(occurrenceStart.getTime() + durationMs) : null;
+      projected.push({
+        ...row,
+        occurrence_index: Number(index || 0),
+        occurrence_start: socialCalendarDateToLocalIso(occurrenceStart),
+        occurrence_end: occurrenceEnd ? socialCalendarDateToLocalIso(occurrenceEnd) : "",
+      });
+    }
+  });
+  return projected;
+}
+
+function socialCalendarFilterRowsByMonth(rows, baseDate) {
+  const projected = socialCalendarProjectRowsForMonth(rows, baseDate);
+  if (projected.length) return projected;
+  const dt = socialCalendarParseDate(baseDate) || new Date();
+  const monthPrefix = `${dt.getFullYear()}-${socialCalendarPad(dt.getMonth() + 1)}-`;
+  return (Array.isArray(rows) ? rows : []).filter((row) => {
+    const key = socialCalendarDayKey(socialCalendarResolveEventStart(row));
+    return key.startsWith(monthPrefix);
+  });
+}
+
 function socialCalendarSourceLabel(value) {
   const code = String(value || "").trim().toLowerCase();
   if (code === "ics_url") return "ICS URL";
@@ -495,7 +867,7 @@ function socialRenderCalendarStatusMeta(status) {
   const node = document.getElementById("socialCalendarGoogleMeta");
   if (!node) return;
   if (!status || typeof status !== "object") {
-    node.innerHTML = `<div class="hint">${escapeHtml(tr("Статус синхронизации появится после первой проверки.", "Sync status appears after the first check."))}</div>`;
+    node.innerHTML = `<div class="hint">${escapeHtml(tr("Статус синхронизации появится после первого запуска.", "Sync status appears after the first check."))}</div>`;
     return;
   }
   const rows = [];
@@ -518,12 +890,134 @@ function socialRenderCalendarStatusMeta(status) {
     </div>
   `).join("");
 }
+function socialDecodeUiText(value) {
+  const raw = String(value == null ? "" : value);
+  if (!raw) return "";
+  let out = raw;
+  for (let i = 0; i < 4; i += 1) {
+    try {
+      if (typeof window.__repairMojibakeText === "function") {
+        out = String(window.__repairMojibakeText(out) || out);
+      }
+    } catch (_) {}
+    try {
+      if (typeof window.decodePossiblyMojibake === "function") {
+        out = String(window.decodePossiblyMojibake(out) || out);
+      }
+    } catch (_) {}
+    out = out
+      .replace(/([\u0420\u0421\u0412\u00d0\u00d1])\u00A0(?=[\u0420\u0421\u0412\u00d0\u00d1\u0400-\u04ffA-Za-z0-9])/g, "$1")
+      .replace(/(?:\b[\u0420\u0421\u0412\u00d0\u00d1]\b(?:\s|\u00A0)+){3,}\b[\u0420\u0421\u0412\u00d0\u00d1]\b/g, (seq) => seq.replace(/[\s\u00A0]+/g, ""))
+      .replace(/(?:\b[\u0420\u0421\u0412\u00d0\u00d1]\b(?:\s|\u00A0)+){5,}/g, (seq) => seq.replace(/[\s\u00A0]+/g, ""))
+      .replace(/([\u0420\u0421\u0412\u00d0\u00d1])(?:\s|\u00A0)+(?=[\u0420\u0421\u0412\u00d0\u00d1])/g, "$1")
+      .replace(/([\u0420\u0421][^\s]{0,2})(?:\s|\u00A0)+(?=[\u0420\u0421][^\s]{0,2})/g, "$1")
+      .replace(/([\u00d0\u00d1][^\s]{0,2})(?:\s|\u00A0)+(?=[\u00d0\u00d1][^\s]{0,2})/g, "$1")
+      .replace(/[\u0000-\u001F\u007F-\u009F]+/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    const compact = out.replace(/([\u0420\u0421\u0412\u00d0\u00d1])\s+(?=[\u0420\u0421\u0412\u00d0\u00d1\u0400-\u04ffA-Za-z0-9])/g, "$1");
+    if (compact && compact !== out) {
+      out = compact;
+    }
+  }
+  try {
+    if (/[\u0420\u0421\u0412]\s+[\u0420\u0421\u0412]/.test(out) && typeof window.decodePossiblyMojibake === "function") {
+      out = String(window.decodePossiblyMojibake(out.replace(/[\u00A0\s]+/g, " ")) || out);
+    }
+  } catch (_) {}
+  try {
+    if ((out.match(/[\u0420\u0421\u0412\u00d0\u00d1]/g) || []).length >= 4 && typeof window.decodePossiblyMojibake === "function") {
+      const collapsed = out.replace(/([\u0420\u0421\u0412\u00d0\u00d1])\s+(?=[\u0420\u0421\u0412\u00d0\u00d1\u0400-\u04ffA-Za-z0-9])/g, "$1");
+      out = String(window.decodePossiblyMojibake(collapsed) || collapsed || out);
+    }
+  } catch (_) {}
+  try {
+    const markers = (out.match(/[\u0420\u0421\u0412\u00d0\u00d1]/g) || []).length;
+    if (markers >= 6) {
+      const squeezed = out
+        .replace(/([A-Za-z\u0400-\u04ff\u0420\u0421\u0412\u00d0\u00d1])(?:\s|\u00A0)+(?=[A-Za-z\u0400-\u04ff\u0420\u0421\u0412\u00d0\u00d1])/g, "$1");
+      if (squeezed && squeezed !== out) {
+        if (typeof window.decodePossiblyMojibake === "function") {
+          out = String(window.decodePossiblyMojibake(squeezed) || squeezed);
+        } else {
+          out = squeezed;
+        }
+      }
+    }
+  } catch (_) {}
+  try {
+    if (/(?:[\u0420\u0421\u0412\u00d0\u00d1]\s+){3,}/.test(out)) {
+      const compact = out.replace(
+        /([\u0420\u0421\u0412\u00d0\u00d1])(?:\s|\u00A0)+(?=[\u0420\u0421\u0412\u00d0\u00d1\u0400-\u04ffA-Za-z0-9])/g,
+        "$1"
+      );
+      if (compact && compact !== out) {
+        if (typeof window.decodePossiblyMojibake === "function") {
+          out = String(window.decodePossiblyMojibake(compact) || compact);
+        } else {
+          out = compact;
+        }
+      }
+    }
+  } catch (_) {}
+  out = out.replace(/[\u0000-\u001F\u007F-\u009F]+/g, " ").replace(/\s{2,}/g, " ").trim();
+  return out;
+}
+
+function socialNormalizeDecodedText(value) {
+  let out = socialDecodeUiText(value);
+  try {
+    if (typeof window.__repairMojibakeText === "function") {
+      out = String(window.__repairMojibakeText(out) || out);
+    }
+  } catch (_) {}
+  try {
+    const markerCount = (String(out || "").match(/[\u0420\u0421\u0412\u00d0\u00d1]/g) || []).length;
+    if (markerCount >= 4) {
+      let compact = String(out || "")
+        .replace(/([\u0420\u0421\u0412\u00d0\u00d1])(?:\s|\u00A0)+(?=[\u0420\u0421\u0412\u00d0\u00d1\u0400-\u04ffA-Za-z0-9])/g, "$1")
+        .replace(/(?:\b[\u0420\u0421\u0412\u00d0\u00d1]\b(?:\s|\u00A0)+){3,}\b[\u0420\u0421\u0412\u00d0\u00d1]\b/g, (seq) => seq.replace(/[\s\u00A0]+/g, ""));
+      compact = compact.replace(/([\u0420\u0421\u0412\u00d0\u00d1])\s+(?=[\u0420\u0421\u0412\u00d0\u00d1])/g, "$1");
+      if (compact && compact !== out) {
+        if (typeof window.decodePossiblyMojibake === "function") {
+          out = String(window.decodePossiblyMojibake(compact) || compact);
+        } else {
+          out = compact;
+        }
+      }
+    }
+  } catch (_) {}
+  return String(out || "")
+    .replace(/[\u0000-\u001F\u007F-\u009F]+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function socialResolveNotificationText(row) {
+  const source = row && typeof row === "object" ? row : {};
+  const payload = source.payload && typeof source.payload === "object" ? source.payload : {};
+  const rawTitle = source.title || source.subject || source.kind_label || tr("\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u0435", "Notification");
+  const rawBody = source.body || source.text || source.preview || source.message || payload.body || payload.text || payload.message || "";
+  return {
+    title: socialNormalizeDecodedText(rawTitle),
+    body: socialNormalizeDecodedText(rawBody),
+  };
+}
+
 function socialShowToast(title, body) {
+  const suppressToasts = window.__socialDisableNotificationToasts === true
+    || socialIsMobileClientShell()
+    || socialIsMobileApkShell()
+    || socialIsAppShellLike()
+    || (window.innerWidth || 0) <= 980;
+  if (suppressToasts) return;
   const host = document.getElementById("socialToastHost");
   if (!host) return;
   const item = document.createElement("div");
+  const safeTitle = socialDecodeUiText(title);
+  const safeBody = socialDecodeUiText(body);
   item.className = "social-toast";
-  item.innerHTML = `<strong>${escapeHtml(String(title || ""))}</strong><div>${escapeHtml(String(body || ""))}</div>`;
+  item.innerHTML = `<strong>${escapeHtml(String(safeTitle || ""))}</strong><div>${escapeHtml(String(safeBody || ""))}</div>`;
   host.appendChild(item);
   setTimeout(() => item.classList.add("show"), 20);
   setTimeout(() => {
@@ -621,23 +1115,15 @@ function socialOpenNotificationTarget(row) {
   if (!row || typeof row !== "object") return;
   const kind = String(row.kind || "").trim().toLowerCase();
   const payload = row.payload && typeof row.payload === "object" ? row.payload : {};
-
-  if (kind.startsWith("chat_")) {
-    currentSocialSubtab = "chat";
-    const socialBtn = document.querySelector(".nav-btn[data-tab='social']");
-    if (typeof showTab === "function") showTab("social", socialBtn || null);
-    const openThread = () => {
-      if (typeof switchSocialSubtab === "function") switchSocialSubtab("chat", true);
-      const threadId = Number(payload.thread_id || 0);
-      if (threadId && typeof socialSelectThread === "function") {
-        setTimeout(() => socialSelectThread(threadId), 180);
-      }
-    };
-    setTimeout(openThread, 120);
+  if (kind === "chat_message" || kind === "chat_reaction") {
+    if (typeof openSocialChatFromBell === "function") openSocialChatFromBell();
+    const threadId = Number(payload.thread_id || 0);
+    if (threadId && typeof socialSelectThread === "function") {
+      setTimeout(() => socialSelectThread(threadId), 180);
+    }
     return;
   }
-
-  if (kind.startsWith("task_")) {
+  if (kind === "task_reminder") {
     currentSocialSubtab = "tasks";
     const socialBtn = document.querySelector(".nav-btn[data-tab='social']");
     if (typeof showTab === "function") showTab("social", socialBtn || null);
@@ -646,8 +1132,7 @@ function socialOpenNotificationTarget(row) {
     }, 140);
     return;
   }
-
-  if (kind.startsWith("calendar_")) {
+  if (kind === "calendar_reminder") {
     currentSocialSubtab = "calendar";
     const socialBtn = document.querySelector(".nav-btn[data-tab='social']");
     if (typeof showTab === "function") showTab("social", socialBtn || null);
@@ -656,7 +1141,6 @@ function socialOpenNotificationTarget(row) {
     }, 140);
     return;
   }
-
   if (kind === "announcement") {
     socialOpenAnnouncementModal({
       id: Number(payload.announcement_id || 0),
@@ -671,13 +1155,7 @@ async function socialMarkNotificationsReadAll(syncLocal = true) {
   socialState.markReadInFlight = true;
   if (syncLocal) {
     socialState.unreadCount = 0;
-    if (Array.isArray(socialState.notificationsFeed)) {
-      socialState.notificationsFeed = socialState.notificationsFeed.map((row) => ({ ...row, is_read: true }));
-    }
     socialSetBell(0);
-    if (typeof socialRenderNotificationCenter === "function") {
-      try { socialRenderNotificationCenter(); } catch (_) {}
-    }
     socialWriteSharedPollState({
       unread: 0,
       last_notification_id: Number(socialState.lastNotificationId || 0),
@@ -696,13 +1174,122 @@ async function socialMarkNotificationsReadAll(syncLocal = true) {
   }
 }
 
+function socialRenderNotificationCenter(rows = null) {
+  let center = document.getElementById("socialNotificationCenter");
+  if (!center) {
+    center = document.createElement("section");
+    center.id = "socialNotificationCenter";
+    center.className = "social-notif-center social-notification-center hidden";
+    document.body.appendChild(center);
+  } else if (center.parentElement !== document.body) {
+    document.body.appendChild(center);
+  }
+  const sourceRows = Array.isArray(rows) ? rows : (Array.isArray(socialState.notificationRows) ? socialState.notificationRows : []);
+  const items = sourceRows.map((row) => {
+    const safe = socialResolveNotificationText(row);
+    const id = Number(row?.id || 0);
+    const stamp = String(row?.created_at || "").replace("T", " ").slice(0, 16);
+    return `
+      <article class="social-notif-item" data-notif-id="${id}">
+        <div class="social-notif-item-head">
+          <b>${escapeHtml(safe.title || tr("\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u0435", "Notification"))}</b>
+          <small>${escapeHtml(stamp || "-")}</small>
+        </div>
+        <p>${escapeHtml(safe.body || tr("\u0411\u0435\u0437 \u0442\u0435\u043a\u0441\u0442\u0430", "No text"))}</p>
+      </article>
+    `;
+  }).join("");
+  center.innerHTML = `
+    <header class="social-notif-head">
+      <strong>${escapeHtml(tr("\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f", "Notifications"))}</strong>
+      <div class="social-notif-head-actions">
+        <button type="button" class="btn-secondary" onclick="socialMarkNotificationsReadAll(true); socialToggleNotificationCenter(false);">${escapeHtml(tr("\u041f\u0440\u043e\u0447\u0438\u0442\u0430\u0442\u044c \u0432\u0441\u0435", "Mark all read"))}</button>
+        <button type="button" class="btn-secondary" onclick="socialToggleNotificationCenter(false)">&times;</button>
+      </div>
+    </header>
+    <div class="social-notif-list">${items || `<div class="hint">${escapeHtml(tr("\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u0439 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.", "No notifications yet."))}</div>`}</div>
+  `;
+  socialEnsureNotificationCenterLayout(center);
+  const shouldOpen = Boolean(socialState.notificationCenterOpen);
+  center.classList.toggle("hidden", !shouldOpen);
+  center.style.display = shouldOpen ? "flex" : "none";
+  return center;
+}
+
+function socialEnsureNotificationCenterLayout(centerNode = null) {
+  const center = centerNode || document.getElementById("socialNotificationCenter");
+  if (!center) return null;
+  if (center.parentElement !== document.body) {
+    document.body.appendChild(center);
+  }
+  const mobile = (window.innerWidth || 0) <= 980;
+  center.classList.add("social-notif-center", "social-notification-center");
+  center.style.setProperty("position", "fixed", "important");
+  center.style.setProperty("z-index", "2147483000", "important");
+  center.style.setProperty("bottom", "auto", "important");
+  center.style.setProperty("transform", "none", "important");
+  center.style.setProperty("visibility", "visible", "important");
+  center.style.setProperty("pointer-events", "auto", "important");
+  center.style.setProperty("overflow-y", "auto", "important");
+  if (mobile) {
+    center.style.setProperty("top", "84px", "important");
+    center.style.setProperty("left", "8px", "important");
+    center.style.setProperty("right", "8px", "important");
+    center.style.setProperty("width", "auto", "important");
+    center.style.setProperty("max-height", "calc(100vh - 96px)", "important");
+  } else {
+    center.style.setProperty("top", "72px", "important");
+    center.style.setProperty("right", "12px", "important");
+    center.style.setProperty("left", "auto", "important");
+    center.style.setProperty("width", "min(420px, calc(100vw - 24px))", "important");
+    center.style.setProperty("max-height", "calc(100vh - 84px)", "important");
+  }
+  return center;
+}
+
+async function socialLoadNotificationCenterRows() {
+  const data = await socialRequest(`/api/social/notifications?since_id=0&limit=40`).catch(() => null);
+  const rows = Array.isArray(data?.rows) ? data.rows : [];
+  socialState.notificationRows = rows;
+  const unread = Number(data?.unread || socialState.unreadCount || 0);
+  socialState.unreadCount = Number.isFinite(unread) ? Math.max(0, unread) : 0;
+  socialSetBell(socialState.unreadCount);
+  return rows;
+}
+
+async function socialToggleNotificationCenter(forceOpen = null) {
+  const center = socialRenderNotificationCenter();
+  socialEnsureNotificationCenterLayout(center);
+  const open = typeof forceOpen === "boolean"
+    ? forceOpen
+    : !Boolean(socialState.notificationCenterOpen);
+  if (open) {
+    const rows = await socialLoadNotificationCenterRows();
+    const renderedCenter = socialRenderNotificationCenter(rows);
+    socialState.notificationCenterOpen = true;
+    const activeCenter = renderedCenter || center;
+    activeCenter.classList.remove("hidden");
+    activeCenter.style.display = "flex";
+    socialEnsureNotificationCenterLayout(activeCenter);
+    return true;
+  }
+  socialState.notificationCenterOpen = false;
+  center.classList.add("hidden");
+  center.style.display = "none";
+  return false;
+}
+
+function socialCloseNotificationCenter() {
+  return socialToggleNotificationCenter(false);
+}
+
 function socialOpenAnnouncementModal(row) {
   if (!row || typeof row !== "object") return;
   const annId = Number(row.id || 0);
   if (!annId || socialState.announcementModalId === annId) return;
   socialState.announcementModalId = annId;
-  const title = String(row.title || tr("Объявление", "Announcement")).trim();
-  const body = String(row.body || "").trim();
+  const title = socialDecodeUiText(String(row.title || tr("Объявление", "Announcement")).trim());
+  const body = socialDecodeUiText(String(row.body || "").trim());
   socialOpenModal(
     title || tr("Объявление", "Announcement"),
     `
@@ -761,9 +1348,8 @@ function socialNotifyDesktop(row) {
   if (kindGroup === "chat" && cfg.chat_enabled === false) return;
   if (kindGroup === "task" && cfg.task_enabled === false) return;
   if (kindGroup === "calendar" && cfg.calendar_enabled === false) return;
-  const text = socialResolveNotificationText(row);
-  const title = String(text.title || tr("Уведомление", "Notification")).trim();
-  const body = String(text.body || "").trim();
+  const title = socialDecodeUiText(String(row.title || tr("Уведомление", "Notification")).trim());
+  const body = socialDecodeUiText(String(row.body || "").trim());
   if (!title && !body) return;
   try {
     const n = new Notification(title || tr("Уведомление", "Notification"), {
@@ -794,262 +1380,28 @@ function socialSetBell(unread) {
   const drawerBadge = document.getElementById("mobileDrawerBellBadge");
   const buttons = [topBtn, drawerBtn].filter(Boolean);
   const badges = [topBadge, drawerBadge].filter(Boolean);
-  if (!buttons.length || !badges.length) return;
+  if (!buttons.length) return;
   const canUse = !modulesLoaded || (enabledModules instanceof Set && enabledModules.has("social_hub"));
   buttons.forEach((btn) => btn.classList.toggle("hidden", !canUse));
+  buttons.forEach((btn) => {
+    if (!btn || btn.dataset?.notifBound === "1") return;
+    if (btn.dataset) btn.dataset.notifBound = "1";
+    btn.addEventListener("click", (event) => {
+      if (event?.preventDefault) event.preventDefault();
+      if (event?.stopPropagation) event.stopPropagation();
+      if (event?.stopImmediatePropagation) event.stopImmediatePropagation();
+      socialToggleNotificationCenter().catch(() => null);
+      return false;
+    }, true);
+  });
   if (!canUse) return;
   const value = Math.max(0, Number(unread || 0));
-  badges.forEach((badge) => {
-    badge.classList.toggle("hidden", value <= 0);
-    badge.textContent = value > 99 ? "99+" : String(value);
-  });
-}
-
-function socialNotificationKindTitle(kind) {
-  const code = String(kind || "").trim().toLowerCase();
-  if (code.startsWith("chat_")) return tr("Чат", "Chat");
-  if (code.startsWith("task_")) return tr("Задачи", "Tasks");
-  if (code.startsWith("calendar_")) return tr("Календарь", "Calendar");
-  return tr("Система", "System");
-}
-
-function socialNotificationKindClass(kind) {
-  const code = String(kind || "").trim().toLowerCase();
-  if (code.startsWith("chat_")) return "chat";
-  if (code.startsWith("task_")) return "task";
-  if (code.startsWith("calendar_")) return "calendar";
-  return "system";
-}
-
-function socialNotificationDecodeText(value) {
-  const raw = String(value || "");
-  if (typeof decodePossiblyMojibake === "function") {
-    try { return decodePossiblyMojibake(raw); } catch (_) {}
+  if (badges.length) {
+    badges.forEach((badge) => {
+      badge.classList.toggle("hidden", value <= 0);
+      badge.textContent = value > 99 ? "99+" : String(value);
+    });
   }
-  return raw;
-}
-
-function socialResolveNotificationText(row) {
-  const safeRow = row && typeof row === "object" ? row : {};
-  const payload = safeRow.payload && typeof safeRow.payload === "object" ? safeRow.payload : {};
-  const key = String(payload.i18n_key || "").trim().toLowerCase();
-  const params = payload.i18n_params && typeof payload.i18n_params === "object" ? payload.i18n_params : {};
-  const actorNick = String(params.actor_nick || "").trim();
-  const assigneeNick = String(params.assignee_nick || "").trim();
-  const taskTitle = String(params.task_title || params.title || "").trim();
-  const dueText = String(params.due_text || "").trim();
-
-  if (key === "task_assigned") {
-    const title = tr("Новая задача", "New task");
-    const body = [actorNick, taskTitle].filter(Boolean).join(": ") || taskTitle || tr("Вам назначена задача", "A task was assigned");
-    return { title, body };
-  }
-  if (key === "task_done") {
-    const title = tr("Задача выполнена", "Task completed");
-    const body = [actorNick, taskTitle].filter(Boolean).join(": ") || taskTitle || tr("Задача отмечена выполненной", "Task was marked done");
-    return { title, body };
-  }
-  if (key === "task_overdue") {
-    const title = tr("Задача просрочена", "Task overdue");
-    const body = [taskTitle, assigneeNick ? `${tr("Исполнитель", "Assignee")}: ${assigneeNick}` : ""].filter(Boolean).join(" • ") || tr("Срок задачи истек", "Task deadline passed");
-    return { title, body };
-  }
-  if (key === "task_reminder_3h") {
-    const title = tr("Срок задачи скоро", "Task deadline soon");
-    const body = [taskTitle, dueText ? `${tr("Дедлайн", "Deadline")}: ${dueText}` : ""].filter(Boolean).join(" • ") || tr("До дедлайна осталось меньше 3 часов", "Less than 3 hours left");
-    return { title, body };
-  }
-
-  const title = socialNotificationDecodeText(safeRow.title || tr("Уведомление", "Notification")).replace(/\s+/g, " ").trim();
-  const body = socialNotificationDecodeText(safeRow.body || "").replace(/\s+/g, " ").trim();
-  return { title, body };
-}
-
-function socialEnsureNotificationCenter() {
-  let root = document.getElementById("socialNotificationCenter");
-  if (root) return root;
-  root = document.createElement("div");
-  root.id = "socialNotificationCenter";
-  root.className = "social-notif-center hidden";
-  root.innerHTML = `
-    <div class="social-notif-head">
-      <strong>${escapeHtml(tr("Уведомления", "Notifications"))}</strong>
-      <button type="button" class="btn-secondary" onclick="socialCloseNotificationCenter()">✕</button>
-    </div>
-    <div id="socialNotificationCenterList" class="social-notif-list"></div>
-  `;
-  document.body.appendChild(root);
-
-  const list = root.querySelector("#socialNotificationCenterList");
-  if (list) {
-    list.addEventListener("scroll", () => {
-      if (socialState.notificationCenterMarkOnScrollDone) return;
-      if (list.scrollTop > 4) {
-        socialState.notificationCenterMarkOnScrollDone = true;
-        socialMarkNotificationsReadAll(true).catch(() => null);
-      }
-    }, { passive: true });
-  }
-
-  document.addEventListener("click", (event) => {
-    if (!socialState.notificationCenterOpen) return;
-    const panel = document.getElementById("socialNotificationCenter");
-    if (!panel) return;
-    const bell = document.getElementById("socialBellBtn");
-    const drawerBell = document.getElementById("mobileDrawerBellBtn");
-    const target = event.target;
-    if (panel.contains(target)) return;
-    if (bell && bell.contains(target)) return;
-    if (drawerBell && drawerBell.contains(target)) return;
-    if (target?.closest?.("#socialBellBtn, #mobileDrawerBellBtn, .icon-bell-btn")) return;
-    socialCloseNotificationCenter();
-  }, true);
-
-  return root;
-}
-
-function socialRenderNotificationCenter() {
-  const root = socialEnsureNotificationCenter();
-  const list = root.querySelector("#socialNotificationCenterList");
-  if (!list) return;
-  const rows = Array.isArray(socialState.notificationsFeed) ? [...socialState.notificationsFeed] : [];
-  rows.sort((a, b) => Number(b?.id || 0) - Number(a?.id || 0));
-  if (!rows.length) {
-    list.innerHTML = `<div class="hint">${escapeHtml(tr("Пока нет уведомлений", "No notifications yet"))}</div>`;
-    return;
-  }
-  list.innerHTML = rows.map((row) => {
-    const id = Number(row?.id || 0);
-    const kindClass = socialNotificationKindClass(row?.kind || "");
-    const isRead = Boolean(row?.is_read);
-    const text = socialResolveNotificationText(row);
-    const created = socialFormatTaskDateTime(row?.created_at) || String(row?.created_at || "").replace("T", " ").slice(0, 16);
-    return `
-      <button type="button" class="social-notif-item ${isRead ? "is-read" : "is-unread"} kind-${escapeHtml(kindClass)}" onclick="socialOpenNotificationFromCenter(${id})">
-        <div class="social-notif-item-head">
-          <span class="social-notif-kind">${escapeHtml(socialNotificationKindTitle(row?.kind || ""))}</span>
-          <small>${escapeHtml(created || "")}</small>
-        </div>
-        <b>${escapeHtml(text.title || tr("Уведомление", "Notification"))}</b>
-        <p>${escapeHtml(text.body || "-")}</p>
-      </button>
-    `;
-  }).join("");
-}
-
-function socialCloseNotificationCenter(silent = false) {
-  const root = document.getElementById("socialNotificationCenter");
-  if (!root || root.classList.contains("hidden")) return false;
-  root.classList.add("hidden");
-  root.classList.remove("mobile-open");
-  socialState.notificationCenterOpen = false;
-  socialState.notificationCenterAnchorId = "";
-  if (!silent && socialState.notificationCenterMarkOnScrollDone) {
-    socialState.notificationCenterMarkOnScrollDone = false;
-  }
-  return true;
-}
-
-async function socialLoadNotificationCenterFeed(force = false) {
-  if (!force && Array.isArray(socialState.notificationsFeed) && socialState.notificationsFeed.length) {
-    return socialState.notificationsFeed;
-  }
-  if (socialState.notificationCenterLoading) return socialState.notificationsFeed || [];
-  socialState.notificationCenterLoading = true;
-  try {
-    const data = await socialRequest('/api/social/notifications?limit=80').catch(() => null);
-    const rows = Array.isArray(data?.rows) ? data.rows : [];
-    socialState.notificationsFeed = rows.map((row) => ({
-      ...row,
-      title: socialNotificationDecodeText(row?.title || ""),
-      body: socialNotificationDecodeText(row?.body || ""),
-      is_read: Boolean(row?.is_read),
-    }));
-    socialState.unreadCount = Number(data?.unread || 0);
-    socialSetBell(socialState.unreadCount);
-    return socialState.notificationsFeed;
-  } finally {
-    socialState.notificationCenterLoading = false;
-  }
-}
-
-async function socialToggleNotificationCenter(event = null) {
-  if (event?.preventDefault) event.preventDefault();
-  if (event?.stopPropagation) event.stopPropagation();
-  const root = socialEnsureNotificationCenter();
-  if (!root) return false;
-
-  if (socialState.notificationCenterOpen) {
-    socialCloseNotificationCenter();
-    return true;
-  }
-
-  const anchor = event?.currentTarget || event?.target?.closest?.('#socialBellBtn, #mobileDrawerBellBtn, .icon-bell-btn') || document.getElementById('socialBellBtn') || document.getElementById('mobileDrawerBellBtn');
-  await socialLoadNotificationCenterFeed(true);
-  socialRenderNotificationCenter();
-
-  const safeTop = 10 + Number(window.visualViewport?.offsetTop || 0);
-  const bodyClassMobile = Boolean(
-    document.body?.classList?.contains("mobile-client-mode")
-    || document.body?.classList?.contains("mobile-apk-mode")
-  );
-  const coarsePointer = (() => {
-    try { return Boolean(window.matchMedia && window.matchMedia("(pointer: coarse)").matches); } catch (_) { return false; }
-  })();
-  const uaMobile = (() => {
-    try { return /android|iphone|ipad|ipod|mobile/i.test(String(navigator?.userAgent || "")); } catch (_) { return false; }
-  })();
-  const viewportWidth = (window.innerWidth || document.documentElement.clientWidth || 0);
-  const isMobileShell = (typeof socialIsMobileClientShell === "function" && socialIsMobileClientShell())
-    || (typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell())
-    || bodyClassMobile
-    || (coarsePointer && viewportWidth <= 1280)
-    || (uaMobile && viewportWidth <= 1400)
-    || viewportWidth <= 980;
-  if (isMobileShell) {
-    const viewportHeight = Math.max(320, Math.round(window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 720));
-    const panelTop = Math.round(safeTop + 52);
-    root.classList.add("mobile-open");
-    root.style.left = "8px";
-    root.style.right = "8px";
-    root.style.width = "auto";
-    root.style.top = `${panelTop}px`;
-    root.style.maxHeight = `${Math.max(260, viewportHeight - panelTop - 12)}px`;
-  } else if (anchor?.getBoundingClientRect) {
-    root.classList.remove("mobile-open");
-    const rect = anchor.getBoundingClientRect();
-    const top = Math.max(safeTop, Number(rect.bottom || 0) + 8);
-    const right = Math.max(8, (window.innerWidth || document.documentElement.clientWidth || 0) - Number(rect.right || 0));
-    root.style.left = "auto";
-    root.style.right = `${Math.round(right)}px`;
-    root.style.width = "min(390px, calc(100vw - 20px))";
-    root.style.top = `${Math.round(top)}px`;
-  } else {
-    root.classList.remove("mobile-open");
-    root.style.left = "auto";
-    root.style.width = "min(390px, calc(100vw - 20px))";
-    root.style.top = `${Math.round(safeTop + 56)}px`;
-    root.style.right = `12px`;
-  }
-
-  socialState.notificationCenterOpen = true;
-  socialState.notificationCenterMarkOnScrollDone = false;
-  root.classList.remove('hidden');
-  return true;
-}
-
-function socialOpenNotificationFromCenter(notificationId) {
-  const id = Number(notificationId || 0);
-  if (!id) return;
-  const rows = Array.isArray(socialState.notificationsFeed) ? socialState.notificationsFeed : [];
-  const row = rows.find((x) => Number(x?.id || 0) === id) || null;
-  if (!row) return;
-  row.is_read = true;
-  if (typeof socialOpenNotificationTarget === 'function') {
-    socialOpenNotificationTarget(row);
-  }
-  socialMarkNotificationsReadAll(true).catch(() => null);
-  socialCloseNotificationCenter();
 }
 
 function socialNowMs() {
@@ -1143,29 +1495,18 @@ async function socialPollNotifications() {
     socialState.unreadCount = Number(data.unread || 0);
     socialSetBell(socialState.unreadCount);
     const rows = Array.isArray(data.rows) ? data.rows : [];
-    const isBootstrapSync = Number(socialState.lastNotificationId || 0) <= 0;
-    if (!Array.isArray(socialState.notificationsFeed)) socialState.notificationsFeed = [];
-    for (const srcRow of rows) {
-      const row = {
-        ...srcRow,
-        title: socialNotificationDecodeText(srcRow?.title || ""),
-        body: socialNotificationDecodeText(srcRow?.body || ""),
-        is_read: Boolean(srcRow?.is_read),
-      };
-      const rowId = Number(row.id || 0);
-      if (rowId > 0) {
-        const idx = socialState.notificationsFeed.findIndex((x) => Number(x?.id || 0) === rowId);
-        if (idx >= 0) socialState.notificationsFeed[idx] = { ...socialState.notificationsFeed[idx], ...row };
-        else socialState.notificationsFeed.push(row);
-      }
-
+    for (const row of rows) {
       const id = Number(row.id || 0);
+      const resolvedText = socialResolveNotificationText(row);
       if (id > socialState.lastNotificationId) socialState.lastNotificationId = id;
       if (!id || socialState.toastsSeen.has(id)) continue;
       socialState.toastsSeen.add(id);
-      if (row.is_read || isBootstrapSync) continue;
-      const text = socialResolveNotificationText(row);
-      socialShowToast(text.title || tr("Уведомление", "Notification"), text.body || "");
+      const suppressToasts = window.__socialDisableNotificationToasts === true
+        || socialIsMobileClientShell()
+        || socialIsMobileApkShell();
+      if (!suppressToasts) {
+        socialShowToast(resolvedText.title || tr("\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u0435", "Notification"), resolvedText.body || "");
+      }
       const kindGroup = socialNotificationKindGroup(row.kind || "");
       socialPlayNotificationSound(kindGroup);
       const shouldDesktopNotify = document.hidden
@@ -1187,12 +1528,6 @@ async function socialPollNotifications() {
           body: row.body || "",
         });
       }
-    }
-    if (Array.isArray(socialState.notificationsFeed) && socialState.notificationsFeed.length > 200) {
-      socialState.notificationsFeed = socialState.notificationsFeed.slice(-200);
-    }
-    if (socialState.notificationCenterOpen) {
-      try { socialRenderNotificationCenter(); } catch (_) {}
     }
     socialWriteSharedPollState({
       unread: Number(socialState.unreadCount || 0),
@@ -1283,10 +1618,6 @@ function resetSocialState() {
     actors: [],
     projects: [],
     tasks: [],
-    tasksAll: [],
-    tasksCacheKey: "",
-    tasksCacheLoadedAt: 0,
-    tasksLoadSeq: 0,
     calendarEvents: [],
     calendarDate: new Date(),
     calendarSelectedDay: "",
@@ -1297,11 +1628,8 @@ function resetSocialState() {
     announcementsTimer: null,
     lastNotificationId: 0,
     unreadCount: 0,
-    notificationsFeed: [],
+    notificationRows: [],
     notificationCenterOpen: false,
-    notificationCenterLoading: false,
-    notificationCenterMarkOnScrollDone: false,
-    notificationCenterAnchorId: "",
     markReadInFlight: false,
     notificationSettings: null,
     announcementModalId: 0,
@@ -1398,6 +1726,9 @@ function switchSocialSubtab(tab, loadNow = true) {
     const btn = document.getElementById(`socialSubtab${key.charAt(0).toUpperCase()}${key.slice(1)}Btn`);
     if (btn) btn.classList.toggle("active", key === safe);
   });
+  if (typeof socialCloseNotificationCenter === "function") {
+    try { socialCloseNotificationCenter(); } catch (_) {}
+  }
   if (safe === "chat") socialEnsureChatListToolbar();
   socialSyncMobileChatChrome();
   socialApplyChatHeadCollapsed();
@@ -1428,7 +1759,24 @@ function switchSocialSubtab(tab, loadNow = true) {
     socialLoadTasks();
   }
   if (safe === "calendar") {
-    socialLoadCalendar();
+    try {
+      if (typeof window.socialEnsureCalendarNavigation === "function") window.socialEnsureCalendarNavigation();
+      if (typeof window.socialEnsureCalendarFab === "function") window.socialEnsureCalendarFab();
+    } catch (_) {}
+    Promise.resolve(socialLoadCalendar()).catch(() => {
+      try { socialRenderCalendar(); } catch (_) {}
+    }).finally(() => {
+      setTimeout(() => {
+        try {
+          if (typeof window.socialNormalizeCalendarChrome === "function") window.socialNormalizeCalendarChrome();
+          if (typeof window.socialEnsureCalendarFab === "function") window.socialEnsureCalendarFab();
+          const dayCount = document.querySelectorAll("#socialCalendarGrid .social-day[data-day-key]").length;
+          if (!dayCount && typeof window.socialRenderCalendar === "function") {
+            window.socialRenderCalendar();
+          }
+        } catch (_) {}
+      }, 60);
+    });
   }
   if (safe === "calculator") {
     socialRenderConverterOptions();
@@ -1528,7 +1876,7 @@ function socialOpenModal(title, html) {
   const host = document.getElementById("socialModalHost");
   const titleNode = document.getElementById("socialModalTitle");
   if (!modal || !host || !titleNode) return;
-  titleNode.textContent = title || tr("Социальный модуль", "Social module");
+    titleNode.textContent = title || tr("\u0421\u043e\u0446\u0438\u0430\u043b\u044c\u043d\u044b\u0439 \u043c\u043e\u0434\u0443\u043b\u044c", "Social module");
   host.innerHTML = html || "";
   modal.classList.remove("hidden");
 }
@@ -1559,14 +1907,14 @@ function socialRenderGames() {
     ];
   host.innerHTML = games.map((game) => {
     const icon = game.code === "snake"
-      ? "🐍"
+      ? "??"
       : (game.code === "tetris"
-        ? "🧩"
+        ? "??"
         : (game.code === "checkers"
-          ? "♟"
+          ? "в™џ"
           : (game.code === "chess"
-            ? "♜"
-            : (game.code === "battleship" ? "⚓" : "🔢"))));
+            ? "в™њ"
+            : (game.code === "battleship" ? "?" : "??"))));
     return `
       <button class="social-game-card" type="button" ondblclick="socialOpenGameMenu('${escapeHtml(game.code)}')" onclick="socialOpenGameMenu('${escapeHtml(game.code)}')">
         <span class="social-game-icon" aria-hidden="true">${icon}</span>
@@ -1605,7 +1953,7 @@ async function socialOpenGameMenu(gameCode) {
           ? tr("Шахматы", "Chess")
           : (code === "battleship" ? tr("Морской бой", "Battleship") : code))));
   const myBest = Number(lb?.my_best || 0);
-  const myRank = lb?.my_rank ? `#${lb.my_rank}` : "—";
+  const myRank = lb?.my_rank ? `#${lb.my_rank}` : "?";
   socialOpenModal(
     `${title}`,
     `
@@ -1613,7 +1961,7 @@ async function socialOpenGameMenu(gameCode) {
         <div class="social-game-record">${tr("Ваш рекорд", "Your best")}: <b>${myBest}</b> - ${tr("Место", "Rank")}: <b>${myRank}</b></div>
         <div class="actions">
           <button type="button" onclick="socialStartGame('${escapeHtml(code)}')">${tr("Игра", "Play")}</button>
-          <button class="btn-secondary" type="button" onclick="socialShowLeaderboard('${escapeHtml(code)}')">${tr("Рейтинг игроков", "Leaderboard")}</button>
+          <button class="btn-secondary" type="button" onclick="socialShowLeaderboard('${escapeHtml(code)}')">${tr("Таблица лидеров", "Leaderboard")}</button>
           <button class="btn-secondary" type="button" onclick="socialShowGameTips('${escapeHtml(code)}')">${tr("Как играть", "How to play")}</button>
         </div>
       </div>
@@ -1643,8 +1991,8 @@ function socialShowGameTips(code) {
   const body = safe === "snake"
     ? tr("Управление: стрелки. Ешьте еду, не врезайтесь в стену и в себя. Каждые 5 очков скорость растет.", "Controls: arrows. Eat food and avoid walls or your body. Speed increases every 5 points.")
     : (safe === "tetris"
-      ? tr("Управление: ← →, ↓, ↑ поворот, пробел — быстрый сброс. Собирайте линии и набирайте очки.", "Controls: ← →, ↓, ↑ rotate, Space hard drop. Complete lines to gain score.")
-      : tr("Управление: стрелки. Совмещайте одинаковые плитки, чтобы получить 2048. Ход завершает игру, когда нет доступных ходов.", "Controls: arrows. Merge equal tiles to reach 2048. Game ends when no moves are available."));
+      ? tr("Управление: < >, v, ^ вращение, пробел — быстрый спуск. Собирайте линии и набирайте очки.", "Controls: < >, v, ^ rotate, Space hard drop. Complete lines to gain score.")
+      : tr("Управление: стрелки. Объединяйте одинаковые плитки, чтобы получить 2048. Игра заканчивается, когда ходы недоступны.", "Controls: arrows. Merge equal tiles to reach 2048. Game ends when no moves are available."));
   socialOpenModal(title, `<div class="hint">${escapeHtml(body)}</div><div class="actions"><button type="button" onclick="socialOpenGameMenu('${escapeHtml(safe)}')">${tr("Назад", "Back")}</button></div>`);
 }
 
@@ -1682,7 +2030,7 @@ async function socialShowLeaderboard(code) {
     <div class="hint">${tr("Ваше место", "Your rank")}: <b>${data.my_rank ? `#${data.my_rank}` : "—"}</b> - ${tr("Ваш рекорд", "Your best")}: <b>${Number(data.my_best || 0)}</b></div>
     <div class="actions"><button type="button" onclick="socialOpenGameMenu('${escapeHtml(safe)}')">${tr("Назад", "Back")}</button></div>
   `;
-  socialOpenModal(tr("Рейтинг игроков", "Leaderboard"), html);
+  socialOpenModal(tr("Таблица лидеров", "Leaderboard"), html);
 }
 
 async function socialStoreGameScore(code, score) {
@@ -1700,9 +2048,9 @@ function socialGameOverlay(title, score, onRetry) {
   return `
     <div class="social-game-overlay">
       <h3>${escapeHtml(title)}</h3>
-      <div>${tr("Счет", "Score")}: <b>${Number(score || 0)}</b></div>
+      <div>${tr("Счёт", "Score")}: <b>${Number(score || 0)}</b></div>
       <div class="actions">
-        ${retryFn ? `<button type="button" onclick="${retryFn}">${tr("Еще раз", "Retry")}</button>` : ""}
+        ${retryFn ? `<button type="button" onclick="${retryFn}">${tr("Ещё раз", "Retry")}</button>` : ""}
         <button class="btn-secondary" type="button" onclick="socialOpenGameMenu('${escapeHtml(socialState.currentGameCode || "snake")}')">${tr("В меню", "Menu")}</button>
       </div>
     </div>
@@ -1738,9 +2086,9 @@ function socialGameControlsHtml(code) {
     return `
       <div class="social-game-controls">
         <button type="button" onclick="socialGameControl('up')">↑</button>
-        <button type="button" onclick="socialGameControl('left')">←</button>
-        <button type="button" onclick="socialGameControl('down')">↓</button>
-        <button type="button" onclick="socialGameControl('right')">→</button>
+        <button type="button" onclick="socialGameControl('left')"><</button>
+        <button type="button" onclick="socialGameControl('down')">v</button>
+        <button type="button" onclick="socialGameControl('right')">></button>
       </div>
     `;
   }
@@ -1748,18 +2096,18 @@ function socialGameControlsHtml(code) {
     return `
       <div class="social-game-controls">
         <button type="button" onclick="socialGameControl('up')">↑</button>
-        <button type="button" onclick="socialGameControl('left')">←</button>
-        <button type="button" onclick="socialGameControl('down')">↓</button>
-        <button type="button" onclick="socialGameControl('right')">→</button>
+        <button type="button" onclick="socialGameControl('left')"><</button>
+        <button type="button" onclick="socialGameControl('down')">v</button>
+        <button type="button" onclick="socialGameControl('right')">></button>
       </div>
     `;
   }
   if (safe === "tetris") {
     return `
       <div class="social-game-controls">
-        <button type="button" onclick="socialGameControl('left')">←</button>
-        <button type="button" onclick="socialGameControl('right')">→</button>
-        <button type="button" onclick="socialGameControl('down')">↓</button>
+        <button type="button" onclick="socialGameControl('left')"><</button>
+        <button type="button" onclick="socialGameControl('right')">></button>
+        <button type="button" onclick="socialGameControl('down')">v</button>
         <button type="button" onclick="socialGameControl('rotate')">${tr("Поворот", "Rotate")}</button>
         <button type="button" onclick="socialGameControl('drop')">${tr("Сброс", "Drop")}</button>
       </div>
@@ -1791,7 +2139,7 @@ function socialStartGame(code) {
     ? tr("Управление: стрелки, свайпы и тап по стороне от змейки. Ешьте еду и не врезайтесь.", "Controls: arrows, swipes, and tap around snake direction. Eat food and avoid collisions.")
     : (safe === "tetris"
       ? tr("Управление: ← →, ↓, ↑ поворот, пробел — быстрый сброс.", "Controls: ← →, ↓, ↑ rotate, Space hard drop.")
-      : tr("Управление: стрелки. Совмещайте одинаковые плитки.", "Controls: arrows. Merge equal tiles."));
+      : tr("Управление: стрелки. Объединяйте одинаковые плитки.", "Controls: arrows. Merge equal tiles."));
   const canvasSize = socialGameCanvasSize(safe);
   const controls = socialGameControlsHtml(safe);
   socialOpenModal(
@@ -1800,7 +2148,7 @@ function socialStartGame(code) {
       <div class="social-game-wrap">
         <div class="hint">${escapeHtml(hint)}</div>
         <canvas id="socialGameCanvas" width="${Number(canvasSize.width || 420)}" height="${Number(canvasSize.height || 620)}"></canvas>
-        <div id="socialGameInfo" class="hint">${tr("Счет", "Score")}: 0</div>
+        <div id="socialGameInfo" class="hint">${tr("Счёт", "Score")}: 0</div>
         ${controls}
       </div>
     `
@@ -1873,7 +2221,7 @@ function socialRunSnake() {
     ctx.globalAlpha = 1;
     ctx.fillStyle = "#ff6f91";
     ctx.fillRect(food.x * size + 2, food.y * size + 2, size - 4, size - 4);
-    info.textContent = `${tr("Счет", "Score")}: ${score}`;
+    info.textContent = `${tr("Счёт", "Score")}: ${score}`;
   }
 
   function stopGame(gameOver = false) {
@@ -2100,7 +2448,7 @@ function socialRunTetris() {
         });
       });
     }
-    info.textContent = `${tr("Счет", "Score")}: ${score}`;
+    info.textContent = `${tr("Счёт", "Score")}: ${score}`;
   }
 
   function gameOver() {
@@ -2320,7 +2668,7 @@ function socialRun2048() {
         drawCell(x, y, board[y][x]);
       }
     }
-    info.textContent = `${tr("Счет", "Score")}: ${score}`;
+    info.textContent = `${tr("Счёт", "Score")}: ${score}`;
   }
 
   function onKey(e) {
@@ -2839,7 +3187,7 @@ function socialApplyChatHeadCollapsed() {
     collapseBtn.textContent = collapsed ? "+" : "-";
     collapseBtn.title = collapsed
       ? tr("Развернуть шапку", "Expand header")
-      : tr("Свернуть шапку", "Collapse header");
+    : tr("\u0421\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u0448\u0430\u043f\u043a\u0443", "Collapse header");
   }
 }
 
@@ -2930,7 +3278,7 @@ function socialRenderThreads() {
   const rows = hasQuery
     ? socialState.chatThreads.filter((thread) => {
       const participants = Array.isArray(thread?.participants) ? thread.participants : [];
-      const lastText = String(thread?.last_message?.text || "");
+      const lastText = socialDecodeUiText(String(thread?.last_message?.text || ""));
       const hay = `${thread?.title || ""} ${thread?.kind || ""} ${lastText} ${participants.map((p) => p?.nick || "").join(" ")}`.toLowerCase();
       if (hay.includes(query)) return true;
       if (!messageMatchSet) return false;
@@ -2948,7 +3296,7 @@ function socialRenderThreads() {
     const threadId = Number(thread.id || 0);
     if (!threadId) continue;
     const unread = Number(thread.unread || 0);
-    const lastText = String(thread.last_message?.text || "");
+    const lastText = socialDecodeUiText(String(thread.last_message?.text || ""));
     const lastTime = socialFormatThreadTime(thread.last_message?.created_at || "");
     const display = socialThreadDisplay(thread);
     const active = threadId === Number(socialState.currentThreadId || 0);
@@ -3123,7 +3471,7 @@ function socialOpenChatActionsMenu() {
   const actions = [];
   actions.push(`
     <button type="button" class="btn-secondary" data-chat-action="toggle_header">
-      ${escapeHtml(collapsed ? tr("Развернуть шапку", "Expand header") : tr("Свернуть шапку", "Collapse header"))}
+          ${escapeHtml(collapsed ? tr("\u0420\u0430\u0437\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u0448\u0430\u043f\u043a\u0443", "Expand header") : tr("\u0421\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u0448\u0430\u043f\u043a\u0443", "Collapse header"))}
     </button>
   `);
   if (isTeamThread) {
@@ -3197,6 +3545,29 @@ function socialOpenChatActionsMenu() {
     });
   });
 }
+async function socialDeleteCurrentGroupThreadLegacyMojibake() {
+  const row = socialGetCurrentThread();
+  const threadId = Number(row?.id || 0);
+  if (!threadId || String(row?.kind || "") !== "group") return;
+  const title = String(row?.title || tr("СЌС‚Сѓ РіСЂСѓРїРїСѓ", "this group")).trim();
+  const ok = confirm(tr(`Удалить группу "${title}"? Это действие необратимо.`, `Delete group "${title}"? This action cannot be undone.`));
+  if (!ok) return;
+  const result = await socialRequest(`/api/social/chat/groups/${threadId}`, {
+    method: "DELETE",
+    retryOnPost: false,
+    maxRetries: 0,
+  }).catch((e) => {
+    alert(e?.message || tr("Не удалось удалить группу", "Failed to delete group"));
+    return null;
+  });
+  if (!result) return;
+  socialCloseThread({ keepAutoSelect: false });
+  await socialLoadThreads({ silent: true });
+  if (typeof socialShowToast === "function") {
+    socialShowToast(tr("Группа удалена", "Group deleted"), tr("Чат удален из списка.", "The chat was removed from the list."));
+  }
+}
+
 async function socialDeleteCurrentGroupThread() {
   const row = socialGetCurrentThread();
   const threadId = Number(row?.id || 0);
@@ -3340,7 +3711,7 @@ function socialOpenGroupParticipants() {
     const online = socialIsParticipantOnline(p);
     const state = online
       ? tr("онлайн", "online now")
-      : (socialFormatLastSeen(p?.last_seen_at || "") || tr("нет данных", "unknown"));
+      : (socialFormatLastSeen(p?.last_seen_at || "") || tr("РЅРµС‚ РґР°РЅРЅС‹С…", "unknown"));
     return `
       <button type="button" class="social-participant-row" data-social-profile-actor="${escapeHtml(actorKey)}">
         <span class="social-participant-avatar">${socialAvatarMarkup(p?.avatar_url || "", nick, "xs")}</span>
@@ -3369,7 +3740,7 @@ function socialOpenGroupParticipants() {
     `
       ${actionsHtml}
       <div class="social-participant-list">
-        ${listHtml || `<div class="hint">${escapeHtml(tr("Список участников пуст.", "No participants yet."))}</div>`}
+            ${listHtml || `<div class="hint">${escapeHtml(tr("\u0423\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u043e\u0432 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.", "No participants yet."))}</div>`}
       </div>
     `
   );
@@ -3625,9 +3996,6 @@ function socialHandleMobileBack() {
     socialCloseImageViewer();
     return true;
   }
-  if (typeof socialCloseNotificationCenter === "function" && socialCloseNotificationCenter(true)) {
-    return true;
-  }
   const menu = document.getElementById("socialChatContextMenu");
   if (menu && !menu.classList.contains("hidden")) {
     socialCloseMessageContext();
@@ -3636,11 +4004,6 @@ function socialHandleMobileBack() {
   const picker = document.getElementById("socialEmojiPicker");
   if (picker && !picker.classList.contains("hidden")) {
     socialToggleEmojiPicker(false);
-    return true;
-  }
-  const modal = document.getElementById("socialModal");
-  if (modal && !modal.classList.contains("hidden")) {
-    socialCloseModal();
     return true;
   }
   if (Number(socialState.chatReplyTo?.id || 0) > 0) {
@@ -3667,7 +4030,7 @@ function socialOpenMessageContext(messageId, event) {
   const fallbackY = Number(event?.clientY || 0) || Number(rect?.top || 0) + Math.max(18, Math.min(30, Number(rect?.height || 0) * 0.45));
   socialState.chatContextX = fallbackX;
   socialState.chatContextY = fallbackY;
-  const quick = ["👍", "🔥", "❤️", "😂", "🙏", "✅"];
+  const quick = ["??", "??", "??", "??", "??", "?"];
   menu.innerHTML = `
     <button type="button" class="social-chat-context-btn" onclick="socialContextReply()">${tr("Ответить", "Reply")}</button>
     <div class="social-chat-context-reactions">
@@ -3755,7 +4118,7 @@ function socialMessageAttachmentsHtml(message) {
     if (isImage) {
       return `<a class="tg-attach tg-attach-image" href="${escapeHtml(url)}" data-image-alt="${escapeHtml(name)}" onclick="return socialOpenImageFromAttachment(event)"><img src="${escapeHtml(url)}" alt="${escapeHtml(name)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" /></a>`;
     }
-    return `<a class="tg-attach tg-attach-file" href="${escapeHtml(url)}" target="_blank" rel="noopener">📎 ${escapeHtml(name)}</a>`;
+    return `<a class="tg-attach tg-attach-file" href="${escapeHtml(url)}" target="_blank" rel="noopener">?? ${escapeHtml(name)}</a>`;
   }).join("");
   if (!body) return "";
   return `<div class="tg-msg-attachments">${body}</div>`;
@@ -3818,7 +4181,7 @@ function socialOpenGroupAvatarModal() {
           <div id="socialGroupAvatarPreview" class="profile-avatar-preview">--</div>
           <div class="team-avatar-controls">
             <label class="admin-user-field">
-              <span>${escapeHtml(tr("Ссылка на аватар", "Avatar URL"))}</span>
+            <span>${escapeHtml(tr("\u0421\u0441\u044b\u043b\u043a\u0430 \u043d\u0430 \u0430\u0432\u0430\u0442\u0430\u0440", "Avatar URL"))}</span>
               <input id="socialGroupAvatarUrl" placeholder="https://..." />
             </label>
             <div id="socialGroupAvatarPicker" class="avatar-picker">${pickerHtml}</div>
@@ -3827,7 +4190,7 @@ function socialOpenGroupAvatarModal() {
         <div class="actions">
           <button id="socialGroupAvatarUploadBtn" class="btn-secondary" type="button">${tr("Загрузить файл", "Upload file")}</button>
           <input id="socialGroupAvatarFileInput" type="file" accept="image/*" class="hidden" />
-          <button id="socialGroupAvatarSave" type="button">${tr("Сохранить", "Save")}</button>
+            <button id="socialGroupAvatarSave" type="button">${tr("\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c", "Save")}</button>
           <button id="socialGroupAvatarClear" class="btn-secondary" type="button">${tr("Удалить", "Clear")}</button>
         </div>
       </div>
@@ -4411,7 +4774,7 @@ function socialCurrentCompanyThread() {
 function socialOpenCompanyChatEditor() {
   const thread = socialCurrentCompanyThread();
   if (!thread) {
-    alert(tr("Сначала откройте чат компании.", "Open company chat first."));
+    alert(tr("\u0421\u043d\u0430\u0447\u0430\u043b\u0430 \u043e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u0447\u0430\u0442 \u043a\u043e\u043c\u043f\u0430\u043d\u0438\u0438.", "Open company chat first."));
     return;
   }
   socialOpenModal(
@@ -4424,7 +4787,7 @@ function socialOpenCompanyChatEditor() {
         </label>
         <div class="hint">${escapeHtml(tr("Все сотрудники компании добавляются в чат автоматически.", "All company employees are added automatically."))}</div>
         <div class="actions">
-          <button type="button" onclick="socialSaveCompanyChatEditor()">${tr("Сохранить", "Save")}</button>
+        <button type="button" onclick="socialSaveCompanyChatEditor()">${tr("\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c", "Save")}</button>
         </div>
       </div>
     `
@@ -4462,7 +4825,7 @@ function socialOpenGroupEditor(editCurrent = false) {
   const editing = Boolean(editCurrent);
   const thread = editing ? socialCurrentGroupThread() : null;
   if (editing && !thread) {
-    alert(tr("Сначала откройте групповой чат.", "Open a group chat first."));
+    alert(tr("\u0421\u043d\u0430\u0447\u0430\u043b\u0430 \u043e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u043d\u0443\u0436\u043d\u044b\u0439 \u0447\u0430\u0442.", "Open a group chat first."));
     return;
   }
   const actors = socialCompanyActors();
@@ -4484,7 +4847,7 @@ function socialOpenGroupEditor(editCurrent = false) {
     return `
       <label class="check">
         <input type="checkbox" data-group-member="${escapeHtml(actorKey)}" ${forceChecked ? "checked" : ""} ${disabled} />
-        ${escapeHtml(row.nick || actorKey)}${isMe ? ` (${escapeHtml(tr("вы", "you"))})` : ""}
+        ${escapeHtml(row.nick || actorKey)}${isMe ? ` (${escapeHtml(tr("РІС‹", "you"))})` : ""}
       </label>
     `;
   }).join("");
@@ -4506,7 +4869,7 @@ function socialOpenGroupEditor(editCurrent = false) {
           <div class="social-group-members-list">${membersHtml}</div>
         </div>
         <div class="actions">
-          <button type="button" onclick="socialSaveGroupEditor(${editing ? Number(thread.id || 0) : 0})">${editing ? tr("Сохранить", "Save") : tr("Создать группу", "Create group")}</button>
+        <button type="button" onclick="socialSaveGroupEditor(${editing ? Number(thread.id || 0) : 0})">${editing ? tr("\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c", "Save") : tr("\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0433\u0440\u0443\u043f\u043f\u0443", "Create group")}</button>
         </div>
       </div>
     `
@@ -4569,7 +4932,7 @@ async function socialLoadDirectActors(query) {
   const endpoint = q ? `/api/social/chat/actors?q=${encodeURIComponent(q)}` : "/api/social/chat/actors";
   const actors = await socialRequest(endpoint).catch((e) => {
     host.innerHTML = `<div class="hint">${escapeHtml(e.message || tr("Ошибка загрузки", "Loading error"))}</div>`;
-    return [];
+    return null;
   });
   if (!Array.isArray(actors)) return;
   const myActor = socialState.boot?.actor?.actor_key || "";
@@ -4610,6 +4973,10 @@ async function socialStartDirectChat(actorKey) {
   await socialSelectThread(Number(thread.id || 0));
 }
 
+let socialTaskLoadReqSeq = 0;
+const socialTaskPendingDone = new Map();
+let socialTaskDragTaskId = 0;
+
 async function socialLoadTaskActors() {
   const rows = await socialRequest("/api/social/tasks/actors").catch(() => []);
   socialState.actors = Array.isArray(rows) ? rows : [];
@@ -4617,7 +4984,9 @@ async function socialLoadTaskActors() {
 
 async function socialLoadProjects() {
   const rows = await socialRequest("/api/social/tasks/projects").catch((e) => {
-    alert(e.message);
+    if (typeof socialShowToast === "function") {
+      socialShowToast(tr("Ошибка", "Error"), e.message || tr("Не удалось загрузить проекты", "Failed to load projects"));
+    }
     return [];
   });
   socialState.projects = Array.isArray(rows) ? rows : [];
@@ -4628,286 +4997,301 @@ async function socialLoadProjects() {
   if ([...select.options].some((x) => x.value === keep)) select.value = keep;
 }
 
-function socialTaskIncludeDoneEnabled() {
-  return Boolean(document.getElementById("socialTaskIncludeDone")?.checked);
+function socialTaskBucketTitle(bucket) {
+  const key = String(bucket || "upcoming").toLowerCase();
+  if (key === "today") return tr("\u0421\u0435\u0433\u043e\u0434\u043d\u044f", "Today");
+  if (key === "tomorrow") return tr("Завтра", "Tomorrow");
+  if (key === "overdue") return tr("Просроченные", "Overdue");
+  if (key === "done") return tr("Выполненные", "Done");
+  return tr("Предстоящие", "Upcoming");
 }
 
-function socialFilterTaskRows(rows, includeDone = false) {
-  const source = Array.isArray(rows) ? rows : [];
-  if (includeDone) return source.slice();
-  return source.filter((row) => String(row?.status || "todo").trim().toLowerCase() !== "done");
+function socialTaskBucketSort(bucket) {
+  const key = String(bucket || "upcoming").toLowerCase();
+  if (key === "overdue") return 0;
+  if (key === "today") return 1;
+  if (key === "tomorrow") return 2;
+  if (key === "upcoming") return 3;
+  if (key === "done") return 4;
+  return 9;
 }
 
-function socialApplyTaskRowsFromCache() {
-  const includeDone = socialTaskIncludeDoneEnabled();
-  const allRows = Array.isArray(socialState.tasksAll) ? socialState.tasksAll : [];
-  socialState.tasks = socialFilterTaskRows(allRows, includeDone);
-}
-
-async function socialLoadTasks(options = {}) {
-  const force = Boolean(options && options.force);
-  const projectId = document.getElementById("socialTaskProjectFilter")?.value || "";
-  const kind = String(document.getElementById("socialTaskKindFilter")?.value || "all").trim().toLowerCase();
-  const cacheKey = `${projectId || ""}|${kind || "all"}`;
-  const cachedRows = Array.isArray(socialState.tasksAll) ? socialState.tasksAll : [];
-  const hasCacheForKey = String(socialState.tasksCacheKey || "") === cacheKey
-    && (cachedRows.length > 0 || Number(socialState.tasksCacheLoadedAt || 0) > 0);
-  const cacheAgeMs = Date.now() - Number(socialState.tasksCacheLoadedAt || 0);
-  const cacheFresh = hasCacheForKey && cacheAgeMs < 60000;
-
-  if (!force && cacheFresh) {
-    socialApplyTaskRowsFromCache();
-    socialRenderTasks();
-    return;
+function socialTaskDueLabel(task) {
+  const raw = String(socialCalendarResolveTaskDue(task) || "").trim();
+  if (!raw) return tr("Без дедлайна", "No deadline");
+  const parsed = socialParseDateSafe(raw);
+  if (!(parsed instanceof Date) || Number.isNaN(parsed.getTime())) {
+    return escapeHtml(raw.replace("T", " ").slice(0, 16));
   }
+  return escapeHtml(parsed.toLocaleString(currentLang === "en" ? "en-US" : "ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }));
+}
 
+function socialTaskAssigneeMeta(task) {
+  const nick = socialDecodeUiText(task?.assignee_nick || "-") || "-";
+  const avatar = String(task?.assignee_avatar_url || "").trim();
+  return `
+    <div class="social-task-assignee">
+      <span class="social-task-assignee-avatar">${socialAvatarMarkup(avatar, nick, "xs")}</span>
+      <span class="social-task-assignee-name">${escapeHtml(nick)}</span>
+    </div>
+  `;
+}
+
+async function socialLoadTasks(opts = {}) {
+  const projectId = document.getElementById("socialTaskProjectFilter")?.value || "";
+  const kind = document.getElementById("socialTaskKindFilter")?.value || "all";
+  const includeDone = Boolean(document.getElementById("socialTaskIncludeDone")?.checked);
   const qp = new URLSearchParams();
   if (projectId) qp.set("project_id", projectId);
   if (kind && kind !== "all") qp.set("task_kind", kind);
-  qp.set("include_done", "1");
+  if (includeDone) qp.set("include_done", "1");
 
-  const requestSeq = Number(socialState.tasksLoadSeq || 0) + 1;
-  socialState.tasksLoadSeq = requestSeq;
+  const reqId = ++socialTaskLoadReqSeq;
+  const host = document.getElementById("socialTasksBoard");
+  if (host && !opts?.silent) {
+    host.innerHTML = `<div class="hint">${tr("Загрузка задач...", "Loading tasks...")}</div>`;
+  }
 
   const rows = await socialRequest(`/api/social/tasks${qp.toString() ? `?${qp.toString()}` : ""}`).catch((e) => {
-    alert(e.message);
+    if (typeof socialShowToast === "function") {
+      socialShowToast(tr("Ошибка загрузки", "Loading error"), e.message || tr("Не удалось загрузить задачи", "Failed to load tasks"));
+    }
     return null;
   });
 
-  if (requestSeq !== Number(socialState.tasksLoadSeq || 0)) return;
-
+  if (reqId !== socialTaskLoadReqSeq) return;
   if (!Array.isArray(rows)) {
-    if (hasCacheForKey) {
-      socialApplyTaskRowsFromCache();
+    if (Array.isArray(socialState.tasks) && socialState.tasks.length) {
       socialRenderTasks();
+    } else if (host) {
+      host.innerHTML = `<div class="hint">${tr("Не удалось загрузить задачи", "Failed to load tasks")}</div>`;
     }
     return;
   }
 
-  const decodeText = (value) => {
-    const raw = String(value ?? "");
-    if (typeof decodePossiblyMojibake === "function") {
-      try { return decodePossiblyMojibake(raw); } catch (_) {}
-    }
-    return raw;
-  };
-
-  socialState.tasksAll = rows.map((row) => ({
-    ...row,
-    title: decodeText(row?.title || ""),
-    description: decodeText(row?.description || ""),
-    assignee_nick: decodeText(row?.assignee_nick || ""),
-    creator_nick: decodeText(row?.creator_nick || ""),
-    project_title: decodeText(row?.project_title || ""),
-  }));
-  socialState.tasksCacheKey = cacheKey;
-  socialState.tasksCacheLoadedAt = Date.now();
-
-  socialApplyTaskRowsFromCache();
+  socialState.tasks = rows;
+  socialState.tasksLastGood = rows;
   socialRenderTasks();
-}
-
-const socialTaskPendingStatus = new Map();
-
-function socialTaskProjectTitle(task) {
-  const direct = String(task?.project_title || task?.project || "").trim();
-  if (direct) return direct;
-  const pid = Number(task?.project_id || 0);
-  if (pid > 0) {
-    const project = (socialState.projects || []).find((row) => Number(row?.id || 0) === pid);
-    const title = String(project?.title || "").trim();
-    if (title) return title;
-  }
-  return tr("Без проекта", "No project");
-}
-
-function socialTaskVisualStatus(task) {
-  const id = Number(task?.id || 0);
-  const pending = socialTaskPendingStatus.get(id);
-  if (pending && pending.targetStatus) return String(pending.targetStatus);
-  return String(task?.status || "todo");
-}
-
-function socialTaskPendingHint(taskId) {
-  const pending = socialTaskPendingStatus.get(Number(taskId || 0));
-  if (!pending) return "";
-  if (String(pending.targetStatus) === "done") {
-    return tr("5с: повторный клик отменит завершение", "5s: click again to cancel complete");
-  }
-  return tr("5с: повторный клик отменит возврат", "5s: click again to cancel restore");
-}
-
-function socialFormatTaskDateTime(iso) {
-  const raw = String(iso || "").trim();
-  if (!raw) return "";
-  const dt = socialParseDateSafe(raw);
-  if (!(dt instanceof Date) || Number.isNaN(dt.getTime())) {
-    return raw.slice(0, 16).replace("T", ", ");
-  }
-  const locale = currentLang === "en" ? "en-GB" : "ru-RU";
-  try {
-    return dt.toLocaleString(locale, {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }).replace(".", ".");
-  } catch (_) {
-    return raw.slice(0, 16).replace("T", ", ");
-  }
 }
 
 function socialRenderTasks() {
   const host = document.getElementById("socialTasksBoard");
   if (!host) return;
-  const rows = socialState.tasks || [];
+  const rows = Array.isArray(socialState.tasks) ? socialState.tasks : [];
   const myActorKey = String(socialState.boot?.actor?.actor_key || "").trim();
-  const isOwner = Boolean(socialState.boot?.actor?.is_owner);
+  const href = String(window.location?.href || "");
+  const path = String(window.location?.pathname || "");
+  const hasFinePointer = typeof window.matchMedia === "function"
+    ? (window.matchMedia("(pointer:fine)").matches || window.matchMedia("(any-pointer:fine)").matches)
+    : true;
+  const dragEnabled = hasFinePointer && !(
+    socialIsAppShellLike()
+    || socialIsMobileClientShell()
+    || socialIsMobileApkShell()
+    || document.body?.classList?.contains("mobile-client-mode")
+    || document.body?.classList?.contains("mobile-apk-mode")
+    || path === "/mobile"
+    || /([?&])mobile_app=1(?:[&#]|$)/i.test(href)
+  );
+
   if (!rows.length) {
     host.innerHTML = `<div class="hint">${tr("Задач пока нет", "No tasks yet")}</div>`;
     return;
   }
-  host.innerHTML = `
-    <div class="social-task-list">
-      ${rows.map((task) => {
-        const id = Number(task?.id || 0);
-        const statusRaw = String(task?.status || "todo");
-        const status = socialTaskVisualStatus(task);
-        const statusLabel = status === "todo"
-          ? tr("Новые", "To do")
-          : (status === "in_progress" ? tr("В работе", "In progress") : tr("Готово", "Done"));
-        const priority = String(task?.priority || "normal");
-        const due = socialFormatTaskDateTime(task?.due_date);
-        const created = socialFormatTaskDateTime(task?.created_at);
-        const dueDt = task?.due_date ? socialParseDateSafe(String(task.due_date || "")) : null;
-        const isDone = status === "done";
-        const isOverdue = !isDone && dueDt instanceof Date && !Number.isNaN(dueDt.getTime()) && dueDt.getTime() < Date.now();
-        const project = socialTaskProjectTitle(task);
-        const kind = String(task?.task_kind || "company").toLowerCase();
-        const kindLabel = kind === "personal" ? tr("ЛИЧНАЯ", "PERSONAL") : project;
-        const isMine = myActorKey && String(task?.assignee_key || "") === myActorKey;
-        const canToggle = Boolean(task?.can_complete || isMine || isOwner);
-        const canDelete = Boolean(task?.can_delete || isOwner);
-        const pendingText = socialTaskPendingHint(id);
-        const mineBadge = isMine ? `<span class="social-task-tag">${tr("Ваша задача", "Your task")}</span>` : "";
-        const assigneeNick = String(task?.assignee_nick || "-");
-        const avatar = socialAvatarMarkup(String(task?.assignee_avatar_url || ""), assigneeNick, "xs");
-        return `
-          <article class="social-task-row ${isMine ? "is-assignee" : ""} ${isDone ? "is-done" : ""} ${isOverdue ? "is-overdue" : ""}" ondblclick="socialOpenTaskModal(${id})">
-            <button class="social-task-check ${isDone ? "is-done" : ""}" type="button" onclick="socialToggleTaskDone(${id}); event.stopPropagation();" title="${tr("Переключить выполнение", "Toggle done")}" ${canToggle ? "" : "disabled"}>✓</button>
-            <div class="social-task-main" onclick="socialOpenTaskModal(${id})">
-              <div class="social-task-title">
-                <b>${escapeHtml(task?.title || "-")}</b>
-                <span class="social-task-kind-badge ${escapeHtml(kind)}">${escapeHtml(kindLabel || tr("ПРОЕКТ", "PROJECT"))}</span>
-                ${mineBadge}
-                <span class="social-status ${escapeHtml(status)}">${escapeHtml(statusLabel)}</span>
-                <span class="social-priority ${escapeHtml(priority)}">${escapeHtml(priority)}</span>
-              </div>
-              <div class="social-task-meta">
-                <span class="social-task-assignee">${avatar}<span class="social-task-assignee-name">${escapeHtml(assigneeNick)}</span></span>
-                <span>${tr("Дата создания", "Created")}: ${escapeHtml(created || "-")}</span>
-                <span>${tr("Дедлайн", "Deadline")}: ${escapeHtml(due || tr("Без дедлайна", "No deadline"))}</span>
-              </div>
-              ${pendingText ? `<div class="social-task-pending-hint">${escapeHtml(pendingText)}</div>` : ""}
+
+  const grouped = new Map();
+  rows.forEach((task) => {
+    const bucket = String(task?.bucket || "upcoming").toLowerCase();
+    if (!grouped.has(bucket)) grouped.set(bucket, []);
+    grouped.get(bucket).push(task);
+  });
+
+  const bucketOrder = [...grouped.keys()].sort((a, b) => socialTaskBucketSort(a) - socialTaskBucketSort(b));
+  const html = bucketOrder.map((bucket) => {
+    const items = grouped.get(bucket) || [];
+    const itemsHtml = items.map((task) => {
+      const id = Number(task?.id || 0);
+      const status = String(task?.status || "todo");
+      const pending = socialTaskPendingDone.has(id);
+      const isDone = status === "done" || pending;
+      const isMine = myActorKey && String(task?.assignee_key || "") === myActorKey;
+      const classes = ["social-task-item"];
+      if (isMine) classes.push("is-assignee");
+      if (isDone) classes.push("is-done");
+      if (bucket === "overdue" && !isDone) classes.push("is-overdue");
+      const pendingHint = pending ? `<span class="social-task-pending">${tr("5с: повторный клик отменит", "5s: click again to undo")}</span>` : "";
+      return `
+        <article class="${classes.join(" ")}" data-task-id="${id}" ${dragEnabled ? `draggable="true" ondragstart="socialTaskDragStart(event, ${id})"` : `draggable="false"`}>
+          <button class="social-task-check ${isDone ? "is-done" : ""}" type="button" onclick="socialToggleTaskDone(${id}); event.stopPropagation();" title="${tr("Отметить выполненной", "Mark done")}">${isDone ? "✓" : ""}</button>
+          <div class="social-task-content" onclick="socialOpenTaskModal(${id})">
+            <div class="social-task-title-row">
+              <b class="social-task-title-text">${escapeHtml(socialDecodeUiText(task?.title || "-") || "-")}</b>
+              <span class="social-task-kind ${escapeHtml(String(task?.task_kind || "company"))}">${escapeHtml(String(task?.task_kind || "company") === "personal" ? tr("\u041c\u041e\u0418", "MINE") : tr("\u041f\u0420\u041e\u0415\u041a\u0422", "PROJECT"))}</span>
             </div>
-            <div class="social-task-actions">
-              ${canDelete ? `<button class="btn-danger" type="button" onclick="socialDeleteTask(${id}); event.stopPropagation();">${tr("Удалить", "Delete")}</button>` : ""}
+            <div class="social-task-subline">
+              <span>${socialTaskDueLabel(task)}</span>
+              ${socialTaskAssigneeMeta(task)}
             </div>
-          </article>
-        `;
-      }).join("")}
-    </div>
-  `;
+            ${pendingHint}
+          </div>
+          <button class="social-task-delete" type="button" onclick="socialDeleteTask(${id}); event.stopPropagation();" title="${tr("Удалить", "Delete")}">✕</button>
+        </article>
+      `;
+    }).join("");
+
+    return `
+      <section class="social-task-bucket" data-bucket="${escapeHtml(bucket)}">
+        <header>
+          <h4>${escapeHtml(socialTaskBucketTitle(bucket))}</h4>
+          <span>${items.length}</span>
+        </header>
+        <div class="social-task-bucket-list" ${dragEnabled ? `ondragover="socialTaskAllowDrop(event)" ondrop="socialTaskDrop(event, '${escapeHtml(bucket)}')"` : ""}>${itemsHtml}</div>
+      </section>
+    `;
+  }).join("");
+
+  host.innerHTML = `<div class="social-task-board-v2">${html}</div>`;
+  host.querySelectorAll(".social-task-check").forEach((btn) => {
+    if (!btn.classList.contains("is-done")) {
+      btn.textContent = "";
+    } else {
+      btn.textContent = "✓";
+    }
+    const title = String(btn.getAttribute("title") || "");
+    if (!title || /[?]{3,}|[\u0420\u0421\u0412\u00d0\u00d1]/.test(title)) {
+      btn.setAttribute("title", tr("\u041e\u0442\u043c\u0435\u0442\u0438\u0442\u044c \u0432\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u043d\u043e\u0439", "Mark done"));
+    }
+  });
+  host.querySelectorAll(".social-task-delete").forEach((btn) => {
+    btn.textContent = "✕";
+    const title = String(btn.getAttribute("title") || "");
+    if (!title || /[?]{3,}|[\u0420\u0421\u0412\u00d0\u00d1]/.test(title)) {
+      btn.setAttribute("title", tr("\u0423\u0434\u0430\u043b\u0438\u0442\u044c", "Delete"));
+    }
+  });
 }
 
-async function socialToggleTaskDone(taskId) {
+function socialTaskDragStart(event, taskId) {
+  if (socialIsAppShellLike()) {
+    socialTaskDragTaskId = 0;
+    return;
+  }
   const id = Number(taskId || 0);
   if (!id) return;
-  const row = (socialState.tasksAll || []).find((x) => Number(x?.id || 0) === id)
-    || (socialState.tasks || []).find((x) => Number(x?.id || 0) === id)
-    || null;
-  if (!row) return;
+  socialTaskDragTaskId = id;
+  if (event?.dataTransfer) {
+    event.dataTransfer.effectAllowed = "move";
+    try { event.dataTransfer.setData("text/plain", String(id)); } catch (_) {}
+  }
+}
 
-  const myActorKey = String(socialState.boot?.actor?.actor_key || "").trim();
-  const isOwner = Boolean(socialState.boot?.actor?.is_owner);
-  const isMine = myActorKey && String(row.assignee_key || "") === myActorKey;
-  const canToggle = Boolean(row?.can_complete || isMine || isOwner);
-  if (!canToggle) {
-    alert(tr("Сотрудник может менять статус только своих задач.", "Employees can update only their own tasks."));
+function socialTaskAllowDrop(event) {
+  if (socialIsAppShellLike()) return;
+  if (event?.preventDefault) event.preventDefault();
+}
+
+async function socialTaskDrop(event, bucket) {
+  if (socialIsAppShellLike()) {
+    socialTaskDragTaskId = 0;
     return;
   }
-
-  const pending = socialTaskPendingStatus.get(id);
-  if (pending) {
-    try { clearTimeout(pending.timerId); } catch (_) {}
-    socialTaskPendingStatus.delete(id);
-    socialRenderTasks();
-    return;
-  }
-
-  const currentStatus = String(row.status || "todo").toLowerCase();
-
-  if (currentStatus !== "done") {
-    const previousStatus = currentStatus;
-    row.status = "done";
-    row.completed_at = new Date().toISOString();
-    socialApplyTaskRowsFromCache();
-    socialRenderTasks();
-
+  if (event?.preventDefault) event.preventDefault();
+  let id = Number(socialTaskDragTaskId || 0);
+  if (!id && event?.dataTransfer) {
     try {
-      await socialRequest(`/api/social/tasks/${id}`, {
-        method: "PUT",
-        body: JSON.stringify({ status: "done" }),
-      });
-      await socialLoadTasks({ force: true });
-    } catch (e) {
-      row.status = previousStatus;
-      row.completed_at = null;
-      socialApplyTaskRowsFromCache();
-      socialRenderTasks();
-      alert(e?.message || tr("Не удалось обновить статус задачи", "Failed to update task status"));
+      id = Number(event.dataTransfer.getData("text/plain") || 0);
+    } catch (_) {
+      id = 0;
     }
-    return;
   }
-
-  const timerId = setTimeout(async () => {
-    try {
-      await socialRequest(`/api/social/tasks/${id}`, {
-        method: "PUT",
-        body: JSON.stringify({ status: "todo" }),
-      });
-      socialTaskPendingStatus.delete(id);
-      await socialLoadTasks({ force: true });
-    } catch (e) {
-      socialTaskPendingStatus.delete(id);
-      socialRenderTasks();
-      alert(e?.message || tr("Не удалось обновить статус задачи", "Failed to update task status"));
+  socialTaskDragTaskId = 0;
+  if (!id) return;
+  const safeBucket = String(bucket || "").trim().toLowerCase();
+  const ok = await socialRequest("/api/social/tasks/reorder", {
+    method: "POST",
+    body: JSON.stringify({ items: [{ task_id: id, bucket: safeBucket, to_index: 0 }] }),
+  }).then(() => true).catch((e) => {
+    if (typeof socialShowToast === "function") {
+      socialShowToast(tr("Ошибка", "Error"), e.message || tr("Не удалось перенести задачу", "Failed to move task"));
     }
-  }, 5000);
-
-  socialTaskPendingStatus.set(id, {
-    targetStatus: "todo",
-    timerId,
-    startedAt: Date.now(),
+    return false;
   });
-  socialRenderTasks();
+  if (!ok) return;
+  await socialLoadTasks({ silent: true });
+}
+
+function socialTaskCurrentActorKey() {
+  return String(socialState.boot?.actor?.actor_key || "").trim();
+}
+
+function socialSyncTaskKindForm() {
+  const kind = String(document.getElementById("socialTaskKind")?.value || "company").trim().toLowerCase();
+  const personal = kind === "personal";
+  const project = document.getElementById("socialTaskProject");
+  const assignee = document.getElementById("socialTaskAssignee");
+  const hint = document.getElementById("socialTaskKindHint");
+  const actorKey = socialTaskCurrentActorKey();
+
+  if (project) {
+    project.disabled = personal;
+    if (personal) project.value = "";
+  }
+  if (assignee) {
+    if (personal && actorKey) {
+      const hasOption = [...assignee.options].some((opt) => String(opt.value || "") === actorKey);
+      if (hasOption) assignee.value = actorKey;
+      assignee.disabled = true;
+    } else {
+      assignee.disabled = false;
+    }
+  }
+  if (hint) {
+    hint.textContent = personal
+      ? tr("Личная задача будет видна только вам и автоматически назначится на вас.", "Personal task is visible only to you and is automatically assigned to you.")
+      : tr("Проектная задача доступна участникам проекта и назначенному исполнителю.", "Project task is visible to project members and the assigned teammate.");
+  }
 }
 
 function socialBuildTaskForm(task = null) {
-
-  const actors = socialState.actors || [];
-  const projects = socialState.projects || [];
+  const actorsRaw = Array.isArray(socialState.actors) ? socialState.actors : [];
+  const projects = Array.isArray(socialState.projects) ? socialState.projects : [];
   const status = task?.status || "todo";
-  const due = task?.due_date ? String(task.due_date).slice(0, 16) : "";
+  const due = task?.due_date ? String(task?.due_date).slice(0, 16) : "";
+  const kind = String(task?.task_kind || "company");
+  const myKey = socialTaskCurrentActorKey();
+  const myNick = String(socialState.boot?.actor?.nick || myKey || "Me").trim() || "Me";
+  const actorMap = new Map();
+  actorsRaw.forEach((row) => {
+    const key = String(row?.actor_key || "").trim();
+    if (!key || actorMap.has(key)) return;
+    actorMap.set(key, row);
+  });
+  if (myKey && !actorMap.has(myKey)) {
+    actorMap.set(myKey, { actor_key: myKey, nick: myNick });
+  }
+  const actors = [...actorMap.values()];
+  const personal = kind === "personal";
+  const currentAssignee = personal && myKey
+    ? myKey
+    : (String(task?.assignee_key || "").trim() || myKey || String(actors[0]?.actor_key || ""));
+  const hint = personal
+    ? tr("Личная задача будет видна только вам и автоматически назначится на вас.", "Personal task is visible only to you and is automatically assigned to you.")
+    : tr("Проектная задача доступна участникам проекта и назначенному исполнителю.", "Project task is visible to project members and the assigned teammate.");
   return `
     <div class="grid-2">
       <label><span>${tr("Название", "Title")}</span><input id="socialTaskTitle" value="${escapeHtml(task?.title || "")}" /></label>
-      <label><span>${tr("Проект", "Project")}</span><select id="socialTaskProject"><option value="">${tr("Без проекта", "No project")}</option>${projects.map((p) => `<option value="${Number(p.id)}" ${Number(task?.project_id || 0) === Number(p.id) ? "selected" : ""}>${escapeHtml(p.title || "-")}</option>`).join("")}</select></label>
-      <label><span>${tr("Исполнитель", "Assignee")}</span><select id="socialTaskAssignee">${actors.map((a) => `<option value="${escapeHtml(String(a.actor_key || ""))}" ${String(task?.assignee_key || "") === String(a.actor_key || "") ? "selected" : ""}>${escapeHtml(a.nick || "-")}</option>`).join("")}</select></label>
+      <label><span>${tr("Тип", "Kind")}</span><select id="socialTaskKind" onchange="socialSyncTaskKindForm()"><option value="company" ${kind === "company" ? "selected" : ""}>${tr("Проектная", "Company")}</option><option value="personal" ${kind === "personal" ? "selected" : ""}>${tr("МОИ ЗАДАЧИ", "Personal")}</option></select></label>
+      <label><span>${tr("Проект", "Project")}</span><select id="socialTaskProject" ${personal ? "disabled" : ""}><option value="">${tr("Без проекта", "No project")}</option>${projects.map((p) => `<option value="${Number(p.id)}" ${!personal && Number(task?.project_id || 0) === Number(p.id) ? "selected" : ""}>${escapeHtml(p.title || "-")}</option>`).join("")}</select></label>
+      <label><span>${tr("Исполнитель", "Assignee")}</span><select id="socialTaskAssignee" ${personal ? "disabled" : ""}>${actors.map((a) => `<option value="${escapeHtml(String(a.actor_key || ""))}" ${currentAssignee === String(a.actor_key || "") ? "selected" : ""}>${escapeHtml(a.nick || "-")}</option>`).join("")}</select></label>
+      <div id="socialTaskKindHint" class="hint full">${escapeHtml(hint)}</div>
       <label><span>${tr("Приоритет", "Priority")}</span><select id="socialTaskPriority"><option value="low" ${task?.priority === "low" ? "selected" : ""}>low</option><option value="normal" ${task?.priority === "normal" || !task ? "selected" : ""}>normal</option><option value="high" ${task?.priority === "high" ? "selected" : ""}>high</option><option value="critical" ${task?.priority === "critical" ? "selected" : ""}>critical</option></select></label>
-      <label><span>${tr("\u0421\u0442\u0430\u0442\u0443\u0441", "Status")}</span><select id="socialTaskStatus"><option value="todo" ${status === "todo" ? "selected" : ""}>todo</option><option value="in_progress" ${status === "in_progress" ? "selected" : ""}>in_progress</option><option value="done" ${status === "done" ? "selected" : ""}>done</option></select></label>
+      <label><span>${tr("Статус", "Status")}</span><select id="socialTaskStatus"><option value="todo" ${status === "todo" ? "selected" : ""}>todo</option><option value="in_progress" ${status === "in_progress" ? "selected" : ""}>in_progress</option><option value="done" ${status === "done" ? "selected" : ""}>done</option></select></label>
       <label><span>${tr("Дедлайн", "Deadline")}</span><input id="socialTaskDue" type="datetime-local" value="${escapeHtml(due)}" /></label>
       <label class="full"><span>${tr("Описание", "Description")}</span><textarea id="socialTaskDescription" rows="5">${escapeHtml(task?.description || "")}</textarea></label>
     </div>
@@ -4923,7 +5307,7 @@ function socialOpenProjectModal() {
         <textarea id="socialProjectDescription" rows="4" placeholder="${tr("Описание", "Description")}"></textarea>
       </div>
       <div class="actions">
-        <button type="button" onclick="socialCreateProject()">${tr("Создать", "Create")}</button>
+        <button type="button" onclick="socialCreateProject()">${tr("\u0421\u043e\u0437\u0434\u0430\u0442\u044c", "Create")}</button>
       </div>
     `
   );
@@ -4932,30 +5316,83 @@ function socialOpenProjectModal() {
 async function socialCreateProject() {
   const title = String(document.getElementById("socialProjectTitle")?.value || "").trim();
   const description = String(document.getElementById("socialProjectDescription")?.value || "").trim();
-  if (!title) return alert(tr("Укажите название проекта", "Enter project title"));
+  if (!title) {
+    alert(tr("Укажите название проекта", "Enter project title"));
+    return;
+  }
   await socialRequest("/api/social/tasks/projects", {
     method: "POST",
     body: JSON.stringify({ title, description }),
   }).catch((e) => alert(e.message));
   socialCloseModal();
   await socialLoadProjects();
+  await socialLoadTasks({ silent: true });
 }
 
-function socialOpenTaskModal(taskId = 0) {
-  const task = socialState.tasks.find((x) => Number(x.id) === Number(taskId || 0)) || null;
-  const comments = Array.isArray(task?.comments) ? task.comments : [];
+async function socialOpenProjectMembersModal() {
+  const projectId = Number(document.getElementById("socialTaskProjectFilter")?.value || 0);
+  if (!projectId) {
+    alert(tr("\u0421\u043d\u0430\u0447\u0430\u043b\u0430 \u0432\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u043f\u0440\u043e\u0435\u043a\u0442 \u0432 \u0444\u0438\u043b\u044c\u0442\u0440\u0435", "Select a project in filter first"));
+    return;
+  }
+  const rows = await socialRequest(`/api/social/tasks/projects/${projectId}/members`).catch((e) => {
+    alert(e.message || tr("Не удалось загрузить участников", "Failed to load members"));
+    return null;
+  });
+  if (!Array.isArray(rows)) return;
+  const list = rows.map((row) => {
+    const key = String(row?.actor_key || "");
+    const nick = String(row?.nick || key || "-");
+    const checked = row?.in_project ? "checked" : "";
+    const ownerTag = row?.is_owner ? `<span class="social-task-kind company">${tr("owner", "owner")}</span>` : "";
+    return `<label class="check social-member-row"><input type="checkbox" data-member-key="${escapeHtml(key)}" ${checked} /> ${socialAvatarMarkup(String(row?.avatar_url || ""), nick, "xs")} <span>${escapeHtml(nick)}</span> ${ownerTag}</label>`;
+  }).join("");
   socialOpenModal(
-    task ? tr("Редактировать задачу", "Edit task") : tr("Новая задача", "New task"),
+    tr("Участники проекта", "Project members"),
     `
-      ${socialBuildTaskForm(task)}
-      ${task ? `<div class="social-task-comments"><h4>${tr("Комментарии", "Comments")}</h4>${comments.map((c) => `<div class="social-task-comment"><b>${escapeHtml(c.author_nick || "-")}</b><small>${escapeHtml((c.created_at || "").slice(0,16).replace("T"," "))}</small><div>${escapeHtml(c.text || "")}</div></div>`).join("") || `<div class="hint">${tr("Комментариев пока нет", "No comments yet")}</div>`}<div class="grid-2"><input id="socialTaskCommentInput" placeholder="${tr("Комментарий", "Comment")}" /><button type="button" onclick="socialAddTaskComment(${Number(task.id)})">${tr("Добавить", "Add")}</button></div></div>` : ""}
+      <div id="socialProjectMembersList" class="social-group-members-list">${list || `<div class="hint">${tr("\u0421\u043f\u0438\u0441\u043e\u043a \u043f\u0443\u0441\u0442", "List is empty")}</div>`}</div>
       <div class="actions">
-        <button type="button" onclick="socialSaveTask(${task ? Number(task.id) : 0})">${task ? tr("Сохранить", "Save") : tr("Создать", "Create")}</button>
+        <button type="button" onclick="socialSaveProjectMembers(${projectId})">${tr("\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c", "Save")}</button>
       </div>
     `
   );
 }
 
+async function socialSaveProjectMembers(projectId) {
+  const id = Number(projectId || 0);
+  if (!id) return;
+  const host = document.getElementById("socialProjectMembersList");
+  if (!host) return;
+  const actorKeys = [...host.querySelectorAll("input[data-member-key]")]
+    .filter((el) => el.checked)
+    .map((el) => String(el.getAttribute("data-member-key") || "").trim())
+    .filter(Boolean);
+  await socialRequest(`/api/social/tasks/projects/${id}/members`, {
+    method: "PUT",
+    body: JSON.stringify({ actor_keys: actorKeys }),
+  }).catch((e) => {
+    alert(e.message || tr("Не удалось сохранить участников", "Failed to save members"));
+    return null;
+  });
+  socialCloseModal();
+  await socialLoadTasks({ silent: true });
+}
+
+function socialOpenTaskModal(taskId = 0) {
+  const task = (socialState.tasks || []).find((x) => Number(x.id) === Number(taskId || 0)) || null;
+  const comments = Array.isArray(task?.comments) ? task.comments : [];
+  socialOpenModal(
+    task ? tr("\u0420\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0437\u0430\u0434\u0430\u0447\u0443", "Edit task") : tr("\u041d\u043e\u0432\u0430\u044f \u0437\u0430\u0434\u0430\u0447\u0430", "New task"),
+    `
+      ${socialBuildTaskForm(task)}
+      ${task ? `<div class="social-task-comments"><h4>${tr("Комментарии", "Comments")}</h4>${comments.map((c) => `<div class="social-task-comment"><b>${escapeHtml(c.author_nick || "-")}</b><small>${escapeHtml((c.created_at || "").slice(0,16).replace("T"," "))}</small><div>${escapeHtml(c.text || "")}</div></div>`).join("") || `<div class="hint">${tr("Комментариев пока нет", "No comments yet")}</div>`}<div class="grid-2"><input id="socialTaskCommentInput" placeholder="${tr("Комментарий", "Comment")}" /><button type="button" onclick="socialAddTaskComment(${Number(task.id)})">${tr("Добавить", "Add")}</button></div></div>` : ""}
+      <div class="actions">
+          <button type="button" onclick="socialSaveTask(${task ? Number(task.id) : 0})">${task ? tr("\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c", "Save") : tr("\u0421\u043e\u0437\u0434\u0430\u0442\u044c", "Create")}</button>
+      </div>
+    `
+  );
+  socialSyncTaskKindForm();
+}
 async function socialSaveTask(taskId = 0) {
   const payload = {
     project_id: Number(document.getElementById("socialTaskProject")?.value || 0) || null,
@@ -4963,18 +5400,25 @@ async function socialSaveTask(taskId = 0) {
     description: String(document.getElementById("socialTaskDescription")?.value || "").trim(),
     status: String(document.getElementById("socialTaskStatus")?.value || "todo"),
     priority: String(document.getElementById("socialTaskPriority")?.value || "normal"),
+    task_kind: String(document.getElementById("socialTaskKind")?.value || "company"),
     due_date: String(document.getElementById("socialTaskDue")?.value || "").trim() || null,
     assignee_key: String(document.getElementById("socialTaskAssignee")?.value || "").trim(),
   };
-  if (!payload.title) return alert(tr("Название задачи обязательно", "Task title is required"));
+  if (payload.task_kind === "personal") {
+    payload.project_id = null;
+    payload.assignee_key = socialTaskCurrentActorKey() || payload.assignee_key;
+  }
+  if (!payload.title) {
+    alert(tr("Название задачи обязательно", "Task title is required"));
+    return;
+  }
   const req = taskId > 0
     ? socialRequest(`/api/social/tasks/${Number(taskId)}`, { method: "PUT", body: JSON.stringify(payload) })
     : socialRequest("/api/social/tasks", { method: "POST", body: JSON.stringify(payload) });
   await req.catch((e) => alert(e.message));
   socialCloseModal();
-  await socialLoadTasks({ force: true });
+  await socialLoadTasks({ silent: true });
 }
-
 async function socialAddTaskComment(taskId) {
   const id = Number(taskId || 0);
   if (!id) return;
@@ -4985,46 +5429,74 @@ async function socialAddTaskComment(taskId) {
     method: "POST",
     body: JSON.stringify({ text }),
   }).catch((e) => alert(e.message));
-  await socialLoadTasks({ force: true });
+  await socialLoadTasks({ silent: true });
   socialOpenTaskModal(id);
-}
-
-async function socialQuickDone(taskId) {
-  return socialToggleTaskDone(taskId);
 }
 
 async function socialDeleteTask(taskId) {
   const id = Number(taskId || 0);
   if (!id) return;
-  const row = (socialState.tasksAll || []).find((x) => Number(x?.id || 0) === id)
-    || (socialState.tasks || []).find((x) => Number(x?.id || 0) === id)
-    || null;
-  if (!row) return;
-  const canDelete = Boolean(row?.can_delete || socialState.boot?.actor?.is_owner);
-  if (!canDelete) {
-    alert(tr("Удалять задачу может только создатель или владелец.", "Only creator or owner can delete task."));
+  if (!confirm(tr("Удалить задачу?", "Delete task?"))) return;
+  const prev = Array.isArray(socialState.tasks) ? [...socialState.tasks] : [];
+  socialState.tasks = prev.filter((x) => Number(x?.id || 0) !== id);
+  socialRenderTasks();
+  const ok = await socialRequest(`/api/social/tasks/${id}`, { method: "DELETE" }).then(() => true).catch((e) => {
+    if (typeof socialShowToast === "function") socialShowToast(tr("Ошибка", "Error"), e.message || tr("Не удалось удалить задачу", "Failed to delete task"));
+    return false;
+  });
+  if (!ok) {
+    socialState.tasks = prev;
+    socialRenderTasks();
     return;
   }
-  if (!confirm(tr("Удалить задачу?", "Delete task?"))) return;
+  await socialLoadTasks({ silent: true });
+}
 
-  const previousAll = Array.isArray(socialState.tasksAll) ? socialState.tasksAll.slice() : [];
-  socialTaskPendingStatus.delete(id);
-  socialState.tasksAll = previousAll.filter((item) => Number(item?.id || 0) !== id);
-  socialApplyTaskRowsFromCache();
-  socialRenderTasks();
+async function socialToggleTaskDone(taskId) {
+  const id = Number(taskId || 0);
+  if (!id) return;
+  const row = (socialState.tasks || []).find((x) => Number(x?.id || 0) === id);
+  if (!row) return;
 
-  try {
-    await socialRequest(`/api/social/tasks/${id}`, { method: "DELETE" });
-    await socialLoadTasks({ force: true });
-  } catch (e) {
-    socialState.tasksAll = previousAll;
-    socialApplyTaskRowsFromCache();
+  const pending = socialTaskPendingDone.get(id);
+  if (pending) {
+    clearTimeout(pending.timerId);
+    socialTaskPendingDone.delete(id);
     socialRenderTasks();
-    alert(e?.message || tr("Не удалось удалить задачу", "Failed to delete task"));
+    if (typeof socialShowToast === "function") {
+      socialShowToast(tr("Отмена", "Cancelled"), tr("Закрытие задачи отменено", "Task completion cancelled"));
+    }
+    return;
+  }
+
+  const timerId = setTimeout(async () => {
+    socialTaskPendingDone.delete(id);
+    await socialRequest(`/api/social/tasks/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ status: "done" }),
+    }).catch((e) => {
+      if (typeof socialShowToast === "function") {
+        socialShowToast(tr("Ошибка", "Error"), e.message || tr("Не удалось закрыть задачу", "Failed to complete task"));
+      }
+    });
+    await socialLoadTasks({ silent: true });
+  }, 5000);
+
+  socialTaskPendingDone.set(id, { timerId, at: Date.now() });
+  socialRenderTasks();
+  if (typeof socialShowToast === "function") {
+    socialShowToast(tr("Готово через 5 секунд", "Will complete in 5 seconds"), tr("Нажмите чек ещё раз, чтобы отменить", "Click the check again to undo"));
   }
 }
 
+async function socialQuickDone(taskId) {
+  await socialToggleTaskDone(taskId);
+}
 async function socialLoadGoogleCalendarStatus() {
+  if (typeof window !== "undefined" && window.__socialDisableGoogleCalendarFlow === true) {
+    socialSetCalendarSyncMessage();
+    return null;
+  }
   const statusNode = document.getElementById("socialCalendarGoogleStatus");
   const connectBtn = document.getElementById("socialCalendarGoogleConnectBtn");
   const syncBtn = document.querySelector(".social-calendar-sync-btn");
@@ -5102,7 +5574,7 @@ async function socialLoadGoogleCalendarStatus() {
   }
   if (syncBtn) {
     syncBtn.textContent = connected
-      ? tr("Синхронизировать из Google / ICS", "Sync from Google / ICS")
+      ? tr("Синхронизация из Google / ICS", "Sync from Google / ICS")
       : tr("Импорт по ICS URL", "Import via ICS URL");
   }
   if (autoGoogleSync && connected && !socialState.calendarAutoSyncInFlight) {
@@ -5136,7 +5608,7 @@ async function socialLoadGoogleCalendarStatus() {
   if (lastSyncState === "error") {
     socialSetCalendarSyncMessage("error", tr("Последняя синхронизация завершилась с ошибкой", "Last sync finished with an error"), lastError ? [lastError, ...summaryLines] : summaryLines);
   } else if (lastSyncState === "partial") {
-    socialSetCalendarSyncMessage("warn", tr("Синхронизация завершилась частично", "Sync completed partially"), summaryLines);
+    socialSetCalendarSyncMessage("warn", tr("Синхронизация завершена частично", "Sync completed partially"), summaryLines);
   } else if (lastSyncState === "ok" || lastSyncState === "empty") {
     socialSetCalendarSyncMessage("success", tr("Последняя синхронизация сохранена", "Latest sync recorded"), summaryLines);
   } else if (!configured && !connected) {
@@ -5155,6 +5627,9 @@ async function socialLoadGoogleCalendarStatus() {
   }
 }
 async function socialConnectGoogleCalendar() {
+  if (typeof window !== "undefined" && window.__socialDisableGoogleCalendarFlow === true) {
+    return false;
+  }
   const statusNode = document.getElementById("socialCalendarGoogleStatus");
   const connectBtn = document.getElementById("socialCalendarGoogleConnectBtn");
   const previousStatus = String(statusNode?.textContent || "").trim();
@@ -5196,18 +5671,24 @@ async function socialConnectGoogleCalendar() {
 async function socialLoadCalendar() {
   const monthInput = document.getElementById("socialCalendarMonth");
   const monthLabel = document.getElementById("socialCalendarMonthLabel");
-  const syncUrlInput = document.getElementById("socialCalendarGoogleIcs");
-  if (syncUrlInput && !String(syncUrlInput.value || "").trim()) {
-    try {
-      syncUrlInput.value = String(localStorage.getItem("social_calendar_google_ics_url") || "").trim();
-    } catch (_) {}
+  if (!Array.isArray(socialState.calendarEventsLastGood)) {
+    socialState.calendarEventsLastGood = [];
   }
-  const syncReplace = document.getElementById("socialCalendarGoogleReplace");
-  if (syncReplace && !syncReplace.dataset.bound) {
-    syncReplace.dataset.bound = "1";
-    try {
-      syncReplace.checked = localStorage.getItem("social_calendar_google_replace") === "1";
-    } catch (_) {}
+  const googleFlowEnabled = !(typeof window !== "undefined" && window.__socialDisableGoogleCalendarFlow === true);
+  if (googleFlowEnabled) {
+    const syncUrlInput = document.getElementById("socialCalendarGoogleIcs");
+    if (syncUrlInput && !String(syncUrlInput.value || "").trim()) {
+      try {
+        syncUrlInput.value = String(localStorage.getItem("social_calendar_google_ics_url") || "").trim();
+      } catch (_) {}
+    }
+    const syncReplace = document.getElementById("socialCalendarGoogleReplace");
+    if (syncReplace && !syncReplace.dataset.bound) {
+      syncReplace.dataset.bound = "1";
+      try {
+        syncReplace.checked = localStorage.getItem("social_calendar_google_replace") === "1";
+      } catch (_) {}
+    }
   }
   if (monthInput && !monthInput.value) {
     monthInput.value = socialCalendarMonthValue(socialState.calendarDate);
@@ -5222,19 +5703,67 @@ async function socialLoadCalendar() {
   if (monthLabel) {
     monthLabel.textContent = socialCalendarMonthLabel(socialState.calendarDate);
   }
-  await socialLoadGoogleCalendarStatus();
+  if (googleFlowEnabled) {
+    try {
+      await socialLoadGoogleCalendarStatus();
+    } catch (_) {
+      socialSetCalendarSyncMessage();
+    }
+  } else {
+    socialSetCalendarSyncMessage();
+  }
+  const previousTasks = Array.isArray(socialState.tasks) ? [...socialState.tasks] : [];
+  const taskRowsRaw = await socialRequest("/api/social/tasks?task_kind=all&include_done=0", { timeoutMs: 12000 }).catch(() => null);
+  const taskRows = socialCalendarExtractRows(taskRowsRaw);
+  const taskLoadFailed = taskRowsRaw == null;
+  socialState.tasks = taskRows.length ? taskRows : (taskLoadFailed ? previousTasks : []);
   const start = new Date(socialState.calendarDate.getFullYear(), socialState.calendarDate.getMonth(), 1, 0, 0, 0, 0);
   const end = new Date(socialState.calendarDate.getFullYear(), socialState.calendarDate.getMonth() + 1, 0, 23, 59, 59, 0);
   const qp = new URLSearchParams({
     date_from: socialCalendarRangeParam(start, false),
     date_to: socialCalendarRangeParam(end, true),
   });
-  const rows = await socialRequest(`/api/social/calendar/events?${qp.toString()}`).catch((e) => {
-    socialState.calendarEvents = [];
+  const previousEvents = Array.isArray(socialState.calendarEvents) ? [...socialState.calendarEvents] : [];
+  const previousLastGood = Array.isArray(socialState.calendarEventsLastGood) ? [...socialState.calendarEventsLastGood] : [];
+  let eventsLoadFailed = false;
+  let rowsRaw = await socialRequest(`/api/social/calendar/events?${qp.toString()}`, { timeoutMs: 12000 }).catch((e) => {
+    eventsLoadFailed = true;
     socialSetCalendarSyncMessage("error", tr("Не удалось загрузить события календаря", "Failed to load calendar events"), [e?.message || tr("Повторите попытку чуть позже.", "Please retry in a moment.")]);
-    return [];
+    return null;
   });
-  socialState.calendarEvents = Array.isArray(rows) ? rows : [];
+  const sourceRows = socialCalendarExtractRows(rowsRaw);
+  let rows = socialCalendarFilterRowsByMonth(sourceRows, socialState.calendarDate);
+  if (!rows.length && sourceRows.length) {
+    rows = sourceRows;
+  }
+  if (!rows.length) {
+    const wideRowsRaw = await socialRequest("/api/social/calendar/events", { timeoutMs: 12000 }).catch(() => null);
+    const wideRows = socialCalendarExtractRows(wideRowsRaw);
+    if (wideRows.length) {
+      rows = socialCalendarFilterRowsByMonth(wideRows, socialState.calendarDate);
+      if (!rows.length) {
+        rows = wideRows;
+      }
+      rowsRaw = wideRowsRaw;
+    }
+  }
+  if (rows.length) {
+    socialState.calendarEvents = rows;
+    const lastGoodSource = socialCalendarExtractRows(rowsRaw);
+    socialState.calendarEventsLastGood = lastGoodSource.length ? [...lastGoodSource] : [...rows];
+  } else {
+    const fallbackMonthRows = socialCalendarFilterRowsByMonth(
+      previousLastGood.length ? previousLastGood : previousEvents,
+      socialState.calendarDate
+    );
+    if (eventsLoadFailed && previousEvents.length) {
+      socialState.calendarEvents = [...previousEvents];
+    } else if (fallbackMonthRows.length) {
+      socialState.calendarEvents = fallbackMonthRows;
+    } else {
+      socialState.calendarEvents = [];
+    }
+  }
   socialRenderCalendar();
 }
 function socialShiftCalendar(deltaMonths = 0) {
@@ -5259,7 +5788,332 @@ function socialJumpCalendarToday() {
   }
   socialLoadCalendar();
 }
+
+function socialCalendarSetMonthYear(year, monthIndex) {
+  const y = Math.max(1970, Math.min(2100, Number(year || 0)));
+  const m = Math.max(0, Math.min(11, Number(monthIndex || 0)));
+  if (!Number.isFinite(y) || !Number.isFinite(m)) return;
+  socialState.calendarDate = new Date(y, m, 1, 0, 0, 0, 0);
+  const monthInput = document.getElementById("socialCalendarMonth");
+  if (monthInput) {
+    monthInput.value = socialCalendarMonthValue(socialState.calendarDate);
+  }
+}
+
+function socialSyncCalendarMonthYearInputs() {
+  const monthSelect = document.getElementById("socialCalendarMonthSelect");
+  const yearSelect = document.getElementById("socialCalendarYearSelect");
+  const base = socialState.calendarDate instanceof Date && !Number.isNaN(socialState.calendarDate.getTime())
+    ? socialState.calendarDate
+    : new Date();
+  const currentYear = base.getFullYear();
+  const currentMonth = base.getMonth();
+
+  if (monthSelect && !monthSelect.options.length) {
+    for (let month = 0; month < 12; month += 1) {
+      const option = document.createElement("option");
+      option.value = String(month);
+      option.textContent = new Date(2026, month, 1).toLocaleDateString(currentLang === "en" ? "en-US" : "ru-RU", {
+        month: "long",
+      });
+      monthSelect.appendChild(option);
+    }
+  }
+  if (monthSelect) {
+    monthSelect.value = String(currentMonth);
+  }
+
+  if (yearSelect && !yearSelect.options.length) {
+    for (let year = currentYear - 6; year <= currentYear + 6; year += 1) {
+      const option = document.createElement("option");
+      option.value = String(year);
+      option.textContent = String(year);
+      yearSelect.appendChild(option);
+    }
+  }
+  if (yearSelect) {
+    const hasYear = [...yearSelect.options].some((opt) => Number(opt.value) === currentYear);
+    if (!hasYear) {
+      const option = document.createElement("option");
+      option.value = String(currentYear);
+      option.textContent = String(currentYear);
+      yearSelect.appendChild(option);
+      [...yearSelect.options]
+        .sort((a, b) => Number(a.value) - Number(b.value))
+        .forEach((opt) => yearSelect.appendChild(opt));
+    }
+    yearSelect.value = String(currentYear);
+  }
+}
+
+function socialApplyCalendarMonthYearPicker() {
+  const monthNode = document.getElementById("socialCalendarPickerMonth");
+  const yearNode = document.getElementById("socialCalendarPickerYear");
+  const month = Number(monthNode?.value || 0);
+  const year = Number(yearNode?.value || 0);
+  if (!Number.isFinite(month) || !Number.isFinite(year)) return;
+  socialCalendarSetMonthYear(year, month);
+  socialCloseModal?.();
+  socialLoadCalendar();
+}
+
+function socialOpenCalendarMonthYearPicker() {
+  const base = socialState.calendarDate instanceof Date && !Number.isNaN(socialState.calendarDate.getTime())
+    ? socialState.calendarDate
+    : new Date();
+  const currentYear = base.getFullYear();
+  const currentMonth = base.getMonth();
+  const monthsHtml = Array.from({ length: 12 }, (_, monthIndex) => {
+    const label = new Date(2026, monthIndex, 1).toLocaleDateString(currentLang === "en" ? "en-US" : "ru-RU", { month: "long" });
+    return `<option value="${monthIndex}" ${monthIndex === currentMonth ? "selected" : ""}>${escapeHtml(label)}</option>`;
+  }).join("");
+  const yearsHtml = Array.from({ length: 17 }, (_, index) => {
+    const year = currentYear - 8 + index;
+    return `<option value="${year}" ${year === currentYear ? "selected" : ""}>${year}</option>`;
+  }).join("");
+  socialOpenModal(
+    tr("Выбрать месяц и год", "Select month and year"),
+    `
+      <div class="social-calendar-month-year-modal">
+        <label>
+          <span>${escapeHtml(tr("Месяц", "Month"))}</span>
+          <select id="socialCalendarPickerMonth">${monthsHtml}</select>
+        </label>
+        <label>
+          <span>${escapeHtml(tr("Год", "Year"))}</span>
+          <select id="socialCalendarPickerYear">${yearsHtml}</select>
+        </label>
+        <div class="actions">
+          <button type="button" class="btn-secondary" onclick="socialCloseModal()">${escapeHtml(tr("Отмена", "Cancel"))}</button>
+          <button type="button" onclick="socialApplyCalendarMonthYearPicker()">${escapeHtml(tr("Применить", "Apply"))}</button>
+        </div>
+      </div>
+    `
+  );
+}
+
+function socialBindCalendarSwipe() {
+  const grid = document.getElementById("socialCalendarGrid");
+  if (!grid || grid.dataset.swipeBound === "1") return;
+  grid.dataset.swipeBound = "1";
+  let startX = 0;
+  let startY = 0;
+  let active = false;
+  let pointerType = "";
+  const threshold = 40;
+  let lastSwipeAt = 0;
+  const triggerSwipe = (dx, dy) => {
+    if (Math.abs(dx) < threshold || Math.abs(dx) < Math.abs(dy)) return;
+    const now = Date.now();
+    if (now - lastSwipeAt < 260) return;
+    lastSwipeAt = now;
+    socialShiftCalendar(dx > 0 ? -1 : 1);
+  };
+  grid.addEventListener("touchstart", (event) => {
+    const touch = event.changedTouches?.[0];
+    if (!touch) return;
+    startX = touch.clientX;
+    startY = touch.clientY;
+    active = true;
+  }, { passive: true });
+  grid.addEventListener("touchend", (event) => {
+    if (!active) return;
+    active = false;
+    const touch = event.changedTouches?.[0];
+    if (!touch) return;
+    const dx = touch.clientX - startX;
+    const dy = touch.clientY - startY;
+    triggerSwipe(dx, dy);
+  }, { passive: true });
+  grid.addEventListener("touchcancel", () => {
+    active = false;
+  }, { passive: true });
+  grid.addEventListener("pointerdown", (event) => {
+    if (!event || !event.isPrimary) return;
+    pointerType = String(event.pointerType || "").toLowerCase();
+    if (pointerType === "mouse") return;
+    startX = Number(event.clientX || 0);
+    startY = Number(event.clientY || 0);
+    active = true;
+  }, { passive: true });
+  grid.addEventListener("pointerup", (event) => {
+    if (!active) return;
+    if (!event || !event.isPrimary) return;
+    const currentType = String(event.pointerType || pointerType || "").toLowerCase();
+    active = false;
+    if (currentType === "mouse") return;
+    const dx = Number(event.clientX || 0) - startX;
+    const dy = Number(event.clientY || 0) - startY;
+    triggerSwipe(dx, dy);
+  }, { passive: true });
+  grid.addEventListener("pointercancel", () => {
+    active = false;
+  }, { passive: true });
+}
+
+function socialEnsureCalendarNavigation() {
+  const root = document.getElementById("socialSubtabCalendar");
+  if (!root) return;
+  let hero = root.querySelector(".social-calendar-hero");
+  if (!hero) {
+    const shell = root.querySelector(".social-calendar-shell") || root;
+    hero = document.createElement("div");
+    hero.className = "social-calendar-hero";
+    shell.prepend(hero);
+  }
+  let nav = hero.querySelector(".social-calendar-nav-controls");
+  if (!nav) {
+    nav = document.createElement("div");
+    nav.className = "social-calendar-nav-controls";
+    nav.innerHTML = `
+      <button id="socialCalendarPrevBtn" type="button" class="social-calendar-nav-btn">&#8249;</button>
+      <select id="socialCalendarMonthSelect" class="social-calendar-picker"></select>
+      <select id="socialCalendarYearSelect" class="social-calendar-picker"></select>
+      <button id="socialCalendarNextBtn" type="button" class="social-calendar-nav-btn">&#8250;</button>
+    `;
+    hero.appendChild(nav);
+  }
+  const appMode = socialIsAppShellLike();
+  nav.classList.toggle("is-app-shell", appMode);
+  const prevBtn = nav.querySelector("#socialCalendarPrevBtn");
+  const nextBtn = nav.querySelector("#socialCalendarNextBtn");
+  const monthSelect = nav.querySelector("#socialCalendarMonthSelect");
+  const yearSelect = nav.querySelector("#socialCalendarYearSelect");
+  const monthLabel = document.getElementById("socialCalendarMonthLabel");
+  if (prevBtn && prevBtn.dataset.bound !== "1") {
+    prevBtn.dataset.bound = "1";
+    prevBtn.addEventListener("click", () => socialShiftCalendar(-1));
+  }
+  if (nextBtn && nextBtn.dataset.bound !== "1") {
+    nextBtn.dataset.bound = "1";
+    nextBtn.addEventListener("click", () => socialShiftCalendar(1));
+  }
+  if (monthSelect && monthSelect.dataset.bound !== "1") {
+    monthSelect.dataset.bound = "1";
+    monthSelect.addEventListener("change", () => {
+      const selectedMonth = Number(monthSelect.value || 0);
+      const selectedYear = Number(yearSelect?.value || socialState.calendarDate?.getFullYear() || new Date().getFullYear());
+      socialCalendarSetMonthYear(selectedYear, selectedMonth);
+      socialLoadCalendar();
+    });
+  }
+  if (yearSelect && yearSelect.dataset.bound !== "1") {
+    yearSelect.dataset.bound = "1";
+    yearSelect.addEventListener("change", () => {
+      const selectedYear = Number(yearSelect.value || new Date().getFullYear());
+      const selectedMonth = Number(monthSelect?.value || socialState.calendarDate?.getMonth() || 0);
+      socialCalendarSetMonthYear(selectedYear, selectedMonth);
+      socialLoadCalendar();
+    });
+  }
+  if (monthLabel && monthLabel.dataset.boundPicker !== "1") {
+    monthLabel.dataset.boundPicker = "1";
+    monthLabel.style.cursor = "pointer";
+    monthLabel.setAttribute("title", tr("Выбрать месяц и год", "Select month and year"));
+    monthLabel.addEventListener("click", () => {
+      socialOpenCalendarMonthYearPicker();
+    });
+  }
+  socialSyncCalendarMonthYearInputs();
+}
+
+function socialNormalizeCalendarChrome() {
+  const root = document.getElementById("socialSubtabCalendar");
+  if (!root) return;
+  root.classList.add("sw-calendar-samsung");
+  const shell = root.querySelector(".social-calendar-shell") || root.querySelector(".panel") || root;
+  let hero = shell.querySelector(".social-calendar-hero");
+  if (!hero) {
+    hero = document.createElement("div");
+    hero.className = "social-calendar-hero";
+    shell.prepend(hero);
+  }
+  let heroCopy = hero.querySelector(".social-calendar-hero-copy");
+  if (!heroCopy) {
+    heroCopy = document.createElement("div");
+    heroCopy.className = "social-calendar-hero-copy";
+    hero.prepend(heroCopy);
+  }
+  let monthLabel = document.getElementById("socialCalendarMonthLabel");
+  if (!monthLabel) {
+    monthLabel = document.createElement("h3");
+    monthLabel.id = "socialCalendarMonthLabel";
+  }
+  monthLabel.textContent = socialCalendarMonthLabel(socialState.calendarDate);
+  if (monthLabel.parentElement !== heroCopy) {
+    heroCopy.appendChild(monthLabel);
+  }
+  heroCopy.querySelectorAll("*").forEach((node) => {
+    if (node.id === "socialCalendarMonthLabel") return;
+    node.style.setProperty("display", "none", "important");
+  });
+  let monthInput = document.getElementById("socialCalendarMonth");
+  if (!monthInput) {
+    monthInput = document.createElement("input");
+    monthInput.id = "socialCalendarMonth";
+    monthInput.type = "month";
+    monthInput.onchange = () => socialLoadCalendar();
+    hero.appendChild(monthInput);
+  } else if (monthInput.parentElement !== hero) {
+    hero.appendChild(monthInput);
+  }
+  monthInput.value = socialCalendarMonthValue(socialState.calendarDate);
+  monthInput.classList.add("hidden");
+  monthInput.style.setProperty("display", "none", "important");
+  socialEnsureCalendarNavigation();
+  root.querySelectorAll(
+    ".social-calendar-toolbar, .social-calendar-toolbar--modern, .social-calendar-toolbar--clean, " +
+    ".social-calendar-filters, .social-calendar-hero-actions, " +
+    ".social-calendar-nav, .social-calendar-nav--minimal, .social-calendar-nav--simple, .social-calendar-nav--cluster, " +
+    ".social-calendar-sync-card, .social-calendar-sync-panel, .social-calendar-source-panel, .social-calendar-import-panel, " +
+    "[id*='GoogleCalendar'], [id*='GoogleOauth'], [id*='GoogleOAuth'], [id*='CalendarOAuth'], [id*='CalendarIcs']"
+  ).forEach((node) => {
+    node.style.setProperty("display", "none", "important");
+  });
+  root.querySelectorAll(
+    "button[onclick*='socialShiftCalendar'], " +
+    "button[onclick*='socialJumpCalendarToday'], " +
+    "button[onclick*='socialOpenCalendarModal']:not(#socialCalendarFab), " +
+    "button[onclick*='socialOpenCalendarQuickAddMenu']:not(#socialCalendarFab), " +
+    "button[onclick*='socialSetCalendarTaskMode'], " +
+    "button[onclick*='socialLoadCalendar']"
+  ).forEach((node) => {
+    node.style.setProperty("display", "none", "important");
+  });
+  root.querySelectorAll("button").forEach((btn) => {
+    if (btn.id === "socialCalendarFab") return;
+    if (btn.classList.contains("social-calendar-nav-btn")) return;
+    if (btn.classList.contains("social-day")) return;
+    if (btn.classList.contains("social-day-item-button")) return;
+    btn.style.setProperty("display", "none", "important");
+  });
+  let grid = document.getElementById("socialCalendarGrid");
+  if (!grid) {
+    grid = document.createElement("div");
+    grid.id = "socialCalendarGrid";
+    grid.className = "social-calendar-grid social-calendar-grid--samsung";
+    shell.appendChild(grid);
+  } else if (grid.parentElement !== shell) {
+    shell.appendChild(grid);
+  }
+  grid.style.setProperty("display", "block", "important");
+  let events = document.getElementById("socialCalendarEvents");
+  if (!events) {
+    events = document.createElement("div");
+    events.id = "socialCalendarEvents";
+    events.className = "social-calendar-events";
+    shell.appendChild(events);
+  } else if (events.parentElement !== shell) {
+    shell.appendChild(events);
+  }
+  events.style.setProperty("display", "block", "important");
+}
+
 function socialRenderCalendar() {
+  socialNormalizeCalendarChrome();
+  socialEnsureCalendarNavigation();
+  socialSyncCalendarMonthYearInputs();
+  socialEnsureCalendarFab();
   const grid = document.getElementById("socialCalendarGrid");
   const list = document.getElementById("socialCalendarEvents");
   const monthLabel = document.getElementById("socialCalendarMonthLabel");
@@ -5272,21 +6126,18 @@ function socialRenderCalendar() {
   const lastDay = new Date(year, month + 1, 0, 0, 0, 0, 0);
   const shift = (firstDay.getDay() + 6) % 7;
   const days = lastDay.getDate();
-  const compactCalendar = typeof window !== "undefined"
-    && window.matchMedia
-    && window.matchMedia("(max-width: 980px)").matches;
   const eventsByDay = new Map();
   const tasksByDay = new Map();
   const myTasksByDay = new Map();
   const myActorKey = String(socialState.boot?.actor?.actor_key || "").trim();
   (socialState.calendarEvents || []).forEach((eventRow) => {
-    const key = socialCalendarDayKey(eventRow?.start_at || "");
+    const key = socialCalendarDayKey(socialCalendarResolveEventStart(eventRow));
     if (!key) return;
     if (!eventsByDay.has(key)) eventsByDay.set(key, []);
     eventsByDay.get(key).push(eventRow);
   });
   (socialState.tasks || []).forEach((task) => {
-    const key = socialCalendarDayKey(task?.due_date || "");
+    const key = socialCalendarDayKey(socialCalendarResolveTaskDue(task));
     if (!key) return;
     if (!tasksByDay.has(key)) tasksByDay.set(key, []);
     tasksByDay.get(key).push(task);
@@ -5298,7 +6149,7 @@ function socialRenderCalendar() {
   if (monthLabel) {
     monthLabel.textContent = socialCalendarMonthLabel(d);
   }
-  let html = `<div class="social-calendar-row head">${[tr("Пн", "Mon"), tr("Вт", "Tue"), tr("Ср", "Wed"), tr("Чт", "Thu"), tr("Пт", "Fri"), tr("Сб", "Sat"), tr("Вс", "Sun")].map((x) => `<span>${x}</span>`).join("")}</div><div class="social-calendar-cells">`;
+  let html = `<div class="social-calendar-row head">${[tr("\u041f\u043d", "Mon"), tr("\u0412\u0442", "Tue"), tr("\u0421\u0440", "Wed"), tr("\u0427\u0442", "Thu"), tr("\u041f\u0442", "Fri"), tr("\u0421\u0431", "Sat"), tr("\u0412\u0441", "Sun")].map((x) => `<span>${x}</span>`).join("")}</div><div class="social-calendar-cells">`;
   for (let i = 0; i < shift; i += 1) html += `<button class="social-day muted" disabled></button>`;
   for (let day = 1; day <= days; day += 1) {
     const key = `${year}-${socialCalendarPad(month + 1)}-${socialCalendarPad(day)}`;
@@ -5311,10 +6162,32 @@ function socialRenderCalendar() {
     const hasTasks = tasksCount > 0 ? "has-task" : "";
     const hasMyTasks = myTasksCount > 0 ? "has-my-task" : "";
     const manyMyTasks = myTasksCount > 1 ? "my-task-many" : "";
-    const countsHtml = compactCalendar
-      ? `<small><span class="calendar-count calendar-events">${eventsCount}</span><span class="calendar-sep">-</span><span class="calendar-count calendar-tasks ${myTasksCount ? "my-task" : ""}">${tasksCount}</span></small>`
-      : `<small><span class="calendar-count calendar-events">${eventsCount} ${tr("соб.", "ev.")}</span><span class="calendar-sep">-</span><span class="calendar-count calendar-tasks ${myTasksCount ? "my-task" : ""}">${tasksCount} ${tr("задач", "tasks")}</span></small>`;
-    html += `<button class="social-day ${active} ${isToday} ${hasEvents} ${hasTasks} ${hasMyTasks} ${manyMyTasks}" data-day-key="${key}" type="button" onclick="socialShowDay('${key}')"><b>${day}</b>${countsHtml}</button>`;
+    const previewRows = [];
+    (eventsByDay.get(key) || []).forEach((eventRow) => {
+      const safeTitle = socialDecodeUiText(socialCalendarResolveEventTitle(eventRow) || "");
+      previewRows.push({
+        kind: "event",
+        title: String(safeTitle || "").trim(),
+        color: String(eventRow?.color || "#b8d2ff").trim() || "#b8d2ff",
+      });
+    });
+    (tasksByDay.get(key) || []).forEach((taskRow) => {
+      const ownTask = myActorKey && String(taskRow?.assignee_key || "") === myActorKey;
+      const safeTitle = socialDecodeUiText(socialCalendarResolveTaskTitle(taskRow) || "");
+      previewRows.push({
+        kind: "task",
+        title: String(safeTitle || "").trim(),
+        color: ownTask ? "#a9dfb8" : "#c9dcff",
+      });
+    });
+    const chips = previewRows.slice(0, 3).map((item) => {
+      const chipTitle = String(item.title || "").trim() || tr("\u0417\u0430\u043f\u0438\u0441\u044c", "Entry");
+      const shortTitle = chipTitle.length > 20 ? `${chipTitle.slice(0, 19)}...` : chipTitle;
+      return `<span class="sw-calendar-chip" style="--sw-chip-color:${escapeHtml(item.color)}"><span class="sw-calendar-chip-title">${escapeHtml(shortTitle)}</span></span>`;
+    }).join("");
+    const hiddenCount = Math.max(0, (eventsCount + tasksCount) - Math.min(3, previewRows.length));
+    const more = hiddenCount > 0 ? `<span class="sw-calendar-more">+${hiddenCount}</span>` : "";
+    html += `<button class="social-day rich ${active} ${isToday} ${hasEvents} ${hasTasks} ${hasMyTasks} ${manyMyTasks}" data-day-key="${key}" type="button" onclick="socialShowDay('${key}')"><div class="social-day-head"><b>${day}</b></div><div class="social-day-preview-stack">${chips}</div>${more}</button>`;
   }
   html += `</div>`;
   grid.innerHTML = html;
@@ -5324,7 +6197,72 @@ function socialRenderCalendar() {
   const fallback = todayFallback || `${year}-${socialCalendarPad(month + 1)}-01`;
   const inMonth = String(socialState.calendarSelectedDay || "").startsWith(`${year}-${socialCalendarPad(month + 1)}-`);
   socialShowDay(inMonth ? socialState.calendarSelectedDay : fallback);
+  socialBindCalendarSwipe();
 }
+
+function socialEnsureCalendarFab() {
+  const root = document.getElementById("socialSubtabCalendar");
+  if (!root) return;
+  const shell = root.querySelector(".social-calendar-shell") || root;
+  let fab = document.getElementById("socialCalendarFab");
+  if (!fab) {
+    fab = document.createElement("button");
+    fab.id = "socialCalendarFab";
+    fab.type = "button";
+    fab.className = "social-calendar-fab";
+    shell.appendChild(fab);
+  }
+  fab.textContent = "+";
+  fab.classList.remove("hidden");
+  fab.setAttribute("aria-label", tr("\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c", "Add"));
+  fab.setAttribute("title", tr("\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c", "Add"));
+  fab.onclick = () => socialOpenCalendarQuickAddMenu();
+}
+
+function socialOpenCalendarQuickAddMenu() {
+  socialOpenModal(
+    tr("\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c", "Add"),
+    `
+      <div class="sw-calendar-quick-menu">
+        <button type="button" onclick="socialCalendarQuickCreate('event')">${escapeHtml(tr("\u0421\u043e\u0431\u044b\u0442\u0438\u0435", "Event"))}</button>
+        <button type="button" onclick="socialCalendarQuickCreate('reminder')">${escapeHtml(tr("\u041d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u0435", "Reminder"))}</button>
+        <button type="button" onclick="socialCalendarQuickCreate('task')">${escapeHtml(tr("\u0417\u0430\u0434\u0430\u0447\u0430", "Task"))}</button>
+      </div>
+    `
+  );
+}
+
+function socialCalendarQuickCreate(kind) {
+  const mode = String(kind || "event").trim().toLowerCase();
+  const selectedDay = String(socialState.calendarSelectedDay || "").trim();
+  socialCloseModal?.();
+  if (mode === "task") {
+    if (typeof switchSocialSubtab === "function") switchSocialSubtab("tasks", true);
+    setTimeout(() => {
+      if (typeof socialOpenTaskModal === "function") socialOpenTaskModal(0);
+      const dueNode = document.getElementById("socialTaskDue");
+      if (dueNode && selectedDay && !String(dueNode.value || "").trim()) {
+        dueNode.value = `${selectedDay}T09:00`;
+      }
+    }, 60);
+    return;
+  }
+  socialOpenCalendarModal(0);
+  setTimeout(() => {
+    const kindNode = document.getElementById("socialEventEntryKind");
+    if (kindNode && (mode === "event" || mode === "reminder")) {
+      kindNode.value = mode;
+      kindNode.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    const startNode = document.getElementById("socialEventStart");
+    const endNode = document.getElementById("socialEventEnd");
+    if (selectedDay) {
+      if (startNode && !String(startNode.value || "").trim()) startNode.value = `${selectedDay}T08:00`;
+      if (endNode && !String(endNode.value || "").trim()) endNode.value = `${selectedDay}T09:00`;
+    }
+  }, 80);
+}
+
 function socialCleanCalendarDetails(raw) {
   const value = String(raw || "");
   if (!value.trim()) return "";
@@ -5336,47 +6274,157 @@ function socialCleanCalendarDetails(raw) {
   return cleaned;
 }
 
+function socialOpenCalendarRecordDetail(kind, id) {
+  const safeKind = String(kind || "event").trim().toLowerCase() === "task" ? "task" : "event";
+  const safeId = Number(id || 0);
+  if (!safeId) return;
+  if (safeKind === "event") {
+    const eventRow = (socialState.calendarEvents || []).find((row) => Number(row?.id || 0) === safeId);
+    if (!eventRow) return;
+    const editId = socialCalendarEventBaseId(eventRow);
+    const startAt = socialCalendarResolveEventStart(eventRow);
+    const endAt = socialCalendarResolveEventEnd(eventRow);
+    const eventTitle = socialCalendarResolveEventTitle(eventRow);
+    const timeLabel = startAt
+      ? `${socialCalendarTimeLabel(startAt)}${endAt ? ` - ${socialCalendarTimeLabel(endAt)}` : ""}`
+      : tr("\u0412\u0435\u0441\u044c \u0434\u0435\u043d\u044c", "All day");
+    const scopeLabel = eventRow?.is_public ? tr("\u041e\u0431\u0449\u0435\u0435", "Shared") : tr("\u041b\u0438\u0447\u043d\u043e\u0435", "Private");
+    const repeatLabel = socialCalendarRecurrenceLabel(eventRow?.recurrence_kind, eventRow?.recurrence_interval);
+    const reminderLabel = socialCalendarReminderSummary(eventRow?.reminder_offsets_min, eventRow?.reminder_enabled !== false);
+    const cleanDetails = socialDecodeUiText(socialCleanCalendarDetails(eventRow?.details || "") || "");
+    const metaBits = [scopeLabel];
+    if (repeatLabel) metaBits.push(repeatLabel);
+    if (reminderLabel) metaBits.push(reminderLabel);
+    socialOpenModal(
+      socialDecodeUiText(String(eventTitle || tr("\u0421\u043e\u0431\u044b\u0442\u0438\u0435", "Event")).trim()) || tr("\u0421\u043e\u0431\u044b\u0442\u0438\u0435", "Event"),
+      `
+        <div class="social-calendar-record-detail">
+          <div><b>${escapeHtml(timeLabel || "-")}</b></div>
+          <div>${escapeHtml(metaBits.join(" / ") || "-")}</div>
+          <div>${cleanDetails ? escapeHtml(cleanDetails) : `<span class="hint">${escapeHtml(tr("\u0411\u0435\u0437 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u044f", "No description"))}</span>`}</div>
+          <div class="actions">
+            <button type="button" class="btn-secondary" onclick="socialOpenCalendarModal(${Number(editId || 0)}); socialCloseModal();">${escapeHtml(tr("\u0418\u0437\u043c\u0435\u043d\u0438\u0442\u044c", "Edit"))}</button>
+            <button type="button" class="btn-danger" onclick="socialDeleteEvent(${Number(editId || 0)}); socialCloseModal();">${escapeHtml(tr("\u0423\u0434\u0430\u043b\u0438\u0442\u044c", "Delete"))}</button>
+          </div>
+        </div>
+      `
+    );
+    return;
+  }
+  const task = (socialState.tasks || []).find((row) => Number(row?.id || 0) === safeId);
+  if (!task) return;
+  const dueRaw = socialCalendarResolveTaskDue(task);
+  const dueLabel = dueRaw ? socialCalendarTimeLabel(dueRaw) : tr("\u0411\u0435\u0437 \u0441\u0440\u043e\u043a\u0430", "No due date");
+  const meta = [];
+  if (String(task?.project_title || "").trim()) meta.push(socialDecodeUiText(task.project_title || ""));
+  if (String(task?.assignee_nick || "").trim()) meta.push(socialDecodeUiText(task.assignee_nick || ""));
+  const status = socialDecodeUiText(task?.status || "") || tr("\u0411\u0435\u0437 \u0441\u0442\u0430\u0442\u0443\u0441\u0430", "No status");
+  const description = socialDecodeUiText(task?.description || "");
+  socialOpenModal(
+    socialDecodeUiText(String(task?.title || tr("\u0417\u0430\u0434\u0430\u0447\u0430", "Task")).trim()) || tr("\u0417\u0430\u0434\u0430\u0447\u0430", "Task"),
+    `
+      <div class="social-calendar-record-detail">
+        <div><b>${escapeHtml(dueLabel)}</b></div>
+        <div>${escapeHtml(meta.join(" / ") || status)}</div>
+        <div>${escapeHtml(description || tr("\u0411\u0435\u0437 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u044f", "No description"))}</div>
+        <div class="actions">
+          <button type="button" class="btn-secondary" onclick="switchSocialSubtab('tasks'); socialOpenTaskModal(${safeId}); socialCloseModal();">${escapeHtml(tr("\u0418\u0437\u043c\u0435\u043d\u0438\u0442\u044c", "Edit"))}</button>
+          <button type="button" class="btn-danger" onclick="socialDeleteTask(${safeId}); socialCloseModal();">${escapeHtml(tr("\u0423\u0434\u0430\u043b\u0438\u0442\u044c", "Delete"))}</button>
+        </div>
+      </div>
+    `
+  );
+}
+
 function socialShowDay(dayKey) {
   const list = document.getElementById("socialCalendarEvents");
   if (!list) return;
+  socialNormalizeCalendarChrome();
   socialState.calendarSelectedDay = dayKey;
   const events = (socialState.calendarEvents || [])
-    .filter((eventRow) => socialCalendarDayKey(eventRow?.start_at || "") === dayKey)
+    .filter((eventRow) => socialCalendarDayKey(socialCalendarResolveEventStart(eventRow)) === dayKey)
     .sort((a, b) => {
-      const left = socialCalendarParseDate(a?.start_at)?.getTime() || 0;
-      const right = socialCalendarParseDate(b?.start_at)?.getTime() || 0;
+      const left = socialCalendarParseDate(socialCalendarResolveEventStart(a))?.getTime() || 0;
+      const right = socialCalendarParseDate(socialCalendarResolveEventStart(b))?.getTime() || 0;
       return left - right;
     });
   const tasks = (socialState.tasks || [])
-    .filter((task) => socialCalendarDayKey(task?.due_date || "") === dayKey)
-    .sort((a, b) => String(a?.title || "").localeCompare(String(b?.title || ""), currentLang === "en" ? "en" : "ru"));
+    .filter((task) => socialCalendarDayKey(socialCalendarResolveTaskDue(task)) === dayKey)
+    .sort((a, b) => {
+      const left = socialDecodeUiText(socialCalendarResolveTaskTitle(a) || "");
+      const right = socialDecodeUiText(socialCalendarResolveTaskTitle(b) || "");
+      return String(left || "").localeCompare(String(right || ""), currentLang === "en" ? "en" : "ru");
+    });
+
+  const eventCards = events.length
+    ? events.map((eventRow) => {
+        const startAt = socialCalendarResolveEventStart(eventRow);
+        const endAt = socialCalendarResolveEventEnd(eventRow);
+        const eventTitle = socialCalendarResolveEventTitle(eventRow);
+        const timeLabel = startAt
+          ? `${socialCalendarTimeLabel(startAt)}${endAt ? ` - ${socialCalendarTimeLabel(endAt)}` : ""}`
+          : "-";
+        const scopeLabel = eventRow?.is_public ? tr("\u041e\u0431\u0449\u0435\u0435", "Shared") : tr("\u041b\u0438\u0447\u043d\u043e\u0435", "Private");
+        const repeatLabel = socialCalendarRecurrenceLabel(eventRow?.recurrence_kind, eventRow?.recurrence_interval);
+        const reminderLabel = socialCalendarReminderSummary(eventRow?.reminder_offsets_min, eventRow?.reminder_enabled !== false);
+        const editId = socialCalendarEventBaseId(eventRow);
+        const cleanDetails = socialCleanCalendarDetails(eventRow?.details || "");
+        const metaBits = [scopeLabel];
+        if (repeatLabel) metaBits.push(repeatLabel);
+        if (reminderLabel) metaBits.push(reminderLabel);
+        return `
+          <button type="button" class="social-day-item social-day-item-button" onclick="socialOpenCalendarRecordDetail('event', ${Number(eventRow?.id || 0)})">
+            <b>${escapeHtml(socialDecodeUiText(eventTitle || "-") || "-")}</b>
+            <small>${escapeHtml(timeLabel)}${metaBits.length ? ` - ${escapeHtml(metaBits.join(" / "))}` : ""}</small>
+            <div>${cleanDetails ? escapeHtml(socialDecodeUiText(cleanDetails) || cleanDetails) : `<span class="hint">${escapeHtml(tr("\u0411\u0435\u0437 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u044f", "No description"))}</span>`}</div>
+          </button>
+        `;
+      }).join("")
+    : `<div class="hint">${tr("\u041d\u0430 \u044d\u0442\u043e\u0442 \u0434\u0435\u043d\u044c \u0441\u043e\u0431\u044b\u0442\u0438\u0439 \u043d\u0435\u0442.", "No events for this day.")}</div>`;
+
+  const taskCards = tasks.length
+    ? tasks.map((task) => {
+        const metaBits = [];
+        if (String(task?.task_kind || "company") === "personal") {
+          metaBits.push(tr("\u041c\u043e\u0438 \u0437\u0430\u0434\u0430\u0447\u0438", "Personal"));
+        } else if (String(task?.project_title || "").trim()) {
+          metaBits.push(socialDecodeUiText(task.project_title || ""));
+        }
+        if (String(task?.assignee_nick || "").trim()) {
+          metaBits.push(socialDecodeUiText(task.assignee_nick || ""));
+        }
+        const statusLabel = socialDecodeUiText(task?.status || "");
+        return `
+          <button type="button" class="social-day-item social-day-item-button" onclick="socialOpenCalendarRecordDetail('task', ${Number(task?.id || 0)})">
+            <b>${escapeHtml(socialDecodeUiText(socialCalendarResolveTaskTitle(task) || "-") || "-")}</b>
+            <small>${escapeHtml(metaBits.join(" / ") || tr("\u0411\u0435\u0437 \u043c\u0435\u0442\u043e\u043a", "No labels"))}</small>
+            <div>${escapeHtml(statusLabel || tr("\u0411\u0435\u0437 \u0441\u0442\u0430\u0442\u0443\u0441\u0430", "No status"))}</div>
+          </button>
+        `;
+      }).join("")
+    : `<div class="hint">${tr("\u041d\u0430 \u044d\u0442\u043e\u0442 \u0434\u0435\u043d\u044c \u0434\u0435\u0434\u043b\u0430\u0439\u043d\u043e\u0432 \u043d\u0435\u0442.", "No task deadlines for this day.")}</div>`;
+
   list.innerHTML = `
     <div class="social-calendar-day-header">
       <div>
-        <span>${escapeHtml(tr("Выбранный день", "Selected day"))}</span>
+        <span>${escapeHtml(tr("\u0412\u044b\u0431\u0440\u0430\u043d\u043d\u044b\u0439 \u0434\u0435\u043d\u044c", "Selected day"))}</span>
         <h4>${escapeHtml(socialCalendarDayLabel(dayKey))}</h4>
       </div>
       <div class="social-calendar-day-stats">
-        <span>${escapeHtml(`${tr("События", "Events")}: ${events.length}`)}</span>
-        <span>${escapeHtml(`${tr("Задачи", "Tasks")}: ${tasks.length}`)}</span>
+        <span>${escapeHtml(`${tr("\u0421\u043e\u0431\u044b\u0442\u0438\u044f", "Events")}: ${events.length}`)}</span>
+        <span>${escapeHtml(`${tr("\u0417\u0430\u0434\u0430\u0447\u0438", "Tasks")}: ${tasks.length}`)}</span>
       </div>
     </div>
     <div class="social-day-events">
-      <h5>${tr("События", "Events")}</h5>
-      ${events.length ? events.map((eventRow) => {
-        const timeLabel = eventRow?.start_at
-          ? `${socialCalendarTimeLabel(eventRow.start_at)}${eventRow?.end_at ? ` - ${socialCalendarTimeLabel(eventRow.end_at)}` : ""}`
-          : "-";
-        const scopeLabel = eventRow?.is_public ? tr("Общее", "Shared") : tr("Личное", "Private");
-        const cleanDetails = socialCleanCalendarDetails(eventRow.details || "");
-        return `<div class="social-day-item"><b>${escapeHtml(eventRow.title || "-")}</b><small>${escapeHtml(timeLabel)} - ${escapeHtml(scopeLabel)}</small><div>${cleanDetails ? escapeHtml(cleanDetails) : `<span class="hint">${escapeHtml(tr("Без описания", "No description"))}</span>`}</div><div class="actions"><button type="button" onclick="socialOpenCalendarModal(${Number(eventRow.id)})">${tr("Изменить", "Edit")}</button><button class="btn-danger" type="button" onclick="socialDeleteEvent(${Number(eventRow.id)})">${tr("Удалить", "Delete")}</button></div></div>`;
-      }).join("") : `<div class="hint">${tr("На этот день событий нет.", "No events for this day.")}</div>`}
+      <h5>${tr("\u0421\u043e\u0431\u044b\u0442\u0438\u044f", "Events")}</h5>
+      ${eventCards}
     </div>
     <div class="social-day-events">
-      <h5>${tr("Дедлайны задач", "Task deadlines")}</h5>
-      ${tasks.length ? tasks.map((task) => `<div class="social-day-item"><b>${escapeHtml(task.title || "-")}</b><small>${escapeHtml(task.assignee_nick || "-")}</small><div>${escapeHtml(task.status || "")}</div></div>`).join("") : `<div class="hint">${tr("На этот день дедлайнов нет.", "No task deadlines for this day.")}</div>`}
+      <h5>${tr("\u0414\u0435\u0434\u043b\u0430\u0439\u043d\u044b \u0437\u0430\u0434\u0430\u0447", "Task deadlines")}</h5>
+      ${taskCards}
     </div>
   `;
+
   const grid = document.getElementById("socialCalendarGrid");
   if (grid) {
     grid.querySelectorAll(".social-day[data-day-key]").forEach((btn) => {
@@ -5384,7 +6432,6 @@ function socialShowDay(dayKey) {
     });
   }
 }
-
 const SOCIAL_EMOJI_STORAGE_KEY = "seo_wibe_social_emoji_recent_v2";
 const SOCIAL_EMOJI_RECENT_LIMIT = 30;
 const SOCIAL_EMOJI_TAB_ORDER = ["recent", "all"];
@@ -5533,10 +6580,10 @@ function socialEnsureEmojiPicker() {
   socialGetEmojiRecents();
   const tabs = `
     <button type="button" class="social-emoji-tab ${socialEmojiSetKey === "recent" ? "active" : ""}" onclick="socialSwitchEmojiSet('recent')" aria-label="${escapeHtml(tr("\u041d\u0435\u0434\u0430\u0432\u043d\u0438\u0435", "Recent"))}" title="${escapeHtml(tr("\u041d\u0435\u0434\u0430\u0432\u043d\u0438\u0435", "Recent"))}">
-      <span class="social-emoji-tab-icon" aria-hidden="true">🕘</span>
+      <span class="social-emoji-tab-icon" aria-hidden="true">??</span>
     </button>
     <button type="button" class="social-emoji-tab ${socialEmojiSetKey === "all" ? "active" : ""}" onclick="socialSwitchEmojiSet('all')" aria-label="${escapeHtml(tr("\u0412\u0441\u0435 \u0441\u043c\u0430\u0439\u043b\u0438\u043a\u0438", "All emoji"))}" title="${escapeHtml(tr("\u0412\u0441\u0435 \u0441\u043c\u0430\u0439\u043b\u0438\u043a\u0438", "All emoji"))}">
-      <span class="social-emoji-tab-icon" aria-hidden="true">🙂</span>
+      <span class="social-emoji-tab-icon" aria-hidden="true">??</span>
     </button>
   `;
   const pane = socialEmojiSetKey === "recent"
@@ -5587,36 +6634,393 @@ function socialInsertEmoji(emoji) {
   socialToggleEmojiPicker(true);
 }
 
-function socialOpenCalendarModal(eventId = 0) {
-  const row = socialState.calendarEvents.find((x) => Number(x.id) === Number(eventId || 0)) || null;
-  socialOpenModal(
-    row ? tr("Изменить событие", "Edit event") : tr("Новое событие", "New event"),
-    `
-      <div class="grid-2">
-        <label><span>${tr("Название", "Title")}</span><input id="socialEventTitle" value="${escapeHtml(row?.title || "")}" /></label>
-        <label><span>${tr("Начало", "Start")}</span><input id="socialEventStart" type="datetime-local" value="${escapeHtml(socialCalendarDateTimeValue(row?.start_at || ""))}" /></label>
-        <label><span>${tr("Конец", "End")}</span><input id="socialEventEnd" type="datetime-local" value="${escapeHtml(socialCalendarDateTimeValue(row?.end_at || ""))}" /></label>
-        <label class="check"><input id="socialEventPublic" type="checkbox" ${row?.is_public ? "checked" : ""} /> ${tr("Общее событие (видно всем)", "Public event (visible to all)")}</label>
-        <label class="full"><span>${tr("Описание", "Details")}</span><textarea id="socialEventDetails" rows="4">${escapeHtml(socialCleanCalendarDetails(row?.details || ""))}</textarea></label>
+const SOCIAL_CALENDAR_REMINDER_PRESETS = Object.freeze([
+  { value: 0 },
+  { value: 10 },
+  { value: 30 },
+  { value: 60 },
+  { value: 24 * 60 },
+  { value: 3 * 24 * 60 },
+  { value: 7 * 24 * 60 },
+]);
+
+function socialCalendarEventBaseId(eventRow) {
+  const sourceId = Number(eventRow?.source_event_id || 0);
+  const ownId = Number(eventRow?.id || 0);
+  return sourceId || ownId || 0;
+}
+
+function socialCalendarNormalizeReminderOffsets(input, fallbackDefault = true) {
+  let source = input;
+  if (typeof source === "string") {
+    const raw = String(source || "").trim();
+    if (!raw) {
+      source = [];
+    } else {
+      try {
+        source = JSON.parse(raw);
+      } catch (_) {
+        source = [raw];
+      }
+    }
+  }
+  if (source == null) source = [];
+  if (!Array.isArray(source)) source = [source];
+  const seen = new Set();
+  const values = [];
+  source.forEach((item) => {
+    const minutes = Math.round(Number(item));
+    if (!Number.isFinite(minutes) || minutes < 0 || minutes > 60 * 24 * 365) return;
+    if (seen.has(minutes)) return;
+    seen.add(minutes);
+    values.push(minutes);
+  });
+  values.sort((a, b) => a - b);
+  if (values.length) return values;
+  return fallbackDefault ? [10] : [];
+}
+
+function socialCalendarReminderLabel(minutesRaw) {
+  const minutes = Math.round(Number(minutesRaw || 0));
+  if (!Number.isFinite(minutes) || minutes < 0) return "";
+  const isEn = typeof currentLang !== "undefined" && currentLang === "en";
+  if (minutes === 0) return tr("\u0412 \u043c\u043e\u043c\u0435\u043d\u0442 \u0441\u043e\u0431\u044b\u0442\u0438\u044f", "At event time");
+  if (minutes % (7 * 24 * 60) === 0) {
+    const weeks = Math.max(1, Math.round(minutes / (7 * 24 * 60)));
+    return isEn ? `${weeks} week${weeks === 1 ? "" : "s"} before` : `${weeks} ${tr("\u043d\u0435\u0434.", "wk.")} ${tr("\u0437\u0430\u0440\u0430\u043d\u0435\u0435", "before")}`;
+  }
+  if (minutes % (24 * 60) === 0) {
+    const days = Math.max(1, Math.round(minutes / (24 * 60)));
+    return isEn ? `${days} day${days === 1 ? "" : "s"} before` : `${days} ${tr("\u0434\u043d.", "day")} ${tr("\u0437\u0430\u0440\u0430\u043d\u0435\u0435", "before")}`;
+  }
+  if (minutes % 60 === 0) {
+    const hours = Math.max(1, Math.round(minutes / 60));
+    return isEn ? `${hours} hour${hours === 1 ? "" : "s"} before` : `${hours} ${tr("\u0447.", "hr")} ${tr("\u0437\u0430\u0440\u0430\u043d\u0435\u0435", "before")}`;
+  }
+  return isEn ? `${minutes} min before` : `${minutes} ${tr("\u043c\u0438\u043d.", "min")} ${tr("\u0437\u0430\u0440\u0430\u043d\u0435\u0435", "before")}`;
+}
+
+function socialCalendarReminderSummary(offsets, enabled = true) {
+  if (!enabled) return tr("\u0411\u0435\u0437 \u043d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u0439", "No reminders");
+  const values = socialCalendarNormalizeReminderOffsets(offsets, true);
+  if (!values.length) return tr("\u0411\u0435\u0437 \u043d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u0439", "No reminders");
+  const labels = values.map((minutes) => socialCalendarReminderLabel(minutes)).filter(Boolean);
+  if (!labels.length) return tr("\u0411\u0435\u0437 \u043d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u0439", "No reminders");
+  const preview = labels.slice(0, 2).join(", ");
+  const extra = labels.length > 2 ? ` +${labels.length - 2}` : "";
+  return `${tr("\u041d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u044f", "Reminders")}: ${preview}${extra}`;
+}
+
+function socialCalendarRecurrenceLabel(kindRaw, intervalRaw) {
+  const kind = String(kindRaw || "none").trim().toLowerCase();
+  const interval = Math.max(1, Math.round(Number(intervalRaw || 1)) || 1);
+  if (kind === "none") return "";
+  if (interval === 1) {
+    if (kind === "day") return tr("\u041a\u0430\u0436\u0434\u044b\u0439 \u0434\u0435\u043d\u044c", "Daily");
+    if (kind === "week") return tr("\u041a\u0430\u0436\u0434\u0443\u044e \u043d\u0435\u0434\u0435\u043b\u044e", "Weekly");
+    if (kind === "month") return tr("\u041a\u0430\u0436\u0434\u044b\u0439 \u043c\u0435\u0441\u044f\u0446", "Monthly");
+    if (kind === "year") return tr("\u041a\u0430\u0436\u0434\u044b\u0439 \u0433\u043e\u0434", "Yearly");
+  }
+  const isEn = typeof currentLang !== "undefined" && currentLang === "en";
+  if (isEn) {
+    if (kind === "day") return `Every ${interval} days`;
+    if (kind === "week") return `Every ${interval} weeks`;
+    if (kind === "month") return `Every ${interval} months`;
+    if (kind === "year") return `Every ${interval} years`;
+    return "";
+  }
+  if (kind === "day") return `\u041a\u0430\u0436\u0434\u044b\u0435 ${interval} \u0434\u043d.`;
+  if (kind === "week") return `\u041a\u0430\u0436\u0434\u044b\u0435 ${interval} \u043d\u0435\u0434.`;
+  if (kind === "month") return `\u041a\u0430\u0436\u0434\u044b\u0435 ${interval} \u043c\u0435\u0441.`;
+  if (kind === "year") return `\u041a\u0430\u0436\u0434\u044b\u0435 ${interval} \u0433.`;
+  return "";
+}
+
+function socialCalendarReminderParts(minutesRaw) {
+  const minutes = Math.max(0, Math.round(Number(minutesRaw || 0)) || 0);
+  if (minutes > 0 && minutes % (7 * 24 * 60) === 0) {
+    return { amount: Math.max(1, Math.round(minutes / (7 * 24 * 60))), unit: "week" };
+  }
+  if (minutes > 0 && minutes % (24 * 60) === 0) {
+    return { amount: Math.max(1, Math.round(minutes / (24 * 60))), unit: "day" };
+  }
+  if (minutes > 0 && minutes % 60 === 0) {
+    return { amount: Math.max(1, Math.round(minutes / 60)), unit: "hour" };
+  }
+  return { amount: Math.max(1, minutes || 30), unit: "minute" };
+}
+
+function socialCalendarReminderUnitFactor(unitRaw) {
+  const unit = String(unitRaw || "minute").trim().toLowerCase();
+  if (unit === "hour") return 60;
+  if (unit === "day") return 24 * 60;
+  if (unit === "week") return 7 * 24 * 60;
+  return 1;
+}
+
+function socialCalendarReminderUnitOptions(selected = "minute") {
+  const unit = String(selected || "minute").trim().toLowerCase();
+  const options = [
+    { value: "minute", label: tr("\u041c\u0438\u043d\u0443\u0442\u044b", "Minutes") },
+    { value: "hour", label: tr("\u0427\u0430\u0441\u044b", "Hours") },
+    { value: "day", label: tr("\u0414\u043d\u0438", "Days") },
+    { value: "week", label: tr("\u041d\u0435\u0434\u0435\u043b\u0438", "Weeks") },
+  ];
+  return options.map((option) => `<option value="${option.value}" ${option.value === unit ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("");
+}
+
+function socialCalendarGetCustomReminderOffsets() {
+  const host = document.getElementById("socialEventReminderCustomList");
+  if (host) {
+    const rows = Array.from(host.querySelectorAll(".social-calendar-reminder-custom-row"));
+    if (rows.length) {
+      const values = rows.map((row) => {
+        const amount = Math.round(Number(row.querySelector('[data-role="amount"]')?.value || 0));
+        const unit = String(row.querySelector('[data-role="unit"]')?.value || "minute").trim().toLowerCase();
+        if (!Number.isFinite(amount) || amount <= 0) return null;
+        return amount * socialCalendarReminderUnitFactor(unit);
+      }).filter((value) => Number.isFinite(value));
+      return socialCalendarNormalizeReminderOffsets(values, false);
+    }
+  }
+  const hidden = document.getElementById("socialEventReminderCustomState");
+  return socialCalendarNormalizeReminderOffsets(hidden?.value || [], false);
+}
+
+function socialCalendarSetCustomReminderOffsets(offsets) {
+  const values = socialCalendarNormalizeReminderOffsets(offsets, false);
+  const hidden = document.getElementById("socialEventReminderCustomState");
+  if (hidden) hidden.value = JSON.stringify(values);
+  const host = document.getElementById("socialEventReminderCustomList");
+  if (!host) return;
+  if (!values.length) {
+    host.innerHTML = `<div class="hint">${escapeHtml(tr("\u041d\u0435\u0442 \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c\u0441\u043a\u0438\u0445 \u043d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u0439", "No custom reminders"))}</div>`;
+    return;
+  }
+  host.innerHTML = values.map((minutes, index) => {
+    const parts = socialCalendarReminderParts(minutes);
+    return `
+      <div class="social-calendar-reminder-custom-row">
+        <input type="number" min="1" step="1" value="${escapeHtml(String(parts.amount || 1))}" data-role="amount" oninput="socialCalendarToggleReminderFields()" />
+        <select data-role="unit" onchange="socialCalendarToggleReminderFields()">${socialCalendarReminderUnitOptions(parts.unit)}</select>
+        <button class="btn-secondary" type="button" onclick="socialCalendarRemoveCustomReminder(${index})">${tr("\u0423\u0434\u0430\u043b\u0438\u0442\u044c", "Remove")}</button>
       </div>
-      <div class="actions"><button type="button" onclick="socialSaveEvent(${row ? Number(row.id) : 0})">${row ? tr("Сохранить", "Save") : tr("Создать", "Create")}</button></div>
+    `;
+  }).join("");
+}
+
+function socialCalendarCollectReminderOffsets() {
+  const enabled = Boolean(document.getElementById("socialEventReminderEnabled")?.checked);
+  if (!enabled) return [];
+  const presetValues = Array.from(document.querySelectorAll('input[name="socialEventReminderPreset"]:checked'))
+    .map((node) => Number(node.value || 0));
+  const customValues = socialCalendarGetCustomReminderOffsets();
+  return socialCalendarNormalizeReminderOffsets([...presetValues, ...customValues], true);
+}
+
+function socialCalendarAddCustomReminder(offset = 180) {
+  const current = socialCalendarGetCustomReminderOffsets();
+  current.push(Number(offset || 180) || 180);
+  socialCalendarSetCustomReminderOffsets(current);
+  socialCalendarToggleReminderFields();
+  const inputs = document.querySelectorAll('.social-calendar-reminder-custom-row [data-role="amount"]');
+  const input = inputs[inputs.length - 1];
+  if (input) {
+    input.focus();
+    input.select?.();
+  }
+}
+
+function socialCalendarRemoveCustomReminder(index) {
+  const current = socialCalendarGetCustomReminderOffsets();
+  current.splice(Math.max(0, Number(index || 0)), 1);
+  socialCalendarSetCustomReminderOffsets(current);
+  socialCalendarToggleReminderFields();
+}
+
+function socialCalendarToggleReminderFields() {
+  const enabled = Boolean(document.getElementById("socialEventReminderEnabled")?.checked);
+  const fields = document.getElementById("socialEventReminderFields");
+  if (fields) fields.classList.toggle("hidden", !enabled);
+  if (enabled) {
+    const hasPreset = Boolean(document.querySelector('input[name="socialEventReminderPreset"]:checked'));
+    const hasCustom = socialCalendarGetCustomReminderOffsets().length > 0;
+    if (!hasPreset && !hasCustom) {
+      const fallback = document.querySelector('input[name="socialEventReminderPreset"][value="10"]');
+      if (fallback) fallback.checked = true;
+    }
+  }
+  const note = document.getElementById("socialEventReminderNote");
+  if (note) {
+    note.textContent = enabled
+      ? socialCalendarReminderSummary(socialCalendarCollectReminderOffsets(), true)
+      : tr("\u041d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u044f \u043e\u0442\u043a\u043b\u044e\u0447\u0435\u043d\u044b", "Reminders are off");
+  }
+}
+
+function socialCalendarToggleRecurrenceFields() {
+  const kind = String(document.getElementById("socialEventRecurrenceKind")?.value || "none").trim().toLowerCase();
+  const intervalWrap = document.getElementById("socialEventRecurrenceIntervalWrap");
+  if (intervalWrap) intervalWrap.classList.toggle("hidden", kind === "none");
+  const note = document.getElementById("socialEventRecurrenceNote");
+  if (note) {
+    const interval = Math.max(1, Math.round(Number(document.getElementById("socialEventRecurrenceInterval")?.value || 1)) || 1);
+    note.textContent = kind === "none"
+      ? tr("\u0421\u043e\u0431\u044b\u0442\u0438\u0435 \u043d\u0435 \u043f\u043e\u0432\u0442\u043e\u0440\u044f\u0435\u0442\u0441\u044f", "This event does not repeat")
+      : socialCalendarRecurrenceLabel(kind, interval);
+  }
+}
+
+async function socialOpenCalendarModal(eventId = 0) {
+  const baseId = Number(eventId || 0);
+  const fallbackRow = (socialState.calendarEvents || []).find((x) => socialCalendarEventBaseId(x) === baseId) || null;
+  let row = fallbackRow;
+  if (baseId > 0) {
+    const loaded = await socialRequest(`/api/social/calendar/events/${baseId}`).catch(() => null);
+    if (loaded && typeof loaded === "object") {
+      row = loaded;
+    } else if (!fallbackRow || String(fallbackRow?.recurrence_kind || "none").trim().toLowerCase() !== "none") {
+      alert(tr("\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0441\u043e\u0431\u044b\u0442\u0438\u0435 \u0434\u043b\u044f \u0440\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u044f", "Failed to load event for editing"));
+      return;
+    }
+  }
+
+  const selectedDay = String(socialState.calendarSelectedDay || socialCalendarDayKey(new Date()) || socialCalendarDayKey(new Date())).trim();
+  const startValue = socialCalendarDateTimeValue(row?.start_at || `${selectedDay}T09:00`);
+  const endValue = socialCalendarDateTimeValue(row?.end_at || `${selectedDay}T10:00`);
+  const reminderEnabled = row ? row?.reminder_enabled !== false : true;
+  const reminderOffsets = socialCalendarNormalizeReminderOffsets(row?.reminder_offsets_min, reminderEnabled);
+  const presetValues = new Set(SOCIAL_CALENDAR_REMINDER_PRESETS.map((item) => Number(item.value || 0)));
+  const presetChecked = new Set(reminderOffsets.filter((value) => presetValues.has(value)));
+  const customOffsets = reminderOffsets.filter((value) => !presetValues.has(value));
+  const recurrenceKind = String(row?.recurrence_kind || "none").trim().toLowerCase() || "none";
+  const recurrenceInterval = Math.max(1, Math.round(Number(row?.recurrence_interval || 1)) || 1);
+  const safeEventId = socialCalendarEventBaseId(row) || baseId;
+
+  socialOpenModal(
+    row ? tr("\u0418\u0437\u043c\u0435\u043d\u0438\u0442\u044c \u0441\u043e\u0431\u044b\u0442\u0438\u0435", "Edit event") : tr("\u041d\u043e\u0432\u043e\u0435 \u0441\u043e\u0431\u044b\u0442\u0438\u0435", "New event"),
+    `
+      <div class="grid-2 social-calendar-edit-grid">
+        <label>
+          <span>${tr("\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435", "Title")}</span>
+          <input id="socialEventTitle" value="${escapeHtml(row?.title || "")}" />
+        </label>
+        <label>
+          <span>${tr("\u041d\u0430\u0447\u0430\u043b\u043e", "Start")}</span>
+          <input id="socialEventStart" type="datetime-local" value="${escapeHtml(startValue)}" />
+        </label>
+        <label>
+          <span>${tr("\u041e\u043a\u043e\u043d\u0447\u0430\u043d\u0438\u0435", "End")}</span>
+          <input id="socialEventEnd" type="datetime-local" value="${escapeHtml(endValue)}" />
+        </label>
+        <label class="check social-calendar-edit-check">
+          <input id="socialEventPublic" type="checkbox" ${row?.is_public ? "checked" : ""} />
+          ${tr("\u041e\u0431\u0449\u0435\u0435 \u0441\u043e\u0431\u044b\u0442\u0438\u0435 (\u0432\u0438\u0434\u043d\u043e \u0432\u0441\u0435\u043c)", "Shared event (visible to all)")}
+        </label>
+        <label class="full">
+          <span>${tr("\u041e\u043f\u0438\u0441\u0430\u043d\u0438\u0435", "Details")}</span>
+          <textarea id="socialEventDetails" rows="5">${escapeHtml(socialCleanCalendarDetails(row?.details || ""))}</textarea>
+        </label>
+      </div>
+      <div class="social-calendar-edit-section">
+        <div class="social-calendar-edit-section-head">
+          <strong>${tr("\u041f\u043e\u0432\u0442\u043e\u0440\u0435\u043d\u0438\u0435", "Repeat")}</strong>
+          <span id="socialEventRecurrenceNote" class="hint"></span>
+        </div>
+        <div class="social-calendar-inline-row">
+          <label>
+            <span>${tr("\u0422\u0438\u043f \u043f\u043e\u0432\u0442\u043e\u0440\u0430", "Repeat type")}</span>
+            <select id="socialEventRecurrenceKind" onchange="socialCalendarToggleRecurrenceFields()">
+              <option value="none" ${recurrenceKind === "none" ? "selected" : ""}>${tr("\u041d\u0435 \u043f\u043e\u0432\u0442\u043e\u0440\u044f\u0442\u044c", "Does not repeat")}</option>
+              <option value="day" ${recurrenceKind === "day" ? "selected" : ""}>${tr("\u041a\u0430\u0436\u0434\u044b\u0439 \u0434\u0435\u043d\u044c", "Every day")}</option>
+              <option value="week" ${recurrenceKind === "week" ? "selected" : ""}>${tr("\u041a\u0430\u0436\u0434\u0443\u044e \u043d\u0435\u0434\u0435\u043b\u044e", "Every week")}</option>
+              <option value="month" ${recurrenceKind === "month" ? "selected" : ""}>${tr("\u041a\u0430\u0436\u0434\u044b\u0439 \u043c\u0435\u0441\u044f\u0446", "Every month")}</option>
+              <option value="year" ${recurrenceKind === "year" ? "selected" : ""}>${tr("\u041a\u0430\u0436\u0434\u044b\u0439 \u0433\u043e\u0434", "Every year")}</option>
+            </select>
+          </label>
+          <label id="socialEventRecurrenceIntervalWrap">
+            <span>${tr("\u0418\u043d\u0442\u0435\u0440\u0432\u0430\u043b", "Interval")}</span>
+            <input id="socialEventRecurrenceInterval" type="number" min="1" max="365" value="${escapeHtml(String(recurrenceInterval))}" oninput="socialCalendarToggleRecurrenceFields()" />
+          </label>
+        </div>
+      </div>
+      <div class="social-calendar-edit-section">
+        <div class="social-calendar-edit-section-head">
+          <label class="check social-calendar-edit-check">
+            <input id="socialEventReminderEnabled" type="checkbox" ${reminderEnabled ? "checked" : ""} onchange="socialCalendarToggleReminderFields()" />
+            ${tr("\u041d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u044f \u0432\u043a\u043b\u044e\u0447\u0435\u043d\u044b", "Reminders enabled")}
+          </label>
+          <span id="socialEventReminderNote" class="hint"></span>
+        </div>
+        <div id="socialEventReminderFields" class="social-calendar-reminder-fields">
+          <div class="social-calendar-reminder-presets">
+            ${SOCIAL_CALENDAR_REMINDER_PRESETS.map((preset) => `
+              <label class="check social-calendar-reminder-choice">
+                <input type="checkbox" name="socialEventReminderPreset" value="${Number(preset.value || 0)}" ${presetChecked.has(Number(preset.value || 0)) ? "checked" : ""} onchange="socialCalendarToggleReminderFields()" />
+                ${escapeHtml(socialCalendarReminderLabel(preset.value))}
+              </label>
+            `).join("")}
+          </div>
+          <input id="socialEventReminderCustomState" type="hidden" value="${escapeHtml(JSON.stringify(customOffsets))}" />
+          <div>
+            <div class="social-calendar-edit-section-head">
+              <strong>${tr("\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c\u0441\u043a\u0438\u0435 \u043d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u044f", "Custom reminders")}</strong>
+              <span class="hint">${tr("\u0414\u043e\u0431\u0430\u0432\u044c\u0442\u0435 \u0441\u0432\u043e\u0438 \u0438\u043d\u0442\u0435\u0440\u0432\u0430\u043b\u044b, \u043d\u0430\u043f\u0440\u0438\u043c\u0435\u0440 \u0437\u0430 2 \u0434\u043d\u044f \u0438\u043b\u0438 \u0437\u0430 5 \u0447\u0430\u0441\u043e\u0432.", "Add your own offsets, for example 2 days or 5 hours before.")}</span>
+            </div>
+            <div id="socialEventReminderCustomList" class="social-calendar-reminder-custom-list"></div>
+          </div>
+          <div class="actions social-calendar-edit-footer">
+            <button class="btn-secondary" type="button" onclick="socialCalendarAddCustomReminder()">${tr("\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0441\u0432\u043e\u0435 \u043d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u0435", "Add custom reminder")}</button>
+          </div>
+        </div>
+      </div>
+      <div class="actions social-calendar-edit-footer">
+        <button type="button" onclick="socialSaveEvent(${safeEventId})">${row ? tr("\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c", "Save") : tr("\u0421\u043e\u0437\u0434\u0430\u0442\u044c", "Create")}</button>
+      </div>
     `
   );
+
+  socialCalendarSetCustomReminderOffsets(customOffsets);
+  socialCalendarToggleRecurrenceFields();
+  socialCalendarToggleReminderFields();
 }
 
 async function socialSaveEvent(eventId = 0) {
+  const startAt = String(document.getElementById("socialEventStart")?.value || "").trim();
+  const endAt = String(document.getElementById("socialEventEnd")?.value || "").trim();
+  const recurrenceKind = String(document.getElementById("socialEventRecurrenceKind")?.value || "none").trim().toLowerCase();
+  const recurrenceInterval = Math.max(1, Math.round(Number(document.getElementById("socialEventRecurrenceInterval")?.value || 1)) || 1);
+  const reminderEnabled = Boolean(document.getElementById("socialEventReminderEnabled")?.checked);
   const payload = {
     title: String(document.getElementById("socialEventTitle")?.value || "").trim(),
     details: String(document.getElementById("socialEventDetails")?.value || "").trim(),
-    start_at: String(document.getElementById("socialEventStart")?.value || "").trim(),
-    end_at: String(document.getElementById("socialEventEnd")?.value || "").trim() || null,
+    start_at: startAt,
+    end_at: endAt || null,
     is_public: Boolean(document.getElementById("socialEventPublic")?.checked),
+    recurrence_kind: recurrenceKind,
+    recurrence_interval: recurrenceKind === "none" ? 1 : recurrenceInterval,
+    reminder_enabled: reminderEnabled,
+    reminder_offsets_min: reminderEnabled ? socialCalendarCollectReminderOffsets() : [],
   };
-  if (!payload.title || !payload.start_at) return alert(tr("Заполните название и дату начала", "Fill title and start date"));
-  const req = eventId > 0
+  if (!payload.title || !payload.start_at) {
+    alert(tr("\u0417\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u043d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u0438 \u0434\u0430\u0442\u0443 \u043d\u0430\u0447\u0430\u043b\u0430", "Fill title and start date"));
+    return;
+  }
+  const startDate = socialCalendarParseDate(payload.start_at);
+  const endDate = payload.end_at ? socialCalendarParseDate(payload.end_at) : null;
+  if (startDate && endDate && endDate.getTime() < startDate.getTime()) {
+    alert(tr("\u0412\u0440\u0435\u043c\u044f \u043e\u043a\u043e\u043d\u0447\u0430\u043d\u0438\u044f \u043d\u0435 \u043c\u043e\u0436\u0435\u0442 \u0431\u044b\u0442\u044c \u0440\u0430\u043d\u044c\u0448\u0435 \u043d\u0430\u0447\u0430\u043b\u0430", "End time cannot be earlier than start time"));
+    return;
+  }
+  const requestPromise = eventId > 0
     ? socialRequest(`/api/social/calendar/events/${Number(eventId)}`, { method: "PUT", body: JSON.stringify(payload) })
     : socialRequest("/api/social/calendar/events", { method: "POST", body: JSON.stringify(payload) });
-  await req.catch((e) => alert(e.message));
+  const saved = await requestPromise.catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  if (!saved) return;
+  socialState.calendarSelectedDay = socialCalendarDayKey(saved?.start_at || payload.start_at) || socialState.calendarSelectedDay;
   socialCloseModal();
   await socialLoadCalendar();
 }
@@ -5624,11 +7028,24 @@ async function socialSaveEvent(eventId = 0) {
 async function socialDeleteEvent(eventId) {
   const id = Number(eventId || 0);
   if (!id) return;
-  await socialRequest(`/api/social/calendar/events/${id}`, { method: "DELETE" }).catch((e) => alert(e.message));
+  const row = (socialState.calendarEvents || []).find((item) => socialCalendarEventBaseId(item) === id) || null;
+  const recurring = String(row?.recurrence_kind || "none").trim().toLowerCase() !== "none";
+  const confirmed = confirm(recurring
+    ? tr("\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0432\u0441\u044e \u0441\u0435\u0440\u0438\u044e \u0441\u043e\u0431\u044b\u0442\u0438\u0439?", "Delete the whole event series?")
+    : tr("\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0441\u043e\u0431\u044b\u0442\u0438\u0435?", "Delete event?"));
+  if (!confirmed) return;
+  const ok = await socialRequest(`/api/social/calendar/events/${id}`, { method: "DELETE" }).then(() => true).catch((e) => {
+    alert(e.message);
+    return false;
+  });
+  if (!ok) return;
+  socialCloseModal?.();
   await socialLoadCalendar();
 }
-
 async function socialSyncGoogleCalendar() {
+  if (typeof window !== "undefined" && window.__socialDisableGoogleCalendarFlow === true) {
+    return false;
+  }
   const urlInput = document.getElementById("socialCalendarGoogleIcs");
   const replaceInput = document.getElementById("socialCalendarGoogleReplace");
   const syncBtn = document.querySelector(".social-calendar-sync-btn");
@@ -5649,9 +7066,9 @@ async function socialSyncGoogleCalendar() {
   }
   if (syncBtn) {
     syncBtn.disabled = true;
-    syncBtn.textContent = tr("Синхронизируем...", "Syncing...");
+    syncBtn.textContent = tr("Синхронизация...", "Syncing...");
   }
-  socialSetCalendarSyncMessage("info", tr("Синхронизация запущена", "Sync started"), [tr("Подождите, пока SEO WIBE обработает календарные события.", "Please wait while SEO WIBE processes calendar events.")]);
+  socialSetCalendarSyncMessage("info", tr("Синхронизация начата", "Sync started"), [tr("Подождите, пока SEO WIBE обработает календарные события.", "Please wait while SEO WIBE processes calendar events.")]);
   const data = await socialRequest("/api/social/calendar/google-sync", {
     method: "POST",
     body: JSON.stringify({
@@ -5663,7 +7080,7 @@ async function socialSyncGoogleCalendar() {
     retryOnPost: true,
     maxRetries: 1,
   }).catch((e) => {
-    socialSetCalendarSyncMessage("error", tr("Синхронизация календаря не удалась", "Calendar sync failed"), [e?.message || tr("Проверьте ссылку, доступность Google OAuth или повторите позже.", "Check the link, Google OAuth availability, or retry later.")]);
+    socialSetCalendarSyncMessage("error", tr("Синхронизация календаря не удалась", "Calendar sync failed"), [e?.message || tr("Проверьте ссылку, подключение Google OAuth или повторите позже.", "Check the link, Google OAuth availability, or retry later.")]);
     return null;
   });
   if (syncBtn) {
@@ -5682,10 +7099,14 @@ async function socialSyncGoogleCalendar() {
   if (warnings.length) summaryLines.push(`${tr("Предупреждения", "Warnings")}: ${warnings.join(" | ")}`);
   socialSetCalendarSyncMessage(
     warnings.length ? "warn" : "success",
-    warnings.length ? tr("Синхронизация завершилась с предупреждениями", "Sync completed with warnings") : tr("Календарь синхронизирован", "Calendar synchronized"),
+    warnings.length ? tr("Синхронизация завершена с предупреждениями", "Sync completed with warnings") : tr("Календарь синхронизирован", "Calendar synchronized"),
     summaryLines
   );
   await socialLoadGoogleCalendarStatus();
+  const taskRows = await socialRequest("/api/social/tasks?task_kind=all&include_done=0", { timeoutMs: 12000 }).catch(() => null);
+  if (Array.isArray(taskRows)) {
+    socialState.tasks = taskRows;
+  }
   await socialLoadCalendar();
 }
 
@@ -5830,7 +7251,7 @@ function socialRenderConverterOptions() {
     volume: ["ml", "l", "m3", "cm3"],
   };
   const currencyLabels = {
-    RUB: tr("RUB (руб.)", "RUB"),
+    RUB: tr("RUB (СЂСѓР±.)", "RUB"),
     USD: "USD",
     EUR: "EUR",
     CNY: "CNY",
@@ -5897,7 +7318,7 @@ function socialCalcVolume() {
   const cm3 = a * b * c;
   const liters = cm3 / 1000;
   const m3 = cm3 / 1_000_000;
-  out.textContent = `${tr("Объем", "Volume")}: ${cm3.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} см³ - ${liters.toLocaleString("ru-RU", { maximumFractionDigits: 3 })} л - ${m3.toLocaleString("ru-RU", { maximumFractionDigits: 6 })} м³`;
+  out.textContent = `${tr("Объём", "Volume")}: ${cm3.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} см³ - ${liters.toLocaleString("ru-RU", { maximumFractionDigits: 3 })} л - ${m3.toLocaleString("ru-RU", { maximumFractionDigits: 6 })} м³`;
 }
 
 function socialNormalizeNoteText(value) {
@@ -5911,6 +7332,50 @@ function socialNormalizeNoteText(value) {
     }
   }
   return raw;
+}
+
+const SOCIAL_NOTE_COLOR_KEY = "seo_wibe_note_cover_colors_v5";
+const SOCIAL_NOTE_COLOR_PALETTE = [
+  "#f8fbff",
+  "#fff7d6",
+  "#e9f7ff",
+  "#f5ecff",
+  "#ebffe9",
+  "#ffeef5",
+  "#fff3e5",
+  "#eef2ff",
+  "#f4f4f5",
+];
+
+function socialGetNoteColorMap() {
+  try {
+    const parsed = JSON.parse(String(localStorage.getItem(SOCIAL_NOTE_COLOR_KEY) || "{}"));
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function socialGetNoteCoverColor(noteId) {
+  const id = Number(noteId || 0);
+  if (!id) return "#f8fbff";
+  const map = socialGetNoteColorMap();
+  const key = String(id);
+  const value = String(map[key] || "").trim().toLowerCase();
+  return /^#[0-9a-f]{6}$/.test(value) ? value : "#f8fbff";
+}
+
+function socialSetNoteCoverColor(noteId, color) {
+  const id = Number(noteId || 0);
+  if (!id) return;
+  const safe = /^#[0-9a-fA-F]{6}$/.test(String(color || "").trim())
+    ? String(color || "").trim().toLowerCase()
+    : "#f8fbff";
+  const map = socialGetNoteColorMap();
+  map[String(id)] = safe;
+  try {
+    localStorage.setItem(SOCIAL_NOTE_COLOR_KEY, JSON.stringify(map));
+  } catch (_) {}
 }
 
 function socialNormalizeNoteRow(row) {
@@ -5937,38 +7402,142 @@ async function socialLoadNotes() {
   socialRenderCurrentNote();
 }
 
+function socialNotePreviewText(note) {
+  const raw = socialNormalizeNoteText(note?.content || "").replace(/\s+/g, " ").trim();
+  return raw || tr("Пустая заметка", "Empty note");
+}
+
+function socialNoteUpdatedLabel(note) {
+  const value = String(note?.updated_at || "").trim();
+  if (!value) return "-";
+  const parsed = socialParseDateSafe(value);
+  if (!(parsed instanceof Date) || Number.isNaN(parsed.getTime())) {
+    return value.replace("T", " ").slice(0, 16);
+  }
+  return parsed.toLocaleString(currentLang === "en" ? "en-GB" : "ru-RU", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function socialRenderNotesList() {
   const host = document.getElementById("socialNotesList");
   if (!host) return;
-  host.innerHTML = socialState.notes.map((row) => `
-    <div class="social-note-row ${Number(row.id) === socialState.currentNoteId ? "active" : ""}">
-      <button class="social-note-main" type="button" onclick="socialSelectNote(${Number(row.id)})">
-        <b>${escapeHtml(row.title || tr("Без названия", "Untitled"))}</b>
-        <small>${escapeHtml(String(row.updated_at || "").slice(0,16).replace("T", " "))}</small>
-      </button>
-      <button class="btn-secondary social-note-delete" type="button" onclick="socialDeleteNote(${Number(row.id)})">✕</button>
-    </div>
-  `).join("") || `<div class="hint">${tr("Заметок пока нет", "No notes yet")}</div>`;
+  const cardHeight = socialIsAppShellLike() ? 146 : 148;
+  host.style.setProperty("display", "grid", "important");
+  host.style.setProperty("grid-template-columns", "repeat(3, minmax(0, 1fr))", "important");
+  host.style.setProperty("grid-auto-rows", `${cardHeight}px`, "important");
+  host.style.setProperty("gap", "10px", "important");
+  host.style.setProperty("width", "100%", "important");
+  host.style.setProperty("min-width", "0", "important");
+  host.style.setProperty("max-width", "100%", "important");
+  host.style.setProperty("overflow-x", "hidden", "important");
+  host.style.setProperty("overflow-y", "auto", "important");
+  const sidebar = host.closest(".social-notes-sidebar");
+  if (sidebar) {
+    const layout = sidebar.closest(".social-notes-layout");
+    if (layout) {
+      layout.style.setProperty("display", "block", "important");
+      layout.style.setProperty("grid-template-columns", "1fr", "important");
+      layout.style.setProperty("width", "100%", "important");
+      layout.style.setProperty("min-width", "0", "important");
+      layout.style.setProperty("max-width", "100%", "important");
+    }
+    sidebar.style.setProperty("width", "100%", "important");
+    sidebar.style.setProperty("max-width", "100%", "important");
+    sidebar.style.setProperty("min-width", "0", "important");
+    const containerChain = [
+      sidebar.closest(".social-card"),
+      sidebar.closest(".social-notes-shell"),
+      sidebar.closest(".social-notes-content"),
+      host.parentElement,
+    ].filter(Boolean);
+    containerChain.forEach((node) => {
+      node.style.setProperty("width", "100%", "important");
+      node.style.setProperty("min-width", "0", "important");
+      node.style.setProperty("max-width", "100%", "important");
+      node.style.setProperty("overflow-x", "hidden", "important");
+    });
+  }
+  const rows = Array.isArray(socialState.notes) ? socialState.notes : [];
+  host.innerHTML = rows.map((row) => {
+    const active = Number(row.id) === Number(socialState.currentNoteId || 0);
+    const title = String(row.title || tr("Без названия", "Untitled")).trim() || tr("Без названия", "Untitled");
+    const preview = socialNotePreviewText(row);
+    const updated = socialNoteUpdatedLabel(row);
+    const sizeLabel = `${String(row.content || "").trim().length} ${tr("симв.", "chars")}`;
+    const cover = socialGetNoteCoverColor(row.id);
+    return `
+      <div class="social-note-row ${active ? "active" : ""}" data-note-id="${Number(row.id)}" style="--sw-note-cover:${escapeHtml(cover)}" onclick="socialSelectNote(${Number(row.id)})">
+        <button class="social-note-main" data-note-id="${Number(row.id)}" type="button" onclick="socialSelectNote(${Number(row.id)})">
+          <b>${escapeHtml(title)}</b>
+          <div class="social-note-snippet">${escapeHtml(preview)}</div>
+          <div class="social-note-meta">
+            <span>${escapeHtml(updated)}</span>
+            <span>${escapeHtml(sizeLabel)}</span>
+          </div>
+        </button>
+      </div>
+    `;
+  }).join("") || `<div class="hint">${tr("Заметок пока нет", "No notes yet")}</div>`;
+  host.querySelectorAll(".social-note-row[data-note-id]").forEach((row) => {
+    const noteId = Number(row.getAttribute("data-note-id") || 0);
+    if (!noteId) return;
+    row.querySelectorAll("button:not(.social-note-main)").forEach((node) => node.remove?.());
+    row.style.cursor = "pointer";
+    row.style.setProperty("min-width", "0", "important");
+    row.style.setProperty("width", "100%", "important");
+    row.style.setProperty("height", `${cardHeight}px`, "important");
+    row.style.setProperty("min-height", `${cardHeight}px`, "important");
+    row.style.setProperty("max-height", `${cardHeight}px`, "important");
+    row.style.setProperty("overflow", "hidden", "important");
+    row.style.setProperty("word-break", "break-word", "important");
+    const main = row.querySelector(".social-note-main");
+    if (main) {
+      main.style.setProperty("display", "grid", "important");
+      main.style.setProperty("grid-template-rows", "auto 1fr auto", "important");
+      main.style.setProperty("height", "100%", "important");
+      main.style.setProperty("overflow", "hidden", "important");
+      main.style.setProperty("word-break", "break-word", "important");
+    }
+    row.onclick = () => socialSelectNote(noteId);
+  });
 }
 
 function socialRenderCurrentNote() {
   const note = socialState.notes.find((x) => Number(x.id) === Number(socialState.currentNoteId || 0)) || null;
   const title = document.getElementById("socialNoteTitle");
   const content = document.getElementById("socialNoteContent");
-  if (!title || !content) return;
-  title.value = socialNormalizeNoteText(note?.title || "");
-  content.value = socialNormalizeNoteText(note?.content || "");
   const autosave = document.getElementById("socialNoteAutosave");
-  if (autosave) autosave.textContent = note ? tr("Автосохранение включено", "Autosave enabled") : tr("Выберите заметку", "Select note");
+  const editor = document.querySelector("#socialSubtabNotes .social-notes-editor");
+  if (!title || !content) return;
+  const hasNote = Boolean(note);
+  if (editor) editor.classList.toggle("is-empty", !hasNote);
+  title.disabled = !hasNote;
+  content.disabled = !hasNote;
+  title.value = hasNote ? socialNormalizeNoteText(note?.title || "") : "";
+  content.value = hasNote ? socialNormalizeNoteText(note?.content || "") : "";
+  title.placeholder = hasNote
+    ? tr("Название заметки", "Note title")
+    : tr("Выберите или создайте заметку", "Select or create a note");
+  content.placeholder = hasNote
+    ? tr("Текст заметки...", "Write your note...")
+    : tr("Откройте карточку заметки слева или создайте новую", "Open a note card on the left or create a new one");
+  if (autosave) autosave.textContent = hasNote ? tr("Автосохранение включено", "Autosave enabled") : tr("Выберите заметку", "Select note");
   socialRenderNoteFiles(note);
 }
 
 function socialSelectNote(noteId) {
-  socialState.currentNoteId = Number(noteId || 0);
+  const safeId = Number(noteId || 0);
+  socialState.currentNoteId = safeId;
   socialRenderNotesList();
   socialRenderCurrentNote();
+  if (safeId > 0 && typeof window.socialOpenNoteEditor === "function") {
+    window.socialOpenNoteEditor(safeId);
+  }
 }
-
 async function socialCreateNote() {
   const row = await socialRequest("/api/social/notes", {
     method: "POST",
@@ -5999,7 +7568,7 @@ async function socialSaveCurrentNote() {
     title: String(titleNode?.value || "").trim() || tr("Без названия", "Untitled"),
     content: String(contentNode?.value || ""),
   };
-  if (autosave) autosave.textContent = tr("Сохраняем...", "Saving...");
+  if (autosave) autosave.textContent = tr("\u0421\u043e\u0445\u0440\u0430\u043d\u044f\u0435\u043c...", "Saving...");
   const saved = await socialRequest(`/api/social/notes/${noteId}`, {
     method: "PUT",
     body: JSON.stringify(payload),
@@ -6012,7 +7581,7 @@ async function socialSaveCurrentNote() {
   if (idx >= 0) socialState.notes[idx] = saved;
   socialRenderNotesList();
   socialRenderCurrentNote();
-  if (autosave) autosave.textContent = tr("Сохранено", "Saved");
+  if (autosave) autosave.textContent = tr("\u0421\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u043e", "Saved");
 }
 
 function socialFormatFileSize(sizeRaw) {
@@ -6039,7 +7608,7 @@ function socialRenderNoteFiles(note) {
       <div class="social-note-file-row">
         <a href="${escapeHtml(file.url || "#")}" target="_blank" rel="noopener noreferrer">${escapeHtml(file.filename || "file")}</a>
         <small>${escapeHtml(socialFormatFileSize(file.size_bytes || 0))}</small>
-        <button class="btn-secondary" type="button" onclick="socialDeleteNoteFile(${Number(file.id || 0)})">✕</button>
+        <button class="btn-secondary" type="button" onclick="socialDeleteNoteFile(${Number(file.id || 0)})">&times;</button>
       </div>
     `).join("")
     : `<div class="hint">${tr("Файлы пока не загружены", "No files uploaded yet")}</div>`;
@@ -6048,7 +7617,7 @@ function socialRenderNoteFiles(note) {
 function socialTriggerNoteFileDialog() {
   const noteId = Number(socialState.currentNoteId || 0);
   if (!noteId) {
-    alert(tr("Сначала выберите заметку", "Select a note first"));
+    alert(tr("\u0421\u043d\u0430\u0447\u0430\u043b\u0430 \u0432\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0437\u0430\u043c\u0435\u0442\u043a\u0443", "Select a note first"));
     return;
   }
   const input = document.getElementById("socialNoteFileUpload");
@@ -6124,6 +7693,171 @@ async function socialDeleteNote(noteId) {
   await socialLoadNotes();
 }
 
+function socialFindNoteById(noteId) {
+  const id = Number(noteId || 0);
+  if (!id) return null;
+  return (socialState.notes || []).find((row) => Number(row?.id || 0) === id) || null;
+}
+
+function socialNoteModalFilesMarkup(note) {
+  const files = Array.isArray(note?.files) ? note.files : [];
+  if (!files.length) {
+    return `<div class="hint">${escapeHtml(tr("\u0424\u0430\u0439\u043b\u044b \u043d\u0435 \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u044b", "No files attached"))}</div>`;
+  }
+  return files.map((file) => {
+    const fid = Number(file?.id || 0);
+    return `
+      <div class="social-note-file-row">
+        <a href="${escapeHtml(file?.url || "#")}" target="_blank" rel="noopener noreferrer">${escapeHtml(file?.filename || "file")}</a>
+        <small>${escapeHtml(socialFormatFileSize(file?.size_bytes || 0))}</small>
+        <button class="btn-secondary" type="button" onclick="socialDeleteNoteFileFromEditor(${Number(note?.id || 0)}, ${fid})">&times;</button>
+      </div>
+    `;
+  }).join("");
+}
+
+function socialNoteModalColorsMarkup(noteId) {
+  const active = socialGetNoteCoverColor(noteId);
+  return SOCIAL_NOTE_COLOR_PALETTE.map((color) => {
+    const selected = active === color ? "is-active" : "";
+    return `<button type="button" class="sw-note-color ${selected}" style="--sw-note-cover:${escapeHtml(color)}" onclick="socialPickNoteCoverColor(${Number(noteId || 0)}, '${color}')"></button>`;
+  }).join("");
+}
+
+function socialOpenNoteEditor(noteId) {
+  const id = Number(noteId || socialState.currentNoteId || 0);
+  if (!id) return;
+  const note = socialFindNoteById(id);
+  if (!note) return;
+  socialState.currentNoteId = id;
+  socialRenderNotesList();
+  socialRenderCurrentNote();
+  socialOpenModal(
+    tr("\u0417\u0430\u043c\u0435\u0442\u043a\u0430", "Note"),
+    `
+      <div class="social-note-editor-modal">
+        <label>
+          <span>${escapeHtml(tr("\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435", "Title"))}</span>
+          <input id="socialNoteModalTitle" value="${escapeHtml(socialNormalizeNoteText(note?.title || ""))}" />
+        </label>
+        <label>
+          <span>${escapeHtml(tr("\u0422\u0435\u043a\u0441\u0442", "Text"))}</span>
+          <textarea id="socialNoteModalContent" rows="10">${escapeHtml(socialNormalizeNoteText(note?.content || ""))}</textarea>
+        </label>
+        <label>
+          <span>${escapeHtml(tr("\u0426\u0432\u0435\u0442 \u043e\u0431\u043b\u043e\u0436\u043a\u0438", "Cover color"))}</span>
+          <div id="socialNoteModalColors" class="sw-note-colors">${socialNoteModalColorsMarkup(id)}</div>
+        </label>
+        <div class="social-note-files-head">
+          <b>${escapeHtml(tr("\u0424\u0430\u0439\u043b\u044b", "Files"))}</b>
+          <input id="socialNoteModalUpload" type="file" multiple onchange="socialUploadNoteFilesFromEditor(${id}, 'socialNoteModalUpload')" />
+          <button class="btn-secondary" type="button" onclick="document.getElementById('socialNoteModalUpload').click()">${escapeHtml(tr("\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0444\u0430\u0439\u043b\u044b", "Add files"))}</button>
+        </div>
+        <div id="socialNoteModalFilesList">${socialNoteModalFilesMarkup(note)}</div>
+        <details class="sw-note-settings">
+          <summary>${escapeHtml(tr("\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u0437\u0430\u043c\u0435\u0442\u043a\u0438", "Note settings"))}</summary>
+          <button class="btn-danger" type="button" onclick="socialDeleteNoteFromEditorSettings(${id})">${escapeHtml(tr("\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0437\u0430\u043c\u0435\u0442\u043a\u0443", "Delete note"))}</button>
+        </details>
+        <div class="actions">
+          <button type="button" class="btn-secondary" onclick="socialCloseModal()">${escapeHtml(tr("\u041e\u0442\u043c\u0435\u043d\u0430", "Cancel"))}</button>
+          <button type="button" onclick="socialSaveNoteEditor(${id})">${escapeHtml(tr("\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c", "Save"))}</button>
+        </div>
+      </div>
+    `
+  );
+}
+
+function socialPickNoteCoverColor(noteId, color) {
+  const id = Number(noteId || 0);
+  if (!id) return;
+  socialSetNoteCoverColor(id, color);
+  const active = socialGetNoteCoverColor(id);
+  document.querySelectorAll("#socialNoteModalColors .sw-note-color").forEach((node) => {
+    const own = String(node.style.getPropertyValue("--sw-note-cover") || "").trim().toLowerCase();
+    node.classList.toggle("is-active", own === active);
+  });
+  socialRenderNotesList();
+}
+
+async function socialSaveNoteEditor(noteId) {
+  const id = Number(noteId || 0);
+  if (!id) return;
+  const payload = {
+    title: String(document.getElementById("socialNoteModalTitle")?.value || "").trim() || tr("\u0411\u0435\u0437 \u043d\u0430\u0437\u0432\u0430\u043d\u0438\u044f", "Untitled"),
+    content: String(document.getElementById("socialNoteModalContent")?.value || ""),
+  };
+  const saved = await socialRequest(`/api/social/notes/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  }).catch((e) => {
+    alert(e?.message || tr("\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0437\u0430\u043c\u0435\u0442\u043a\u0443", "Failed to save note"));
+    return null;
+  });
+  if (!saved) return;
+  socialState.currentNoteId = id;
+  await socialLoadNotes();
+  socialRenderNotesList();
+  socialRenderCurrentNote();
+  socialCloseModal();
+}
+
+async function socialUploadNoteFilesFromEditor(noteId, inputId) {
+  const id = Number(noteId || 0);
+  if (!id) return;
+  const input = document.getElementById(String(inputId || ""));
+  const files = Array.from(input?.files || []);
+  if (!files.length) return;
+  try {
+    for (const file of files) {
+      const body = new FormData();
+      body.append("file", file);
+      const headers = {};
+      if (token) headers.Authorization = `Bearer ${token}`;
+      await requestJson(`/api/social/notes/${id}/files`, {
+        method: "POST",
+        headers,
+        body,
+        timeoutMs: 90000,
+        retryOnPost: true,
+        maxRetries: 1,
+      });
+    }
+    socialState.currentNoteId = id;
+    await socialLoadNotes();
+    socialOpenNoteEditor(id);
+  } catch (e) {
+    alert(e?.message || tr("\u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0444\u0430\u0439\u043b\u0430", "File upload error"));
+  } finally {
+    if (input) input.value = "";
+  }
+}
+
+async function socialDeleteNoteFileFromEditor(noteId, fileId) {
+  const id = Number(noteId || 0);
+  const fid = Number(fileId || 0);
+  if (!id || !fid) return;
+  if (!confirm(tr("\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0444\u0430\u0439\u043b?", "Delete file?"))) return;
+  await socialRequest(`/api/social/notes/${id}/files/${fid}`, { method: "DELETE" }).catch((e) => {
+    alert(e?.message || tr("\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u0444\u0430\u0439\u043b", "Failed to delete file"));
+    return null;
+  });
+  socialState.currentNoteId = id;
+  await socialLoadNotes();
+  socialOpenNoteEditor(id);
+}
+
+async function socialDeleteNoteFromEditorSettings(noteId) {
+  const id = Number(noteId || 0);
+  if (!id) return;
+  if (!confirm(tr("\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0437\u0430\u043c\u0435\u0442\u043a\u0443?", "Delete note?"))) return;
+  await socialRequest(`/api/social/notes/${id}`, { method: "DELETE" }).catch((e) => {
+    alert(e?.message || tr("\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u0437\u0430\u043c\u0435\u0442\u043a\u0443", "Failed to delete note"));
+    return null;
+  });
+  if (socialState.currentNoteId === id) socialState.currentNoteId = 0;
+  await socialLoadNotes();
+  socialCloseModal();
+}
 
 function socialGetChatContextBoundsSafe() {
   const main = document.querySelector("#socialSubtabChat .social-chat-main");
@@ -6232,7 +7966,6 @@ function socialOpenMessageContextSafe(messageId, event) {
 }
 
 socialOpenMessageContext = socialOpenMessageContextSafe;
-
 window.loadSocialWorkspace = loadSocialWorkspace;
 window.switchSocialSubtab = switchSocialSubtab;
 window.socialOpenGameMenu = socialOpenGameMenu;
@@ -6274,26 +8007,45 @@ window.socialLoadOlderMessages = socialLoadOlderMessages;
 window.socialOpenGroupAvatarModal = socialOpenGroupAvatarModal;
 window.socialOpenProjectModal = socialOpenProjectModal;
 window.socialCreateProject = socialCreateProject;
+window.socialOpenProjectMembersModal = socialOpenProjectMembersModal;
+window.socialSaveProjectMembers = socialSaveProjectMembers;
 window.socialOpenTaskModal = socialOpenTaskModal;
 window.socialSaveTask = socialSaveTask;
 window.socialAddTaskComment = socialAddTaskComment;
 window.socialQuickDone = socialQuickDone;
-window.socialToggleTaskDone = socialToggleTaskDone;
 window.socialDeleteTask = socialDeleteTask;
+window.socialSyncTaskKindForm = socialSyncTaskKindForm;
+window.socialToggleTaskDone = socialToggleTaskDone;
+window.socialTaskDragStart = socialTaskDragStart;
+window.socialTaskAllowDrop = socialTaskAllowDrop;
+window.socialTaskDrop = socialTaskDrop;
 window.socialOpenCalendarModal = socialOpenCalendarModal;
 window.socialSaveEvent = socialSaveEvent;
 window.socialDeleteEvent = socialDeleteEvent;
+window.socialOpenCalendarQuickAddMenu = socialOpenCalendarQuickAddMenu;
+window.socialCalendarQuickCreate = socialCalendarQuickCreate;
+window.socialCalendarAddCustomReminder = socialCalendarAddCustomReminder;
+window.socialCalendarRemoveCustomReminder = socialCalendarRemoveCustomReminder;
+window.socialCalendarToggleReminderFields = socialCalendarToggleReminderFields;
+window.socialCalendarToggleRecurrenceFields = socialCalendarToggleRecurrenceFields;
 window.socialShiftCalendar = socialShiftCalendar;
+window.socialOpenCalendarMonthYearPicker = socialOpenCalendarMonthYearPicker;
+window.socialApplyCalendarMonthYearPicker = socialApplyCalendarMonthYearPicker;
 window.socialJumpCalendarToday = socialJumpCalendarToday;
 window.socialLoadCalendar = socialLoadCalendar;
 window.socialConnectGoogleCalendar = socialConnectGoogleCalendar;
+window.socialNormalizeCalendarChrome = socialNormalizeCalendarChrome;
 window.socialRenderCalendar = socialRenderCalendar;
 window.socialShowDay = socialShowDay;
+window.socialOpenCalendarRecordDetail = socialOpenCalendarRecordDetail;
+window.socialCleanCalendarDetails = socialCleanCalendarDetails;
 window.socialSetBell = socialSetBell;
-window.socialMarkNotificationsReadAll = socialMarkNotificationsReadAll;
+window.socialEnsureNotificationCenterLayout = socialEnsureNotificationCenterLayout;
+window.socialRenderNotificationCenter = socialRenderNotificationCenter;
+window.socialLoadNotificationCenterRows = socialLoadNotificationCenterRows;
 window.socialToggleNotificationCenter = socialToggleNotificationCenter;
 window.socialCloseNotificationCenter = socialCloseNotificationCenter;
-window.socialOpenNotificationFromCenter = socialOpenNotificationFromCenter;
+window.socialMarkNotificationsReadAll = socialMarkNotificationsReadAll;
 window.socialMaybeStartHooks = socialMaybeStartHooks;
 window.socialToggleEmojiPicker = socialToggleEmojiPicker;
 window.socialInsertEmoji = socialInsertEmoji;
@@ -6308,6 +8060,12 @@ window.socialConvert = socialConvert;
 window.socialCalcVolume = socialCalcVolume;
 window.socialCreateNote = socialCreateNote;
 window.socialSelectNote = socialSelectNote;
+window.socialOpenNoteEditor = socialOpenNoteEditor;
+window.socialPickNoteCoverColor = socialPickNoteCoverColor;
+window.socialSaveNoteEditor = socialSaveNoteEditor;
+window.socialUploadNoteFilesFromEditor = socialUploadNoteFilesFromEditor;
+window.socialDeleteNoteFileFromEditor = socialDeleteNoteFileFromEditor;
+window.socialDeleteNoteFromEditorSettings = socialDeleteNoteFromEditorSettings;
 window.socialScheduleNoteSave = socialScheduleNoteSave;
 window.socialDeleteCurrentNote = socialDeleteCurrentNote;
 window.socialDeleteNote = socialDeleteNote;
@@ -6330,8 +8088,58 @@ document.addEventListener("visibilitychange", () => {
 
 socialMaybeStartHooks();
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(function configureStableSocialRuntimeV20260324() {
+  if (typeof window === "undefined") return;
+  // Disable old emergency runtime patch packs that override core calendar/notes/notification
+  // rendering and can conflict with the current stable implementation.
+  window.__socialDisableLegacyTaskCalendarPatches = true;
+  window.__socialDisableTaskMouseDropV2 = true;
+  window.__socialDisableUiRecoveryV20260323b = true;
+  window.__socialDisableUiTextFixesV1 = true;
+  window.__socialDisableCurrencyPatchV2 = true;
+  window.__socialDisableTaskGlyphPatchV1 = true;
+  window.__socialDisableHardeningV20260323 = true;
+  window.__socialDisableUiFinalV20260323c = true;
+})();
+
 (function attachSocialTasksPlanPatchV2() {
   if (typeof window === "undefined") return;
+  if (window.__socialDisableLegacyTaskCalendarPatches !== false) return;
   if (window.__socialTasksPlanPatchV2) return;
   window.__socialTasksPlanPatchV2 = true;
 
@@ -6408,8 +8216,7 @@ socialMaybeStartHooks();
         : [];
       const result = await originalSocialLoadTasks(opts);
       const currentRows = Array.isArray(window.socialState.tasks) ? window.socialState.tasks : [];
-      const hadError = Boolean(window.socialState.tasksLastLoadError);
-      if (currentRows.length || !hadError) {
+      if (currentRows.length) {
         window.socialState.tasksLastGood = [...currentRows];
       } else if (previousGood.length) {
         window.socialState.tasks = [...previousGood];
@@ -6457,7 +8264,7 @@ socialMaybeStartHooks();
       host.id = "socialCalendarTaskMode";
       host.className = "social-calendar-task-mode";
       host.innerHTML = `
-        <button type="button" class="chip-btn" data-mode="events">${window.tr("События", "Events")}</button>
+        <button type="button" class="chip-btn" data-mode="events">${window.tr("\u0421\u043e\u0431\u044b\u0442\u0438\u044f", "Events")}</button>
         <button type="button" class="chip-btn" data-mode="tasks">${window.tr("Задачи", "Tasks")}</button>
         <button type="button" class="chip-btn" data-mode="my_tasks">${window.tr("МОИ ЗАДАЧИ", "MY TASKS")}</button>
       `;
@@ -6553,6 +8360,20 @@ socialMaybeStartHooks();
     startY: 0,
     lastY: 0,
   };
+  const isTouchDragEnabled = () => {
+    const href = String(window.location?.href || "");
+    const path = String(window.location?.pathname || "");
+    const hasFinePointer = typeof window.matchMedia === "function"
+      ? (window.matchMedia("(pointer:fine)").matches || window.matchMedia("(any-pointer:fine)").matches)
+      : false;
+    if (!hasFinePointer) return false;
+    if (socialIsAppShellLike()) return false;
+    if (document.body?.classList?.contains("mobile-client-mode")) return false;
+    if (document.body?.classList?.contains("mobile-apk-mode")) return false;
+    if (path === "/mobile") return false;
+    if (/([?&])mobile_app=1(?:[&#]|$)/i.test(href)) return false;
+    return true;
+  };
 
   function clearTouchDropMarkers() {
     document.querySelectorAll(".social-task-bucket-list.is-touch-drop-target")
@@ -6629,7 +8450,7 @@ socialMaybeStartHooks();
   }
 
   function onTaskTouchStart(event) {
-    if (typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell()) return;
+    if (!isTouchDragEnabled()) return;
     if (String(window.socialState?.currentSubtab || "") !== "tasks") return;
     if (!event.touches || event.touches.length !== 1) return;
     const item = event.target.closest(".social-task-item");
@@ -6649,7 +8470,7 @@ socialMaybeStartHooks();
   }
 
   function onTaskTouchMove(event) {
-    if (typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell()) return;
+    if (!isTouchDragEnabled()) return;
     if (!touchDrag.taskId) return;
     if (!event.touches || event.touches.length !== 1) return;
     const point = event.touches[0];
@@ -6674,10 +8495,7 @@ socialMaybeStartHooks();
   }
 
   async function onTaskTouchEnd() {
-    if (typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell()) {
-      resetTouchDrag();
-      return;
-    }
+    if (!isTouchDragEnabled()) return;
     if (!touchDrag.taskId) return;
     const shouldCommit = Boolean(touchDrag.moved && touchDrag.targetBucket);
     const pendingTaskId = touchDrag.taskId;
@@ -6694,6 +8512,7 @@ socialMaybeStartHooks();
   }
 
   function onTaskTouchCancel() {
+    if (!isTouchDragEnabled()) return;
     resetTouchDrag();
   }
 
@@ -6708,6 +8527,7 @@ socialMaybeStartHooks();
 
 (function patchSocialTaskMouseDropV2() {
   if (typeof window === "undefined") return;
+  if (window.__socialDisableTaskMouseDropV2 !== false) return;
   if (window.__socialTaskMouseDropV2) return;
   window.__socialTaskMouseDropV2 = true;
 
@@ -6728,7 +8548,9 @@ socialMaybeStartHooks();
   }
 
   window.socialTaskDrop = async function socialTaskDropEnhanced(event, bucket) {
-    if (typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell()) return false;
+    if (socialIsAppShellLike()) {
+      return;
+    }
     if (event?.preventDefault) event.preventDefault();
     let id = 0;
     try {
@@ -6769,6 +8591,7 @@ socialMaybeStartHooks();
 
 (function patchSocialCalendarModeVisualsV1() {
   if (typeof window === "undefined") return;
+  if (window.__socialDisableLegacyTaskCalendarPatches !== false) return;
   if (window.__socialCalendarModeVisualsV1) return;
   window.__socialCalendarModeVisualsV1 = true;
 
@@ -6823,245 +8646,915 @@ socialMaybeStartHooks();
   }
 })();
 
+(function patchSocialUiRecoveryV20260323b() {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  if (window.__socialDisableUiRecoveryV20260323b !== false) return;
+  if (window.__socialUiRecoveryV20260323b) return;
+  window.__socialUiRecoveryV20260323b = true;
 
+  const decodeSafe = (value) => {
+    let out = String(value == null ? "" : value);
+    if (!out) return "";
+    try {
+      if (typeof window.socialDecodeUiText === "function") {
+        out = String(window.socialDecodeUiText(out) || out);
+      }
+    } catch (_) {}
+    try {
+      if (typeof window.decodePossiblyMojibake === "function") {
+        out = String(window.decodePossiblyMojibake(out) || out);
+      }
+    } catch (_) {}
+    try {
+      if (typeof window.__repairMojibakeText === "function") {
+        out = String(window.__repairMojibakeText(out) || out);
+      }
+    } catch (_) {}
+    return out.replace(/\s{2,}/g, " ").trim();
+  };
 
+  const sanitizeNodeTree = (root) => {
+    const target = root || document.body;
+    if (!target) return;
+    const textAttrs = ["title", "placeholder", "aria-label", "data-tip"];
+    const walker = document.createTreeWalker(target, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, null);
+    let node = walker.currentNode;
+    while (node) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const before = String(node.nodeValue || "");
+        const after = decodeSafe(before);
+        if (after && after !== before) node.nodeValue = after;
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        textAttrs.forEach((attr) => {
+          const before = String(node.getAttribute?.(attr) || "");
+          if (!before) return;
+          const after = decodeSafe(before);
+          if (after && after !== before) node.setAttribute(attr, after);
+        });
+      }
+      node = walker.nextNode();
+    }
+  };
 
+  const ensureCalendarUi = () => {
+    const root = document.getElementById("socialSubtabCalendar");
+    if (!root) return;
+    root.classList.add("sw-calendar-samsung");
+    const shell = root.querySelector(".social-calendar-shell") || root;
+    shell.querySelectorAll("button").forEach((btn) => {
+      if (btn.id === "socialCalendarFab") return;
+      if (btn.classList.contains("social-day")) return;
+      if (btn.classList.contains("social-day-item-button")) return;
+      btn.style.setProperty("display", "none", "important");
+    });
+    let fab = document.getElementById("socialCalendarFab");
+    if (!fab) {
+      fab = document.createElement("button");
+      fab.id = "socialCalendarFab";
+      fab.type = "button";
+      fab.className = "social-calendar-fab";
+      shell.appendChild(fab);
+    }
+    fab.textContent = "+";
+    fab.classList.remove("hidden");
+    fab.onclick = () => {
+      if (typeof window.socialOpenCalendarQuickAddMenu === "function") {
+        window.socialOpenCalendarQuickAddMenu();
+      }
+    };
+    const dayCount = root.querySelectorAll("#socialCalendarGrid .social-day[data-day-key]").length;
+    if (!dayCount) {
+      root.classList.add("sw-calendar-awaiting-data");
+    } else {
+      root.classList.remove("sw-calendar-awaiting-data");
+    }
+  };
 
+  const ensureNotesCards = () => {
+    const host = document.getElementById("socialNotesList");
+    if (!host) return;
+    host.querySelectorAll(".social-note-delete, [class*='note-delete'], [class*='note-remove'], [class*='note-close'], [data-action='delete'], button[onclick*='socialDeleteNote']").forEach((node) => {
+      if (node?.remove) node.remove();
+    });
+    host.querySelectorAll(".social-note-row[data-note-id], .sw-note-card[data-note-id]").forEach((row) => {
+      const noteId = Number(row.getAttribute("data-note-id") || 0);
+      if (!noteId) return;
+      row.onclick = () => {
+        if (typeof window.socialSelectNote === "function") window.socialSelectNote(noteId);
+      };
+      const color = typeof window.socialGetNoteCoverColor === "function"
+        ? String(window.socialGetNoteCoverColor(noteId) || "").trim()
+        : "";
+      if (color) row.style.setProperty("--sw-note-cover", color);
+    });
+  };
 
+  const ensureNotificationCenterState = () => {
+    const center = document.getElementById("socialNotificationCenter");
+    if (!center) return;
+    sanitizeNodeTree(center);
+    if (!window.socialState?.notificationCenterOpen) {
+      center.classList.add("hidden");
+      center.style.display = "none";
+    }
+  };
 
+  const patchFn = (name, make) => {
+    const original = typeof window[name] === "function" ? window[name] : null;
+    if (!original) return;
+    window[name] = make(original);
+  };
 
-(function patchSocialTasksAndNotificationsV3() {
+  patchFn("socialRenderNotificationCenter", (original) => function patchedRenderNotificationCenter() {
+    const result = original.apply(this, arguments);
+    ensureNotificationCenterState();
+    return result;
+  });
+
+  patchFn("socialToggleNotificationCenter", (original) => async function patchedToggleNotificationCenter(forceOpen = null) {
+    const result = await Promise.resolve(original.call(this, forceOpen));
+    ensureNotificationCenterState();
+    return result;
+  });
+
+  patchFn("socialRenderNotesList", (original) => function patchedRenderNotesList() {
+    const result = original.apply(this, arguments);
+    ensureNotesCards();
+    sanitizeNodeTree(document.getElementById("socialSubtabNotes"));
+    return result;
+  });
+
+  patchFn("socialRenderCalendar", (original) => function patchedRenderCalendar() {
+    const result = original.apply(this, arguments);
+    ensureCalendarUi();
+    sanitizeNodeTree(document.getElementById("socialSubtabCalendar"));
+    return result;
+  });
+
+  patchFn("socialLoadCalendar", (original) => async function patchedLoadCalendar() {
+    const result = await Promise.resolve(original.apply(this, arguments)).catch(() => null);
+    setTimeout(() => {
+      ensureCalendarUi();
+      sanitizeNodeTree(document.getElementById("socialSubtabCalendar"));
+    }, 0);
+    return result;
+  });
+
+  patchFn("switchSocialSubtab", (original) => function patchedSwitchSocialSubtab(tab, loadNow = true) {
+    const result = original.call(this, tab, loadNow);
+    const safeTab = String(tab || "").trim().toLowerCase();
+    if (safeTab === "calendar") {
+      setTimeout(() => {
+        ensureCalendarUi();
+        sanitizeNodeTree(document.getElementById("socialSubtabCalendar"));
+      }, 80);
+    }
+    if (safeTab === "notes") {
+      setTimeout(() => {
+        ensureNotesCards();
+        sanitizeNodeTree(document.getElementById("socialSubtabNotes"));
+      }, 80);
+    }
+    return result;
+  });
+
+  patchFn("socialRenderConverterOptions", (original) => function patchedRenderConverterOptions() {
+    const result = original.apply(this, arguments);
+    const type = String(document.getElementById("socialConvType")?.value || "currency");
+    if (type === "currency") {
+      const labels = {
+        RUB: window.tr("\u20bd (\u0440\u0443\u0431.)", "RUB"),
+        USD: "USD",
+        EUR: "EUR",
+        CNY: "CNY",
+        BYN: window.tr("BYN (\u0431\u0435\u043b. \u0440\u0443\u0431.)", "BYN"),
+        TRY: window.tr("TRY (\u043b\u0438\u0440\u0430)", "TRY"),
+        GBP: window.tr("GBP (\u0444\u0443\u043d\u0442)", "GBP"),
+        UAH: window.tr("UAH (\u0433\u0440\u0438\u0432\u043d\u0430)", "UAH"),
+      };
+      ["socialConvFrom", "socialConvTo"].forEach((id) => {
+        const node = document.getElementById(id);
+        if (!node) return;
+        [...node.options].forEach((opt) => {
+          const code = String(opt?.value || "").trim().toUpperCase();
+          if (labels[code]) opt.textContent = labels[code];
+        });
+      });
+    }
+    return result;
+  });
+
+  const deleteGroupThreadSafe = async () => {
+    const row = typeof socialGetCurrentThread === "function" ? socialGetCurrentThread() : null;
+    const threadId = Number(row?.id || 0);
+    if (!threadId || String(row?.kind || "") !== "group") return;
+    const title = String(row?.title || window.tr("\u044d\u0442\u0443 \u0433\u0440\u0443\u043f\u043f\u0443", "this group")).trim();
+    const ok = confirm(window.tr(`\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0433\u0440\u0443\u043f\u043f\u0443 "${title}"? \u042d\u0442\u043e \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435 \u043d\u0435\u043e\u0431\u0440\u0430\u0442\u0438\u043c\u043e.`, `Delete group "${title}"? This action cannot be undone.`));
+    if (!ok) return;
+    const requestFn = typeof socialRequest === "function"
+      ? socialRequest
+      : (typeof window.socialRequest === "function" ? window.socialRequest : null);
+    if (typeof requestFn !== "function") return;
+    const result = await requestFn(`/api/social/chat/groups/${threadId}`, {
+      method: "DELETE",
+      retryOnPost: false,
+      maxRetries: 0,
+    }).catch((error) => {
+      alert(error?.message || window.tr("\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u0433\u0440\u0443\u043f\u043f\u0443", "Failed to delete group"));
+      return null;
+    });
+    if (!result) return;
+    if (typeof socialCloseThread === "function") socialCloseThread({ keepAutoSelect: false });
+    if (typeof socialLoadThreads === "function") await socialLoadThreads({ silent: true });
+    if (typeof socialShowToast === "function") {
+      socialShowToast(window.tr("\u0413\u0440\u0443\u043f\u043f\u0430 \u0443\u0434\u0430\u043b\u0435\u043d\u0430", "Group deleted"), window.tr("\u0427\u0430\u0442 \u0443\u0434\u0430\u043b\u0435\u043d \u0438\u0437 \u0441\u043f\u0438\u0441\u043a\u0430.", "The chat was removed from the list."));
+    }
+  };
+
+  window.socialDeleteCurrentGroupThreadLegacyMojibake = deleteGroupThreadSafe;
+  window.socialDeleteCurrentGroupThread = deleteGroupThreadSafe;
+
+  setTimeout(() => {
+    ensureCalendarUi();
+    ensureNotesCards();
+    ensureNotificationCenterState();
+    sanitizeNodeTree(document.body);
+  }, 0);
+})();
+
+(function patchSocialUiTextFixesV1() {
   if (typeof window === "undefined") return;
-  if (window.__socialTasksAndNotificationsV3) return;
-  window.__socialTasksAndNotificationsV3 = true;
+  if (window.__socialDisableUiTextFixesV1 !== false) return;
+  if (window.__socialUiTextFixesV1) return;
+  window.__socialUiTextFixesV1 = true;
 
-  function safeTaskBucket(task) {
-    const raw = String(task?.bucket || "").trim().toLowerCase();
-    if (["today", "tomorrow", "upcoming", "overdue", "done"].includes(raw)) return raw;
-    const status = String(task?.status || "todo").trim().toLowerCase();
-    if (status === "done") return "done";
-    const due = task?.due_date ? socialParseDateSafe(String(task.due_date || "")) : null;
-    if (!(due instanceof Date) || Number.isNaN(due.getTime())) return "upcoming";
-    const now = new Date();
-    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startTomorrow = new Date(startToday.getFullYear(), startToday.getMonth(), startToday.getDate() + 1);
-    const startAfterTomorrow = new Date(startToday.getFullYear(), startToday.getMonth(), startToday.getDate() + 2);
-    if (due < startToday) return "overdue";
-    if (due < startTomorrow) return "today";
-    if (due < startAfterTomorrow) return "tomorrow";
-    return "upcoming";
+  function decodeSafe(value) {
+    let out = String(value == null ? "" : value);
+    if (!out) return "";
+    for (let i = 0; i < 4; i += 1) {
+      try {
+        if (typeof window.__repairMojibakeText === "function") {
+          out = String(window.__repairMojibakeText(out) || out);
+        }
+      } catch (_) {}
+      try {
+        if (typeof window.decodePossiblyMojibake === "function") {
+          out = String(window.decodePossiblyMojibake(out) || out);
+        }
+      } catch (_) {}
+      out = out
+        .replace(/(?:\b[\u0420\u0421\u0412\u00d0\u00d1]\b(?:\s|\u00A0)+){3,}\b[\u0420\u0421\u0412\u00d0\u00d1]\b/g, (seq) => seq.replace(/[\s\u00A0]+/g, ""))
+        .replace(/([\u0420\u0421\u0412\u00d0\u00d1])(?:\s|\u00A0)+(?=[\u0420\u0421\u0412\u00d0\u00d1])/g, "$1")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+    }
+    return out;
   }
 
-  function bucketLabel(bucket) {
-    if (bucket === "today") return tr("Сегодня", "Today");
-    if (bucket === "tomorrow") return tr("Завтра", "Tomorrow");
-    if (bucket === "upcoming") return tr("Предстоящие", "Upcoming");
-    if (bucket === "overdue") return tr("Просроченные", "Overdue");
-    if (bucket === "done") return tr("Выполненные", "Completed");
-    return tr("Задачи", "Tasks");
+  const originalResolve = typeof window.socialResolveNotificationText === "function"
+    ? window.socialResolveNotificationText
+    : null;
+  if (originalResolve) {
+    window.socialResolveNotificationText = function patchedResolveNotificationText(row) {
+      const result = originalResolve.call(this, row) || {};
+      return {
+        ...result,
+        title: decodeSafe(result.title || ""),
+        body: decodeSafe(result.body || ""),
+      };
+    };
+  }
+
+  const originalRenderConv = typeof window.socialRenderConverterOptions === "function"
+    ? window.socialRenderConverterOptions
+    : null;
+  if (originalRenderConv) {
+    window.socialRenderConverterOptions = function patchedRenderConverterOptions() {
+      const result = originalRenderConv.apply(this, arguments);
+      const type = String(document.getElementById("socialConvType")?.value || "currency");
+      if (type !== "currency") return result;
+      const from = document.getElementById("socialConvFrom");
+      const to = document.getElementById("socialConvTo");
+      const labels = {
+        RUB: window.tr("RUB (руб.)", "RUB"),
+        USD: "USD",
+        EUR: "EUR",
+        CNY: "CNY",
+        BYN: window.tr("BYN (бел. руб.)", "BYN (BYN)"),
+        TRY: window.tr("TRY (лира)", "TRY (Lira)"),
+        GBP: window.tr("GBP (фунт)", "GBP (Pound)"),
+        UAH: window.tr("UAH (гривна)", "UAH (Hryvnia)"),
+      };
+      [from, to].forEach((node) => {
+        if (!node) return;
+        [...node.options].forEach((opt) => {
+          const code = String(opt?.value || "").trim().toUpperCase();
+          if (!code) return;
+          if (labels[code]) opt.textContent = labels[code];
+        });
+      });
+      return result;
+    };
+  }
+})();
+
+(function patchSocialCurrencyLabelsV2() {
+  if (typeof window === "undefined") return;
+  if (window.__socialDisableCurrencyPatchV2 !== false) return;
+  if (window.__socialCurrencyLabelsV2) return;
+  window.__socialCurrencyLabelsV2 = true;
+
+  const originalRenderConv = typeof window.socialRenderConverterOptions === "function"
+    ? window.socialRenderConverterOptions
+    : null;
+  if (!originalRenderConv) return;
+
+  window.socialRenderConverterOptions = function patchedRenderConverterOptionsV2() {
+    const result = originalRenderConv.apply(this, arguments);
+    const type = String(document.getElementById("socialConvType")?.value || "currency");
+    if (type !== "currency") return result;
+    const labels = {
+      RUB: window.tr("RUB (руб.)", "RUB"),
+      USD: "USD",
+      EUR: "EUR",
+      CNY: "CNY",
+      BYN: window.tr("BYN (бел. руб.)", "BYN (BYN)"),
+      TRY: window.tr("TRY (лира)", "TRY (Lira)"),
+      GBP: window.tr("GBP (фунт)", "GBP (Pound)"),
+      UAH: window.tr("UAH (гривна)", "UAH (Hryvnia)"),
+    };
+    ["socialConvFrom", "socialConvTo"].forEach((id) => {
+      const node = document.getElementById(id);
+      if (!node) return;
+      [...node.options].forEach((opt) => {
+        const code = String(opt?.value || "").trim().toUpperCase();
+        if (labels[code]) opt.textContent = labels[code];
+      });
+    });
+    return result;
+  };
+})();
+
+(function patchSocialTaskGlyphsV1() {
+  if (typeof window === "undefined") return;
+  if (window.__socialDisableTaskGlyphPatchV1 !== false) return;
+  if (window.__socialTaskGlyphsV1) return;
+  window.__socialTaskGlyphsV1 = true;
+
+  function normalizeTaskButtons() {
+    const host = document.getElementById("socialTasksBoard");
+    if (!host) return;
+    host.querySelectorAll(".social-task-check").forEach((btn) => {
+      const done = btn.classList.contains("is-done");
+      btn.textContent = done ? "\u2713" : "";
+      const title = String(btn.getAttribute("title") || "");
+      if (!title || /[?]{3,}|[\u0420\u0421\u0412\u00d0\u00d1]/.test(title)) {
+        btn.setAttribute("title", window.tr ? window.tr("Отметить выполненной", "Mark done") : "Mark done");
+      }
+    });
+    host.querySelectorAll(".social-task-delete").forEach((btn) => {
+      btn.textContent = "\u2715";
+      const title = String(btn.getAttribute("title") || "");
+      if (!title || /[?]{3,}|[\u0420\u0421\u0412\u00d0\u00d1]/.test(title)) {
+        btn.setAttribute("title", window.tr ? window.tr("Удалить", "Delete") : "Delete");
+      }
+    });
+    host.querySelectorAll(".social-task-pending").forEach((node) => {
+      const text = String(node.textContent || "");
+      if (!text || /[?]{3,}|[\u0420\u0421\u0412\u00d0\u00d1]/.test(text)) {
+        node.textContent = window.tr ? window.tr("5с: повторный клик отменит", "5s: click again to undo") : "5s: click again to undo";
+      }
+    });
+  }
+
+  const originalRenderTasks = typeof window.socialRenderTasks === "function" ? window.socialRenderTasks : null;
+  if (originalRenderTasks) {
+    window.socialRenderTasks = function patchedRenderTasksWithGlyphs() {
+      const result = originalRenderTasks.apply(this, arguments);
+      normalizeTaskButtons();
+      return result;
+    };
   }
 
   const originalLoadTasks = typeof window.socialLoadTasks === "function" ? window.socialLoadTasks : null;
   if (originalLoadTasks) {
-    window.socialLoadTasks = async function socialLoadTasksV3(options = {}) {
-      const force = Boolean(options && options.force);
-      const projectId = document.getElementById("socialTaskProjectFilter")?.value || "";
-      const kind = String(document.getElementById("socialTaskKindFilter")?.value || "all").trim().toLowerCase();
-      const cacheKey = `${projectId || ""}|${kind || "all"}`;
-      const cachedRows = Array.isArray(socialState.tasksAll) ? socialState.tasksAll : [];
-      const hasCacheForKey = String(socialState.tasksCacheKey || "") === cacheKey
-        && (cachedRows.length > 0 || Number(socialState.tasksCacheLoadedAt || 0) > 0);
-      const cacheAgeMs = Date.now() - Number(socialState.tasksCacheLoadedAt || 0);
-      const cacheFresh = hasCacheForKey && cacheAgeMs < 60000;
+    window.socialLoadTasks = async function patchedLoadTasksWithGlyphs() {
+      const result = await Promise.resolve(originalLoadTasks.apply(this, arguments));
+      normalizeTaskButtons();
+      return result;
+    };
+  }
+})();
 
-      if (hasCacheForKey) {
-        socialApplyTaskRowsFromCache();
-        if (typeof window.socialRenderTasks === "function") window.socialRenderTasks();
-        if (!force && cacheFresh) return;
+(function patchSocialHardeningV20260323() {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  if (window.__socialDisableHardeningV20260323 !== false) return;
+  if (window.__socialHardeningV20260323) return;
+  window.__socialHardeningV20260323 = true;
+
+  const decodeSafe = (value) => {
+    let out = String(value == null ? "" : value);
+    if (!out) return "";
+    try {
+      if (typeof window.socialDecodeUiText === "function") {
+        out = String(window.socialDecodeUiText(out) || out);
       }
+    } catch (_) {}
+    try {
+      if (typeof window.decodePossiblyMojibake === "function") {
+        out = String(window.decodePossiblyMojibake(out) || out);
+      }
+    } catch (_) {}
+    try {
+      if (typeof window.__repairMojibakeText === "function") {
+        out = String(window.__repairMojibakeText(out) || out);
+      }
+    } catch (_) {}
+    return out.replace(/\s{2,}/g, " ").trim();
+  };
 
-      socialState.tasksLastLoadError = false;
+  const ensureNotificationCenterPosition = () => {
+    const center = document.getElementById("socialNotificationCenter");
+    if (!center) return null;
+    if (center.parentElement !== document.body) document.body.appendChild(center);
+    const mobile = (window.innerWidth || 0) <= 980;
+    center.classList.add("social-notif-center", "social-notification-center");
+    center.style.setProperty("position", "fixed", "important");
+    center.style.setProperty("z-index", "2147483000", "important");
+    center.style.setProperty("bottom", "auto", "important");
+    center.style.setProperty("transform", "none", "important");
+    center.style.setProperty("visibility", "visible", "important");
+    center.style.setProperty("pointer-events", "auto", "important");
+    center.style.setProperty("overflow-y", "auto", "important");
+    if (mobile) {
+      center.style.setProperty("top", "84px", "important");
+      center.style.setProperty("left", "8px", "important");
+      center.style.setProperty("right", "8px", "important");
+      center.style.setProperty("width", "auto", "important");
+      center.style.setProperty("max-height", "calc(100vh - 96px)", "important");
+    } else {
+      center.style.setProperty("top", "72px", "important");
+      center.style.setProperty("left", "auto", "important");
+      center.style.setProperty("right", "12px", "important");
+      center.style.setProperty("width", "min(420px, calc(100vw - 24px))", "important");
+      center.style.setProperty("max-height", "calc(100vh - 84px)", "important");
+    }
+    return center;
+  };
+
+  const originalRenderCenter = typeof window.socialRenderNotificationCenter === "function"
+    ? window.socialRenderNotificationCenter
+    : null;
+  if (originalRenderCenter) {
+    window.socialRenderNotificationCenter = function patchedRenderNotificationCenter(rows = null) {
+      const result = originalRenderCenter.call(this, rows);
+      const center = ensureNotificationCenterPosition();
+      if (!center) return result;
+      center.querySelectorAll(".social-notif-item b, .social-notif-item p").forEach((node) => {
+        const before = String(node.textContent || "");
+        const after = decodeSafe(before);
+        if (after && after !== before) node.textContent = after;
+      });
+      return result;
+    };
+  }
+
+  const originalToggleCenter = typeof window.socialToggleNotificationCenter === "function"
+    ? window.socialToggleNotificationCenter
+    : null;
+  if (originalToggleCenter) {
+    window.socialToggleNotificationCenter = async function patchedToggleNotificationCenter(forceOpen = null) {
+      const opened = await Promise.resolve(originalToggleCenter.call(this, forceOpen));
+      const center = ensureNotificationCenterPosition();
+      if (!center) return opened;
+      if (opened) {
+        center.classList.remove("hidden");
+        center.style.display = "flex";
+      } else {
+        center.classList.add("hidden");
+        center.style.display = "none";
+      }
+      return opened;
+    };
+  }
+
+  const originalRenderThreads = typeof window.socialRenderThreads === "function"
+    ? window.socialRenderThreads
+    : null;
+  if (originalRenderThreads) {
+    window.socialRenderThreads = function patchedRenderThreads() {
+      const result = originalRenderThreads.apply(this, arguments);
+      const host = document.getElementById("socialChatThreads");
+      if (host) {
+        host.querySelectorAll(".social-thread-preview").forEach((node) => {
+          const before = String(node.textContent || "");
+          const after = decodeSafe(before);
+          if (after && after !== before) node.textContent = after;
+        });
+      }
+      return result;
+    };
+  }
+
+  const originalAnnouncementModal = typeof window.socialOpenAnnouncementModal === "function"
+    ? window.socialOpenAnnouncementModal
+    : null;
+  if (originalAnnouncementModal) {
+    window.socialOpenAnnouncementModal = function patchedOpenAnnouncementModal(row) {
+      const payload = row && typeof row === "object"
+        ? {
+            ...row,
+            title: decodeSafe(row.title || ""),
+            body: decodeSafe(row.body || ""),
+          }
+        : row;
+      return originalAnnouncementModal.call(this, payload);
+    };
+  }
+
+  const originalNotifyDesktop = typeof window.socialNotifyDesktop === "function"
+    ? window.socialNotifyDesktop
+    : null;
+  if (originalNotifyDesktop) {
+    window.socialNotifyDesktop = function patchedNotifyDesktop(row) {
+      const payload = row && typeof row === "object"
+        ? {
+            ...row,
+            title: decodeSafe(row.title || ""),
+            body: decodeSafe(row.body || ""),
+          }
+        : row;
+      return originalNotifyDesktop.call(this, payload);
+    };
+  }
+
+  const buildFallbackCalendarGrid = () => {
+    const root = document.getElementById("socialSubtabCalendar");
+    if (!root) return;
+    try {
+      if (typeof window.socialNormalizeCalendarChrome === "function") {
+        window.socialNormalizeCalendarChrome();
+      }
+    } catch (_) {}
+    const shell = root.querySelector(".social-calendar-shell") || root;
+    let grid = document.getElementById("socialCalendarGrid");
+    if (!grid) {
+      grid = document.createElement("div");
+      grid.id = "socialCalendarGrid";
+      grid.className = "social-calendar-grid social-calendar-grid--samsung";
+      shell.appendChild(grid);
+    }
+    const monthLabel = document.getElementById("socialCalendarMonthLabel");
+    const baseDate = (window.socialState && window.socialState.calendarDate instanceof Date && !Number.isNaN(window.socialState.calendarDate.getTime()))
+      ? window.socialState.calendarDate
+      : new Date();
+    const year = baseDate.getFullYear();
+    const month = baseDate.getMonth();
+    const firstDay = new Date(year, month, 1, 0, 0, 0, 0);
+    const lastDay = new Date(year, month + 1, 0, 0, 0, 0, 0);
+    const shift = (firstDay.getDay() + 6) % 7;
+    const days = Number(lastDay.getDate() || 0);
+    if (monthLabel && typeof window.socialCalendarMonthLabel === "function") {
+      monthLabel.textContent = window.socialCalendarMonthLabel(baseDate);
+    }
+    let html = `<div class="social-calendar-row head">${[(window.tr ? window.tr("Пн", "Mon") : "Mon"), (window.tr ? window.tr("Вт", "Tue") : "Tue"), (window.tr ? window.tr("Ср", "Wed") : "Wed"), (window.tr ? window.tr("Чт", "Thu") : "Thu"), (window.tr ? window.tr("Пт", "Fri") : "Fri"), (window.tr ? window.tr("Сб", "Sat") : "Sat"), (window.tr ? window.tr("Вс", "Sun") : "Sun")].map((x) => `<span>${x}</span>`).join("")}</div><div class="social-calendar-cells">`;
+    for (let i = 0; i < shift; i += 1) html += `<button class="social-day muted" disabled></button>`;
+    for (let day = 1; day <= days; day += 1) {
+      const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      html += `<button class="social-day rich" data-day-key="${key}" type="button" onclick="socialShowDay('${key}')"><div class="social-day-head"><b>${day}</b></div><div class="social-day-preview-stack"></div></button>`;
+    }
+    html += `</div>`;
+    grid.innerHTML = html;
+  };
+
+  const ensureCalendarUi = () => {
+    const root = document.getElementById("socialSubtabCalendar");
+    if (!root) return;
+    const grid = document.getElementById("socialCalendarGrid");
+    const dayCount = grid ? grid.querySelectorAll(".social-day[data-day-key]").length : 0;
+    if (dayCount === 0) buildFallbackCalendarGrid();
+    const shell = root.querySelector(".social-calendar-shell") || root;
+    let fab = document.getElementById("socialCalendarFab");
+    if (!fab) {
+      fab = document.createElement("button");
+      fab.id = "socialCalendarFab";
+      fab.type = "button";
+      fab.className = "social-calendar-fab";
+      shell.appendChild(fab);
+    }
+    fab.textContent = "+";
+    fab.classList.remove("hidden");
+    fab.onclick = () => {
+      if (typeof window.socialOpenCalendarQuickAddMenu === "function") {
+        window.socialOpenCalendarQuickAddMenu();
+      }
+    };
+    root.querySelectorAll("button").forEach((btn) => {
+      if (btn.id === "socialCalendarFab") return;
+      if (btn.classList.contains("social-day")) return;
+      if (btn.classList.contains("social-day-item-button")) return;
+      btn.style.setProperty("display", "none", "important");
+    });
+  };
+
+  const originalRenderCalendar = typeof window.socialRenderCalendar === "function"
+    ? window.socialRenderCalendar
+    : null;
+  if (originalRenderCalendar) {
+    window.socialRenderCalendar = function patchedRenderCalendar() {
       try {
-        await originalLoadTasks(options);
-      } catch (error) {
-        socialState.tasksLastLoadError = true;
-        if (typeof socialShowToast === "function") {
-          socialShowToast(tr("Задачи", "Tasks"), String(error?.message || tr("Ошибка загрузки задач", "Failed to load tasks")));
-        }
-      }
-
-      const currentRows = Array.isArray(socialState.tasks) ? socialState.tasks : [];
-      if (currentRows.length || !socialState.tasksLastLoadError) {
-        socialState.tasksLastGood = [...currentRows];
-      }
-      if (!currentRows.length && !socialTaskIncludeDoneEnabled()) {
-        if (typeof window.socialRenderTasks === "function") window.socialRenderTasks();
+        const result = originalRenderCalendar.apply(this, arguments);
+        ensureCalendarUi();
+        return result;
+      } catch (_) {
+        buildFallbackCalendarGrid();
+        ensureCalendarUi();
+        return null;
       }
     };
   }
 
-  window.socialTaskDragStart = function socialTaskDragStart(event, taskId) {
-    if (typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell()) return;
-    const id = Number(taskId || 0);
-    if (!id || !event?.dataTransfer) return;
+  const originalLoadCalendar = typeof window.socialLoadCalendar === "function"
+    ? window.socialLoadCalendar
+    : null;
+  if (originalLoadCalendar) {
+    window.socialLoadCalendar = async function patchedLoadCalendar() {
+      let result = null;
+      try {
+        result = await Promise.resolve(originalLoadCalendar.apply(this, arguments));
+      } catch (_) {
+        result = null;
+      }
+      setTimeout(() => ensureCalendarUi(), 0);
+      return result;
+    };
+  }
+
+  const originalSwitchSocialSubtab = typeof window.switchSocialSubtab === "function"
+    ? window.switchSocialSubtab
+    : null;
+  if (originalSwitchSocialSubtab) {
+    window.switchSocialSubtab = function patchedSwitchSocialSubtab(tab, loadNow = true) {
+      const result = originalSwitchSocialSubtab.call(this, tab, loadNow);
+      if (String(tab || "").trim().toLowerCase() === "calendar") {
+        setTimeout(() => {
+          try {
+            ensureCalendarUi();
+            const dayCount = document.querySelectorAll("#socialCalendarGrid .social-day[data-day-key]").length;
+            if (!dayCount && typeof window.socialRenderCalendar === "function") {
+              window.socialRenderCalendar();
+            }
+          } catch (_) {}
+        }, 60);
+        setTimeout(() => {
+          try { ensureCalendarUi(); } catch (_) {}
+        }, 220);
+      }
+      return result;
+    };
+  }
+
+  const originalRenderNotesList = typeof window.socialRenderNotesList === "function"
+    ? window.socialRenderNotesList
+    : null;
+  if (originalRenderNotesList) {
+    window.socialRenderNotesList = function patchedRenderNotesList() {
+      const result = originalRenderNotesList.apply(this, arguments);
+      const host = document.getElementById("socialNotesList");
+      if (!host) return result;
+      host.querySelectorAll(".social-note-delete, [class*='note-delete'], [data-action='delete'], button[onclick*='socialDeleteNote']").forEach((node) => {
+        if (node?.remove) node.remove();
+      });
+      host.querySelectorAll(".social-note-row[data-note-id]").forEach((row) => {
+        const id = Number(row.getAttribute("data-note-id") || 0);
+        if (id <= 0) return;
+        row.onclick = () => {
+          if (typeof window.socialSelectNote === "function") window.socialSelectNote(id);
+        };
+        const color = typeof window.socialGetNoteCoverColor === "function"
+          ? String(window.socialGetNoteCoverColor(id) || "").trim()
+          : "";
+        if (color) row.style.setProperty("--sw-note-cover", color);
+      });
+      return result;
+    };
+  }
+})();
+
+(function patchSocialUiFinalV20260323c() {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  if (window.__socialDisableUiFinalV20260323c !== false) return;
+  if (window.__socialUiFinalV20260323c) return;
+  window.__socialUiFinalV20260323c = true;
+
+  const decodeSafe = (value) => {
+    let out = String(value == null ? "" : value);
+    if (!out) return "";
     try {
-      event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData("text/plain", String(id));
+      if (typeof window.socialDecodeUiText === "function") out = String(window.socialDecodeUiText(out) || out);
     } catch (_) {}
-    const node = event.currentTarget;
-    if (node?.setAttribute) node.setAttribute("data-dragging", "1");
+    try {
+      if (typeof window.decodePossiblyMojibake === "function") out = String(window.decodePossiblyMojibake(out) || out);
+    } catch (_) {}
+    try {
+      if (typeof window.__repairMojibakeText === "function") out = String(window.__repairMojibakeText(out) || out);
+    } catch (_) {}
+    return out.replace(/\s{2,}/g, " ").trim();
   };
 
-  window.socialTaskDragEnd = function socialTaskDragEnd(event) {
-    const node = event?.currentTarget;
-    if (node?.removeAttribute) node.removeAttribute("data-dragging");
+  const sanitizeTree = (root) => {
+    const target = root || document.body;
+    if (!target) return;
+    const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT, null);
+    let node = walker.currentNode;
+    while (node) {
+      const before = String(node.nodeValue || "");
+      const after = decodeSafe(before);
+      if (after && after !== before) node.nodeValue = after;
+      node = walker.nextNode();
+    }
   };
 
-  window.socialTaskDragOver = function socialTaskDragOver(event) {
-    if (typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell()) return;
-    if (event?.preventDefault) event.preventDefault();
+  const ensureCalendarUi = () => {
+    const root = document.getElementById("socialSubtabCalendar");
+    if (!root) return;
+    root.classList.add("sw-calendar-samsung");
+    const shell = root.querySelector(".social-calendar-shell") || root;
+    shell.querySelectorAll("button").forEach((btn) => {
+      if (btn.id === "socialCalendarFab") return;
+      if (btn.classList.contains("social-day")) return;
+      if (btn.classList.contains("social-day-item-button")) return;
+      btn.style.setProperty("display", "none", "important");
+    });
+    const dayCount = root.querySelectorAll("#socialCalendarGrid .social-day[data-day-key]").length;
+    if (!dayCount) {
+      root.classList.add("sw-calendar-awaiting-data");
+    } else {
+      root.classList.remove("sw-calendar-awaiting-data");
+    }
   };
 
-  window.socialRenderTasks = function socialRenderTasksV3() {
+  const ensureNotesUi = () => {
+    const host = document.getElementById("socialNotesList");
+    if (!host) return;
+    host.querySelectorAll(".social-note-delete, [class*='note-delete'], [class*='note-remove'], [class*='note-close'], [data-action='delete'], button[onclick*='socialDeleteNote']").forEach((node) => {
+      if (node?.remove) node.remove();
+    });
+    host.querySelectorAll(".social-note-row[data-note-id], .sw-note-card[data-note-id]").forEach((row) => {
+      const id = Number(row.getAttribute("data-note-id") || 0);
+      if (!id) return;
+      row.onclick = () => {
+        if (typeof window.socialSelectNote === "function") window.socialSelectNote(id);
+      };
+    });
+  };
+
+  const ensureNotificationCenter = () => {
+    const center = document.getElementById("socialNotificationCenter");
+    if (!center) return;
+    sanitizeTree(center);
+    if (!window.socialState?.notificationCenterOpen) {
+      center.classList.add("hidden");
+      center.style.display = "none";
+    }
+  };
+
+  const bindBellButtons = () => {
+    ["socialBellBtn", "mobileDrawerBellBtn"].forEach((id) => {
+      const btn = document.getElementById(id);
+      if (!btn || btn.dataset.finalBellBind === "1") return;
+      btn.dataset.finalBellBind = "1";
+      btn.addEventListener("click", async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof window.socialToggleNotificationCenter === "function") {
+          await window.socialToggleNotificationCenter();
+        }
+      });
+    });
+  };
+
+  const patchFn = (name, make) => {
+    const original = typeof window[name] === "function" ? window[name] : null;
+    if (!original) return;
+    window[name] = make(original);
+  };
+
+  patchFn("socialRenderConverterOptions", (original) => function patchedRenderConverterOptionsFinal() {
+    const result = original.apply(this, arguments);
+    const type = String(document.getElementById("socialConvType")?.value || "currency");
+    if (type !== "currency") return result;
+    const labels = {
+      RUB: window.tr("\u20bd (\u0440\u0443\u0431.)", "RUB"),
+      USD: "USD",
+      EUR: "EUR",
+      CNY: "CNY",
+      BYN: window.tr("BYN (\u0431\u0435\u043b. \u0440\u0443\u0431.)", "BYN"),
+      TRY: window.tr("TRY (\u043b\u0438\u0440\u0430)", "TRY"),
+      GBP: window.tr("GBP (\u0444\u0443\u043d\u0442)", "GBP"),
+      UAH: window.tr("UAH (\u0433\u0440\u0438\u0432\u043d\u0430)", "UAH"),
+    };
+    ["socialConvFrom", "socialConvTo"].forEach((id) => {
+      const node = document.getElementById(id);
+      if (!node) return;
+      [...node.options].forEach((opt) => {
+        const code = String(opt?.value || "").trim().toUpperCase();
+        if (labels[code]) opt.textContent = labels[code];
+      });
+    });
+    return result;
+  });
+
+  const normalizeTaskButtons = () => {
     const host = document.getElementById("socialTasksBoard");
     if (!host) return;
-    const rows = Array.isArray(socialState.tasks) ? socialState.tasks : [];
-    const includeDone = socialTaskIncludeDoneEnabled();
-    const myActorKey = String(socialState.boot?.actor?.actor_key || "").trim();
-    const isOwner = Boolean(socialState.boot?.actor?.is_owner);
-
-    const order = ["today", "tomorrow", "upcoming", "overdue", "done"];
-    const bucketMap = new Map(order.map((x) => [x, []]));
-    for (const row of rows) {
-      const key = safeTaskBucket(row);
-      if (!bucketMap.has(key)) bucketMap.set(key, []);
-      bucketMap.get(key).push(row);
-    }
-
-    const sections = order
-      .filter((bucket) => includeDone || bucket !== "done")
-      .map((bucket) => {
-        const items = bucketMap.get(bucket) || [];
-        const listHtml = items.length
-          ? items.map((task) => {
-            const id = Number(task?.id || 0);
-            const status = socialTaskVisualStatus(task);
-            const isDone = status === "done";
-            const due = socialFormatTaskDateTime(task?.due_date);
-            const created = socialFormatTaskDateTime(task?.created_at);
-            const project = socialTaskProjectTitle(task);
-            const kind = String(task?.task_kind || "company").toLowerCase();
-            const kindLabel = kind === "personal" ? tr("ЛИЧНАЯ", "PERSONAL") : project;
-            const assigneeNick = String(task?.assignee_nick || "-");
-            const avatar = socialAvatarMarkup(String(task?.assignee_avatar_url || ""), assigneeNick, "xs");
-            const pendingText = socialTaskPendingHint(id);
-            const isMine = myActorKey && String(task?.assignee_key || "") === myActorKey;
-            const canToggle = Boolean(task?.can_complete || isMine || isOwner);
-            const canDelete = Boolean(task?.can_delete || isOwner);
-            const dueDt = task?.due_date ? socialParseDateSafe(String(task.due_date || "")) : null;
-            const isOverdue = !isDone && dueDt instanceof Date && !Number.isNaN(dueDt.getTime()) && dueDt.getTime() < Date.now();
-            const canDrag = !((typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell()) || (typeof socialIsMobileClientShell === "function" && socialIsMobileClientShell()) || (typeof socialHasCoarsePointer === "function" && socialHasCoarsePointer()));
-            return `
-              <article class="social-task-item ${isMine ? "is-assignee" : ""} ${isDone ? "is-done" : ""} ${isOverdue ? "is-overdue" : ""}" data-task-id="${id}" draggable="${canDrag ? "true" : "false"}" ondragstart="socialTaskDragStart(event, ${id})" ondragend="socialTaskDragEnd(event)" ondblclick="socialOpenTaskModal(${id})">
-                <button class="social-task-check ${isDone ? "is-done" : ""}" type="button" onclick="socialToggleTaskDone(${id}); event.stopPropagation();" title="${tr("Переключить выполнение", "Toggle done")}" ${canToggle ? "" : "disabled"}>✓</button>
-                <div class="social-task-content" onclick="socialOpenTaskModal(${id})">
-                  <div class="social-task-title-row">
-                    <div class="social-task-title-text">${escapeHtml(task?.title || "-")}</div>
-                    <span class="social-task-kind ${kind === "personal" ? "personal" : "company"}">${escapeHtml(kindLabel || tr("Без проекта", "No project"))}</span>
-                  </div>
-                  <div class="social-task-subline">
-                    <span class="social-task-assignee">${avatar}<span class="social-task-assignee-name">${escapeHtml(assigneeNick)}</span></span>
-                    <span>${tr("Дата создания", "Created")}: ${escapeHtml(created || "-")} • ${tr("Дедлайн", "Deadline")}: ${escapeHtml(due || tr("Без дедлайна", "No deadline"))}</span>
-                  </div>
-                  ${pendingText ? `<div class="social-task-pending">${escapeHtml(pendingText)}</div>` : ""}
-                </div>
-                ${canDelete ? `<button class="social-task-delete" type="button" onclick="socialDeleteTask(${id}); event.stopPropagation();" title="${tr("Удалить", "Delete")}">✕</button>` : `<span></span>`}
-              </article>
-            `;
-          }).join("")
-          : `<div class="hint">${escapeHtml(tr("Нет задач", "No tasks"))}</div>`;
-
-        return `
-          <section class="social-task-bucket" data-bucket="${bucket}" ondragover="socialTaskDragOver(event)" ondrop="socialTaskDrop(event, '${bucket}')">
-            <header>
-              <h4>${escapeHtml(bucketLabel(bucket))}</h4>
-              <span>${Number(items.length || 0)}</span>
-            </header>
-            <div class="social-task-bucket-list">${listHtml}</div>
-          </section>
-        `;
-      })
-      .join("");
-
-    host.innerHTML = `<div class="social-task-board-v2">${sections}</div>`;
+    host.querySelectorAll(".social-task-check").forEach((btn) => {
+      const done = btn.classList.contains("is-done");
+      btn.textContent = done ? "\u2713" : "";
+      btn.setAttribute("title", window.tr("\u041e\u0442\u043c\u0435\u0442\u0438\u0442\u044c \u0432\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u043d\u043e\u0439", "Mark done"));
+    });
+    host.querySelectorAll(".social-task-delete").forEach((btn) => {
+      btn.textContent = "\u2715";
+      btn.setAttribute("title", window.tr("\u0423\u0434\u0430\u043b\u0438\u0442\u044c", "Delete"));
+    });
+    host.querySelectorAll(".social-task-pending").forEach((node) => {
+      const before = String(node.textContent || "");
+      if (!before || /[?]{3,}|[\u0420\u0421\u0412\u00d0\u00d1]/.test(before)) {
+        node.textContent = window.tr("5\u0441: \u043f\u043e\u0432\u0442\u043e\u0440\u043d\u044b\u0439 \u043a\u043b\u0438\u043a \u043e\u0442\u043c\u0435\u043d\u0438\u0442", "5s: click again to undo");
+      }
+    });
   };
 
-  window.socialOpenProjectMembersModal = async function socialOpenProjectMembersModal() {
-    const projectId = Number(document.getElementById("socialTaskProjectFilter")?.value || 0);
-    if (!projectId) {
-      if (typeof socialShowToast === "function") socialShowToast(tr("Проекты", "Projects"), tr("Сначала выберите проект в фильтре.", "Select a project first."));
-      else alert(tr("Сначала выберите проект в фильтре.", "Select a project first."));
-      return;
-    }
+  patchFn("socialRenderTasks", (original) => function patchedRenderTasksFinal() {
+    const result = original.apply(this, arguments);
+    normalizeTaskButtons();
+    sanitizeTree(document.getElementById("socialSubtabTasks"));
+    return result;
+  });
+  patchFn("socialLoadTasks", (original) => async function patchedLoadTasksFinal() {
+    const result = await Promise.resolve(original.apply(this, arguments));
+    normalizeTaskButtons();
+    sanitizeTree(document.getElementById("socialSubtabTasks"));
+    return result;
+  });
 
-    const project = (Array.isArray(socialState.projects) ? socialState.projects : []).find((row) => Number(row?.id || 0) === projectId);
-    const title = String(project?.title || "").trim() || tr("Проект", "Project");
-    const members = await socialRequest(`/api/social/tasks/projects/${projectId}/members`).catch((error) => {
-      const msg = String(error?.message || tr("Не удалось загрузить участников", "Failed to load members"));
-      if (typeof socialShowToast === "function") socialShowToast(tr("Участники", "Members"), msg);
-      else alert(msg);
+  const deleteGroupSafe = async () => {
+    const row = typeof socialGetCurrentThread === "function" ? socialGetCurrentThread() : null;
+    const threadId = Number(row?.id || 0);
+    if (!threadId || String(row?.kind || "") !== "group") return;
+    const title = String(row?.title || window.tr("\u044d\u0442\u0443 \u0433\u0440\u0443\u043f\u043f\u0443", "this group")).trim();
+    const ok = confirm(window.tr(`\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0433\u0440\u0443\u043f\u043f\u0443 "${title}"? \u042d\u0442\u043e \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435 \u043d\u0435\u043e\u0431\u0440\u0430\u0442\u0438\u043c\u043e.`, `Delete group "${title}"? This action cannot be undone.`));
+    if (!ok) return;
+    const requestFn = typeof socialRequest === "function"
+      ? socialRequest
+      : (typeof window.socialRequest === "function" ? window.socialRequest : null);
+    if (!requestFn) return;
+    const result = await requestFn(`/api/social/chat/groups/${threadId}`, {
+      method: "DELETE",
+      retryOnPost: false,
+      maxRetries: 0,
+    }).catch((error) => {
+      alert(error?.message || window.tr("\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u0433\u0440\u0443\u043f\u043f\u0443", "Failed to delete group"));
       return null;
     });
-    if (!Array.isArray(members)) return;
-
-    const canEdit = Boolean(socialState.boot?.actor?.is_owner);
-    const rowsHtml = members.map((row) => {
-      const actorKey = String(row?.actor_key || "");
-      const nick = String(row?.nick || actorKey || "-");
-      const avatar = socialAvatarMarkup(String(row?.avatar_url || ""), nick, "xs");
-      const checked = Boolean(row?.in_project) ? "checked" : "";
-      const disabled = canEdit ? "" : "disabled";
-      const ownerBadge = Boolean(row?.is_owner) ? `<span class="social-task-tag">${escapeHtml(tr("owner", "owner"))}</span>` : "";
-      return `
-        <label class="social-member-row">
-          <input class="social-project-member-check" type="checkbox" value="${escapeHtml(actorKey)}" ${checked} ${disabled} />
-          ${avatar}
-          <span class="social-task-assignee-name">${escapeHtml(nick)}</span>
-          ${ownerBadge}
-        </label>
-      `;
-    }).join("");
-
-    socialOpenModal(
-      `${tr("Участники проекта", "Project members")}: ${escapeHtml(title)}`,
-      `
-        <div class="social-group-members">
-          <div class="social-group-members-list" id="socialProjectMembersList">${rowsHtml || `<div class="hint">${escapeHtml(tr("Участников пока нет", "No members yet"))}</div>`}</div>
-          <div class="actions">
-            <button type="button" class="btn-secondary" onclick="socialCloseModal()">${tr("Отмена", "Cancel")}</button>
-            ${canEdit ? `<button type="button" onclick="socialSaveProjectMembers(${projectId})">${tr("Сохранить", "Save")}</button>` : `<span class="hint">${escapeHtml(tr("Только владелец может менять состав", "Only owner can edit members"))}</span>`}
-          </div>
-        </div>
-      `
-    );
+    if (!result) return;
+    if (typeof socialCloseThread === "function") socialCloseThread({ keepAutoSelect: false });
+    if (typeof socialLoadThreads === "function") await socialLoadThreads({ silent: true });
+    if (typeof socialShowToast === "function") {
+      socialShowToast(window.tr("\u0413\u0440\u0443\u043f\u043f\u0430 \u0443\u0434\u0430\u043b\u0435\u043d\u0430", "Group deleted"), window.tr("\u0427\u0430\u0442 \u0443\u0434\u0430\u043b\u0435\u043d \u0438\u0437 \u0441\u043f\u0438\u0441\u043a\u0430.", "The chat was removed from the list."));
+    }
   };
+  window.socialDeleteCurrentGroupThreadLegacyMojibake = deleteGroupSafe;
+  window.socialDeleteCurrentGroupThread = deleteGroupSafe;
 
-  window.socialSaveProjectMembers = async function socialSaveProjectMembers(projectId) {
-    const safeProjectId = Number(projectId || 0);
-    if (!safeProjectId) return;
-    const checks = [...document.querySelectorAll("#socialProjectMembersList .social-project-member-check")];
-    const actorKeys = checks.filter((node) => node.checked).map((node) => String(node.value || "").trim()).filter(Boolean);
-    await socialRequest(`/api/social/tasks/projects/${safeProjectId}/members`, {
-      method: "PUT",
-      body: JSON.stringify({ actor_keys: actorKeys }),
-    }).catch((error) => {
-      const msg = String(error?.message || tr("Не удалось сохранить участников", "Failed to save members"));
-      if (typeof socialShowToast === "function") socialShowToast(tr("Участники", "Members"), msg);
-      else alert(msg);
-      throw error;
-    });
-    socialCloseModal();
-    await socialLoadProjects();
-    await window.socialLoadTasks({ force: true });
-  };
+  patchFn("socialRenderNotificationCenter", (original) => function patchedRenderNotificationCenterFinal() {
+    const result = original.apply(this, arguments);
+    ensureNotificationCenter();
+    return result;
+  });
+  patchFn("socialToggleNotificationCenter", (original) => async function patchedToggleNotificationCenterFinal(forceOpen = null) {
+    const result = await Promise.resolve(original.call(this, forceOpen));
+    ensureNotificationCenter();
+    return result;
+  });
+  patchFn("socialRenderCalendar", (original) => function patchedRenderCalendarFinal() {
+    const result = original.apply(this, arguments);
+    ensureCalendarUi();
+    sanitizeTree(document.getElementById("socialSubtabCalendar"));
+    return result;
+  });
+  patchFn("socialRenderNotesList", (original) => function patchedRenderNotesListFinal() {
+    const result = original.apply(this, arguments);
+    ensureNotesUi();
+    sanitizeTree(document.getElementById("socialSubtabNotes"));
+    return result;
+  });
+
+  setTimeout(() => {
+    ensureCalendarUi();
+    ensureNotesUi();
+    ensureNotificationCenter();
+    bindBellButtons();
+    sanitizeTree(document.body);
+  }, 0);
 })();

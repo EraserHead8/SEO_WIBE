@@ -1,998 +1,1069 @@
-(function socialOverridesV20260320() {
+(function socialOverridesV20260321a() {
   if (typeof window === "undefined") return;
-  if (window.__socialOverridesV20260320) return;
-  window.__socialOverridesV20260320 = true;
+  if (window.__socialOverridesV20260321a) return;
+  window.__socialOverridesV20260321a = true;
+  window.__socialDisableNotificationToasts = true;
 
-  function taskBucketTitle(bucket) {
-    const key = String(bucket || "upcoming").trim().toLowerCase();
-    if (key === "today") return tr("РЎРµРіРѕРґРЅСЏ", "Today");
-    if (key === "tomorrow") return tr("Р—Р°РІС‚СЂР°", "Tomorrow");
-    if (key === "overdue") return tr("РџСЂРѕСЃСЂРѕС‡РµРЅРЅС‹Рµ", "Overdue");
-    if (key === "done") return tr("Р’С‹РїРѕР»РЅРµРЅРЅС‹Рµ", "Done");
-    return tr("РџСЂРµРґСЃС‚РѕСЏС‰РёРµ", "Upcoming");
+  const NOTE_COLORS_KEY = "seo_wibe_note_cover_colors_v1";
+  const NOTE_DEFAULT_COLOR = "#f8fbff";
+  const NOTE_PALETTE = ["#f8fbff", "#fff8dc", "#e9f8ff", "#f6ecff", "#e9ffe9", "#ffeef2", "#fff2e1", "#f0f4ff", "#f2f2f2"];
+  const REMINDER_PRESETS = [10, 60, 180, 1440, 4320, 10080];
+  const RECURRENCE_OPTIONS = ["none", "daily", "weekly", "monthly", "yearly"];
+
+  function ensureSocialState() {
+    if (!window.socialState || typeof window.socialState !== "object") {
+      window.socialState = {};
+    }
+    return window.socialState;
   }
 
-  function taskStatusLabel(statusRaw) {
-    const status = String(statusRaw || "todo").trim().toLowerCase();
-    if (status === "in_progress") return tr("Р’ СЂР°Р±РѕС‚Рµ", "In progress");
-    if (status === "done") return tr("Р’С‹РїРѕР»РЅРµРЅР°", "Done");
-    return tr("Рљ РІС‹РїРѕР»РЅРµРЅРёСЋ", "To do");
+  function t(ru, en) {
+    const safeRu = cleanText(ru);
+    const safeEn = cleanText(en);
+    try {
+      if (typeof window.tr === "function") return cleanText(String(window.tr(safeRu, safeEn) || ""));
+    } catch (_) {}
+    return String(window.currentLang || "ru").toLowerCase() === "en" ? safeEn : safeRu;
   }
 
-  function taskPriorityOptions(selected = "normal") {
-    const safe = String(selected || "normal").trim().toLowerCase();
-    const options = [
-      { value: "low", label: tr("РќРёР·РєРёР№", "Low") },
-      { value: "normal", label: tr("РћР±С‹С‡РЅС‹Р№", "Normal") },
-      { value: "high", label: tr("Р’С‹СЃРѕРєРёР№", "High") },
-      { value: "critical", label: tr("РљСЂРёС‚РёС‡РЅС‹Р№", "Critical") },
+  function esc(value) {
+    const raw = String(value ?? "");
+    if (typeof window.escapeHtml === "function") return window.escapeHtml(raw);
+    return raw
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function cleanText(value) {
+    let text = String(value ?? "");
+    try {
+      if (typeof window.decodePossiblyMojibake === "function") {
+        text = String(window.decodePossiblyMojibake(text) || text);
+      }
+    } catch (_) {}
+    try {
+      if (typeof window.__repairMojibakeText === "function") {
+        text = String(window.__repairMojibakeText(text) || text);
+      }
+    } catch (_) {}
+    return text;
+  }
+
+  function compactText(value, maxLen = 40) {
+    const text = cleanText(value).replace(/\s+/g, " ").trim();
+    if (!text) return "";
+    if (text.length <= maxLen) return text;
+    return `${text.slice(0, Math.max(0, maxLen - 1)).trim()}…`;
+  }
+
+  function parseDate(value) {
+    if (!value) return null;
+    try {
+      if (typeof window.socialParseDateSafe === "function") {
+        const parsed = window.socialParseDateSafe(value);
+        if (parsed instanceof Date && !Number.isNaN(parsed.getTime())) return parsed;
+      }
+    } catch (_) {}
+    const d = new Date(value);
+    return d instanceof Date && !Number.isNaN(d.getTime()) ? d : null;
+  }
+
+  function pad2(value) {
+    return String(Math.max(0, Number(value || 0))).padStart(2, "0");
+  }
+
+  function dayKey(value) {
+    try {
+      if (typeof window.socialCalendarDayKey === "function") {
+        const key = String(window.socialCalendarDayKey(value) || "").trim();
+        if (key) return key;
+      }
+    } catch (_) {}
+    const d = value instanceof Date ? value : parseDate(value);
+    if (!(d instanceof Date)) return "";
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  }
+
+  function dateTimeInputValue(value) {
+    if (!value) return "";
+    try {
+      if (typeof window.socialCalendarDateTimeValue === "function") {
+        return String(window.socialCalendarDateTimeValue(value) || "");
+      }
+    } catch (_) {}
+    const d = parseDate(value);
+    if (!(d instanceof Date)) return String(value || "").replace(" ", "T").slice(0, 16);
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  }
+
+  function calendarTimeLabel(value) {
+    try {
+      if (typeof window.socialCalendarTimeLabel === "function") {
+        return String(window.socialCalendarTimeLabel(value) || "");
+      }
+    } catch (_) {}
+    const d = parseDate(value);
+    if (!(d instanceof Date)) return "";
+    return d.toLocaleTimeString(String(window.currentLang || "ru").toLowerCase() === "en" ? "en-GB" : "ru-RU", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function calendarMonthLabel(value) {
+    try {
+      if (typeof window.socialCalendarMonthLabel === "function") {
+        return String(window.socialCalendarMonthLabel(value) || "");
+      }
+    } catch (_) {}
+    const d = value instanceof Date ? value : parseDate(value);
+    if (!(d instanceof Date)) return "";
+    return d.toLocaleDateString(String(window.currentLang || "ru").toLowerCase() === "en" ? "en-GB" : "ru-RU", { month: "long", year: "numeric" });
+  }
+
+  function calendarDayLabel(key) {
+    try {
+      if (typeof window.socialCalendarDayLabel === "function") {
+        return String(window.socialCalendarDayLabel(key) || key);
+      }
+    } catch (_) {}
+    const d = parseDate(`${key}T00:00:00`);
+    if (!(d instanceof Date)) return key;
+    return d.toLocaleDateString(String(window.currentLang || "ru").toLowerCase() === "en" ? "en-GB" : "ru-RU", {
+      weekday: "long", day: "numeric", month: "long", year: "numeric",
+    });
+  }
+
+  function normalizeColor(value, fallback = "#b8d2ff") {
+    const raw = String(value || "").trim();
+    return /^#[0-9a-fA-F]{6}$/.test(raw) ? raw.toLowerCase() : fallback;
+  }
+
+  function repairTextNodes(root) {
+    const target = root || document.body;
+    if (!target) return;
+    const suspect = /(?:Р[\u0400-\u04ff]|С[\u0400-\u04ff]|вЂ|рџ|\?{4,})/;
+    const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT, null);
+    let node = walker.nextNode();
+    while (node) {
+      const original = String(node.nodeValue || "");
+      if (original && suspect.test(original)) {
+        const fixed = cleanText(original);
+        if (fixed && fixed !== original) node.nodeValue = fixed;
+      }
+      node = walker.nextNode();
+    }
+  }
+
+  let repairTimer = 0;
+  function queueTextRepair() {
+    if (repairTimer) return;
+    repairTimer = window.setTimeout(() => {
+      repairTimer = 0;
+      repairTextNodes(document.body);
+    }, 120);
+  }
+
+  function applyKnownCopy() {
+    document.querySelectorAll(".bell-emoji").forEach((node) => { node.textContent = "🔔"; });
+    const map = [
+      [".nav-btn[data-tab='social']", t("Социальный", "Social")],
+      ["#socialSubtabChatBtn", t("Чат", "Chat")],
+      ["#socialSubtabTasksBtn", t("Задачи", "Tasks")],
+      ["#socialSubtabCalendarBtn", t("Календарь", "Calendar")],
+      ["#socialSubtabNotesBtn", t("Заметки", "Notes")],
     ];
-    return options.map((option) => `<option value="${option.value}" ${option.value === safe ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("");
+    map.forEach(([selector, text]) => {
+      document.querySelectorAll(selector).forEach((node) => { node.textContent = text; });
+    });
   }
 
-  function taskStatusOptions(selected = "todo") {
-    const safe = String(selected || "todo").trim().toLowerCase();
-    const options = [
-      { value: "todo", label: tr("Рљ РІС‹РїРѕР»РЅРµРЅРёСЋ", "To do") },
-      { value: "in_progress", label: tr("Р’ СЂР°Р±РѕС‚Рµ", "In progress") },
-      { value: "done", label: tr("Р’С‹РїРѕР»РЅРµРЅР°", "Done") },
+  function applyKnownCopy() {
+    document.querySelectorAll(".bell-emoji").forEach((node) => { node.textContent = "🔔"; });
+    const map = [
+      [".nav-btn[data-tab='social']", t("Социальный", "Social")],
+      ["#socialSubtabChatBtn", t("Чат", "Chat")],
+      ["#socialSubtabTasksBtn", t("Задачи", "Tasks")],
+      ["#socialSubtabCalendarBtn", t("Календарь", "Calendar")],
+      ["#socialSubtabNotesBtn", t("Заметки", "Notes")],
     ];
-    return options.map((option) => `<option value="${option.value}" ${option.value === safe ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("");
+    map.forEach(([selector, text]) => {
+      document.querySelectorAll(selector).forEach((node) => { node.textContent = text; });
+    });
   }
 
-  function taskResolveDraftKind(task = null, forcedKind = "") {
-    if (task && typeof task === "object") {
-      return String(task.task_kind || "company").trim().toLowerCase() === "personal" ? "personal" : "company";
+  function applyKnownCopy() {
+    document.querySelectorAll(".bell-emoji").forEach((node) => { node.textContent = "\u{1F514}"; });
+    [
+      ".nav-btn[data-tab='social']",
+      "#socialSubtabChatBtn",
+      "#socialSubtabTasksBtn",
+      "#socialSubtabCalendarBtn",
+      "#socialSubtabNotesBtn",
+      "#socialSubtabCalculatorBtn",
+      "#socialSubtabGamesBtn",
+    ].forEach((selector) => {
+      document.querySelectorAll(selector).forEach((node) => {
+        node.textContent = cleanText(String(node.textContent || ""));
+      });
+    });
+  }
+
+  function bindBellButtons() {
+    ["socialBellBtn", "mobileDrawerBellBtn"].forEach((id) => {
+      const button = document.getElementById(id);
+      if (!button || button.dataset.swBellBound === "1") return;
+      button.dataset.swBellBound = "1";
+      button.addEventListener("click", (event) => {
+        if (typeof window.openSocialChatFromBell === "function") {
+          window.openSocialChatFromBell(event);
+        }
+      });
+    });
+  }
+
+  function normalizeNotificationCenter() {
+    const center = document.getElementById("socialNotificationCenter");
+    if (!center) return null;
+    if (center.parentElement !== document.body) {
+      document.body.appendChild(center);
     }
-    const forced = String(forcedKind || socialState?.taskDraftKind || "").trim().toLowerCase();
-    if (forced === "personal") return "personal";
-    if (forced === "company") return "company";
-    const calendarMode = String(socialState?.calendarTaskFilter || "").trim().toLowerCase();
-    return calendarMode === "my_tasks" ? "personal" : "company";
+    center.classList.add("social-notif-center");
+    center.style.position = "fixed";
+    center.style.zIndex = "1200";
+    return center;
   }
 
-  function taskDefaultDueValue() {
-    const selectedDay = String(socialState?.calendarSelectedDay || "").trim();
-    if (selectedDay && /^\d{4}-\d{2}-\d{2}$/.test(selectedDay)) {
-      return `${selectedDay}T09:00`;
+  const originalOpenBell = typeof window.openSocialChatFromBell === "function" ? window.openSocialChatFromBell : null;
+  window.openSocialChatFromBell = async function openSocialChatFromBellOverride(event = null) {
+    if (event?.preventDefault) event.preventDefault();
+    if (event?.stopPropagation) event.stopPropagation();
+    if (typeof window.socialToggleNotificationCenter === "function") {
+      try {
+        await window.socialToggleNotificationCenter(event || null);
+        queueTextRepair();
+        return false;
+      } catch (_) {}
     }
-    return "";
+    if (originalOpenBell) return originalOpenBell.call(this, event);
+    return false;
+  };
+
+  const originalRenderNotificationCenter = typeof window.socialRenderNotificationCenter === "function"
+    ? window.socialRenderNotificationCenter
+    : null;
+  if (originalRenderNotificationCenter && !originalRenderNotificationCenter.__swWrapped) {
+    const wrapped = function socialRenderNotificationCenterOverride() {
+      const result = originalRenderNotificationCenter.apply(this, arguments);
+      const center = normalizeNotificationCenter();
+      if (center) repairTextNodes(center);
+      return result;
+    };
+    wrapped.__swWrapped = true;
+    window.socialRenderNotificationCenter = wrapped;
   }
 
-  function taskProjectMeta(task) {
-    if (String(task?.task_kind || "").trim().toLowerCase() === "personal") {
-      return tr("РњРћР Р—РђР”РђР§Р", "My tasks");
-    }
-    const projectTitle = String(task?.project_title || "").trim();
-    return projectTitle || tr("Р‘РµР· РїСЂРѕРµРєС‚Р°", "No project");
+  const originalToggleNotificationCenter = typeof window.socialToggleNotificationCenter === "function"
+    ? window.socialToggleNotificationCenter
+    : null;
+  if (originalToggleNotificationCenter && !originalToggleNotificationCenter.__swWrapped) {
+    const wrapped = async function socialToggleNotificationCenterOverride(event = null) {
+      const result = await originalToggleNotificationCenter.call(this, event);
+      const center = normalizeNotificationCenter();
+      if (center) repairTextNodes(center);
+      return result;
+    };
+    wrapped.__swWrapped = true;
+    window.socialToggleNotificationCenter = wrapped;
   }
 
-  function calendarActiveMode() {
-    const mode = String(socialState?.calendarTaskFilter || "events").trim().toLowerCase();
+  function calendarMode() {
+    const state = ensureSocialState();
+    const mode = String(state.calendarTaskFilter || "events").trim().toLowerCase();
     if (mode === "tasks") return "tasks";
     if (mode === "my_tasks") return "my_tasks";
     return "events";
   }
 
-  function syncCalendarModeCopy() {
-    const kicker = document.querySelector("#socialSubtabCalendar .social-calendar-kicker");
-    if (kicker) kicker.textContent = tr("РљР°Р»РµРЅРґР°СЂСЊ", "Calendar");
-    const host = document.getElementById("socialCalendarTaskMode");
-    if (!host) return;
-    const labels = {
-      events: tr("РЎРѕР±С‹С‚РёСЏ", "Events"),
-      tasks: tr("Р—Р°РґР°С‡Рё", "Tasks"),
-      my_tasks: tr("РњРћР Р—РђР”РђР§Р", "My tasks"),
-    };
-    host.querySelectorAll("button[data-mode]").forEach((button) => {
-      const mode = String(button.getAttribute("data-mode") || "").trim().toLowerCase();
-      if (labels[mode]) button.textContent = labels[mode];
-    });
-  }
-
-  function calendarPrimaryActionConfig(mode = "") {
-    const safeMode = String(mode || calendarActiveMode()).trim().toLowerCase();
-    if (safeMode === "my_tasks") {
-      return {
-        label: tr("Р”РѕР±Р°РІРёС‚СЊ РјРѕСЋ Р·Р°РґР°С‡Сѓ", "Add my task"),
-        onclick: "socialCalendarOpenCreateFromMode('my_tasks')",
-      };
-    }
-    if (safeMode === "tasks") {
-      return {
-        label: tr("Р”РѕР±Р°РІРёС‚СЊ Р·Р°РґР°С‡Сѓ", "Add task"),
-        onclick: "socialCalendarOpenCreateFromMode('tasks')",
-      };
-    }
-    return {
-      label: tr("Р”РѕР±Р°РІРёС‚СЊ СЃРѕР±С‹С‚РёРµ", "Add event"),
-      onclick: "socialCalendarOpenCreateFromMode('events')",
-    };
-  }
-
-  function syncCalendarPrimaryAction() {
-    const button = document.getElementById("socialCalendarPrimaryAction") || document.querySelector("#socialSubtabCalendar .social-calendar-hero-actions button:not(.btn-secondary)");
-    if (!button) return;
-    const config = calendarPrimaryActionConfig();
-    button.textContent = config.label;
-    button.setAttribute("onclick", config.onclick);
-  }
-
-  function calendarModeRowsForDay(dayKey) {
-    const mode = calendarActiveMode();
+  function calendarRowsForDay(key) {
+    const safeKey = String(key || "").trim();
+    if (!safeKey) return [];
+    const state = ensureSocialState();
+    const mode = calendarMode();
+    const rows = [];
     if (mode === "events") {
-      return (socialState?.calendarEvents || [])
-        .filter((eventRow) => socialCalendarDayKey(eventRow?.start_at || "") === dayKey)
-        .sort((left, right) => (socialCalendarParseDate(left?.start_at)?.getTime() || 0) - (socialCalendarParseDate(right?.start_at)?.getTime() || 0));
-    }
-    return (socialState?.tasks || [])
-      .filter((task) => socialCalendarDayKey(task?.due_date || "") === dayKey)
-      .filter((task) => mode !== "my_tasks" || String(task?.task_kind || "").trim().toLowerCase() === "personal")
-      .sort((left, right) => {
-        const leftDue = socialParseDateSafe(left?.due_date)?.getTime() || 0;
-        const rightDue = socialParseDateSafe(right?.due_date)?.getTime() || 0;
-        if (leftDue !== rightDue) return leftDue - rightDue;
-        return String(left?.title || "").localeCompare(String(right?.title || ""), currentLang === "en" ? "en" : "ru");
+      const events = Array.isArray(state.calendarEvents) ? state.calendarEvents : [];
+      events.forEach((row, index) => {
+        if (dayKey(row?.start_at || "") !== safeKey) return;
+        rows.push({ kind: "event", row, id: Number(row?.id || 0), order: index });
       });
-  }
-
-  function calendarPreviewColor(item, mode) {
-    const raw = String(item?.color || "").trim();
-    if (/^#[0-9a-fA-F]{6}$/.test(raw)) return raw.toLowerCase();
-    if (mode === "events") return "#9dc4ff";
-    return String(item?.task_kind || "").trim().toLowerCase() === "personal" ? "#b8e3c2" : "#d8e8ff";
-  }
-
-  function calendarPreviewStyle(item, mode) {
-    const color = calendarPreviewColor(item, mode);
-    return `style="--social-preview-color:${escapeHtml(color)}"`;
-  }
-
-  function calendarPreviewPill(item, mode) {
-    if (mode === "events") {
-      const timeValue = String(item?.start_at || "").trim() ? socialCalendarTimeLabel(item.start_at) : tr("Весь день", "All day");
-      return `<span class="social-day-preview-pill is-event" ${calendarPreviewStyle(item, mode)}><span class="social-day-preview-time">${escapeHtml(timeValue)}</span><span class="social-day-preview-title">${escapeHtml(item?.title || "-")}</span></span>`;
-    }
-    const personal = String(item?.task_kind || "").trim().toLowerCase() === "personal";
-    const dueLabel = String(item?.due_date || "").trim() ? socialCalendarTimeLabel(item.due_date) : tr("Без времени", "No time");
-    return `<span class="social-day-preview-pill is-task ${personal ? "is-personal" : ""}" ${calendarPreviewStyle(item, mode)}><span class="social-day-preview-time">${escapeHtml(dueLabel)}</span><span class="social-day-preview-title">${escapeHtml(item?.title || "-")}</span></span>`;
-  }
-
-  function normalizeNoteRow(row) {
-    if (!row || typeof row !== "object") return row;
-    return {
-      ...row,
-      title: socialNormalizeNoteText(row.title || ""),
-      content: socialNormalizeNoteText(row.content || ""),
-    };
-  }
-
-  socialTaskBucketTitle = taskBucketTitle;
-
-  socialBuildTaskForm = function socialBuildTaskFormOverride(task = null, forcedKind = "") {
-    const actorsRaw = Array.isArray(socialState?.actors) ? socialState.actors : [];
-    const projects = Array.isArray(socialState?.projects) ? socialState.projects : [];
-    const kind = taskResolveDraftKind(task, forcedKind);
-    const status = String(task?.status || "todo").trim().toLowerCase() || "todo";
-    const due = task?.due_date ? String(task.due_date).slice(0, 16) : taskDefaultDueValue();
-    const myKey = socialTaskCurrentActorKey();
-    const myNick = String(socialState?.boot?.actor?.nick || myKey || tr("РЇ", "Me")).trim() || tr("РЇ", "Me");
-    const actorMap = new Map();
-    actorsRaw.forEach((row) => {
-      const key = String(row?.actor_key || "").trim();
-      if (!key || actorMap.has(key)) return;
-      actorMap.set(key, row);
-    });
-    if (myKey && !actorMap.has(myKey)) actorMap.set(myKey, { actor_key: myKey, nick: myNick });
-    const actors = [...actorMap.values()];
-    const isPersonal = kind === "personal";
-    const currentAssignee = isPersonal && myKey ? myKey : (String(task?.assignee_key || "").trim() || myKey || String(actors[0]?.actor_key || ""));
-    const hint = isPersonal ? tr("Р›РёС‡РЅР°СЏ Р·Р°РґР°С‡Р° Р±СѓРґРµС‚ РІРёРґРЅР° С‚РѕР»СЊРєРѕ РІР°Рј Рё Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё РЅР°Р·РЅР°С‡РёС‚СЃСЏ РЅР° РІР°СЃ.", "This personal task is visible only to you and will be assigned to you automatically.") : tr("РџСЂРѕРµРєС‚РЅР°СЏ Р·Р°РґР°С‡Р° РґРѕСЃС‚СѓРїРЅР° СѓС‡Р°СЃС‚РЅРёРєР°Рј РїСЂРѕРµРєС‚Р° Рё РЅР°Р·РЅР°С‡РµРЅРЅРѕРјСѓ РёСЃРїРѕР»РЅРёС‚РµР»СЋ.", "This project task is visible to project members and the selected assignee.");
-    return `
-      <div class="grid-2">
-        <label><span>${tr("РќР°Р·РІР°РЅРёРµ", "Title")}</span><input id="socialTaskTitle" value="${escapeHtml(task?.title || "")}" placeholder="${escapeHtml(tr("РќР°РїСЂРёРјРµСЂ: РџРѕРґРіРѕС‚РѕРІРёС‚СЊ РїРѕСЃС‚Р°РІРєСѓ", "For example: Prepare shipment"))}" /></label>
-        <label><span>${tr("РўРёРї Р·Р°РґР°С‡Рё", "Task type")}</span><select id="socialTaskKind" onchange="socialSyncTaskKindForm()"><option value="company" ${kind === "company" ? "selected" : ""}>${tr("РџСЂРѕРµРєС‚РЅР°СЏ", "Project")}</option><option value="personal" ${kind === "personal" ? "selected" : ""}>${tr("РњРћР Р—РђР”РђР§Р", "My tasks")}</option></select></label>
-        <label><span>${tr("РџСЂРѕРµРєС‚", "Project")}</span><select id="socialTaskProject" ${isPersonal ? "disabled" : ""}><option value="">${tr("Р‘РµР· РїСЂРѕРµРєС‚Р°", "No project")}</option>${projects.map((project) => `<option value="${Number(project.id)}" ${!isPersonal && Number(task?.project_id || 0) === Number(project.id) ? "selected" : ""}>${escapeHtml(project.title || "-")}</option>`).join("")}</select></label>
-        <label><span>${tr("РСЃРїРѕР»РЅРёС‚РµР»СЊ", "Assignee")}</span><select id="socialTaskAssignee" ${isPersonal ? "disabled" : ""}>${actors.map((actor) => `<option value="${escapeHtml(String(actor.actor_key || ""))}" ${currentAssignee === String(actor.actor_key || "") ? "selected" : ""}>${escapeHtml(actor.nick || "-")}</option>`).join("")}</select></label>
-        <div id="socialTaskKindHint" class="hint full">${escapeHtml(hint)}</div>
-        <label><span>${tr("РџСЂРёРѕСЂРёС‚РµС‚", "Priority")}</span><select id="socialTaskPriority">${taskPriorityOptions(String(task?.priority || "normal"))}</select></label>
-        <label><span>${tr("РЎС‚Р°С‚СѓСЃ", "Status")}</span><select id="socialTaskStatus">${taskStatusOptions(status)}</select></label>
-        <label><span>${tr("Р”РµРґР»Р°Р№РЅ", "Deadline")}</span><input id="socialTaskDue" type="datetime-local" value="${escapeHtml(due)}" /></label>
-        <label class="full"><span>${tr("РћРїРёСЃР°РЅРёРµ", "Description")}</span><textarea id="socialTaskDescription" rows="5" placeholder="${escapeHtml(tr("РџРѕРґСЂРѕР±РЅРѕСЃС‚Рё, С‡РµРє-Р»РёСЃС‚, РєРѕРЅС‚РµРєСЃС‚", "Details, checklist, context"))}">${escapeHtml(task?.description || "")}</textarea></label>
-      </div>
-    `;
-  };
-
-  socialRenderTasks = function socialRenderTasksOverride() {
-    const host = document.getElementById("socialTasksBoard");
-    if (!host) return;
-    const rows = Array.isArray(socialState?.tasks) ? socialState.tasks : [];
-    const myActorKey = String(socialState?.boot?.actor?.actor_key || "").trim();
-    if (!rows.length) {
-      host.innerHTML = `<div class="hint">${escapeHtml(tr("Р—Р°РґР°С‡ РїРѕРєР° РЅРµС‚", "No tasks yet"))}</div>`;
-      return;
-    }
-    const grouped = new Map();
-    rows.forEach((task) => {
-      const bucket = String(task?.bucket || "upcoming").trim().toLowerCase();
-      if (!grouped.has(bucket)) grouped.set(bucket, []);
-      grouped.get(bucket).push(task);
-    });
-    const bucketOrder = [...grouped.keys()].sort((a, b) => socialTaskBucketSort(a) - socialTaskBucketSort(b));
-    host.innerHTML = `<div class="social-task-board-v2">${bucketOrder.map((bucket) => {
-      const items = grouped.get(bucket) || [];
-      return `<section class="social-task-bucket" data-bucket="${escapeHtml(bucket)}"><header><h4>${escapeHtml(taskBucketTitle(bucket))}</h4><span>${items.length}</span></header><div class="social-task-bucket-list" ondragover="socialTaskAllowDrop(event)" ondrop="socialTaskDrop(event, '${escapeHtml(bucket)}')">${items.map((task) => {
-        const id = Number(task?.id || 0);
-        const status = String(task?.status || "todo").trim().toLowerCase();
-        const pending = socialTaskPendingDone.has(id);
-        const isDone = status === "done" || pending;
-        const isMine = myActorKey && String(task?.assignee_key || "").trim() === myActorKey;
-        const classes = ["social-task-item"];
-        if (isMine) classes.push("is-assignee");
-        if (isDone) classes.push("is-done");
-        if (bucket === "overdue" && !isDone) classes.push("is-overdue");
-        return `<article class="${classes.join(" ")}" data-task-id="${id}" draggable="true" ondragstart="socialTaskDragStart(event, ${id})"><button class="social-task-check ${isDone ? "is-done" : ""}" type="button" onclick="socialToggleTaskDone(${id}); event.stopPropagation();" title="${escapeHtml(tr("РћС‚РјРµС‚РёС‚СЊ РІС‹РїРѕР»РЅРµРЅРЅРѕР№", "Mark as done"))}">${isDone ? "✓" : ""}</button><div class="social-task-content" onclick="socialOpenTaskModal(${id})"><div class="social-task-title-row"><b class="social-task-title-text">${escapeHtml(task?.title || "-")}</b><span class="social-task-kind ${String(task?.task_kind || "company").trim().toLowerCase() === "personal" ? "personal" : "company"}">${escapeHtml(taskProjectMeta(task))}</span></div><div class="social-task-subline"><span>${escapeHtml(socialTaskDueLabel(task))}</span>${socialTaskAssigneeMeta(task)}</div><div class="social-task-subline social-task-subline--secondary"><span>${escapeHtml(taskStatusLabel(task?.status))}</span>${String(task?.description || "").trim() ? `<span class="social-task-meta-trim">${escapeHtml(String(task.description || "").replace(/\s+/g, " ").trim())}</span>` : `<span class="social-task-meta-trim">${escapeHtml(tr("Р‘РµР· РѕРїРёСЃР°РЅРёСЏ", "No description"))}</span>`}</div>${pending ? `<span class="social-task-pending">${escapeHtml(tr("Р•С‰Рµ 5 СЃРµРєСѓРЅРґ РјРѕР¶РЅРѕ РѕС‚РјРµРЅРёС‚СЊ РїРѕРІС‚РѕСЂРЅС‹Рј РЅР°Р¶Р°С‚РёРµРј.", "You can undo within 5 seconds by tapping again."))}</span>` : ""}</div><button class="social-task-delete" type="button" onclick="socialDeleteTask(${id}); event.stopPropagation();" title="${escapeHtml(tr("РЈРґР°Р»РёС‚СЊ", "Delete"))}">✕</button></article>`;
-      }).join("")}</div></section>`;
-    }).join("")}</div>`;
-    if ((typeof socialIsMobileApkShell === "function" && socialIsMobileApkShell()) || (typeof socialIsMobileClientShell === "function" && socialIsMobileClientShell()) || Boolean(window.mobileClientMode) || (typeof socialHasCoarsePointer === "function" && socialHasCoarsePointer())) {
-      host.querySelectorAll(".social-task-item").forEach((item) => {
-        item.setAttribute("draggable", "false");
-        item.removeAttribute("ondragstart");
+    } else {
+      const tasks = Array.isArray(state.tasks) ? state.tasks : [];
+      tasks.forEach((row, index) => {
+        if (dayKey(row?.due_date || "") !== safeKey) return;
+        if (mode === "my_tasks" && String(row?.task_kind || "").trim().toLowerCase() !== "personal") return;
+        rows.push({ kind: "task", row, id: Number(row?.id || 0), order: index });
       });
     }
-  };
+    rows.sort((a, b) => {
+      const leftTs = parseDate(a.kind === "event" ? a.row?.start_at : a.row?.due_date)?.getTime() || 0;
+      const rightTs = parseDate(b.kind === "event" ? b.row?.start_at : b.row?.due_date)?.getTime() || 0;
+      if (leftTs !== rightTs) return leftTs - rightTs;
+      return a.order - b.order;
+    });
+    return rows;
+  }
 
-  socialOpenTaskModal = function socialOpenTaskModalOverride(taskId = 0, forcedKind = "") {
-    const task = (socialState?.tasks || []).find((row) => Number(row?.id || 0) === Number(taskId || 0)) || null;
-    const comments = Array.isArray(task?.comments) ? task.comments : [];
-    const resolvedKind = taskResolveDraftKind(task, forcedKind);
-    socialState.taskDraftKind = resolvedKind;
-    socialOpenModal(
-      task ? tr("Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ Р·Р°РґР°С‡Сѓ", "Edit task") : tr("РќРѕРІР°СЏ Р·Р°РґР°С‡Р°", "New task"),
-      `${socialBuildTaskForm(task, resolvedKind)}${task ? `<div class="social-task-comments"><h4>${tr("РљРѕРјРјРµРЅС‚Р°СЂРёРё", "Comments")}</h4>${comments.length ? comments.map((comment) => `<div class="social-task-comment"><b>${escapeHtml(comment.author_nick || "-")}</b><small>${escapeHtml(String(comment.created_at || "").slice(0, 16).replace("T", " "))}</small><div>${escapeHtml(comment.text || "")}</div></div>`).join("") : `<div class="hint">${escapeHtml(tr("РљРѕРјРјРµРЅС‚Р°СЂРёРµРІ РїРѕРєР° РЅРµС‚", "No comments yet"))}</div>`}<div class="grid-2"><input id="socialTaskCommentInput" placeholder="${escapeHtml(tr("РљРѕРјРјРµРЅС‚Р°СЂРёР№", "Comment"))}" /><button type="button" onclick="socialAddTaskComment(${Number(task.id || 0)})">${tr("Р”РѕР±Р°РІРёС‚СЊ", "Add")}</button></div></div>` : ""}<div class="actions"><button type="button" onclick="socialSaveTask(${task ? Number(task.id || 0) : 0})">${task ? tr("РЎРѕС…СЂР°РЅРёС‚СЊ", "Save") : tr("РЎРѕР·РґР°С‚СЊ", "Create")}</button></div>`
-    );
-    socialSyncTaskKindForm();
-    socialState.taskDraftKind = "";
-  };
+  function calendarRowColor(item) {
+    if (item.kind === "event") return normalizeColor(item.row?.color, "#b8d2ff");
+    return String(item.row?.task_kind || "").trim().toLowerCase() === "personal" ? "#b8e7c8" : "#c9dcff";
+  }
 
-  socialCalendarOpenCreateFromMode = function socialCalendarOpenCreateFromModeOverride(mode = "") {
-    const safeMode = String(mode || calendarActiveMode()).trim().toLowerCase();
-    if (safeMode === "events") {
-      socialOpenCalendarModal();
-      return;
+  function calendarRowTime(item) {
+    if (item.kind === "event") {
+      const start = String(item.row?.start_at || "").trim();
+      const end = String(item.row?.end_at || "").trim();
+      if (!start) return t("Весь день", "All day");
+      const left = calendarTimeLabel(start);
+      const right = end ? calendarTimeLabel(end) : "";
+      return right ? `${left} - ${right}` : left;
     }
-    socialState.taskDraftKind = safeMode === "my_tasks" ? "personal" : "company";
-    socialOpenTaskModal(0, socialState.taskDraftKind);
-  };
+    const due = String(item.row?.due_date || "").trim();
+    return due ? calendarTimeLabel(due) : t("Без времени", "No time");
+  }
 
-  const originalOpenCalendarModal = typeof socialOpenCalendarModal === "function" ? socialOpenCalendarModal : null;
-  if (originalOpenCalendarModal) {
-    socialOpenCalendarModal = async function socialOpenCalendarModalOverride(eventId = 0) {
-      await originalOpenCalendarModal.call(this, eventId);
-      const grid = document.querySelector(".social-calendar-edit-grid");
-      const titleInput = document.getElementById("socialEventTitle");
-      if (!grid || !titleInput || document.getElementById("socialEventColor")) return;
-      const eventRow = (socialState?.calendarEvents || []).find((item) => Number(socialCalendarEventBaseId(item) || 0) === Number(eventId || 0)) || null;
-      const currentColor = /^#[0-9a-fA-F]{6}$/.test(String(eventRow?.color || "").trim()) ? String(eventRow.color).trim() : "#9dc4ff";
-      const titleLabel = titleInput.closest("label");
-      const colorLabel = document.createElement("label");
-      colorLabel.innerHTML = `<span>${escapeHtml(tr("Цвет", "Color"))}</span><div class="social-event-color-row"><input id="socialEventColor" type="color" value="${escapeHtml(currentColor)}" /><span class="hint">${escapeHtml(tr("Цвет события будет виден на календаре.", "The event color is shown on the calendar."))}</span></div>`;
-      if (titleLabel && titleLabel.nextElementSibling) {
-        titleLabel.insertAdjacentElement("afterend", colorLabel);
-      } else {
-        grid.appendChild(colorLabel);
+  function calendarRowMeta(item) {
+    if (item.kind === "event") {
+      const shared = item.row?.is_public ? t("Общее", "Shared") : t("Личное", "Private");
+      const recurrence = String(item.row?.recurrence_kind || "none").trim().toLowerCase();
+      const interval = Math.max(1, Number(item.row?.recurrence_interval || 1));
+      let recLabel = "";
+      if (recurrence !== "none") {
+        const map = {
+          daily: t("каждый день", "daily"),
+          weekly: t("каждую неделю", "weekly"),
+          monthly: t("каждый месяц", "monthly"),
+          yearly: t("каждый год", "yearly"),
+        };
+        const base = map[recurrence] || recurrence;
+        recLabel = interval > 1 ? `${base} x${interval}` : base;
       }
-    };
+      return [shared, recLabel].filter(Boolean).join(" • ");
+    }
+    const assignee = cleanText(item.row?.assignee_nick || "").trim();
+    const status = String(item.row?.status || "todo").trim().toLowerCase();
+    const statusLabel = status === "done"
+      ? t("Выполнена", "Done")
+      : status === "in_progress"
+        ? t("В работе", "In progress")
+        : t("К выполнению", "To do");
+    return [assignee, statusLabel].filter(Boolean).join(" • ");
   }
 
-  socialSaveEvent = async function socialSaveEventOverride(eventId = 0) {
-    const startAt = String(document.getElementById("socialEventStart")?.value || "").trim();
-    const endAt = String(document.getElementById("socialEventEnd")?.value || "").trim();
-    const recurrenceKind = String(document.getElementById("socialEventRecurrenceKind")?.value || "none").trim().toLowerCase();
-    const recurrenceInterval = Math.max(1, Math.round(Number(document.getElementById("socialEventRecurrenceInterval")?.value || 1)) || 1);
-    const reminderEnabled = Boolean(document.getElementById("socialEventReminderEnabled")?.checked);
-    const payload = {
-      title: String(document.getElementById("socialEventTitle")?.value || "").trim(),
-      details: String(document.getElementById("socialEventDetails")?.value || "").trim(),
-      start_at: startAt,
-      end_at: endAt || null,
-      is_public: Boolean(document.getElementById("socialEventPublic")?.checked),
-      color: String(document.getElementById("socialEventColor")?.value || "").trim(),
-      recurrence_kind: recurrenceKind,
-      recurrence_interval: recurrenceKind === "none" ? 1 : recurrenceInterval,
-      reminder_enabled: reminderEnabled,
-      reminder_offsets_min: reminderEnabled ? socialCalendarCollectReminderOffsets() : [],
-    };
-    if (!payload.title || !payload.start_at) {
-      alert(tr("Заполните название и дату начала", "Fill title and start date"));
-      return;
+  function calendarRowDescription(item) {
+    if (item.kind === "event") {
+      let text = String(item.row?.details || "").trim();
+      if (typeof window.socialCleanCalendarDetails === "function") {
+        text = String(window.socialCleanCalendarDetails(text) || text).trim();
+      }
+      return text || t("Без описания", "No description");
     }
-    const startDate = socialCalendarParseDate(payload.start_at);
-    const endDate = payload.end_at ? socialCalendarParseDate(payload.end_at) : null;
-    if (startDate && endDate && endDate.getTime() < startDate.getTime()) {
-      alert(tr("Время окончания не может быть раньше начала", "End time cannot be earlier than start time"));
-      return;
-    }
-    const requestPromise = eventId > 0
-      ? socialRequest(`/api/social/calendar/events/${Number(eventId)}`, { method: "PUT", body: JSON.stringify(payload) })
-      : socialRequest("/api/social/calendar/events", { method: "POST", body: JSON.stringify(payload) });
-    const saved = await requestPromise.catch((e) => {
-      alert(e.message);
-      return null;
-    });
-    if (!saved) return;
-    socialState.calendarSelectedDay = socialCalendarDayKey(saved?.start_at || payload.start_at) || socialState.calendarSelectedDay;
-    socialCloseModal();
-    await socialLoadCalendar();
-  };
+    return String(item.row?.description || "").trim() || t("Без описания", "No description");
+  }
 
-  socialRenderCalendar = function socialRenderCalendarOverride() {
+  function calendarRowTitle(item) {
+    return cleanText(item.row?.title || "").trim() || "-";
+  }
+
+  function calendarCellChips(key) {
+    const rows = calendarRowsForDay(key);
+    if (!rows.length) return "";
+    const limit = 3;
+    const chips = rows.slice(0, limit).map((item) => `
+      <span class="sw-cal-chip ${item.kind === "task" ? "is-task" : "is-event"}" style="--sw-chip-color:${esc(calendarRowColor(item))}">
+        <span class="sw-cal-chip-text">${esc(compactText(calendarRowTitle(item), 18))}</span>
+      </span>
+    `).join("");
+    const remain = rows.length - limit;
+    const more = remain > 0 ? `<span class="sw-cal-more">+${remain}</span>` : "";
+    return `<div class="sw-cal-chip-list">${chips}${more}</div>`;
+  }
+
+  function ensureSelectedDayInMonth() {
+    const state = ensureSocialState();
+    const d = state.calendarDate instanceof Date ? state.calendarDate : new Date();
+    const monthPrefix = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-`;
+    const selected = String(state.calendarSelectedDay || "").trim();
+    if (!selected.startsWith(monthPrefix)) {
+      state.calendarSelectedDay = `${monthPrefix}01`;
+    }
+  }
+
+  function renderCalendarGrid() {
     const grid = document.getElementById("socialCalendarGrid");
-    const list = document.getElementById("socialCalendarEvents");
-    const monthLabel = document.getElementById("socialCalendarMonthLabel");
-    if (!grid || !list) return;
-    syncCalendarModeCopy();
-    syncCalendarPrimaryAction();
+    if (!grid) return;
+    const state = ensureSocialState();
+    const d = state.calendarDate instanceof Date ? state.calendarDate : new Date();
+    ensureSelectedDayInMonth();
+    const selected = String(state.calendarSelectedDay || "").trim();
+    const today = dayKey(new Date());
+    const first = new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0, 0, 0, 0, 0);
+    const shift = (first.getDay() + 6) % 7;
+    const days = last.getDate();
+    const weekdays = [t("Пн", "Mon"), t("Вт", "Tue"), t("Ср", "Wed"), t("Чт", "Thu"), t("Пт", "Fri"), t("Сб", "Sat"), t("Вс", "Sun")];
 
-    const date = socialState.calendarDate;
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const todayKey = socialCalendarDayKey(new Date());
-    const firstDay = new Date(year, month, 1, 0, 0, 0, 0);
-    const lastDay = new Date(year, month + 1, 0, 0, 0, 0, 0);
-    const shift = (firstDay.getDay() + 6) % 7;
-    const days = lastDay.getDate();
-    const mode = calendarActiveMode();
-    const compact = typeof window.matchMedia === "function" && window.matchMedia("(max-width: 980px)").matches;
-    const previewLimit = compact ? 1 : 2;
-
-    if (monthLabel) monthLabel.textContent = socialCalendarMonthLabel(date);
-
-    let html = `<div class="social-calendar-row head">${[
-      tr("РџРЅ", "Mon"),
-      tr("Р’С‚", "Tue"),
-      tr("РЎСЂ", "Wed"),
-      tr("Р§С‚", "Thu"),
-      tr("РџС‚", "Fri"),
-      tr("РЎР±", "Sat"),
-      tr("Р’СЃ", "Sun"),
-    ].map((label) => `<span>${escapeHtml(label)}</span>`).join("")}</div><div class="social-calendar-cells">`;
-
-    for (let i = 0; i < shift; i += 1) {
-      html += `<button class="social-day muted rich" disabled type="button"></button>`;
-    }
-
+    let html = `<div class="social-calendar-row head">${weekdays.map((x) => `<span>${esc(x)}</span>`).join("")}</div><div class="social-calendar-cells">`;
+    for (let i = 0; i < shift; i += 1) html += `<button class="social-day muted" disabled></button>`;
     for (let day = 1; day <= days; day += 1) {
-      const key = `${year}-${socialCalendarPad(month + 1)}-${socialCalendarPad(day)}`;
-      const rows = calendarModeRowsForDay(key);
-      const preview = rows.slice(0, previewLimit).map((item) => calendarPreviewPill(item, mode)).join("");
-      const moreCount = rows.length - previewLimit;
-      const active = socialState.calendarSelectedDay === key ? "active" : "";
-      const isToday = todayKey && key === todayKey ? "today" : "";
-      const hasRows = rows.length ? "has-preview" : "";
+      const key = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(day)}`;
+      const active = selected === key ? "active" : "";
+      const todayClass = today === key ? "today" : "";
       html += `
-        <button class="social-day rich ${active} ${isToday} ${hasRows}" data-day-key="${key}" type="button" onclick="socialShowDay('${key}')">
-          <div class="social-day-head">
-            <b>${day}</b>
-            ${todayKey && key === todayKey ? `<span class="social-day-badge">${escapeHtml(tr("РЎРµРіРѕРґРЅСЏ", "Today"))}</span>` : ""}
-          </div>
-          <div class="social-day-preview-stack">${preview}</div>
-          ${moreCount > 0 ? `<div class="social-day-more">+${moreCount}</div>` : ""}
+        <button class="social-day ${active} ${todayClass}" data-day-key="${key}" type="button" onclick="socialShowDay('${key}')">
+          <b>${day}</b>
+          ${calendarCellChips(key)}
         </button>
       `;
     }
-
     html += "</div>";
     grid.innerHTML = html;
-    const inMonth = String(socialState.calendarSelectedDay || "").startsWith(`${year}-${socialCalendarPad(month + 1)}-`);
-    const fallback = (todayKey && String(todayKey).startsWith(`${year}-${socialCalendarPad(month + 1)}-`)) ? todayKey : `${year}-${socialCalendarPad(month + 1)}-01`;
-    socialShowDay(inMonth ? socialState.calendarSelectedDay : fallback);
+
+    const monthLabel = document.getElementById("socialCalendarMonthLabel");
+    if (monthLabel) monthLabel.textContent = cleanText(calendarMonthLabel(d));
+  }
+
+  function normalizeCalendarScaffold() {
+    const root = document.getElementById("socialSubtabCalendar");
+    if (!root) return;
+    root.classList.add("social-calendar-samsung-mode");
+    root.querySelectorAll("#socialCalendarEvents, .social-calendar-events, .social-calendar-sync, .social-calendar-google, .social-calendar-filters, .social-calendar-toolbar, .social-calendar-toolbar--modern, .social-calendar-toolbar--clean, #socialCalendarTaskMode, #socialCalendarPrimaryAction").forEach((node) => {
+      node.classList.add("hidden");
+      node.setAttribute("aria-hidden", "true");
+    });
+    const fab = document.getElementById("socialCalendarFab");
+    if (fab) fab.classList.remove("hidden");
+  }
+
+  function renderDaySheet(openSheet = false) {
+    const backdrop = document.getElementById("socialCalendarDaySheetBackdrop");
+    const sheet = document.getElementById("socialCalendarDaySheet");
+    if (!backdrop || !sheet) return;
+    const state = ensureSocialState();
+    const selected = String(state.calendarSelectedDay || "").trim();
+    if (!selected) {
+      sheet.classList.add("hidden");
+      backdrop.classList.add("hidden");
+      return;
+    }
+
+    const rows = calendarRowsForDay(selected);
+    const cards = rows.length
+      ? rows.map((item, index) => {
+        const key = `${item.kind}:${item.id || 0}:${index}`;
+        const encodedKey = encodeURIComponent(key);
+        const expanded = Boolean(window.__swCalExpanded?.has(key));
+        const title = calendarRowTitle(item);
+        const time = calendarRowTime(item);
+        const meta = calendarRowMeta(item);
+        const desc = calendarRowDescription(item);
+        const editAction = item.kind === "event"
+          ? `socialOpenCalendarModal(${Number(item.id || 0)});event.stopPropagation();`
+          : `switchSocialSubtab('tasks');socialOpenTaskModal(${Number(item.id || 0)});event.stopPropagation();`;
+        const deleteAction = item.kind === "event"
+          ? `socialDeleteEvent(${Number(item.id || 0)});event.stopPropagation();`
+          : `socialDeleteTask(${Number(item.id || 0)});event.stopPropagation();`;
+        return `
+          <article class="sw-day-item ${item.kind === "task" ? "is-task" : "is-event"} ${expanded ? "is-expanded" : ""}" style="--sw-chip-color:${esc(calendarRowColor(item))}" onclick="socialToggleCalendarItemExpanded('${encodedKey}')">
+            <div class="sw-day-item-head">
+              <b>${esc(compactText(title, 56))}</b>
+              <small>${esc(time)}</small>
+            </div>
+            <div class="sw-day-item-meta">${esc(meta || "")}</div>
+            ${expanded ? `<div class="sw-day-item-desc">${esc(desc)}</div><div class="sw-day-item-actions"><button type="button" class="btn-secondary" onclick="${editAction}">${esc(t("Редактировать", "Edit"))}</button><button type="button" class="btn-danger" onclick="${deleteAction}">${esc(t("Удалить", "Delete"))}</button></div>` : ""}
+          </article>
+        `;
+      }).join("")
+      : `<div class="hint">${esc(t("На этот день событий нет.", "No events for this day."))}</div>`;
+
+    sheet.innerHTML = `
+      <section class="sw-day-sheet-card">
+        <div class="sw-day-sheet-head">
+          <div>
+            <div class="sw-day-sheet-kicker">${esc(t("Выбранный день", "Selected day"))}</div>
+            <h4>${esc(cleanText(calendarDayLabel(selected)))}</h4>
+          </div>
+          <button type="button" class="btn-secondary" onclick="socialHideCalendarDaySheet()">✕</button>
+        </div>
+        <div class="sw-day-sheet-list">${cards}</div>
+        <div class="sw-day-sheet-footer">
+          <button type="button" class="btn-secondary" onclick="socialOpenCalendarQuickAddMenu()">${esc(t("Добавить", "Add"))}</button>
+        </div>
+      </section>
+    `;
+
+    if (openSheet) {
+      sheet.classList.remove("hidden");
+      backdrop.classList.remove("hidden");
+      sheet.setAttribute("aria-hidden", "false");
+    }
+  }
+
+  window.socialHideCalendarDaySheet = function socialHideCalendarDaySheet() {
+    const backdrop = document.getElementById("socialCalendarDaySheetBackdrop");
+    const sheet = document.getElementById("socialCalendarDaySheet");
+    if (sheet) {
+      sheet.classList.add("hidden");
+      sheet.setAttribute("aria-hidden", "true");
+    }
+    if (backdrop) backdrop.classList.add("hidden");
   };
 
-  socialShowDay = function socialShowDayOverride(dayKey) {
-    const list = document.getElementById("socialCalendarEvents");
-    if (!list) return;
-    socialState.calendarSelectedDay = dayKey;
-    syncCalendarPrimaryAction();
+  window.__swCalExpanded = new Set();
 
-    const mode = calendarActiveMode();
-    const rows = calendarModeRowsForDay(dayKey);
-    const title = socialCalendarDayLabel(dayKey);
-    const action = calendarPrimaryActionConfig(mode);
+  window.socialToggleCalendarItemExpanded = function socialToggleCalendarItemExpanded(encodedKey) {
+    const key = decodeURIComponent(String(encodedKey || ""));
+    if (!key) return;
+    if (window.__swCalExpanded.has(key)) window.__swCalExpanded.delete(key);
+    else window.__swCalExpanded.add(key);
+    renderDaySheet(true);
+  };
 
-    const cards = rows.length ? rows.map((row) => {
-      if (mode === "events") {
-        const timeLabel = row?.start_at ? `${socialCalendarTimeLabel(row.start_at)}${row?.end_at ? ` - ${socialCalendarTimeLabel(row.end_at)}` : ""}` : tr("Р’РµСЃСЊ РґРµРЅСЊ", "All day");
-        const meta = [
-          row?.is_public ? tr("РћР±С‰РµРµ", "Shared") : tr("Р›РёС‡РЅРѕРµ", "Private"),
-          socialCalendarRecurrenceLabel(row?.recurrence_kind, row?.recurrence_interval),
-          socialCalendarReminderSummary(row?.reminder_offsets_min, row?.reminder_enabled !== false),
-        ].filter(Boolean).join(" / ");
-        return `<article class="social-calendar-day-card is-event" style="--social-preview-color:${escapeHtml(calendarPreviewColor(row, \"events\"))}"><div class="social-calendar-day-card-body" onclick="socialOpenCalendarModal(${socialCalendarEventBaseId(row)})"><div class="social-calendar-day-card-meta">${escapeHtml(timeLabel)}${meta ? ` · ${escapeHtml(meta)}` : ""}</div><h5>${escapeHtml(row?.title || "-")}</h5><div class="social-calendar-day-card-desc">${escapeHtml(socialCleanCalendarDetails(row?.details || "") || tr("Р‘РµР· РѕРїРёСЃР°РЅРёСЏ", "No description"))}</div></div><div class="social-calendar-day-card-actions"><button type="button" onclick="socialOpenCalendarModal(${socialCalendarEventBaseId(row)})">${tr("РћС‚РєСЂС‹С‚СЊ", "Open")}</button><button class="btn-danger" type="button" onclick="socialDeleteEvent(${socialCalendarEventBaseId(row)})">${tr("РЈРґР°Р»РёС‚СЊ", "Delete")}</button></div></article>`;
+  window.socialShowDay = function socialShowDayOverride(key) {
+    const safe = String(key || "").trim();
+    if (!safe) return;
+    const state = ensureSocialState();
+    state.calendarSelectedDay = safe;
+    renderCalendarGrid();
+    renderDaySheet(true);
+  };
+
+  window.socialRenderCalendar = function socialRenderCalendarSamsung() {
+    const state = ensureSocialState();
+    if (!(state.calendarDate instanceof Date)) state.calendarDate = new Date();
+    normalizeCalendarScaffold();
+    renderCalendarGrid();
+    renderDaySheet(false);
+    queueTextRepair();
+  };
+
+  window.socialLoadCalendar = async function socialLoadCalendarSamsungOverride() {
+    const state = ensureSocialState();
+    normalizeCalendarScaffold();
+    if (!(state.calendarDate instanceof Date) || Number.isNaN(state.calendarDate.getTime())) {
+      const now = new Date();
+      state.calendarDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    }
+
+    const monthInput = document.getElementById("socialCalendarMonth");
+    if (monthInput && !String(monthInput.value || "").trim()) {
+      monthInput.value = `${state.calendarDate.getFullYear()}-${pad2(state.calendarDate.getMonth() + 1)}`;
+    }
+    const monthVal = String(monthInput?.value || "").trim();
+    if (monthVal) {
+      const parts = monthVal.split("-");
+      const y = Number(parts[0] || 0);
+      const m = Number(parts[1] || 0);
+      if (Number.isFinite(y) && Number.isFinite(m) && y > 0 && m > 0) {
+        state.calendarDate = new Date(y, m - 1, 1, 0, 0, 0, 0);
       }
-
-      const id = Number(row?.id || 0);
-      const status = String(row?.status || "todo").trim().toLowerCase();
-      const pending = socialTaskPendingDone.has(id);
-      const isDone = status === "done" || pending;
-      const meta = [taskProjectMeta(row), String(row?.assignee_nick || "").trim(), taskStatusLabel(row?.status)].filter(Boolean).join(" / ");
-      return `<article class="social-calendar-day-card is-task ${isDone ? "is-done" : ""}" style="--social-preview-color:${escapeHtml(calendarPreviewColor(row, \"tasks\"))}"><button class="social-calendar-day-card-check social-task-check ${isDone ? "is-done" : ""}" type="button" onclick="socialToggleTaskDone(${id}); event.stopPropagation();" title="${escapeHtml(tr("РћС‚РјРµС‚РёС‚СЊ РІС‹РїРѕР»РЅРµРЅРЅРѕР№", "Mark as done"))}">${isDone ? "✓" : ""}</button><div class="social-calendar-day-card-body" onclick="socialOpenTaskModal(${id})"><div class="social-calendar-day-card-meta">${escapeHtml(socialTaskDueLabel(row))}${meta ? ` · ${escapeHtml(meta)}` : ""}</div><h5>${escapeHtml(row?.title || "-")}</h5><div class="social-calendar-day-card-desc">${escapeHtml(String(row?.description || "").trim() || tr("Р‘РµР· РѕРїРёСЃР°РЅРёСЏ", "No description"))}</div>${pending ? `<div class="social-task-pending">${escapeHtml(tr("Р—Р°РґР°С‡Р° Р·Р°РІРµСЂС€РёС‚СЃСЏ С‡РµСЂРµР· 5 СЃРµРєСѓРЅРґ. РќР°Р¶РјРёС‚Рµ РµС‰Рµ СЂР°Р·, С‡С‚РѕР±С‹ РѕС‚РјРµРЅРёС‚СЊ.", "Task will be completed in 5 seconds. Tap again to undo."))}</div>` : ""}</div><div class="social-calendar-day-card-actions"><button type="button" onclick="socialOpenTaskModal(${id})">${tr("РћС‚РєСЂС‹С‚СЊ", "Open")}</button></div></article>`;
-    }).join("") : `<div class="social-note-empty">${escapeHtml(mode === "events" ? tr("РќР° СЌС‚РѕС‚ РґРµРЅСЊ СЃРѕР±С‹С‚РёР№ РЅРµС‚.", "No events for this day.") : tr("РќР° СЌС‚РѕС‚ РґРµРЅСЊ Р·Р°РґР°С‡ РЅРµС‚.", "No tasks for this day."))}</div>`;
-
-    list.innerHTML = `<section class="social-calendar-day-sheet"><div class="social-calendar-day-sheet-head"><div><span class="social-calendar-day-sheet-kicker">${escapeHtml(mode === "events" ? tr("Р’С‹Р±СЂР°РЅРЅС‹Р№ РґРµРЅСЊ", "Selected day") : (mode === "my_tasks" ? tr("РњРѕРё Р·Р°РґР°С‡Рё РЅР° РґРµРЅСЊ", "My tasks for the day") : tr("Р—Р°РґР°С‡Рё РЅР° РґРµРЅСЊ", "Tasks for the day")))}</span><h4 class="social-calendar-day-sheet-date">${escapeHtml(title)}</h4></div><div class="social-calendar-day-sheet-stat">${escapeHtml(`${rows.length} ${mode === "events" ? tr("Р·Р°РїРёСЃРµР№", "items") : tr("Р·Р°РґР°С‡", "tasks")}`)}</div></div><div class="social-calendar-day-sheet-list">${cards}</div><div class="social-calendar-day-sheet-footer"><button type="button" onclick="${action.onclick}">${escapeHtml(action.label)}</button></div></section>`;
-
-    const grid = document.getElementById("socialCalendarGrid");
-    if (grid) {
-      grid.querySelectorAll(".social-day[data-day-key]").forEach((button) => {
-        button.classList.toggle("active", String(button.getAttribute("data-day-key") || "") === dayKey);
-      });
     }
-  };
-  function notePreviewText(note) {
-    const raw = socialNormalizeNoteText(note?.content || "").replace(/\s+/g, " ").trim();
-    return raw || tr("РџСѓСЃС‚Р°СЏ Р·Р°РјРµС‚РєР°", "Empty note");
-  }
+    const monthLabel = document.getElementById("socialCalendarMonthLabel");
+    if (monthLabel) monthLabel.textContent = cleanText(calendarMonthLabel(state.calendarDate));
 
-  function noteUpdatedLabel(note) {
-    const value = String(note?.updated_at || "").trim();
-    if (!value) return "-";
-    const parsed = socialParseDateSafe(value);
-    if (!(parsed instanceof Date) || Number.isNaN(parsed.getTime())) {
-      return value.replace("T", " ").slice(0, 16);
-    }
-    return parsed.toLocaleString(currentLang === "en" ? "en-GB" : "ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
-  }
+    const start = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth(), 1, 0, 0, 0, 0);
+    const end = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth() + 1, 0, 23, 59, 59, 0);
+    const qp = new URLSearchParams({
+      date_from: `${start.getFullYear()}-${pad2(start.getMonth() + 1)}-${pad2(start.getDate())} 00:00:00`,
+      date_to: `${end.getFullYear()}-${pad2(end.getMonth() + 1)}-${pad2(end.getDate())} 23:59:59`,
+    });
 
-  function noteStatLabel(note) {
-    const textLength = String(note?.content || "").trim().length;
-    const filesCount = Array.isArray(note?.files) ? note.files.length : 0;
-    return filesCount > 0 ? tr(`${textLength} СЃРёРјРІРѕР»РѕРІ · ${filesCount} С„Р°Р№Р»(РѕРІ)`, `${textLength} chars · ${filesCount} file(s)`) : tr(`${textLength} СЃРёРјРІРѕР»РѕРІ`, `${textLength} chars`);
-  }
-
-  function openNoteModal(noteId) {
-    const note = (socialState?.notes || []).find((row) => Number(row?.id || 0) === Number(noteId || 0)) || null;
-    if (!note) return;
-    socialOpenModal(
-      tr("Р—Р°РјРµС‚РєР°", "Note"),
-      `<div class="social-note-editor-modal"><div class="social-note-editor-toolbar"><div class="social-note-editor-meta"><strong>${escapeHtml(noteUpdatedLabel(note))}</strong><span id="socialNoteAutosave">${escapeHtml(tr("РђРІС‚РѕСЃРѕС…СЂР°РЅРµРЅРёРµ РІРєР»СЋС‡РµРЅРѕ", "Autosave enabled"))}</span></div><div class="social-note-editor-actions"><button class="btn-secondary" type="button" onclick="socialTriggerNoteFileDialog()">${tr("Р¤Р°Р№Р»С‹", "Files")}</button><button class="btn-danger" type="button" onclick="socialDeleteCurrentNote()">${tr("РЈРґР°Р»РёС‚СЊ", "Delete")}</button></div></div><div class="social-note-editor-body"><input id="socialNoteTitle" value="${escapeHtml(socialNormalizeNoteText(note?.title || ""))}" placeholder="${escapeHtml(tr("РќР°Р·РІР°РЅРёРµ Р·Р°РјРµС‚РєРё", "Note title"))}" oninput="socialScheduleNoteSave()" /><textarea id="socialNoteContent" rows="14" placeholder="${escapeHtml(tr("РўРµРєСЃС‚ Р·Р°РјРµС‚РєРё", "Note text"))}" oninput="socialScheduleNoteSave()">${escapeHtml(socialNormalizeNoteText(note?.content || ""))}</textarea></div><div class="social-note-editor-files"><div class="social-note-editor-files-head"><strong>${tr("Р’Р»РѕР¶РµРЅРёСЏ", "Attachments")}</strong><span class="hint">${escapeHtml(tr("РќР°Р¶РјРёС‚Рµ В«Р¤Р°Р№Р»С‹В», С‡С‚РѕР±С‹ РґРѕР±Р°РІРёС‚СЊ РІР»РѕР¶РµРЅРёСЏ.", "Press вЂњFilesвЂќ to add attachments."))}</span></div><div id="socialNoteFiles"></div><input id="socialNoteFileUpload" type="file" multiple class="hidden" onchange="socialUploadNoteFiles(this.files)" /></div><div class="actions"><button type="button" onclick="socialSaveCurrentNote()">${tr("РЎРѕС…СЂР°РЅРёС‚СЊ", "Save")}</button></div></div>`
-    );
-    socialRenderCurrentNote();
-  }
-
-  socialLoadNotes = async function socialLoadNotesOverride() {
-    const rows = await socialRequest("/api/social/notes").catch((e) => {
-      alert(e.message);
+    const rows = await window.socialRequest(`/api/social/calendar/events?${qp.toString()}`).catch((error) => {
+      state.calendarEvents = [];
+      if (typeof window.socialSetCalendarSyncMessage === "function") {
+        window.socialSetCalendarSyncMessage("error", t("Не удалось загрузить события календаря", "Failed to load calendar events"), [String(error?.message || "")]);
+      }
       return [];
     });
-    socialState.notes = Array.isArray(rows) ? rows.map((row) => normalizeNoteRow(row)).filter(Boolean) : [];
-    if (!socialState.currentNoteId && socialState.notes.length) socialState.currentNoteId = Number(socialState.notes[0].id || 0);
-    const kicker = document.querySelector("#socialSubtabNotes .social-calendar-kicker");
-    if (kicker) kicker.textContent = tr("Р‘С‹СЃС‚СЂС‹Рµ Р·Р°РјРµС‚РєРё", "Quick notes");
-    socialRenderNotesList();
-    socialRenderCurrentNote();
+    state.calendarEvents = Array.isArray(rows) ? rows : [];
+
+    if (calendarMode() !== "events" && typeof window.socialLoadTasks === "function") {
+      await window.socialLoadTasks({ silent: true }).catch(() => null);
+    }
+
+    window.socialRenderCalendar();
+    return state.calendarEvents;
   };
 
-  socialRenderNotesList = function socialRenderNotesListOverride() {
+  const originalSocialShowToast = typeof window.socialShowToast === "function" ? window.socialShowToast : null;
+  if (originalSocialShowToast && !originalSocialShowToast.__swTextWrapped) {
+    const wrappedToast = function socialShowToastTextSafe(title, body) {
+      return originalSocialShowToast.call(this, cleanText(title), cleanText(body));
+    };
+    wrappedToast.__swTextWrapped = true;
+    window.socialShowToast = wrappedToast;
+  }
+
+  function recurrenceLabel(kind) {
+    const map = {
+      none: t("Не повторять", "Does not repeat"),
+      daily: t("Каждый день", "Daily"),
+      weekly: t("Каждую неделю", "Weekly"),
+      monthly: t("Каждый месяц", "Monthly"),
+      yearly: t("Каждый год", "Yearly"),
+    };
+    return map[String(kind || "none").trim().toLowerCase()] || map.none;
+  }
+
+  function reminderLabel(min) {
+    const value = Math.max(0, Number(min || 0));
+    if (value === 0) return t("В момент события", "At event time");
+    if (value < 60) return t(`За ${value} мин.`, `${value} min before`);
+    if (value < 1440) return t(`За ${Math.round(value / 60)} ч`, `${Math.round(value / 60)} h before`);
+    return t(`За ${Math.round(value / 1440)} дн.`, `${Math.round(value / 1440)} d before`);
+  }
+
+  function renderReminderChecks(activeValues) {
+    const active = new Set((Array.isArray(activeValues) ? activeValues : [10]).map((n) => Math.max(0, Number(n || 0))));
+    const presets = REMINDER_PRESETS.map((value) => `
+      <label class="check social-reminder-check">
+        <input class="social-event-reminder-item" type="checkbox" value="${value}" ${active.has(value) ? "checked" : ""} />
+        ${esc(reminderLabel(value))}
+      </label>
+    `).join("");
+    const customValue = [...active].find((value) => !REMINDER_PRESETS.includes(value) && value > 0) || "";
+    return `${presets}<label><span>${esc(t("Свой интервал (мин.)", "Custom offset (min)"))}</span><input id="socialEventReminderCustom" type="number" min="1" step="1" value="${esc(customValue)}" /></label>`;
+  }
+
+  function reminderOffsetsFromModal() {
+    const values = [];
+    document.querySelectorAll(".social-event-reminder-item:checked").forEach((node) => {
+      const val = Math.max(0, Number(node?.value || 0));
+      if (Number.isFinite(val) && val >= 0) values.push(val);
+    });
+    const custom = Math.max(0, Number(document.getElementById("socialEventReminderCustom")?.value || 0));
+    if (Number.isFinite(custom) && custom > 0) values.push(custom);
+    const uniq = [...new Set(values)].filter((v) => Number.isFinite(v) && v >= 0);
+    return uniq.sort((a, b) => a - b);
+  }
+
+  function taskQuickCreate(dueValue = "") {
+    if (typeof window.switchSocialSubtab === "function") window.switchSocialSubtab("tasks");
+    window.setTimeout(() => {
+      if (typeof window.socialOpenTaskModal === "function") window.socialOpenTaskModal(0);
+      if (dueValue) {
+        window.setTimeout(() => {
+          const dueInput = document.getElementById("socialTaskDue");
+          if (dueInput && !String(dueInput.value || "").trim()) dueInput.value = dueValue;
+        }, 80);
+      }
+    }, 80);
+  }
+  window.socialOpenCalendarModal = function socialOpenCalendarModalOverride(eventId = 0, options = {}) {
+    const row = (Array.isArray(window.socialState?.calendarEvents) ? window.socialState.calendarEvents : [])
+      .find((item) => Number(item?.id || 0) === Number(eventId || 0)) || null;
+    const selectedDay = String(options?.selectedDay || window.socialState?.calendarSelectedDay || "").trim();
+    const presetKind = String(options?.presetKind || "event").trim().toLowerCase();
+    const isReminder = presetKind === "reminder";
+
+    const defaultStart = selectedDay ? `${selectedDay}T09:00` : dateTimeInputValue(new Date());
+    const startValue = dateTimeInputValue(row?.start_at || defaultStart);
+    const endValue = dateTimeInputValue(row?.end_at || "");
+    const recurrenceKind = String(row?.recurrence_kind || "none").trim().toLowerCase();
+    const recurrenceInterval = Math.max(1, Number(row?.recurrence_interval || 1));
+    const reminders = Array.isArray(row?.reminder_offsets_min) && row.reminder_offsets_min.length
+      ? row.reminder_offsets_min
+      : [10];
+    const reminderEnabled = row?.reminder_enabled !== false;
+    const isPublic = row?.is_public === true && !isReminder;
+
+    const recurrenceSelect = RECURRENCE_OPTIONS.map((kind) => `<option value="${kind}" ${kind === recurrenceKind ? "selected" : ""}>${esc(recurrenceLabel(kind))}</option>`).join("");
+
+    if (typeof window.socialOpenModal !== "function") return;
+    window.socialOpenModal(
+      row ? t("Изменить событие", "Edit event") : (isReminder ? t("Новое напоминание", "New reminder") : t("Новое событие", "New event")),
+      `
+        <input id="socialEventEntryKind" type="hidden" value="${isReminder ? "reminder" : "event"}" />
+        <div class="grid-2 social-calendar-modal-grid">
+          <label class="full"><span>${esc(t("Название", "Title"))}</span><input id="socialEventTitle" value="${esc(cleanText(row?.title || ""))}" /></label>
+          <label><span>${esc(t("Цвет", "Color"))}</span><input id="socialEventColor" type="color" value="${esc(normalizeColor(row?.color, "#4c92ff"))}" /></label>
+          <label class="check"><input id="socialEventPublic" type="checkbox" ${isPublic ? "checked" : ""} ${isReminder ? "disabled" : ""} /> ${esc(t("Общее событие", "Shared event"))}</label>
+          <label><span>${esc(t("Начало", "Start"))}</span><input id="socialEventStart" type="datetime-local" value="${esc(startValue)}" /></label>
+          <label><span>${esc(t("Конец", "End"))}</span><input id="socialEventEnd" type="datetime-local" value="${esc(endValue)}" /></label>
+          <label><span>${esc(t("Повтор", "Repeat"))}</span><select id="socialEventRecurrenceKind">${recurrenceSelect}</select></label>
+          <label><span>${esc(t("Интервал", "Interval"))}</span><input id="socialEventRecurrenceInterval" type="number" min="1" step="1" value="${esc(recurrenceInterval)}" /></label>
+          <label class="check"><input id="socialEventReminderEnabled" type="checkbox" ${reminderEnabled ? "checked" : ""} /> ${esc(t("Включить напоминания", "Enable reminders"))}</label>
+          <div class="full social-reminder-grid" id="socialEventReminderGrid">${renderReminderChecks(reminders)}</div>
+          <label class="full"><span>${esc(t("Примечание", "Details"))}</span><textarea id="socialEventDetails" rows="4">${esc(cleanText(row?.details || ""))}</textarea></label>
+        </div>
+        <div class="actions">
+          <button type="button" onclick="socialSaveEvent(${Number(row?.id || 0)})">${esc(row ? t("Сохранить", "Save") : t("Создать", "Create"))}</button>
+        </div>
+      `
+    );
+    queueTextRepair();
+  };
+
+  window.socialSaveEvent = async function socialSaveEventOverride(eventId = 0) {
+    const title = cleanText(document.getElementById("socialEventTitle")?.value || "").trim();
+    const startAt = String(document.getElementById("socialEventStart")?.value || "").trim();
+    const endAt = String(document.getElementById("socialEventEnd")?.value || "").trim();
+    const entryKind = String(document.getElementById("socialEventEntryKind")?.value || "event").trim().toLowerCase();
+    const reminderEnabled = Boolean(document.getElementById("socialEventReminderEnabled")?.checked);
+    const recurrenceKind = String(document.getElementById("socialEventRecurrenceKind")?.value || "none").trim().toLowerCase();
+    const recurrenceInterval = Math.max(1, Number(document.getElementById("socialEventRecurrenceInterval")?.value || 1));
+    const reminderOffsets = reminderEnabled ? reminderOffsetsFromModal() : [];
+
+    if (!title || !startAt) {
+      alert(t("Заполните название и дату начала", "Fill title and start date"));
+      return;
+    }
+
+    const payload = {
+      title,
+      details: cleanText(document.getElementById("socialEventDetails")?.value || "").trim(),
+      start_at: startAt,
+      end_at: endAt || null,
+      is_public: entryKind === "reminder" ? false : Boolean(document.getElementById("socialEventPublic")?.checked),
+      color: normalizeColor(document.getElementById("socialEventColor")?.value || "", "#4c92ff"),
+      recurrence_kind: RECURRENCE_OPTIONS.includes(recurrenceKind) ? recurrenceKind : "none",
+      recurrence_interval: recurrenceInterval,
+      reminder_enabled: reminderEnabled,
+      reminder_offsets_min: reminderOffsets.length ? reminderOffsets : [10],
+    };
+
+    const req = Number(eventId || 0) > 0
+      ? window.socialRequest(`/api/social/calendar/events/${Number(eventId)}`, { method: "PUT", body: JSON.stringify(payload) })
+      : window.socialRequest("/api/social/calendar/events", { method: "POST", body: JSON.stringify(payload) });
+
+    await req.catch((error) => {
+      alert(error?.message || t("Не удалось сохранить событие", "Failed to save event"));
+      return null;
+    });
+
+    if (typeof window.socialCloseModal === "function") window.socialCloseModal();
+    if (typeof window.socialLoadCalendar === "function") await window.socialLoadCalendar();
+    renderDaySheet(false);
+  };
+
+  window.socialDeleteEvent = async function socialDeleteEventOverride(eventId) {
+    const id = Number(eventId || 0);
+    if (!id) return;
+    if (!confirm(t("Удалить событие?", "Delete event?"))) return;
+    await window.socialRequest(`/api/social/calendar/events/${id}`, { method: "DELETE" }).catch((error) => {
+      alert(error?.message || t("Не удалось удалить событие", "Failed to delete event"));
+      return null;
+    });
+    if (typeof window.socialLoadCalendar === "function") await window.socialLoadCalendar();
+    renderDaySheet(false);
+  };
+
+  window.socialOpenCalendarQuickAddMenu = function socialOpenCalendarQuickAddMenu() {
+    const state = ensureSocialState();
+    const selectedDay = String(state.calendarSelectedDay || "").trim();
+    if (typeof window.socialOpenModal !== "function") return;
+    window.socialOpenModal(
+      t("Добавить", "Add"),
+      `
+        <div class="sw-calendar-quick-menu">
+          <button type="button" onclick="socialCalendarQuickCreate('event')">${esc(t("Событие", "Event"))}</button>
+          <button type="button" onclick="socialCalendarQuickCreate('reminder')">${esc(t("Напоминание", "Reminder"))}</button>
+          <button type="button" onclick="socialCalendarQuickCreate('task')">${esc(t("Задача", "Task"))}</button>
+          <div class="hint">${esc(selectedDay ? `${t("Дата", "Date")}: ${selectedDay}` : t("Выберите день в календаре", "Select a day in calendar"))}</div>
+        </div>
+      `
+    );
+  };
+
+  window.socialCalendarQuickCreate = function socialCalendarQuickCreate(kind) {
+    const safe = String(kind || "event").trim().toLowerCase();
+    const state = ensureSocialState();
+    const selectedDay = String(state.calendarSelectedDay || "").trim();
+    const dueValue = selectedDay ? `${selectedDay}T09:00` : "";
+    if (typeof window.socialCloseModal === "function") window.socialCloseModal();
+    if (safe === "task") {
+      taskQuickCreate(dueValue);
+      return;
+    }
+    window.socialOpenCalendarModal(0, { presetKind: safe, selectedDay });
+  };
+
+  function noteColorMap() {
+    try {
+      const parsed = JSON.parse(String(localStorage.getItem(NOTE_COLORS_KEY) || "{}"));
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function getNoteColor(noteId) {
+    const id = Number(noteId || 0);
+    if (!id) return NOTE_DEFAULT_COLOR;
+    const map = noteColorMap();
+    const raw = String(map[String(id)] || "").trim();
+    return /^#[0-9a-fA-F]{6}$/.test(raw) ? raw : NOTE_DEFAULT_COLOR;
+  }
+
+  function setNoteColor(noteId, color) {
+    const id = Number(noteId || 0);
+    if (!id) return;
+    const map = noteColorMap();
+    map[String(id)] = normalizeColor(color, NOTE_DEFAULT_COLOR);
+    try { localStorage.setItem(NOTE_COLORS_KEY, JSON.stringify(map)); } catch (_) {}
+  }
+
+  function ensureNotesCompactLayout() {
+    const root = document.getElementById("socialSubtabNotes");
+    if (!root) return;
+    root.classList.add("sw-notes-compact");
+    const createBtn = root.querySelector(".social-notes-sidebar > button");
+    if (createBtn) createBtn.textContent = t("Создать запись", "Create note");
+  }
+
+  function noteCardsHtml() {
+    const rows = Array.isArray(window.socialState?.notes) ? window.socialState.notes : [];
+    if (!rows.length) return `<div class="hint">${esc(t("Заметок пока нет", "No notes yet"))}</div>`;
+    return `<div class="sw-notes-grid">${rows.map((note) => {
+      const id = Number(note?.id || 0);
+      const title = compactText(note?.title || t("Без названия", "Untitled"), 28);
+      const snippet = compactText(note?.content || "", 76) || t("Пустая заметка", "Empty note");
+      const stamp = String(note?.updated_at || note?.created_at || "").replace("T", " ").slice(0, 16);
+      return `
+        <button type="button" class="sw-note-card" style="--sw-note-cover:${esc(getNoteColor(id))}" onclick="socialOpenNoteEditor(${id})">
+          <b class="sw-note-title">${esc(title)}</b>
+          <div class="sw-note-snippet">${esc(snippet)}</div>
+          <small class="sw-note-meta">${esc(stamp)}</small>
+        </button>
+      `;
+    }).join("")}</div>`;
+  }
+
+  window.socialRenderNotesList = function socialRenderNotesListOverride() {
+    ensureNotesCompactLayout();
     const host = document.getElementById("socialNotesList");
     if (!host) return;
-    const rows = Array.isArray(socialState?.notes) ? socialState.notes : [];
-    host.innerHTML = rows.map((row) => {
-      const active = Number(row?.id || 0) === Number(socialState?.currentNoteId || 0);
-      const title = String(row?.title || tr("Р‘РµР· РЅР°Р·РІР°РЅРёСЏ", "Untitled")).trim() || tr("Р‘РµР· РЅР°Р·РІР°РЅРёСЏ", "Untitled");
-      return `<article class="social-note-card ${active ? "active" : ""}"><button class="social-note-card-delete" type="button" onclick="socialDeleteNote(${Number(row?.id || 0)}); event.stopPropagation();" title="${escapeHtml(tr("РЈРґР°Р»РёС‚СЊ", "Delete"))}">✕</button><button class="social-note-card-main" type="button" onclick="socialSelectNote(${Number(row?.id || 0)})"><div class="social-note-card-surface"><h4 class="social-note-card-title">${escapeHtml(title)}</h4><div class="social-note-card-snippet">${escapeHtml(notePreviewText(row))}</div></div><div class="social-note-card-meta"><span>${escapeHtml(noteUpdatedLabel(row))}</span><span>${escapeHtml(noteStatLabel(row))}</span></div></button></article>`;
-    }).join("") || `<div class="social-note-empty">${escapeHtml(tr("Р—Р°РјРµС‚РѕРє РїРѕРєР° РЅРµС‚. РЎРѕР·РґР°Р№С‚Рµ РїРµСЂРІСѓСЋ РєР°СЂС‚РѕС‡РєСѓ.", "No notes yet. Create your first card."))}</div>`;
+    host.innerHTML = noteCardsHtml();
+    queueTextRepair();
   };
 
-  socialRenderCurrentNote = function socialRenderCurrentNoteOverride() {
-    const note = (socialState?.notes || []).find((row) => Number(row?.id || 0) === Number(socialState?.currentNoteId || 0)) || null;
-    const title = document.getElementById("socialNoteTitle");
-    const content = document.getElementById("socialNoteContent");
-    const autosave = document.getElementById("socialNoteAutosave");
-    if (title) {
-      title.disabled = !note;
-      title.value = note ? socialNormalizeNoteText(note?.title || "") : "";
-    }
-    if (content) {
-      content.disabled = !note;
-      content.value = note ? socialNormalizeNoteText(note?.content || "") : "";
-    }
-    if (autosave) autosave.textContent = note ? tr("РђРІС‚РѕСЃРѕС…СЂР°РЅРµРЅРёРµ РІРєР»СЋС‡РµРЅРѕ", "Autosave enabled") : tr("Р’С‹Р±РµСЂРёС‚Рµ Р·Р°РјРµС‚РєСѓ", "Select a note");
-    socialRenderNoteFiles(note);
+  window.socialSelectNote = function socialSelectNoteOverride(noteId) {
+    window.socialOpenNoteEditor(noteId);
   };
 
-  socialSelectNote = function socialSelectNoteOverride(noteId) {
-    socialState.currentNoteId = Number(noteId || 0);
-    socialRenderNotesList();
-    openNoteModal(socialState.currentNoteId);
+  window.socialOpenNoteEditor = function socialOpenNoteEditor(noteId) {
+    const id = Number(noteId || 0);
+    if (!id || typeof window.socialOpenModal !== "function") return;
+    const note = (Array.isArray(window.socialState?.notes) ? window.socialState.notes : []).find((row) => Number(row?.id || 0) === id) || null;
+    if (!note) return;
+
+    const files = Array.isArray(note.files) ? note.files : [];
+    const fileRows = files.length
+      ? files.map((file) => `
+          <div class="social-note-file-row">
+            <a href="${esc(file?.url || "#")}" target="_blank" rel="noopener noreferrer">${esc(cleanText(file?.filename || "file"))}</a>
+            <button class="btn-secondary" type="button" onclick="socialDeleteNoteFileFromModal(${id}, ${Number(file?.id || 0)})">✕</button>
+          </div>
+        `).join("")
+      : `<div class="hint">${esc(t("Файлы не добавлены", "No files attached"))}</div>`;
+
+    const palette = NOTE_PALETTE.map((color) => {
+      const active = normalizeColor(getNoteColor(id), NOTE_DEFAULT_COLOR) === color ? "is-active" : "";
+      return `<button type="button" class="sw-note-color ${active}" style="--sw-note-cover:${esc(color)}" onclick="socialPickNoteColor(${id}, '${color}')"></button>`;
+    }).join("");
+
+    window.socialOpenModal(
+      t("Заметка", "Note"),
+      `
+        <div class="social-note-editor-modal">
+          <label><span>${esc(t("Название", "Title"))}</span><input id="socialNoteModalTitle" value="${esc(cleanText(note?.title || ""))}" /></label>
+          <label><span>${esc(t("Текст", "Text"))}</span><textarea id="socialNoteModalContent" rows="10">${esc(cleanText(note?.content || ""))}</textarea></label>
+          <label><span>${esc(t("Цвет обложки", "Cover color"))}</span><div class="sw-note-colors">${palette}</div></label>
+          <div class="social-note-files-head">
+            <b>${esc(t("Файлы", "Files"))}</b>
+            <input id="socialNoteModalUpload" type="file" multiple onchange="socialUploadNoteFilesFromModal(${id}, 'socialNoteModalUpload')" />
+            <button class="btn-secondary" type="button" onclick="document.getElementById('socialNoteModalUpload').click()">${esc(t("Добавить файлы", "Add files"))}</button>
+          </div>
+          <div id="socialNoteModalFilesList">${fileRows}</div>
+          <details class="sw-note-settings">
+            <summary>${esc(t("Настройки заметки", "Note settings"))}</summary>
+            <button class="btn-danger" type="button" onclick="socialDeleteNoteFromSettings(${id})">${esc(t("Удалить заметку", "Delete note"))}</button>
+          </details>
+          <div class="actions">
+            <button type="button" onclick="socialSaveNoteEditor(${id})">${esc(t("Сохранить", "Save"))}</button>
+          </div>
+        </div>
+      `
+    );
   };
 
-  socialCreateNote = async function socialCreateNoteOverride() {
-    const row = await socialRequest("/api/social/notes", { method: "POST", body: JSON.stringify({ title: tr("РќРѕРІР°СЏ Р·Р°РјРµС‚РєР°", "New note"), content: "" }) }).catch((e) => {
-      alert(e.message);
+  window.socialPickNoteColor = function socialPickNoteColor(noteId, color) {
+    const id = Number(noteId || 0);
+    if (!id) return;
+    setNoteColor(id, color);
+    const buttons = document.querySelectorAll(".sw-note-color");
+    buttons.forEach((button) => {
+      const nodeColor = window.getComputedStyle(button).getPropertyValue("--sw-note-cover").trim().toLowerCase();
+      button.classList.toggle("is-active", nodeColor === normalizeColor(color).toLowerCase());
+    });
+  };
+
+  window.socialSaveNoteEditor = async function socialSaveNoteEditor(noteId) {
+    const id = Number(noteId || 0);
+    if (!id) return;
+    const payload = {
+      title: cleanText(document.getElementById("socialNoteModalTitle")?.value || "").trim() || t("Без названия", "Untitled"),
+      content: cleanText(document.getElementById("socialNoteModalContent")?.value || ""),
+    };
+    await window.socialRequest(`/api/social/notes/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }).catch((error) => {
+      alert(error?.message || t("Не удалось сохранить заметку", "Failed to save note"));
       return null;
     });
-    if (!row) return;
-    await socialLoadNotes();
-    socialSelectNote(Number(row.id || 0));
+    await window.socialLoadNotes();
+    if (typeof window.socialCloseModal === "function") window.socialCloseModal();
   };
 
-  socialSaveCurrentNote = async function socialSaveCurrentNoteOverride() {
-    const noteId = Number(socialState?.currentNoteId || 0);
-    if (!noteId) return;
-    const titleNode = document.getElementById("socialNoteTitle");
-    const contentNode = document.getElementById("socialNoteContent");
-    const autosave = document.getElementById("socialNoteAutosave");
-    const payload = { title: String(titleNode?.value || "").trim() || tr("Р‘РµР· РЅР°Р·РІР°РЅРёСЏ", "Untitled"), content: String(contentNode?.value || "") };
-    if (autosave) autosave.textContent = tr("РЎРѕС…СЂР°РЅСЏРµРј...", "Saving...");
-    const saved = await socialRequest(`/api/social/notes/${noteId}`, { method: "PUT", body: JSON.stringify(payload) }).catch((e) => {
-      if (autosave) autosave.textContent = String(e?.message || tr("РћС€РёР±РєР° СЃРѕС…СЂР°РЅРµРЅРёСЏ", "Save error"));
-      return null;
-    });
-    if (!saved) return;
-    const normalized = normalizeNoteRow(saved);
-    const index = (socialState?.notes || []).findIndex((row) => Number(row?.id || 0) === noteId);
-    if (index >= 0) socialState.notes[index] = normalized; else socialState.notes = [normalized].concat(Array.isArray(socialState?.notes) ? socialState.notes : []);
-    socialRenderNotesList();
-    socialRenderCurrentNote();
-    if (autosave) autosave.textContent = tr("РЎРѕС…СЂР°РЅРµРЅРѕ", "Saved");
-  };
+  window.socialUploadNoteFilesFromModal = async function socialUploadNoteFilesFromModal(noteId, inputId) {
+    const id = Number(noteId || 0);
+    if (!id) return;
+    const input = document.getElementById(String(inputId || ""));
+    const files = Array.from(input?.files || []);
+    if (!files.length) return;
 
-  socialRenderNoteFiles = function socialRenderNoteFilesOverride(note) {
-    const host = document.getElementById("socialNoteFiles");
-    const uploader = document.getElementById("socialNoteFileUpload");
-    if (!host) return;
-    if (!note) {
-      host.innerHTML = `<div class="hint">${escapeHtml(tr("Р¤Р°Р№Р»С‹ РїРѕСЏРІСЏС‚СЃСЏ РїРѕСЃР»Рµ РѕС‚РєСЂС‹С‚РёСЏ Р·Р°РјРµС‚РєРё.", "Files will appear after opening a note."))}</div>`;
-      if (uploader) uploader.disabled = true;
-      return;
-    }
-    if (uploader) uploader.disabled = false;
-    const files = Array.isArray(note?.files) ? note.files : [];
-    host.innerHTML = files.length ? files.map((file) => `<div class="social-note-file-row"><a href="${escapeHtml(file.url || "#")}" target="_blank" rel="noopener noreferrer">${escapeHtml(file.filename || "file")}</a><small>${escapeHtml(socialFormatFileSize(file.size_bytes || 0))}</small><button class="btn-secondary" type="button" onclick="socialDeleteNoteFile(${Number(file.id || 0)})">${tr("РЈРґР°Р»РёС‚СЊ", "Delete")}</button></div>`).join("") : `<div class="hint">${escapeHtml(tr("Р¤Р°Р№Р»С‹ РїРѕРєР° РЅРµ Р·Р°РіСЂСѓР¶РµРЅС‹.", "No files uploaded yet."))}</div>`;
-  };
-
-  socialTriggerNoteFileDialog = function socialTriggerNoteFileDialogOverride() {
-    const noteId = Number(socialState?.currentNoteId || 0);
-    if (!noteId) {
-      alert(tr("РЎРЅР°С‡Р°Р»Р° РѕС‚РєСЂРѕР№С‚Рµ Р·Р°РјРµС‚РєСѓ.", "Open a note first."));
-      return;
-    }
-    const input = document.getElementById("socialNoteFileUpload");
-    if (input) input.click();
-  };
-
-  socialUploadNoteFiles = async function socialUploadNoteFilesOverride(fileList) {
-    const noteId = Number(socialState?.currentNoteId || 0);
-    const autosave = document.getElementById("socialNoteAutosave");
-    const input = document.getElementById("socialNoteFileUpload");
-    const files = Array.from(fileList || []);
-    if (!noteId || !files.length) return;
-    if (autosave) autosave.textContent = tr("Р—Р°РіСЂСѓР¶Р°РµРј С„Р°Р№Р»С‹...", "Uploading files...");
     try {
       for (const file of files) {
         const body = new FormData();
         body.append("file", file);
         const headers = {};
-        if (token) headers.Authorization = `Bearer ${token}`;
-        await requestJson(`/api/social/notes/${noteId}/files`, { method: "POST", headers, body, timeoutMs: 90000, retryOnPost: true, maxRetries: 1 });
+        if (window.token) headers.Authorization = `Bearer ${window.token}`;
+        await window.requestJson(`/api/social/notes/${id}/files`, {
+          method: "POST",
+          headers,
+          body,
+          timeoutMs: 90000,
+          retryOnPost: true,
+          maxRetries: 1,
+        });
       }
-      await socialLoadNotes();
-      socialState.currentNoteId = noteId;
-      socialRenderNotesList();
-      socialRenderCurrentNote();
-      if (autosave) autosave.textContent = tr("Р¤Р°Р№Р»С‹ Р·Р°РіСЂСѓР¶РµРЅС‹", "Files uploaded");
-    } catch (e) {
-      const message = e?.message || tr("РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё С„Р°Р№Р»Р°", "File upload error");
-      if (autosave) autosave.textContent = String(message);
-      alert(message);
+      await window.socialLoadNotes();
+      window.socialOpenNoteEditor(id);
+    } catch (error) {
+      alert(error?.message || t("Ошибка загрузки файла", "File upload error"));
     } finally {
       if (input) input.value = "";
     }
   };
 
-  socialDeleteNoteFile = async function socialDeleteNoteFileOverride(fileId) {
-    const id = Number(fileId || 0);
-    const noteId = Number(socialState?.currentNoteId || 0);
-    if (!id || !noteId) return;
-    if (!confirm(tr("РЈРґР°Р»РёС‚СЊ С„Р°Р№Р»?", "Delete file?"))) return;
-    await socialRequest(`/api/social/notes/${noteId}/files/${id}`, { method: "DELETE" }).catch((e) => {
-      alert(e.message);
+  window.socialDeleteNoteFileFromModal = async function socialDeleteNoteFileFromModal(noteId, fileId) {
+    const id = Number(noteId || 0);
+    const fid = Number(fileId || 0);
+    if (!id || !fid) return;
+    if (!confirm(t("Удалить файл?", "Delete file?"))) return;
+    await window.socialRequest(`/api/social/notes/${id}/files/${fid}`, { method: "DELETE" }).catch((error) => {
+      alert(error?.message || t("Не удалось удалить файл", "Failed to delete file"));
       return null;
     });
-    await socialLoadNotes();
-    socialState.currentNoteId = noteId;
-    socialRenderNotesList();
-    socialRenderCurrentNote();
+    await window.socialLoadNotes();
+    window.socialOpenNoteEditor(id);
   };
 
-  socialDeleteCurrentNote = async function socialDeleteCurrentNoteOverride() {
-    const noteId = Number(socialState?.currentNoteId || 0);
-    if (!noteId) return;
-    await socialDeleteNote(noteId);
-  };
-
-  socialDeleteNote = async function socialDeleteNoteOverride(noteId) {
+  window.socialDeleteNoteFromSettings = async function socialDeleteNoteFromSettings(noteId) {
     const id = Number(noteId || 0);
     if (!id) return;
-    if (!confirm(tr("РЈРґР°Р»РёС‚СЊ Р·Р°РјРµС‚РєСѓ?", "Delete note?"))) return;
-    await socialRequest(`/api/social/notes/${id}`, { method: "DELETE" }).catch((e) => {
-      alert(e.message);
+    if (!confirm(t("Удалить заметку?", "Delete note?"))) return;
+    await window.socialRequest(`/api/social/notes/${id}`, { method: "DELETE" }).catch((error) => {
+      alert(error?.message || t("Не удалось удалить заметку", "Failed to delete note"));
       return null;
     });
-    if (Number(socialState?.currentNoteId || 0) === id) {
-      socialState.currentNoteId = 0;
-      socialCloseModal();
-    }
-    await socialLoadNotes();
+    await window.socialLoadNotes();
+    if (typeof window.socialCloseModal === "function") window.socialCloseModal();
   };
 
-  syncCalendarModeCopy();
-  syncCalendarPrimaryAction();
-})();
-(function socialProjectModalTextOverride() {
-  socialOpenProjectModal = function socialOpenProjectModalOverride() {
-    socialOpenModal(
-      tr("РќРѕРІС‹Р№ РїСЂРѕРµРєС‚", "New project"),
-      `<div class="grid-1"><input id="socialProjectTitle" placeholder="${escapeHtml(tr("РќР°Р·РІР°РЅРёРµ РїСЂРѕРµРєС‚Р°", "Project title"))}" /><textarea id="socialProjectDescription" rows="4" placeholder="${escapeHtml(tr("РљСЂР°С‚РєРѕРµ РѕРїРёСЃР°РЅРёРµ РїСЂРѕРµРєС‚Р°", "Short project description"))}"></textarea></div><div class="actions"><button type="button" onclick="socialCreateProject()">${tr("РЎРѕР·РґР°С‚СЊ", "Create")}</button></div>`
-    );
-  };
-
-  socialOpenProjectMembersModal = async function socialOpenProjectMembersModalOverride() {
-    const projectId = Number(document.getElementById("socialTaskProjectFilter")?.value || 0);
-    if (!projectId) {
-      alert(tr("РЎРЅР°С‡Р°Р»Р° РІС‹Р±РµСЂРёС‚Рµ РїСЂРѕРµРєС‚ РІ С„РёР»СЊС‚СЂРµ.", "Select a project in the filter first."));
-      return;
-    }
-    const rows = await socialRequest(`/api/social/tasks/projects/${projectId}/members`).catch((e) => {
-      alert(e.message || tr("РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СѓС‡Р°СЃС‚РЅРёРєРѕРІ РїСЂРѕРµРєС‚Р°", "Failed to load project members"));
+  window.socialCreateNote = async function socialCreateNoteOverride() {
+    const row = await window.socialRequest("/api/social/notes", {
+      method: "POST",
+      body: JSON.stringify({ title: t("Новая заметка", "New note"), content: "" }),
+    }).catch((error) => {
+      alert(error?.message || t("Не удалось создать заметку", "Failed to create note"));
       return null;
     });
-    if (!Array.isArray(rows)) return;
-    const list = rows.map((row) => {
-      const key = String(row?.actor_key || "").trim();
-      const nick = String(row?.nick || key || "-").trim() || "-";
-      const checked = row?.in_project ? "checked" : "";
-      const ownerTag = row?.is_owner ? `<span class="social-task-kind company">${escapeHtml(tr("Р’Р»Р°РґРµР»РµС†", "Owner"))}</span>` : "";
-      return `<label class="check social-member-row"><input type="checkbox" data-member-key="${escapeHtml(key)}" ${checked} /> ${socialAvatarMarkup(String(row?.avatar_url || ""), nick, "xs")} <span>${escapeHtml(nick)}</span> ${ownerTag}</label>`;
-    }).join("");
-    socialOpenModal(
-      tr("РЈС‡Р°СЃС‚РЅРёРєРё РїСЂРѕРµРєС‚Р°", "Project members"),
-      `<div id="socialProjectMembersList" class="social-group-members-list">${list || `<div class="hint">${escapeHtml(tr("РЎРїРёСЃРѕРє РїРѕРєР° РїСѓСЃС‚", "No members yet"))}</div>`}</div><div class="actions"><button type="button" onclick="socialSaveProjectMembers(${projectId})">${tr("РЎРѕС…СЂР°РЅРёС‚СЊ", "Save")}</button></div>`
-    );
+    if (!row) return;
+    await window.socialLoadNotes();
+    window.socialOpenNoteEditor(Number(row?.id || 0));
   };
-})();
-
-
-
-(function socialSamsungCalendarRefitV20260320() {
-  if (typeof window === "undefined") return;
-  if (window.__socialSamsungCalendarRefitV20260320) return;
-  window.__socialSamsungCalendarRefitV20260320 = true;
-
-  function i18n(ru, en) {
-    return currentLang === "en" ? en : ru;
-  }
-
-  function normDate(value) {
-    if (typeof socialCalendarParseDate === "function") return socialCalendarParseDate(value);
-    const dt = new Date(value);
-    return Number.isNaN(dt.getTime()) ? null : dt;
-  }
-
-  function dayKey(value) {
-    if (typeof socialCalendarDayKey === "function") return socialCalendarDayKey(value);
-    const dt = normDate(value);
-    if (!dt) return "";
-    const m = `${dt.getMonth() + 1}`.padStart(2, "0");
-    const d = `${dt.getDate()}`.padStart(2, "0");
-    return `${dt.getFullYear()}-${m}-${d}`;
-  }
-
-  function timeLabel(value) {
-    if (typeof socialCalendarTimeLabel === "function") return socialCalendarTimeLabel(value);
-    const dt = normDate(value);
-    if (!dt) return "";
-    return dt.toLocaleTimeString(currentLang === "en" ? "en-GB" : "ru-RU", { hour: "2-digit", minute: "2-digit" });
-  }
-
-  function dayLabel(value) {
-    if (typeof socialCalendarDayLabel === "function") return socialCalendarDayLabel(value);
-    const dt = normDate(value);
-    if (!dt) return String(value || "");
-    return dt.toLocaleDateString(currentLang === "en" ? "en-US" : "ru-RU", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
-  }
-
-  function currentMode() {
-    // Samsung-like calendar keeps a single month view with merged records.
-    return "events";
-  }
-
-  function eventBaseId(row) {
-    if (typeof socialCalendarEventBaseId === "function") return Number(socialCalendarEventBaseId(row) || 0);
-    return Number(row?.id || 0);
-  }
-
-  function rowColor(row, mode) {
-    const raw = String(row?.color || "").trim();
-    if (/^#[0-9a-fA-F]{6}$/.test(raw)) return raw.toLowerCase();
-    if (mode === "events") return "#b9d5ff";
-    return String(row?.task_kind || "").trim().toLowerCase() === "personal" ? "#bde5c8" : "#d8e6ff";
-  }
-
-  function eventRowsForDay(day) {
-    return (socialState?.calendarEvents || [])
-      .filter((row) => dayKey(row?.start_at || "") === day)
-      .map((row) => ({ ...row, __swMode: "events" }))
-      .sort((a, b) => (normDate(a?.start_at)?.getTime() || 0) - (normDate(b?.start_at)?.getTime() || 0));
-  }
-
-  function taskRowsForDay(day) {
-    return (socialState?.tasks || [])
-      .filter((row) => dayKey(row?.due_date || "") === day)
-      .map((row) => ({ ...row, __swMode: "tasks" }))
-      .sort((a, b) => (normDate(a?.due_date)?.getTime() || 0) - (normDate(b?.due_date)?.getTime() || 0));
-  }
-
-  function rowsForDay(day) {
-    const merged = [...eventRowsForDay(day), ...taskRowsForDay(day)];
-    merged.sort((a, b) => {
-      const left = normDate(a?.start_at || a?.due_date || "")?.getTime() || 0;
-      const right = normDate(b?.start_at || b?.due_date || "")?.getTime() || 0;
-      if (left !== right) return left - right;
-      return String(a?.title || "").localeCompare(String(b?.title || ""), currentLang === "en" ? "en" : "ru");
-    });
-    return merged;
-  }
-
-  function renderCellChip(row) {
-    const mode = String(row?.__swMode || "events").trim().toLowerCase();
-    const title = String(row?.title || "-").trim() || "-";
-    const itemMode = String(row?.__swMode || mode || "events").trim().toLowerCase();
-    const isEvent = itemMode === "events";
-    const rawTime = isEvent ? String(row?.start_at || "").trim() : String(row?.due_date || "").trim();
-    const time = rawTime ? timeLabel(rawTime) : "";
-    const style = `style="--sw-chip-color:${escapeHtml(rowColor(row, mode))}"`;
-    return `<span class="sw-calendar-chip ${isEvent ? "is-event" : "is-task"}" ${style}><span class="sw-calendar-chip-title">${escapeHtml(time ? `${time} ${title}` : title)}</span></span>`;
-  }
-
-  function setModeButtonsState() {
-    const host = document.getElementById("socialCalendarTaskMode");
-    if (host) host.style.display = "none";
-  }
-
-  function calendarMonthTitle(date) {
-    const dt = normDate(date) || new Date();
-    const month = dt.toLocaleDateString(currentLang === "en" ? "en-US" : "ru-RU", { month: "long" });
-    return String(month || "").toUpperCase();
-  }
-
-  function ensureCalendarFab() {
-    const shell = document.querySelector("#socialSubtabCalendar .social-calendar-shell");
-    if (!shell) return;
-    let fab = document.getElementById("socialCalendarSamsungFab");
-    if (!fab) {
-      fab = document.createElement("button");
-      fab.id = "socialCalendarSamsungFab";
-      fab.className = "social-calendar-samsung-fab";
-      fab.type = "button";
-      fab.textContent = "+";
-      fab.setAttribute("aria-label", i18n("Добавить", "Add"));
-      fab.setAttribute("title", i18n("Добавить", "Add"));
-      fab.setAttribute("onclick", "socialCalendarSamsungOpenCreate()");
-      shell.appendChild(fab);
-    }
-  }
-
-  function hideLegacyCalendarControls() {
-    const root = document.getElementById("socialSubtabCalendar");
-    if (!root) return;
-    root.classList.add("social-calendar-samsung-mode");
-    const modeHost = document.getElementById("socialCalendarTaskMode");
-    if (modeHost) modeHost.style.display = "none";
-    const toolbar = root.querySelector(".social-calendar-toolbar--clean");
-    if (toolbar) toolbar.style.display = "none";
-  }
-
-  function buildDayItem(row, mode, index, selectedDay) {
-    const itemMode = String(row?.__swMode || mode || "events").trim().toLowerCase();
-    const isEvent = itemMode === "events";
-    const rowId = isEvent ? eventBaseId(row) : Number(row?.id || 0);
-    const key = `${mode}:${rowId}:${index}:${selectedDay}`;
-    const expanded = String(socialState?.calendarExpandedItemKey || "") === key;
-    const title = String(row?.title || "-").trim() || "-";
-    const time = isEvent
-      ? (String(row?.start_at || "").trim() ? `${timeLabel(row.start_at)}${row?.end_at ? ` - ${timeLabel(row.end_at)}` : ""}` : i18n("Весь день", "All day"))
-      : (String(row?.due_date || "").trim() ? timeLabel(row.due_date) : i18n("Без времени", "No time"));
-    const descriptionRaw = isEvent
-      ? (typeof socialCleanCalendarDetails === "function" ? socialCleanCalendarDetails(row?.details || "") : String(row?.details || "").trim())
-      : String(row?.description || "").trim();
-    const description = descriptionRaw || i18n("Без описания", "No description");
-    const recurrence = isEvent && typeof socialCalendarRecurrenceLabel === "function"
-      ? socialCalendarRecurrenceLabel(row?.recurrence_kind, row?.recurrence_interval)
-      : "";
-    const reminder = isEvent && typeof socialCalendarReminderSummary === "function"
-      ? socialCalendarReminderSummary(row?.reminder_offsets_min, row?.reminder_enabled !== false)
-      : "";
-    const taskStatus = !isEvent ? (String(row?.status || "todo").trim().toLowerCase() === "done" ? i18n("Выполнена", "Done") : i18n("К выполнению", "To do")) : "";
-    const assignee = !isEvent ? String(row?.assignee_nick || "").trim() : "";
-    const metaBits = isEvent
-      ? [
-          row?.is_public ? i18n("Общее", "Shared") : i18n("Личное", "Private"),
-          recurrence,
-          reminder,
-        ].filter(Boolean)
-      : [
-          taskStatus,
-          assignee,
-        ].filter(Boolean);
-    const meta = metaBits.join(" · ");
-    const color = rowColor(row, itemMode);
-    const openFn = isEvent ? `socialOpenCalendarModal(${rowId})` : `socialOpenTaskModal(${rowId})`;
-    const deleteFn = isEvent ? `socialDeleteEvent(${rowId})` : `socialDeleteTask(${rowId})`;
-
-    return `
-      <article class="sw-day-item ${expanded ? "is-expanded" : ""}" style="--sw-chip-color:${escapeHtml(color)}" onclick="socialToggleCalendarItemExpanded('${escapeHtml(key)}')">
-        <div class="sw-day-item-head">
-          <div class="sw-day-item-title-wrap">
-            <div class="sw-day-item-time">${escapeHtml(time)}</div>
-            <h5 class="sw-day-item-title">${escapeHtml(title)}</h5>
-          </div>
-          <span class="sw-day-item-arrow" aria-hidden="true">${expanded ? "v" : ">"}</span>
-        </div>
-        ${expanded ? `
-          <div class="sw-day-item-body">
-            ${meta ? `<div class="sw-day-item-meta">${escapeHtml(meta)}</div>` : ""}
-            <div class="sw-day-item-desc">${escapeHtml(description)}</div>
-            <div class="sw-day-item-actions">
-              <button type="button" onclick="${openFn}; event.stopPropagation();">${escapeHtml(i18n("Редактировать", "Edit"))}</button>
-              <button class="btn-danger" type="button" onclick="${deleteFn}; event.stopPropagation();">${escapeHtml(i18n("Удалить", "Delete"))}</button>
-            </div>
-          </div>
-        ` : ""}
-      </article>
-    `;
-  }
-
-  function selectedDayFallback(year, month, todayKey) {
-    const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}-`;
-    const selected = String(socialState?.calendarSelectedDay || "").trim();
-    if (selected.startsWith(monthPrefix)) return selected;
-    if (todayKey && todayKey.startsWith(monthPrefix)) return todayKey;
-    return `${monthPrefix}01`;
-  }
-
-  window.socialCalendarSamsungOpenCreate = function socialCalendarSamsungOpenCreate() {
-    socialOpenCalendarModal();
-  };
-
-  window.socialToggleCalendarItemExpanded = function socialToggleCalendarItemExpanded(key) {
-    const current = String(socialState?.calendarExpandedItemKey || "");
-    socialState.calendarExpandedItemKey = current === String(key || "") ? "" : String(key || "");
-    const selected = String(socialState?.calendarSelectedDay || "").trim();
-    if (selected) socialShowDay(selected);
-  };
-
-  socialRenderCalendar = function socialRenderCalendarSamsungOverride() {
-    const grid = document.getElementById("socialCalendarGrid");
-    const list = document.getElementById("socialCalendarEvents");
-    const monthLabel = document.getElementById("socialCalendarMonthLabel");
-    if (!grid || !list) return;
-
-    hideLegacyCalendarControls();
-    ensureCalendarFab();
-
-    const date = socialState.calendarDate instanceof Date ? socialState.calendarDate : new Date();
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const firstDay = new Date(year, month, 1, 0, 0, 0, 0);
-    const lastDay = new Date(year, month + 1, 0, 0, 0, 0, 0);
-    const shift = (firstDay.getDay() + 6) % 7;
-    const days = lastDay.getDate();
-    const mode = "events";
-    const todayKey = dayKey(new Date());
-    const compact = typeof window.matchMedia === "function" && window.matchMedia("(max-width: 980px)").matches;
-    const previewLimit = compact ? 2 : 3;
-
-    if (monthLabel) monthLabel.textContent = calendarMonthTitle(date);
-    setModeButtonsState(mode);
-
-    let html = `<div class="social-calendar-row head">${[
-      i18n("Пн", "Mon"),
-      i18n("Вт", "Tue"),
-      i18n("Ср", "Wed"),
-      i18n("Чт", "Thu"),
-      i18n("Пт", "Fri"),
-      i18n("Сб", "Sat"),
-      i18n("Вс", "Sun"),
-    ].map((label) => `<span>${escapeHtml(label)}</span>`).join("")}</div><div class="social-calendar-cells">`;
-
-    for (let i = 0; i < shift; i += 1) {
-      html += `<button class="social-day muted rich" type="button" disabled></button>`;
-    }
-
-    for (let day = 1; day <= days; day += 1) {
-      const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-      const rows = rowsForDay(key);
-      const preview = rows.slice(0, previewLimit).map((row) => renderCellChip(row)).join("");
-      const more = rows.length - previewLimit;
-      const active = String(socialState?.calendarSelectedDay || "") === key ? "active" : "";
-      const today = todayKey === key ? "today" : "";
-      html += `
-        <button class="social-day rich ${active} ${today} ${rows.length ? "has-preview" : ""}" type="button" data-day-key="${key}" onclick="socialShowDay('${key}')">
-          <div class="social-day-head"><b>${day}</b></div>
-          <div class="social-day-preview-stack">${preview}</div>
-          ${more > 0 ? `<div class="social-day-more">+${more}</div>` : ""}
-        </button>
-      `;
-    }
-
-    html += "</div>";
-    grid.innerHTML = html;
-    socialShowDay(selectedDayFallback(year, month, todayKey));
-  };
-
-  socialShowDay = function socialShowDaySamsungOverride(day) {
-    const list = document.getElementById("socialCalendarEvents");
-    if (!list) return;
-    const mode = "events";
-    const selectedDay = String(day || "").trim();
-    socialState.calendarSelectedDay = selectedDay;
-
-    const rows = rowsForDay(selectedDay);
-    const title = dayLabel(selectedDay);
-    const cards = rows.length
-      ? rows.map((row, idx) => buildDayItem(row, mode, idx, selectedDay)).join("")
-      : `<div class="social-note-empty">${escapeHtml(i18n("На этот день записей нет.", "No records for this day."))}</div>`;
-
-    list.innerHTML = `
-      <section class="sw-day-sheet">
-        <header class="sw-day-sheet-head">
-          <div class="sw-day-sheet-kicker">${escapeHtml(i18n("Выбранный день", "Selected day"))}</div>
-          <h4 class="sw-day-sheet-date">${escapeHtml(title)}</h4>
-          <div class="sw-day-sheet-stat">${escapeHtml(`${rows.length}`)} ${escapeHtml(i18n("записей", "records"))}</div>
-        </header>
-        <div class="sw-day-sheet-list">${cards}</div>
-      </section>
-    `;
-
-    const grid = document.getElementById("socialCalendarGrid");
-    if (grid) {
-      grid.querySelectorAll(".social-day[data-day-key]").forEach((btn) => {
-        btn.classList.toggle("active", String(btn.getAttribute("data-day-key") || "") === selectedDay);
-      });
-    }
-  };
-
-  const originalRenderNotesList = typeof socialRenderNotesList === "function" ? socialRenderNotesList : null;
-  socialRenderNotesList = function socialRenderNotesListCompactOverride() {
-    if (originalRenderNotesList) originalRenderNotesList();
-    const root = document.getElementById("socialSubtabNotes");
-    if (!root) return;
-    const hint = root.querySelector(".social-notes-board-copy .hint");
-    if (hint) hint.textContent = i18n("Три карточки в ряд. Откройте заметку нажатием.", "Three cards per row. Tap a card to open it.");
-  };
-
-  const originalSwitchSocialSubtab = typeof switchSocialSubtab === "function" ? switchSocialSubtab : null;
-  if (originalSwitchSocialSubtab && !originalSwitchSocialSubtab.__socialSamsungWrapped) {
-    const wrapped = function wrappedSwitchSocialSubtab() {
+  const originalSwitchSocialSubtab = typeof window.switchSocialSubtab === "function"
+    ? window.switchSocialSubtab
+    : null;
+  if (originalSwitchSocialSubtab && !originalSwitchSocialSubtab.__swSamsungWrapped) {
+    const wrappedSwitchSocialSubtab = function wrappedSwitchSocialSubtab() {
       const result = originalSwitchSocialSubtab.apply(this, arguments);
-      const active = String(arguments[0] || "").trim().toLowerCase();
-      if (active === "calendar") {
-        hideLegacyCalendarControls();
-        ensureCalendarFab();
-      }
+      const requested = String(arguments[0] || "").trim().toLowerCase();
+      window.setTimeout(() => {
+        normalizeNotificationCenter();
+        if (requested === "calendar" && typeof window.socialLoadCalendar === "function") {
+          window.socialLoadCalendar().catch(() => {
+            if (typeof window.socialRenderCalendar === "function") window.socialRenderCalendar();
+          });
+        }
+        if (requested === "notes" && typeof window.socialRenderNotesList === "function") {
+          window.socialRenderNotesList();
+        }
+        queueTextRepair();
+      }, 0);
       return result;
     };
-    wrapped.__socialSamsungWrapped = true;
-    switchSocialSubtab = wrapped;
+    wrappedSwitchSocialSubtab.__swSamsungWrapped = true;
+    window.switchSocialSubtab = wrappedSwitchSocialSubtab;
   }
 
-  hideLegacyCalendarControls();
-  ensureCalendarFab();
+  function init() {
+    ensureSocialState();
+    ensureNotesCompactLayout();
+    applyKnownCopy();
+    bindBellButtons();
+    normalizeNotificationCenter();
+    queueTextRepair();
+    if (String(window.socialState?.currentSubtab || "") === "calendar") {
+      normalizeCalendarScaffold();
+      if (typeof window.socialLoadCalendar === "function") {
+        window.socialLoadCalendar().catch(() => {
+          if (typeof window.socialRenderCalendar === "function") window.socialRenderCalendar();
+        });
+      } else if (typeof window.socialRenderCalendar === "function") {
+        window.socialRenderCalendar();
+      }
+    }
+    if (String(window.socialState?.currentSubtab || "") === "notes") {
+      window.socialRenderNotesList();
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init, { once: true });
+  } else {
+    init();
+  }
+  window.setTimeout(init, 250);
 })();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

@@ -1,4 +1,4 @@
-let accountingReloadTimer = null;
+﻿let accountingReloadTimer = null;
 let accountingExpenseEditId = 0;
 let accountingRequestSeq = 0;
 let accountingMonthlyRequestSeq = 0;
@@ -160,40 +160,40 @@ function normalizeAccountingWarning(raw) {
   const low = text.toLowerCase();
   if (low.includes("429") && low.includes("wb")) {
     return tr(
-      "WB API временно ограничил запросы (429). Показана доступная часть данных.",
+      "WB API РІСЂРµРјРµРЅРЅРѕ РѕРіСЂР°РЅРёС‡РёР» Р·Р°РїСЂРѕСЃС‹ (429). РџРѕРєР°Р·Р°РЅР° РґРѕСЃС‚СѓРїРЅР°СЏ С‡Р°СЃС‚СЊ РґР°РЅРЅС‹С….",
       "WB API rate-limited requests (429). Showing available partial data."
     );
   }
   if (low.includes("429") && low.includes("ozon")) {
     return tr(
-      "Ozon API временно ограничил запросы (429). Показана доступная часть данных.",
+      "Ozon API РІСЂРµРјРµРЅРЅРѕ РѕРіСЂР°РЅРёС‡РёР» Р·Р°РїСЂРѕСЃС‹ (429). РџРѕРєР°Р·Р°РЅР° РґРѕСЃС‚СѓРїРЅР°СЏ С‡Р°СЃС‚СЊ РґР°РЅРЅС‹С….",
       "Ozon API rate-limited requests (429). Showing available partial data."
     );
   }
   if (low.includes("bad_json") && low.includes("wb")) {
     return tr(
-      "WB API вернул нестабильный ответ. Использована частичная статистика.",
+      "WB API РІРµСЂРЅСѓР» РЅРµСЃС‚Р°Р±РёР»СЊРЅС‹Р№ РѕС‚РІРµС‚. РСЃРїРѕР»СЊР·РѕРІР°РЅР° С‡Р°СЃС‚РёС‡РЅР°СЏ СЃС‚Р°С‚РёСЃС‚РёРєР°.",
       "WB API returned malformed data. Partial statistics were used."
     );
   }
-  if (low.includes("wb finance api недоступен") && (
-    low.includes("wb sales api вернул некорректный ответ")
-    || low.includes("wb sales api вернул неожиданный формат")
+  if (low.includes("wb finance api РЅРµРґРѕСЃС‚СѓРїРµРЅ") && (
+    low.includes("wb sales api РІРµСЂРЅСѓР» РЅРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ РѕС‚РІРµС‚")
+    || low.includes("wb sales api РІРµСЂРЅСѓР» РЅРµРѕР¶РёРґР°РЅРЅС‹Р№ С„РѕСЂРјР°С‚")
     || low.includes("bad_json")
   )) {
     return tr(
-      "WB API вернул нестабильный ответ. Использована частичная статистика.",
+      "WB API РІРµСЂРЅСѓР» РЅРµСЃС‚Р°Р±РёР»СЊРЅС‹Р№ РѕС‚РІРµС‚. РСЃРїРѕР»СЊР·РѕРІР°РЅР° С‡Р°СЃС‚РёС‡РЅР°СЏ СЃС‚Р°С‚РёСЃС‚РёРєР°.",
       "WB API returned unstable data. Partial statistics were used."
     );
   }
-  if (low.includes("ads api недоступен")) {
+  if (low.includes("ads api РЅРµРґРѕСЃС‚СѓРїРµРЅ")) {
     return tr(
-      "Рекламные расходы временно недоступны в API. Остальные показатели рассчитаны.",
+      "Р РµРєР»Р°РјРЅС‹Рµ СЂР°СЃС…РѕРґС‹ РІСЂРµРјРµРЅРЅРѕ РЅРµРґРѕСЃС‚СѓРїРЅС‹ РІ API. РћСЃС‚Р°Р»СЊРЅС‹Рµ РїРѕРєР°Р·Р°С‚РµР»Рё СЂР°СЃСЃС‡РёС‚Р°РЅС‹.",
       "Ads costs are temporarily unavailable from API. Other metrics are calculated."
     );
   }
-  if (low.includes("ключ") || low.includes("unauthorized")) {
-    return tr("Проверьте API-ключи WB/Ozon в профиле.", "Check WB/Ozon API keys in profile.");
+  if (low.includes("РєР»СЋС‡") || low.includes("unauthorized")) {
+    return tr("РџСЂРѕРІРµСЂСЊС‚Рµ API-РєР»СЋС‡Рё WB/Ozon РІ РїСЂРѕС„РёР»Рµ.", "Check WB/Ozon API keys in profile.");
   }
   return text;
 }
@@ -204,11 +204,11 @@ function renderAccountingWarnings() {
   const rawLines = Array.isArray(accountingWarnings) ? accountingWarnings : [];
   const lines = [...new Set(rawLines.map((x) => normalizeAccountingWarning(x)).filter(Boolean))];
   if (!lines.length) {
-    warningEl.textContent = tr("Данные бухгалтерии загружены.", "Accounting data loaded.");
+    warningEl.textContent = tr("Р”Р°РЅРЅС‹Рµ Р±СѓС…РіР°Р»С‚РµСЂРёРё Р·Р°РіСЂСѓР¶РµРЅС‹.", "Accounting data loaded.");
     return;
   }
   const visible = lines.slice(0, 3);
-  const tail = lines.length > 3 ? tr(`(+ еще ${lines.length - 3})`, `(+ ${lines.length - 3} more)`) : "";
+  const tail = lines.length > 3 ? tr(`(+ РµС‰Рµ ${lines.length - 3})`, `(+ ${lines.length - 3} more)`) : "";
   warningEl.textContent = [...visible, tail].filter(Boolean).join(" | ");
 }
 
@@ -219,26 +219,26 @@ function renderAccountingOverview() {
   const o = accountingOverview && typeof accountingOverview === "object" ? accountingOverview : {};
 
   const cards = [
-    { label: tr("Заказы", "Orders"), value: formatInt(o.orders || 0), tone: "neutral" },
-    { label: tr("Штуки", "Units"), value: formatInt(o.units || 0), tone: "neutral" },
-    { label: tr("Выкупы", "Buyouts"), value: formatInt(o.buyouts || 0), tone: "neutral" },
-    { label: tr("Возвраты", "Returns"), value: formatInt(o.returns || 0), tone: "neutral" },
-    { label: tr("Выручка", "Revenue"), value: formatMoney(o.revenue || 0), tone: "positive" },
-    { label: tr("Себестоимость", "COGS"), value: formatMoney(o.cogs || 0), tone: "negative" },
-    { label: tr("Валовая прибыль", "Gross profit"), value: formatMoney(o.gross_profit || 0), tone: "positive" },
-    { label: tr("Расходы МП", "Marketplace expense"), value: formatMoney(o.marketplace_expense || 0), tone: "negative" },
-    { label: tr("Операционная прибыль", "Operating profit"), value: formatMoney(o.operating_profit || 0), tone: "positive" },
-    { label: tr("Доп. расходы", "Custom expenses"), value: formatMoney(o.custom_expenses || 0), tone: "negative" },
-    { label: tr("Налоги", "Taxes"), value: formatMoney((o.tax_amount || 0) + (o.vat_amount || 0)), tone: "negative" },
-    { label: tr("Чистая прибыль", "Net profit"), value: formatMoney(o.net_profit || 0), tone: "net" },
-    { label: tr("Маржа", "Margin"), value: `${accountingFormatPercent(o.margin || 0)}%`, tone: "positive" },
-    { label: tr("Комиссии", "Commission"), value: formatMoney(o.commission || 0), tone: "negative" },
-    { label: tr("Логистика", "Logistics"), value: formatMoney(o.logistics || 0), tone: "negative" },
-    { label: tr("Хранение", "Storage"), value: formatMoney(o.storage || 0), tone: "negative" },
-    { label: tr("Удержания", "Deductions"), value: formatMoney(o.deductions || 0), tone: "negative" },
-    { label: tr("Приемка", "Acceptance"), value: formatMoney(o.acceptance || 0), tone: "negative" },
-    { label: tr("Штрафы", "Penalties"), value: formatMoney(o.penalties || 0), tone: "negative" },
-    { label: tr("Реклама", "Ads"), value: formatMoney(o.ad_spend || 0), tone: "negative" },
+    { label: tr("Orders", "Orders"), value: formatInt(o.orders || 0), tone: "neutral" },
+    { label: tr("Units", "Units"), value: formatInt(o.units || 0), tone: "neutral" },
+    { label: tr("Р’С‹РєСѓРїС‹", "Buyouts"), value: formatInt(o.buyouts || 0), tone: "neutral" },
+    { label: tr("Р’РѕР·РІСЂР°С‚С‹", "Returns"), value: formatInt(o.returns || 0), tone: "neutral" },
+    { label: tr("Р’С‹СЂСѓС‡РєР°", "Revenue"), value: formatMoney(o.revenue || 0), tone: "positive" },
+    { label: tr("COGS", "COGS"), value: formatMoney(o.cogs || 0), tone: "negative" },
+    { label: tr("Р’Р°Р»РѕРІР°СЏ РїСЂРёР±С‹Р»СЊ", "Gross profit"), value: formatMoney(o.gross_profit || 0), tone: "positive" },
+    { label: tr("Р Р°СЃС…РѕРґС‹ РњРџ", "Marketplace expense"), value: formatMoney(o.marketplace_expense || 0), tone: "negative" },
+    { label: tr("РћРїРµСЂР°С†РёРѕРЅРЅР°СЏ РїСЂРёР±С‹Р»СЊ", "Operating profit"), value: formatMoney(o.operating_profit || 0), tone: "positive" },
+    { label: tr("Р”РѕРї. СЂР°СЃС…РѕРґС‹", "Custom expenses"), value: formatMoney(o.custom_expenses || 0), tone: "negative" },
+    { label: tr("Taxes", "Taxes"), value: formatMoney((o.tax_amount || 0) + (o.vat_amount || 0)), tone: "negative" },
+    { label: tr("Net profit", "Net profit"), value: formatMoney(o.net_profit || 0), tone: "net" },
+    { label: tr("РњР°СЂР¶Р°", "Margin"), value: `${accountingFormatPercent(o.margin || 0)}%`, tone: "positive" },
+    { label: tr("Commission", "Commission"), value: formatMoney(o.commission || 0), tone: "negative" },
+    { label: tr("Logistics", "Logistics"), value: formatMoney(o.logistics || 0), tone: "negative" },
+    { label: tr("Storage", "Storage"), value: formatMoney(o.storage || 0), tone: "negative" },
+    { label: tr("РЈРґРµСЂР¶Р°РЅРёСЏ", "Deductions"), value: formatMoney(o.deductions || 0), tone: "negative" },
+    { label: tr("РџСЂРёРµРјРєР°", "Acceptance"), value: formatMoney(o.acceptance || 0), tone: "negative" },
+    { label: tr("Penalties", "Penalties"), value: formatMoney(o.penalties || 0), tone: "negative" },
+    { label: tr("Р РµРєР»Р°РјР°", "Ads"), value: formatMoney(o.ad_spend || 0), tone: "negative" },
   ];
 
   cardsEl.innerHTML = cards
@@ -256,19 +256,19 @@ function renderAccountingOverview() {
   const preferred = ["wb", "ozon", "all"];
   const keys = [...new Set([...preferred, ...Object.keys(byMarket)])].filter((key) => byMarket[key] && typeof byMarket[key] === "object");
   if (!keys.length) {
-    marketEl.innerHTML = `<article class="sales-kpi"><span>${tr("Маркетплейсы", "Marketplaces")}</span><strong>${tr("Нет данных", "No data")}</strong></article>`;
+    marketEl.innerHTML = `<article class="sales-kpi"><span>${tr("РњР°СЂРєРµС‚РїР»РµР№СЃС‹", "Marketplaces")}</span><strong>${tr("РќРµС‚ РґР°РЅРЅС‹С…", "No data")}</strong></article>`;
     return;
   }
   marketEl.innerHTML = keys
     .map((key) => {
       const row = byMarket[key] || {};
-      const title = key === "all" ? tr("Все маркетплейсы", "All marketplaces") : key.toUpperCase();
+      const title = key === "all" ? tr("Р’СЃРµ РјР°СЂРєРµС‚РїР»РµР№СЃС‹", "All marketplaces") : key.toUpperCase();
       return `
         <article class="sales-kpi ${Number(row.net_profit || 0) >= 0 ? "accounting-kpi-positive" : "accounting-kpi-negative"}">
           <span>${escapeHtml(title)}</span>
           <strong>${escapeHtml(formatMoney(row.net_profit || 0))}</strong>
-          <small>${escapeHtml(tr("Выручка", "Revenue"))}: ${escapeHtml(formatMoney(row.revenue || 0))}</small>
-          <small>${escapeHtml(tr("Маржа", "Margin"))}: ${escapeHtml(`${accountingFormatPercent(row.margin || 0)}%`)}</small>
+          <small>${escapeHtml(tr("Р’С‹СЂСѓС‡РєР°", "Revenue"))}: ${escapeHtml(formatMoney(row.revenue || 0))}</small>
+          <small>${escapeHtml(tr("РњР°СЂР¶Р°", "Margin"))}: ${escapeHtml(`${accountingFormatPercent(row.margin || 0)}%`)}</small>
         </article>
       `;
     })
@@ -282,7 +282,7 @@ function renderAccountingChart() {
   const points = Array.isArray(accountingChartRows) ? accountingChartRows : [];
   if (!points.length) {
     clearChartHost(host);
-    meta.textContent = tr("Нет данных по прибыли за выбранный период.", "No profit data for selected period.");
+    meta.textContent = tr("РќРµС‚ РґР°РЅРЅС‹С… РїРѕ РїСЂРёР±С‹Р»Рё Р·Р° РІС‹Р±СЂР°РЅРЅС‹Р№ РїРµСЂРёРѕРґ.", "No profit data for selected period.");
     return;
   }
 
@@ -312,10 +312,10 @@ function renderAccountingChart() {
             top: 2,
             textStyle: { color: "#5f7391", fontSize: 12 },
             data: [
-              tr("Выручка", "Revenue"),
-              tr("Валовая", "Gross"),
-              tr("Операционная", "Operating"),
-              tr("Чистая", "Net"),
+              tr("Р’С‹СЂСѓС‡РєР°", "Revenue"),
+              tr("Р’Р°Р»РѕРІР°СЏ", "Gross"),
+              tr("РћРїРµСЂР°С†РёРѕРЅРЅР°СЏ", "Operating"),
+              tr("Р§РёСЃС‚Р°СЏ", "Net"),
             ],
           },
           xAxis: {
@@ -337,7 +337,7 @@ function renderAccountingChart() {
           },
           series: [
             {
-              name: tr("Выручка", "Revenue"),
+              name: tr("Р’С‹СЂСѓС‡РєР°", "Revenue"),
               type: "line",
               smooth: true,
               showSymbol: false,
@@ -346,7 +346,7 @@ function renderAccountingChart() {
               itemStyle: { color: "#2ec5ff" },
             },
             {
-              name: tr("Валовая", "Gross"),
+              name: tr("Р’Р°Р»РѕРІР°СЏ", "Gross"),
               type: "line",
               smooth: true,
               showSymbol: false,
@@ -355,7 +355,7 @@ function renderAccountingChart() {
               itemStyle: { color: "#8266ff" },
             },
             {
-              name: tr("Операционная", "Operating"),
+              name: tr("РћРїРµСЂР°С†РёРѕРЅРЅР°СЏ", "Operating"),
               type: "line",
               smooth: true,
               showSymbol: false,
@@ -364,7 +364,7 @@ function renderAccountingChart() {
               itemStyle: { color: "#3bd38c" },
             },
             {
-              name: tr("Чистая", "Net"),
+              name: tr("Р§РёСЃС‚Р°СЏ", "Net"),
               type: "line",
               smooth: true,
               showSymbol: false,
@@ -385,9 +385,9 @@ function renderAccountingChart() {
   }
 
   meta.innerHTML = [
-    `${tr("Периодов", "Points")}: <b>${formatInt(points.length)}</b>`,
-    `${tr("Пик", "Peak")}: <b>${formatMoney(peak)}</b>`,
-    `${tr("Мин", "Min")}: <b>${formatMoney(min)}</b>`,
+    `${tr("РџРµСЂРёРѕРґРѕРІ", "Points")}: <b>${formatInt(points.length)}</b>`,
+    `${tr("РџРёРє", "Peak")}: <b>${formatMoney(peak)}</b>`,
+    `${tr("РњРёРЅ", "Min")}: <b>${formatMoney(min)}</b>`,
   ].map((x) => `<span>${x}</span>`).join("");
 }
 
@@ -399,8 +399,8 @@ function renderAccountingAnalysis() {
 
   const rows = Array.isArray(accountingAnalysisRows) ? accountingAnalysisRows : [];
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="12">${escapeHtml(tr("Нет данных для анализа.", "No analytics data."))}</td></tr>`;
-    meta.textContent = tr("Строк: 0", "Rows: 0");
+    tbody.innerHTML = `<tr><td colspan="12">${escapeHtml(tr("РќРµС‚ РґР°РЅРЅС‹С… РґР»СЏ Р°РЅР°Р»РёР·Р°.", "No analytics data."))}</td></tr>`;
+    meta.textContent = tr("РЎС‚СЂРѕРє: 0", "Rows: 0");
     return;
   }
 
@@ -425,7 +425,7 @@ function renderAccountingAnalysis() {
     `;
     tbody.appendChild(trEl);
   }
-  meta.textContent = tr(`Строк анализа: ${rows.length}`, `Analysis rows: ${rows.length}`);
+  meta.textContent = tr(`РЎС‚СЂРѕРє Р°РЅР°Р»РёР·Р°: ${rows.length}`, `Analysis rows: ${rows.length}`);
 }
 
 function resetAccountingExpenseForm() {
@@ -475,13 +475,13 @@ function editAccountingExpense(expenseId) {
   const active = document.getElementById("accountingExpenseActive");
   if (active) active.checked = Boolean(row.is_active);
   switchAccountingSubtab("expenses", false);
-  accountingSetMeta("accountingExpensesMeta", tr(`Редактирование расхода #${id}`, `Editing expense #${id}`));
+  accountingSetMeta("accountingExpensesMeta", tr(`Р РµРґР°РєС‚РёСЂРѕРІР°РЅРёРµ СЂР°СЃС…РѕРґР° #${id}`, `Editing expense #${id}`));
 }
 
 async function deleteAccountingExpense(expenseId) {
   const id = Number(expenseId || 0);
   if (!id) return;
-  if (!confirm(tr("Удалить этот расход?", "Delete this expense?"))) return;
+  if (!confirm(tr("РЈРґР°Р»РёС‚СЊ СЌС‚РѕС‚ СЂР°СЃС…РѕРґ?", "Delete this expense?"))) return;
   const data = await requestJson(`/api/accounting/expenses/${id}`, {
     method: "DELETE",
     headers: authHeaders(),
@@ -493,7 +493,7 @@ async function deleteAccountingExpense(expenseId) {
   if (!data) return;
   await loadAccountingExpenses();
   await loadAccountingData();
-  accountingSetMeta("accountingExpensesMeta", String(data.message || tr("Расход удален.", "Expense deleted.")));
+  accountingSetMeta("accountingExpensesMeta", String(data.message || tr("Р Р°СЃС…РѕРґ СѓРґР°Р»РµРЅ.", "Expense deleted.")));
 }
 
 function renderAccountingExpenses() {
@@ -503,14 +503,14 @@ function renderAccountingExpenses() {
   const rows = Array.isArray(accountingExpensesRows) ? accountingExpensesRows : [];
   tbody.innerHTML = "";
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="9">${escapeHtml(tr("Расходы еще не добавлены.", "No expenses yet."))}</td></tr>`;
-    meta.textContent = tr("Расходов: 0", "Expenses: 0");
+    tbody.innerHTML = `<tr><td colspan="9">${escapeHtml(tr("Р Р°СЃС…РѕРґС‹ РµС‰Рµ РЅРµ РґРѕР±Р°РІР»РµРЅС‹.", "No expenses yet."))}</td></tr>`;
+    meta.textContent = tr("Р Р°СЃС…РѕРґРѕРІ: 0", "Expenses: 0");
     return;
   }
   for (const row of rows) {
     const id = Number(row?.id || 0);
     const active = Boolean(row?.is_active);
-    const period = [accountingToYmd(row?.start_date), accountingToYmd(row?.end_date)].filter(Boolean).join(" → ") || "-";
+    const period = [accountingToYmd(row?.start_date), accountingToYmd(row?.end_date)].filter(Boolean).join(" в†’ ") || "-";
     const trEl = document.createElement("tr");
     trEl.innerHTML = `
       <td>${escapeHtml(String(id || "-"))}</td>
@@ -519,18 +519,18 @@ function renderAccountingExpenses() {
       <td>${escapeHtml(formatMoney(row?.amount || 0))}</td>
       <td>${escapeHtml(String(row?.recurrence || "monthly"))}</td>
       <td>${escapeHtml(period)}</td>
-      <td>${escapeHtml(active ? tr("Активен", "Active") : tr("Отключен", "Disabled"))}</td>
+      <td>${escapeHtml(active ? tr("РђРєС‚РёРІРµРЅ", "Active") : tr("РћС‚РєР»СЋС‡РµРЅ", "Disabled"))}</td>
       <td>${escapeHtml(String(row?.note || "-"))}</td>
       <td>
         <div class="row-actions">
-          <button class="btn-secondary icon-action-btn" type="button" data-tip="${escapeHtml(tr("Редактировать", "Edit"))}" onclick="editAccountingExpense(${id})">&#9998;</button>
-          <button class="btn-danger icon-action-btn" type="button" data-tip="${escapeHtml(tr("Удалить", "Delete"))}" onclick="deleteAccountingExpense(${id})">&#128465;</button>
+          <button class="btn-secondary icon-action-btn" type="button" data-tip="${escapeHtml(tr("Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ", "Edit"))}" onclick="editAccountingExpense(${id})">&#9998;</button>
+          <button class="btn-danger icon-action-btn" type="button" data-tip="${escapeHtml(tr("РЈРґР°Р»РёС‚СЊ", "Delete"))}" onclick="deleteAccountingExpense(${id})">&#128465;</button>
         </div>
       </td>
     `;
     tbody.appendChild(trEl);
   }
-  meta.textContent = tr(`Расходов: ${rows.length}`, `Expenses: ${rows.length}`);
+  meta.textContent = tr(`Р Р°СЃС…РѕРґРѕРІ: ${rows.length}`, `Expenses: ${rows.length}`);
 }
 
 async function loadAccountingSettings() {
@@ -551,7 +551,7 @@ async function loadAccountingSettings() {
   setVal("accountingTaxRate", data.tax_rate);
   setVal("accountingAdditionalRate", data.additional_rate);
   setVal("accountingFixedCostPerMonth", data.fixed_cost_per_month);
-  accountingSetMeta("accountingSettingsMeta", tr("Настройки расчета загружены.", "Accounting settings loaded."));
+  accountingSetMeta("accountingSettingsMeta", tr("РќР°СЃС‚СЂРѕР№РєРё СЂР°СЃС‡РµС‚Р° Р·Р°РіСЂСѓР¶РµРЅС‹.", "Accounting settings loaded."));
   return data;
 }
 
@@ -563,21 +563,21 @@ async function saveAccountingSettings() {
     fixed_cost_per_month: Number(document.getElementById("accountingFixedCostPerMonth")?.value || 0),
   };
   const data = await withBusy(
-    tr("Сохраняем параметры бухгалтерии…", "Saving accounting settings..."),
+    tr("РЎРѕС…СЂР°РЅСЏРµРј РїР°СЂР°РјРµС‚СЂС‹ Р±СѓС…РіР°Р»С‚РµСЂРёРёвЂ¦", "Saving accounting settings..."),
     () => requestJson("/api/accounting/settings", {
       method: "PUT",
       headers: authHeaders(),
       body: JSON.stringify(payload),
       timeoutMs: 90000,
     }),
-    tr("Параметры налогов и доп. расходов влияют на расчет чистой прибыли.", "Tax and extra-cost settings affect net profit calculation.")
+    tr("РџР°СЂР°РјРµС‚СЂС‹ РЅР°Р»РѕРіРѕРІ Рё РґРѕРї. СЂР°СЃС…РѕРґРѕРІ РІР»РёСЏСЋС‚ РЅР° СЂР°СЃС‡РµС‚ С‡РёСЃС‚РѕР№ РїСЂРёР±С‹Р»Рё.", "Tax and extra-cost settings affect net profit calculation.")
   ).catch((e) => {
     alert(e.message);
     return null;
   });
   if (!data) return;
   accountingSettingsState = data;
-  accountingSetMeta("accountingSettingsMeta", tr("Параметры сохранены.", "Settings saved."));
+  accountingSetMeta("accountingSettingsMeta", tr("РџР°СЂР°РјРµС‚СЂС‹ СЃРѕС…СЂР°РЅРµРЅС‹.", "Settings saved."));
   await loadAccountingData();
 }
 
@@ -609,18 +609,18 @@ async function saveAccountingExpense() {
   };
 
   if (!payload.category) {
-    alert(tr("Укажите категорию расхода.", "Specify expense category."));
+    alert(tr("РЈРєР°Р¶РёС‚Рµ РєР°С‚РµРіРѕСЂРёСЋ СЂР°СЃС…РѕРґР°.", "Specify expense category."));
     return;
   }
   if (!Number.isFinite(payload.amount) || payload.amount < 0) {
-    alert(tr("Укажите корректную сумму расхода.", "Specify valid expense amount."));
+    alert(tr("РЈРєР°Р¶РёС‚Рµ РєРѕСЂСЂРµРєС‚РЅСѓСЋ СЃСѓРјРјСѓ СЂР°СЃС…РѕРґР°.", "Specify valid expense amount."));
     return;
   }
 
   const method = id > 0 ? "PUT" : "POST";
   const endpoint = id > 0 ? `/api/accounting/expenses/${id}` : "/api/accounting/expenses";
   const result = await withBusy(
-    id > 0 ? tr("Обновляем расход…", "Updating expense...") : tr("Добавляем расход…", "Adding expense..."),
+    id > 0 ? tr("РћР±РЅРѕРІР»СЏРµРј СЂР°СЃС…РѕРґвЂ¦", "Updating expense...") : tr("Р”РѕР±Р°РІР»СЏРµРј СЂР°СЃС…РѕРґвЂ¦", "Adding expense..."),
     () => requestJson(endpoint, {
       method,
       headers: authHeaders(),
@@ -636,7 +636,7 @@ async function saveAccountingExpense() {
   resetAccountingExpenseForm();
   await loadAccountingExpenses();
   await loadAccountingData();
-  accountingSetMeta("accountingExpensesMeta", id > 0 ? tr("Расход обновлен.", "Expense updated.") : tr("Расход добавлен.", "Expense created."));
+  accountingSetMeta("accountingExpensesMeta", id > 0 ? tr("Р Р°СЃС…РѕРґ РѕР±РЅРѕРІР»РµРЅ.", "Expense updated.") : tr("Р Р°СЃС…РѕРґ РґРѕР±Р°РІР»РµРЅ.", "Expense created."));
 }
 
 function accountingNormalizeMonthlyKpi(raw) {
@@ -718,24 +718,24 @@ function renderAccountingMonthlySummary() {
     const statusParts = [];
     if (String(meta.source || "").trim()) {
       const sourceLabel = String(meta.source || "").toLowerCase().includes("cache")
-        ? tr("Источник: кэш", "Source: cache")
-        : tr("Источник: live", "Source: live");
+        ? tr("РСЃС‚РѕС‡РЅРёРє: РєСЌС€", "Source: cache")
+        : tr("РСЃС‚РѕС‡РЅРёРє: live", "Source: live");
       statusParts.push(sourceLabel);
     }
     if (meta.generated_at) {
       const parsed = Date.parse(String(meta.generated_at));
       if (Number.isFinite(parsed)) {
-        statusParts.push(`${tr("Сформировано", "Generated")}: ${new Date(parsed).toLocaleString()}`);
+        statusParts.push(`${tr("РЎС„РѕСЂРјРёСЂРѕРІР°РЅРѕ", "Generated")}: ${new Date(parsed).toLocaleString()}`);
       }
     }
     if (warnings.length) {
       statusParts.push(warnings.slice(0, 2).join(" | "));
-      if (warnings.length > 2) statusParts.push(`(+ ${warnings.length - 2} more)`);
+      if (warnings.length > 2) statusParts.push(tr(`(+ ${warnings.length - 2} РµС‰С‘ РїСЂРµРґСѓРїСЂРµР¶РґРµРЅРёР№)`, `(+ ${warnings.length - 2} more warnings)`));
     }
-    accountingSetMeta("accountingMonthlyStatus", statusParts.join(" | ") || tr("Помесячная сводка загружена.", "Monthly summary loaded."));
+    accountingSetMeta("accountingMonthlyStatus", statusParts.join(" | ") || tr("РџРѕРјРµСЃСЏС‡РЅР°СЏ СЃРІРѕРґРєР° Р·Р°РіСЂСѓР¶РµРЅР°.", "Monthly summary loaded."));
 
     if (!rows.length) {
-      host.innerHTML = `<div class="panel"><div class="hint">${escapeHtml(tr("Нет данных за последние 12 месяцев.", "No data for the last 12 months."))}</div></div>`;
+      host.innerHTML = `<div class="panel"><div class="hint">${escapeHtml(tr("РќРµС‚ РґР°РЅРЅС‹С… Р·Р° РїРѕСЃР»РµРґРЅРёРµ 12 РјРµСЃСЏС†РµРІ.", "No data for the last 12 months."))}</div></div>`;
       return;
     }
 
@@ -754,16 +754,16 @@ function renderAccountingMonthlySummary() {
             <span>${escapeHtml(`${tr("Orders", "Orders")}: ${formatInt(data.orders || 0)} | ${tr("Units", "Units")}: ${formatInt(data.units || 0)}`)}</span>
           </header>
           <div class="accounting-month-metrics-grid">
-            ${accountingMonthlyMetric(tr("Оборот", "Turnover"), formatMoney(data.turnover || 0), "neutral")}
-            ${accountingMonthlyMetric(tr("Комиссия", "Commission"), formatMoney(data.commission || 0), "expense")}
-            ${accountingMonthlyMetric(tr("Реклама", "Ad spend"), formatMoney(data.ad_spend || 0), "expense")}
-            ${accountingMonthlyMetric(tr("Логистика", "Logistics"), formatMoney(data.logistics || 0), "expense")}
-            ${accountingMonthlyMetric(tr("Хранение", "Storage"), formatMoney(data.storage || 0), "expense")}
-            ${accountingMonthlyMetric(tr("Штрафы", "Penalties"), formatMoney(data.penalties || 0), "expense")}
-            ${accountingMonthlyMetric(tr("Эквайринг", "Acquiring"), formatMoney(data.acquiring || 0), "expense")}
-            ${accountingMonthlyMetric(tr("Себестоимость", "COGS"), formatMoney(data.cogs || 0), "expense")}
-            ${accountingMonthlyMetric(tr("Налоги", "Taxes"), formatMoney(data.tax_total || 0), "expense")}
-            ${accountingMonthlyMetric(tr("Чистая прибыль", "Net profit"), formatMoney(data.net_profit || 0), Number(data.net_profit || 0) >= 0 ? "profit" : "expense")}
+            ${accountingMonthlyMetric(tr("Turnover", "Turnover"), formatMoney(data.turnover || 0), "neutral")}
+            ${accountingMonthlyMetric(tr("Commission", "Commission"), formatMoney(data.commission || 0), "expense")}
+            ${accountingMonthlyMetric(tr("Ad spend", "Ad spend"), formatMoney(data.ad_spend || 0), "expense")}
+            ${accountingMonthlyMetric(tr("Logistics", "Logistics"), formatMoney(data.logistics || 0), "expense")}
+            ${accountingMonthlyMetric(tr("Storage", "Storage"), formatMoney(data.storage || 0), "expense")}
+            ${accountingMonthlyMetric(tr("Penalties", "Penalties"), formatMoney(data.penalties || 0), "expense")}
+            ${accountingMonthlyMetric(tr("Acquiring", "Acquiring"), formatMoney(data.acquiring || 0), "expense")}
+            ${accountingMonthlyMetric(tr("COGS", "COGS"), formatMoney(data.cogs || 0), "expense")}
+            ${accountingMonthlyMetric(tr("Taxes", "Taxes"), formatMoney(data.tax_total || 0), "expense")}
+            ${accountingMonthlyMetric(tr("Net profit", "Net profit"), formatMoney(data.net_profit || 0), Number(data.net_profit || 0) >= 0 ? "profit" : "expense")}
           </div>
         </article>
       `;
@@ -776,8 +776,8 @@ function renderAccountingMonthlySummary() {
               <span>${escapeHtml(`${row.date_from || ""} - ${row.date_to || ""}`)}</span>
             </div>
             <div class="accounting-month-row-summary">
-              <span class="accounting-month-total ${totalNetClass}">${escapeHtml(`${tr("Итого net", "Total net")}: ${formatMoney(total.net_profit || 0)}`)}</span>
-              <span class="accounting-month-total">${escapeHtml(`${tr("Итого оборот", "Total turnover")}: ${formatMoney(total.turnover || 0)}`)}</span>
+              <span class="accounting-month-total ${totalNetClass}">${escapeHtml(`${tr("Total net", "Total net")}: ${formatMoney(total.net_profit || 0)}`)}</span>
+              <span class="accounting-month-total">${escapeHtml(`${tr("Total turnover", "Total turnover")}: ${formatMoney(total.turnover || 0)}`)}</span>
               <span class="accounting-month-delta ${deltaClass}">${escapeHtml(`${tr("Delta net WB-Ozon", "Delta net WB-Ozon")}: ${formatMoney(deltaNet)}`)}</span>
             </div>
           </header>
@@ -794,17 +794,14 @@ function renderAccountingMonthlySummary() {
     }
     accountingSetMeta(
       "accountingMonthlyStatus",
-      tr(
-        "Ошибка отображения monthly-сводки. Показаны последние сохраненные данные.",
-        "Monthly summary render error. Showing last saved data."
-      )
+      tr("Monthly summary render error. Showing last saved data.", "Monthly summary render error. Showing last saved data.")
     );
   }
 }
 
 async function loadAccountingMonthlySummary(forceBusy = false) {
   if (modulesLoaded && enabledModules instanceof Set && !enabledModules.has("accounting")) {
-    accountingSetMeta("accountingMonthlyStatus", tr("Модуль бухгалтерии отключен администратором.", "Accounting module is disabled by admin."));
+    accountingSetMeta("accountingMonthlyStatus", tr("Accounting module is disabled by admin.", "Accounting module is disabled by admin."));
     return false;
   }
 
@@ -816,7 +813,7 @@ async function loadAccountingMonthlySummary(forceBusy = false) {
   fastQp.set("tz", tz);
   fastQp.set("fast", "1");
 
-  accountingSetMeta("accountingMonthlyStatus", tr("Загружаем помесячную прибыль...", "Loading monthly profit summary..."));
+  accountingSetMeta("accountingMonthlyStatus", tr("Loading monthly profit summary...", "Loading monthly profit summary..."));
 
   const fastFetcher = () => requestJson(`/api/accounting/monthly-summary?${fastQp.toString()}`, {
     headers: authHeaders(),
@@ -825,7 +822,7 @@ async function loadAccountingMonthlySummary(forceBusy = false) {
 
   const fastPayload = forceBusy
     ? await withBusy(
-      tr("Обновляем помесячную прибыль...", "Refreshing monthly profit summary..."),
+      tr("Refreshing monthly profit summary...", "Refreshing monthly profit summary..."),
       fastFetcher
     ).catch(() => null)
     : await fastFetcher().catch(() => null);
@@ -834,9 +831,9 @@ async function loadAccountingMonthlySummary(forceBusy = false) {
     if (accountingMonthlyLastGoodState) {
       accountingMonthlyState = accountingMonthlyLastGoodState;
       renderAccountingMonthlySummary();
-      accountingSetMeta("accountingMonthlyStatus", tr("network: показаны последние доступные данные", "network: showing last available data"));
+      accountingSetMeta("accountingMonthlyStatus", tr("network: showing last available data", "network: showing last available data"));
     } else {
-      accountingSetMeta("accountingMonthlyStatus", tr("network: не удалось загрузить monthly-сводку", "network: failed to load monthly summary"));
+      accountingSetMeta("accountingMonthlyStatus", tr("network: failed to load monthly summary", "network: failed to load monthly summary"));
     }
     return false;
   }
@@ -847,9 +844,9 @@ async function loadAccountingMonthlySummary(forceBusy = false) {
     if (accountingMonthlyLastGoodState) {
       accountingMonthlyState = accountingMonthlyLastGoodState;
       renderAccountingMonthlySummary();
-      accountingSetMeta("accountingMonthlyStatus", tr("bad_payload: показаны последние доступные данные", "bad_payload: showing last available data"));
+      accountingSetMeta("accountingMonthlyStatus", tr("bad_payload: showing last available data", "bad_payload: showing last available data"));
     } else {
-      accountingSetMeta("accountingMonthlyStatus", tr("bad_payload: сервер вернул некорректный ответ", "bad_payload: server returned malformed response"));
+      accountingSetMeta("accountingMonthlyStatus", tr("bad_payload: server returned malformed response", "bad_payload: server returned malformed response"));
     }
     return false;
   }
@@ -875,7 +872,7 @@ async function loadAccountingMonthlySummary(forceBusy = false) {
       if (runSeq !== accountingMonthlyRequestSeq) return;
       const normalizedLive = accountingNormalizeMonthlyPayload(livePayload);
       if (!normalizedLive) {
-        accountingSetMeta("accountingMonthlyStatus", tr("partial: live-обновление вернуло неполный ответ", "partial: live refresh returned partial payload"));
+        accountingSetMeta("accountingMonthlyStatus", tr("partial: live refresh returned partial payload", "partial: live refresh returned partial payload"));
         return;
       }
       accountingMonthlyState = normalizedLive;
@@ -884,7 +881,7 @@ async function loadAccountingMonthlySummary(forceBusy = false) {
     })
     .catch(() => {
       if (runSeq !== accountingMonthlyRequestSeq) return;
-      accountingSetMeta("accountingMonthlyStatus", tr("upstream-limited: оставлены кэшированные данные", "upstream-limited: cached data kept"));
+      accountingSetMeta("accountingMonthlyStatus", tr("upstream-limited: cached data kept", "upstream-limited: cached data kept"));
     })
     .finally(() => {
       accountingMonthlyLiveRefreshInFlight = false;
@@ -895,7 +892,7 @@ async function loadAccountingMonthlySummary(forceBusy = false) {
 
 async function loadAccountingData(forceBusy = false, retryAttempt = 0) {
   if (modulesLoaded && enabledModules instanceof Set && !enabledModules.has("accounting")) {
-    accountingSetMeta("accountingWarnings", tr("Модуль бухгалтерии отключен администратором.", "Accounting module is disabled by admin."));
+    accountingSetMeta("accountingWarnings", tr("РњРѕРґСѓР»СЊ Р±СѓС…РіР°Р»С‚РµСЂРёРё РѕС‚РєР»СЋС‡РµРЅ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂРѕРј.", "Accounting module is disabled by admin."));
     return false;
   }
 
@@ -918,7 +915,7 @@ async function loadAccountingData(forceBusy = false, retryAttempt = 0) {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   qp.set("tz", tz);
 
-  accountingSetMeta("accountingWarnings", tr("Загружаем бухгалтерские данные...", "Loading accounting data..."));
+  accountingSetMeta("accountingWarnings", tr("Р—Р°РіСЂСѓР¶Р°РµРј Р±СѓС…РіР°Р»С‚РµСЂСЃРєРёРµ РґР°РЅРЅС‹Рµ...", "Loading accounting data..."));
 
   const fetcher = () => requestJson(`/api/accounting/data?${qp.toString()}`, {
     headers: authHeaders(),
@@ -927,9 +924,9 @@ async function loadAccountingData(forceBusy = false, retryAttempt = 0) {
 
   const data = forceBusy
     ? await withBusy(
-      tr("Обновляем модуль Бухгалтерия…", "Refreshing Accounting module..."),
+      tr("РћР±РЅРѕРІР»СЏРµРј РјРѕРґСѓР»СЊ Р‘СѓС…РіР°Р»С‚РµСЂРёСЏвЂ¦", "Refreshing Accounting module..."),
       fetcher,
-      tr("Загрузка финансовых данных WB/Ozon может занять до 1-2 минут.", "WB/Ozon financial data load may take up to 1-2 minutes.")
+      tr("Р—Р°РіСЂСѓР·РєР° С„РёРЅР°РЅСЃРѕРІС‹С… РґР°РЅРЅС‹С… WB/Ozon РјРѕР¶РµС‚ Р·Р°РЅСЏС‚СЊ РґРѕ 1-2 РјРёРЅСѓС‚.", "WB/Ozon financial data load may take up to 1-2 minutes.")
     ).catch((e) => {
       alert(e.message);
       return null;
@@ -955,7 +952,7 @@ async function loadAccountingData(forceBusy = false, retryAttempt = 0) {
     accountingSetMeta(
       "accountingWarnings",
       tr(
-        "Сервер вернул некорректный ответ по бухгалтерии. Данные сохранены в текущем состоянии, повторите обновление.",
+        "РЎРµСЂРІРµСЂ РІРµСЂРЅСѓР» РЅРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ РѕС‚РІРµС‚ РїРѕ Р±СѓС…РіР°Р»С‚РµСЂРёРё. Р”Р°РЅРЅС‹Рµ СЃРѕС…СЂР°РЅРµРЅС‹ РІ С‚РµРєСѓС‰РµРј СЃРѕСЃС‚РѕСЏРЅРёРё, РїРѕРІС‚РѕСЂРёС‚Рµ РѕР±РЅРѕРІР»РµРЅРёРµ.",
         "Server returned malformed accounting payload. Current data is kept, please retry refresh."
       )
     );
@@ -974,7 +971,7 @@ async function loadAccountingData(forceBusy = false, retryAttempt = 0) {
     accountingSetMeta(
       "accountingWarnings",
       tr(
-        "WB API ограничил запросы (429). Повторяем загрузку автоматически...",
+        "WB API РѕРіСЂР°РЅРёС‡РёР» Р·Р°РїСЂРѕСЃС‹ (429). РџРѕРІС‚РѕСЂСЏРµРј Р·Р°РіСЂСѓР·РєСѓ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё...",
         "WB API rate-limited requests (429). Retrying automatically..."
       )
     );
@@ -1074,7 +1071,7 @@ async function accountingDownload(path, fallbackName, marketplaceOverride = "") 
     cache: "no-store",
   }).catch(() => null);
   if (!response) {
-    alert(tr("Не удалось скачать файл. Проверьте соединение.", "Failed to download file. Check network."));
+    alert(tr("РќРµ СѓРґР°Р»РѕСЃСЊ СЃРєР°С‡Р°С‚СЊ С„Р°Р№Р». РџСЂРѕРІРµСЂСЊС‚Рµ СЃРѕРµРґРёРЅРµРЅРёРµ.", "Failed to download file. Check network."));
     return;
   }
   if (!response.ok) {
@@ -1083,7 +1080,7 @@ async function accountingDownload(path, fallbackName, marketplaceOverride = "") 
       const payload = await response.json();
       errMsg = String(payload?.detail || payload?.message || "").trim();
     } catch (_) {}
-    alert(errMsg || tr("Ошибка скачивания файла.", "Download failed."));
+    alert(errMsg || tr("РћС€РёР±РєР° СЃРєР°С‡РёРІР°РЅРёСЏ С„Р°Р№Р»Р°.", "Download failed."));
     return;
   }
   const blob = await response.blob();
@@ -1115,7 +1112,7 @@ async function importAccountingPurchasePrices() {
   const input = document.getElementById("accountingImportFile");
   const file = input?.files?.[0] || null;
   if (!file) {
-    alert(tr("Выберите файл Excel/CSV для импорта.", "Select an Excel/CSV file to import."));
+    alert(tr("Выберите файл Excel (.xlsx или .xlsm) для импорта.", "Select an Excel file (.xlsx or .xlsm) to import."));
     return;
   }
   const form = new FormData();
@@ -1123,7 +1120,7 @@ async function importAccountingPurchasePrices() {
   const headers = {};
   if (typeof token === "string" && token) headers.Authorization = `Bearer ${token}`;
   const data = await withBusy(
-    tr("Импортируем закупочные цены…", "Importing purchase prices..."),
+    tr("Импортируем закупочные цены...", "Importing purchase prices..."),
     async () => {
       const response = await fetch("/api/accounting/purchase-prices/import", {
         method: "POST",
@@ -1144,15 +1141,17 @@ async function importAccountingPurchasePrices() {
   });
   if (!data) return;
   if (input) input.value = "";
+
   const lines = [
     `${tr("Обновлено", "Updated")}: ${formatInt(data.updated || 0)}`,
     `${tr("Без изменений", "Skipped")}: ${formatInt(data.skipped || 0)}`,
   ];
   if (Array.isArray(data.unmatched) && data.unmatched.length) {
-    lines.push(`${tr("Не сопоставлено", "Unmatched")}: ${data.unmatched.slice(0, 6).join(", ")}`);
+    lines.push(`${tr("Не сопоставлено", "Unmatched")}: ${data.unmatched.slice(0, 8).join("; ")}`);
   }
   if (Array.isArray(data.errors) && data.errors.length) {
-    lines.push(`${tr("Ошибки", "Errors")}: ${data.errors.slice(0, 4).join(" | ")}`);
+    const details = data.errors.slice(0, 8).map((x) => `- ${x}`).join("\n");
+    lines.push(`${tr("Ошибки", "Errors")}:\n${details}`);
   }
   alert(lines.join("\n"));
   await loadAccountingData(true);
@@ -1164,22 +1163,22 @@ function applyAccountingUiLanguage() {
     const el = document.querySelector(selector);
     if (el) el.textContent = value;
   };
-  setText("#accountingSubtabOverviewBtn", isEn ? "Overview" : "Обзор");
-  setText("#accountingSubtabAnalysisBtn", isEn ? "Analysis" : "Анализ");
-  setText("#accountingSubtabMonthlyBtn", isEn ? "Monthly profit" : "Прибыль по месяцам");
-  setText("#accountingSubtabExpensesBtn", isEn ? "Expenses" : "Расходы");
-  setText("#accountingSubtabSettingsBtn", isEn ? "Taxes & settings" : "Налоги и параметры");
-  setText("#accountingSubtabOverview .panel h3", isEn ? "Profit overview" : "Прибыль и обзор");
-  setText("#accountingSubtabMonthly .panel h3", isEn ? "Monthly profit by marketplaces" : "Прибыль по месяцам (WB и Ozon)");
-  setText("#accountingSubtabOverview .grid-6 button:nth-of-type(1)", isEn ? "Refresh data" : "Обновить данные");
-  setText("#accountingSubtabOverview .grid-6 button:nth-of-type(2)", isEn ? "Reload all" : "Обновить все");
+  setText("#accountingSubtabOverviewBtn", isEn ? "Overview" : "РћР±Р·РѕСЂ");
+  setText("#accountingSubtabAnalysisBtn", isEn ? "Analysis" : "РђРЅР°Р»РёР·");
+  setText("#accountingSubtabMonthlyBtn", isEn ? "Monthly Profit" : "Monthly Profit");
+  setText("#accountingSubtabExpensesBtn", isEn ? "Expenses" : "Р Р°СЃС…РѕРґС‹");
+  setText("#accountingSubtabSettingsBtn", isEn ? "Taxes & settings" : "РќР°Р»РѕРіРё Рё РїР°СЂР°РјРµС‚СЂС‹");
+  setText("#accountingSubtabOverview .panel h3", isEn ? "Profit overview" : "РџСЂРёР±С‹Р»СЊ Рё РѕР±Р·РѕСЂ");
+  setText("#accountingSubtabMonthly .panel h3", isEn ? "Monthly Profit by Marketplace" : "Monthly Profit by Marketplace");
+  setText("#accountingSubtabOverview .grid-6 button:nth-of-type(1)", isEn ? "Refresh data" : "РћР±РЅРѕРІРёС‚СЊ РґР°РЅРЅС‹Рµ");
+  setText("#accountingSubtabOverview .grid-6 button:nth-of-type(2)", isEn ? "Reload all" : "РћР±РЅРѕРІРёС‚СЊ РІСЃРµ");
   const templateMarketSel = document.getElementById("accountingTemplateMarketplace");
   if (templateMarketSel) {
     const prev = String(templateMarketSel.value || localStorage.getItem("accounting_template_marketplace") || "all").toLowerCase();
     templateMarketSel.innerHTML = `
-      <option value="all">${isEn ? "Template: WB + Ozon" : "Шаблон: WB + Ozon"}</option>
-      <option value="wb">${isEn ? "Template: WB only" : "Шаблон: только WB"}</option>
-      <option value="ozon">${isEn ? "Template: Ozon only" : "Шаблон: только Ozon"}</option>
+      <option value="all">${isEn ? "Template: WB + Ozon" : "РЁР°Р±Р»РѕРЅ: WB + Ozon"}</option>
+      <option value="wb">${isEn ? "Template: WB only" : "РЁР°Р±Р»РѕРЅ: С‚РѕР»СЊРєРѕ WB"}</option>
+      <option value="ozon">${isEn ? "Template: Ozon only" : "РЁР°Р±Р»РѕРЅ: С‚РѕР»СЊРєРѕ Ozon"}</option>
     `;
     templateMarketSel.value = ["all", "wb", "ozon"].includes(prev) ? prev : "all";
   }
@@ -1190,7 +1189,7 @@ function applyAccountingUiLanguage() {
   if (marketSel) {
     const val = marketSel.value || "all";
     marketSel.innerHTML = `
-      <option value="all">${isEn ? "All marketplaces" : "Все маркетплейсы"}</option>
+      <option value="all">${isEn ? "All marketplaces" : "Р’СЃРµ РјР°СЂРєРµС‚РїР»РµР№СЃС‹"}</option>
       <option value="wb">WB</option>
       <option value="ozon">Ozon</option>
     `;
@@ -1200,29 +1199,29 @@ function applyAccountingUiLanguage() {
   if (periodSel) {
     const val = periodSel.value || "day";
     periodSel.innerHTML = `
-      <option value="day">${isEn ? "Day" : "День"}</option>
-      <option value="week">${isEn ? "Week" : "Неделя"}</option>
-      <option value="month">${isEn ? "Month" : "Месяц"}</option>
-      <option value="quarter">${isEn ? "Quarter" : "Квартал"}</option>
-      <option value="year">${isEn ? "Year" : "Год"}</option>
-      <option value="custom">${isEn ? "Custom" : "Произвольный период"}</option>
+      <option value="day">${isEn ? "Day" : "Р”РµРЅСЊ"}</option>
+      <option value="week">${isEn ? "Week" : "РќРµРґРµР»СЏ"}</option>
+      <option value="month">${isEn ? "Month" : "РњРµСЃСЏС†"}</option>
+      <option value="quarter">${isEn ? "Quarter" : "РљРІР°СЂС‚Р°Р»"}</option>
+      <option value="year">${isEn ? "Year" : "Р“РѕРґ"}</option>
+      <option value="custom">${isEn ? "Custom" : "РџСЂРѕРёР·РІРѕР»СЊРЅС‹Р№ РїРµСЂРёРѕРґ"}</option>
     `;
     periodSel.value = val;
   }
-  setText("#accountingSubtabAnalysis .panel h3", isEn ? "Product analytics" : "Товарная аналитика");
-  setText("#accountingSubtabAnalysis .grid-4 button:nth-of-type(1)", isEn ? "Refresh analytics" : "Обновить анализ");
-  setText("#accountingSubtabAnalysis .grid-4 button:nth-of-type(2)", isEn ? "Reset filters" : "Сбросить фильтры");
-  setText("#accountingSubtabExpenses .panel h3", isEn ? "Expense management" : "Учет расходов");
-  setText("#accountingSubtabExpenses .actions button:nth-of-type(1)", isEn ? "Save expense" : "Сохранить расход");
-  setText("#accountingSubtabExpenses .actions button:nth-of-type(2)", isEn ? "Reset form" : "Сбросить форму");
-  setText("#accountingSubtabSettings .panel h3", isEn ? "Taxes and calculation settings" : "Налоги и параметры расчета");
-  setText("#accountingSubtabSettings .accounting-settings-grid .field-label:nth-of-type(1) > span", isEn ? "VAT rate, %" : "Ставка НДС, %");
-  setText("#accountingSubtabSettings .accounting-settings-grid .field-label:nth-of-type(2) > span", isEn ? "Profit/USN tax rate, %" : "Налог на прибыль/УСН, %");
-  setText("#accountingSubtabSettings .accounting-settings-grid .field-label:nth-of-type(3) > span", isEn ? "Additional costs from revenue, %" : "Доп. расходы от выручки, %");
-  setText("#accountingSubtabSettings .accounting-settings-grid .field-label:nth-of-type(4) > span", isEn ? "Fixed monthly costs, ₽" : "Фикс. расходы в месяц, ₽");
-  setText("#accountingSubtabSettings .panel > .hint", isEn ? "VAT and tax are applied to final period profit. Leave 0 for unused settings." : "НДС и налог применяются к итоговой прибыли по выбранному периоду. Если параметр не используется — оставьте 0.");
-  setText("#accountingSubtabSettings .actions button:nth-of-type(1)", isEn ? "Save settings" : "Сохранить параметры");
-  setText("#accountingSubtabSettings .actions button:nth-of-type(2)", isEn ? "Refresh" : "Обновить");
+  setText("#accountingSubtabAnalysis .panel h3", isEn ? "Product analytics" : "РўРѕРІР°СЂРЅР°СЏ Р°РЅР°Р»РёС‚РёРєР°");
+  setText("#accountingSubtabAnalysis .grid-4 button:nth-of-type(1)", isEn ? "Refresh analytics" : "РћР±РЅРѕРІРёС‚СЊ Р°РЅР°Р»РёР·");
+  setText("#accountingSubtabAnalysis .grid-4 button:nth-of-type(2)", isEn ? "Reset filters" : "РЎР±СЂРѕСЃРёС‚СЊ С„РёР»СЊС‚СЂС‹");
+  setText("#accountingSubtabExpenses .panel h3", isEn ? "Expense management" : "РЈС‡РµС‚ СЂР°СЃС…РѕРґРѕРІ");
+  setText("#accountingSubtabExpenses .actions button:nth-of-type(1)", isEn ? "Save expense" : "РЎРѕС…СЂР°РЅРёС‚СЊ СЂР°СЃС…РѕРґ");
+  setText("#accountingSubtabExpenses .actions button:nth-of-type(2)", isEn ? "Reset form" : "РЎР±СЂРѕСЃРёС‚СЊ С„РѕСЂРјСѓ");
+  setText("#accountingSubtabSettings .panel h3", isEn ? "Taxes and calculation settings" : "РќР°Р»РѕРіРё Рё РїР°СЂР°РјРµС‚СЂС‹ СЂР°СЃС‡РµС‚Р°");
+  setText("#accountingSubtabSettings .accounting-settings-grid .field-label:nth-of-type(1) > span", isEn ? "VAT rate, %" : "РЎС‚Р°РІРєР° РќР”РЎ, %");
+  setText("#accountingSubtabSettings .accounting-settings-grid .field-label:nth-of-type(2) > span", isEn ? "Profit/USN tax rate, %" : "РќР°Р»РѕРі РЅР° РїСЂРёР±С‹Р»СЊ/РЈРЎРќ, %");
+  setText("#accountingSubtabSettings .accounting-settings-grid .field-label:nth-of-type(3) > span", isEn ? "Additional costs from revenue, %" : "Р”РѕРї. СЂР°СЃС…РѕРґС‹ РѕС‚ РІС‹СЂСѓС‡РєРё, %");
+  setText("#accountingSubtabSettings .accounting-settings-grid .field-label:nth-of-type(4) > span", isEn ? "Fixed monthly costs, в‚Ѕ" : "Р¤РёРєСЃ. СЂР°СЃС…РѕРґС‹ РІ РјРµСЃСЏС†, в‚Ѕ");
+  setText("#accountingSubtabSettings .panel > .hint", isEn ? "VAT and tax are applied to final period profit. Leave 0 for unused settings." : "РќР”РЎ Рё РЅР°Р»РѕРі РїСЂРёРјРµРЅСЏСЋС‚СЃСЏ Рє РёС‚РѕРіРѕРІРѕР№ РїСЂРёР±С‹Р»Рё РїРѕ РІС‹Р±СЂР°РЅРЅРѕРјСѓ РїРµСЂРёРѕРґСѓ. Р•СЃР»Рё РїР°СЂР°РјРµС‚СЂ РЅРµ РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ вЂ” РѕСЃС‚Р°РІСЊС‚Рµ 0.");
+  setText("#accountingSubtabSettings .actions button:nth-of-type(1)", isEn ? "Save settings" : "РЎРѕС…СЂР°РЅРёС‚СЊ РїР°СЂР°РјРµС‚СЂС‹");
+  setText("#accountingSubtabSettings .actions button:nth-of-type(2)", isEn ? "Refresh" : "РћР±РЅРѕРІРёС‚СЊ");
 }
 
 window.switchAccountingSubtab = switchAccountingSubtab;
@@ -1245,3 +1244,4 @@ window.resetAccountingExpenseForm = resetAccountingExpenseForm;
 window.editAccountingExpense = editAccountingExpense;
 window.deleteAccountingExpense = deleteAccountingExpense;
 window.applyAccountingUiLanguage = applyAccountingUiLanguage;
+

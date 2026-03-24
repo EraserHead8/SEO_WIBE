@@ -109,10 +109,13 @@
     });
   })();
   let queueRaf = 0;
+  let queueTimer = 0;
+  let lastQueueRunAt = 0;
   const queuedRoots = new Set();
   let calendarRecoverAt = 0;
   let domObserver = null;
   let observerQueued = false;
+  let fullRootSanitized = false;
 
   function isEn() {
     return String(window.currentLang || "").trim().toLowerCase() === "en";
@@ -146,7 +149,7 @@
   function mojibakeScore(text) {
     const value = String(text || "");
     if (!value) return 0;
-    const m = value.match(/(?:\u0420[\u0400-\u04ffA-Za-z0-9]|\u0421[\u0400-\u04ffA-Za-z0-9]|\u0412[\u0400-\u04ffA-Za-z0-9]|\u00d0.|\u00d1.|\uFFFD|\?{3,})/g);
+    const m = value.match(/(?:\u0420[\u0400-\u04ffA-Za-z0-9$]|\u0421[\u0400-\u04ffA-Za-z0-9$]|\u0412[\u0400-\u04ffA-Za-z0-9$]|Р[\u00A0\s]*В|Р[\u00A0\s]*Р|\u00d0.|\u00d1.|вЂ|в„|вљ|[Pp]\$[A-Za-z\u0400-\u04ff]{0,6}|\uFFFD|\?{3,})/g);
     return m ? m.length : 0;
   }
 
@@ -154,9 +157,80 @@
     return String(text || "")
       .replace(/[\u0000-\u001F\u007F-\u009F]+/g, " ")
       .replace(/\u00a0/g, " ")
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      .replace(/[\u2060\u180E]/g, "")
       .replace(/([\u0420\u0421\u0412\u00d0\u00d1])(?:\s|\u00A0)+(?=[\u0420\u0421\u0412\u00d0\u00d1\u0400-\u04ffA-Za-z0-9])/g, "$1")
       .replace(/\s{2,}/g, " ")
       .trim();
+  }
+
+  function applySymbolFixes(text) {
+    let out = String(text || "");
+    if (!out) return "";
+    [
+      ["вЊ«", "\u232b"],
+      ["В±", "\u00b1"],
+      ["Г·", "\u00f7"],
+      ["Г—", "\u00d7"],
+      ["в€’", "\u2212"],
+      ["вЂў", "\u2022"],
+      ["вЂ¦", "\u2026"],
+    ].forEach(([from, to]) => {
+      if (out.includes(from)) out = out.split(from).join(to);
+    });
+    const replacements = [
+      ["вњ•", "\u2715"],
+      ["вЊ«", "\u232b"],
+      ["В±", "\u00b1"],
+      ["Г·", "\u00f7"],
+      ["Г—", "\u00d7"],
+      ["в€’", "\u2212"],
+      ["вњ•", "\u2715"],
+      ["вЊ«", "\u232b"],
+      ["В±", "\u00b1"],
+      ["Г·", "\u00f7"],
+      ["Г—", "\u00d7"],
+      ["в€’", "\u2212"],
+      ["вЂ¦", "\u2026"],
+      ["рџ””", "\ud83d\udd14"],
+      ["вњ•", "\u2715"],
+      ["вЊ«", "\u232b"],
+      ["В±", "\u00b1"],
+      ["Г·", "\u00f7"],
+      ["Г—", "\u00d7"],
+      ["в€’", "\u2212"],
+    ];
+    replacements.push(
+      ["вЊ•", "\u2715"],
+      ["вњ•", "\u2715"],
+      ["в’", "\u2212"]
+    );
+    replacements.push(
+      ["вЪ•", "\u2715"],
+      ["вЊ«", "\u232b"],
+      ["В±", "\u00b1"],
+      ["Г·", "\u00f7"],
+      ["Г—", "\u00d7"],
+      ["в€’", "\u2212"]
+    );
+    replacements.push(
+      ["вљ•", "\u2715"],
+      ["вЬ•", "\u2715"],
+      ["вь•", "\u2715"],
+      ["Р’В«", "\u232b"],
+      ["Р’В·", "\u00f7"],
+      ["Р’вЂ”", "\u00d7"],
+      ["Р’вЂ™", "\u2212"],
+      ["Р’вЂ¦", "\u2026"]
+    );
+    const seen = new Set();
+    replacements.forEach(([from, to]) => {
+      const key = `${from}=>${to}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      if (out.includes(from)) out = out.split(from).join(to);
+    });
+    return out;
   }
 
   function collapseBrokenSpacing(text) {
@@ -167,7 +241,9 @@
         .replace(/([\u0420\u0421\u0412\u00d0\u00d1][^\s]{0,3})(?:\s|\u00A0)+(?=[\u0420\u0421\u0412\u00d0\u00d1][^\s]{0,3})/g, "$1")
         .replace(/(\b[\u0420\u0421\u0412\u00d0\u00d1][\u0400-\u04ffA-Za-z0-9'’.,:;!?-]{0,2}\b)(?:\s|\u00A0)+(?=\b[\u0420\u0421\u0412\u00d0\u00d1][\u0400-\u04ffA-Za-z0-9'’.,:;!?-]{0,2}\b)/g, "$1")
         .replace(/([\u0420\u0421\u0412\u00d0\u00d1])(?:\s|\u00A0)+(?=[\u0400-\u04ffA-Za-z0-9])/g, "$1")
+        .replace(/([PCBHX])(?:\s|\u00A0)+(?=[PCBHX\u0400-\u04ffA-Za-z0-9])/g, "$1")
         .replace(/(?:\b[\u0420\u0421\u0412\u00d0\u00d1]\b(?:\s|\u00A0)+){3,}\b[\u0420\u0421\u0412\u00d0\u00d1]\b/g, (seq) => seq.replace(/[\s\u00A0]+/g, ""))
+        .replace(/(?:\b[PCBHX]\b(?:\s|\u00A0)+){3,}\b[PCBHX]\b/g, (seq) => seq.replace(/[\s\u00A0]+/g, ""))
         .replace(/\s{2,}/g, " ");
     }
     return normalizeArtifacts(out);
@@ -177,12 +253,31 @@
     const value = String(text || "");
     if (!value) return false;
     if (/\?{3,}|\uFFFD/.test(value)) return true;
+    if (/(?:вЊ«|В±|Г·|Г—|в€’|вЂў|вЂ¦)/.test(value)) return true;
+    if (/Р[\u00A0\s]*В|Р[\u00A0\s]*Р|вЂ|в„|вљ/.test(value)) return true;
+    if (/(?:Р[\s\u00A0]*[A-Za-z0-9])|(?:С[\s\u00A0]*[A-Za-z0-9])|(?:В[\s\u00A0]*[A-Za-z0-9])/.test(value)) return true;
+    if (/(?:Ð[\s\u00A0]*[A-Za-z0-9])|(?:Ñ[\s\u00A0]*[A-Za-z0-9])/.test(value)) return true;
+    if (/(?:\bP[\$§\^]?[A-Za-zА-Яа-я0-9]{0,3}\b(?:\s+|$)){2,}/.test(value)) return true;
+    if (/(?:[РСВÐÑ][^\s]{0,3}(?:\s+|$)){3,}/.test(value)) return true;
+    if (/[РСВÐÑ][\s\u00A0]+[РСВÐÑ][\s\u00A0]+[РСВÐÑ]/.test(value)) return true;
     if (mojibakeScore(value) >= 2) return true;
     if (/(?:\b[\u0420\u0421\u0412\u00d0\u00d1]\b(?:\s|\u00A0)+){4,}/.test(value)) return true;
     if (/(?:[\u0420\u0421\u0412\u00d0\u00d1](?:\s|\u00A0)+){3,}/.test(value)) return true;
     if (/(?:[\u0420\u0421\u0412\u00d0\u00d1]\s+){3,}/.test(value)) return true;
+    if (/(?:\b[PCBHX]\b(?:\s|\u00A0)+){3,}/.test(value)) return true;
+    if (/[PBCXH][\s\u00A0]+[PBCXH][\s\u00A0]+[PBCXH]/.test(value)) return true;
     return false;
   }
+
+  const baseLooksBroken = looksBroken;
+  looksBroken = function patchedLooksBroken(text) {
+    const value = String(text || "");
+    if (!value) return false;
+    if (baseLooksBroken(value)) return true;
+    if (/(?:[\u0420\u0440\u0421\u0441\u0412\u0432\u00d0\u00d1][^\s]{0,3}(?:\s+|$)){3,}/.test(value)) return true;
+    if (/[\u0420\u0440\u0421\u0441\u0412\u0432\u00d0\u00d1][\s\u00A0]+[\u0420\u0440\u0421\u0441\u0412\u0432\u00d0\u00d1][\s\u00A0]+[\u0420\u0440\u0421\u0441\u0412\u0432\u00d0\u00d1]/.test(value)) return true;
+    return false;
+  };
 
   function decodeCp1251Utf8(text) {
     initCp1251Table();
@@ -211,20 +306,23 @@
   function repairText(input) {
     const raw = String(input == null ? "" : input);
     if (!raw) return "";
+    if (!looksBroken(raw)) {
+      const cleanFast = normalizeArtifacts(raw);
+      if (!looksBroken(cleanFast)) return cleanFast;
+    }
     const directQuestionFix = brokenQuestionMap.get(raw.trim());
     if (directQuestionFix) return directQuestionFix;
-    if (!looksBroken(raw)) return normalizeArtifacts(raw);
-    const collapsed = collapseBrokenSpacing(raw);
-    const candidates = [
-      raw,
-      collapsed,
-      decodeCp1251Utf8(raw),
-      decodeCp1251Utf8(collapsed),
-      decodeLatin1Utf8(raw),
-      decodeLatin1Utf8(collapsed),
-      raw.replace(/([A-Za-z\u0400-\u04ff\u0420\u0421\u0412\u00d0\u00d1])(?:\s|\u00A0)+(?=[A-Za-z\u0400-\u04ff\u0420\u0421\u0412\u00d0\u00d1])/g, "$1"),
-    ].filter(Boolean);
-    let best = normalizeArtifacts(raw);
+    const symbolFixed = applySymbolFixes(raw);
+    const collapsed = collapseBrokenSpacing(symbolFixed);
+    const squeezed = symbolFixed.replace(/([A-Za-z\u0400-\u04ff\u0420\u0421\u0412\u00d0\u00d1])(?:\s|\u00A0)+(?=[A-Za-z\u0400-\u04ff\u0420\u0421\u0412\u00d0\u00d1])/g, "$1");
+    const candidates = [symbolFixed, collapsed, squeezed];
+    [symbolFixed, collapsed, squeezed].forEach((base) => {
+      const cp = decodeCp1251Utf8(base);
+      if (cp) candidates.push(cp);
+      const latin = decodeLatin1Utf8(base);
+      if (latin) candidates.push(latin);
+    });
+    let best = normalizeArtifacts(symbolFixed);
     let bestBad = mojibakeScore(best);
     let bestCyr = cyrillicScore(best);
     candidates.forEach((candRaw) => {
@@ -242,7 +340,21 @@
         bestCyr = cyr;
       }
     });
-    return normalizeArtifacts(best);
+    let final = normalizeArtifacts(best);
+    if (!looksBroken(raw) && !looksBroken(final)) return final;
+    if (looksBroken(final)) {
+      const compact = collapseBrokenSpacing(final);
+      const decoded = normalizeArtifacts(decodeCp1251Utf8(compact) || decodeLatin1Utf8(compact) || compact);
+      const finalBad = mojibakeScore(final);
+      const compactBad = mojibakeScore(compact);
+      const decodedBad = mojibakeScore(decoded);
+      if (decodedBad < finalBad || (decodedBad === finalBad && cyrillicScore(decoded) > cyrillicScore(final))) {
+        final = decoded;
+      } else if (compactBad < finalBad || (compactBad === finalBad && cyrillicScore(compact) > cyrillicScore(final))) {
+        final = compact;
+      }
+    }
+    return normalizeArtifacts(final);
   }
 
   window.__repairMojibakeText = repairText;
@@ -270,6 +382,14 @@
   function sanitizeTree(root) {
     const target = root || document.getElementById("appSection") || document.body;
     if (!target) return;
+    const appRoot = document.getElementById("appSection");
+    const isLargeRoot = target === appRoot || target === document.body || target === document.documentElement;
+    if (target.nodeType === Node.ELEMENT_NODE) {
+      if (!isLargeRoot || fullRootSanitized) {
+        const snapshot = String(target.textContent || "").slice(0, 80000);
+        if (!looksBroken(snapshot) && !/\uFFFD|\?{3,}/.test(snapshot)) return;
+      }
+    }
     if (target.nodeType === Node.TEXT_NODE) {
       repairTextNode(target);
       return;
@@ -282,25 +402,32 @@
       if (current.nodeType === Node.ELEMENT_NODE) repairElementAttrs(current);
       current = walker.nextNode();
     }
+    if (isLargeRoot) {
+      fullRootSanitized = true;
+    }
   }
 
   function queueSanitize(root) {
     const safeRoot = (root && root.nodeType) ? root : (document.getElementById("appSection") || document.body);
     if (safeRoot) queuedRoots.add(safeRoot);
-    if (queueRaf) return;
-    queueRaf = requestAnimationFrame(() => {
+    const run = () => {
       queueRaf = 0;
+      queueTimer = 0;
+      lastQueueRunAt = Date.now();
       const roots = [...queuedRoots];
       queuedRoots.clear();
       if (!roots.length) roots.push(document.getElementById("appSection") || document.body);
       roots.forEach((node) => sanitizeTree(node));
       applyKnownCopy();
-      normalizeCalendarUi();
-      normalizeNotificationCenter();
-      normalizeNotesGrid();
-      normalizeTasksUi();
-      normalizeGamesUi();
-    });
+    };
+    if (queueRaf || queueTimer) return;
+    const now = Date.now();
+    const delay = Math.max(0, 90 - (now - lastQueueRunAt));
+    if (delay > 0) {
+      queueTimer = setTimeout(run, delay);
+      return;
+    }
+    queueRaf = requestAnimationFrame(run);
   }
 
   function isAppShellMode() {
@@ -463,6 +590,9 @@
       ["#socialSubtabNotesBtn", pick("\u0417\u0430\u043c\u0435\u0442\u043a\u0438", "Notes")],
       ["#socialSubtabCalculatorBtn", pick("\u041a\u0430\u043b\u044c\u043a\u0443\u043b\u044f\u0442\u043e\u0440", "Calculator")],
       ["#socialSubtabGamesBtn", pick("\u0418\u0433\u0440\u044b", "Games")],
+      ["#helpSubtabMainBtn", pick("\u0421\u043f\u0440\u0430\u0432\u043a\u0430", "Help")],
+      ["#helpSubtabAssistantBtn", pick("AI \u043f\u043e\u043c\u043e\u0449\u043d\u0438\u043a", "AI assistant")],
+      ["#helpSubtabDownloadsBtn", pick("\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0438", "Downloads")],
       ["#socialModalTitle", pick("\u0421\u043e\u0446\u0438\u0430\u043b\u044c\u043d\u044b\u0439 \u043c\u043e\u0434\u0443\u043b\u044c", "Social module")],
       ["#socialSubtabChat h3", pick("\u0427\u0430\u0442\u044b", "Chats")],
       ["#socialSubtabChat .social-chat-sidebar-head small", pick("\u041b\u0438\u0447\u043d\u044b\u0435 \u0438 \u0433\u0440\u0443\u043f\u043f\u043e\u0432\u044b\u0435", "Personal and group")],
@@ -528,12 +658,43 @@
       document.querySelectorAll(selector).forEach((node) => node.setAttribute(attr, value));
     });
     document.querySelectorAll(".bell-emoji").forEach((node) => { node.textContent = "\u{1F514}"; });
+
+    document.querySelectorAll(".photo-close, .campaign-close, .social-notif-head .btn-secondary:last-child").forEach((node) => {
+      if (!node) return;
+      const before = String(node.textContent || "").trim();
+      if (!before || looksBroken(before) || /[РСВ]|вњ•|РІСљ/.test(before)) {
+        node.textContent = "\u2715";
+      }
+    });
+    document.querySelectorAll("#socialNotificationCenter .social-notif-head-actions button:last-child, #socialNotificationCenter .btn-secondary:last-child").forEach((node) => {
+      if (!node) return;
+      node.textContent = "\u2715";
+      node.setAttribute("aria-label", pick("\u0417\u0430\u043a\u0440\u044b\u0442\u044c", "Close"));
+      node.setAttribute("title", pick("\u0417\u0430\u043a\u0440\u044b\u0442\u044c", "Close"));
+    });
+    document.querySelectorAll(".social-modal-close, .modal-close, .sheet-close, [class*='close-btn']").forEach((node) => {
+      if (!node) return;
+      const before = String(node.textContent || "").trim();
+      if (!before || before.length <= 2 || looksBroken(before) || /[Р РЎР’]|РІСљвЂў|Р Р†РЎС™|вЊ•|вњ•/.test(before)) {
+        node.textContent = "\u2715";
+      }
+      node.setAttribute("aria-label", pick("\u0417\u0430\u043a\u0440\u044b\u0442\u044c", "Close"));
+      node.setAttribute("title", pick("\u0417\u0430\u043a\u0440\u044b\u0442\u044c", "Close"));
+    });
+    document.querySelectorAll(".social-calc-back").forEach((node) => { node.textContent = "\u232b"; });
+    document.querySelectorAll("[onclick*=\"socialCalcToggleSign\"]").forEach((node) => { node.textContent = "\u00b1"; });
+    document.querySelectorAll("[onclick*=\"socialCalcPress('/')\"]").forEach((node) => { node.textContent = "\u00f7"; });
+    document.querySelectorAll("[onclick*=\"socialCalcPress('*')\"]").forEach((node) => { node.textContent = "\u00d7"; });
+    document.querySelectorAll("[onclick*=\"socialCalcPress('-')\"]").forEach((node) => { node.textContent = "\u2212"; });
   }
 
   function normalizeCalendarUi() {
     try {
       if (typeof window.socialNormalizeCalendarChrome === "function") {
         window.socialNormalizeCalendarChrome();
+      }
+      if (typeof window.socialEnsureCalendarNavigation === "function") {
+        window.socialEnsureCalendarNavigation();
       }
       if (typeof window.socialEnsureCalendarFab === "function") {
         window.socialEnsureCalendarFab();
@@ -548,16 +709,41 @@
       window.socialState.calendarDate = calendarBaseDate();
     }
     root.classList.add("sw-calendar-samsung");
-    const shell = root.querySelector(".social-calendar-shell") || root;
-    shell.querySelectorAll("button").forEach((btn) => {
-      if (btn.id === "socialCalendarFab") return;
-      if (btn.classList.contains("social-day")) return;
-      if (btn.classList.contains("social-day-item-button")) return;
-      btn.style.setProperty("display", "none", "important");
-    });
-    root.querySelectorAll("#socialCalendarGrid .social-day").forEach((btn) => {
-      btn.style.setProperty("display", "grid", "important");
-    });
+    try {
+      if (typeof window.socialBindCalendarSwipe === "function") {
+        window.socialBindCalendarSwipe();
+      }
+    } catch (_) {}
+    let nav = root.querySelector(".social-calendar-nav-controls");
+    if (!nav) {
+      try {
+        if (typeof window.socialEnsureCalendarNavigation === "function") {
+          window.socialEnsureCalendarNavigation();
+        }
+      } catch (_) {}
+      nav = root.querySelector(".social-calendar-nav-controls");
+    }
+    if (nav) {
+      const appMode = isAppShellMode();
+      nav.classList.toggle("is-app-shell", appMode);
+      nav.style.setProperty("display", "grid", "important");
+      nav.style.setProperty("width", "100%", "important");
+      nav.style.setProperty("align-items", "center", "important");
+      nav.style.setProperty("gap", "8px", "important");
+      nav.style.setProperty(
+        "grid-template-columns",
+        appMode ? "minmax(120px, 1fr) minmax(98px, auto)" : "auto minmax(110px, 1fr) minmax(92px, auto) auto",
+        "important"
+      );
+      nav.querySelectorAll(".social-calendar-picker").forEach((node) => {
+        node.style.setProperty("display", "block", "important");
+        node.style.setProperty("min-height", "42px", "important");
+        node.style.setProperty("width", "100%", "important");
+      });
+      nav.querySelectorAll(".social-calendar-nav-btn").forEach((node) => {
+        node.style.setProperty("display", appMode ? "none" : "inline-flex", "important");
+      });
+    }
     const grid = document.getElementById("socialCalendarGrid");
     if (grid) {
       grid.style.setProperty("display", "block", "important");
@@ -571,28 +757,20 @@
         cells.style.setProperty("display", "grid", "important");
         cells.style.setProperty("grid-template-columns", "repeat(7, minmax(0, 1fr))", "important");
       }
-    }
-    const dayCount = root.querySelectorAll("#socialCalendarGrid .social-day[data-day-key]").length;
-    if (dayCount > 0) return;
-    buildCalendarFallbackGridV2(root);
-    const now = Date.now();
-    if (now - calendarRecoverAt < 1300) return;
-    calendarRecoverAt = now;
-    setTimeout(() => {
       try {
-        if (typeof window.socialRenderCalendar === "function") {
+        const totalRows = Number((window.socialState?.calendarEvents || []).length || 0)
+          + Number((window.socialState?.tasks || []).length || 0);
+        const chips = grid.querySelectorAll(".sw-calendar-chip").length;
+        if (totalRows > 0 && chips === 0 && typeof window.socialRenderCalendar === "function") {
           window.socialRenderCalendar();
         }
-        const rebuilt = root.querySelectorAll("#socialCalendarGrid .social-day[data-day-key]").length;
-        if (!rebuilt && typeof window.socialLoadCalendar === "function") {
-          window.socialLoadCalendar();
-        }
       } catch (_) {}
-    }, 90);
-    setTimeout(() => {
-      const refreshed = root.querySelectorAll("#socialCalendarGrid .social-day[data-day-key]").length;
-      if (!refreshed) buildCalendarFallbackGridV2(root);
-    }, 260);
+    }
+    const monthLabel = document.getElementById("socialCalendarMonthLabel");
+    if (monthLabel) {
+      monthLabel.style.setProperty("cursor", "pointer", "important");
+      monthLabel.setAttribute("title", pick("\u0412\u044b\u0431\u043e\u0440 \u043c\u0435\u0441\u044f\u0446\u0430 \u0438 \u0433\u043e\u0434\u0430", "Choose month and year"));
+    }
   }
 
   function normalizeNotificationCenter() {
@@ -621,12 +799,84 @@
       center.style.setProperty("width", "min(420px, calc(100vw - 24px))", "important");
       center.style.setProperty("max-height", "calc(100vh - 84px)", "important");
     }
+    center.querySelectorAll(".social-notif-item").forEach((node) => {
+      node.style.setProperty("height", "auto", "important");
+      node.style.setProperty("min-height", "80px", "important");
+      node.style.setProperty("overflow", "hidden", "important");
+    });
+    center.querySelectorAll(".social-notif-item-head b").forEach((node) => {
+      node.style.setProperty("display", "block", "important");
+      node.style.setProperty("line-height", "1.25", "important");
+      node.style.setProperty("overflow-wrap", "anywhere", "important");
+      node.style.setProperty("word-break", "break-word", "important");
+      node.style.setProperty("max-height", "3.2em", "important");
+      node.style.setProperty("overflow", "hidden", "important");
+    });
+    center.querySelectorAll(".social-notif-item p").forEach((node) => {
+      node.style.setProperty("line-height", "1.3", "important");
+      node.style.setProperty("overflow-wrap", "anywhere", "important");
+      node.style.setProperty("word-break", "break-word", "important");
+      node.style.setProperty("max-height", "5.2em", "important");
+      node.style.setProperty("overflow", "hidden", "important");
+      node.style.setProperty("margin", "6px 0 0", "important");
+    });
+    center.querySelectorAll(".social-notif-head-actions button:last-child, .social-notif-head .btn-secondary:last-child").forEach((btn) => {
+      btn.textContent = "\u2715";
+      btn.setAttribute("aria-label", pick("\u0417\u0430\u043a\u0440\u044b\u0442\u044c", "Close"));
+      btn.setAttribute("title", pick("\u0417\u0430\u043a\u0440\u044b\u0442\u044c", "Close"));
+    });
     return center;
   }
 
   function normalizeNotesGrid() {
     const host = document.getElementById("socialNotesList");
     if (!host) return;
+    const appShell = isAppShellMode();
+    const cardHeight = appShell ? 146 : 148;
+    host.style.setProperty("display", "grid", "important");
+    host.style.setProperty("grid-template-columns", "repeat(3, minmax(0, 1fr))", "important");
+    host.style.setProperty("grid-auto-rows", `${cardHeight}px`, "important");
+    host.style.setProperty("gap", "10px", "important");
+    host.style.setProperty("width", "100%", "important");
+    host.style.setProperty("min-width", "0", "important");
+    host.style.setProperty("max-width", "100%", "important");
+    host.style.setProperty("align-content", "start", "important");
+    host.style.setProperty("justify-content", "stretch", "important");
+    host.style.setProperty("justify-items", "stretch", "important");
+    host.style.setProperty("overflow-x", "hidden", "important");
+    host.style.setProperty("overflow-y", "auto", "important");
+
+    const sidebar = host.closest(".social-notes-sidebar");
+    if (sidebar) {
+      const layout = sidebar.closest(".social-notes-layout");
+      if (layout) {
+        layout.style.setProperty("display", "block", "important");
+        layout.style.setProperty("grid-template-columns", "1fr", "important");
+        layout.style.setProperty("width", "100%", "important");
+        layout.style.setProperty("min-width", "0", "important");
+        layout.style.setProperty("max-width", "100%", "important");
+      }
+      const editor = sidebar.parentElement?.querySelector(".social-notes-editor");
+      if (editor) editor.style.setProperty("display", "none", "important");
+      sidebar.style.setProperty("display", "block", "important");
+      sidebar.style.setProperty("width", "100%", "important");
+      sidebar.style.setProperty("max-width", "100%", "important");
+      sidebar.style.setProperty("min-width", "0", "important");
+      sidebar.style.setProperty("overflow-x", "hidden", "important");
+      sidebar.style.setProperty("overflow-y", "auto", "important");
+      [
+        sidebar.closest(".social-card"),
+        sidebar.closest(".social-notes-shell"),
+        sidebar.closest(".social-notes-content"),
+        host.parentElement,
+      ].filter(Boolean).forEach((node) => {
+        node.style.setProperty("width", "100%", "important");
+        node.style.setProperty("min-width", "0", "important");
+        node.style.setProperty("max-width", "100%", "important");
+        node.style.setProperty("overflow-x", "hidden", "important");
+      });
+    }
+
     host.querySelectorAll(
       ".social-note-delete, [class*='note-delete'], [class*='note-remove'], [class*='note-close'], [data-action='delete'], button[onclick*='socialDeleteNote']"
     ).forEach((node) => node.remove?.());
@@ -635,15 +885,21 @@
       if (!noteId) return;
       row.style.cursor = "pointer";
       row.style.setProperty("width", "100%", "important");
-      row.style.setProperty("max-width", "none", "important");
+      row.style.setProperty("height", `${cardHeight}px`, "important");
+      row.style.setProperty("min-height", `${cardHeight}px`, "important");
+      row.style.setProperty("max-height", `${cardHeight}px`, "important");
+      row.style.setProperty("min-width", "0", "important");
+      row.style.setProperty("max-width", "100%", "important");
+      row.style.setProperty("overflow", "hidden", "important");
       row.style.setProperty("justify-self", "stretch", "important");
-      row.style.setProperty("height", "148px", "important");
-      row.style.setProperty("min-height", "148px", "important");
-      row.style.setProperty("max-height", "148px", "important");
       const main = row.querySelector(".social-note-main");
       if (main) {
+        main.style.setProperty("display", "grid", "important");
+        main.style.setProperty("grid-template-rows", "auto 1fr auto", "important");
         main.style.setProperty("width", "100%", "important");
         main.style.setProperty("height", "100%", "important");
+        main.style.setProperty("min-height", "0", "important");
+        main.style.setProperty("overflow", "hidden", "important");
       }
       if (row.dataset.noteOpenBound !== "1") {
         row.dataset.noteOpenBound = "1";
@@ -658,7 +914,9 @@
       try {
         if (typeof window.socialGetNoteCoverColor === "function") {
           const color = String(window.socialGetNoteCoverColor(noteId) || "").trim();
-          if (color) row.style.setProperty("--sw-note-cover", color);
+          if (color) {
+            row.style.setProperty("--sw-note-cover", color);
+          }
         }
       } catch (_) {}
     });
@@ -726,7 +984,6 @@
       btn.addEventListener("click", async (event) => {
         event.preventDefault();
         event.stopPropagation();
-        event.stopImmediatePropagation?.();
         try {
           if (typeof window.socialToggleNotificationCenter === "function") {
             await window.socialToggleNotificationCenter();
@@ -740,24 +997,7 @@
   }
 
   function bindBellDelegated() {
-    if (!document.body?.dataset) return;
-    if (document.body.dataset.textFixBellDelegated === "1") return;
-    document.body.dataset.textFixBellDelegated = "1";
-    document.addEventListener("click", async (event) => {
-      const btn = event?.target?.closest?.("#socialBellBtn, #mobileDrawerBellBtn, .icon-bell-btn");
-      if (!btn) return;
-      event.preventDefault?.();
-      event.stopPropagation?.();
-      event.stopImmediatePropagation?.();
-      try {
-        if (typeof window.socialToggleNotificationCenter === "function") {
-          await window.socialToggleNotificationCenter();
-        }
-        if (btn.id === "mobileDrawerBellBtn" && typeof window.closeMobileNav === "function") {
-          window.closeMobileNav();
-        }
-      } catch (_) {}
-    }, true);
+    // Intentionally empty: delegated bell listener caused duplicate open/close toggles.
   }
 
   function bindTaskTouchGuard() {
@@ -847,13 +1087,7 @@
       if (!(currentDate instanceof Date) || Number.isNaN(currentDate.getTime())) {
         window.socialState.calendarDate = calendarBaseDate();
       }
-      let result = null;
-      try {
-        result = original.apply(this, arguments);
-      } catch (_) {
-        const root = document.getElementById("socialSubtabCalendar");
-        if (root) buildCalendarFallbackGridV2(root);
-      }
+      const result = original.apply(this, arguments);
       normalizeCalendarUi();
       queueSanitize(document.getElementById("socialSubtabCalendar"));
       return result;
@@ -870,6 +1104,14 @@
       const result = await Promise.resolve(original.apply(this, arguments));
       normalizeCalendarUi();
       queueSanitize(document.getElementById("socialSubtabCalendar"));
+      try {
+        const totalRows = Number((window.socialState?.calendarEvents || []).length || 0)
+          + Number((window.socialState?.tasks || []).length || 0);
+        const chipCount = document.querySelectorAll("#socialCalendarGrid .sw-calendar-chip").length;
+        if (totalRows > 0 && chipCount === 0 && typeof window.socialRenderCalendar === "function") {
+          window.socialRenderCalendar();
+        }
+      } catch (_) {}
       return result;
     });
 
@@ -915,6 +1157,41 @@
       const result = original.apply(this, arguments);
       bindBellButtons();
       bindBellDelegated();
+      return result;
+    });
+
+    wrapFn("switchSocialSubtab", (original) => function wrappedSwitchSocialSubtab(tab, loadNow = true) {
+      const result = original.call(this, tab, loadNow);
+      const safeTab = String(tab || "").trim().toLowerCase();
+      setTimeout(() => {
+        if (safeTab === "calendar") normalizeCalendarUi();
+        if (safeTab === "notes") normalizeNotesGrid();
+        if (safeTab === "tasks") normalizeTasksUi();
+        if (safeTab === "games") normalizeGamesUi();
+        normalizeNotificationCenter();
+        queueSanitize(document.getElementById("socialSection") || document.getElementById("appSection") || document.body);
+      }, 80);
+      setTimeout(() => {
+        if (safeTab === "calendar") normalizeCalendarUi();
+        if (safeTab === "notes") normalizeNotesGrid();
+        queueSanitize(document.getElementById("socialNotificationCenter") || document.body);
+      }, 320);
+      return result;
+    });
+
+    wrapFn("switchTab", (original) => function wrappedSwitchTab() {
+      const result = original.apply(this, arguments);
+      const root = document.getElementById("appSection") || document.body;
+      setTimeout(() => queueSanitize(root), 80);
+      setTimeout(() => queueSanitize(root), 320);
+      return result;
+    });
+
+    wrapFn("switchHelpSubtab", (original) => function wrappedSwitchHelpSubtab() {
+      const result = original.apply(this, arguments);
+      const helpRoot = document.getElementById("helpSection") || document.getElementById("appSection") || document.body;
+      setTimeout(() => queueSanitize(helpRoot), 80);
+      setTimeout(() => queueSanitize(helpRoot), 320);
       return result;
     });
   }
