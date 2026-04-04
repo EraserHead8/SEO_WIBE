@@ -12047,6 +12047,11 @@ body.mobile-client-mode .social-checkers-board-wrap {
   cursor: pointer;
 }
 
+.social-task-meta-stack {
+  display: grid;
+  gap: 4px;
+}
+
 .social-task-title-row {
   display: flex;
   justify-content: space-between;
@@ -12086,8 +12091,9 @@ body.mobile-client-mode .social-checkers-board-wrap {
 
 .social-task-subline {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   font-size: 12px;
   color: var(--text-muted);
@@ -12097,6 +12103,14 @@ body.mobile-client-mode .social-checkers-board-wrap {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.social-task-assignee-line {
+  display: flex;
+  align-items: center;
+  min-width: 0;
 }
 
 .social-task-assignee .tg-avatar {
@@ -12107,7 +12121,7 @@ body.mobile-client-mode .social-checkers-board-wrap {
 }
 
 .social-task-assignee-name {
-  max-width: 150px;
+  max-width: 220px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

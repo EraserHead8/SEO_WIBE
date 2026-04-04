@@ -32,6 +32,10 @@ let socialState = {
   calendarEventsLastGood: [],
   calendarDate: new Date(),
   calendarSelectedDay: "",
+  calendarDaySheetOpen: false,
+  calendarHistoryLayers: [],
+  calendarHistoryBound: false,
+  calendarHistoryClosingAll: false,
   notes: [],
   currentNoteId: 0,
   noteSaveTimer: null,
@@ -75,6 +79,9 @@ if (typeof window !== "undefined") {
   window.socialState = socialState;
   // Google sync flow is intentionally disabled in Samsung-like calendar UX.
   window.__socialDisableGoogleCalendarFlow = true;
+  if (typeof window.__socialDisableCalendarBellFixV20260329 === "undefined") {
+    window.__socialDisableCalendarBellFixV20260329 = true;
+  }
   // Keep legacy experimental task/calendar patches disabled to avoid UI regressions.
   if (typeof window.__socialDisableLegacyTaskCalendarPatches === "undefined") {
     window.__socialDisableLegacyTaskCalendarPatches = true;
@@ -96,9 +103,15 @@ if (typeof window !== "undefined") {
   if (typeof window.__socialDisableCurrencyPatchV2 === "undefined") {
     window.__socialDisableCurrencyPatchV2 = true;
   }
-  if (typeof window.__socialDisableTaskGlyphPatchV1 === "undefined") {
-    window.__socialDisableTaskGlyphPatchV1 = true;
-  }
+if (typeof window.__socialDisableTaskGlyphPatchV1 === "undefined") {
+  window.__socialDisableTaskGlyphPatchV1 = true;
+}
+if (typeof window.__socialDisableLegacyCalendarFallbackV20260323b === "undefined") {
+  window.__socialDisableLegacyCalendarFallbackV20260323b = true;
+}
+if (typeof window.__socialDisableCalendarBellFixV20260329 === "undefined") {
+  window.__socialDisableCalendarBellFixV20260329 = true;
+}
 }
 
 const SOCIAL_POLL_LEADER_KEY = "seo_wibe_social_poll_leader_v1";
@@ -156,6 +169,18 @@ function socialIsAppShellLike() {
     if (window.AndroidBridge || window.SeoWibeBridge) return true;
   } catch (_) {}
   return false;
+}
+
+function socialIsCompactMobileViewport() {
+  try {
+    const width = Number(window.innerWidth || document.documentElement?.clientWidth || 0);
+    if (width > 0 && width <= 980) return true;
+  } catch (_) {}
+  return false;
+}
+
+function socialUseCalendarSheetMode() {
+  return true;
 }
 
 function socialIsImageFile(file) {
@@ -996,12 +1021,132 @@ function socialNormalizeDecodedText(value) {
 function socialResolveNotificationText(row) {
   const source = row && typeof row === "object" ? row : {};
   const payload = source.payload && typeof source.payload === "object" ? source.payload : {};
-  const rawTitle = source.title || source.subject || source.kind_label || tr("\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u0435", "Notification");
-  const rawBody = source.body || source.text || source.preview || source.message || payload.body || payload.text || payload.message || "";
-  return {
-    title: socialNormalizeDecodedText(rawTitle),
-    body: socialNormalizeDecodedText(rawBody),
+  const normalizeCandidate = (value) => socialNormalizeDecodedText(String(value == null ? "" : value));
+  const meaningfulCandidate = (value) => {
+    const text = normalizeCandidate(value);
+    if (!text) return "";
+    if (/^(true|false|null|none|undefined|nan)$/i.test(text)) return "";
+    const compact = text.replace(/\s+/g, "");
+    if (compact && /^[\d:.\-+/()]+$/.test(compact)) return "";
+    if (!/[A-Za-zА-Яа-яЁё]/.test(text)) return "";
+    return text;
   };
+  const kindLabel = (value) => {
+    const code = String(value || "").trim().toLowerCase();
+    if (code.includes("chat_reaction")) return tr("Новая реакция", "New reaction");
+    if (code.includes("chat")) return tr("Новое сообщение", "New message");
+    if (code.includes("task")) return tr("Задачи", "Tasks");
+    if (code.includes("calendar") || code.includes("event") || code.includes("reminder")) {
+      return tr("Календарь", "Calendar");
+    }
+    return tr("Уведомление", "Notification");
+  };
+  const safeKindLabel = (value) => {
+    const code = String(value || "").trim().toLowerCase();
+    if (code.includes("chat_reaction")) return tr("Новая реакция", "New reaction");
+    if (code.includes("chat")) return tr("Новое сообщение", "New message");
+    if (code.includes("task")) return tr("Задачи", "Tasks");
+    if (code.includes("calendar") || code.includes("event") || code.includes("reminder")) {
+      return tr("Календарь", "Calendar");
+    }
+    return tr("Уведомление", "Notification");
+  };
+  const mojibakeScore = (value) => (String(value || "").match(/[\u0420\u0421\u0412\u00d0\u00d1]/g) || []).length;
+  const pickBest = (items, fallback = "") => {
+    const variants = items
+      .map((value) => meaningfulCandidate(value))
+      .filter(Boolean);
+    if (!variants.length) return normalizeCandidate(fallback);
+    return variants.sort((left, right) => {
+      const leftScore = mojibakeScore(left);
+      const rightScore = mojibakeScore(right);
+      if (leftScore !== rightScore) return leftScore - rightScore;
+      return left.length - right.length;
+    })[0];
+  };
+  const rawTitle = pickBest([
+    source.display_title,
+    source.notification_title,
+    source.title,
+    source.subject,
+    source.summary,
+    payload.display_title,
+    payload.notification_title,
+    payload.title,
+    payload.subject,
+    payload.summary,
+    payload.chat_title,
+    payload.chat_name,
+    payload.thread_title,
+    payload.thread_name,
+    payload.event_title,
+    payload.task_title,
+    payload.sender_name,
+    payload.sender_nick,
+    source.kind_label,
+    payload.display_kind,
+  ], safeKindLabel(source.kind || payload.kind || ""));
+  const rawBody = pickBest([
+    source.display_body,
+    source.notification_body,
+    source.body,
+    source.text,
+    source.preview,
+    source.message,
+    source.subtitle,
+    payload.display_body,
+    payload.notification_body,
+    payload.body,
+    payload.text,
+    payload.message,
+    payload.preview,
+    payload.preview_text,
+    payload.message_text,
+    payload.content,
+    payload.snippet,
+    payload.note,
+    payload.description,
+    payload.task_description,
+    payload.event_description,
+  ], "");
+  let titleText = normalizeCandidate(rawTitle);
+  let bodyText = normalizeCandidate(rawBody);
+  if (!titleText || /^[\d:.\-+/()]+$/.test(titleText.replace(/\s+/g, ""))) {
+    titleText = safeKindLabel(source.kind || payload.kind || "");
+  }
+  if (!bodyText || /^[\d:.\-+/()]+$/.test(bodyText.replace(/\s+/g, ""))) {
+    bodyText = "";
+  }
+  if (!bodyText && String(source.kind || payload.kind || "").toLowerCase().includes("chat")) {
+    const sender = pickBest([
+      payload.sender_nick,
+      payload.sender_name,
+      payload.actor_nick,
+      payload.author,
+    ], "");
+    const preview = pickBest([
+      payload.preview,
+      payload.text,
+      payload.message,
+      source.preview,
+      source.message,
+      source.text,
+    ], "");
+    bodyText = [sender, preview].filter(Boolean).join(": ");
+  }
+  return {
+    title: titleText || kindLabel(source.kind || payload.kind || ""),
+    body: bodyText || tr("Без текста", "No text"),
+  };
+}
+
+function socialNotificationDisplayText(value, fallback = "") {
+  const text = socialDecodeUiText(String(value == null ? "" : value).trim());
+  if (!text) return String(fallback || "").trim();
+  const compact = text.replace(/\s+/g, "");
+  if (/^[\d:.\-+/()]+$/.test(compact)) return String(fallback || "").trim();
+  if (!/[A-Za-zА-Яа-яЁё]/.test(text)) return String(fallback || "").trim();
+  return text;
 }
 
 function socialShowToast(title, body) {
@@ -1192,10 +1337,10 @@ function socialRenderNotificationCenter(rows = null) {
     return `
       <article class="social-notif-item" data-notif-id="${id}">
         <div class="social-notif-item-head">
-          <b>${escapeHtml(safe.title || tr("\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u0435", "Notification"))}</b>
+          <b>${escapeHtml(socialNotificationDisplayText(safe.title, tr("\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u0435", "Notification")))}</b>
           <small>${escapeHtml(stamp || "-")}</small>
         </div>
-        <p>${escapeHtml(safe.body || tr("\u0411\u0435\u0437 \u0442\u0435\u043a\u0441\u0442\u0430", "No text"))}</p>
+        <p>${escapeHtml(socialNotificationDisplayText(safe.body, tr("\u0411\u0435\u0437 \u0442\u0435\u043a\u0441\u0442\u0430", "No text")))}</p>
       </article>
     `;
   }).join("");
@@ -1249,12 +1394,25 @@ function socialEnsureNotificationCenterLayout(centerNode = null) {
 
 async function socialLoadNotificationCenterRows() {
   const data = await socialRequest(`/api/social/notifications?since_id=0&limit=40`).catch(() => null);
-  const rows = Array.isArray(data?.rows) ? data.rows : [];
-  socialState.notificationRows = rows;
-  const unread = Number(data?.unread || socialState.unreadCount || 0);
-  socialState.unreadCount = Number.isFinite(unread) ? Math.max(0, unread) : 0;
+  const previousRows = Array.isArray(socialState.notificationRows) ? [...socialState.notificationRows] : [];
+  let rows = Array.isArray(data?.rows) ? data.rows : [];
+  if ((!data || typeof data !== "object") && !rows.length && previousRows.length) {
+    rows = previousRows;
+  }
+  socialState.notificationRows = rows.map((row) => {
+    const safe = socialResolveNotificationText(row);
+    return {
+      ...(row && typeof row === "object" ? row : {}),
+      title: socialNotificationDisplayText(safe.title || row?.title || row?.text || row?.message || row?.preview || row?.payload?.title, ""),
+      body: socialNotificationDisplayText(safe.body || row?.body || row?.text || row?.message || row?.preview || row?.payload?.body, ""),
+    };
+  });
+  if (data && typeof data === "object") {
+    const unread = Number(data?.unread || socialState.unreadCount || 0);
+    socialState.unreadCount = Number.isFinite(unread) ? Math.max(0, unread) : 0;
+  }
   socialSetBell(socialState.unreadCount);
-  return rows;
+  return socialState.notificationRows;
 }
 
 async function socialToggleNotificationCenter(forceOpen = null) {
@@ -1348,8 +1506,9 @@ function socialNotifyDesktop(row) {
   if (kindGroup === "chat" && cfg.chat_enabled === false) return;
   if (kindGroup === "task" && cfg.task_enabled === false) return;
   if (kindGroup === "calendar" && cfg.calendar_enabled === false) return;
-  const title = socialDecodeUiText(String(row.title || tr("Уведомление", "Notification")).trim());
-  const body = socialDecodeUiText(String(row.body || "").trim());
+  const safe = typeof socialResolveNotificationText === "function" ? socialResolveNotificationText(row) : {};
+  const title = socialNotificationDisplayText(safe.title || row.title || row.text || row.message || tr("Уведомление", "Notification"), tr("Уведомление", "Notification"));
+  const body = socialNotificationDisplayText(safe.body || row.body || row.text || row.message || "", "");
   if (!title && !body) return;
   try {
     const n = new Notification(title || tr("Уведомление", "Notification"), {
@@ -1384,15 +1543,9 @@ function socialSetBell(unread) {
   const canUse = !modulesLoaded || (enabledModules instanceof Set && enabledModules.has("social_hub"));
   buttons.forEach((btn) => btn.classList.toggle("hidden", !canUse));
   buttons.forEach((btn) => {
-    if (!btn || btn.dataset?.notifBound === "1") return;
-    if (btn.dataset) btn.dataset.notifBound = "1";
-    btn.addEventListener("click", (event) => {
-      if (event?.preventDefault) event.preventDefault();
-      if (event?.stopPropagation) event.stopPropagation();
-      if (event?.stopImmediatePropagation) event.stopImmediatePropagation();
-      socialToggleNotificationCenter().catch(() => null);
-      return false;
-    }, true);
+    if (!btn) return;
+    btn.removeAttribute?.("onclick");
+    try { btn.onclick = null; } catch (_) {}
   });
   if (!canUse) return;
   const value = Math.max(0, Number(unread || 0));
@@ -1402,6 +1555,11 @@ function socialSetBell(unread) {
       badge.textContent = value > 99 ? "99+" : String(value);
     });
   }
+  try {
+    if (typeof window.socialBindBellButtonsNow === "function") {
+      window.socialBindBellButtonsNow();
+    }
+  } catch (_) {}
 }
 
 function socialNowMs() {
@@ -1621,6 +1779,10 @@ function resetSocialState() {
     calendarEvents: [],
     calendarDate: new Date(),
     calendarSelectedDay: "",
+    calendarDaySheetOpen: false,
+    calendarHistoryLayers: [],
+    calendarHistoryBound: false,
+    calendarHistoryClosingAll: false,
     notes: [],
     currentNoteId: 0,
     noteSaveTimer: null,
@@ -1876,12 +2038,24 @@ function socialOpenModal(title, html) {
   const host = document.getElementById("socialModalHost");
   const titleNode = document.getElementById("socialModalTitle");
   if (!modal || !host || !titleNode) return;
-    titleNode.textContent = title || tr("\u0421\u043e\u0446\u0438\u0430\u043b\u044c\u043d\u044b\u0439 \u043c\u043e\u0434\u0443\u043b\u044c", "Social module");
+  titleNode.textContent = title || tr("\u0421\u043e\u0446\u0438\u0430\u043b\u044c\u043d\u044b\u0439 \u043c\u043e\u0434\u0443\u043b\u044c", "Social module");
   host.innerHTML = html || "";
   modal.classList.remove("hidden");
 }
 
 function socialCloseModal(evt = null) {
+  const forced = Boolean(evt && typeof evt === "object" && evt.force === true);
+  if (!forced) {
+    const topLayer = typeof socialCalendarTopHistoryLayer === "function" ? socialCalendarTopHistoryLayer() : null;
+    if (topLayer && typeof socialCalendarIsModalHistoryLayer === "function" && socialCalendarIsModalHistoryLayer(topLayer.layer)) {
+      if (topLayer.layer === "month-picker" && typeof socialCloseCalendarMonthYearPicker === "function") {
+        socialCloseCalendarMonthYearPicker({ reload: false });
+        return;
+      }
+      socialCalendarBackLayer?.();
+      return;
+    }
+  }
   const modal = document.getElementById("socialModal");
   if (!modal) return;
   if (evt && evt.target && evt.target !== modal) return;
@@ -4030,7 +4204,7 @@ function socialOpenMessageContext(messageId, event) {
   const fallbackY = Number(event?.clientY || 0) || Number(rect?.top || 0) + Math.max(18, Math.min(30, Number(rect?.height || 0) * 0.45));
   socialState.chatContextX = fallbackX;
   socialState.chatContextY = fallbackY;
-  const quick = ["??", "??", "??", "??", "??", "?"];
+  const quick = ["👍", "❤️", "😂", "🔥", "👏", "😮"];
   menu.innerHTML = `
     <button type="button" class="social-chat-context-btn" onclick="socialContextReply()">${tr("Ответить", "Reply")}</button>
     <div class="social-chat-context-reactions">
@@ -4118,7 +4292,7 @@ function socialMessageAttachmentsHtml(message) {
     if (isImage) {
       return `<a class="tg-attach tg-attach-image" href="${escapeHtml(url)}" data-image-alt="${escapeHtml(name)}" onclick="return socialOpenImageFromAttachment(event)"><img src="${escapeHtml(url)}" alt="${escapeHtml(name)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" /></a>`;
     }
-    return `<a class="tg-attach tg-attach-file" href="${escapeHtml(url)}" target="_blank" rel="noopener">?? ${escapeHtml(name)}</a>`;
+    return `<a class="tg-attach tg-attach-file" href="${escapeHtml(url)}" target="_blank" rel="noopener">📎 ${escapeHtml(name)}</a>`;
   }).join("");
   if (!body) return "";
   return `<div class="tg-msg-attachments">${body}</div>`;
@@ -5033,14 +5207,56 @@ function socialTaskDueLabel(task) {
 }
 
 function socialTaskAssigneeMeta(task) {
-  const nick = socialDecodeUiText(task?.assignee_nick || "-") || "-";
-  const avatar = String(task?.assignee_avatar_url || "").trim();
+  const nickRaw = task?.assignee_nick
+    || task?.assignee_name
+    || task?.assignee?.nick
+    || task?.assignee?.name
+    || task?.creator_nick
+    || task?.creator_name
+    || task?.creator?.nick
+    || task?.creator?.name
+    || task?.assignee_key
+    || task?.creator_key
+    || "";
+  const nick = socialDecodeUiText(nickRaw || "") || tr("Без исполнителя", "No assignee");
+  const avatar = String(
+    task?.assignee_avatar_url
+    || task?.assignee_avatar
+    || task?.assignee_image
+    || task?.assignee?.avatar_url
+    || task?.assignee?.avatar
+    || task?.assignee?.image
+    || task?.creator_avatar_url
+    || task?.creator_avatar
+    || task?.creator?.avatar_url
+    || task?.creator?.avatar
+    || ""
+  ).trim();
   return `
-    <div class="social-task-assignee">
+    <div class="social-task-assignee" title="${escapeHtml(nick)}">
       <span class="social-task-assignee-avatar">${socialAvatarMarkup(avatar, nick, "xs")}</span>
       <span class="social-task-assignee-name">${escapeHtml(nick)}</span>
     </div>
   `;
+}
+
+function socialTaskIsCompleted(task) {
+  const status = String(task?.status || task?.state || task?.workflow_state || task?.completion_status || "")
+    .trim()
+    .toLowerCase();
+  const bucket = String(task?.bucket || "").trim().toLowerCase();
+  if (["done", "completed", "closed", "complete", "finished", "resolved"].includes(status)) return true;
+  if (["done", "completed", "closed"].includes(bucket)) return true;
+  if (
+    task?.is_done === true
+    || task?.done === true
+    || task?.completed === true
+    || task?.is_completed === true
+    || task?.finished === true
+    || task?.is_finished === true
+    || task?.resolved === true
+  ) return true;
+  return Boolean(task?.completed_at || task?.done_at || task?.closed_at || task?.finished_at || task?.resolved_at);
 }
 
 async function socialLoadTasks(opts = {}) {
@@ -5083,7 +5299,18 @@ async function socialLoadTasks(opts = {}) {
 function socialRenderTasks() {
   const host = document.getElementById("socialTasksBoard");
   if (!host) return;
-  const rows = Array.isArray(socialState.tasks) ? socialState.tasks : [];
+  const rowsAll = Array.isArray(socialState.tasks) ? socialState.tasks : [];
+  const includeDone = Boolean(document.getElementById("socialTaskIncludeDone")?.checked);
+  const rows = includeDone
+    ? rowsAll
+    : rowsAll.filter((task) => {
+        const id = Number(task?.id || 0);
+        if (id > 0 && socialTaskPendingDone.has(id)) return false;
+        if (socialTaskIsCompleted(task)) return false;
+        const bucket = String(task?.bucket || "").trim().toLowerCase();
+        if (bucket === "done" || bucket === "completed" || bucket === "closed") return false;
+        return true;
+      });
   const myActorKey = String(socialState.boot?.actor?.actor_key || "").trim();
   const href = String(window.location?.href || "");
   const path = String(window.location?.pathname || "");
@@ -5117,9 +5344,8 @@ function socialRenderTasks() {
     const items = grouped.get(bucket) || [];
     const itemsHtml = items.map((task) => {
       const id = Number(task?.id || 0);
-      const status = String(task?.status || "todo");
       const pending = socialTaskPendingDone.has(id);
-      const isDone = status === "done" || pending;
+      const isDone = socialTaskIsCompleted(task) || pending;
       const isMine = myActorKey && String(task?.assignee_key || "") === myActorKey;
       const classes = ["social-task-item"];
       if (isMine) classes.push("is-assignee");
@@ -5134,9 +5360,13 @@ function socialRenderTasks() {
               <b class="social-task-title-text">${escapeHtml(socialDecodeUiText(task?.title || "-") || "-")}</b>
               <span class="social-task-kind ${escapeHtml(String(task?.task_kind || "company"))}">${escapeHtml(String(task?.task_kind || "company") === "personal" ? tr("\u041c\u041e\u0418", "MINE") : tr("\u041f\u0420\u041e\u0415\u041a\u0422", "PROJECT"))}</span>
             </div>
-            <div class="social-task-subline">
-              <span>${socialTaskDueLabel(task)}</span>
-              ${socialTaskAssigneeMeta(task)}
+            <div class="social-task-meta-stack">
+              <div class="social-task-subline">
+                <span>${socialTaskDueLabel(task)}</span>
+              </div>
+              <div class="social-task-assignee-line">
+                ${socialTaskAssigneeMeta(task)}
+              </div>
             </div>
             ${pendingHint}
           </div>
@@ -5157,6 +5387,12 @@ function socialRenderTasks() {
   }).join("");
 
   host.innerHTML = `<div class="social-task-board-v2">${html}</div>`;
+  host.querySelectorAll(".social-task-check.is-done").forEach((btn) => {
+    btn.innerHTML = "&#10003;";
+  });
+  host.querySelectorAll(".social-task-delete").forEach((btn) => {
+    btn.innerHTML = "&times;";
+  });
   host.querySelectorAll(".social-task-check").forEach((btn) => {
     if (!btn.classList.contains("is-done")) {
       btn.textContent = "";
@@ -5175,7 +5411,60 @@ function socialRenderTasks() {
       btn.setAttribute("title", tr("\u0423\u0434\u0430\u043b\u0438\u0442\u044c", "Delete"));
     }
   });
+  host.querySelectorAll(".social-task-check.is-done").forEach((btn) => {
+    btn.innerHTML = "&#10003;";
+  });
+  host.querySelectorAll(".social-task-delete").forEach((btn) => {
+    btn.innerHTML = "&times;";
+  });
+  host.querySelectorAll(".social-task-check").forEach((btn) => {
+    btn.setAttribute("title", tr("Отметить выполненной", "Mark done"));
+    btn.textContent = btn.classList.contains("is-done") ? "✓" : "";
+  });
+  host.querySelectorAll(".social-task-delete").forEach((btn) => {
+    btn.setAttribute("title", tr("Удалить", "Delete"));
+    btn.textContent = "✕";
+  });
+  host.querySelectorAll(".social-task-pending").forEach((node) => {
+    node.textContent = tr("5с: повторный клик отменит", "5s: click again to undo");
+  });
+  host.querySelectorAll(".social-task-assignee-name").forEach((node) => {
+    if (!String(node.textContent || "").trim()) {
+      node.textContent = tr("Без исполнителя", "No assignee");
+    }
+  });
 }
+
+function socialNormalizeTaskCardsAfterRender(hostNode = null) {
+  const host = hostNode || document.getElementById("socialTasksBoard");
+  if (!host) return;
+  host.querySelectorAll(".social-task-check").forEach((btn) => {
+    const done = btn.classList.contains("is-done");
+    btn.innerHTML = done ? "&#10003;" : "";
+    btn.setAttribute("title", tr("\u041e\u0442\u043c\u0435\u0442\u0438\u0442\u044c \u0432\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u043d\u043e\u0439", "Mark done"));
+    btn.setAttribute("aria-label", tr("\u041e\u0442\u043c\u0435\u0442\u0438\u0442\u044c \u0432\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u043d\u043e\u0439", "Mark done"));
+  });
+  host.querySelectorAll(".social-task-delete").forEach((btn) => {
+    btn.innerHTML = "&times;";
+    btn.setAttribute("title", tr("\u0423\u0434\u0430\u043b\u0438\u0442\u044c", "Delete"));
+    btn.setAttribute("aria-label", tr("\u0423\u0434\u0430\u043b\u0438\u0442\u044c", "Delete"));
+  });
+  host.querySelectorAll(".social-task-pending").forEach((node) => {
+    node.textContent = tr("\u0415\u0449\u0451 5 \u0441\u0435\u043a.: \u043d\u0430\u0436\u043c\u0438\u0442\u0435 \u0441\u043d\u043e\u0432\u0430, \u0447\u0442\u043e\u0431\u044b \u043e\u0442\u043c\u0435\u043d\u0438\u0442\u044c", "5 sec left: tap again to undo");
+  });
+  host.querySelectorAll(".social-task-assignee-name").forEach((node) => {
+    if (!String(node.textContent || "").trim()) {
+      node.textContent = tr("\u0411\u0435\u0437 \u0438\u0441\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044f", "No assignee");
+    }
+  });
+}
+
+const socialRenderTasksBaseV20260328 = socialRenderTasks;
+socialRenderTasks = function socialRenderTasksPatchedV20260328() {
+  const result = socialRenderTasksBaseV20260328.apply(this, arguments);
+  socialNormalizeTaskCardsAfterRender(document.getElementById("socialTasksBoard"));
+  return result;
+};
 
 function socialTaskDragStart(event, taskId) {
   if (socialIsAppShellLike()) {
@@ -5356,6 +5645,22 @@ async function socialOpenProjectMembersModal() {
       </div>
     `
   );
+  return;
+  const modalTitle = document.getElementById("socialModalTitle");
+  if (modalTitle) {
+    modalTitle.textContent = tr("Выбрать месяц и год", "Select month and year");
+  }
+  const pickerLabels = document.querySelectorAll(".social-calendar-month-year-modal label > span");
+  if (pickerLabels[0]) pickerLabels[0].textContent = tr("Месяц", "Month");
+  if (pickerLabels[1]) pickerLabels[1].textContent = tr("Год", "Year");
+  const pickerButtons = document.querySelectorAll(".social-calendar-month-year-modal .actions button");
+  if (modalTitle) modalTitle.textContent = calendarPickerTitleText;
+  if (pickerLabels[0]) pickerLabels[0].textContent = calendarPickerMonthText;
+  if (pickerLabels[1]) pickerLabels[1].textContent = calendarPickerYearText;
+  if (pickerButtons[0]) pickerButtons[0].textContent = calendarPickerCancelText;
+  if (pickerButtons[1]) pickerButtons[1].textContent = calendarPickerApplyText;
+  if (pickerButtons[0]) pickerButtons[0].textContent = tr("Отмена", "Cancel");
+  if (pickerButtons[1]) pickerButtons[1].textContent = tr("Применить", "Apply");
 }
 
 async function socialSaveProjectMembers(projectId) {
@@ -5800,6 +6105,318 @@ function socialCalendarSetMonthYear(year, monthIndex) {
   }
 }
 
+function socialHideCalendarLegacyDetails() {
+  const root = document.getElementById("socialSubtabCalendar");
+  [
+    "#socialCalendarEvents",
+    "#socialCalendarEventsLegacy",
+    ".social-calendar-events",
+    ".social-calendar-selected",
+    ".social-calendar-selected-day",
+    ".social-calendar-day-header",
+    ".social-calendar-day-details",
+    ".social-calendar-day-list",
+    ".social-calendar-records",
+    ".social-calendar-summary",
+    ".social-calendar-selected-wrap",
+    ".social-calendar-selected-panel",
+    ".social-calendar-day-panel",
+    ".social-calendar-day-cards",
+    ".social-calendar-day-entries",
+    ".social-calendar-bottom",
+    ".social-calendar-lower",
+    "[data-calendar-detail]",
+    "[data-selected-day]",
+  ].forEach((selector) => {
+    const nodes = root ? root.querySelectorAll(selector) : document.querySelectorAll(selector);
+    nodes.forEach((node) => {
+      if (!node) return;
+      node.innerHTML = "";
+      node.hidden = true;
+      node.style.setProperty("display", "none", "important");
+      node.style.setProperty("max-height", "0", "important");
+      node.style.setProperty("min-height", "0", "important");
+      node.style.setProperty("overflow", "hidden", "important");
+      node.style.setProperty("margin", "0", "important");
+      node.style.setProperty("padding", "0", "important");
+      node.style.setProperty("border", "0", "important");
+      node.style.setProperty("box-shadow", "none", "important");
+    });
+  });
+  if (root) {
+    const board = root.querySelector(".social-calendar-board");
+    const main = root.querySelector(".social-calendar-main");
+    [board, main].forEach((container) => {
+      if (!container) return;
+      Array.from(container.children || []).forEach((child) => {
+        if (!child) return;
+        if (container === board && child.classList?.contains("social-calendar-main")) return;
+        if (container === main && child.id === "socialCalendarGrid") return;
+        child.innerHTML = "";
+        child.hidden = true;
+        child.style.setProperty("display", "none", "important");
+      });
+    });
+    root.querySelectorAll("#socialCalendarEvents, #socialCalendarEventsLegacy").forEach((node) => {
+      if (!node) return;
+      try {
+        node.remove();
+      } catch (_) {
+        node.innerHTML = "";
+        node.hidden = true;
+      }
+    });
+  }
+}
+
+function socialCalendarEnsureHistoryState() {
+  if (!Array.isArray(socialState.calendarHistoryLayers)) {
+    socialState.calendarHistoryLayers = [];
+  }
+  return socialState.calendarHistoryLayers;
+}
+
+function socialCalendarTopHistoryLayer() {
+  const stack = socialCalendarEnsureHistoryState();
+  return stack.length ? stack[stack.length - 1] : null;
+}
+
+function socialCalendarIsModalHistoryLayer(layer) {
+  return ["detail", "event-edit", "month-picker", "quick-add"].includes(String(layer || "").trim());
+}
+
+function socialCalendarEnsureHistoryBinding() {
+  if (socialState.calendarHistoryBound || typeof window === "undefined") return;
+  socialState.calendarHistoryBound = true;
+  window.addEventListener("popstate", () => {
+    const stack = socialCalendarEnsureHistoryState();
+    const keepCalendarVisible = Boolean(
+      socialState.calendarGestureStackActive
+      || stack.length
+      || socialState.calendarDaySheetOpen
+      || !document.getElementById("socialModal")?.classList?.contains?.("hidden")
+    );
+    if (socialState.calendarHistoryClosingAll) {
+      if (stack.length) stack.pop();
+      socialCloseModal({ force: true });
+      socialHideCalendarDaySheet(true);
+      if (!stack.length) {
+        socialState.calendarHistoryClosingAll = false;
+      }
+      if (keepCalendarVisible && typeof switchSocialSubtab === "function") {
+        try { switchSocialSubtab("calendar", false); } catch (_) {}
+      }
+      return;
+    }
+    if (!stack.length) {
+      if (keepCalendarVisible && typeof switchSocialSubtab === "function") {
+        try { switchSocialSubtab("calendar", false); } catch (_) {}
+      }
+      socialCloseModal({ force: true });
+      socialHideCalendarDaySheet(true);
+      socialState.calendarGestureStackActive = false;
+      return;
+    }
+    stack.pop();
+    if (keepCalendarVisible && typeof switchSocialSubtab === "function") {
+      try { switchSocialSubtab("calendar", false); } catch (_) {}
+    }
+    socialCalendarRestoreHistoryLayer(stack.length ? stack[stack.length - 1] : null);
+    socialState.calendarGestureStackActive = stack.length > 0;
+  });
+}
+
+function socialCalendarPushHistoryLayer(layer, payload = {}, options = {}) {
+  const safeLayer = String(layer || "").trim();
+  if (!safeLayer) return;
+  socialCalendarEnsureHistoryBinding();
+  const stack = socialCalendarEnsureHistoryState();
+  const entry = {
+    layer: safeLayer,
+    payload: payload && typeof payload === "object" ? { ...payload } : {},
+  };
+  const top = stack.length ? stack[stack.length - 1] : null;
+  const sameEntry = top
+    && top.layer === entry.layer
+    && JSON.stringify(top.payload || {}) === JSON.stringify(entry.payload || {});
+  if (sameEntry) return;
+  const replaceTop = Boolean(options.replaceTop) || (safeLayer === "day" && top?.layer === "day");
+  if (replaceTop && stack.length) {
+    stack[stack.length - 1] = entry;
+    try {
+      window.history?.replaceState?.({ ...(window.history.state || {}), socialCalendarLayer: entry }, "", window.location.href);
+    } catch (_) {}
+    return;
+  }
+  stack.push(entry);
+  socialState.calendarGestureStackActive = true;
+  try {
+    window.history?.pushState?.({ ...(window.history.state || {}), socialCalendarLayer: entry }, "", window.location.href);
+  } catch (_) {}
+}
+
+function socialCalendarRestoreHistoryLayer(entry) {
+  socialCloseModal({ force: true });
+  const calendarPickerTitleText = tr("Выбрать месяц и год", "Select month and year");
+  const calendarPickerMonthText = tr("Месяц", "Month");
+  const calendarPickerYearText = tr("Год", "Year");
+  const calendarPickerCancelText = tr("Отмена", "Cancel");
+  const calendarPickerApplyText = tr("Применить", "Apply");
+  socialHideCalendarDaySheet(true);
+  if (!entry || typeof entry !== "object") {
+    socialHideCalendarLegacyDetails();
+    try {
+      socialRenderCalendar();
+      socialBindCalendarSwipe();
+    } catch (_) {}
+    return;
+  }
+  const payload = entry.payload && typeof entry.payload === "object" ? entry.payload : {};
+  if (entry.layer === "day") {
+    socialShowDay(String(payload.dayKey || socialState.calendarSelectedDay || "").trim(), { skipHistory: true });
+    return;
+  }
+  if (entry.layer === "detail") {
+    socialOpenCalendarRecordDetail(payload.kind, Number(payload.id || 0), {
+      dayKey: payload.dayKey,
+      skipHistory: true,
+    });
+    return;
+  }
+  if (entry.layer === "event-edit") {
+    socialOpenCalendarModal(Number(payload.eventId || 0), {
+      dayKey: payload.dayKey,
+      returnKind: payload.kind || "event",
+      returnId: Number(payload.recordId || 0),
+      skipHistory: true,
+    });
+    return;
+  }
+  if (entry.layer === "month-picker") {
+    socialOpenCalendarMonthYearPicker({ skipHistory: true });
+    return;
+  }
+  if (entry.layer === "quick-add") {
+    socialOpenCalendarQuickAddMenu({ skipHistory: true });
+  }
+}
+
+function socialCalendarBackLayer() {
+  const stack = socialCalendarEnsureHistoryState();
+  const topLayer = stack.length ? stack[stack.length - 1] : null;
+  if (!stack.length) {
+    socialCloseModal({ force: true });
+    socialHideCalendarDaySheet(true);
+    socialState.calendarGestureStackActive = false;
+    return;
+  }
+  if (topLayer?.layer === "month-picker") {
+    socialCloseCalendarMonthYearPicker({ reload: false });
+    return;
+  }
+  const isAppShellLike = Boolean(
+    socialIsAppShellLike?.()
+    || socialIsMobileClientShell?.()
+    || socialIsMobileApkShell?.()
+    || document.body?.classList?.contains("mobile-client-mode")
+    || document.body?.classList?.contains("mobile-apk-mode")
+    || String(window.location?.pathname || "").trim() === "/mobile"
+  );
+  if (isAppShellLike) {
+    stack.pop();
+    socialCalendarRestoreHistoryLayer(stack.length ? stack[stack.length - 1] : null);
+    socialState.calendarGestureStackActive = stack.length > 0;
+    return;
+  }
+  try {
+    window.history?.back?.();
+    return;
+  } catch (_) {}
+  stack.pop();
+  socialCalendarRestoreHistoryLayer(stack.length ? stack[stack.length - 1] : null);
+  socialState.calendarGestureStackActive = stack.length > 0;
+}
+
+function socialCalendarCollapseHistoryToRoot() {
+  const stack = socialCalendarEnsureHistoryState();
+  if (!stack.length) {
+    socialCloseModal({ force: true });
+    socialHideCalendarDaySheet(true);
+    return;
+  }
+  socialState.calendarHistoryClosingAll = true;
+  try {
+    window.history?.go?.(-stack.length);
+    return;
+  } catch (_) {}
+  stack.splice(0, stack.length);
+  socialState.calendarHistoryClosingAll = false;
+  socialCloseModal({ force: true });
+  socialHideCalendarDaySheet(true);
+}
+
+function socialSetCalendarDaySheetOpen(open) {
+  socialState.calendarDaySheetOpen = Boolean(open);
+}
+
+function socialForceOpenCalendarDaySheet(dayKey) {
+  const safeDayKey = String(dayKey || "").trim();
+  if (!safeDayKey) return;
+  socialSetCalendarDaySheetOpen(true);
+  socialHideCalendarLegacyDetails();
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(() => {
+      socialOpenCalendarDaySheet(safeDayKey);
+      requestAnimationFrame(() => socialOpenCalendarDaySheet(safeDayKey));
+    });
+    return;
+  }
+  socialOpenCalendarDaySheet(safeDayKey);
+}
+
+function socialEnsureCalendarDaySheetNodes() {
+  if (typeof document === "undefined" || !document.body) return {};
+  let backdrop = document.getElementById("socialCalendarDaySheetBackdrop");
+  let sheet = document.getElementById("socialCalendarDaySheet");
+  if (!backdrop) {
+    backdrop = document.createElement("div");
+    backdrop.id = "socialCalendarDaySheetBackdrop";
+    backdrop.className = "social-calendar-day-sheet-backdrop hidden";
+    backdrop.onclick = () => socialHideCalendarDaySheet();
+    document.body.appendChild(backdrop);
+  }
+  if (!sheet) {
+    sheet = document.createElement("section");
+    sheet.id = "socialCalendarDaySheet";
+    sheet.className = "social-calendar-day-sheet hidden";
+    sheet.setAttribute("aria-hidden", "true");
+    document.body.appendChild(sheet);
+  }
+  return { backdrop, sheet };
+}
+
+function socialHideCalendarDaySheet(force = false) {
+  const forced = Boolean(force === true || (force && typeof force === "object" && force.force === true));
+  if (!forced) {
+    const topLayer = socialCalendarTopHistoryLayer();
+    if (topLayer?.layer === "day") {
+      socialCalendarBackLayer();
+      return;
+    }
+  }
+  const backdrop = document.getElementById("socialCalendarDaySheetBackdrop");
+  const sheet = document.getElementById("socialCalendarDaySheet");
+  socialSetCalendarDaySheetOpen(false);
+  if (sheet) {
+    sheet.classList.add("hidden");
+    sheet.setAttribute("aria-hidden", "true");
+  }
+  if (backdrop) backdrop.classList.add("hidden");
+  if (!socialCalendarEnsureHistoryState().length && document.getElementById("socialModal")?.classList?.contains("hidden")) {
+    socialState.calendarGestureStackActive = false;
+  }
+}
+
 function socialSyncCalendarMonthYearInputs() {
   const monthSelect = document.getElementById("socialCalendarMonthSelect");
   const yearSelect = document.getElementById("socialCalendarYearSelect");
@@ -5846,6 +6463,56 @@ function socialSyncCalendarMonthYearInputs() {
   }
 }
 
+function socialRestoreCalendarAfterMonthPicker(options = {}) {
+  const opts = options && typeof options === "object" ? options : {};
+  const reload = Boolean(opts.reload);
+  socialHideCalendarLegacyDetails();
+  socialNormalizeCalendarChrome();
+  socialSyncCalendarMonthYearInputs();
+  const finalize = () => {
+    const dayCount = document.querySelectorAll("#socialCalendarGrid .social-day[data-day-key]").length;
+    if (!dayCount && !opts.__retry && typeof window.socialLoadCalendar === "function") {
+      Promise.resolve(window.socialLoadCalendar({ preserveSelection: true, silent: false })).catch(() => null).finally(() => {
+        setTimeout(() => socialRestoreCalendarAfterMonthPicker({
+          ...opts,
+          reload: false,
+          __retry: true,
+        }), 0);
+      });
+      return;
+    }
+    if (!dayCount && typeof window.socialRenderCalendar === "function") {
+      socialRenderCalendar();
+    }
+    socialBindCalendarDayOverlay();
+    socialBindCalendarSwipe();
+    socialHideCalendarLegacyDetails();
+  };
+  if (reload) {
+    const result = socialLoadCalendar();
+    Promise.resolve(result).catch(() => null).finally(() => {
+      setTimeout(finalize, 0);
+    });
+    return result;
+  }
+  setTimeout(finalize, 0);
+  return true;
+}
+
+function socialCloseCalendarMonthYearPicker(options = {}) {
+  const stack = socialCalendarEnsureHistoryState();
+  const topLayer = stack.length ? stack[stack.length - 1] : null;
+  if (topLayer?.layer === "month-picker") {
+    stack.pop();
+  }
+  socialState.calendarGestureStackActive = stack.length > 0;
+  socialState.calendarMonthPickerOpen = false;
+  socialState.calendarDaySheetOpen = false;
+  socialCloseModal({ force: true });
+  socialHideCalendarDaySheet(true);
+  return socialRestoreCalendarAfterMonthPicker(options);
+}
+
 function socialApplyCalendarMonthYearPicker() {
   const monthNode = document.getElementById("socialCalendarPickerMonth");
   const yearNode = document.getElementById("socialCalendarPickerYear");
@@ -5853,11 +6520,11 @@ function socialApplyCalendarMonthYearPicker() {
   const year = Number(yearNode?.value || 0);
   if (!Number.isFinite(month) || !Number.isFinite(year)) return;
   socialCalendarSetMonthYear(year, month);
-  socialCloseModal?.();
-  socialLoadCalendar();
+  socialCloseCalendarMonthYearPicker({ reload: true });
 }
 
-function socialOpenCalendarMonthYearPicker() {
+function socialOpenCalendarMonthYearPicker(options = {}) {
+  const opts = options && typeof options === "object" ? options : {};
   const base = socialState.calendarDate instanceof Date && !Number.isNaN(socialState.calendarDate.getTime())
     ? socialState.calendarDate
     : new Date();
@@ -5871,6 +6538,12 @@ function socialOpenCalendarMonthYearPicker() {
     const year = currentYear - 8 + index;
     return `<option value="${year}" ${year === currentYear ? "selected" : ""}>${year}</option>`;
   }).join("");
+  if (!opts.skipHistory) {
+    socialCalendarPushHistoryLayer("month-picker", {
+      dayKey: String(socialState.calendarSelectedDay || "").trim(),
+    });
+  }
+  socialHideCalendarDaySheet(true);
   socialOpenModal(
     tr("Выбрать месяц и год", "Select month and year"),
     `
@@ -5884,12 +6557,22 @@ function socialOpenCalendarMonthYearPicker() {
           <select id="socialCalendarPickerYear">${yearsHtml}</select>
         </label>
         <div class="actions">
-          <button type="button" class="btn-secondary" onclick="socialCloseModal()">${escapeHtml(tr("Отмена", "Cancel"))}</button>
+          <button type="button" class="btn-secondary" onclick="socialCloseCalendarMonthYearPicker({ reload: false })">${escapeHtml(tr("Отмена", "Cancel"))}</button>
           <button type="button" onclick="socialApplyCalendarMonthYearPicker()">${escapeHtml(tr("Применить", "Apply"))}</button>
         </div>
       </div>
     `
   );
+  const modalTitle = document.getElementById("socialModalTitle");
+  if (modalTitle) {
+    modalTitle.textContent = tr("Выбрать месяц и год", "Select month and year");
+  }
+  const pickerLabels = document.querySelectorAll(".social-calendar-month-year-modal label > span");
+  if (pickerLabels[0]) pickerLabels[0].textContent = tr("Месяц", "Month");
+  if (pickerLabels[1]) pickerLabels[1].textContent = tr("Год", "Year");
+  const pickerButtons = document.querySelectorAll(".social-calendar-month-year-modal .actions button");
+  if (pickerButtons[0]) pickerButtons[0].textContent = tr("Отмена", "Cancel");
+  if (pickerButtons[1]) pickerButtons[1].textContent = tr("Применить", "Apply");
 }
 
 function socialBindCalendarSwipe() {
@@ -5951,6 +6634,24 @@ function socialBindCalendarSwipe() {
   }, { passive: true });
 }
 
+function socialBindCalendarDayOverlay() {
+  const grid = document.getElementById("socialCalendarGrid");
+  if (!grid || grid.dataset.dayOverlayBound === "1") return;
+  grid.dataset.dayOverlayBound = "1";
+  grid.addEventListener("click", (event) => {
+    const dayNode = event.target?.closest?.(".social-day[data-day-key]");
+    if (!dayNode) return;
+    const dayKey = String(dayNode.getAttribute("data-day-key") || "").trim();
+    if (!dayKey) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (typeof event.stopImmediatePropagation === "function") {
+      event.stopImmediatePropagation();
+    }
+    socialShowDay(dayKey);
+  }, true);
+}
+
 function socialEnsureCalendarNavigation() {
   const root = document.getElementById("socialSubtabCalendar");
   if (!root) return;
@@ -6009,10 +6710,12 @@ function socialEnsureCalendarNavigation() {
   if (monthLabel && monthLabel.dataset.boundPicker !== "1") {
     monthLabel.dataset.boundPicker = "1";
     monthLabel.style.cursor = "pointer";
+    try { monthLabel.setAttribute("title", tr("Выбрать месяц и год", "Select month and year")); } catch (_) {}
     monthLabel.setAttribute("title", tr("Выбрать месяц и год", "Select month and year"));
     monthLabel.addEventListener("click", () => {
       socialOpenCalendarMonthYearPicker();
     });
+    monthLabel.setAttribute("title", tr("Выбрать месяц и год", "Select month and year"));
   }
   socialSyncCalendarMonthYearInputs();
 }
@@ -6020,6 +6723,7 @@ function socialEnsureCalendarNavigation() {
 function socialNormalizeCalendarChrome() {
   const root = document.getElementById("socialSubtabCalendar");
   if (!root) return;
+  root.dataset.calendarSheetMode = socialUseCalendarSheetMode() ? "1" : "0";
   root.classList.add("sw-calendar-samsung");
   const shell = root.querySelector(".social-calendar-shell") || root.querySelector(".panel") || root;
   let hero = shell.querySelector(".social-calendar-hero");
@@ -6097,16 +6801,8 @@ function socialNormalizeCalendarChrome() {
     shell.appendChild(grid);
   }
   grid.style.setProperty("display", "block", "important");
-  let events = document.getElementById("socialCalendarEvents");
-  if (!events) {
-    events = document.createElement("div");
-    events.id = "socialCalendarEvents";
-    events.className = "social-calendar-events";
-    shell.appendChild(events);
-  } else if (events.parentElement !== shell) {
-    shell.appendChild(events);
-  }
-  events.style.setProperty("display", "block", "important");
+  socialHideCalendarLegacyDetails();
+  socialEnsureCalendarDaySheetNodes();
 }
 
 function socialRenderCalendar() {
@@ -6115,9 +6811,8 @@ function socialRenderCalendar() {
   socialSyncCalendarMonthYearInputs();
   socialEnsureCalendarFab();
   const grid = document.getElementById("socialCalendarGrid");
-  const list = document.getElementById("socialCalendarEvents");
   const monthLabel = document.getElementById("socialCalendarMonthLabel");
-  if (!grid || !list) return;
+  if (!grid) return;
   const d = socialState.calendarDate;
   const todayKey = socialCalendarDayKey(new Date());
   const year = d.getFullYear();
@@ -6168,7 +6863,7 @@ function socialRenderCalendar() {
       previewRows.push({
         kind: "event",
         title: String(safeTitle || "").trim(),
-        color: String(eventRow?.color || "#b8d2ff").trim() || "#b8d2ff",
+        color: String(eventRow?.color || "#8fb8ff").trim() || "#8fb8ff",
       });
     });
     (tasksByDay.get(key) || []).forEach((taskRow) => {
@@ -6177,7 +6872,7 @@ function socialRenderCalendar() {
       previewRows.push({
         kind: "task",
         title: String(safeTitle || "").trim(),
-        color: ownTask ? "#a9dfb8" : "#c9dcff",
+        color: ownTask ? "#89d3a5" : "#e0b0ff",
       });
     });
     const chips = previewRows.slice(0, 3).map((item) => {
@@ -6196,8 +6891,131 @@ function socialRenderCalendar() {
     : "";
   const fallback = todayFallback || `${year}-${socialCalendarPad(month + 1)}-01`;
   const inMonth = String(socialState.calendarSelectedDay || "").startsWith(`${year}-${socialCalendarPad(month + 1)}-`);
-  socialShowDay(inMonth ? socialState.calendarSelectedDay : fallback);
+  const selectedKey = inMonth ? socialState.calendarSelectedDay : fallback;
+  socialState.calendarSelectedDay = selectedKey;
+  try {
+    document.querySelector(`#socialCalendarGrid .social-day[data-day-key="${CSS.escape(String(selectedKey || ""))}"]`)?.classList?.add("active");
+  } catch (_) {}
+  socialHideCalendarLegacyDetails();
+  if (socialState.calendarDaySheetOpen && selectedKey) {
+    socialForceOpenCalendarDaySheet(selectedKey);
+  } else {
+    socialHideCalendarDaySheet();
+  }
+  socialBindCalendarDayOverlay();
   socialBindCalendarSwipe();
+}
+
+function socialCalendarCollectDayEntries(dayKey) {
+  const events = (socialState.calendarEvents || [])
+    .filter((eventRow) => socialCalendarDayKey(socialCalendarResolveEventStart(eventRow)) === dayKey)
+    .sort((a, b) => {
+      const left = socialCalendarParseDate(socialCalendarResolveEventStart(a))?.getTime() || 0;
+      const right = socialCalendarParseDate(socialCalendarResolveEventStart(b))?.getTime() || 0;
+      return left - right;
+    });
+  const tasks = (socialState.tasks || [])
+    .filter((task) => socialCalendarDayKey(socialCalendarResolveTaskDue(task)) === dayKey)
+    .sort((a, b) => {
+      const left = socialCalendarParseDate(socialCalendarResolveTaskDue(a))?.getTime() || 0;
+      const right = socialCalendarParseDate(socialCalendarResolveTaskDue(b))?.getTime() || 0;
+      return left - right;
+    });
+  return { events, tasks };
+}
+
+function socialOpenCalendarDaySheet(dayKey) {
+  const safeDayKey = String(dayKey || "").trim();
+  if (!safeDayKey) return;
+  socialSetCalendarDaySheetOpen(true);
+  const { backdrop, sheet } = socialEnsureCalendarDaySheetNodes();
+  if (!backdrop || !sheet) return;
+  socialHideCalendarLegacyDetails();
+  const { events, tasks } = socialCalendarCollectDayEntries(safeDayKey);
+  const parsedDay = socialCalendarParseDate(`${safeDayKey}T12:00:00`);
+  const dayNumber = parsedDay instanceof Date && !Number.isNaN(parsedDay.getTime())
+    ? String(parsedDay.getDate())
+    : safeDayKey.slice(-2).replace(/^0/, "");
+  const weekdayLabel = parsedDay instanceof Date && !Number.isNaN(parsedDay.getTime())
+    ? parsedDay.toLocaleDateString(currentLang === "en" ? "en-US" : "ru-RU", { weekday: "long" })
+    : socialCalendarDayLabel(safeDayKey);
+  const shortDateLabel = parsedDay instanceof Date && !Number.isNaN(parsedDay.getTime())
+    ? parsedDay.toLocaleDateString(currentLang === "en" ? "en-US" : "ru-RU", { day: "numeric", month: "short" })
+    : socialCalendarDayLabel(safeDayKey);
+  const cards = [];
+  events.forEach((eventRow) => {
+    const eventId = Number(eventRow?.id || 0);
+    if (!eventId) return;
+    const eventTitle = socialDecodeUiText(socialCalendarResolveEventTitle(eventRow) || "") || tr("\u0421\u043e\u0431\u044b\u0442\u0438\u0435", "Event");
+    const startAt = socialCalendarResolveEventStart(eventRow);
+    const endAt = socialCalendarResolveEventEnd(eventRow);
+    const timeLabel = startAt
+      ? `${socialCalendarTimeLabel(startAt)}${endAt ? ` - ${socialCalendarTimeLabel(endAt)}` : ""}`
+      : tr("\u0412\u0435\u0441\u044c \u0434\u0435\u043d\u044c", "All day");
+    const color = String(eventRow?.color || "#8fb8ff").trim() || "#8fb8ff";
+    cards.push(`
+      <button type="button" class="sw-day-item is-event" style="--sw-sheet-color:${escapeHtml(color)}" onclick="socialOpenCalendarRecordDetail('event', ${eventId}, { dayKey: '${safeDayKey}' })">
+        <span class="sw-calendar-sheet-badge">${escapeHtml(tr("\u0421\u043e\u0431\u044b\u0442\u0438\u0435", "Event"))}</span>
+        <b>${escapeHtml(eventTitle)}</b>
+        <small>${escapeHtml(timeLabel)}</small>
+      </button>
+    `);
+  });
+  tasks.forEach((taskRow) => {
+    const taskId = Number(taskRow?.id || 0);
+    if (!taskId) return;
+    const title = socialDecodeUiText(socialCalendarResolveTaskTitle(taskRow) || "") || tr("\u0417\u0430\u0434\u0430\u0447\u0430", "Task");
+    const dueAt = socialCalendarResolveTaskDue(taskRow);
+    const timeLabel = dueAt ? socialCalendarTimeLabel(dueAt) : tr("\u0411\u0435\u0437 \u0441\u0440\u043e\u043a\u0430", "No due date");
+    const ownTask = String(taskRow?.task_kind || "company") === "personal";
+    const color = ownTask ? "#89d3a5" : "#e0b0ff";
+    cards.push(`
+      <button type="button" class="sw-day-item is-task" style="--sw-sheet-color:${escapeHtml(color)}" onclick="socialOpenCalendarRecordDetail('task', ${taskId}, { dayKey: '${safeDayKey}' })">
+        <span class="sw-calendar-sheet-badge">${escapeHtml(tr("\u0417\u0430\u0434\u0430\u0447\u0430", "Task"))}</span>
+        <b>${escapeHtml(title)}</b>
+        <small>${escapeHtml(timeLabel)}</small>
+      </button>
+    `);
+  });
+  sheet.innerHTML = `
+    <section class="sw-day-sheet-card">
+      <div class="sw-day-sheet-head">
+        <div class="sw-day-sheet-title-block">
+          <h4><span class="sw-day-sheet-daynum">${escapeHtml(dayNumber)}</span> ${escapeHtml(weekdayLabel)}</h4>
+          <small>${escapeHtml(shortDateLabel)}</small>
+        </div>
+        <button type="button" class="btn-secondary sw-day-sheet-close" aria-label="${escapeHtml(tr("Закрыть", "Close"))}" title="${escapeHtml(tr("Закрыть", "Close"))}" onclick="socialHideCalendarDaySheet()">×</button>
+      </div>
+      <div class="sw-day-sheet-list">
+        ${cards.join("") || `<div class="hint">${escapeHtml(tr("\u041d\u0430 \u044d\u0442\u043e\u0442 \u0434\u0435\u043d\u044c \u0437\u0430\u043f\u0438\u0441\u0435\u0439 \u043d\u0435\u0442.", "No records for this day."))}</div>`}
+      </div>
+      <div class="sw-day-sheet-foot">
+        <button type="button" class="sw-day-sheet-add" onclick="socialOpenCalendarQuickAddMenu()">${escapeHtml(tr(`Добавить на ${shortDateLabel}`, `Add on ${shortDateLabel}`))}</button>
+        <button type="button" class="social-calendar-fab social-calendar-fab-mini" aria-label="${escapeHtml(tr("Добавить", "Add"))}" title="${escapeHtml(tr("Добавить", "Add"))}" onclick="socialOpenCalendarQuickAddMenu()">+</button>
+      </div>
+    </section>
+  `;
+  const closeBtn = sheet.querySelector(".sw-day-sheet-close");
+  if (closeBtn) {
+    closeBtn.textContent = "×";
+    closeBtn.setAttribute("aria-label", tr("Закрыть", "Close"));
+    closeBtn.setAttribute("title", tr("Закрыть", "Close"));
+  }
+  const addBtn = sheet.querySelector(".sw-day-sheet-add");
+  if (addBtn) {
+    addBtn.textContent = tr(`Добавить на ${shortDateLabel}`, `Add on ${shortDateLabel}`);
+    addBtn.setAttribute("onclick", "socialOpenCalendarQuickAddMenu()");
+  }
+  const fabMini = sheet.querySelector(".social-calendar-fab-mini");
+  if (fabMini) {
+    fabMini.textContent = "+";
+    fabMini.setAttribute("aria-label", tr("Добавить", "Add"));
+    fabMini.setAttribute("title", tr("Добавить", "Add"));
+    fabMini.setAttribute("onclick", "socialOpenCalendarQuickAddMenu()");
+  }
+  backdrop.classList.remove("hidden");
+  sheet.classList.remove("hidden");
+  sheet.setAttribute("aria-hidden", "false");
 }
 
 function socialEnsureCalendarFab() {
@@ -6219,7 +7037,14 @@ function socialEnsureCalendarFab() {
   fab.onclick = () => socialOpenCalendarQuickAddMenu();
 }
 
-function socialOpenCalendarQuickAddMenu() {
+function socialOpenCalendarQuickAddMenu(options = {}) {
+  const opts = options && typeof options === "object" ? options : {};
+  if (!opts.skipHistory) {
+    socialCalendarPushHistoryLayer("quick-add", {
+      dayKey: String(socialState.calendarSelectedDay || "").trim(),
+    });
+  }
+  socialHideCalendarDaySheet(true);
   socialOpenModal(
     tr("\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c", "Add"),
     `
@@ -6235,7 +7060,7 @@ function socialOpenCalendarQuickAddMenu() {
 function socialCalendarQuickCreate(kind) {
   const mode = String(kind || "event").trim().toLowerCase();
   const selectedDay = String(socialState.calendarSelectedDay || "").trim();
-  socialCloseModal?.();
+  socialCloseModal({ force: true });
   if (mode === "task") {
     if (typeof switchSocialSubtab === "function") switchSocialSubtab("tasks", true);
     setTimeout(() => {
@@ -6247,7 +7072,7 @@ function socialCalendarQuickCreate(kind) {
     }, 60);
     return;
   }
-  socialOpenCalendarModal(0);
+  socialOpenCalendarModal(0, { dayKey: selectedDay });
   setTimeout(() => {
     const kindNode = document.getElementById("socialEventEntryKind");
     if (kindNode && (mode === "event" || mode === "reminder")) {
@@ -6274,10 +7099,20 @@ function socialCleanCalendarDetails(raw) {
   return cleaned;
 }
 
-function socialOpenCalendarRecordDetail(kind, id) {
+function socialOpenCalendarRecordDetail(kind, id, options = {}) {
+  const opts = options && typeof options === "object" ? options : {};
   const safeKind = String(kind || "event").trim().toLowerCase() === "task" ? "task" : "event";
   const safeId = Number(id || 0);
   if (!safeId) return;
+  const detailDayKey = String(opts.dayKey || socialState.calendarSelectedDay || "").trim();
+  if (!opts.skipHistory) {
+    socialCalendarPushHistoryLayer("detail", {
+      kind: safeKind,
+      id: safeId,
+      dayKey: detailDayKey,
+    });
+  }
+  socialHideCalendarDaySheet(true);
   if (safeKind === "event") {
     const eventRow = (socialState.calendarEvents || []).find((row) => Number(row?.id || 0) === safeId);
     if (!eventRow) return;
@@ -6303,8 +7138,8 @@ function socialOpenCalendarRecordDetail(kind, id) {
           <div>${escapeHtml(metaBits.join(" / ") || "-")}</div>
           <div>${cleanDetails ? escapeHtml(cleanDetails) : `<span class="hint">${escapeHtml(tr("\u0411\u0435\u0437 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u044f", "No description"))}</span>`}</div>
           <div class="actions">
-            <button type="button" class="btn-secondary" onclick="socialOpenCalendarModal(${Number(editId || 0)}); socialCloseModal();">${escapeHtml(tr("\u0418\u0437\u043c\u0435\u043d\u0438\u0442\u044c", "Edit"))}</button>
-            <button type="button" class="btn-danger" onclick="socialDeleteEvent(${Number(editId || 0)}); socialCloseModal();">${escapeHtml(tr("\u0423\u0434\u0430\u043b\u0438\u0442\u044c", "Delete"))}</button>
+            <button type="button" class="btn-secondary" onclick="socialOpenCalendarModal(${Number(editId || 0)}, { dayKey: '${detailDayKey}', returnKind: 'event', returnId: ${safeId} })">${escapeHtml(tr("\u0418\u0437\u043c\u0435\u043d\u0438\u0442\u044c", "Edit"))}</button>
+            <button type="button" class="btn-danger" onclick="socialDeleteEvent(${Number(editId || 0)})">${escapeHtml(tr("\u0423\u0434\u0430\u043b\u0438\u0442\u044c", "Delete"))}</button>
           </div>
         </div>
       `
@@ -6328,109 +7163,30 @@ function socialOpenCalendarRecordDetail(kind, id) {
         <div>${escapeHtml(meta.join(" / ") || status)}</div>
         <div>${escapeHtml(description || tr("\u0411\u0435\u0437 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u044f", "No description"))}</div>
         <div class="actions">
-          <button type="button" class="btn-secondary" onclick="switchSocialSubtab('tasks'); socialOpenTaskModal(${safeId}); socialCloseModal();">${escapeHtml(tr("\u0418\u0437\u043c\u0435\u043d\u0438\u0442\u044c", "Edit"))}</button>
-          <button type="button" class="btn-danger" onclick="socialDeleteTask(${safeId}); socialCloseModal();">${escapeHtml(tr("\u0423\u0434\u0430\u043b\u0438\u0442\u044c", "Delete"))}</button>
+          <button type="button" class="btn-secondary" onclick="socialCloseModal({ force: true }); switchSocialSubtab('tasks'); socialOpenTaskModal(${safeId});">${escapeHtml(tr("\u0418\u0437\u043c\u0435\u043d\u0438\u0442\u044c", "Edit"))}</button>
+          <button type="button" class="btn-danger" onclick="socialDeleteTask(${safeId}); socialCloseModal({ force: true });">${escapeHtml(tr("\u0423\u0434\u0430\u043b\u0438\u0442\u044c", "Delete"))}</button>
         </div>
       </div>
     `
   );
 }
 
-function socialShowDay(dayKey) {
-  const list = document.getElementById("socialCalendarEvents");
-  if (!list) return;
+function socialShowDay(dayKey, options = {}) {
+  const opts = options && typeof options === "object" ? options : {};
+  const safeDayKey = String(dayKey || "").trim();
+  if (!safeDayKey) return;
   socialNormalizeCalendarChrome();
-  socialState.calendarSelectedDay = dayKey;
-  const events = (socialState.calendarEvents || [])
-    .filter((eventRow) => socialCalendarDayKey(socialCalendarResolveEventStart(eventRow)) === dayKey)
-    .sort((a, b) => {
-      const left = socialCalendarParseDate(socialCalendarResolveEventStart(a))?.getTime() || 0;
-      const right = socialCalendarParseDate(socialCalendarResolveEventStart(b))?.getTime() || 0;
-      return left - right;
-    });
-  const tasks = (socialState.tasks || [])
-    .filter((task) => socialCalendarDayKey(socialCalendarResolveTaskDue(task)) === dayKey)
-    .sort((a, b) => {
-      const left = socialDecodeUiText(socialCalendarResolveTaskTitle(a) || "");
-      const right = socialDecodeUiText(socialCalendarResolveTaskTitle(b) || "");
-      return String(left || "").localeCompare(String(right || ""), currentLang === "en" ? "en" : "ru");
-    });
-
-  const eventCards = events.length
-    ? events.map((eventRow) => {
-        const startAt = socialCalendarResolveEventStart(eventRow);
-        const endAt = socialCalendarResolveEventEnd(eventRow);
-        const eventTitle = socialCalendarResolveEventTitle(eventRow);
-        const timeLabel = startAt
-          ? `${socialCalendarTimeLabel(startAt)}${endAt ? ` - ${socialCalendarTimeLabel(endAt)}` : ""}`
-          : "-";
-        const scopeLabel = eventRow?.is_public ? tr("\u041e\u0431\u0449\u0435\u0435", "Shared") : tr("\u041b\u0438\u0447\u043d\u043e\u0435", "Private");
-        const repeatLabel = socialCalendarRecurrenceLabel(eventRow?.recurrence_kind, eventRow?.recurrence_interval);
-        const reminderLabel = socialCalendarReminderSummary(eventRow?.reminder_offsets_min, eventRow?.reminder_enabled !== false);
-        const editId = socialCalendarEventBaseId(eventRow);
-        const cleanDetails = socialCleanCalendarDetails(eventRow?.details || "");
-        const metaBits = [scopeLabel];
-        if (repeatLabel) metaBits.push(repeatLabel);
-        if (reminderLabel) metaBits.push(reminderLabel);
-        return `
-          <button type="button" class="social-day-item social-day-item-button" onclick="socialOpenCalendarRecordDetail('event', ${Number(eventRow?.id || 0)})">
-            <b>${escapeHtml(socialDecodeUiText(eventTitle || "-") || "-")}</b>
-            <small>${escapeHtml(timeLabel)}${metaBits.length ? ` - ${escapeHtml(metaBits.join(" / "))}` : ""}</small>
-            <div>${cleanDetails ? escapeHtml(socialDecodeUiText(cleanDetails) || cleanDetails) : `<span class="hint">${escapeHtml(tr("\u0411\u0435\u0437 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u044f", "No description"))}</span>`}</div>
-          </button>
-        `;
-      }).join("")
-    : `<div class="hint">${tr("\u041d\u0430 \u044d\u0442\u043e\u0442 \u0434\u0435\u043d\u044c \u0441\u043e\u0431\u044b\u0442\u0438\u0439 \u043d\u0435\u0442.", "No events for this day.")}</div>`;
-
-  const taskCards = tasks.length
-    ? tasks.map((task) => {
-        const metaBits = [];
-        if (String(task?.task_kind || "company") === "personal") {
-          metaBits.push(tr("\u041c\u043e\u0438 \u0437\u0430\u0434\u0430\u0447\u0438", "Personal"));
-        } else if (String(task?.project_title || "").trim()) {
-          metaBits.push(socialDecodeUiText(task.project_title || ""));
-        }
-        if (String(task?.assignee_nick || "").trim()) {
-          metaBits.push(socialDecodeUiText(task.assignee_nick || ""));
-        }
-        const statusLabel = socialDecodeUiText(task?.status || "");
-        return `
-          <button type="button" class="social-day-item social-day-item-button" onclick="socialOpenCalendarRecordDetail('task', ${Number(task?.id || 0)})">
-            <b>${escapeHtml(socialDecodeUiText(socialCalendarResolveTaskTitle(task) || "-") || "-")}</b>
-            <small>${escapeHtml(metaBits.join(" / ") || tr("\u0411\u0435\u0437 \u043c\u0435\u0442\u043e\u043a", "No labels"))}</small>
-            <div>${escapeHtml(statusLabel || tr("\u0411\u0435\u0437 \u0441\u0442\u0430\u0442\u0443\u0441\u0430", "No status"))}</div>
-          </button>
-        `;
-      }).join("")
-    : `<div class="hint">${tr("\u041d\u0430 \u044d\u0442\u043e\u0442 \u0434\u0435\u043d\u044c \u0434\u0435\u0434\u043b\u0430\u0439\u043d\u043e\u0432 \u043d\u0435\u0442.", "No task deadlines for this day.")}</div>`;
-
-  list.innerHTML = `
-    <div class="social-calendar-day-header">
-      <div>
-        <span>${escapeHtml(tr("\u0412\u044b\u0431\u0440\u0430\u043d\u043d\u044b\u0439 \u0434\u0435\u043d\u044c", "Selected day"))}</span>
-        <h4>${escapeHtml(socialCalendarDayLabel(dayKey))}</h4>
-      </div>
-      <div class="social-calendar-day-stats">
-        <span>${escapeHtml(`${tr("\u0421\u043e\u0431\u044b\u0442\u0438\u044f", "Events")}: ${events.length}`)}</span>
-        <span>${escapeHtml(`${tr("\u0417\u0430\u0434\u0430\u0447\u0438", "Tasks")}: ${tasks.length}`)}</span>
-      </div>
-    </div>
-    <div class="social-day-events">
-      <h5>${tr("\u0421\u043e\u0431\u044b\u0442\u0438\u044f", "Events")}</h5>
-      ${eventCards}
-    </div>
-    <div class="social-day-events">
-      <h5>${tr("\u0414\u0435\u0434\u043b\u0430\u0439\u043d\u044b \u0437\u0430\u0434\u0430\u0447", "Task deadlines")}</h5>
-      ${taskCards}
-    </div>
-  `;
-
-  const grid = document.getElementById("socialCalendarGrid");
-  if (grid) {
-    grid.querySelectorAll(".social-day[data-day-key]").forEach((btn) => {
-      btn.classList.toggle("active", String(btn.getAttribute("data-day-key") || "") === dayKey);
-    });
+  socialState.calendarSelectedDay = safeDayKey;
+  document.querySelectorAll("#socialCalendarGrid .social-day.active").forEach((node) => node.classList.remove("active"));
+  try {
+    document.querySelector(`#socialCalendarGrid .social-day[data-day-key="${CSS.escape(safeDayKey)}"]`)?.classList?.add("active");
+  } catch (_) {}
+  if (!opts.skipHistory) {
+    socialCalendarPushHistoryLayer("day", { dayKey: safeDayKey });
   }
+  socialHideCalendarLegacyDetails();
+  socialForceOpenCalendarDaySheet(safeDayKey);
+  setTimeout(() => socialHideCalendarLegacyDetails(), 24);
 }
 const SOCIAL_EMOJI_STORAGE_KEY = "seo_wibe_social_emoji_recent_v2";
 const SOCIAL_EMOJI_RECENT_LIMIT = 30;
@@ -6580,10 +7336,10 @@ function socialEnsureEmojiPicker() {
   socialGetEmojiRecents();
   const tabs = `
     <button type="button" class="social-emoji-tab ${socialEmojiSetKey === "recent" ? "active" : ""}" onclick="socialSwitchEmojiSet('recent')" aria-label="${escapeHtml(tr("\u041d\u0435\u0434\u0430\u0432\u043d\u0438\u0435", "Recent"))}" title="${escapeHtml(tr("\u041d\u0435\u0434\u0430\u0432\u043d\u0438\u0435", "Recent"))}">
-      <span class="social-emoji-tab-icon" aria-hidden="true">??</span>
+      <span class="social-emoji-tab-icon" aria-hidden="true">🕘</span>
     </button>
     <button type="button" class="social-emoji-tab ${socialEmojiSetKey === "all" ? "active" : ""}" onclick="socialSwitchEmojiSet('all')" aria-label="${escapeHtml(tr("\u0412\u0441\u0435 \u0441\u043c\u0430\u0439\u043b\u0438\u043a\u0438", "All emoji"))}" title="${escapeHtml(tr("\u0412\u0441\u0435 \u0441\u043c\u0430\u0439\u043b\u0438\u043a\u0438", "All emoji"))}">
-      <span class="social-emoji-tab-icon" aria-hidden="true">??</span>
+      <span class="social-emoji-tab-icon" aria-hidden="true">🙂</span>
     </button>
   `;
   const pane = socialEmojiSetKey === "recent"
@@ -6871,7 +7627,8 @@ function socialCalendarToggleRecurrenceFields() {
   }
 }
 
-async function socialOpenCalendarModal(eventId = 0) {
+async function socialOpenCalendarModal(eventId = 0, options = {}) {
+  const opts = options && typeof options === "object" ? options : {};
   const baseId = Number(eventId || 0);
   const fallbackRow = (socialState.calendarEvents || []).find((x) => socialCalendarEventBaseId(x) === baseId) || null;
   let row = fallbackRow;
@@ -6896,6 +7653,17 @@ async function socialOpenCalendarModal(eventId = 0) {
   const recurrenceKind = String(row?.recurrence_kind || "none").trim().toLowerCase() || "none";
   const recurrenceInterval = Math.max(1, Math.round(Number(row?.recurrence_interval || 1)) || 1);
   const safeEventId = socialCalendarEventBaseId(row) || baseId;
+  const historyDayKey = String(opts.dayKey || socialState.calendarSelectedDay || selectedDay || "").trim();
+
+  if (!opts.skipHistory) {
+    socialCalendarPushHistoryLayer("event-edit", {
+      eventId: safeEventId || 0,
+      dayKey: historyDayKey,
+      kind: String(opts.returnKind || "event").trim().toLowerCase(),
+      recordId: Number(opts.returnId || 0),
+    });
+  }
+  socialHideCalendarDaySheet(true);
 
   socialOpenModal(
     row ? tr("\u0418\u0437\u043c\u0435\u043d\u0438\u0442\u044c \u0441\u043e\u0431\u044b\u0442\u0438\u0435", "Edit event") : tr("\u041d\u043e\u0432\u043e\u0435 \u0441\u043e\u0431\u044b\u0442\u0438\u0435", "New event"),
@@ -7021,7 +7789,7 @@ async function socialSaveEvent(eventId = 0) {
   });
   if (!saved) return;
   socialState.calendarSelectedDay = socialCalendarDayKey(saved?.start_at || payload.start_at) || socialState.calendarSelectedDay;
-  socialCloseModal();
+  socialCalendarCollapseHistoryToRoot();
   await socialLoadCalendar();
 }
 
@@ -7039,7 +7807,7 @@ async function socialDeleteEvent(eventId) {
     return false;
   });
   if (!ok) return;
-  socialCloseModal?.();
+  socialCalendarCollapseHistoryToRoot();
   await socialLoadCalendar();
 }
 async function socialSyncGoogleCalendar() {
@@ -7422,12 +8190,22 @@ function socialNoteUpdatedLabel(note) {
   });
 }
 
+function socialNoteCardFill(coverRaw) {
+  const cover = String(coverRaw || "#eaf2ff").trim() || "#eaf2ff";
+  return `linear-gradient(180deg, color-mix(in srgb, ${cover} 58%, #ffffff), color-mix(in srgb, ${cover} 26%, #ffffff))`;
+}
+
 function socialRenderNotesList() {
   const host = document.getElementById("socialNotesList");
   if (!host) return;
-  const cardHeight = socialIsAppShellLike() ? 146 : 148;
+  const compactNotes = socialIsAppShellLike() || socialIsCompactMobileViewport();
+  const cardHeight = compactNotes ? 176 : 196;
   host.style.setProperty("display", "grid", "important");
-  host.style.setProperty("grid-template-columns", "repeat(3, minmax(0, 1fr))", "important");
+  host.style.setProperty(
+    "grid-template-columns",
+    compactNotes ? "repeat(3, minmax(94px, 1fr))" : "repeat(auto-fit, minmax(124px, 1fr))",
+    "important"
+  );
   host.style.setProperty("grid-auto-rows", `${cardHeight}px`, "important");
   host.style.setProperty("gap", "10px", "important");
   host.style.setProperty("width", "100%", "important");
@@ -7445,9 +8223,11 @@ function socialRenderNotesList() {
       layout.style.setProperty("min-width", "0", "important");
       layout.style.setProperty("max-width", "100%", "important");
     }
+    sidebar.style.setProperty("display", "block", "important");
     sidebar.style.setProperty("width", "100%", "important");
     sidebar.style.setProperty("max-width", "100%", "important");
     sidebar.style.setProperty("min-width", "0", "important");
+    sidebar.style.setProperty("overflow", "hidden", "important");
     const containerChain = [
       sidebar.closest(".social-card"),
       sidebar.closest(".social-notes-shell"),
@@ -7459,6 +8239,7 @@ function socialRenderNotesList() {
       node.style.setProperty("min-width", "0", "important");
       node.style.setProperty("max-width", "100%", "important");
       node.style.setProperty("overflow-x", "hidden", "important");
+      node.style.setProperty("display", "block", "important");
     });
   }
   const rows = Array.isArray(socialState.notes) ? socialState.notes : [];
@@ -7469,9 +8250,13 @@ function socialRenderNotesList() {
     const updated = socialNoteUpdatedLabel(row);
     const sizeLabel = `${String(row.content || "").trim().length} ${tr("симв.", "chars")}`;
     const cover = socialGetNoteCoverColor(row.id);
+    const fill = socialNoteCardFill(cover);
+    const clickHandler = compactNotes
+      ? `socialOpenNoteEditor(${Number(row.id)})`
+      : `socialSelectNote(${Number(row.id)})`;
     return `
-      <div class="social-note-row ${active ? "active" : ""}" data-note-id="${Number(row.id)}" style="--sw-note-cover:${escapeHtml(cover)}" onclick="socialSelectNote(${Number(row.id)})">
-        <button class="social-note-main" data-note-id="${Number(row.id)}" type="button" onclick="socialSelectNote(${Number(row.id)})">
+      <div class="social-note-row ${active ? "active" : ""}" data-note-id="${Number(row.id)}" style="--sw-note-cover:${escapeHtml(cover)};--sw-note-card-fill:${escapeHtml(fill)};background:${escapeHtml(fill)};background-color:${escapeHtml(cover)};background-image:${escapeHtml(fill)}" onclick="${clickHandler}">
+        <button class="social-note-main" data-note-id="${Number(row.id)}" type="button" style="background:transparent;background-color:transparent;background-image:none" onclick="${clickHandler}">
           <b>${escapeHtml(title)}</b>
           <div class="social-note-snippet">${escapeHtml(preview)}</div>
           <div class="social-note-meta">
@@ -7502,7 +8287,13 @@ function socialRenderNotesList() {
       main.style.setProperty("overflow", "hidden", "important");
       main.style.setProperty("word-break", "break-word", "important");
     }
-    row.onclick = () => socialSelectNote(noteId);
+    row.onclick = () => {
+      if (compactNotes) {
+        socialOpenNoteEditor(noteId);
+        return;
+      }
+      socialSelectNote(noteId);
+    };
   });
 }
 
@@ -7720,7 +8511,7 @@ function socialNoteModalColorsMarkup(noteId) {
   const active = socialGetNoteCoverColor(noteId);
   return SOCIAL_NOTE_COLOR_PALETTE.map((color) => {
     const selected = active === color ? "is-active" : "";
-    return `<button type="button" class="sw-note-color ${selected}" style="--sw-note-cover:${escapeHtml(color)}" onclick="socialPickNoteCoverColor(${Number(noteId || 0)}, '${color}')"></button>`;
+    return `<button type="button" class="sw-note-color ${selected}" data-note-color="${escapeHtml(color)}" style="--sw-note-cover:${escapeHtml(color)};background:${escapeHtml(color)};background-color:${escapeHtml(color)}" onclick="socialPickNoteCoverColor(${Number(noteId || 0)}, '${color}')" aria-label="${escapeHtml(color)}"></button>`;
   }).join("");
 }
 
@@ -7750,7 +8541,7 @@ function socialOpenNoteEditor(noteId) {
         </label>
         <div class="social-note-files-head">
           <b>${escapeHtml(tr("\u0424\u0430\u0439\u043b\u044b", "Files"))}</b>
-          <input id="socialNoteModalUpload" type="file" multiple onchange="socialUploadNoteFilesFromEditor(${id}, 'socialNoteModalUpload')" />
+          <input id="socialNoteModalUpload" type="file" multiple hidden onchange="socialUploadNoteFilesFromEditor(${id}, 'socialNoteModalUpload')" />
           <button class="btn-secondary" type="button" onclick="document.getElementById('socialNoteModalUpload').click()">${escapeHtml(tr("\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0444\u0430\u0439\u043b\u044b", "Add files"))}</button>
         </div>
         <div id="socialNoteModalFilesList">${socialNoteModalFilesMarkup(note)}</div>
@@ -7765,6 +8556,10 @@ function socialOpenNoteEditor(noteId) {
       </div>
     `
   );
+  const modalTitle = document.getElementById("socialModalTitle");
+  if (modalTitle) {
+    modalTitle.textContent = tr("\u0417\u0430\u043c\u0435\u0442\u043a\u0430", "Note");
+  }
 }
 
 function socialPickNoteCoverColor(noteId, color) {
@@ -7773,7 +8568,7 @@ function socialPickNoteCoverColor(noteId, color) {
   socialSetNoteCoverColor(id, color);
   const active = socialGetNoteCoverColor(id);
   document.querySelectorAll("#socialNoteModalColors .sw-note-color").forEach((node) => {
-    const own = String(node.style.getPropertyValue("--sw-note-cover") || "").trim().toLowerCase();
+    const own = String(node.getAttribute("data-note-color") || node.style.getPropertyValue("--sw-note-cover") || "").trim().toLowerCase();
     node.classList.toggle("is-active", own === active);
   });
   socialRenderNotesList();
@@ -8019,6 +8814,174 @@ window.socialToggleTaskDone = socialToggleTaskDone;
 window.socialTaskDragStart = socialTaskDragStart;
 window.socialTaskAllowDrop = socialTaskAllowDrop;
 window.socialTaskDrop = socialTaskDrop;
+function socialTaskAssigneeMeta(task) {
+  const nickRaw = task?.assignee_nick
+    || task?.assignee_name
+    || task?.assignee_display_name
+    || task?.assignee_username
+    || task?.assignee_login
+    || task?.assignee?.nick
+    || task?.assignee?.name
+    || task?.assignee?.username
+    || task?.assignee?.login
+    || task?.creator_nick
+    || task?.creator_name
+    || task?.creator_display_name
+    || task?.creator_username
+    || task?.creator?.nick
+    || task?.creator?.name
+    || task?.creator?.username
+    || task?.owner_nick
+    || task?.owner_name
+    || task?.user_nick
+    || task?.user_name
+    || task?.assignee_key
+    || task?.creator_key
+    || "";
+  const nick = socialDecodeUiText(nickRaw || "") || tr("Без исполнителя", "No assignee");
+  const avatar = String(
+    task?.assignee_avatar_url
+    || task?.assignee_avatar
+    || task?.assignee_image
+    || task?.assignee?.avatar_url
+    || task?.assignee?.avatar
+    || task?.assignee?.image
+    || task?.creator_avatar_url
+    || task?.creator_avatar
+    || task?.creator?.avatar_url
+    || task?.creator?.avatar
+    || ""
+  ).trim();
+  return `
+    <div class="social-task-assignee" title="${escapeHtml(nick)}">
+      <span class="social-task-assignee-avatar">${socialAvatarMarkup(avatar, nick, "xs")}</span>
+      <span class="social-task-assignee-name">${escapeHtml(nick)}</span>
+    </div>
+  `;
+}
+
+function socialOpenCalendarMonthYearPicker(options = {}) {
+  const opts = options && typeof options === "object" ? options : {};
+  const base = socialState.calendarDate instanceof Date && !Number.isNaN(socialState.calendarDate.getTime())
+    ? socialState.calendarDate
+    : new Date();
+  const currentYear = base.getFullYear();
+  const currentMonth = base.getMonth();
+  const monthsHtml = Array.from({ length: 12 }, (_, monthIndex) => {
+    const label = new Date(2026, monthIndex, 1).toLocaleDateString(currentLang === "en" ? "en-US" : "ru-RU", { month: "long" });
+    return `<option value="${monthIndex}" ${monthIndex === currentMonth ? "selected" : ""}>${escapeHtml(label)}</option>`;
+  }).join("");
+  const yearsHtml = Array.from({ length: 17 }, (_, index) => {
+    const year = currentYear - 8 + index;
+    return `<option value="${year}" ${year === currentYear ? "selected" : ""}>${year}</option>`;
+  }).join("");
+  if (!opts.skipHistory) {
+    socialCalendarPushHistoryLayer("month-picker", {
+      dayKey: String(socialState.calendarSelectedDay || "").trim(),
+    });
+  }
+  socialHideCalendarDaySheet(true);
+  socialOpenModal(
+    tr("Выбрать месяц и год", "Select month and year"),
+    `
+      <div class="social-calendar-month-year-modal">
+        <label>
+          <span>${escapeHtml(tr("Месяц", "Month"))}</span>
+          <select id="socialCalendarPickerMonth">${monthsHtml}</select>
+        </label>
+        <label>
+          <span>${escapeHtml(tr("Год", "Year"))}</span>
+          <select id="socialCalendarPickerYear">${yearsHtml}</select>
+        </label>
+        <div class="actions">
+          <button type="button" class="btn-secondary" onclick="socialCloseModal()">${escapeHtml(tr("Отмена", "Cancel"))}</button>
+          <button type="button" onclick="socialApplyCalendarMonthYearPicker()">${escapeHtml(tr("Применить", "Apply"))}</button>
+        </div>
+      </div>
+    `
+  );
+  const modalTitle = document.getElementById("socialModalTitle");
+  if (modalTitle) {
+    modalTitle.textContent = tr("Выбрать месяц и год", "Select month and year");
+  }
+}
+
+function socialOpenCalendarDaySheet(dayKey) {
+  const safeDayKey = String(dayKey || "").trim();
+  if (!safeDayKey) return;
+  socialSetCalendarDaySheetOpen(true);
+  const { backdrop, sheet } = socialEnsureCalendarDaySheetNodes();
+  if (!backdrop || !sheet) return;
+  socialHideCalendarLegacyDetails();
+  const { events, tasks } = socialCalendarCollectDayEntries(safeDayKey);
+  const parsedDay = socialCalendarParseDate(`${safeDayKey}T12:00:00`);
+  const dayNumber = parsedDay instanceof Date && !Number.isNaN(parsedDay.getTime())
+    ? String(parsedDay.getDate())
+    : safeDayKey.slice(-2).replace(/^0/, "");
+  const weekdayLabel = parsedDay instanceof Date && !Number.isNaN(parsedDay.getTime())
+    ? parsedDay.toLocaleDateString(currentLang === "en" ? "en-US" : "ru-RU", { weekday: "long" })
+    : socialCalendarDayLabel(safeDayKey);
+  const shortDateLabel = parsedDay instanceof Date && !Number.isNaN(parsedDay.getTime())
+    ? parsedDay.toLocaleDateString(currentLang === "en" ? "en-US" : "ru-RU", { day: "numeric", month: "short" })
+    : socialCalendarDayLabel(safeDayKey);
+  const cards = [];
+  events.forEach((eventRow) => {
+    const eventId = Number(eventRow?.id || 0);
+    if (!eventId) return;
+    const eventTitle = socialDecodeUiText(socialCalendarResolveEventTitle(eventRow) || "") || tr("Событие", "Event");
+    const startAt = socialCalendarResolveEventStart(eventRow);
+    const endAt = socialCalendarResolveEventEnd(eventRow);
+    const timeLabel = startAt
+      ? `${socialCalendarTimeLabel(startAt)}${endAt ? ` - ${socialCalendarTimeLabel(endAt)}` : ""}`
+      : tr("Весь день", "All day");
+    const color = String(eventRow?.color || "#8fb8ff").trim() || "#8fb8ff";
+    cards.push(`
+      <button type="button" class="sw-day-item is-event" style="--sw-sheet-color:${escapeHtml(color)}" onclick="socialOpenCalendarRecordDetail('event', ${eventId}, { dayKey: '${safeDayKey}' })">
+        <span class="sw-calendar-sheet-badge">${escapeHtml(tr("Событие", "Event"))}</span>
+        <b>${escapeHtml(eventTitle)}</b>
+        <small>${escapeHtml(timeLabel)}</small>
+      </button>
+    `);
+  });
+  tasks.forEach((taskRow) => {
+    const taskId = Number(taskRow?.id || 0);
+    if (!taskId) return;
+    const title = socialDecodeUiText(socialCalendarResolveTaskTitle(taskRow) || "") || tr("Задача", "Task");
+    const dueAt = socialCalendarResolveTaskDue(taskRow);
+    const timeLabel = dueAt ? socialCalendarTimeLabel(dueAt) : tr("Без срока", "No due date");
+    const ownTask = String(taskRow?.task_kind || "company") === "personal";
+    const color = ownTask ? "#95d4ab" : "#c9b6f6";
+    cards.push(`
+      <button type="button" class="sw-day-item is-task" style="--sw-sheet-color:${escapeHtml(color)}" onclick="socialOpenCalendarRecordDetail('task', ${taskId}, { dayKey: '${safeDayKey}' })">
+        <span class="sw-calendar-sheet-badge">${escapeHtml(tr("Задача", "Task"))}</span>
+        <b>${escapeHtml(title)}</b>
+        <small>${escapeHtml(timeLabel)}</small>
+      </button>
+    `);
+  });
+  sheet.innerHTML = `
+    <section class="sw-day-sheet-card">
+      <div class="sw-day-sheet-head">
+        <div class="sw-day-sheet-title-block">
+          <h4><span class="sw-day-sheet-daynum">${escapeHtml(dayNumber)}</span> ${escapeHtml(weekdayLabel)}</h4>
+          <small>${escapeHtml(shortDateLabel)}</small>
+        </div>
+        <button type="button" class="btn-secondary sw-day-sheet-close" aria-label="${escapeHtml(tr("Закрыть", "Close"))}" title="${escapeHtml(tr("Закрыть", "Close"))}" onclick="socialHideCalendarDaySheet()">&times;</button>
+      </div>
+      <div class="sw-day-sheet-list">
+        ${cards.join("") || `<div class="hint">${escapeHtml(tr("На этот день записей нет.", "No records for this day."))}</div>`}
+      </div>
+      <div class="sw-day-sheet-foot">
+        <button type="button" class="sw-day-sheet-add" onclick="socialOpenCalendarQuickAddMenu()">${escapeHtml(tr(`Добавить на ${shortDateLabel}`, `Add on ${shortDateLabel}`))}</button>
+        <button type="button" class="social-calendar-fab social-calendar-fab-mini" aria-label="${escapeHtml(tr("Добавить", "Add"))}" title="${escapeHtml(tr("Добавить", "Add"))}" onclick="socialOpenCalendarQuickAddMenu()">+</button>
+      </div>
+    </section>
+  `;
+  backdrop.classList.remove("hidden");
+  sheet.classList.remove("hidden");
+  sheet.setAttribute("aria-hidden", "false");
+}
+
 window.socialOpenCalendarModal = socialOpenCalendarModal;
 window.socialSaveEvent = socialSaveEvent;
 window.socialDeleteEvent = socialDeleteEvent;
@@ -8028,6 +8991,12 @@ window.socialCalendarAddCustomReminder = socialCalendarAddCustomReminder;
 window.socialCalendarRemoveCustomReminder = socialCalendarRemoveCustomReminder;
 window.socialCalendarToggleReminderFields = socialCalendarToggleReminderFields;
 window.socialCalendarToggleRecurrenceFields = socialCalendarToggleRecurrenceFields;
+window.socialHideCalendarLegacyDetails = socialHideCalendarLegacyDetails;
+window.socialHideCalendarDaySheet = socialHideCalendarDaySheet;
+window.socialForceOpenCalendarDaySheet = socialForceOpenCalendarDaySheet;
+window.socialCalendarBackLayer = socialCalendarBackLayer;
+window.socialCalendarCollapseHistoryToRoot = socialCalendarCollapseHistoryToRoot;
+window.socialBindCalendarSwipe = socialBindCalendarSwipe;
 window.socialShiftCalendar = socialShiftCalendar;
 window.socialOpenCalendarMonthYearPicker = socialOpenCalendarMonthYearPicker;
 window.socialApplyCalendarMonthYearPicker = socialApplyCalendarMonthYearPicker;
@@ -8128,6 +9097,11 @@ socialMaybeStartHooks();
   // Disable old emergency runtime patch packs that override core calendar/notes/notification
   // rendering and can conflict with the current stable implementation.
   window.__socialDisableLegacyTaskCalendarPatches = true;
+  window.__socialDisableCalendarBellFixV20260329 = true;
+  window.__socialDisableCalendarRaceFixV20260327b = true;
+  window.__socialDisableCalendarStabilityV20260327 = true;
+  window.__socialDisableCalendarRescueV20260327c = true;
+  window.__seoWibeCalendarRescueV20260327c = true;
   window.__socialDisableTaskMouseDropV2 = true;
   window.__socialDisableUiRecoveryV20260323b = true;
   window.__socialDisableUiTextFixesV1 = true;
@@ -8135,6 +9109,964 @@ socialMaybeStartHooks();
   window.__socialDisableTaskGlyphPatchV1 = true;
   window.__socialDisableHardeningV20260323 = true;
   window.__socialDisableUiFinalV20260323c = true;
+  window.__socialDisableCalendarBellFixV20260329 = true;
+})();
+
+(() => {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  if (window.__seoWibeDisableCalendarMobileHardFixV20260331 !== false) return;
+  if (window.__seoWibeCalendarMobileHardFixV20260331 === true) return;
+  window.__seoWibeCalendarMobileHardFixV20260331 = true;
+
+  const safeInvoke = (fn, ...args) => {
+    try {
+      if (typeof fn === "function") return fn(...args);
+    } catch (_) {}
+    return undefined;
+  };
+
+  const ensureState = () => {
+    window.socialState = window.socialState && typeof window.socialState === "object" ? window.socialState : {};
+    if (!(window.socialState.calendarDate instanceof Date) || Number.isNaN(window.socialState.calendarDate.getTime())) {
+      window.socialState.calendarDate = new Date();
+    }
+    if (!Array.isArray(window.socialState.calendarHistoryLayers)) {
+      window.socialState.calendarHistoryLayers = [];
+    }
+    if (!Array.isArray(window.socialState.calendarEvents)) {
+      window.socialState.calendarEvents = [];
+    }
+    if (!Array.isArray(window.socialState.tasks)) {
+      window.socialState.tasks = [];
+    }
+    return window.socialState;
+  };
+
+  const isAppShell = () => {
+    try {
+      if (typeof window.socialIsAppShellLike === "function") return Boolean(window.socialIsAppShellLike());
+    } catch (_) {}
+    return Boolean(
+      document.body?.classList?.contains("mobile-apk-mode")
+      || document.body?.classList?.contains("mobile-client-mode")
+      || String(window.location?.pathname || "").trim() === "/mobile"
+      || Number(window.innerWidth || 0) <= 980
+    );
+  };
+
+  const decodeText = (value) => {
+    try {
+      if (typeof window.socialDecodeUiText === "function") {
+        return String(window.socialDecodeUiText(value || "") || "").trim();
+      }
+    } catch (_) {}
+    return String(value || "").trim();
+  };
+
+  const escape = (value) => {
+    try {
+      if (typeof window.escapeHtml === "function") return window.escapeHtml(value);
+    } catch (_) {}
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  };
+
+  const parseDate = (value) => {
+    try {
+      if (typeof window.socialCalendarParseDate === "function") {
+        const parsed = window.socialCalendarParseDate(value);
+        if (parsed instanceof Date && !Number.isNaN(parsed.getTime())) return parsed;
+      }
+    } catch (_) {}
+    const fallback = new Date(value || Date.now());
+    return fallback instanceof Date && !Number.isNaN(fallback.getTime()) ? fallback : null;
+  };
+
+  const dayKey = (value) => {
+    try {
+      if (typeof window.socialCalendarDayKey === "function") {
+        return String(window.socialCalendarDayKey(value) || "").trim();
+      }
+    } catch (_) {}
+    const dt = parseDate(value);
+    if (!dt) return "";
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+  };
+
+  const monthKey = (value) => {
+    const dt = value instanceof Date && !Number.isNaN(value.getTime()) ? value : parseDate(value);
+    if (!dt) return "";
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+  };
+
+  const hideLegacyPanels = () => {
+    const root = document.getElementById("socialSubtabCalendar");
+    if (!root) return;
+    const selectors = [
+      "#socialCalendarEvents",
+      "#socialCalendarEventsLegacy",
+      ".social-calendar-events",
+      ".social-calendar-selected",
+      ".social-calendar-selected-day",
+      ".social-calendar-day-header",
+      ".social-calendar-day-details",
+      ".social-calendar-day-list",
+      ".social-calendar-records",
+      ".social-calendar-summary",
+      ".social-calendar-selected-wrap",
+      ".social-calendar-selected-panel",
+      ".social-calendar-selected-info",
+      ".social-calendar-selected-content",
+      "[data-calendar-detail]",
+      "[data-selected-day]",
+    ];
+    root.querySelectorAll(selectors.join(",")).forEach((node) => {
+      if (!node) return;
+      node.hidden = true;
+      node.setAttribute("aria-hidden", "true");
+      node.style.setProperty("display", "none", "important");
+      node.style.setProperty("max-height", "0", "important");
+      node.style.setProperty("min-height", "0", "important");
+      node.style.setProperty("overflow", "hidden", "important");
+      node.style.setProperty("margin", "0", "important");
+      node.style.setProperty("padding", "0", "important");
+      node.style.setProperty("border", "0", "important");
+      node.style.setProperty("box-shadow", "none", "important");
+      try { node.innerHTML = ""; } catch (_) {}
+    });
+  };
+
+  const collectMonthItems = (baseDate) => {
+    const state = ensureState();
+    const bucket = new Map();
+    const targetMonth = monthKey(baseDate);
+    const pushItem = (key, item) => {
+      if (!key || !item) return;
+      const list = bucket.get(key) || [];
+      list.push(item);
+      bucket.set(key, list);
+    };
+
+    (state.calendarEvents || []).forEach((row) => {
+      let start = null;
+      try {
+        start = typeof window.socialCalendarResolveEventStart === "function"
+          ? window.socialCalendarResolveEventStart(row)
+          : null;
+      } catch (_) {}
+      const key = dayKey(start || row?.start_at || row?.date);
+      if (!key || !key.startsWith(targetMonth)) return;
+      const title = decodeText(
+        (typeof window.socialCalendarResolveEventTitle === "function" ? window.socialCalendarResolveEventTitle(row) : row?.title)
+        || "Событие"
+      );
+      pushItem(key, {
+        title,
+        color: String(row?.color || "#9fc0ff").trim() || "#9fc0ff",
+      });
+    });
+
+    (state.tasks || []).forEach((row) => {
+      let due = null;
+      try {
+        due = typeof window.socialCalendarResolveTaskDue === "function"
+          ? window.socialCalendarResolveTaskDue(row)
+          : null;
+      } catch (_) {}
+      const key = dayKey(due || row?.due_at || row?.deadline_at || row?.deadline);
+      if (!key || !key.startsWith(targetMonth)) return;
+      const title = decodeText(
+        (typeof window.socialCalendarResolveTaskTitle === "function" ? window.socialCalendarResolveTaskTitle(row) : row?.title)
+        || "Задача"
+      );
+      pushItem(key, {
+        title,
+        color: String(row?.task_kind || "company") === "personal" ? "#a8d9b6" : "#d6c3f6",
+      });
+    });
+
+    return bucket;
+  };
+
+  const rebuildCalendarGridFallback = () => {
+    const root = document.getElementById("socialSubtabCalendar");
+    let grid = document.getElementById("socialCalendarGrid");
+    if (!root || !grid) return false;
+    const state = ensureState();
+    const baseDate = state.calendarDate instanceof Date && !Number.isNaN(state.calendarDate.getTime())
+      ? state.calendarDate
+      : new Date();
+    const year = baseDate.getFullYear();
+    const month = baseDate.getMonth();
+    const first = new Date(year, month, 1);
+    const offset = (first.getDay() + 6) % 7;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const prevDays = new Date(year, month, 0).getDate();
+    const todayKey = dayKey(new Date());
+    const selectedDay = String(state.calendarSelectedDay || "").trim();
+    const itemsByDay = collectMonthItems(baseDate);
+    const weekdays = String(document.documentElement.lang || "").trim().toLowerCase() === "en"
+      ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+      : ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+
+    let html = `<div class="social-calendar-row head">${weekdays.map((x) => `<span>${escape(x)}</span>`).join("")}</div><div class="social-calendar-cells">`;
+    const totalCells = Math.ceil((offset + daysInMonth) / 7) * 7;
+
+    for (let i = 0; i < totalCells; i += 1) {
+      let current = null;
+      let inMonth = true;
+      if (i < offset) {
+        current = new Date(year, month - 1, prevDays - offset + i + 1);
+        inMonth = false;
+      } else if (i >= offset + daysInMonth) {
+        current = new Date(year, month + 1, i - (offset + daysInMonth) + 1);
+        inMonth = false;
+      } else {
+        current = new Date(year, month, i - offset + 1);
+      }
+      const key = dayKey(current);
+      const items = itemsByDay.get(key) || [];
+      const active = selectedDay === key ? "active" : "";
+      const today = todayKey === key ? "today" : "";
+      const faded = inMonth ? "" : "is-outside";
+      const preview = items.slice(0, 3).map((item) => {
+        const shortTitle = item.title.length > 18 ? `${item.title.slice(0, 17)}...` : item.title;
+        return `<span class="sw-calendar-chip" style="--sw-chip-color:${escape(item.color)}"><span class="sw-calendar-chip-title">${escape(shortTitle)}</span></span>`;
+      }).join("");
+      const more = items.length > 3 ? `<span class="sw-calendar-more">+${items.length - 3}</span>` : "";
+      html += `
+        <button class="social-day rich ${active} ${today} ${faded} ${items.length ? "has-event" : ""}" data-day-key="${key}" type="button">
+          <div class="social-day-head"><b>${current.getDate()}</b></div>
+          <div class="social-day-preview-stack">${preview}</div>
+          ${more}
+        </button>
+      `;
+    }
+    html += "</div>";
+    grid.innerHTML = html;
+    return true;
+  };
+
+  const ensureCalendarGridVisible = () => {
+    const grid = document.getElementById("socialCalendarGrid");
+    if (!grid) return false;
+    const count = grid.querySelectorAll(".social-day[data-day-key]").length;
+    const heads = grid.querySelectorAll(".social-day-head b").length;
+    if (count >= 28 && heads >= 28) return true;
+    return rebuildCalendarGridFallback();
+  };
+
+  const sanitizeMonthYearPicker = () => {
+    const modal = document.getElementById("socialModal");
+    if (!modal || modal.classList.contains("hidden")) return;
+    const picker = modal.querySelector(".social-calendar-month-year-modal");
+    if (!picker) return;
+    const title = document.getElementById("socialModalTitle");
+    if (title) title.textContent = "Выбрать месяц и год";
+    const buttons = picker.querySelectorAll(".actions button");
+    if (buttons[0]) {
+      buttons[0].textContent = "Отмена";
+      buttons[0].setAttribute("onclick", "socialCloseCalendarMonthYearPicker({ reload: false })");
+    }
+    if (buttons[1]) {
+      buttons[1].textContent = "Применить";
+      buttons[1].setAttribute("onclick", "socialApplyCalendarMonthYearPicker()");
+    }
+  };
+
+  const forceDayOverlay = (day) => {
+    const dayKeyValue = String(day || ensureState().calendarSelectedDay || "").trim();
+    if (!dayKeyValue) return;
+    hideLegacyPanels();
+    ensureState().calendarSelectedDay = dayKeyValue;
+    try {
+      if (typeof window.socialForceOpenCalendarDaySheet === "function") {
+        window.socialForceOpenCalendarDaySheet(dayKeyValue);
+      } else if (typeof window.socialOpenCalendarDaySheet === "function") {
+        window.socialOpenCalendarDaySheet(dayKeyValue);
+      }
+    } catch (_) {}
+    setTimeout(hideLegacyPanels, 24);
+  };
+
+  const bindDayOverlayHard = () => {
+    const grid = document.getElementById("socialCalendarGrid");
+    if (!grid || grid.dataset.calendarDayOverlayHardBoundV20260331 === "1") return;
+    grid.dataset.calendarDayOverlayHardBoundV20260331 = "1";
+    grid.addEventListener("click", (event) => {
+      const dayNode = event.target?.closest?.(".social-day[data-day-key]");
+      if (!dayNode) return;
+      const key = String(dayNode.getAttribute("data-day-key") || "").trim();
+      if (!key) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+      try {
+        if (typeof window.socialShowDay === "function") {
+          window.socialShowDay(key, { skipHistory: false });
+        } else {
+          forceDayOverlay(key);
+        }
+      } catch (_) {
+        forceDayOverlay(key);
+      }
+    }, true);
+  };
+
+  const bindSwipeHard = () => {
+    const root = document.getElementById("socialSubtabCalendar");
+    if (!root || root.dataset.calendarSwipeHardBoundV20260331 === "1") return;
+    root.dataset.calendarSwipeHardBoundV20260331 = "1";
+    let startX = 0;
+    let startY = 0;
+    let active = false;
+    let lastSwipeAt = 0;
+    document.addEventListener("touchstart", (event) => {
+      const touch = event.changedTouches?.[0];
+      if (!touch || !root.contains(event.target)) {
+        active = false;
+        return;
+      }
+      if (event.target?.closest?.("#socialModal, #socialCalendarDaySheet, #socialCalendarDaySheetBackdrop, .social-calendar-month-year-modal")) {
+        active = false;
+        return;
+      }
+      startX = Number(touch.clientX || 0);
+      startY = Number(touch.clientY || 0);
+      active = true;
+    }, { passive: true, capture: true });
+    document.addEventListener("touchend", (event) => {
+      if (!active) return;
+      active = false;
+      const touch = event.changedTouches?.[0];
+      if (!touch) return;
+      const dx = Number(touch.clientX || 0) - startX;
+      const dy = Number(touch.clientY || 0) - startY;
+      if (Math.abs(dx) < 46 || Math.abs(dx) <= Math.abs(dy)) return;
+      const now = Date.now();
+      if (now - lastSwipeAt < 260) return;
+      lastSwipeAt = now;
+      safeInvoke(window.socialShiftCalendar, dx > 0 ? -1 : 1);
+    }, { passive: true, capture: true });
+  };
+
+  const bindBackGestureHard = () => {
+    if (!isAppShell() || document.body.dataset.calendarBackHardBoundV20260331 === "1") return;
+    document.body.dataset.calendarBackHardBoundV20260331 = "1";
+    let startX = 0;
+    let startY = 0;
+    let active = false;
+    document.addEventListener("touchstart", (event) => {
+      const touch = event.changedTouches?.[0];
+      if (!touch) return;
+      const state = ensureState();
+      const hasFlow = Boolean(
+        state.calendarHistoryLayers?.length
+        || (document.getElementById("socialCalendarDaySheet") && !document.getElementById("socialCalendarDaySheet").classList.contains("hidden"))
+        || (document.getElementById("socialModal") && !document.getElementById("socialModal").classList.contains("hidden"))
+      );
+      if (!hasFlow || touch.clientX > 48) {
+        active = false;
+        return;
+      }
+      startX = Number(touch.clientX || 0);
+      startY = Number(touch.clientY || 0);
+      active = true;
+    }, { passive: true, capture: true });
+    document.addEventListener("touchmove", (event) => {
+      if (!active) return;
+      const touch = event.touches?.[0] || event.changedTouches?.[0];
+      if (!touch) return;
+      const dx = Number(touch.clientX || 0) - startX;
+      const dy = Number(touch.clientY || 0) - startY;
+      if (dx > 10 && dx > Math.abs(dy)) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+      }
+    }, { passive: false, capture: true });
+    document.addEventListener("touchend", (event) => {
+      if (!active) return;
+      active = false;
+      const touch = event.changedTouches?.[0];
+      if (!touch) return;
+      const dx = Number(touch.clientX || 0) - startX;
+      const dy = Number(touch.clientY || 0) - startY;
+      if (dx < 72 || dx <= Math.abs(dy)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+      safeInvoke(window.socialCalendarBackLayer);
+    }, { passive: false, capture: true });
+  };
+
+  const refreshCalendarMobileUi = () => {
+    hideLegacyPanels();
+    ensureCalendarGridVisible();
+    bindDayOverlayHard();
+    bindSwipeHard();
+    bindBackGestureHard();
+    sanitizeMonthYearPicker();
+    try {
+      const label = document.getElementById("socialCalendarMonthLabel");
+      if (label) {
+        label.style.textAlign = "center";
+        label.style.display = "block";
+        label.style.marginInline = "auto";
+      }
+    } catch (_) {}
+  };
+
+  const wrap = (name, factory) => {
+    const original = typeof window[name] === "function" ? window[name] : null;
+    if (!original || original.__seoWibeCalendarMobileHardFixWrappedV20260331 === "1") return;
+    const wrapped = factory(original);
+    if (typeof wrapped !== "function") return;
+    wrapped.__seoWibeCalendarMobileHardFixWrappedV20260331 = "1";
+    window[name] = wrapped;
+  };
+
+  wrap("socialRenderCalendar", (original) => function wrappedSocialRenderCalendar() {
+    const result = original.apply(this, arguments);
+    setTimeout(refreshCalendarMobileUi, 0);
+    return result;
+  });
+
+  wrap("socialLoadCalendar", (original) => async function wrappedSocialLoadCalendar() {
+    const result = await Promise.resolve(original.apply(this, arguments));
+    setTimeout(refreshCalendarMobileUi, 0);
+    setTimeout(refreshCalendarMobileUi, 120);
+    return result;
+  });
+
+  wrap("socialShiftCalendar", (original) => function wrappedSocialShiftCalendar(deltaMonths = 0) {
+    const result = original.apply(this, arguments);
+    setTimeout(refreshCalendarMobileUi, 80);
+    setTimeout(refreshCalendarMobileUi, 220);
+    return result;
+  });
+
+  wrap("socialOpenCalendarMonthYearPicker", (original) => function wrappedOpenCalendarMonthYearPicker() {
+    const result = original.apply(this, arguments);
+    setTimeout(sanitizeMonthYearPicker, 0);
+    setTimeout(sanitizeMonthYearPicker, 80);
+    return result;
+  });
+
+  wrap("socialCloseCalendarMonthYearPicker", (original) => function wrappedCloseCalendarMonthYearPicker() {
+    const result = original.apply(this, arguments);
+    setTimeout(refreshCalendarMobileUi, 0);
+    setTimeout(refreshCalendarMobileUi, 120);
+    return result;
+  });
+
+  wrap("socialApplyCalendarMonthYearPicker", (original) => function wrappedApplyCalendarMonthYearPicker() {
+    const result = original.apply(this, arguments);
+    setTimeout(refreshCalendarMobileUi, 120);
+    setTimeout(refreshCalendarMobileUi, 260);
+    return result;
+  });
+
+  wrap("socialShowDay", (original) => function wrappedSocialShowDay(value, options = {}) {
+    const result = original.apply(this, arguments);
+    const key = String(value || ensureState().calendarSelectedDay || "").trim();
+    setTimeout(() => forceDayOverlay(key), 0);
+    setTimeout(() => forceDayOverlay(key), 80);
+    return result;
+  });
+
+  wrap("socialCalendarBackLayer", (original) => function wrappedSocialCalendarBackLayer() {
+    const result = original.apply(this, arguments);
+    setTimeout(refreshCalendarMobileUi, 0);
+    return result;
+  });
+
+  const init = () => {
+    refreshCalendarMobileUi();
+    try {
+      if (typeof window.socialBindCalendarSwipe === "function") {
+        window.socialBindCalendarSwipe();
+      }
+    } catch (_) {}
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init, { once: true });
+  } else {
+    init();
+  }
+  setTimeout(init, 240);
+})();
+
+(() => {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  if (window.__socialDisableCalendarRaceFixV20260327b === true) return;
+  if (window.__seoWibeCalendarRaceFixV20260327b) return;
+  window.__seoWibeCalendarRaceFixV20260327b = true;
+
+  const safeInvoke = (fn, ...args) => {
+    try {
+      if (typeof fn === "function") return fn(...args);
+    } catch (_) {}
+    return undefined;
+  };
+
+  const ensureState = () => {
+    window.socialState = window.socialState && typeof window.socialState === "object" ? window.socialState : {};
+    if (!(window.socialState.calendarDate instanceof Date) || Number.isNaN(window.socialState.calendarDate.getTime())) {
+      window.socialState.calendarDate = new Date();
+    }
+    if (!Array.isArray(window.socialState.calendarHistoryLayers)) {
+      window.socialState.calendarHistoryLayers = [];
+    }
+    return window.socialState;
+  };
+
+  const ensureCalendarSubtab = () => {
+    if (!isAppShell()) return;
+    try {
+      const current = String(window.currentSocialSubtab || window.socialState?.currentSubtab || "").trim().toLowerCase();
+      if (current !== "calendar" && typeof window.switchSocialSubtab === "function") {
+        window.switchSocialSubtab("calendar", true);
+      }
+    } catch (_) {}
+  };
+
+  const isAppShell = () => {
+    try {
+      if (typeof window.socialIsAppShellLike === "function") return Boolean(window.socialIsAppShellLike());
+    } catch (_) {}
+    try {
+      if (document.body?.classList?.contains("mobile-apk-mode")) return true;
+      if (document.body?.classList?.contains("mobile-client-mode")) return true;
+      if (String(window.location?.pathname || "").trim() === "/mobile") return true;
+    } catch (_) {}
+    return Number(window.innerWidth || 0) <= 980;
+  };
+
+  const monthValue = (dateValue) => {
+    try {
+      if (typeof window.socialCalendarMonthValue === "function") return String(window.socialCalendarMonthValue(dateValue) || "");
+    } catch (_) {}
+    const dt = dateValue instanceof Date && !Number.isNaN(dateValue.getTime()) ? dateValue : new Date();
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+  };
+
+  const dayKey = (value) => {
+    try {
+      if (typeof window.socialCalendarDayKey === "function") return String(window.socialCalendarDayKey(value) || "");
+    } catch (_) {}
+    return "";
+  };
+
+  const parseDate = (value) => {
+    try {
+      if (typeof window.socialCalendarParseDate === "function") return window.socialCalendarParseDate(value);
+    } catch (_) {}
+    return null;
+  };
+
+  const translate = (ru, en) => {
+    try {
+      if (typeof window.tr === "function") return window.tr(ru, en);
+    } catch (_) {}
+    return ru || en || "";
+  };
+
+  const cleanupCalendarUi = () => {
+    const root = document.getElementById("socialSubtabCalendar");
+    const monthLabel = document.getElementById("socialCalendarMonthLabel");
+    const monthInput = document.getElementById("socialCalendarMonth");
+    const grid = document.getElementById("socialCalendarGrid");
+    if (monthLabel) {
+      try {
+        monthLabel.removeAttribute("title");
+      } catch (_) {}
+      monthLabel.style.setProperty("display", "block", "important");
+      monthLabel.style.setProperty("width", "100%", "important");
+      monthLabel.style.setProperty("text-align", "center", "important");
+      monthLabel.style.setProperty("justify-self", "center", "important");
+      monthLabel.style.setProperty("margin", "0 auto", "important");
+    }
+    if (monthInput) {
+      monthInput.classList.add("hidden");
+      monthInput.style.setProperty("display", "none", "important");
+      monthInput.style.setProperty("visibility", "hidden", "important");
+      monthInput.style.setProperty("pointer-events", "none", "important");
+    }
+    if (root) {
+      root.querySelectorAll("#socialCalendarMonthSelect, #socialCalendarYearSelect, .social-calendar-picker").forEach((node) => {
+        node.classList.add("hidden");
+        node.style.setProperty("display", "none", "important");
+        node.style.setProperty("visibility", "hidden", "important");
+        node.style.setProperty("pointer-events", "none", "important");
+      });
+    }
+    if (grid) {
+      grid.hidden = false;
+      grid.style.setProperty("display", "block", "important");
+      grid.style.setProperty("visibility", "visible", "important");
+      grid.style.setProperty("opacity", "1", "important");
+    }
+    safeInvoke(window.socialHideCalendarLegacyDetails);
+  };
+
+  const ensureDaySheet = (safeDayKey) => {
+    const key = String(safeDayKey || "").trim();
+    if (!key) return;
+    safeInvoke(window.socialHideCalendarLegacyDetails);
+    safeInvoke(window.socialShowDay, key, { skipHistory: false });
+    setTimeout(() => safeInvoke(window.socialForceOpenCalendarDaySheet, key), 0);
+    setTimeout(() => safeInvoke(window.socialForceOpenCalendarDaySheet, key), 80);
+    setTimeout(() => safeInvoke(window.socialHideCalendarLegacyDetails), 120);
+  };
+
+  const renderCalendarGridFallback = () => {
+    const state = ensureState();
+    const grid = document.getElementById("socialCalendarGrid");
+    const monthLabel = document.getElementById("socialCalendarMonthLabel");
+    if (!grid) return;
+    const calendarDate = state.calendarDate instanceof Date && !Number.isNaN(state.calendarDate.getTime())
+      ? state.calendarDate
+      : new Date();
+    const year = calendarDate.getFullYear();
+    const month = calendarDate.getMonth();
+    const firstDay = new Date(year, month, 1, 0, 0, 0, 0);
+    const lastDay = new Date(year, month + 1, 0, 0, 0, 0, 0);
+    const shift = (firstDay.getDay() + 6) % 7;
+    const days = lastDay.getDate();
+    const today = dayKey(new Date());
+    const eventsByDay = new Map();
+    const tasksByDay = new Map();
+    const myActorKey = String(state.boot?.actor?.actor_key || "").trim();
+
+    (Array.isArray(state.calendarEvents) ? state.calendarEvents : []).forEach((eventRow) => {
+      const key = dayKey(safeInvoke(window.socialCalendarResolveEventStart, eventRow));
+      if (!key) return;
+      if (!eventsByDay.has(key)) eventsByDay.set(key, []);
+      eventsByDay.get(key).push(eventRow);
+    });
+    (Array.isArray(state.tasks) ? state.tasks : []).forEach((taskRow) => {
+      const key = dayKey(safeInvoke(window.socialCalendarResolveTaskDue, taskRow));
+      if (!key) return;
+      if (!tasksByDay.has(key)) tasksByDay.set(key, []);
+      tasksByDay.get(key).push(taskRow);
+    });
+
+    if (monthLabel) {
+      try {
+        monthLabel.textContent = typeof window.socialCalendarMonthLabel === "function"
+          ? String(window.socialCalendarMonthLabel(calendarDate) || "")
+          : calendarDate.toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
+      } catch (_) {}
+    }
+
+    const weekdays = [
+      translate("\u041f\u043d", "Mon"),
+      translate("\u0412\u0442", "Tue"),
+      translate("\u0421\u0440", "Wed"),
+      translate("\u0427\u0442", "Thu"),
+      translate("\u041f\u0442", "Fri"),
+      translate("\u0421\u0431", "Sat"),
+      translate("\u0412\u0441", "Sun"),
+    ];
+
+    let html = `<div class="social-calendar-row head">${weekdays.map((label) => `<span>${label}</span>`).join("")}</div><div class="social-calendar-cells">`;
+    for (let i = 0; i < shift; i += 1) {
+      html += `<button class="social-day muted" disabled type="button"></button>`;
+    }
+    for (let day = 1; day <= days; day += 1) {
+      const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      const active = String(state.calendarSelectedDay || "") === key ? "active" : "";
+      const todayClass = key === today ? "today" : "";
+      const previewRows = [];
+      (eventsByDay.get(key) || []).forEach((eventRow) => {
+        const rawTitle = safeInvoke(window.socialCalendarResolveEventTitle, eventRow) || translate("\u0421\u043e\u0431\u044b\u0442\u0438\u0435", "Event");
+        const safeTitle = typeof window.socialDecodeUiText === "function"
+          ? String(window.socialDecodeUiText(rawTitle) || rawTitle)
+          : String(rawTitle || "");
+        previewRows.push({
+          color: String(eventRow?.color || "#8fb8ff").trim() || "#8fb8ff",
+          title: safeTitle,
+        });
+      });
+      (tasksByDay.get(key) || []).forEach((taskRow) => {
+        const rawTitle = safeInvoke(window.socialCalendarResolveTaskTitle, taskRow) || translate("\u0417\u0430\u0434\u0430\u0447\u0430", "Task");
+        const safeTitle = typeof window.socialDecodeUiText === "function"
+          ? String(window.socialDecodeUiText(rawTitle) || rawTitle)
+          : String(rawTitle || "");
+        const ownTask = myActorKey && String(taskRow?.assignee_key || "").trim() === myActorKey;
+        previewRows.push({
+          color: ownTask ? "#95d4ab" : "#c9b6f6",
+          title: safeTitle,
+        });
+      });
+      const chips = previewRows.slice(0, 3).map((item) => {
+        const title = String(item.title || "").trim() || translate("\u0417\u0430\u043f\u0438\u0441\u044c", "Entry");
+        const shortTitle = title.length > 18 ? `${title.slice(0, 17)}...` : title;
+        return `<span class="sw-calendar-chip" style="--sw-chip-color:${escapeHtml(item.color)}"><span class="sw-calendar-chip-title">${escapeHtml(shortTitle)}</span></span>`;
+      }).join("");
+      const hiddenCount = Math.max(0, previewRows.length - 3);
+      const more = hiddenCount > 0 ? `<span class="sw-calendar-more">+${hiddenCount}</span>` : "";
+      html += `
+        <button
+          class="social-day rich ${active} ${todayClass} ${previewRows.length ? "has-event" : ""}"
+          data-day-key="${key}"
+          type="button"
+          onclick="socialShowDay('${key}')"
+        >
+          <div class="social-day-head"><b>${day}</b></div>
+          <div class="social-day-preview-stack">${chips}</div>
+          ${more}
+        </button>
+      `;
+    }
+    html += "</div>";
+    grid.innerHTML = html;
+
+    const selectedInMonth = String(state.calendarSelectedDay || "").startsWith(`${year}-${String(month + 1).padStart(2, "0")}-`);
+    if (!selectedInMonth) {
+      const fallbackToday = today && today.startsWith(`${year}-${String(month + 1).padStart(2, "0")}-`) ? today : `${year}-${String(month + 1).padStart(2, "0")}-01`;
+      state.calendarSelectedDay = fallbackToday;
+    }
+    cleanupCalendarUi();
+    safeInvoke(window.socialBindCalendarSwipe);
+  };
+
+  const ensureCalendarRendered = () => {
+    cleanupCalendarUi();
+    const grid = document.getElementById("socialCalendarGrid");
+    const count = grid ? grid.querySelectorAll(".social-day[data-day-key]").length : 0;
+    const heads = grid ? grid.querySelectorAll(".social-day-head b").length : 0;
+    if (count < 28 || heads < 28) {
+      renderCalendarGridFallback();
+    }
+    cleanupCalendarUi();
+  };
+
+  const originalLoadCalendarBeforeRaceFix = typeof window.socialLoadCalendar === "function" ? window.socialLoadCalendar : null;
+  window.socialLoadCalendar = async function socialLoadCalendarStableV20260327b() {
+    const state = ensureState();
+    state.calendarLoadSeq = Number(state.calendarLoadSeq || 0) + 1;
+    const loadSeq = state.calendarLoadSeq;
+    const monthInput = document.getElementById("socialCalendarMonth");
+    const monthLabel = document.getElementById("socialCalendarMonthLabel");
+    const monthRaw = String(monthInput?.value || monthValue(state.calendarDate)).trim();
+    if (monthRaw) {
+      const [rawYear, rawMonth] = monthRaw.split("-").map((item) => Number(item || 0));
+      if (rawYear && rawMonth) {
+        state.calendarDate = new Date(rawYear, rawMonth - 1, 1, 0, 0, 0, 0);
+      }
+    }
+    if (monthInput) monthInput.value = monthValue(state.calendarDate);
+    if (monthLabel) {
+      try {
+        monthLabel.textContent = typeof window.socialCalendarMonthLabel === "function"
+          ? String(window.socialCalendarMonthLabel(state.calendarDate) || "")
+          : state.calendarDate.toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
+      } catch (_) {}
+    }
+
+    cleanupCalendarUi();
+
+    try {
+      if (!(typeof window !== "undefined" && window.__socialDisableGoogleCalendarFlow === true)) {
+        await Promise.resolve(safeInvoke(window.socialLoadGoogleCalendarStatus));
+      } else {
+        safeInvoke(window.socialSetCalendarSyncMessage);
+      }
+    } catch (_) {
+      safeInvoke(window.socialSetCalendarSyncMessage);
+    }
+
+    const previousTasks = Array.isArray(state.tasks) ? [...state.tasks] : [];
+    const previousEvents = Array.isArray(state.calendarEvents) ? [...state.calendarEvents] : [];
+    const previousLastGood = Array.isArray(state.calendarEventsLastGood) ? [...state.calendarEventsLastGood] : [];
+
+    let taskRowsRaw = null;
+    try {
+      taskRowsRaw = await window.socialRequest("/api/social/tasks?task_kind=all&include_done=0", { timeoutMs: 12000 });
+    } catch (_) {
+      taskRowsRaw = null;
+    }
+    if (loadSeq !== state.calendarLoadSeq) return null;
+    const taskRows = safeInvoke(window.socialCalendarExtractRows, taskRowsRaw) || [];
+    state.tasks = taskRows.length ? taskRows : (taskRowsRaw == null ? previousTasks : []);
+
+    const start = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth(), 1, 0, 0, 0, 0);
+    const end = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth() + 1, 0, 23, 59, 59, 0);
+    const qp = new URLSearchParams({
+      date_from: typeof window.socialCalendarRangeParam === "function" ? window.socialCalendarRangeParam(start, false) : start.toISOString(),
+      date_to: typeof window.socialCalendarRangeParam === "function" ? window.socialCalendarRangeParam(end, true) : end.toISOString(),
+    });
+
+    let rowsRaw = null;
+    let eventsLoadFailed = false;
+    try {
+      rowsRaw = await window.socialRequest(`/api/social/calendar/events?${qp.toString()}`, { timeoutMs: 12000 });
+    } catch (_) {
+      eventsLoadFailed = true;
+      rowsRaw = null;
+    }
+    if (loadSeq !== state.calendarLoadSeq) return null;
+
+    const sourceRows = safeInvoke(window.socialCalendarExtractRows, rowsRaw) || [];
+    let rows = safeInvoke(window.socialCalendarFilterRowsByMonth, sourceRows, state.calendarDate) || [];
+    if (!rows.length && sourceRows.length) rows = sourceRows;
+
+    if (!rows.length) {
+      try {
+        const wideRowsRaw = await window.socialRequest("/api/social/calendar/events", { timeoutMs: 12000 });
+        if (loadSeq !== state.calendarLoadSeq) return null;
+        const wideRows = safeInvoke(window.socialCalendarExtractRows, wideRowsRaw) || [];
+        if (wideRows.length) {
+          rows = safeInvoke(window.socialCalendarFilterRowsByMonth, wideRows, state.calendarDate) || [];
+          if (!rows.length) rows = wideRows;
+          rowsRaw = wideRowsRaw;
+        }
+      } catch (_) {}
+    }
+    if (loadSeq !== state.calendarLoadSeq) return null;
+
+    if (rows.length) {
+      state.calendarEvents = rows;
+      const lastGoodSource = safeInvoke(window.socialCalendarExtractRows, rowsRaw) || [];
+      state.calendarEventsLastGood = lastGoodSource.length ? [...lastGoodSource] : [...rows];
+    } else {
+      const fallbackMonthRows = safeInvoke(
+        window.socialCalendarFilterRowsByMonth,
+        previousLastGood.length ? previousLastGood : previousEvents,
+        state.calendarDate
+      ) || [];
+      if (eventsLoadFailed && previousEvents.length) {
+        state.calendarEvents = [...previousEvents];
+      } else if (fallbackMonthRows.length) {
+        state.calendarEvents = fallbackMonthRows;
+      } else {
+        state.calendarEvents = [];
+      }
+    }
+
+    try {
+      if (typeof originalLoadCalendarBeforeRaceFix === "function" && originalLoadCalendarBeforeRaceFix !== window.socialLoadCalendar) {
+        // Keep side effects from the original flow minimal and controlled.
+      }
+    } catch (_) {}
+
+    ensureCalendarRendered();
+    return state.calendarEvents;
+  };
+
+  const originalBackLayer = typeof window.socialCalendarBackLayer === "function" ? window.socialCalendarBackLayer : null;
+  window.socialCalendarBackLayer = function socialCalendarBackLayerStableV20260327b() {
+    const state = ensureState();
+    const stack = Array.isArray(state.calendarHistoryLayers) ? state.calendarHistoryLayers : [];
+    if (isAppShell()) {
+      if (!stack.length) {
+        safeInvoke(window.socialCloseModal, { force: true });
+        safeInvoke(window.socialHideCalendarDaySheet, true);
+        cleanupCalendarUi();
+        return;
+      }
+      stack.pop();
+      const prev = stack.length ? stack[stack.length - 1] : null;
+      safeInvoke(window.socialCloseModal, { force: true });
+      safeInvoke(window.socialHideCalendarDaySheet, true);
+      safeInvoke(window.socialCalendarRestoreHistoryLayer, prev);
+      cleanupCalendarUi();
+      return;
+    }
+    return safeInvoke(originalBackLayer);
+  };
+
+  if (document.body.dataset.calendarTapOverlayBoundV20260327b !== "1") {
+    document.body.dataset.calendarTapOverlayBoundV20260327b = "1";
+    let tapState = null;
+    document.addEventListener("touchstart", (event) => {
+      const dayNode = event.target?.closest?.("#socialCalendarGrid .social-day[data-day-key]");
+      if (!dayNode) {
+        tapState = null;
+        return;
+      }
+      const touch = event.changedTouches?.[0];
+      if (!touch) return;
+      tapState = {
+        key: String(dayNode.getAttribute("data-day-key") || "").trim(),
+        x: touch.clientX,
+        y: touch.clientY,
+      };
+    }, { passive: true, capture: true });
+    document.addEventListener("touchend", (event) => {
+      if (!tapState?.key) return;
+      const touch = event.changedTouches?.[0];
+      const dx = Math.abs(Number(touch?.clientX || 0) - Number(tapState.x || 0));
+      const dy = Math.abs(Number(touch?.clientY || 0) - Number(tapState.y || 0));
+      const key = tapState.key;
+      tapState = null;
+      if (dx > 18 || dy > 18) return;
+      event.preventDefault();
+      event.stopPropagation();
+      ensureDaySheet(key);
+    }, { passive: false, capture: true });
+  }
+
+  const observerRoot = document.getElementById("socialSubtabCalendar");
+  if (observerRoot && observerRoot.dataset.calendarMutationObserverV20260327b !== "1") {
+    observerRoot.dataset.calendarMutationObserverV20260327b = "1";
+    const observer = new MutationObserver(() => {
+      cleanupCalendarUi();
+      const grid = document.getElementById("socialCalendarGrid");
+      if (grid && !grid.querySelector(".social-day[data-day-key]")) {
+        setTimeout(() => ensureCalendarRendered(), 0);
+      }
+    });
+    observer.observe(observerRoot, { childList: true, subtree: true });
+  }
+
+  setTimeout(() => ensureCalendarRendered(), 0);
+})();
+
+(() => {
+  if (typeof window === "undefined") return;
+  if (window.__seoWibeNotificationTextFinalV2) return;
+  window.__seoWibeNotificationTextFinalV2 = true;
+
+  const patchFn = (name, make) => {
+    const original = typeof window[name] === "function" ? window[name] : null;
+    if (!original || original.__seoWibeNotifTextWrappedV2 === true) return;
+    const wrapped = make(original);
+    if (typeof wrapped !== "function") return;
+    wrapped.__seoWibeNotifTextWrappedV2 = true;
+    window[name] = wrapped;
+  };
+
+  const normalizeRow = (row) => {
+    if (!row || typeof row !== "object") return row;
+    const safe = typeof window.socialResolveNotificationText === "function"
+      ? (window.socialResolveNotificationText(row) || {})
+      : {};
+    return {
+      ...row,
+      title: socialNotificationDisplayText(safe.title || row.title || row.text || row.message || row.preview || "", ""),
+      body: socialNotificationDisplayText(safe.body || row.body || row.text || row.message || row.preview || "", ""),
+    };
+  };
+
+  patchFn("socialLoadNotificationCenterRows", (original) => async function patchedLoadNotificationCenterRowsFinalV2() {
+    const rows = await Promise.resolve(original.apply(this, arguments));
+    const normalizedRows = Array.isArray(rows) ? rows.map(normalizeRow) : [];
+    if (window.socialState && typeof window.socialState === "object") {
+      window.socialState.notificationRows = normalizedRows;
+    }
+    return normalizedRows;
+  });
+
+  patchFn("socialNotifyDesktop", (original) => function patchedSocialNotifyDesktopFinalV2(row) {
+    return original.call(this, normalizeRow(row));
+  });
 })();
 
 (function attachSocialTasksPlanPatchV2() {
@@ -8733,6 +10665,8 @@ socialMaybeStartHooks();
   const ensureNotesCards = () => {
     const host = document.getElementById("socialNotesList");
     if (!host) return;
+    const compactNotes = (typeof socialIsAppShellLike === "function" && socialIsAppShellLike())
+      || (typeof socialIsCompactMobileViewport === "function" && socialIsCompactMobileViewport());
     host.querySelectorAll(".social-note-delete, [class*='note-delete'], [class*='note-remove'], [class*='note-close'], [data-action='delete'], button[onclick*='socialDeleteNote']").forEach((node) => {
       if (node?.remove) node.remove();
     });
@@ -8740,6 +10674,10 @@ socialMaybeStartHooks();
       const noteId = Number(row.getAttribute("data-note-id") || 0);
       if (!noteId) return;
       row.onclick = () => {
+        if (compactNotes && typeof window.socialOpenNoteEditor === "function") {
+          window.socialOpenNoteEditor(noteId);
+          return;
+        }
         if (typeof window.socialSelectNote === "function") window.socialSelectNote(noteId);
       };
       const color = typeof window.socialGetNoteCoverColor === "function"
@@ -9188,6 +11126,10 @@ socialMaybeStartHooks();
     };
   }
 
+  if (window.__socialDisableLegacyCalendarFallbackV20260323b !== false) {
+    return;
+  }
+
   const buildFallbackCalendarGrid = () => {
     const root = document.getElementById("socialSubtabCalendar");
     if (!root) return;
@@ -9379,6 +11321,10 @@ socialMaybeStartHooks();
     const root = document.getElementById("socialSubtabCalendar");
     if (!root) return;
     root.classList.add("sw-calendar-samsung");
+    root.setAttribute("data-calendar-sheet-mode", "overlay");
+    if (typeof window.socialHideCalendarLegacyDetails === "function") {
+      try { window.socialHideCalendarLegacyDetails(); } catch (_) {}
+    }
     const shell = root.querySelector(".social-calendar-shell") || root;
     shell.querySelectorAll("button").forEach((btn) => {
       if (btn.id === "socialCalendarFab") return;
@@ -9392,11 +11338,44 @@ socialMaybeStartHooks();
     } else {
       root.classList.remove("sw-calendar-awaiting-data");
     }
+    if (
+      window.socialState?.calendarDaySheetOpen &&
+      window.socialState?.calendarSelectedDay &&
+      typeof window.socialForceOpenCalendarDaySheet === "function"
+    ) {
+      try {
+        window.socialForceOpenCalendarDaySheet(window.socialState.calendarSelectedDay);
+      } catch (_) {}
+    }
   };
 
   const ensureNotesUi = () => {
+    const root = document.getElementById("socialSubtabNotes");
     const host = document.getElementById("socialNotesList");
-    if (!host) return;
+    if (!root || !host) return;
+    root.style.setProperty("position", "relative", "important");
+    const sidebar = root.querySelector(".social-notes-sidebar");
+    sidebar?.querySelectorAll(":scope > button").forEach((node) => node.remove?.());
+    let fab = document.getElementById("socialNotesFab");
+    if (!fab) {
+      fab = document.createElement("button");
+      fab.id = "socialNotesFab";
+      fab.className = "social-notes-fab";
+      fab.type = "button";
+      fab.setAttribute("aria-label", window.tr("Создать заметку", "Create note"));
+      fab.setAttribute("title", window.tr("Создать заметку", "Create note"));
+      fab.textContent = "+";
+      fab.addEventListener("click", async (event) => {
+        if (event?.preventDefault) event.preventDefault();
+        if (event?.stopPropagation) event.stopPropagation();
+        if (typeof window.socialCreateNote === "function") {
+          await window.socialCreateNote();
+        }
+      });
+      root.appendChild(fab);
+    } else if (fab.parentElement !== root) {
+      root.appendChild(fab);
+    }
     host.querySelectorAll(".social-note-delete, [class*='note-delete'], [class*='note-remove'], [class*='note-close'], [data-action='delete'], button[onclick*='socialDeleteNote']").forEach((node) => {
       if (node?.remove) node.remove();
     });
@@ -9404,6 +11383,15 @@ socialMaybeStartHooks();
       const id = Number(row.getAttribute("data-note-id") || 0);
       if (!id) return;
       row.onclick = () => {
+        const compactMode = Boolean(
+          document.body?.classList?.contains("mobile-apk-mode")
+          || document.body?.classList?.contains("mobile-client-mode")
+          || (typeof window.socialIsAppShellLike === "function" && window.socialIsAppShellLike())
+        );
+        if (compactMode && typeof window.socialOpenNoteEditor === "function") {
+          window.socialOpenNoteEditor(id);
+          return;
+        }
         if (typeof window.socialSelectNote === "function") window.socialSelectNote(id);
       };
     });
@@ -9424,15 +11412,43 @@ socialMaybeStartHooks();
       const btn = document.getElementById(id);
       if (!btn || btn.dataset.finalBellBind === "1") return;
       btn.dataset.finalBellBind = "1";
+      btn.removeAttribute("onclick");
+      try { btn.onclick = null; } catch (_) {}
       btn.addEventListener("click", async (event) => {
         event.preventDefault();
         event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+        const shouldOpen = !Boolean(window.socialState?.notificationCenterOpen);
+        if (id === "mobileDrawerBellBtn" && typeof window.closeMobileNav === "function") {
+          try { window.closeMobileNav(); } catch (_) {}
+          await new Promise((resolve) => window.setTimeout(resolve, 40));
+        }
         if (typeof window.socialToggleNotificationCenter === "function") {
-          await window.socialToggleNotificationCenter();
+          await window.socialToggleNotificationCenter(shouldOpen);
         }
       });
     });
+    if (document.body && document.body.dataset.socialBellDelegateBound !== "1") {
+      document.body.dataset.socialBellDelegateBound = "1";
+      document.body.addEventListener("click", async (event) => {
+        const btn = event.target?.closest?.("#socialBellBtn, #mobileDrawerBellBtn");
+        if (!btn) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+        if (btn.dataset.finalBellBind === "1") return;
+        const shouldOpen = !Boolean(window.socialState?.notificationCenterOpen);
+        if (btn.id === "mobileDrawerBellBtn" && typeof window.closeMobileNav === "function") {
+          try { window.closeMobileNav(); } catch (_) {}
+          await new Promise((resolve) => window.setTimeout(resolve, 40));
+        }
+        if (typeof window.socialToggleNotificationCenter === "function") {
+          await window.socialToggleNotificationCenter(shouldOpen);
+        }
+      }, true);
+    }
   };
+  window.socialBindBellButtonsNow = bindBellButtons;
 
   const patchFn = (name, make) => {
     const original = typeof window[name] === "function" ? window[name] : null;
@@ -9556,5 +11572,1684 @@ socialMaybeStartHooks();
     ensureNotificationCenter();
     bindBellButtons();
     sanitizeTree(document.body);
+  }, 0);
+})();
+
+(() => {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  if (window.__socialDisableCalendarBellFixV20260329 === true) return;
+  if (window.__seoWibeSocialCalendarBellFixV20260329) return;
+  if (window.__socialDisableCalendarBellFixV20260329 === true) return;
+  window.__seoWibeSocialCalendarBellFixV20260329 = true;
+
+  const safeInvoke = (fn, ...args) => {
+    try {
+      if (typeof fn === "function") return fn(...args);
+    } catch (_) {}
+    return undefined;
+  };
+
+  const decode = (value) => {
+    let out = String(value == null ? "" : value);
+    if (!out) return "";
+    try {
+      if (typeof window.socialDecodeUiText === "function") {
+        out = String(window.socialDecodeUiText(out) || out);
+      }
+    } catch (_) {}
+    try {
+      if (typeof window.__repairMojibakeText === "function") {
+        out = String(window.__repairMojibakeText(out) || out);
+      }
+    } catch (_) {}
+    return String(out || "").replace(/[\u0000-\u001F\u007F-\u009F]+/g, " ").replace(/\s{2,}/g, " ").trim();
+  };
+
+  const isMeaningful = (value) => {
+    const text = decode(value);
+    if (!text) return false;
+    const compact = text.replace(/\s+/g, " ").trim();
+    if (!compact) return false;
+    if (/^(true|false|null|none|undefined|nan)$/i.test(compact)) return false;
+    if (/^[\d\s:./-]+$/.test(compact)) return false;
+    return /[A-Za-zА-Яа-яЁё]/.test(compact);
+  };
+
+  const collectNotificationStrings = (row, acc = []) => {
+    if (row == null) return acc;
+    if (typeof row === "string" || typeof row === "number" || typeof row === "boolean") {
+      acc.push(String(row));
+      return acc;
+    }
+    if (Array.isArray(row)) {
+      row.forEach((item) => collectNotificationStrings(item, acc));
+      return acc;
+    }
+    if (typeof row === "object") {
+      Object.keys(row).forEach((key) => collectNotificationStrings(row[key], acc));
+    }
+    return acc;
+  };
+
+  const originalResolve = typeof window.socialResolveNotificationText === "function"
+    ? window.socialResolveNotificationText
+    : null;
+  if (originalResolve && originalResolve.__seoWibeBellFixWrappedV20260329 !== true) {
+    window.socialResolveNotificationText = function socialResolveNotificationTextBellFixV20260329(row) {
+      const base = originalResolve.call(this, row) || {};
+      const pool = collectNotificationStrings([
+        base.title,
+        base.body,
+        row?.title,
+        row?.body,
+        row?.text,
+        row?.message,
+        row?.preview,
+        row?.content,
+        row?.payload,
+        row?.meta,
+        row?.data,
+        row?.notification,
+      ], []);
+      const candidates = pool.map((item) => decode(item)).filter(isMeaningful);
+      const title = isMeaningful(base.title) ? decode(base.title) : (candidates[0] || "");
+      const body = isMeaningful(base.body) ? decode(base.body) : (candidates[1] || candidates[0] || "");
+      const fallbackKind = String(row?.kind || row?.type || "").toLowerCase();
+      const kindLabel = fallbackKind.includes("chat")
+        ? (window.tr ? window.tr("Новое сообщение", "New message") : "New message")
+        : fallbackKind.includes("task")
+          ? (window.tr ? window.tr("Задачи", "Tasks") : "Tasks")
+          : fallbackKind.includes("calendar") || fallbackKind.includes("event") || fallbackKind.includes("reminder")
+            ? (window.tr ? window.tr("Календарь", "Calendar") : "Calendar")
+            : (window.tr ? window.tr("Уведомление", "Notification") : "Notification");
+      return {
+        ...base,
+        title: title || kindLabel,
+        body: body || "",
+      };
+    };
+    window.socialResolveNotificationText.__seoWibeBellFixWrappedV20260329 = true;
+  }
+
+  const originalLoadRows = typeof window.socialLoadNotificationCenterRows === "function"
+    ? window.socialLoadNotificationCenterRows
+    : null;
+  if (originalLoadRows && originalLoadRows.__seoWibeBellFixWrappedV20260329 !== true) {
+    window.socialLoadNotificationCenterRows = async function socialLoadNotificationCenterRowsBellFixV20260329() {
+      const rows = await Promise.resolve(originalLoadRows.apply(this, arguments)).catch(() => []);
+      const normalized = Array.isArray(rows) ? rows.map((row) => {
+        const safe = typeof window.socialResolveNotificationText === "function"
+          ? (window.socialResolveNotificationText(row) || {})
+          : {};
+        return {
+          ...(row && typeof row === "object" ? row : {}),
+          title: String(safe.title || row?.title || "").trim(),
+          body: String(safe.body || row?.body || "").trim(),
+        };
+      }) : [];
+      if (window.socialState && typeof window.socialState === "object") {
+        window.socialState.notificationRows = normalized;
+      }
+      return normalized;
+    };
+    window.socialLoadNotificationCenterRows.__seoWibeBellFixWrappedV20260329 = true;
+  }
+
+  const originalNotifyDesktop = typeof window.socialNotifyDesktop === "function"
+    ? window.socialNotifyDesktop
+    : null;
+  if (originalNotifyDesktop && originalNotifyDesktop.__seoWibeBellFixWrappedV20260329 !== true) {
+    window.socialNotifyDesktop = function socialNotifyDesktopBellFixV20260329(row) {
+      const safe = typeof window.socialResolveNotificationText === "function"
+        ? (window.socialResolveNotificationText(row) || {})
+        : {};
+      const payload = row && typeof row === "object"
+        ? {
+            ...row,
+            title: decode(safe.title || row?.title || row?.text || ""),
+            body: decode(safe.body || row?.body || row?.text || row?.message || ""),
+          }
+        : row;
+      return originalNotifyDesktop.call(this, payload);
+    };
+    window.socialNotifyDesktop.__seoWibeBellFixWrappedV20260329 = true;
+  }
+
+  const originalCloseModal = typeof window.socialCloseModal === "function"
+    ? window.socialCloseModal
+    : null;
+  if (originalCloseModal && originalCloseModal.__seoWibeBellFixWrappedV20260329 !== true) {
+    window.socialCloseModal = function socialCloseModalBellFixV20260329() {
+      const modal = document.getElementById("socialModal");
+      const hadMonthPicker = Boolean(
+        modal
+        && !modal.classList.contains("hidden")
+        && modal.querySelector(".social-calendar-month-year-modal")
+      );
+      const result = originalCloseModal.apply(this, arguments);
+      if (hadMonthPicker) {
+        setTimeout(() => {
+          safeInvoke(window.socialHideCalendarDaySheet, true);
+          safeInvoke(window.socialNormalizeCalendarChrome);
+          safeInvoke(window.socialSyncCalendarMonthYearInputs);
+          safeInvoke(window.socialRenderCalendar);
+          const dayCount = document.querySelectorAll("#socialCalendarGrid .social-day[data-day-key]").length;
+          if (!dayCount && typeof window.socialLoadCalendar === "function") {
+            Promise.resolve(window.socialLoadCalendar({ preserveSelection: true, silent: false })).catch(() => null);
+          }
+          safeInvoke(window.socialBindCalendarSwipe);
+        }, 0);
+      }
+      return result;
+    };
+    window.socialCloseModal.__seoWibeBellFixWrappedV20260329 = true;
+  }
+
+  const ensureBellDelegate = () => {
+    if (document.body.dataset.socialBellDelegateBoundV20260329 === "1") return;
+    document.body.dataset.socialBellDelegateBoundV20260329 = "1";
+    document.addEventListener("click", async (event) => {
+      const btn = event.target?.closest?.("#socialBellBtn, #mobileDrawerBellBtn");
+      if (!btn) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+      const shouldOpen = !Boolean(window.socialState?.notificationCenterOpen);
+      if (btn.id === "mobileDrawerBellBtn" && typeof window.closeMobileNav === "function") {
+        try { window.closeMobileNav(); } catch (_) {}
+        await new Promise((resolve) => window.setTimeout(resolve, 40));
+      }
+      if (typeof window.socialToggleNotificationCenter === "function") {
+        await window.socialToggleNotificationCenter(shouldOpen);
+      }
+    }, true);
+  };
+
+  const ensureCalendarSwipeFallback = () => {
+    if (document.body.dataset.socialCalendarSwipeFallbackBoundV20260329 === "1") return;
+    document.body.dataset.socialCalendarSwipeFallbackBoundV20260329 = "1";
+    let startX = 0;
+    let startY = 0;
+    let active = false;
+    let lastSwipeAt = 0;
+    const threshold = 44;
+    const begin = (event) => {
+      const touch = event.changedTouches?.[0];
+      const root = document.getElementById("socialSubtabCalendar");
+      if (!touch || !root || !root.contains(event.target)) {
+        active = false;
+        return;
+      }
+      if (event.target?.closest?.("#socialModal, #socialCalendarDaySheet, .social-calendar-day-sheet, .social-calendar-month-year-modal")) {
+        active = false;
+        return;
+      }
+      startX = Number(touch.clientX || 0);
+      startY = Number(touch.clientY || 0);
+      active = true;
+    };
+    const finish = (event) => {
+      if (!active) return;
+      active = false;
+      const touch = event.changedTouches?.[0];
+      if (!touch) return;
+      const dx = Number(touch.clientX || 0) - startX;
+      const dy = Number(touch.clientY || 0) - startY;
+      if (Math.abs(dx) < threshold || Math.abs(dx) < Math.abs(dy)) return;
+      const now = Date.now();
+      if (now - lastSwipeAt < 260) return;
+      lastSwipeAt = now;
+      safeInvoke(window.socialShiftCalendar, dx > 0 ? -1 : 1);
+    };
+    document.addEventListener("touchstart", begin, { passive: true, capture: true });
+    document.addEventListener("touchend", finish, { passive: true, capture: true });
+    document.addEventListener("touchcancel", () => { active = false; }, { passive: true, capture: true });
+  };
+
+  ensureBellDelegate();
+  ensureCalendarSwipeFallback();
+  try {
+    if (typeof window.socialBindBellButtonsNow === "function") {
+      window.socialBindBellButtonsNow();
+    }
+    if (typeof window.socialBindCalendarSwipe === "function") {
+      window.socialBindCalendarSwipe();
+    }
+  } catch (_) {}
+})();
+
+(() => {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  if (window.__socialDisableCalendarStabilityV20260327 === true) return;
+  if (window.__seoWibeCalendarStabilityV20260327) return;
+  window.__seoWibeCalendarStabilityV20260327 = true;
+
+  const safeInvoke = (fn, ...args) => {
+    try {
+      if (typeof fn === "function") return fn(...args);
+    } catch (_) {}
+    return undefined;
+  };
+
+  const ensureState = () => {
+    window.socialState = window.socialState && typeof window.socialState === "object" ? window.socialState : {};
+    if (!(window.socialState.calendarDate instanceof Date) || Number.isNaN(window.socialState.calendarDate.getTime())) {
+      window.socialState.calendarDate = new Date();
+    }
+    if (!Array.isArray(window.socialState.calendarHistoryLayers)) {
+      window.socialState.calendarHistoryLayers = [];
+    }
+    return window.socialState;
+  };
+
+  const isAppShell = () => {
+    try {
+      if (typeof window.socialIsAppShellLike === "function") return Boolean(window.socialIsAppShellLike());
+    } catch (_) {}
+    try {
+      if (document.body?.classList?.contains("mobile-apk-mode")) return true;
+      if (document.body?.classList?.contains("mobile-client-mode")) return true;
+      if (String(window.location?.pathname || "").trim() === "/mobile") return true;
+      return Number(window.innerWidth || 0) <= 980;
+    } catch (_) {
+      return false;
+    }
+  };
+
+  const legacySelectors = [
+    "#socialCalendarEvents",
+    "#socialCalendarEventsLegacy",
+    ".social-calendar-events",
+    ".social-calendar-selected",
+    ".social-calendar-selected-day",
+    ".social-calendar-day-header",
+    ".social-calendar-day-details",
+    ".social-calendar-day-list",
+    ".social-calendar-records",
+    ".social-calendar-summary",
+    ".social-calendar-selected-wrap",
+    ".social-calendar-selected-panel",
+    ".social-calendar-day-panel",
+    ".social-calendar-day-cards",
+    ".social-calendar-day-entries",
+    ".social-calendar-bottom",
+    ".social-calendar-lower",
+    "[data-calendar-detail]",
+    "[data-selected-day]",
+  ];
+
+  const hideLegacyCalendarPanels = () => {
+    safeInvoke(window.socialHideCalendarLegacyDetails);
+    const root = document.getElementById("socialSubtabCalendar");
+    [root, document].forEach((scope) => {
+      if (!scope?.querySelectorAll) return;
+      scope.querySelectorAll(legacySelectors.join(", ")).forEach((node) => {
+        if (!node) return;
+        node.hidden = true;
+        node.setAttribute("aria-hidden", "true");
+        node.innerHTML = "";
+        node.style.setProperty("display", "none", "important");
+        node.style.setProperty("max-height", "0", "important");
+        node.style.setProperty("min-height", "0", "important");
+        node.style.setProperty("overflow", "hidden", "important");
+        node.style.setProperty("margin", "0", "important");
+        node.style.setProperty("padding", "0", "important");
+        node.style.setProperty("border", "0", "important");
+        node.style.setProperty("box-shadow", "none", "important");
+      });
+    });
+  };
+
+  const normalizeCalendarHeader = () => {
+    const root = document.getElementById("socialSubtabCalendar");
+    if (!root) return;
+    const hero = root.querySelector(".social-calendar-hero");
+    const heroCopy = root.querySelector(".social-calendar-hero-copy");
+    const monthLabel = document.getElementById("socialCalendarMonthLabel");
+    const monthInput = document.getElementById("socialCalendarMonth");
+    const nav = root.querySelector(".social-calendar-nav-controls");
+    const appShell = isAppShell();
+    if (hero) {
+      hero.style.setProperty("display", "grid", "important");
+      hero.style.setProperty("grid-template-columns", "1fr", "important");
+      hero.style.setProperty("justify-items", "center", "important");
+      hero.style.setProperty("align-items", "center", "important");
+      hero.style.setProperty("width", "100%", "important");
+      hero.style.setProperty("padding", "0", "important");
+      hero.style.setProperty("margin", "0 0 10px 0", "important");
+    }
+    if (heroCopy) {
+      heroCopy.style.setProperty("display", "grid", "important");
+      heroCopy.style.setProperty("place-items", "center", "important");
+      heroCopy.style.setProperty("width", "100%", "important");
+      heroCopy.style.setProperty("text-align", "center", "important");
+    }
+    if (monthLabel) {
+      if (typeof window.socialCalendarMonthLabel === "function") {
+        monthLabel.textContent = String(window.socialCalendarMonthLabel(ensureState().calendarDate) || monthLabel.textContent || "");
+      }
+      monthLabel.style.setProperty("display", "block", "important");
+      monthLabel.style.setProperty("width", "100%", "important");
+      monthLabel.style.setProperty("text-align", "center", "important");
+      monthLabel.style.setProperty("justify-self", "center", "important");
+      monthLabel.style.setProperty("margin", "0 auto", "important");
+      monthLabel.style.setProperty("cursor", "pointer", "important");
+      try { monthLabel.removeAttribute("title"); } catch (_) {}
+      monthLabel.setAttribute("aria-label", typeof window.tr === "function"
+        ? window.tr("\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u043c\u0435\u0441\u044f\u0446 \u0438 \u0433\u043e\u0434", "Select month and year")
+        : "Select month and year");
+      if (monthLabel.dataset.calendarMonthPickerBoundV20260327 !== "1") {
+        monthLabel.dataset.calendarMonthPickerBoundV20260327 = "1";
+        monthLabel.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          safeInvoke(window.socialOpenCalendarMonthYearPicker);
+        });
+      }
+    }
+    if (monthInput) {
+      monthInput.classList.add("hidden");
+      monthInput.style.setProperty("display", "none", "important");
+      monthInput.style.setProperty("visibility", "hidden", "important");
+      monthInput.style.setProperty("pointer-events", "none", "important");
+    }
+    root.querySelectorAll("#socialCalendarMonthSelect, #socialCalendarYearSelect, .social-calendar-picker").forEach((node) => {
+      node.classList.add("hidden");
+      node.style.setProperty("display", "none", "important");
+      node.style.setProperty("visibility", "hidden", "important");
+      node.style.setProperty("pointer-events", "none", "important");
+    });
+    if (nav) {
+      nav.classList.toggle("is-app-shell", appShell);
+      nav.style.setProperty("display", appShell ? "none" : "flex", "important");
+      nav.style.setProperty("justify-content", "space-between", "important");
+      nav.style.setProperty("align-items", "center", "important");
+      nav.style.setProperty("width", "100%", "important");
+      nav.querySelectorAll(".social-calendar-picker").forEach((node) => {
+        node.style.setProperty("display", "none", "important");
+      });
+      nav.querySelectorAll(".social-calendar-nav-btn").forEach((btn) => {
+        btn.style.setProperty("display", appShell ? "none" : "inline-flex", "important");
+        try { btn.removeAttribute("title"); } catch (_) {}
+      });
+    }
+  };
+
+  const normalizeCalendarFab = () => {
+    const fab = document.getElementById("socialCalendarFab");
+    if (!fab) return;
+    fab.textContent = "+";
+    fab.classList.remove("hidden");
+    fab.style.setProperty("display", "inline-flex", "important");
+    if (isAppShell()) {
+      fab.style.setProperty("position", "fixed", "important");
+      fab.style.setProperty("right", "18px", "important");
+      fab.style.setProperty("bottom", "18px", "important");
+      fab.style.setProperty("z-index", "2147482000", "important");
+    } else {
+      fab.style.setProperty("position", "absolute", "important");
+      fab.style.setProperty("right", "16px", "important");
+      fab.style.setProperty("bottom", "16px", "important");
+      fab.style.setProperty("z-index", "1200", "important");
+    }
+  };
+
+  const ensureOverlayNodes = () => {
+    const backdrop = document.getElementById("socialCalendarDaySheetBackdrop");
+    const sheet = document.getElementById("socialCalendarDaySheet");
+    if (backdrop && backdrop.parentElement !== document.body) document.body.appendChild(backdrop);
+    if (sheet && sheet.parentElement !== document.body) document.body.appendChild(sheet);
+  };
+
+  const sanitizeDaySheet = () => {
+    const sheet = document.getElementById("socialCalendarDaySheet");
+    if (!sheet || sheet.classList.contains("hidden")) return;
+    const closeBtn = sheet.querySelector(".sw-day-sheet-close");
+    if (closeBtn) {
+      closeBtn.textContent = "\u00d7";
+      closeBtn.setAttribute("aria-label", typeof window.tr === "function" ? window.tr("\u0417\u0430\u043a\u0440\u044b\u0442\u044c", "Close") : "Close");
+      try { closeBtn.removeAttribute("title"); } catch (_) {}
+    }
+    const addBtn = sheet.querySelector(".sw-day-sheet-add");
+    if (addBtn && !String(addBtn.textContent || "").trim()) {
+      addBtn.textContent = typeof window.tr === "function" ? window.tr("\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c", "Add") : "Add";
+    }
+    const fabMini = sheet.querySelector(".social-calendar-fab-mini");
+    if (fabMini) {
+      fabMini.textContent = "+";
+      fabMini.setAttribute("aria-label", typeof window.tr === "function" ? window.tr("\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c", "Add") : "Add");
+      try { fabMini.removeAttribute("title"); } catch (_) {}
+    }
+    sheet.querySelectorAll("[title]").forEach((node) => {
+      try { node.removeAttribute("title"); } catch (_) {}
+    });
+  };
+
+  const sanitizeMonthYearModal = () => {
+    const modal = document.getElementById("socialModal");
+    const host = document.getElementById("socialModalHost");
+    const title = document.getElementById("socialModalTitle");
+    if (!modal || modal.classList.contains("hidden") || !host) return;
+    const picker = host.querySelector(".social-calendar-month-year-modal");
+    if (!picker) return;
+    if (title) {
+      title.textContent = typeof window.tr === "function"
+        ? window.tr("\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u043c\u0435\u0441\u044f\u0446 \u0438 \u0433\u043e\u0434", "Select month and year")
+        : "Select month and year";
+    }
+    const labels = picker.querySelectorAll("label > span");
+    if (labels[0]) labels[0].textContent = typeof window.tr === "function" ? window.tr("\u041c\u0435\u0441\u044f\u0446", "Month") : "Month";
+    if (labels[1]) labels[1].textContent = typeof window.tr === "function" ? window.tr("\u0413\u043e\u0434", "Year") : "Year";
+    picker.querySelectorAll(".actions button").forEach((btn, index) => {
+      btn.textContent = index === 0
+        ? (typeof window.tr === "function" ? window.tr("\u041e\u0442\u043c\u0435\u043d\u0430", "Cancel") : "Cancel")
+        : (typeof window.tr === "function" ? window.tr("\u041f\u0440\u0438\u043c\u0435\u043d\u0438\u0442\u044c", "Apply") : "Apply");
+      try { btn.removeAttribute("title"); } catch (_) {}
+    });
+  };
+
+  const markActiveDay = (dayKey) => {
+    const safeDayKey = String(dayKey || "").trim();
+    document.querySelectorAll("#socialCalendarGrid .social-day.active").forEach((node) => node.classList.remove("active"));
+    if (!safeDayKey) return;
+    try {
+      document.querySelector(`#socialCalendarGrid .social-day[data-day-key="${CSS.escape(safeDayKey)}"]`)?.classList?.add("active");
+    } catch (_) {}
+  };
+
+  const openDayOverlay = (dayKey, options = {}) => {
+    const safeDayKey = String(dayKey || "").trim();
+    if (!safeDayKey) return;
+    const opts = options && typeof options === "object" ? options : {};
+    const state = ensureState();
+    state.calendarSelectedDay = safeDayKey;
+    state.calendarDaySheetOpen = true;
+    markActiveDay(safeDayKey);
+    if (!opts.skipHistory) {
+      safeInvoke(window.socialCalendarPushHistoryLayer, "day", { dayKey: safeDayKey }, { replaceTop: true });
+    }
+    hideLegacyCalendarPanels();
+    ensureOverlayNodes();
+    if (typeof window.socialForceOpenCalendarDaySheet === "function") {
+      window.socialForceOpenCalendarDaySheet(safeDayKey);
+    } else {
+      safeInvoke(window.socialOpenCalendarDaySheet, safeDayKey);
+    }
+    setTimeout(() => {
+      hideLegacyCalendarPanels();
+      sanitizeDaySheet();
+    }, 0);
+    setTimeout(() => {
+      hideLegacyCalendarPanels();
+      sanitizeDaySheet();
+    }, 80);
+  };
+
+  const bindDayClicks = () => {
+    const grid = document.getElementById("socialCalendarGrid");
+    if (!grid || grid.dataset.calendarSheetClickBoundV20260327 === "1") return;
+    grid.dataset.calendarSheetClickBoundV20260327 = "1";
+    grid.addEventListener("click", (event) => {
+      const dayNode = event.target?.closest?.(".social-day[data-day-key]");
+      if (!dayNode) return;
+      const dayKey = String(dayNode.getAttribute("data-day-key") || "").trim();
+      if (!dayKey) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+      openDayOverlay(dayKey);
+    }, true);
+  };
+
+  const bindBackGesture = () => {
+    if (!isAppShell() || document.body.dataset.calendarEdgeBackV20260327 === "1") return;
+    document.body.dataset.calendarEdgeBackV20260327 = "1";
+    let startX = 0;
+    let startY = 0;
+    let active = false;
+    document.addEventListener("touchstart", (event) => {
+      const touch = event.changedTouches?.[0];
+      if (!touch) return;
+      const state = ensureState();
+      const hasFlow = Boolean(
+        state.calendarHistoryLayers?.length
+        || (document.getElementById("socialCalendarDaySheet") && !document.getElementById("socialCalendarDaySheet").classList.contains("hidden"))
+        || (document.getElementById("socialModal") && !document.getElementById("socialModal").classList.contains("hidden"))
+      );
+      if (!hasFlow || touch.clientX > 28) {
+        active = false;
+        return;
+      }
+      startX = touch.clientX;
+      startY = touch.clientY;
+      active = true;
+    }, { passive: true });
+    document.addEventListener("touchend", (event) => {
+      if (!active) return;
+      active = false;
+      const touch = event.changedTouches?.[0];
+      if (!touch) return;
+      const dx = touch.clientX - startX;
+      const dy = touch.clientY - startY;
+      if (dx < 72 || dx <= Math.abs(dy)) return;
+      safeInvoke(window.socialCalendarBackLayer);
+    }, { passive: true });
+    document.addEventListener("touchcancel", () => {
+      active = false;
+    }, { passive: true });
+  };
+
+  const refreshCalendarUi = () => {
+    normalizeCalendarHeader();
+    normalizeCalendarFab();
+    ensureOverlayNodes();
+    hideLegacyCalendarPanels();
+    bindDayClicks();
+    bindBackGesture();
+    sanitizeMonthYearModal();
+    sanitizeDaySheet();
+    safeInvoke(window.socialBindCalendarSwipe);
+  };
+
+  const scheduleCalendarRecovery = () => {
+    if (document.body.dataset.calendarRecoveryScheduledV20260327 === "1") return;
+    document.body.dataset.calendarRecoveryScheduledV20260327 = "1";
+    setTimeout(() => {
+      try {
+        const dayCount = document.querySelectorAll("#socialCalendarGrid .social-day[data-day-key]").length;
+        if (!dayCount) {
+          safeInvoke(window.socialNormalizeCalendarChrome);
+          safeInvoke(window.socialSyncCalendarMonthYearInputs);
+          safeInvoke(window.socialRenderCalendar);
+          refreshCalendarUi();
+        }
+      } finally {
+        delete document.body.dataset.calendarRecoveryScheduledV20260327;
+      }
+    }, 120);
+  };
+
+  const wrap = (name, make) => {
+    const original = typeof window[name] === "function" ? window[name] : null;
+    if (!original || original.__seoWibeCalendarStableWrappedV20260327 === "1") return;
+    const wrapped = make(original);
+    if (typeof wrapped !== "function") return;
+    wrapped.__seoWibeCalendarStableWrappedV20260327 = "1";
+    window[name] = wrapped;
+  };
+
+  wrap("socialLoadCalendar", (original) => async function patchedSocialLoadCalendarStable() {
+    const result = await Promise.resolve(original.apply(this, arguments));
+    refreshCalendarUi();
+    scheduleCalendarRecovery();
+    return result;
+  });
+
+  wrap("socialRenderCalendar", (original) => function patchedSocialRenderCalendarStable() {
+    const result = original.apply(this, arguments);
+    refreshCalendarUi();
+    return result;
+  });
+
+  wrap("socialOpenCalendarMonthYearPicker", (original) => function patchedOpenCalendarMonthYearPickerStable() {
+    safeInvoke(window.socialHideCalendarDaySheet, true);
+    const result = original.apply(this, arguments);
+    setTimeout(sanitizeMonthYearModal, 0);
+    return result;
+  });
+
+  wrap("socialOpenCalendarDaySheet", (original) => function patchedOpenCalendarDaySheetStable() {
+    const result = original.apply(this, arguments);
+    hideLegacyCalendarPanels();
+    sanitizeDaySheet();
+    return result;
+  });
+
+  wrap("socialShowDay", () => function patchedSocialShowDayStable(dayKey, options = {}) {
+    openDayOverlay(dayKey, options);
+  });
+
+  const originalShiftCalendar = typeof window.socialShiftCalendar === "function"
+    ? window.socialShiftCalendar
+    : null;
+  if (originalShiftCalendar && originalShiftCalendar.__seoWibeCalendarStableShiftV20260327 !== "1") {
+    window.socialShiftCalendar = function socialShiftCalendarStable(deltaMonths = 0) {
+      const delta = Number(deltaMonths || 0);
+      if (!Number.isFinite(delta) || !delta) return;
+      const state = ensureState();
+      const base = state.calendarDate instanceof Date && !Number.isNaN(state.calendarDate.getTime())
+        ? state.calendarDate
+        : new Date();
+      state.calendarDate = new Date(base.getFullYear(), base.getMonth() + delta, 1, 0, 0, 0, 0);
+      state.calendarDaySheetOpen = false;
+      safeInvoke(window.socialHideCalendarDaySheet, true);
+      safeInvoke(window.socialCloseModal, { force: true });
+      const monthInput = document.getElementById("socialCalendarMonth");
+      if (monthInput && typeof window.socialCalendarMonthValue === "function") {
+        monthInput.value = String(window.socialCalendarMonthValue(state.calendarDate) || "").trim();
+      }
+      const result = safeInvoke(window.socialLoadCalendar);
+      setTimeout(refreshCalendarUi, 0);
+      scheduleCalendarRecovery();
+      return result;
+    };
+    window.socialShiftCalendar.__seoWibeCalendarStableShiftV20260327 = "1";
+  }
+
+  window.addEventListener("popstate", () => {
+    setTimeout(refreshCalendarUi, 0);
+  });
+
+  setTimeout(refreshCalendarUi, 0);
+})();
+
+(() => {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  if (window.__socialDisableCalendarRescueV20260327c === true) return;
+  if (window.__seoWibeCalendarRescueV20260327c) return;
+  window.__seoWibeCalendarRescueV20260327c = true;
+
+  const baseRenderCalendar = typeof window.socialRenderCalendar === "function"
+    ? window.socialRenderCalendar
+    : null;
+  const baseLoadCalendar = typeof window.socialLoadCalendar === "function"
+    ? window.socialLoadCalendar
+    : null;
+  const baseShowDay = typeof window.socialShowDay === "function"
+    ? window.socialShowDay
+    : null;
+  const baseCalendarBackLayer = typeof window.socialCalendarBackLayer === "function"
+    ? window.socialCalendarBackLayer
+    : null;
+
+  const safeInvoke = (fn, ...args) => {
+    try {
+      if (typeof fn === "function") return fn(...args);
+    } catch (_) {}
+    return undefined;
+  };
+
+  const escape = (value) => {
+    const source = String(value == null ? "" : value);
+    if (typeof window.escapeHtml === "function") return window.escapeHtml(source);
+    return source
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  };
+
+  const t = (ru, en) => {
+    try {
+      if (typeof window.tr === "function") return window.tr(ru, en);
+    } catch (_) {}
+    return ru;
+  };
+
+  const pad = (value) => String(Number(value || 0)).padStart(2, "0");
+
+  const ensureState = () => {
+    window.socialState = window.socialState && typeof window.socialState === "object" ? window.socialState : {};
+    if (!(window.socialState.calendarDate instanceof Date) || Number.isNaN(window.socialState.calendarDate.getTime())) {
+      window.socialState.calendarDate = new Date();
+    }
+    if (!Array.isArray(window.socialState.calendarHistoryLayers)) window.socialState.calendarHistoryLayers = [];
+    if (!Array.isArray(window.socialState.calendarEvents)) window.socialState.calendarEvents = [];
+    if (!Array.isArray(window.socialState.calendarEventsLastGood)) window.socialState.calendarEventsLastGood = [];
+    if (!Array.isArray(window.socialState.tasks)) window.socialState.tasks = [];
+    return window.socialState;
+  };
+
+  const isAppShell = () => {
+    try {
+      if (typeof window.socialIsAppShellLike === "function") return Boolean(window.socialIsAppShellLike());
+    } catch (_) {}
+    try {
+      if (document.body?.classList?.contains("mobile-apk-mode")) return true;
+      if (document.body?.classList?.contains("mobile-client-mode")) return true;
+      return String(window.location?.pathname || "").trim() === "/mobile" || Number(window.innerWidth || 0) <= 980;
+    } catch (_) {
+      return false;
+    }
+  };
+
+  const monthValue = (date) => {
+    const d = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
+    return typeof window.socialCalendarMonthValue === "function"
+      ? String(window.socialCalendarMonthValue(d) || "")
+      : `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+  };
+
+  const monthLabel = (date) => {
+    const d = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
+    if (typeof window.socialCalendarMonthLabel === "function") {
+      return String(window.socialCalendarMonthLabel(d) || "");
+    }
+    return d.toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
+  };
+
+  const dayKey = (value) => {
+    if (typeof window.socialCalendarDayKey === "function") {
+      const resolved = String(window.socialCalendarDayKey(value) || "").trim();
+      if (resolved) return resolved;
+    }
+    const d = value instanceof Date ? value : new Date(value);
+    if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "";
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
+
+  const decode = (value) => {
+    let out = String(value == null ? "" : value);
+    try {
+      if (typeof window.socialDecodeUiText === "function") out = String(window.socialDecodeUiText(out) || out);
+    } catch (_) {}
+    try {
+      if (typeof window.socialNormalizeDecodedText === "function") out = String(window.socialNormalizeDecodedText(out) || out);
+    } catch (_) {}
+    try {
+      if (typeof window.decodePossiblyMojibake === "function") out = String(window.decodePossiblyMojibake(out) || out);
+    } catch (_) {}
+    try {
+      if (typeof window.__repairMojibakeText === "function") out = String(window.__repairMojibakeText(out) || out);
+    } catch (_) {}
+    return out.replace(/\s{2,}/g, " ").trim();
+  };
+
+  const calendarRoot = () => document.getElementById("socialSubtabCalendar");
+
+  const hideNode = (node) => {
+    if (!node) return;
+    node.hidden = true;
+    node.setAttribute("aria-hidden", "true");
+    node.style.setProperty("display", "none", "important");
+    node.style.setProperty("max-height", "0", "important");
+    node.style.setProperty("min-height", "0", "important");
+    node.style.setProperty("overflow", "hidden", "important");
+    node.style.setProperty("margin", "0", "important");
+    node.style.setProperty("padding", "0", "important");
+    node.style.setProperty("border", "0", "important");
+    node.style.setProperty("box-shadow", "none", "important");
+  };
+
+  const hideLegacyPanels = () => {
+    safeInvoke(window.socialHideCalendarLegacyDetails);
+    const root = calendarRoot();
+    const selectors = [
+      "#socialCalendarEvents",
+      "#socialCalendarEventsLegacy",
+      ".social-calendar-events",
+      ".social-calendar-selected",
+      ".social-calendar-selected-day",
+      ".social-calendar-day-header",
+      ".social-calendar-day-details",
+      ".social-calendar-day-list",
+      ".social-calendar-records",
+      ".social-calendar-summary",
+      ".social-calendar-selected-wrap",
+      ".social-calendar-selected-panel",
+      ".social-calendar-day-panel",
+      ".social-calendar-day-cards",
+      ".social-calendar-day-entries",
+      ".social-calendar-bottom",
+      ".social-calendar-lower",
+      ".social-calendar-footer",
+      ".social-calendar-detail-panel",
+      ".social-calendar-selected-info",
+      ".social-calendar-selected-content",
+      "[data-calendar-detail]",
+      "[data-selected-day]",
+    ];
+    [root, document].forEach((scope) => {
+      if (!scope?.querySelectorAll) return;
+      scope.querySelectorAll(selectors.join(", ")).forEach(hideNode);
+    });
+    if (!root) return;
+    const shell = root.querySelector(".social-calendar-shell");
+    const board = root.querySelector(".social-calendar-board");
+    const main = root.querySelector(".social-calendar-main");
+    if (shell) {
+      Array.from(shell.children || []).forEach((child) => {
+        if (!child) return;
+        if (child.classList?.contains("social-calendar-hero")) return;
+        if (child.classList?.contains("social-calendar-board")) return;
+        if (child.id === "socialCalendarFab") return;
+        hideNode(child);
+      });
+    }
+    if (board) {
+      Array.from(board.children || []).forEach((child) => {
+        if (!child) return;
+        if (child.classList?.contains("social-calendar-main")) return;
+        hideNode(child);
+      });
+    }
+    if (main) {
+      Array.from(main.children || []).forEach((child) => {
+        if (!child) return;
+        if (child.id === "socialCalendarGrid") return;
+        hideNode(child);
+      });
+    }
+    root.dataset.calendarSheetMode = "overlay";
+    root.setAttribute("data-calendar-sheet-mode", "overlay");
+  };
+
+  const ensureChrome = () => {
+    const state = ensureState();
+    const root = calendarRoot();
+    if (!root) return null;
+    safeInvoke(window.socialNormalizeCalendarChrome);
+    safeInvoke(window.socialEnsureCalendarNavigation);
+    safeInvoke(window.socialEnsureCalendarFab);
+    const shell = root.querySelector(".social-calendar-shell") || root.querySelector(".panel") || root;
+    const hero = shell.querySelector(".social-calendar-hero");
+    const heroCopy = shell.querySelector(".social-calendar-hero-copy");
+    const label = document.getElementById("socialCalendarMonthLabel");
+    const monthInput = document.getElementById("socialCalendarMonth");
+    const nav = root.querySelector(".social-calendar-nav-controls");
+    if (hero) {
+      hero.style.setProperty("display", "grid", "important");
+      hero.style.setProperty("grid-template-columns", "1fr", "important");
+      hero.style.setProperty("justify-items", "center", "important");
+      hero.style.setProperty("align-items", "center", "important");
+      hero.style.setProperty("width", "100%", "important");
+      hero.style.setProperty("padding", "0", "important");
+      hero.style.setProperty("margin", "0 0 10px 0", "important");
+    }
+    if (heroCopy) {
+      heroCopy.style.setProperty("display", "grid", "important");
+      heroCopy.style.setProperty("place-items", "center", "important");
+      heroCopy.style.setProperty("width", "100%", "important");
+      heroCopy.style.setProperty("text-align", "center", "important");
+      heroCopy.style.setProperty("margin", "0 auto", "important");
+    }
+    if (label) {
+      label.textContent = monthLabel(state.calendarDate);
+      label.style.setProperty("display", "block", "important");
+      label.style.setProperty("width", "100%", "important");
+      label.style.setProperty("text-align", "center", "important");
+      label.style.setProperty("justify-self", "center", "important");
+      label.style.setProperty("margin", "0 auto", "important");
+      label.style.setProperty("cursor", "pointer", "important");
+      try { label.removeAttribute("title"); } catch (_) {}
+      label.setAttribute("aria-label", t("\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u043c\u0435\u0441\u044f\u0446 \u0438 \u0433\u043e\u0434", "Select month and year"));
+      if (label.dataset.calendarRescueMonthBound !== "1") {
+        label.dataset.calendarRescueMonthBound = "1";
+        label.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          safeInvoke(window.socialOpenCalendarMonthYearPicker);
+        });
+      }
+    }
+    if (monthInput) {
+      monthInput.value = monthValue(state.calendarDate);
+      monthInput.classList.add("hidden");
+      monthInput.style.setProperty("display", "none", "important");
+      monthInput.style.setProperty("visibility", "hidden", "important");
+      monthInput.style.setProperty("pointer-events", "none", "important");
+    }
+    root.querySelectorAll("#socialCalendarMonthSelect, #socialCalendarYearSelect, .social-calendar-picker").forEach((node) => {
+      node.classList.add("hidden");
+      node.style.setProperty("display", "none", "important");
+      node.style.setProperty("visibility", "hidden", "important");
+      node.style.setProperty("pointer-events", "none", "important");
+    });
+    if (nav) {
+      nav.classList.toggle("is-app-shell", isAppShell());
+      nav.style.setProperty("display", isAppShell() ? "none" : "flex", "important");
+      nav.style.setProperty("justify-content", "space-between", "important");
+      nav.style.setProperty("align-items", "center", "important");
+      nav.style.setProperty("width", "100%", "important");
+      nav.querySelectorAll(".social-calendar-nav-btn").forEach((btn) => {
+        btn.style.setProperty("display", isAppShell() ? "none" : "inline-flex", "important");
+        try { btn.removeAttribute("title"); } catch (_) {}
+      });
+    }
+    const board = root.querySelector(".social-calendar-board") || shell;
+    const main = root.querySelector(".social-calendar-main") || board;
+    let grid = document.getElementById("socialCalendarGrid");
+    if (!grid) {
+      grid = document.createElement("div");
+      grid.id = "socialCalendarGrid";
+      grid.className = "social-calendar-grid social-calendar-grid--samsung";
+      (main || shell).appendChild(grid);
+    } else if (main && grid.parentElement !== main) {
+      main.appendChild(grid);
+    }
+    grid.style.setProperty("display", "block", "important");
+    grid.style.setProperty("visibility", "visible", "important");
+    grid.style.setProperty("opacity", "1", "important");
+    const fab = document.getElementById("socialCalendarFab");
+    if (fab) {
+      fab.textContent = "+";
+      fab.classList.remove("hidden");
+      fab.style.setProperty("display", "inline-flex", "important");
+      if (isAppShell()) {
+        fab.style.setProperty("position", "fixed", "important");
+        fab.style.setProperty("right", "16px", "important");
+        fab.style.setProperty("bottom", "calc(env(safe-area-inset-bottom, 0px) + 14px)", "important");
+        fab.style.setProperty("z-index", "2147482000", "important");
+      } else {
+        fab.style.setProperty("position", "absolute", "important");
+        fab.style.setProperty("right", "16px", "important");
+        fab.style.setProperty("bottom", "16px", "important");
+        fab.style.setProperty("z-index", "1200", "important");
+      }
+      try { fab.removeAttribute("title"); } catch (_) {}
+    }
+    hideLegacyPanels();
+    return grid;
+  };
+
+  const buildPreviewItems = (key, state) => {
+    const actorKey = String(state.boot?.actor?.actor_key || "").trim();
+    const items = [];
+    (Array.isArray(state.calendarEvents) ? state.calendarEvents : []).forEach((row) => {
+      if (dayKey(safeInvoke(window.socialCalendarResolveEventStart, row)) !== key) return;
+      items.push({
+        kind: "event",
+        title: decode(safeInvoke(window.socialCalendarResolveEventTitle, row) || row?.title || row?.name || ""),
+        color: String(row?.color || "#9ac2ff").trim() || "#9ac2ff",
+      });
+    });
+    (Array.isArray(state.tasks) ? state.tasks : []).forEach((row) => {
+      if (dayKey(safeInvoke(window.socialCalendarResolveTaskDue, row)) !== key) return;
+      const own = actorKey && String(row?.assignee_key || "").trim() === actorKey;
+      items.push({
+        kind: "task",
+        title: decode(safeInvoke(window.socialCalendarResolveTaskTitle, row) || row?.title || row?.name || ""),
+        color: own ? "#b8e5b8" : "#e9c4ff",
+      });
+    });
+    return items;
+  };
+
+  const renderCalendarGrid = () => {
+    const state = ensureState();
+    const grid = ensureChrome();
+    if (!grid) return;
+    const d = state.calendarDate instanceof Date && !Number.isNaN(state.calendarDate.getTime()) ? state.calendarDate : new Date();
+    const today = dayKey(new Date());
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    const firstDay = new Date(year, month, 1, 0, 0, 0, 0);
+    const lastDay = new Date(year, month + 1, 0, 23, 59, 59, 0);
+    const shift = (firstDay.getDay() + 6) % 7;
+    const days = Number(lastDay.getDate() || 0);
+    const selectedPrefix = `${year}-${pad(month + 1)}-`;
+    if (!String(state.calendarSelectedDay || "").startsWith(selectedPrefix)) {
+      const fallbackToday = today && today.startsWith(selectedPrefix) ? today : `${selectedPrefix}01`;
+      state.calendarSelectedDay = fallbackToday;
+    }
+    const head = [t("\u041f\u043d", "Mon"), t("\u0412\u0442", "Tue"), t("\u0421\u0440", "Wed"), t("\u0427\u0442", "Thu"), t("\u041f\u0442", "Fri"), t("\u0421\u0431", "Sat"), t("\u0412\u0441", "Sun")]
+      .map((label) => `<span>${escape(label)}</span>`)
+      .join("");
+    let html = `<div class="social-calendar-row head">${head}</div><div class="social-calendar-cells">`;
+    for (let i = 0; i < shift; i += 1) html += `<button class="social-day muted" type="button" disabled></button>`;
+    for (let day = 1; day <= days; day += 1) {
+      const key = `${year}-${pad(month + 1)}-${pad(day)}`;
+      const items = buildPreviewItems(key, state);
+      const chips = items.slice(0, 3).map((item) => {
+        const title = String(item.title || "").trim() || t("\u0417\u0430\u043f\u0438\u0441\u044c", "Entry");
+        const shortTitle = title.length > 20 ? `${title.slice(0, 19)}...` : title;
+        return `<span class="sw-calendar-chip" style="--sw-chip-color:${escape(item.color)}"><span class="sw-calendar-chip-title">${escape(shortTitle)}</span></span>`;
+      }).join("");
+      const more = items.length > 3 ? `<span class="sw-calendar-more">+${items.length - 3}</span>` : "";
+      const classes = [
+        "social-day",
+        "rich",
+        key === String(state.calendarSelectedDay || "") ? "active" : "",
+        key === today ? "today" : "",
+        items.some((item) => item.kind === "event") ? "has-event" : "",
+        items.some((item) => item.kind === "task") ? "has-task" : "",
+      ].filter(Boolean).join(" ");
+      html += `<button class="${escape(classes)}" data-day-key="${escape(key)}" type="button"><div class="social-day-head"><b>${day}</b></div><div class="social-day-preview-stack">${chips}</div>${more}</button>`;
+    }
+    html += "</div>";
+    grid.innerHTML = html;
+    hideLegacyPanels();
+  };
+
+  const sanitizeDaySheet = () => {
+    const sheet = document.getElementById("socialCalendarDaySheet");
+    if (!sheet || sheet.classList.contains("hidden")) return;
+    const closeBtn = sheet.querySelector(".sw-day-sheet-close");
+    if (closeBtn) {
+      closeBtn.textContent = "\u00d7";
+      closeBtn.setAttribute("aria-label", t("\u0417\u0430\u043a\u0440\u044b\u0442\u044c", "Close"));
+      try { closeBtn.removeAttribute("title"); } catch (_) {}
+    }
+    const addBtn = sheet.querySelector(".sw-day-sheet-add");
+    if (addBtn) {
+      addBtn.setAttribute("onclick", "socialOpenCalendarQuickAddMenu()");
+      try { addBtn.removeAttribute("title"); } catch (_) {}
+    }
+    const miniFab = sheet.querySelector(".social-calendar-fab-mini");
+    if (miniFab) {
+      miniFab.textContent = "+";
+      miniFab.setAttribute("aria-label", t("\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c", "Add"));
+      try { miniFab.removeAttribute("title"); } catch (_) {}
+    }
+    sheet.querySelectorAll("[title]").forEach((node) => {
+      try { node.removeAttribute("title"); } catch (_) {}
+    });
+  };
+
+  const cleanMonthYearModal = () => {
+    const modal = document.getElementById("socialModal");
+    const host = document.getElementById("socialModalHost");
+    const title = document.getElementById("socialModalTitle");
+    if (!modal || modal.classList.contains("hidden") || !host) return;
+    if (!host.querySelector(".social-calendar-month-year-modal")) return;
+    if (title) title.textContent = t("\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u043c\u0435\u0441\u044f\u0446 \u0438 \u0433\u043e\u0434", "Select month and year");
+    const labels = host.querySelectorAll(".social-calendar-month-year-modal label > span");
+    if (labels[0]) labels[0].textContent = t("\u041c\u0435\u0441\u044f\u0446", "Month");
+    if (labels[1]) labels[1].textContent = t("\u0413\u043e\u0434", "Year");
+    host.querySelectorAll(".social-calendar-month-year-modal .actions button").forEach((btn, index) => {
+      btn.textContent = index === 0 ? t("\u041e\u0442\u043c\u0435\u043d\u0430", "Cancel") : t("\u041f\u0440\u0438\u043c\u0435\u043d\u0438\u0442\u044c", "Apply");
+      try { btn.removeAttribute("title"); } catch (_) {}
+    });
+  };
+
+  const scheduleCalendarRerenderAfterMonthPickerClose = () => {
+    setTimeout(() => {
+      try {
+        const state = ensureState();
+        if (state.calendarDate instanceof Date && !Number.isNaN(state.calendarDate.getTime())) {
+          const monthInput = document.getElementById("socialCalendarMonth");
+          if (monthInput) {
+            monthInput.value = monthValue(state.calendarDate);
+          }
+        }
+        safeInvoke(window.socialHideCalendarDaySheet, true);
+        state.calendarDaySheetOpen = false;
+        renderCalendarGrid();
+        refreshCalendarUi();
+        const hasDays = Boolean(document.querySelector("#socialCalendarGrid .social-day[data-day-key]"));
+        if (!hasDays && typeof window.socialLoadCalendar === "function") {
+          Promise.resolve(window.socialLoadCalendar({ preserveSelection: true, silent: false })).catch(() => null);
+        }
+        ensureCalendarBackSwipeCatcher();
+      } catch (_) {
+        try {
+          renderCalendarGrid();
+          refreshCalendarUi();
+          ensureCalendarBackSwipeCatcher();
+        } catch (_) {}
+      }
+    }, 0);
+  };
+
+  const originalCloseModal = typeof window.socialCloseModal === "function"
+    ? window.socialCloseModal
+    : null;
+  if (originalCloseModal && originalCloseModal.__calendarRescueCloseWrappedV20260327c !== true) {
+    window.socialCloseModal = function socialCloseModalRescueV20260327c() {
+      const modal = document.getElementById("socialModal");
+      const wasMonthPicker = Boolean(
+        modal
+        && !modal.classList.contains("hidden")
+        && modal.querySelector(".social-calendar-month-year-modal")
+      );
+      const result = originalCloseModal.apply(this, arguments);
+      if (wasMonthPicker && !window.__socialCalendarMonthApplyInFlightV20260327c) {
+        scheduleCalendarRerenderAfterMonthPickerClose();
+      }
+      return result;
+    };
+    window.socialCloseModal.__calendarRescueCloseWrappedV20260327c = true;
+  }
+
+  const originalApplyMonthYearPicker = typeof window.socialApplyCalendarMonthYearPicker === "function"
+    ? window.socialApplyCalendarMonthYearPicker
+    : null;
+  if (originalApplyMonthYearPicker && originalApplyMonthYearPicker.__calendarRescueApplyWrappedV20260327c !== true) {
+    window.socialApplyCalendarMonthYearPicker = function socialApplyCalendarMonthYearPickerRescueV20260327c() {
+      window.__socialCalendarMonthApplyInFlightV20260327c = true;
+      try {
+        return originalApplyMonthYearPicker.apply(this, arguments);
+      } finally {
+        setTimeout(() => {
+          window.__socialCalendarMonthApplyInFlightV20260327c = false;
+        }, 0);
+      }
+    };
+    window.socialApplyCalendarMonthYearPicker.__calendarRescueApplyWrappedV20260327c = true;
+  }
+
+  const reopenDayOverlay = (value, options = {}) => {
+    const state = ensureState();
+    const key = String(value || state.calendarSelectedDay || "").trim();
+    if (!key) return;
+    state.calendarSelectedDay = key;
+    state.calendarDaySheetOpen = true;
+    document.querySelectorAll("#socialCalendarGrid .social-day.active").forEach((node) => node.classList.remove("active"));
+    try {
+      document.querySelector(`#socialCalendarGrid .social-day[data-day-key="${CSS.escape(key)}"]`)?.classList?.add("active");
+    } catch (_) {}
+    if (!options.skipHistory) {
+      safeInvoke(window.socialCalendarPushHistoryLayer, "day", { dayKey: key }, { replaceTop: true });
+    }
+    hideLegacyPanels();
+    safeInvoke(window.socialForceOpenCalendarDaySheet, key);
+    setTimeout(() => {
+      hideLegacyPanels();
+      sanitizeDaySheet();
+    }, 0);
+    setTimeout(() => {
+      hideLegacyPanels();
+      sanitizeDaySheet();
+    }, 90);
+  };
+
+  const refreshCalendarUi = () => {
+    const grid = ensureChrome();
+    const dayCount = grid ? grid.querySelectorAll(".social-day[data-day-key]").length : 0;
+    if (!dayCount) {
+      renderCalendarGrid();
+    }
+    cleanMonthYearModal();
+    sanitizeDaySheet();
+    hideLegacyPanels();
+    ensureCalendarBackSwipeCatcher();
+    safeInvoke(window.socialBindCalendarSwipe);
+  };
+
+  const ensureCalendarBackSwipeCatcher = () => {
+    let catcher = document.getElementById("socialCalendarBackSwipeCatcher");
+    if (!catcher) {
+      catcher = document.createElement("div");
+      catcher.id = "socialCalendarBackSwipeCatcher";
+      catcher.setAttribute("aria-hidden", "true");
+      catcher.style.setProperty("position", "fixed", "important");
+      catcher.style.setProperty("left", "0", "important");
+      catcher.style.setProperty("top", "0", "important");
+      catcher.style.setProperty("bottom", "0", "important");
+      catcher.style.setProperty("width", "28px", "important");
+      catcher.style.setProperty("z-index", "2147482500", "important");
+      catcher.style.setProperty("background", "transparent", "important");
+      catcher.style.setProperty("touch-action", "pan-y", "important");
+      document.body.appendChild(catcher);
+      let startX = 0;
+      let startY = 0;
+      let active = false;
+      catcher.addEventListener("touchstart", (event) => {
+        const touch = event.changedTouches?.[0];
+        if (!touch) return;
+        startX = Number(touch.clientX || 0);
+        startY = Number(touch.clientY || 0);
+        active = true;
+        event.preventDefault();
+        event.stopPropagation();
+      }, { passive: false });
+      catcher.addEventListener("touchmove", (event) => {
+        if (!active) return;
+        event.preventDefault();
+        event.stopPropagation();
+      }, { passive: false });
+      catcher.addEventListener("touchend", (event) => {
+        const touch = event.changedTouches?.[0];
+        if (!active || !touch) {
+          active = false;
+          return;
+        }
+        const dx = Number(touch.clientX || 0) - startX;
+        const dy = Number(touch.clientY || 0) - startY;
+        active = false;
+        event.preventDefault();
+        event.stopPropagation();
+        if (dx >= 44 && dx > Math.abs(dy) && typeof window.socialCalendarBackLayer === "function") {
+          ensureCalendarSubtab();
+          window.socialCalendarBackLayer();
+        }
+      }, { passive: false });
+      catcher.addEventListener("touchcancel", () => {
+        active = false;
+      }, { passive: true });
+    }
+    const state = ensureState();
+    const visible = isAppShell() && Boolean(
+      state.calendarHistoryLayers?.length
+      || (document.getElementById("socialCalendarDaySheet") && !document.getElementById("socialCalendarDaySheet").classList.contains("hidden"))
+      || (document.getElementById("socialModal") && !document.getElementById("socialModal").classList.contains("hidden"))
+    );
+    catcher.style.setProperty("display", visible ? "block" : "none", "important");
+    catcher.style.setProperty("pointer-events", visible ? "auto" : "none", "important");
+    return catcher;
+  };
+
+  const loadCalendarStable = async () => {
+    const state = ensureState();
+    state.calendarLoadSeq = Number(state.calendarLoadSeq || 0) + 1;
+    const loadSeq = state.calendarLoadSeq;
+    const monthInput = document.getElementById("socialCalendarMonth");
+    const monthRaw = String(monthInput?.value || monthValue(state.calendarDate)).trim();
+    if (monthRaw) {
+      const [rawYear, rawMonth] = monthRaw.split("-").map((item) => Number(item || 0));
+      if (rawYear && rawMonth) {
+        state.calendarDate = new Date(rawYear, rawMonth - 1, 1, 0, 0, 0, 0);
+      }
+    }
+    ensureChrome();
+    const previousTasks = Array.isArray(state.tasks) ? [...state.tasks] : [];
+    const previousEvents = Array.isArray(state.calendarEvents) ? [...state.calendarEvents] : [];
+    const previousLastGood = Array.isArray(state.calendarEventsLastGood) ? [...state.calendarEventsLastGood] : [];
+
+    let taskRowsRaw = null;
+    try {
+      taskRowsRaw = await window.socialRequest("/api/social/tasks?task_kind=all&include_done=0", { timeoutMs: 12000 });
+    } catch (_) {
+      taskRowsRaw = null;
+    }
+    if (loadSeq !== state.calendarLoadSeq) return null;
+    const taskRows = safeInvoke(window.socialCalendarExtractRows, taskRowsRaw) || [];
+    state.tasks = taskRows.length ? taskRows : (taskRowsRaw == null ? previousTasks : []);
+
+    const start = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth(), 1, 0, 0, 0, 0);
+    const end = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth() + 1, 0, 23, 59, 59, 0);
+    const qp = new URLSearchParams({
+      date_from: typeof window.socialCalendarRangeParam === "function" ? window.socialCalendarRangeParam(start, false) : start.toISOString(),
+      date_to: typeof window.socialCalendarRangeParam === "function" ? window.socialCalendarRangeParam(end, true) : end.toISOString(),
+    });
+
+    let rowsRaw = null;
+    let eventsLoadFailed = false;
+    try {
+      rowsRaw = await window.socialRequest(`/api/social/calendar/events?${qp.toString()}`, { timeoutMs: 12000 });
+    } catch (_) {
+      rowsRaw = null;
+      eventsLoadFailed = true;
+    }
+    if (loadSeq !== state.calendarLoadSeq) return null;
+    const sourceRows = safeInvoke(window.socialCalendarExtractRows, rowsRaw) || [];
+    let rows = safeInvoke(window.socialCalendarFilterRowsByMonth, sourceRows, state.calendarDate) || [];
+    if (!rows.length && sourceRows.length) rows = sourceRows;
+    if (!rows.length) {
+      try {
+        const wideRaw = await window.socialRequest("/api/social/calendar/events", { timeoutMs: 12000 });
+        if (loadSeq !== state.calendarLoadSeq) return null;
+        const wideRows = safeInvoke(window.socialCalendarExtractRows, wideRaw) || [];
+        if (wideRows.length) {
+          rows = safeInvoke(window.socialCalendarFilterRowsByMonth, wideRows, state.calendarDate) || [];
+          if (!rows.length) rows = wideRows;
+          rowsRaw = wideRaw;
+        }
+      } catch (_) {}
+    }
+    if (loadSeq !== state.calendarLoadSeq) return null;
+    if (rows.length) {
+      state.calendarEvents = rows;
+      const lastGood = safeInvoke(window.socialCalendarExtractRows, rowsRaw) || [];
+      state.calendarEventsLastGood = lastGood.length ? [...lastGood] : [...rows];
+    } else {
+      const fallbackMonthRows = safeInvoke(window.socialCalendarFilterRowsByMonth, previousLastGood.length ? previousLastGood : previousEvents, state.calendarDate) || [];
+      if (eventsLoadFailed && previousEvents.length) {
+        state.calendarEvents = [...previousEvents];
+      } else if (fallbackMonthRows.length) {
+        state.calendarEvents = fallbackMonthRows;
+      } else {
+        state.calendarEvents = [];
+      }
+    }
+    refreshCalendarUi();
+    if (state.calendarDaySheetOpen && state.calendarSelectedDay) {
+      reopenDayOverlay(state.calendarSelectedDay, { skipHistory: true });
+    }
+    return state.calendarEvents;
+  };
+
+  window.socialRenderCalendar = function socialRenderCalendarRescueV20260327c() {
+    let result = ensureState().calendarEvents;
+    if (baseRenderCalendar) {
+      result = baseRenderCalendar.apply(this, arguments);
+    }
+    refreshCalendarUi();
+    return result;
+  };
+
+  window.socialLoadCalendar = async function socialLoadCalendarRescueV20260327c() {
+    const state = ensureState();
+    const monthInput = document.getElementById("socialCalendarMonth");
+    if (monthInput) {
+      monthInput.value = monthValue(state.calendarDate);
+    }
+    const result = baseLoadCalendar
+      ? await Promise.resolve(baseLoadCalendar.apply(this, arguments))
+      : await loadCalendarStable();
+    refreshCalendarUi();
+    if (state.calendarDaySheetOpen && state.calendarSelectedDay) {
+      reopenDayOverlay(state.calendarSelectedDay, { skipHistory: true });
+    }
+    return result;
+  };
+
+  window.socialShiftCalendar = function socialShiftCalendarRescueV20260327c(deltaMonths = 0) {
+    const delta = Number(deltaMonths || 0);
+    if (!Number.isFinite(delta) || !delta) return;
+    const state = ensureState();
+    const now = Date.now();
+    if (now - Number(state.calendarShiftStampV20260327c || 0) < 240) return;
+    state.calendarShiftStampV20260327c = now;
+    const base = state.calendarDate instanceof Date && !Number.isNaN(state.calendarDate.getTime()) ? state.calendarDate : new Date();
+    state.calendarDate = new Date(base.getFullYear(), base.getMonth() + delta, 1, 0, 0, 0, 0);
+    state.calendarDaySheetOpen = false;
+    safeInvoke(window.socialHideCalendarDaySheet, true);
+    safeInvoke(window.socialCloseModal, { force: true });
+    const monthInput = document.getElementById("socialCalendarMonth");
+    if (monthInput) monthInput.value = monthValue(state.calendarDate);
+    return window.socialLoadCalendar();
+  };
+
+  window.socialShowDay = function socialShowDayRescueV20260327c(value, options = {}) {
+    const key = String(value || "").trim();
+    if (!key) return;
+    const opts = options && typeof options === "object" ? options : {};
+    if (baseShowDay) {
+      const result = baseShowDay.call(this, key, opts);
+      setTimeout(() => {
+        refreshCalendarUi();
+        reopenDayOverlay(key, { skipHistory: true });
+      }, 0);
+      return result;
+    }
+    reopenDayOverlay(key, opts);
+  };
+
+  window.socialCalendarBackLayer = function socialCalendarBackLayerRescueV20260327c() {
+    const state = ensureState();
+    const stack = Array.isArray(state.calendarHistoryLayers) ? state.calendarHistoryLayers : [];
+    const modalVisible = Boolean(document.getElementById("socialModal") && !document.getElementById("socialModal").classList.contains("hidden"));
+    const daySheetVisible = Boolean(document.getElementById("socialCalendarDaySheet") && !document.getElementById("socialCalendarDaySheet").classList.contains("hidden"));
+    if (stack.length || modalVisible || daySheetVisible || isAppShell()) {
+      ensureCalendarSubtab();
+      if (!stack.length) {
+        safeInvoke(window.socialCloseModal, { force: true });
+        safeInvoke(window.socialHideCalendarDaySheet, true);
+        state.calendarDaySheetOpen = false;
+        hideLegacyPanels();
+        if (typeof window.switchSocialSubtab === "function") {
+          try { window.switchSocialSubtab("calendar", false); } catch (_) {}
+        }
+        refreshCalendarUi();
+        return;
+      }
+      stack.pop();
+      const previous = stack.length ? stack[stack.length - 1] : null;
+      safeInvoke(window.socialCloseModal, { force: true });
+      safeInvoke(window.socialHideCalendarDaySheet, true);
+      state.calendarDaySheetOpen = false;
+      if (previous) {
+        ensureCalendarSubtab();
+        safeInvoke(window.socialCalendarRestoreHistoryLayer, previous);
+      } else if (modalVisible || daySheetVisible) {
+        hideLegacyPanels();
+        if (typeof window.switchSocialSubtab === "function") {
+          try { window.switchSocialSubtab("calendar", false); } catch (_) {}
+        }
+        refreshCalendarUi();
+      }
+      return;
+    }
+    if (baseCalendarBackLayer) {
+      return baseCalendarBackLayer.apply(this, arguments);
+    }
+    if (!stack.length) {
+      safeInvoke(window.socialCloseModal, { force: true });
+      safeInvoke(window.socialHideCalendarDaySheet, true);
+      hideLegacyPanels();
+      return;
+    }
+    stack.pop();
+    const previous = stack.length ? stack[stack.length - 1] : null;
+    safeInvoke(window.socialCloseModal, { force: true });
+    safeInvoke(window.socialHideCalendarDaySheet, true);
+    safeInvoke(window.socialCalendarRestoreHistoryLayer, previous);
+    setTimeout(() => {
+      refreshCalendarUi();
+      if (previous?.layer === "day" && previous?.payload?.dayKey) {
+        reopenDayOverlay(previous.payload.dayKey, { skipHistory: true });
+      }
+    }, 0);
+  };
+
+  if (document.body.dataset.calendarRescueTouchBoundV20260327c !== "1") {
+    document.body.dataset.calendarRescueTouchBoundV20260327c = "1";
+    let tapState = null;
+    let swipeState = null;
+    let backState = null;
+    document.addEventListener("touchstart", (event) => {
+      const touch = event.changedTouches?.[0];
+      const dayNode = event.target?.closest?.("#socialCalendarGrid .social-day[data-day-key]");
+      const flowTarget = Boolean(
+        event.target?.closest?.(
+          "#socialCalendarDaySheet, #socialCalendarDaySheetBackdrop, #socialModal, .sw-day-sheet-card, .social-calendar-record-detail, .social-calendar-edit-grid"
+        )
+      );
+      if (dayNode && touch) {
+        tapState = {
+          key: String(dayNode.getAttribute("data-day-key") || "").trim(),
+          x: touch.clientX,
+          y: touch.clientY,
+        };
+      } else {
+        tapState = null;
+      }
+      const grid = event.target?.closest?.("#socialCalendarGrid");
+      swipeState = grid && touch ? { x: touch.clientX, y: touch.clientY } : null;
+      if (!isAppShell() || !touch) {
+        backState = null;
+        return;
+      }
+      const state = ensureState();
+      const hasFlow = Boolean(
+        state.calendarHistoryLayers?.length
+        || (document.getElementById("socialCalendarDaySheet") && !document.getElementById("socialCalendarDaySheet").classList.contains("hidden"))
+        || (document.getElementById("socialModal") && !document.getElementById("socialModal").classList.contains("hidden"))
+      );
+      backState = hasFlow && (touch.clientX <= 72 || flowTarget)
+        ? { x: touch.clientX, y: touch.clientY }
+        : null;
+    }, { passive: true, capture: true });
+
+    document.addEventListener("touchmove", (event) => {
+      const touch = event.touches?.[0] || event.changedTouches?.[0];
+      if (!backState || !touch) return;
+      const dx = Number(touch.clientX || 0) - Number(backState.x || 0);
+      const dy = Number(touch.clientY || 0) - Number(backState.y || 0);
+      if (dx > 10 && dx > Math.abs(dy)) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+      }
+    }, { passive: false, capture: true });
+
+    document.addEventListener("touchend", (event) => {
+      const touch = event.changedTouches?.[0];
+      if (backState && touch) {
+        const dx = Number(touch.clientX || 0) - Number(backState.x || 0);
+        const dy = Number(touch.clientY || 0) - Number(backState.y || 0);
+        backState = null;
+        if (dx >= 72 && dx > Math.abs(dy)) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+          window.socialCalendarBackLayer();
+          return;
+        }
+      }
+      if (swipeState && touch) {
+        const dx = Number(touch.clientX || 0) - Number(swipeState.x || 0);
+        const dy = Number(touch.clientY || 0) - Number(swipeState.y || 0);
+        swipeState = null;
+        if (Math.abs(dx) > 42 && Math.abs(dx) > Math.abs(dy) + 10) {
+          ensureState().calendarTapSuppressedUntilV20260327c = Date.now() + 360;
+          event.preventDefault();
+          event.stopPropagation();
+          window.socialShiftCalendar(dx > 0 ? -1 : 1);
+          return;
+        }
+      }
+      if (!tapState?.key) return;
+      const key = tapState.key;
+      const dx = Math.abs(Number(touch?.clientX || 0) - Number(tapState.x || 0));
+      const dy = Math.abs(Number(touch?.clientY || 0) - Number(tapState.y || 0));
+      tapState = null;
+      if (Date.now() < Number(ensureState().calendarTapSuppressedUntilV20260327c || 0)) return;
+      if (dx > 18 || dy > 18) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+      safeInvoke(window.socialShowDay, key);
+    }, { passive: false, capture: true });
+  }
+
+  const originalOpenMonthYearPicker = typeof window.socialOpenCalendarMonthYearPicker === "function"
+    ? window.socialOpenCalendarMonthYearPicker
+    : null;
+  if (originalOpenMonthYearPicker && originalOpenMonthYearPicker.__calendarRescueWrappedV20260327c !== true) {
+    window.socialOpenCalendarMonthYearPicker = function socialOpenCalendarMonthYearPickerRescueV20260327c() {
+      safeInvoke(window.socialHideCalendarDaySheet, true);
+      const result = originalOpenMonthYearPicker.apply(this, arguments);
+      setTimeout(cleanMonthYearModal, 0);
+      return result;
+    };
+    window.socialOpenCalendarMonthYearPicker.__calendarRescueWrappedV20260327c = true;
+  }
+
+  const originalResolveNotificationText = typeof window.socialResolveNotificationText === "function"
+    ? window.socialResolveNotificationText
+    : null;
+  if (originalResolveNotificationText && originalResolveNotificationText.__calendarRescueNotifWrappedV20260327c !== true) {
+    const flattenStrings = (value, acc) => {
+      if (value == null) return acc;
+      if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+        acc.push(String(value));
+        return acc;
+      }
+      if (Array.isArray(value)) {
+        value.forEach((item) => flattenStrings(item, acc));
+        return acc;
+      }
+      if (typeof value === "object") {
+        Object.keys(value).forEach((key) => flattenStrings(value[key], acc));
+      }
+      return acc;
+    };
+    const isUsableNotificationText = (value) => {
+      const text = decode(value);
+      if (!text) return false;
+      const compact = String(text).replace(/\s+/g, " ").trim();
+      if (!compact) return false;
+      if (/^[\d\s:./-]+$/.test(compact)) return false;
+      if (/^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?$/.test(compact)) return false;
+      return true;
+    };
+    window.socialResolveNotificationText = function socialResolveNotificationTextRescueV20260327c(row) {
+      const base = originalResolveNotificationText.call(this, row) || {};
+      const pool = flattenStrings([
+        base.title,
+        base.body,
+        row?.title,
+        row?.body,
+        row?.text,
+        row?.message,
+        row?.preview,
+        row?.payload,
+        row?.meta,
+        row?.data,
+        row?.notification,
+      ], []);
+      const choose = (fallback) => {
+        const variants = pool.map((item) => decode(item)).filter(isUsableNotificationText);
+        if (!variants.length) return "";
+        return variants.sort((left, right) => {
+          const leftScore = (String(left || "").match(/[\u0420\u0421\u0412\u00d0\u00d1]/g) || []).length;
+          const rightScore = (String(right || "").match(/[\u0420\u0421\u0412\u00d0\u00d1]/g) || []).length;
+          if (leftScore !== rightScore) return leftScore - rightScore;
+          return left.length - right.length;
+        })[0];
+      };
+      const fallbackTitle = decode(base.title || t("\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u0435", "Notification"));
+      const fallbackBody = decode(base.body || "");
+      const titleCandidate = choose(base.title || fallbackTitle);
+      const bodyCandidate = choose(base.body || fallbackBody);
+      return {
+        ...base,
+        title: titleCandidate || (isUsableNotificationText(fallbackTitle) ? fallbackTitle : t("\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u0435", "Notification")),
+        body: bodyCandidate || (isUsableNotificationText(fallbackBody) ? fallbackBody : ""),
+      };
+    };
+    window.socialResolveNotificationText.__calendarRescueNotifWrappedV20260327c = true;
+  }
+
+  const originalNotifyDesktop = typeof window.socialNotifyDesktop === "function"
+    ? window.socialNotifyDesktop
+    : null;
+  if (originalNotifyDesktop && originalNotifyDesktop.__calendarRescueDesktopNotifWrappedV20260327c !== true) {
+    window.socialNotifyDesktop = function socialNotifyDesktopRescueV20260327c(row) {
+      const safeText = typeof window.socialResolveNotificationText === "function"
+        ? (window.socialResolveNotificationText(row) || {})
+        : {};
+      const payload = row && typeof row === "object"
+        ? {
+            ...row,
+            title: decode(safeText.title || row?.title || ""),
+            body: decode(safeText.body || row?.body || row?.text || row?.message || ""),
+          }
+        : row;
+      return originalNotifyDesktop.call(this, payload);
+    };
+    window.socialNotifyDesktop.__calendarRescueDesktopNotifWrappedV20260327c = true;
+  }
+
+  window.addEventListener("popstate", () => {
+    setTimeout(() => {
+      const state = ensureState();
+      const hasCalendarFlow = Boolean(
+        state.calendarHistoryLayers?.length
+        || state.calendarDaySheetOpen
+        || (document.getElementById("socialCalendarDaySheet") && !document.getElementById("socialCalendarDaySheet").classList.contains("hidden"))
+        || (document.getElementById("socialModal") && !document.getElementById("socialModal").classList.contains("hidden"))
+      );
+      if (hasCalendarFlow) {
+        try {
+          refreshCalendarUi();
+          return;
+        } catch (_) {}
+      }
+      refreshCalendarUi();
+    }, 0);
+  });
+
+  const stableRuntime = {
+    socialResolveNotificationText: window.socialResolveNotificationText,
+    socialNotifyDesktop: window.socialNotifyDesktop,
+    socialRenderNotificationCenter: window.socialRenderNotificationCenter,
+    socialLoadNotificationCenterRows: window.socialLoadNotificationCenterRows,
+    socialToggleNotificationCenter: window.socialToggleNotificationCenter,
+    socialRenderCalendar: window.socialRenderCalendar,
+    socialLoadCalendar: window.socialLoadCalendar,
+    socialShiftCalendar: window.socialShiftCalendar,
+    socialShowDay: window.socialShowDay,
+    socialCalendarBackLayer: window.socialCalendarBackLayer,
+    socialOpenCalendarMonthYearPicker: window.socialOpenCalendarMonthYearPicker,
+    socialApplyCalendarMonthYearPicker: window.socialApplyCalendarMonthYearPicker,
+    socialBindCalendarSwipe: window.socialBindCalendarSwipe,
+    socialBindBellButtonsNow: window.socialBindBellButtonsNow,
+  };
+  window.__seoWibeStableSocialRuntimeV20260402 = stableRuntime;
+  window.__seoWibeRestoreStableSocialRuntimeV20260402 = function restoreStableSocialRuntimeV20260402() {
+    Object.entries(stableRuntime).forEach(([key, value]) => {
+      if (typeof value === "function") {
+        window[key] = value;
+      }
+    });
+    return stableRuntime;
+  };
+
+  setTimeout(() => {
+    loadCalendarStable();
   }, 0);
 })();

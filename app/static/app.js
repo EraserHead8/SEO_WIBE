@@ -160,20 +160,32 @@ const DEFAULT_AVATARS = Array.from({ length: 8 }, (_, i) => `/static/avatars/ava
 const GROUP_AVATARS = Array.from({ length: 8 }, (_, i) => `/static/avatars/group-${String(i + 1).padStart(2, "0")}.svg`);
 let currentLang = (localStorage.getItem("ui_lang") || "ru").toLowerCase() === "en" ? "en" : "ru";
 let currentTheme = (localStorage.getItem("ui_theme") || "classic").toLowerCase();
+function isLikelyNativeMobileShell() {
+  try {
+    if (typeof window.ReactNativeWebView !== "undefined") return true;
+    const ua = String(navigator.userAgent || "").toLowerCase();
+    if (/\bwv\b/.test(ua) || ua.includes("android")) return true;
+    if (typeof navigator.standalone !== "undefined" && navigator.standalone) return true;
+    if (typeof window.matchMedia === "function" && window.matchMedia("(display-mode: standalone)").matches) return true;
+  } catch (_) {}
+  return false;
+}
 const mobileClientMode = (() => {
   try {
     const url = new URL(window.location.href);
-    return window.location.pathname === "/mobile" || url.searchParams.get("mobile_app") === "1";
+    return window.location.pathname === "/mobile"
+      || url.searchParams.get("mobile_app") === "1"
+      || isLikelyNativeMobileShell();
   } catch (_) {
-    return String(window.location.pathname || "").trim() === "/mobile";
+    return String(window.location.pathname || "").trim() === "/mobile" || isLikelyNativeMobileShell();
   }
 })();
 const mobileApkMode = (() => {
   try {
     const url = new URL(window.location.href);
-    return url.searchParams.get("mobile_app") === "1";
+    return url.searchParams.get("mobile_app") === "1" || isLikelyNativeMobileShell();
   } catch (_) {
-    return false;
+    return isLikelyNativeMobileShell();
   }
 })();
 let sidebarCompact = localStorage.getItem("sidebar_compact") === "1";
@@ -507,17 +519,16 @@ function t(key, fallback = "") {
   const ruPack = UI_TEXT.ru || {};
   const enPack = UI_TEXT.en || {};
   const source = pack[key] || fallback || key;
-  let value = decodePossiblyMojibake(source);
-  try {
-    if (typeof window !== "undefined" && typeof window.__repairMojibakeText === "function") {
-      value = String(window.__repairMojibakeText(value) || value);
-    }
-  } catch (_) {}
+  const rawRu = String(ruPack[key] || source || "");
+  const repairedRu = _repairUiCandidate(rawRu);
+  const repairedEn = _repairUiCandidate(enPack[key] || fallback || key);
+  let value = _repairUiCandidate(source);
   if (currentLang !== "en") {
-    const rawRu = String(ruPack[key] || source || "");
     const broken = /\?{3,}|�|(?:Ð.|Ñ.|вЂ|рџ|[ЃЉЊЋЏђѓљњћџ])/.test(rawRu);
-    if (broken || _mojibakeScore(rawRu) >= 2 || /\uFFFD/.test(rawRu)) {
-      value = decodePossiblyMojibake(enPack[key] || fallback || key);
+    if (_looksReadableRussian(repairedRu) || _looksReadableCyrillic(repairedRu)) {
+      value = repairedRu;
+    } else if (!(_looksReadableRussian(value) || _looksReadableCyrillic(value)) && (broken || _mojibakeScore(rawRu) >= 2 || /\uFFFD/.test(rawRu))) {
+      value = repairedEn || repairedRu || value;
     }
   }
   return value;
@@ -539,6 +550,42 @@ function _cyrillicScore(text) {
   if (!value) return 0;
   const matches = value.match(/[\u0400-\u04FF]/g);
   return matches ? matches.length : 0;
+}
+
+function _repairUiCandidate(input) {
+  let value = String(input ?? "");
+  if (!value) return "";
+  try {
+    value = String(decodePossiblyMojibake(value) || value);
+  } catch (_) {}
+  try {
+    if (typeof window !== "undefined" && typeof window.__repairMojibakeText === "function") {
+      value = String(window.__repairMojibakeText(value) || value);
+    }
+  } catch (_) {}
+  return String(value || "")
+    .replace(/[\u0000-\u001F\u007F-\u009F]+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function _looksReadableRussian(text) {
+  const value = String(text || "").trim();
+  if (!value) return false;
+  const broken = /\?{3,}|\uFFFD|(?:\u00D0.|\u00D1.|РІР‚|СЂСџ|[РѓР‰РЉР‹РЏС’С“С™СљС›СџР С“Р вЂ°Р Р‰Р вЂ№Р РЏРЎвЂ™РЎвЂњРЎв„ўРЎС™РЎвЂєРЎСџ])/u.test(value)
+    || _mojibakeScore(value) >= 2
+    || /(?:\b[\u0420\u0421\u0412\u00D0\u00D1]\b(?:\s|\u00A0)+){3,}/u.test(value);
+  if (broken) return false;
+  return _cyrillicScore(value) >= 2;
+}
+
+function _looksReadableCyrillic(text) {
+  const value = String(text || "").trim();
+  if (!value) return false;
+  if (!_cyrillicScore(value)) return false;
+  if (_mojibakeScore(value) > 1 || /\uFFFD/.test(value)) return false;
+  if (/[РСВÐÑ](?:\s|\u00A0){0,1}[РСВÐÑ]/.test(value)) return false;
+  return _cyrillicScore(value) >= 2 || /[А-Яа-яЁё]/.test(value);
 }
 
 let _cp1251ReverseMap = null;
@@ -648,7 +695,9 @@ if (typeof window !== "undefined") {
 function __legacyTr(ru, en) {
   const rawRu = String(ru == null ? "" : ru);
   const rawEn = String(en == null ? "" : en);
-  let value = decodePossiblyMojibake(currentLang === "en" ? rawEn : rawRu);
+  const repairedRu = _repairUiCandidate(rawRu);
+  const repairedEn = _repairUiCandidate(rawEn);
+  let value = currentLang === "en" ? repairedEn : repairedRu;
   try {
     if (typeof window !== "undefined" && typeof window.__repairMojibakeText === "function") {
       value = String(window.__repairMojibakeText(value) || value);
@@ -656,11 +705,13 @@ function __legacyTr(ru, en) {
   } catch (_) {}
   if (currentLang !== "en") {
     const broken = /\?{3,}|\uFFFD|(?:\u00D0.|\u00D1.|вЂ|рџ|[ЃЉЊЋЏђѓљњћџ])/u.test(String(value || ""));
-    if ((broken || _mojibakeScore(String(value || "")) >= 2 || /\uFFFD/.test(String(value || ""))) && rawEn.trim()) {
+    if ((_looksReadableRussian(repairedRu) || _looksReadableCyrillic(repairedRu))) {
+      value = repairedRu;
+    } else if ((broken || _mojibakeScore(String(value || "")) >= 2 || /\uFFFD/.test(String(value || ""))) && rawEn.trim()) {
       value = decodePossiblyMojibake(rawEn);
     }
   }
-  return value;
+  return _repairUiCandidate(value);
 }
 
 // Harden translation decoding for double-encoded/space-split mojibake variants.
@@ -701,11 +752,60 @@ function tr(ru, en) {
     const broken = /\?{3,}|\uFFFD|(?:\u00D0.|\u00D1.|РІР‚|СЂСџ|[РѓР‰РЉР‹РЏС’С“С™СљС›Сџ])/u.test(current)
       || _mojibakeScore(current) >= 2
       || /(?:\b[\u0420\u0421\u0412\u00D0\u00D1]\b(?:\s|\u00A0)+){3,}/u.test(current);
-    if (broken && decodedEn) {
+    if (_looksReadableRussian(decodedRu) || _looksReadableCyrillic(decodedRu)) {
+      value = decodedRu;
+    } else if (broken && decodedEn) {
       value = decodedEn;
     }
   }
   return clean(value || (currentLang === "en" ? decodedEn : decodedRu) || rawRu || rawEn);
+}
+
+function normalizeAppText(value, fallback = "") {
+  const fixSymbols = (input) => String(input == null ? "" : input)
+    .replace(/РІРЉВ«/g, "\u232b")
+    .replace(/Р’В±/g, "\u00b1")
+    .replace(/Р“В·/g, "\u00f7")
+    .replace(/Р“вЂ”/g, "\u00d7")
+    .replace(/РІв‚¬вЂ™/g, "\u2212")
+    .replace(/РІР‚Сћ/g, "\u2022")
+    .replace(/РІР‚В¦/g, "\u2026");
+  const clean = (input) => String(input == null ? "" : input)
+    .replace(/[\u0000-\u001F\u007F-\u009F]+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  const looksBroken = (input) => {
+    const raw = clean(input);
+    if (!raw) return false;
+    if (/\?{3,}|\uFFFD|пїЅ/.test(raw)) return true;
+    if (/(?:\u00D0.|\u00D1.|Ð.|Ñ.|РІР‚|СЂСџ|рџ|вЂ|[ЃЉЊЋЏђѓљњћџРѓР‰РЉР‹РЏС’С“С™СљС›Сџ])/u.test(raw)) return true;
+    try {
+      if (typeof _mojibakeScore === "function" && _mojibakeScore(raw) >= 2) return true;
+    } catch (_) {}
+    return false;
+  };
+  const decodeChain = (input) => {
+    let text = clean(fixSymbols(input));
+    if (!text) return "";
+    for (let i = 0; i < 3; i += 1) {
+      try {
+        if (typeof decodePossiblyMojibake === "function") {
+          text = clean(decodePossiblyMojibake(text) || text);
+        }
+      } catch (_) {}
+      try {
+        if (typeof window !== "undefined" && typeof window.__repairMojibakeText === "function") {
+          text = clean(window.__repairMojibakeText(text) || text);
+        }
+      } catch (_) {}
+      text = clean(fixSymbols(text));
+    }
+    return text;
+  };
+  const primary = decodeChain(value);
+  const backup = decodeChain(fallback);
+  if (looksBroken(primary) && backup && !looksBroken(backup)) return backup;
+  return primary || backup || clean(fixSymbols(value));
 }
 
 function shouldTrackUiActivity(key, cooldownMs = 30000) {
@@ -917,7 +1017,7 @@ function applySidebarMode() {
   if (shell) shell.classList.toggle("sidebar-compact", compact);
   const toggle = sidebar.querySelector(".sidebar-toggle");
   if (toggle) {
-    toggle.textContent = compact ? "?" : "?";
+    toggle.textContent = "\u2630";
     toggle.dataset.tip = compact
       ? tr("Показать подписи", "Show labels")
       : tr("Скрыть подписи", "Hide labels");
@@ -1687,7 +1787,7 @@ async function requestJson(url, opts = {}) {
         if (!parsed.hasBody) return {};
         if (parsed.ok) return parsed.payload;
         throw makeRequestError(
-          currentLang === "en" ? "Server returned an invalid response." : "?????? ?????? ???????????? ?????.",
+          currentLang === "en" ? "Server returned an invalid response." : "Сервер вернул некорректный ответ.",
           {
             kind: "parse",
             status: response.status,
@@ -1754,7 +1854,7 @@ async function requestJson(url, opts = {}) {
       }
       if (isFetchNetwork) {
         throw makeRequestError(
-          currentLang === "en" ? "Network error. Check connection and retry." : "??????? ??????. ????????? ?????????? ? ?????????.",
+          currentLang === "en" ? "Network error. Check connection and retry." : "Сетевая ошибка. Проверьте подключение и повторите.",
           { kind: "network", cause: e }
         );
       }
@@ -1773,7 +1873,7 @@ async function requestJson(url, opts = {}) {
   }
   if (isNetworkError(lastError)) {
     throw makeRequestError(
-      currentLang === "en" ? "Network error. Check connection and retry." : "??????? ??????. ????????? ?????????? ? ?????????.",
+      currentLang === "en" ? "Network error. Check connection and retry." : "Сетевая ошибка. Проверьте подключение и повторите.",
       { kind: "network", cause: lastError }
     );
   }
@@ -1895,13 +1995,22 @@ const BUTTON_TIPS = {
 function inferButtonTip(text) {
   const cleaned = String(text || "").trim();
   if (!cleaned) return "";
+  try {
+    const body = document.body;
+    const href = String(window.location?.href || "");
+    const isAppShell = Boolean(
+      body?.classList?.contains("mobile-client-mode")
+      || body?.classList?.contains("mobile-apk-mode")
+      || /([?&])mobile_app=1(?:[&#]|$)/i.test(href)
+      || typeof window.ReactNativeWebView !== "undefined"
+      || (navigator.maxTouchPoints || 0) > 0
+    );
+    if (isAppShell) return "";
+  } catch (_) {}
   const dict = BUTTON_TIPS[currentLang] || BUTTON_TIPS.ru;
   if (dict[cleaned]) return dict[cleaned];
   if (currentLang !== "en") return `\u0414\u0435\u0439\u0441\u0442\u0432\u0438\u0435: ${cleaned}`;
   return `Action: ${cleaned}`;
-  if (currentLang !== "en") return `Действие: ${cleaned}`;
-  return `Action: ${cleaned}`;
-  return currentLang === "en" ? `Action: ${cleaned}` : `Действие: ${cleaned}`;
 }
 
 function applyButtonTooltips() {
@@ -1938,6 +2047,21 @@ function showHoverTip(target, text) {
 }
 
 function initHoverTips() {
+  try {
+    const body = document.body;
+    const href = String(window.location?.href || "");
+    const isAppShell = Boolean(
+      body?.classList?.contains("mobile-client-mode")
+      || body?.classList?.contains("mobile-apk-mode")
+      || /([?&])mobile_app=1(?:[&#]|$)/i.test(href)
+      || typeof window.ReactNativeWebView !== "undefined"
+      || (navigator.maxTouchPoints || 0) > 0
+    );
+    if (isAppShell) {
+      hideHoverTip();
+      return;
+    }
+  } catch (_) {}
   document.addEventListener("mouseover", (e) => {
     const el = e.target?.closest?.("button,[data-tip]");
     if (!el) return;
@@ -2081,7 +2205,7 @@ function renderTrendChart(svgId, metaId, points) {
       );
       meta.innerHTML = `
         <span>${tr("Проверок", "Checks")}: <b>${checks}</b></span>
-        <span>${tr("??????? ???????", "Average rank")}: <b>${avgPos}</b></span>
+        <span>${tr("Средняя позиция", "Average rank")}: <b>${avgPos}</b></span>
         <span>${tr("Входов в топ-5", "Top-5 hits")}: <b>${top5}</b></span>
       `;
       return;
@@ -2104,7 +2228,7 @@ function renderTrendChart(svgId, metaId, points) {
   }
   meta.innerHTML = `
     <span>${tr("Проверок", "Checks")}: <b>${checks}</b></span>
-    <span>${tr("??????? ???????", "Average rank")}: <b>${avgPos}</b></span>
+    <span>${tr("Средняя позиция", "Average rank")}: <b>${avgPos}</b></span>
     <span>${tr("Входов в топ-5", "Top-5 hits")}: <b>${top5}</b></span>
   `;
 }
@@ -2113,7 +2237,7 @@ function renderSeoKanban(rows) {
   const board = document.getElementById("seoKanban");
   if (!board) return;
   const columns = [
-    { key: "generated", title: tr("?????????????", "Generated"), cls: "generated" },
+    { key: "generated", title: tr("Сгенерировано", "Generated"), cls: "generated" },
     { key: "in_progress", title: tr("В работе", "In progress"), cls: "in-progress" },
     { key: "applied", title: tr("Применено", "Applied"), cls: "applied" },
     { key: "top_reached", title: tr("Топ-5 достигнут", "Top-5 reached"), cls: "top" },
@@ -2244,7 +2368,7 @@ async function loadSelectedProductDetails(productId = selectedProductId, opts = 
 async function saveSelectedProductDetails() {
   const id = Number(selectedProductId || 0);
   if (!id) {
-    alert(tr("??????? ???????? ????? ? ???????.", "Select a product in table first."));
+    alert(tr("Сначала выберите товар в таблице.", "Select a product in table first."));
     return;
   }
   const payload = {
@@ -2254,7 +2378,7 @@ async function saveSelectedProductDetails() {
     target_keywords: String(document.getElementById("productDetailKeywords")?.value || "").trim(),
   };
   const updated = await withBusy(
-    tr("????????? ????????? ???????? ??????", "Saving product card changes..."),
+    tr("Сохраняем изменения карточки товара...", "Saving product card changes..."),
     () => requestJson(`/api/products/${id}`, {
       method: "PATCH",
       headers: authHeaders(),
@@ -2308,13 +2432,13 @@ function ensureProfileTeamUi() {
   panel.className = "panel";
   panel.id = "profileTeamPanel";
   panel.innerHTML = `
-    <h3>${tr("?????????? ????????", "Workspace Team")}</h3>
+    <h3>${tr("Команда кабинета", "Workspace Team")}</h3>
     <div class="team-member-toolbar">
       <div id="teamPanelHint" class="hint">${tr("Добавление и редактирование сотрудника выполняется через pop-up окно.", "Add or edit employees via popup window.")}</div>
       <button id="teamAddMemberBtn" class="btn-secondary" type="button" onclick="openTeamMemberCreator()">${tr("Добавить сотрудника", "Add employee")}</button>
     </div>
     <div class="team-member-list" id="teamMembersList">
-      <div class="hint">${tr("?????????? ???????????...", "Loading employees...")}</div>
+      <div class="hint">${tr("Загружаем сотрудников...", "Loading employees...")}</div>
     </div>
   `;
   profileTab.appendChild(panel);
@@ -2847,7 +2971,7 @@ function getMobileQuickNavOptions() {
     if (!modulesLoaded) return true;
     return enabledModules instanceof Set && enabledModules.has(code);
   };
-  const options = [{ value: "sales_dashboard", label: isEn ? "Statistics" : "??????????" }];
+  const options = [{ value: "sales_dashboard", label: isEn ? "Statistics" : "Статистика" }];
   if (has("social_hub")) {
     options.push({ value: "social_chat", label: isEn ? "Chat" : "Чат" });
     options.push({ value: "social_tasks", label: isEn ? "Tasks" : "Задачи" });
@@ -2862,14 +2986,14 @@ function getMobileQuickNavOptions() {
     if (has("returns")) options.push({ value: "reviews_returns", label: isEn ? "Returns" : "Возвраты" });
   }
   if (has("wb_ads") || has("wb_ads_analytics") || has("wb_ads_recommendations")) {
-    if (has("wb_ads")) options.push({ value: "ads_campaigns", label: isEn ? "Ad campaigns" : "????????? ????????" });
+    if (has("wb_ads")) options.push({ value: "ads_campaigns", label: isEn ? "Ad campaigns" : "Рекламные кампании" });
     if (has("wb_ads_analytics")) options.push({ value: "ads_analytics", label: isEn ? "Ads analytics" : "Аналитика рекламы" });
-    if (has("wb_ads_recommendations")) options.push({ value: "ads_recommendations", label: isEn ? "Recommendations" : "????????????" });
+    if (has("wb_ads_recommendations")) options.push({ value: "ads_recommendations", label: isEn ? "Recommendations" : "Рекомендации" });
     if (has("wb_ads")) options.push({ value: "ads_bidder", label: isEn ? "WB Ads bidder" : "Бидер WB Ads" });
   }
   options.push({ value: "profile_main", label: isEn ? "Profile" : "Профиль" });
   if (has("help_center")) {
-    options.push({ value: "help_main", label: isEn ? "Help" : "???????" });
+    options.push({ value: "help_main", label: isEn ? "Help" : "Справка" });
   }
   return options;
 }
@@ -3371,10 +3495,8 @@ async function ensureAuth(allowFallback = true) {
         const storedTab = normalizeLegacyTabName(storedRaw).tab;
         let initialTab = isTabAvailable(storedTab) ? storedTab : resolveInitialTab();
         if (mobileClientMode) {
-          const mobileDefaultSocial = "chat";
-          currentSocialSubtab = ["games", "chat", "tasks", "calendar", "calculator", "notes"].includes(storedSocialSubtab)
-            ? storedSocialSubtab
-            : mobileDefaultSocial;
+          // Mobile app should open the social hub on Calendar by default.
+          currentSocialSubtab = "calendar";
           if (isTabAvailable("social")) initialTab = "social";
           else if (isTabAvailable("sales")) initialTab = "sales";
           else if (isTabAvailable("reviews")) initialTab = "reviews";
@@ -3445,7 +3567,7 @@ function setTopbarAvatarImage(imgNode, urlRaw, { wrapper = null, fallbackTextNod
 function renderProfileMenuIntro() {
   const nickNode = document.getElementById("profileSectionsIntroNick");
   if (!nickNode) return;
-  nickNode.textContent = String(me?.actor_nick || me?.actor_email || me?.email || "-");
+  nickNode.textContent = normalizeAppText(me?.actor_nick || me?.actor_email || me?.email || "-", "-");
 }
 
 function renderMobileDrawerUser() {
@@ -3455,8 +3577,11 @@ function renderMobileDrawerUser() {
     btn.classList.add("hidden");
     return;
   }
-  const actorEmail = String(me.actor_email || me.email || "").trim();
-  const name = String(me.actor_nick || actorEmail || "-");
+  const actorEmail = normalizeAppText(String(me.actor_email || me.email || "").trim(), "-");
+  const name = normalizeAppText(String(me.actor_nick || actorEmail || "-"), actorEmail || "-");
+  const fixedRoleText = me.role === "admin"
+    ? tr("Админ", "Admin")
+    : (isOwner ? tr("Владелец", "Owner") : tr("Участник", "Member"));
   const initials = computeAvatarInitials(name, actorEmail);
   const avatarText = document.getElementById("mobileDrawerAvatarText");
   const avatarName = document.getElementById("mobileDrawerAvatarName");
@@ -3481,8 +3606,8 @@ function renderTopbarUser() {
     renderMobileDrawerUser();
     return;
   }
-  const actorEmail = String(me.actor_email || me.email || "").trim();
-  const name = String(me.actor_nick || actorEmail || "-");
+  const actorEmail = normalizeAppText(String(me.actor_email || me.email || "").trim(), "-");
+  const name = normalizeAppText(String(me.actor_nick || actorEmail || "-"), actorEmail || "-");
   const isOwner = Boolean(me.actor_is_owner);
   const roleText = me.role === "admin"
     ? tr("Админ", "Admin")
@@ -3504,7 +3629,7 @@ function renderTopbarUser() {
   setTopbarAvatarImage(avatarImg, avatarUrl, { fallbackTextNode: avatarText });
   setTopbarAvatarImage(popAvatarImg, avatarUrl, { wrapper: popAvatar, fallbackTextNode: popAvatarText });
   if (popName) popName.textContent = name;
-  if (popRole) popRole.textContent = roleText;
+  if (popRole) popRole.textContent = fixedRoleText;
   if (popEmail) popEmail.textContent = actorEmail || "-";
   renderProfileMenuIntro();
   btn.classList.remove("hidden");
@@ -3622,7 +3747,7 @@ function triggerTeamAvatarUpload() {
 
 async function uploadTeamAvatar() {
   if (!activeTeamMemberId) {
-    alert(tr("??????? ???????? ??????????.", "Select a team member first."));
+    alert(tr("Сначала выберите сотрудника.", "Select a team member first."));
     return;
   }
   try {
@@ -11335,7 +11460,12 @@ async function renewBilling() {
 
 function setInputValue(id, value) {
   const el = document.getElementById(id);
-  if (el) el.value = value ?? "";
+  if (!el) return;
+  if (typeof value === "string") {
+    el.value = normalizeAppText(value, el.value || "");
+    return;
+  }
+  el.value = value ?? "";
 }
 
 function getProfileSectionNode(sectionId) {
@@ -11384,10 +11514,13 @@ function renderProfileData(data) {
     : null;
   const companyAvatar = String(data?.avatar_url || "").trim();
   const actorPersonalAvatar = String(actorRow?.avatar_url || "").trim();
-  const actorName = String(actorRow?.full_name || actorRow?.nickname || me?.actor_nick || me?.actor_email || me?.email || "");
+  const actorName = normalizeAppText(
+    String(actorRow?.full_name || actorRow?.nickname || me?.actor_nick || me?.actor_email || me?.email || ""),
+    String(me?.actor_nick || me?.actor_email || me?.email || "")
+  );
   const actorAvatar = actorPersonalAvatar || companyAvatar;
   const introNickNode = document.getElementById("profileSectionsIntroNick");
-  if (introNickNode) introNickNode.textContent = actorName || String(me?.actor_nick || me?.email || "-");
+  if (introNickNode) introNickNode.textContent = actorName || normalizeAppText(String(me?.actor_nick || me?.email || "-"), "-");
 
   setInputValue("profileFullName", data.full_name || "");
   setInputValue("profilePositionTitle", data.position_title || "");
@@ -11514,7 +11647,7 @@ function renderProfileAiServiceOptions(forcedMode = "") {
   const prev = String(serviceSelect.value || "").trim();
   serviceSelect.innerHTML = activeRows.length
     ? activeRows.map((row) => `<option value="${Number(row.id || 0)}">#${Number(row.id || 0)} ${escapeHtml(String(row.name || "-"))} (${escapeHtml(String(row.provider || "-"))})</option>`).join("")
-    : `<option value="">${tr("???????? ???", "No services")}</option>`;
+    : `<option value="">${tr("Нет сервисов", "No services")}</option>`;
   if (prev && [...serviceSelect.options].some((x) => x.value === prev)) {
     serviceSelect.value = prev;
     return;
@@ -11583,7 +11716,7 @@ function renderProfileAiState(data) {
       const addBtn = document.querySelector("button[onclick='addProfileAiService()']");
       if (addBtn) {
         addBtn.dataset.editId = String(id);
-        addBtn.textContent = tr("????????? ?????????", "Save changes");
+        addBtn.textContent = tr("Сохранить изменения", "Save changes");
       }
       document.getElementById("profileAiApiKey")?.focus();
     });
@@ -11622,14 +11755,14 @@ function applyTeamModalHeader(mode, row = null) {
     if (passEl) passEl.placeholder = tr("Пароль сотрудника (>=8)", "Employee password (>=8)");
     return;
   }
-  if (saveBtn) saveBtn.textContent = tr("?????????", "Save");
+  if (saveBtn) saveBtn.textContent = tr("Сохранить", "Save");
   if (passLabelEl) passLabelEl.textContent = tr("Новый пароль", "New password");
   if (passEl) passEl.placeholder = tr("Новый пароль (опц.)", "New password (optional)");
   if (!row) return;
   if (titleEl) {
     titleEl.textContent = row.is_owner
       ? tr("Владелец кабинета", "Workspace owner")
-      : tr("????????? ????????", "Workspace employee");
+      : tr("Сотрудник кабинета", "Workspace employee");
   }
   const isSelfEmployee = Boolean(
     me
@@ -11643,7 +11776,7 @@ function applyTeamModalHeader(mode, row = null) {
       : (isSelfEmployee
         ? tr("Можно менять только свои ФИО, телефон, ник и фото.", "You can edit only your own name, phone, nickname and avatar.")
         : tr("Можно менять доступы и данные", "You can edit access and profile fields"));
-    metaEl.textContent = `#${Number(row.id || 0)} ? ${metaText}`;
+    metaEl.textContent = `#${Number(row.id || 0)} - ${metaText}`;
   }
   if (deleteBtn) deleteBtn.classList.toggle("hidden", Boolean(row.is_owner || isSelfEmployee));
 }
@@ -11687,7 +11820,7 @@ function renderTeamMembers() {
   host.innerHTML = "";
   if (!Array.isArray(teamMembers) || !teamMembers.length) {
     closeTeamMemberEditor();
-    host.innerHTML = `<div class="hint">${escapeHtml(tr("??????????? ???? ???.", "No employees yet."))}</div>`;
+    host.innerHTML = `<div class="hint">${escapeHtml(tr("Сотрудников пока нет.", "No employees yet."))}</div>`;
     return;
   }
   for (const row of teamMembers) {
@@ -11696,18 +11829,18 @@ function renderTeamMembers() {
     card.className = "team-member-row";
     const roleLabel = row.is_owner
       ? tr("Владелец", "Owner")
-      : tr("?????????", "Employee");
+      : tr("Сотрудник", "Employee");
     const roleMeta = row.is_owner
       ? ""
       : (row.has_password ? tr("пароль задан", "password set") : tr("пароль не задан", "password missing"));
-    const editLabel = tr("????????????? ??????????", "Edit employee");
+    const editLabel = tr("Редактировать сотрудника", "Edit employee");
     card.innerHTML = `
       <div class="team-member-row-main">
         <div class="team-member-identity">
           <strong>${escapeHtml(String(row.full_name || row.nickname || row.email || "-"))}</strong>
           <div class="hint">${escapeHtml(String(row.email || "-"))}</div>
         </div>
-        <div class="team-member-role">${escapeHtml(roleMeta ? `${roleLabel} ? ${roleMeta}` : roleLabel)}</div>
+        <div class="team-member-role">${escapeHtml(roleMeta ? `${roleLabel} - ${roleMeta}` : roleLabel)}</div>
         <div class="team-member-access">
           <strong>${escapeHtml(access.title)}</strong>
           <div class="hint">${escapeHtml(access.details)}</div>
@@ -12261,7 +12394,7 @@ async function loadHelpDocs() {
       downloadsCurrent.innerHTML = `<div class="help-empty">${
         lang === "en"
           ? "Downloads are unavailable for your access."
-          : "?????? ???????? ?????????? ??? ?????? ???????."
+          : "Загрузки недоступны для вашего доступа."
       }</div>`;
     }
     if (downloadsList) downloadsList.innerHTML = "";
@@ -12291,6 +12424,7 @@ async function loadHelpDocs() {
     }
     const options = [...pairs.entries()].map(([code, title]) => `<option value="${code}">${escapeHtml(title)} (${escapeHtml(code)})</option>`).join("");
     select.innerHTML = `<option value="">${lang === "en" ? "All modules" : "Все модули"}</option>${options}`;
+    select.innerHTML = `<option value="">${lang === "en" ? "All modules" : "\u0412\u0441\u0435 \u043c\u043e\u0434\u0443\u043b\u0438"}</option>${options}`;
     if (prev && [...select.options].some((opt) => opt.value === prev)) {
       select.value = prev;
     } else if (moduleCode && [...select.options].some((opt) => opt.value === moduleCode)) {
@@ -12301,7 +12435,7 @@ async function loadHelpDocs() {
   const view = document.getElementById("helpDocsView");
   if (!view) return;
   if (!rows.length) {
-    view.innerHTML = `<div class="help-empty">${lang === "en" ? "No help data." : "??????? ?? ???????."}</div>`;
+    view.innerHTML = `<div class="help-empty">${lang === "en" ? "No help data." : "Нет данных справки."}</div>`;
     return;
   }
   const unique = new Map();
@@ -12368,8 +12502,39 @@ async function loadHelpDocs() {
       </div>
       <div class="help-chip-list">${moduleChips}</div>
     </div>
-    <div class="help-card-list">${cards || `<div class="help-empty">${lang === "en" ? "Module help not found." : "??????? ?? ?????? ?? ???????."}</div>`}</div>
+    <div class="help-card-list">${cards || `<div class="help-empty">${lang === "en" ? "Module help not found." : "Справка по модулю не найдена."}</div>`}</div>
   `;
+  if (lang !== "en") {
+    const helpTitle = view.querySelector(".help-header-title h4");
+    if (helpTitle) helpTitle.textContent = "Интерактивная справка";
+    const helpSubtitle = view.querySelector(".help-header-title p");
+    if (helpSubtitle) {
+      helpSubtitle.textContent = selectedCode
+        ? "Показана справка только по выбранному модулю."
+        : "Выберите модуль, чтобы открыть целевую справку.";
+    }
+    view.querySelectorAll(".help-open-btn").forEach((btn) => {
+      btn.textContent = "Показать справку модуля";
+    });
+    view.querySelectorAll(".help-filter-btn").forEach((btn) => {
+      btn.textContent = "Подсветить модуль";
+    });
+    view.querySelectorAll(".help-checklist strong").forEach((el) => {
+      el.textContent = "Быстрый чек-лист";
+    });
+    const checklistRows = [
+      "Откройте модуль через левое меню.",
+      "Заполните обязательные поля и фильтры перед запуском.",
+      "Запустите действие и контролируйте статус-бар.",
+      "Проверьте итоговую таблицу и сводные показатели.",
+      "Если данные выглядят некорректно, обновите модуль и проверьте предупреждения в строке статуса.",
+    ];
+    view.querySelectorAll(".help-checklist li").forEach((el, index) => {
+      if (checklistRows[index]) el.textContent = checklistRows[index];
+    });
+    const emptyHelp = view.querySelector(".help-card-list .help-empty");
+    if (emptyHelp) emptyHelp.textContent = "Справка по модулю не найдена.";
+  }
   renderHelpAssistantModuleOptions();
   markModuleLoaded("help");
 }
@@ -12391,6 +12556,7 @@ async function loadHelpReleases() {
   helpReleaseRows = rows;
   if (!rows.length) {
     currentHost.innerHTML = `<div class="help-empty">${lang === "en" ? "No release data yet." : "Данные релизов пока отсутствуют."}</div>`;
+    if (lang !== "en") currentHost.innerHTML = `<div class="help-empty">Данные релизов пока отсутствуют.</div>`;
     listHost.innerHTML = "";
     return;
   }
@@ -12429,6 +12595,16 @@ async function loadHelpReleases() {
       </div>
     </article>
   `;
+  if (lang !== "en") {
+    const currentTitle = currentHost.querySelector(".help-card-head h4");
+    if (currentTitle) currentTitle.textContent = `Текущая версия ${currentVersion}`;
+    const currentMeta = currentHost.querySelector(".help-card-head small");
+    if (currentMeta) currentMeta.textContent = `${releaseDate}${currentCode > 0 ? `, code ${currentCode}` : ""}`;
+    const downloadBtn = currentHost.querySelector(".help-open-btn");
+    if (downloadBtn) downloadBtn.textContent = "Скачать Android APK";
+    const currentBlocks = currentHost.querySelectorAll(".help-block h5");
+    if (currentBlocks[1]) currentBlocks[1].textContent = "Отличия от прошлой версии";
+  }
 
   const cards = rows.map((row) => {
     const version = escapeHtml(String(row?.version || "-"));
@@ -12463,6 +12639,20 @@ async function loadHelpReleases() {
     </div>
     <div class="help-card-list">${cards}</div>
   `;
+  if (lang !== "en") {
+    const releasesTitle = listHost.querySelector(".help-header-title h4");
+    if (releasesTitle) releasesTitle.textContent = "История APK версий";
+    const releasesSubtitle = listHost.querySelector(".help-header-title p");
+    if (releasesSubtitle) {
+      releasesSubtitle.textContent = "Здесь отображаются только Android APK версии и краткие примечания к релизу.";
+    }
+    listHost.querySelectorAll(".help-card-head small").forEach((el, index) => {
+      const row = rows[index];
+      const code = Number(row?.android_version_code || 0);
+      const date = String(row?.released_at || "-");
+      el.textContent = `${date}${code > 0 ? `, code ${code}` : ""}`;
+    });
+  }
 }
 
 function formatHelpContent(text, lang = "ru") {

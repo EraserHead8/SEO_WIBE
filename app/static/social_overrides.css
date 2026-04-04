@@ -54,7 +54,8 @@
 }
 
 .social-notif-item-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   justify-content: space-between;
   align-items: flex-start;
   gap: 8px;
@@ -80,7 +81,8 @@
   white-space: normal !important;
   overflow-wrap: anywhere !important;
   word-break: break-word !important;
-  line-height: 1.3 !important;
+  line-height: 1.28 !important;
+  font-size: 14px !important;
   display: -webkit-box !important;
   -webkit-box-orient: vertical !important;
   -webkit-line-clamp: 4 !important;
@@ -112,18 +114,27 @@ body.mobile-client-mode #socialToastHost {
   box-shadow: none !important;
 }
 
+#socialSubtabCalendar .social-calendar-hero-copy {
+  display: grid !important;
+  place-items: center !important;
+  gap: 8px !important;
+  text-align: center !important;
+}
+
 #socialSubtabCalendar #socialCalendarMonthLabel {
   margin: 0 !important;
+  width: 100% !important;
   font-size: clamp(28px, 3.8vw, 44px) !important;
   font-weight: 800 !important;
   line-height: 1 !important;
   letter-spacing: 0.04em !important;
   text-transform: uppercase !important;
+  text-align: center !important;
 }
 
 #socialSubtabCalendar .social-calendar-nav-controls {
-  display: grid !important;
-  grid-template-columns: auto minmax(110px, 1fr) minmax(92px, auto) auto !important;
+  display: flex !important;
+  justify-content: space-between !important;
   align-items: center !important;
   gap: 8px !important;
   margin-top: 10px !important;
@@ -143,7 +154,7 @@ body.mobile-client-mode #socialToastHost {
 }
 
 #socialSubtabCalendar .social-calendar-nav-controls .social-calendar-picker {
-  display: block !important;
+  display: none !important;
   width: 100% !important;
   min-width: 0 !important;
   min-height: 42px !important;
@@ -154,7 +165,7 @@ body.mobile-client-mode #socialToastHost {
 }
 
 #socialSubtabCalendar .social-calendar-nav-controls.is-app-shell {
-  grid-template-columns: minmax(120px, 1fr) minmax(98px, auto) !important;
+  display: none !important;
 }
 
 #socialSubtabCalendar .social-calendar-toolbar,
@@ -193,10 +204,10 @@ body.mobile-client-mode #socialToastHost {
 }
 
 #socialSubtabCalendar .social-day.rich {
-  min-height: 102px !important;
-  max-height: 128px !important;
-  padding: 6px !important;
-  gap: 4px !important;
+  min-height: 94px !important;
+  max-height: 112px !important;
+  padding: 5px !important;
+  gap: 3px !important;
   align-content: start !important;
   overflow: hidden !important;
 }
@@ -212,9 +223,9 @@ body.mobile-client-mode #socialToastHost {
 
 #socialSubtabCalendar .social-day-preview-stack {
   display: grid !important;
-  gap: 4px !important;
+  gap: 3px !important;
   min-height: 0 !important;
-  max-height: 64px !important;
+  max-height: 52px !important;
   overflow: hidden !important;
 }
 
@@ -226,11 +237,12 @@ body.mobile-client-mode #socialToastHost {
 #socialSubtabCalendar .sw-calendar-chip {
   display: block !important;
   max-width: 100% !important;
-  min-height: 16px !important;
-  padding: 1px 6px !important;
-  border-radius: 7px !important;
-  background: color-mix(in srgb, var(--sw-chip-color, #b8d2ff) 78%, #fff) !important;
-  border-left: 3px solid color-mix(in srgb, var(--sw-chip-color, #b8d2ff) 84%, #3b82f6) !important;
+  min-height: 15px !important;
+  padding: 1px 5px !important;
+  border-radius: 8px !important;
+  background: color-mix(in srgb, var(--sw-chip-color, #8fb8ff) 82%, #fff) !important;
+  border-left: 3px solid color-mix(in srgb, var(--sw-chip-color, #8fb8ff) 88%, #2d6cdf) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sw-chip-color, #8fb8ff) 22%, #ffffff) !important;
 }
 
 #socialSubtabCalendar .sw-calendar-chip-title {
@@ -238,7 +250,7 @@ body.mobile-client-mode #socialToastHost {
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
-  font-size: 11px !important;
+  font-size: 10px !important;
   line-height: 1.2 !important;
 }
 
@@ -248,10 +260,61 @@ body.mobile-client-mode #socialToastHost {
   color: var(--text-muted, #6b7a90) !important;
 }
 
-#socialSubtabCalendar #socialCalendarEvents {
-  display: grid !important;
-  grid-template-columns: 1fr !important;
-  gap: 10px !important;
+#socialSubtabCalendar #socialCalendarEvents,
+#socialSubtabCalendar #socialCalendarEventsLegacy,
+#socialSubtabCalendar .social-calendar-events,
+#socialSubtabCalendar .social-calendar-selected,
+#socialSubtabCalendar .social-calendar-selected-day,
+#socialSubtabCalendar .social-calendar-day-header,
+#socialSubtabCalendar .social-calendar-day-details,
+#socialSubtabCalendar .social-calendar-day-list,
+#socialSubtabCalendar .social-calendar-records,
+#socialSubtabCalendar .social-calendar-summary,
+#socialSubtabCalendar [data-calendar-detail],
+#socialSubtabCalendar [data-selected-day] {
+  display: none !important;
+  max-height: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+#socialSubtabCalendar .social-calendar-board > :not(.social-calendar-main),
+#socialSubtabCalendar .social-calendar-main > :not(#socialCalendarGrid) {
+  display: none !important;
+}
+
+body.mobile-apk-mode #socialSubtabCalendar #socialCalendarEvents,
+body.mobile-client-mode #socialSubtabCalendar #socialCalendarEvents,
+body.mobile-apk-mode #socialSubtabCalendar #socialCalendarEventsLegacy,
+body.mobile-client-mode #socialSubtabCalendar #socialCalendarEventsLegacy,
+body.mobile-apk-mode #socialSubtabCalendar .social-calendar-events,
+body.mobile-client-mode #socialSubtabCalendar .social-calendar-events,
+body.mobile-apk-mode #socialSubtabCalendar .social-calendar-selected,
+body.mobile-client-mode #socialSubtabCalendar .social-calendar-selected,
+body.mobile-apk-mode #socialSubtabCalendar .social-calendar-day-header,
+body.mobile-client-mode #socialSubtabCalendar .social-calendar-day-header,
+body.mobile-apk-mode #socialSubtabCalendar .social-calendar-day-details,
+body.mobile-client-mode #socialSubtabCalendar .social-calendar-day-details,
+body.mobile-apk-mode #socialSubtabCalendar .social-calendar-records,
+body.mobile-client-mode #socialSubtabCalendar .social-calendar-records,
+body.mobile-apk-mode #socialSubtabCalendar .social-calendar-summary,
+body.mobile-client-mode #socialSubtabCalendar .social-calendar-summary {
+  display: none !important;
+}
+
+@media (max-width: 980px) {
+  #socialSubtabCalendar #socialCalendarEvents,
+  #socialSubtabCalendar #socialCalendarEventsLegacy,
+  #socialSubtabCalendar .social-calendar-events,
+  #socialSubtabCalendar .social-calendar-day-header,
+  #socialSubtabCalendar .social-calendar-records,
+  #socialSubtabCalendar .social-calendar-summary {
+    display: none !important;
+  }
 }
 
 #socialCalendarFab.social-calendar-fab {
@@ -266,6 +329,11 @@ body.mobile-client-mode #socialToastHost {
   color: #fff !important;
   font-size: 34px !important;
   line-height: 1 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  padding: 0 !important;
   box-shadow: 0 10px 26px rgba(76, 138, 16, 0.32) !important;
   z-index: 1200 !important;
 }
@@ -275,6 +343,8 @@ body.mobile-client-mode #socialToastHost {
   display: block !important;
   grid-template-columns: 1fr !important;
   width: 100% !important;
+  position: relative !important;
+  padding-bottom: 82px !important;
 }
 
 #socialSubtabNotes .social-notes-editor {
@@ -282,6 +352,7 @@ body.mobile-client-mode #socialToastHost {
 }
 
 #socialSubtabNotes .social-notes-sidebar {
+  display: block !important;
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
@@ -290,9 +361,9 @@ body.mobile-client-mode #socialToastHost {
 
 #socialSubtabNotes .social-notes-list {
   display: grid !important;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-  grid-auto-rows: 148px !important;
-  gap: 10px !important;
+  grid-template-columns: repeat(3, minmax(94px, 1fr)) !important;
+  grid-auto-rows: 176px !important;
+  gap: 12px !important;
   align-content: start !important;
   align-items: stretch !important;
   justify-content: stretch !important;
@@ -308,6 +379,40 @@ body.mobile-client-mode #socialToastHost {
 #socialSubtabNotes #socialNotesList {
   width: 100% !important;
   min-width: 0 !important;
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 84px !important;
+}
+
+#socialSubtabNotes .social-notes-sidebar > button:first-child {
+  display: none !important;
+}
+
+#socialSubtabNotes button[onclick*="socialCreateNote"],
+#socialSubtabNotes .social-notes-sidebar > button[title="Create note"],
+#socialSubtabNotes .social-notes-sidebar > button[title="Создать запись"] {
+  display: none !important;
+}
+
+#socialNotesFab.social-notes-fab {
+  position: absolute !important;
+  right: 16px !important;
+  bottom: 16px !important;
+  width: 56px !important;
+  height: 56px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: linear-gradient(180deg, #9ed94f, #7cc91c) !important;
+  color: #fff !important;
+  font-size: 34px !important;
+  line-height: 1 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  padding: 0 !important;
+  box-shadow: 0 12px 26px rgba(124, 201, 28, 0.30) !important;
+  z-index: 1201 !important;
 }
 
 #socialSubtabNotes #socialNotesList .social-note-row,
@@ -318,10 +423,17 @@ body.mobile-client-mode #socialToastHost {
   max-width: 100% !important;
   inline-size: 100% !important;
   min-width: 0 !important;
-  height: 148px !important;
-  min-height: 148px !important;
-  max-height: 148px !important;
-  border-radius: 16px !important;
+  height: 176px !important;
+  min-height: 176px !important;
+  max-height: 176px !important;
+  border-radius: 18px !important;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--sw-note-cover, #c9dcff) 48%, #ffffff),
+      color-mix(in srgb, var(--sw-note-cover, #c9dcff) 22%, #ffffff)
+    ) !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.10) !important;
   overflow: hidden !important;
   justify-self: stretch !important;
 }
@@ -334,22 +446,64 @@ body.mobile-client-mode #socialSubtabNotes .social-notes-layout {
 
 body.mobile-apk-mode #socialSubtabNotes .social-notes-sidebar,
 body.mobile-client-mode #socialSubtabNotes .social-notes-sidebar {
+  display: block !important;
   width: 100% !important;
   max-width: 100% !important;
   overflow-x: hidden !important;
   overflow-y: auto !important;
 }
 
+body.mobile-apk-mode #socialSubtabNotes .social-notes-list,
+body.mobile-client-mode #socialSubtabNotes .social-notes-list {
+  grid-template-columns: repeat(3, minmax(94px, 1fr)) !important;
+  grid-auto-rows: 176px !important;
+}
+
+body.mobile-apk-mode #socialSubtabNotes #socialNotesList .social-note-row,
+body.mobile-client-mode #socialSubtabNotes #socialNotesList .social-note-row,
+body.mobile-apk-mode #socialSubtabNotes #socialNotesList .sw-note-card,
+body.mobile-client-mode #socialSubtabNotes #socialNotesList .sw-note-card {
+  height: 176px !important;
+  min-height: 176px !important;
+  max-height: 176px !important;
+}
+
+body.mobile-apk-mode #socialNotesFab.social-notes-fab,
+body.mobile-client-mode #socialNotesFab.social-notes-fab {
+  position: fixed !important;
+  right: 16px !important;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 14px) !important;
+}
+
+@media (pointer: coarse) and (max-width: 1280px) {
+  #socialSubtabCalendar #socialCalendarEvents {
+    display: none !important;
+    max-height: 0 !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  #socialSubtabNotes .social-notes-sidebar {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  #socialSubtabNotes .social-notes-list {
+    grid-template-columns: repeat(3, minmax(94px, 1fr)) !important;
+    grid-auto-rows: 176px !important;
+  }
+  #socialSubtabNotes #socialNotesList .social-note-row,
+  #socialSubtabNotes #socialNotesList .sw-note-card {
+    height: 176px !important;
+    min-height: 176px !important;
+    max-height: 176px !important;
+  }
+}
+
 #socialSubtabNotes #socialNotesList .social-note-row::before,
 #socialSubtabNotes #socialNotesList .sw-note-card::before {
-  content: "" !important;
-  position: absolute !important;
-  left: 0 !important;
-  top: 0 !important;
-  width: 100% !important;
-  height: 6px !important;
-  background: var(--sw-note-cover, #c9dcff) !important;
-  pointer-events: none !important;
+  display: none !important;
 }
 
 #socialSubtabNotes #socialNotesList .social-note-main {
@@ -360,6 +514,8 @@ body.mobile-client-mode #socialSubtabNotes .social-notes-sidebar {
   min-height: 0 !important;
   overflow: hidden !important;
   cursor: pointer !important;
+  background: transparent !important;
+  padding: 14px !important;
 }
 
 .social-calendar-month-year-modal {
@@ -372,18 +528,49 @@ body.mobile-client-mode #socialSubtabNotes .social-notes-sidebar {
   gap: 6px;
 }
 
+#socialModalHost .sw-note-colors {
+  display: grid !important;
+  grid-template-columns: repeat(8, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+  align-items: stretch !important;
+}
+
+#socialModalHost .sw-note-color {
+  appearance: none !important;
+  width: 100% !important;
+  aspect-ratio: 1 / 1 !important;
+  min-height: 34px !important;
+  padding: 0 !important;
+  border-radius: 12px !important;
+  border: 1px solid color-mix(in srgb, var(--sw-note-cover, #c9dcff) 58%, #b7c6d8) !important;
+  background: var(--sw-note-cover, #c9dcff) !important;
+  background-color: var(--sw-note-cover, #c9dcff) !important;
+  background-image: none !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55) !important;
+}
+
+#socialModalHost .sw-note-color.is-active {
+  transform: scale(1.04) !important;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent, #5ea1ff) 52%, transparent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.6) !important;
+}
+
 #socialSubtabNotes #socialNotesList .social-note-main b {
   display: -webkit-box !important;
   -webkit-line-clamp: 2 !important;
   -webkit-box-orient: vertical !important;
   overflow: hidden !important;
+  font-size: 16px !important;
+  line-height: 1.22 !important;
 }
 
 #socialSubtabNotes #socialNotesList .social-note-snippet {
   display: -webkit-box !important;
-  -webkit-line-clamp: 4 !important;
+  -webkit-line-clamp: 6 !important;
   -webkit-box-orient: vertical !important;
   overflow: hidden !important;
+  color: var(--text-main, #22324a) !important;
 }
 
 #socialSubtabNotes #socialNotesList .social-note-delete,
@@ -397,6 +584,166 @@ body.mobile-client-mode #socialSubtabNotes .social-notes-sidebar {
   display: none !important;
 }
 
+#socialCalendarDaySheetBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 18, 38, 0.26);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 1090;
+}
+
+#socialCalendarDaySheet {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(640px, calc(100vw - 24px));
+  max-height: min(78vh, 760px);
+  overflow: auto;
+  z-index: 1100;
+}
+
+#socialCalendarDaySheet .sw-day-sheet-card {
+  display: grid;
+  gap: 16px;
+  background: color-mix(in srgb, var(--panel-bg, #fff) 97%, #f5f6ef);
+  border: 1px solid color-mix(in srgb, var(--line, #d9e2ef) 84%, #ffffff);
+  border-radius: 36px;
+  padding: 22px 22px 18px;
+  box-shadow: 0 28px 70px rgba(11, 24, 46, 0.16);
+}
+
+#socialCalendarDaySheet .sw-day-sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+#socialCalendarDaySheet .sw-day-sheet-title-block {
+  display: grid;
+  gap: 4px;
+}
+
+#socialCalendarDaySheet .sw-day-sheet-head h4 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.08;
+}
+
+#socialCalendarDaySheet .sw-day-sheet-daynum {
+  font-size: 54px;
+  font-weight: 800;
+  line-height: 0.9;
+  margin-right: 10px;
+}
+
+#socialCalendarDaySheet .sw-day-sheet-head small {
+  font-size: 14px;
+  color: var(--text-muted, #6b7a90);
+}
+
+#socialCalendarDaySheet .sw-day-sheet-close {
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 18px;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  line-height: 1 !important;
+}
+
+#socialCalendarDaySheet .sw-day-sheet-list {
+  display: grid;
+  gap: 10px;
+  min-height: 140px;
+}
+
+#socialCalendarDaySheet .sw-day-item {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+  padding: 16px 16px 14px 18px;
+  border-radius: 22px;
+  border: 1px solid color-mix(in srgb, var(--sw-sheet-color, #8fb8ff) 22%, #d9e2ef);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--sw-sheet-color, #8fb8ff) 36%, #ffffff), color-mix(in srgb, var(--sw-sheet-color, #8fb8ff) 24%, #ffffff));
+  box-shadow: 0 12px 22px rgba(10, 25, 56, 0.06);
+}
+
+#socialCalendarDaySheet .sw-day-item .sw-calendar-sheet-badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--sw-sheet-color, #8fb8ff) 60%, #24334d);
+}
+
+#socialCalendarDaySheet .sw-day-item b {
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+#socialCalendarDaySheet .sw-day-item small {
+  font-size: 14px;
+  color: var(--text-muted, #6b7a90);
+}
+
+#socialCalendarDaySheet .sw-day-sheet-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+#socialCalendarDaySheet .sw-day-sheet-add {
+  flex: 1 1 auto;
+  min-height: 56px;
+  border: 0;
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--panel-bg-soft, #f5f7ef) 94%, #edf2e2);
+  color: var(--text-muted, #76808f);
+  font-weight: 700;
+  text-align: left;
+  padding: 0 20px;
+}
+
+#socialCalendarDaySheet .social-calendar-fab-mini {
+  position: static !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: 56px !important;
+  min-width: 56px !important;
+  height: 56px !important;
+  font-size: 34px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  padding: 0 !important;
+  box-shadow: 0 12px 24px rgba(76, 138, 16, 0.24) !important;
+}
+
+@media (max-width: 980px) {
+  #socialCalendarDaySheet {
+    width: min(560px, calc(100vw - 20px));
+    max-height: min(82vh, 760px);
+  }
+
+  #socialCalendarDaySheet .sw-day-sheet-card {
+    border-radius: 32px;
+    padding: 18px 18px 16px;
+  }
+
+  #socialCalendarDaySheet .sw-day-sheet-daynum {
+    font-size: 46px;
+  }
+}
+
 /* Tasks (mobile app/client: no overflow, no swipe drag behaviour) */
 #socialTasksBoard,
 #socialTasksBoard .social-task-board-v2,
@@ -407,6 +754,46 @@ body.mobile-client-mode #socialSubtabNotes .social-notes-sidebar {
   min-width: 0 !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
+}
+
+#socialTasksBoard .social-task-title-row {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 8px !important;
+  min-width: 0 !important;
+}
+
+#socialTasksBoard .social-task-kind {
+  margin-left: auto !important;
+  max-width: 92px !important;
+  flex: 0 1 92px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+#socialTasksBoard .social-task-delete,
+#socialTasksBoard .social-task-check,
+#socialCalendarFab.social-calendar-fab,
+#socialCalendarDaySheet .social-calendar-fab-mini,
+#socialCalendarDaySheet .sw-day-sheet-close,
+#socialNotesFab.social-notes-fab,
+#socialNotificationCenter .social-notif-head-actions button,
+#socialNotificationCenter .sw-notif-close {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  line-height: 1 !important;
+  padding: 0 !important;
+  transform: translate(0, 0) !important;
+  text-indent: 0 !important;
+}
+
+#socialTasksBoard .social-task-delete,
+#socialTasksBoard .social-task-check {
+  font-size: 22px !important;
+  line-height: 1 !important;
 }
 
 body.mobile-apk-mode #socialTasksBoard,
@@ -464,6 +851,645 @@ body.mobile-client-mode #socialTasksBoard .social-task-assignee-name {
   #socialCalendarFab.social-calendar-fab {
     position: fixed !important;
     right: 16px !important;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 86px) !important;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 14px) !important;
   }
+
+  #socialCalendarDaySheet {
+    left: 50%;
+    top: 50%;
+    bottom: auto;
+    transform: translate(-50%, -50%);
+    width: min(560px, calc(100vw - 20px));
+    max-height: min(82vh, 760px);
+  }
+
+  #socialCalendarDaySheet .sw-day-sheet-card {
+    border-radius: 26px;
+    padding: 16px 16px 14px;
+  }
+
+  #socialCalendarDaySheet .sw-day-sheet-head h4 {
+    font-size: 20px;
+  }
+
+  #socialCalendarDaySheet .sw-day-sheet-daynum {
+    font-size: 40px;
+  }
+
+  #socialSubtabNotes .social-notes-list,
+  #socialSubtabNotes #socialNotesList {
+    grid-template-columns: repeat(3, minmax(94px, 1fr)) !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  #socialSubtabNotes #socialNotesList .social-note-row,
+  #socialSubtabNotes #socialNotesList .sw-note-card {
+    height: 176px !important;
+    min-height: 176px !important;
+    max-height: 176px !important;
+  }
+
+  #socialSubtabNotes #socialNotesList .social-note-main b {
+    font-size: 14px !important;
+    line-height: 1.18 !important;
+  }
+
+  #socialSubtabNotes #socialNotesList .social-note-snippet {
+    font-size: 11px !important;
+    line-height: 1.24 !important;
+    -webkit-line-clamp: 5 !important;
+  }
+
+  #socialSubtabNotes #socialNotesList .social-note-meta {
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+    gap: 4px !important;
+  }
+
+  #socialNotificationCenter .social-notif-item-head b,
+  #socialNotificationCenter .social-notif-item p {
+    font-size: 12px !important;
+    line-height: 1.15 !important;
+  }
+
+  #socialNotificationCenter .social-notif-item-head {
+    gap: 6px !important;
+  }
+
+  #socialNotificationCenter .social-notif-item-head small {
+    font-size: 11px !important;
+    white-space: nowrap !important;
+  }
+
+  #socialNotificationCenter .social-notif-head-actions > .btn-secondary:last-child {
+    min-width: 46px !important;
+    width: 46px !important;
+    padding: 0 !important;
+  }
+}
+
+/* Final calendar rescue layer */
+#socialSubtabCalendar[data-calendar-sheet-mode="overlay"] #socialCalendarMonthLabel {
+  display: block !important;
+  width: 100% !important;
+  margin: 0 auto !important;
+  text-align: center !important;
+  justify-self: center !important;
+}
+
+#socialSubtabCalendar[data-calendar-sheet-mode="overlay"] #socialCalendarMonth,
+#socialSubtabCalendar[data-calendar-sheet-mode="overlay"] #socialCalendarMonthSelect,
+#socialSubtabCalendar[data-calendar-sheet-mode="overlay"] #socialCalendarYearSelect,
+#socialSubtabCalendar[data-calendar-sheet-mode="overlay"] .social-calendar-picker {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+#socialSubtabCalendar[data-calendar-sheet-mode="overlay"] .social-calendar-shell > :not(.social-calendar-hero):not(.social-calendar-board):not(#socialCalendarFab),
+#socialSubtabCalendar[data-calendar-sheet-mode="overlay"] .social-calendar-board > :not(.social-calendar-main),
+#socialSubtabCalendar[data-calendar-sheet-mode="overlay"] .social-calendar-main > :not(#socialCalendarGrid) {
+  display: none !important;
+}
+
+#socialSubtabCalendar[data-calendar-sheet-mode="overlay"] #socialCalendarGrid {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Final polish: notes, tasks, bell, centered icon glyphs */
+#socialSubtabNotes #socialNotesList {
+  margin-top: 18px !important;
+  padding-top: 8px !important;
+}
+
+#socialSubtabNotes .social-notes-sidebar > button,
+#socialSubtabNotes button[onclick*="socialCreateNote"] {
+  display: none !important;
+}
+
+#socialSubtabNotes #socialNotesList .social-note-row,
+#socialSubtabNotes #socialNotesList .sw-note-card {
+  background-size: 100% 100% !important;
+  background-repeat: no-repeat !important;
+}
+
+#socialSubtabNotes #socialNotesList .social-note-main {
+  background: transparent !important;
+}
+
+#socialModalHost .sw-note-color {
+  color: transparent !important;
+  caret-color: transparent !important;
+  font-size: 0 !important;
+}
+
+#socialCalendarDaySheetBackdrop,
+#socialCalendarDaySheet {
+  overscroll-behavior: contain !important;
+  touch-action: pan-y !important;
+}
+
+#socialTasksBoard .social-task-item,
+#socialSubtabTasks .social-task-item {
+  grid-template-columns: 40px minmax(0, 1fr) 44px !important;
+  column-gap: 10px !important;
+}
+
+#socialTasksBoard .social-task-title-row,
+#socialSubtabTasks .social-task-title-row {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: start !important;
+  column-gap: 8px !important;
+}
+
+#socialTasksBoard .social-task-title-text,
+#socialSubtabTasks .social-task-title-text {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+#socialTasksBoard .social-task-kind,
+#socialSubtabTasks .social-task-kind {
+  margin-left: 0 !important;
+  justify-self: end !important;
+  align-self: start !important;
+  max-width: 96px !important;
+  flex: 0 0 auto !important;
+}
+
+#socialTasksBoard .social-task-delete,
+#socialTasksBoard .social-task-check,
+#socialSubtabTasks .social-task-delete,
+#socialSubtabTasks .social-task-check,
+#socialCalendarFab.social-calendar-fab,
+#socialCalendarDaySheet .social-calendar-fab-mini,
+#socialCalendarDaySheet .sw-day-sheet-close,
+#socialNotesFab.social-notes-fab,
+#socialNotificationCenter .social-notif-head-actions button,
+#socialNotificationCenter .sw-notif-close,
+.campaign-close,
+.photo-close {
+  font-family: "Segoe UI Symbol", "Segoe UI", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  line-height: 1 !important;
+  vertical-align: middle !important;
+}
+
+#socialTasksBoard .social-task-delete,
+#socialTasksBoard .social-task-check,
+#socialSubtabTasks .social-task-delete,
+#socialSubtabTasks .social-task-check {
+  font-size: 22px !important;
+}
+
+#socialNotificationCenter .social-notif-item-head,
+#socialNotificationCenter .social-notif-item p {
+  overflow: hidden !important;
+}
+
+#socialNotificationCenter .social-notif-item {
+  overflow: hidden !important;
+}
+
+#socialNotificationCenter .social-notif-item-head b,
+#socialNotificationCenter .social-notif-item p {
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+
+#socialNotificationCenter .social-notif-head-actions {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+#socialNotificationCenter .social-notif-head-actions > .btn-secondary:last-child {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  line-height: 1 !important;
+}
+
+#socialSubtabTasks .social-task-item {
+  grid-template-columns: 38px minmax(0, 1fr) 38px !important;
+}
+
+#socialSubtabTasks .social-task-check,
+#socialSubtabTasks .social-task-delete,
+#socialNotificationCenter .social-notif-head-actions > .btn-secondary:last-child,
+#socialCalendarFab.social-calendar-fab,
+#socialCalendarDaySheet .social-calendar-fab-mini,
+#socialCalendarDaySheet .sw-day-sheet-close {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  line-height: 1 !important;
+  padding: 0 !important;
+}
+
+/* Final mobile cleanup v20260328 */
+#socialSubtabNotes .social-notes-sidebar > button,
+#socialSubtabNotes .social-card > button:first-child,
+#socialSubtabNotes .panel > button:first-child,
+#socialSubtabNotes button[onclick*="socialCreateNote"] {
+  display: none !important;
+}
+
+#socialSubtabNotes #socialNotesList {
+  margin-top: 14px !important;
+  padding-top: 10px !important;
+}
+
+#socialSubtabNotes #socialNotesList .social-note-row,
+#socialSubtabNotes #socialNotesList .sw-note-card {
+  background: var(--sw-note-card-fill, linear-gradient(180deg, color-mix(in srgb, var(--sw-note-cover, #eaf2ff) 58%, #ffffff), color-mix(in srgb, var(--sw-note-cover, #eaf2ff) 26%, #ffffff))) !important;
+  background-color: var(--sw-note-cover, #eaf2ff) !important;
+  background-image: var(--sw-note-card-fill, linear-gradient(180deg, color-mix(in srgb, var(--sw-note-cover, #eaf2ff) 58%, #ffffff), color-mix(in srgb, var(--sw-note-cover, #eaf2ff) 26%, #ffffff))) !important;
+}
+
+#socialSubtabNotes #socialNotesList .social-note-main {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+#socialNotesFab.social-notes-fab {
+  position: fixed !important;
+  right: 16px !important;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 14px) !important;
+  display: grid !important;
+  place-items: center !important;
+}
+
+#socialNotesFab.social-notes-fab > span {
+  display: grid !important;
+  place-items: center !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+#socialModalHost .sw-note-color {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+}
+
+#socialTasksBoard .social-task-item,
+#socialSubtabTasks .social-task-item {
+  grid-template-columns: 40px minmax(0, 1fr) 48px !important;
+}
+
+#socialTasksBoard .social-task-content,
+#socialSubtabTasks .social-task-content {
+  min-width: 0 !important;
+  padding-right: 6px !important;
+  overflow: hidden !important;
+}
+
+#socialTasksBoard .social-task-title-row,
+#socialSubtabTasks .social-task-title-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 72px) !important;
+}
+
+#socialTasksBoard .social-task-kind,
+#socialSubtabTasks .social-task-kind {
+  max-width: 72px !important;
+  font-size: 10px !important;
+  padding: 4px 8px !important;
+}
+
+#socialTasksBoard .social-task-delete,
+#socialTasksBoard .social-task-check,
+#socialSubtabTasks .social-task-delete,
+#socialSubtabTasks .social-task-check {
+  width: 40px !important;
+  min-width: 40px !important;
+  height: 40px !important;
+  border-radius: 16px !important;
+}
+
+#socialCalendarFab.social-calendar-fab,
+#socialCalendarDaySheet .social-calendar-fab-mini,
+#socialCalendarDaySheet .sw-day-sheet-close,
+#socialNotesFab.social-notes-fab,
+#socialNotificationCenter .social-notif-head-actions > .btn-secondary:last-child {
+  display: grid !important;
+  place-items: center !important;
+  line-height: 1 !important;
+}
+
+#socialSubtabTasks .social-task-content,
+#socialSubtabTasks .social-task-title-row {
+  min-width: 0 !important;
+}
+
+#socialSubtabTasks .social-task-content {
+  overflow: hidden !important;
+  padding-right: 4px !important;
+}
+
+#socialSubtabTasks .social-task-title-text {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+
+#socialSubtabTasks .social-task-kind {
+  flex: 0 1 78px !important;
+  max-width: 78px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  margin-left: auto !important;
+}
+
+#socialSubtabNotes .social-notes-sidebar > button,
+#socialSubtabNotes .social-notes-sidebar > .btn-secondary,
+#socialSubtabNotes #socialNotesCreateBtn,
+#socialSubtabNotes .social-note-create,
+#socialSubtabNotes [data-action="create-note"] {
+  display: none !important;
+}
+
+#socialSubtabNotes #socialNotesList {
+  margin-top: 24px !important;
+  padding-top: 12px !important;
+}
+
+#socialSubtabNotes #socialNotesList .social-note-row,
+#socialSubtabNotes #socialNotesList .sw-note-card {
+  background: var(--sw-note-card-fill, var(--sw-note-cover, #eef4ff)) !important;
+  background-color: var(--sw-note-cover, #eef4ff) !important;
+  background-image: var(--sw-note-card-fill, none) !important;
+}
+
+#socialSubtabNotes #socialNotesList .social-note-main {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+#socialModalHost .sw-note-color {
+  background: var(--sw-note-cover, #eef4ff) !important;
+  background-color: var(--sw-note-cover, #eef4ff) !important;
+  background-image: none !important;
+  border: 1px solid rgba(127, 151, 188, 0.35) !important;
+}
+
+#socialTasksBoard .social-task-item,
+#socialSubtabTasks .social-task-item {
+  grid-template-columns: 40px minmax(0, 1fr) 52px !important;
+  column-gap: 10px !important;
+}
+
+#socialTasksBoard .social-task-content,
+#socialSubtabTasks .social-task-content {
+  min-width: 0 !important;
+  padding-right: 12px !important;
+  overflow: hidden !important;
+}
+
+#socialTasksBoard .social-task-title-row,
+#socialSubtabTasks .social-task-title-row {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 68px) !important;
+  column-gap: 8px !important;
+  align-items: start !important;
+}
+
+#socialTasksBoard .social-task-kind,
+#socialSubtabTasks .social-task-kind {
+  max-width: 68px !important;
+  justify-self: end !important;
+  margin-left: 0 !important;
+}
+
+#socialTasksBoard .social-task-title-text,
+#socialSubtabTasks .social-task-title-text {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  padding-right: 4px !important;
+}
+
+#socialTasksBoard .social-task-delete,
+#socialTasksBoard .social-task-check,
+#socialSubtabTasks .social-task-delete,
+#socialSubtabTasks .social-task-check,
+#socialCalendarFab.social-calendar-fab,
+#socialCalendarDaySheet .social-calendar-fab-mini,
+#socialCalendarDaySheet .sw-day-sheet-close,
+#socialNotesFab.social-notes-fab,
+#socialNotificationCenter .social-notif-head-actions button,
+#socialNotificationCenter .sw-notif-close,
+.campaign-close,
+.photo-close {
+  display: grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+  line-height: 1 !important;
+  text-indent: 0 !important;
+}
+
+#socialCalendarMonthLabel {
+  width: 100% !important;
+  margin: 0 auto !important;
+  text-align: center !important;
+  justify-self: center !important;
+  align-self: center !important;
+}
+
+body.mobile-apk-mode #socialSubtabCalendar #socialCalendarMonthSelect,
+body.mobile-apk-mode #socialSubtabCalendar #socialCalendarYearSelect,
+body.mobile-apk-mode #socialSubtabCalendar .social-calendar-picker,
+body.mobile-apk-mode #socialSubtabCalendar .social-calendar-nav-controls,
+body.mobile-client-mode #socialSubtabCalendar #socialCalendarMonthSelect,
+body.mobile-client-mode #socialSubtabCalendar #socialCalendarYearSelect,
+body.mobile-client-mode #socialSubtabCalendar .social-calendar-picker,
+body.mobile-client-mode #socialSubtabCalendar .social-calendar-nav-controls {
+  display: none !important;
+}
+
+/* Final mobile polish v20260328e */
+#socialCalendarFab.social-calendar-fab,
+#socialCalendarDaySheet .social-calendar-fab-mini,
+#socialCalendarDaySheet .sw-day-sheet-close,
+#socialNotesFab.social-notes-fab,
+#socialNotificationCenter .social-notif-head-actions > button,
+#socialTasksBoard .social-task-delete,
+#socialTasksBoard .social-task-check,
+#socialSubtabTasks .social-task-delete,
+#socialSubtabTasks .social-task-check {
+  display: grid !important;
+  place-items: center !important;
+  text-align: center !important;
+  line-height: 1 !important;
+  text-indent: 0 !important;
+  padding: 0 !important;
+  transform: none !important;
+}
+
+#socialCalendarFab.social-calendar-fab > span,
+#socialCalendarDaySheet .social-calendar-fab-mini > span,
+#socialCalendarDaySheet .sw-day-sheet-close > span,
+#socialNotesFab.social-notes-fab > span {
+  display: grid !important;
+  place-items: center !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+#socialSubtabNotes .social-notes-layout {
+  padding-top: 0 !important;
+  padding-bottom: 92px !important;
+}
+
+#socialSubtabNotes .social-notes-sidebar {
+  position: relative !important;
+}
+
+#socialSubtabNotes #socialNotesList {
+  margin-top: 16px !important;
+  padding-top: 4px !important;
+  padding-bottom: 92px !important;
+}
+
+#socialSubtabNotes .social-notes-sidebar > button,
+#socialSubtabNotes .social-notes-layout > button,
+#socialSubtabNotes .panel > button,
+#socialSubtabNotes button[onclick*="socialCreateNote"],
+#socialSubtabNotes button[title="Create note"],
+#socialSubtabNotes button[title="Создать запись"],
+#socialSubtabNotes button[aria-label="Create note"],
+#socialSubtabNotes button[aria-label="Создать заметку"] {
+  display: none !important;
+}
+
+#socialNotesFab.social-notes-fab {
+  position: fixed !important;
+  right: 16px !important;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 14px) !important;
+  z-index: 2147482000 !important;
+}
+
+#socialSubtabNotes #socialNotesList .social-note-row,
+#socialSubtabNotes #socialNotesList .sw-note-card {
+  background: var(--sw-note-card-fill, linear-gradient(180deg, color-mix(in srgb, var(--sw-note-cover, #eaf2ff) 58%, #ffffff), color-mix(in srgb, var(--sw-note-cover, #eaf2ff) 26%, #ffffff))) !important;
+  background-color: var(--sw-note-cover, #eaf2ff) !important;
+  background-image: var(--sw-note-card-fill, linear-gradient(180deg, color-mix(in srgb, var(--sw-note-cover, #eaf2ff) 58%, #ffffff), color-mix(in srgb, var(--sw-note-cover, #eaf2ff) 26%, #ffffff))) !important;
+}
+
+#socialSubtabNotes #socialNotesList .social-note-main {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+#socialModalHost .sw-note-color {
+  background: var(--sw-note-cover, #eef4ff) !important;
+  background-color: var(--sw-note-cover, #eef4ff) !important;
+  background-image: none !important;
+  border: 1px solid rgba(127, 151, 188, 0.35) !important;
+  opacity: 1 !important;
+}
+
+#socialTasksBoard .social-task-item,
+#socialSubtabTasks .social-task-item {
+  grid-template-columns: 40px minmax(0, 1fr) 44px !important;
+  column-gap: 12px !important;
+}
+
+#socialTasksBoard .social-task-content,
+#socialSubtabTasks .social-task-content {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  padding-right: 12px !important;
+}
+
+#socialTasksBoard .social-task-title-row,
+#socialSubtabTasks .social-task-title-row {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  column-gap: 10px !important;
+  align-items: start !important;
+}
+
+#socialTasksBoard .social-task-kind,
+#socialSubtabTasks .social-task-kind {
+  justify-self: end !important;
+  align-self: start !important;
+  max-width: 68px !important;
+  width: auto !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  font-size: 10px !important;
+  padding: 4px 8px !important;
+}
+
+#socialTasksBoard .social-task-delete,
+#socialSubtabTasks .social-task-delete {
+  justify-self: center !important;
+  align-self: center !important;
+}
+
+#socialNotificationCenter .social-notif-item-head {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 8px !important;
+  align-items: start !important;
+}
+
+#socialNotificationCenter .social-notif-item-head b,
+#socialNotificationCenter .social-notif-item p {
+  overflow: hidden !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+
+body.mobile-apk-mode #socialSubtabCalendar #socialCalendarMonthLabel,
+body.mobile-client-mode #socialSubtabCalendar #socialCalendarMonthLabel,
+#socialSubtabCalendar #socialCalendarMonthLabel {
+  display: block !important;
+  width: 100% !important;
+  margin: 0 auto 8px !important;
+  text-align: center !important;
+}
+
+body.mobile-apk-mode #socialSubtabCalendar .social-calendar-selected,
+body.mobile-apk-mode #socialSubtabCalendar .social-calendar-selected-day,
+body.mobile-apk-mode #socialSubtabCalendar .social-calendar-day-panel,
+body.mobile-apk-mode #socialSubtabCalendar .social-calendar-bottom,
+body.mobile-apk-mode #socialSubtabCalendar .social-calendar-lower,
+body.mobile-client-mode #socialSubtabCalendar .social-calendar-selected,
+body.mobile-client-mode #socialSubtabCalendar .social-calendar-selected-day,
+body.mobile-client-mode #socialSubtabCalendar .social-calendar-day-panel,
+body.mobile-client-mode #socialSubtabCalendar .social-calendar-bottom,
+body.mobile-client-mode #socialSubtabCalendar .social-calendar-lower {
+  display: none !important;
+  max-height: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+#socialSubtabNotes button[aria-label="Создать заметку"],
+#socialSubtabNotes button[title="Создать заметку"] {
+  display: none !important;
+}
+
+#socialNotesList {
+  margin-top: 18px !important;
+  padding-top: 6px !important;
 }
