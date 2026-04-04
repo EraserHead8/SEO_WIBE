@@ -368,84 +368,6 @@
     window.addEventListener("click", handler, { capture: true, passive: false });
   };
 
-  const bindCalendarSwipeCapture = () => {
-    if (window.__seoWibeMobileRuntimeCalendarSwipeBound) return;
-    window.__seoWibeMobileRuntimeCalendarSwipeBound = true;
-    const swipe = {
-      active: false,
-      startedInCalendar: false,
-      x: 0,
-      y: 0,
-      moved: false,
-      handled: false,
-      lastAt: 0,
-    };
-    const canHandle = (target) => {
-      const state = ensureState();
-      if (String(state.currentSubtab || "").trim().toLowerCase() !== "calendar") return false;
-      if (state.calendarMonthPickerOpen || state.calendarDaySheetOpen) return false;
-      if (document.getElementById("socialModal") && !document.getElementById("socialModal").classList.contains("hidden")) return false;
-      return Boolean(target?.closest?.("#socialCalendarGrid, #socialSubtabCalendar"));
-    };
-    const trigger = (dx) => {
-      const now = Date.now();
-      if (now - swipe.lastAt < 260) return;
-      swipe.lastAt = now;
-      const stable = window.__seoWibeStableSocialRuntimeV20260402 || {};
-      const shift = typeof stable.shiftCalendar === "function"
-        ? stable.shiftCalendar.bind(window)
-        : (typeof window.socialShiftCalendar === "function" ? window.socialShiftCalendar.bind(window) : null);
-      if (!shift) return;
-      shift(dx > 0 ? -1 : 1);
-      setTimeout(refreshCalendarRuntime, 0);
-      setTimeout(refreshCalendarRuntime, 180);
-    };
-    window.addEventListener("touchstart", (event) => {
-      const touch = event.touches?.[0] || event.changedTouches?.[0];
-      swipe.active = Boolean(touch);
-      swipe.startedInCalendar = canHandle(event.target);
-      swipe.moved = false;
-      swipe.handled = false;
-      if (!touch || !swipe.startedInCalendar) return;
-      swipe.x = Number(touch.clientX || 0);
-      swipe.y = Number(touch.clientY || 0);
-    }, { capture: true, passive: true });
-    window.addEventListener("touchmove", (event) => {
-      if (!swipe.active || !swipe.startedInCalendar || swipe.handled) return;
-      const touch = event.changedTouches?.[0];
-      if (!touch) return;
-      const dx = Number(touch.clientX || 0) - swipe.x;
-      const dy = Number(touch.clientY || 0) - swipe.y;
-      if (Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy)) {
-        swipe.moved = true;
-        event.preventDefault();
-      }
-    }, { capture: true, passive: false });
-    window.addEventListener("touchend", (event) => {
-      if (!swipe.active || !swipe.startedInCalendar || swipe.handled) {
-        swipe.active = false;
-        return;
-      }
-      const touch = event.changedTouches?.[0];
-      swipe.active = false;
-      if (!touch) return;
-      const dx = Number(touch.clientX || 0) - swipe.x;
-      const dy = Number(touch.clientY || 0) - swipe.y;
-      if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;
-      swipe.handled = true;
-      event.preventDefault();
-      event.stopPropagation();
-      if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
-      trigger(dx);
-    }, { capture: true, passive: false });
-    window.addEventListener("touchcancel", () => {
-      swipe.active = false;
-      swipe.startedInCalendar = false;
-      swipe.moved = false;
-      swipe.handled = false;
-    }, { capture: true, passive: true });
-  };
-
   const reapply = () => {
     restoreStableRuntime();
     patchNotifications();
@@ -457,7 +379,6 @@
   patchNotifications();
   wrapCalendar();
   bindBellCapture();
-  bindCalendarSwipeCapture();
   refreshCalendarRuntime();
   window.addEventListener("seo-wibe-auth", () => {
     scheduleReapplyBurst(0, 220);

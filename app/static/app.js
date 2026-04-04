@@ -167,6 +167,10 @@ function isLikelyNativeMobileShell() {
     if (/\bwv\b/.test(ua) || ua.includes("android")) return true;
     if (typeof navigator.standalone !== "undefined" && navigator.standalone) return true;
     if (typeof window.matchMedia === "function" && window.matchMedia("(display-mode: standalone)").matches) return true;
+    const viewportWidth = Math.max(window.innerWidth || 0, document.documentElement?.clientWidth || 0);
+    const touchPoints = Math.max(0, Number(navigator.maxTouchPoints || 0));
+    const coarsePointer = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+    if (viewportWidth > 0 && viewportWidth <= 980 && (touchPoints > 0 || coarsePointer)) return true;
   } catch (_) {}
   return false;
 }
@@ -188,6 +192,47 @@ const mobileApkMode = (() => {
     return isLikelyNativeMobileShell();
   }
 })();
+function shouldForceMobileCalendarStart() {
+  try {
+    if (mobileClientMode || mobileApkMode) return true;
+    const body = document.body;
+    if (body?.classList?.contains("mobile-client-mode") || body?.classList?.contains("mobile-apk-mode")) return true;
+    const viewportWidth = Math.max(window.innerWidth || 0, document.documentElement?.clientWidth || 0);
+    const touchPoints = Math.max(0, Number(navigator.maxTouchPoints || 0));
+    const coarsePointer = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+    return viewportWidth > 0 && viewportWidth <= 980 && (touchPoints > 0 || coarsePointer);
+  } catch (_) {
+    return Boolean(mobileClientMode || mobileApkMode);
+  }
+}
+
+function applyMobileCalendarStartupRoute(delayMs = 0) {
+  if (!shouldForceMobileCalendarStart()) return;
+  const run = () => {
+    currentSocialSubtab = "calendar";
+    try {
+      sessionStorage.setItem("seo_wibe_last_tab", "social");
+      sessionStorage.setItem("seo_wibe_last_social_subtab", "calendar");
+    } catch (_) {}
+    const appSection = document.getElementById("appSection");
+    if (!appSection || appSection.classList.contains("hidden")) return;
+    const socialBtn = document.querySelector(".nav-btn[data-tab='social']");
+    if (!socialBtn) return;
+    try {
+      showTab("social", socialBtn);
+    } catch (_) {}
+    if (typeof switchSocialSubtab === "function") {
+      setTimeout(() => {
+        try { switchSocialSubtab("calendar", true); } catch (_) {}
+      }, 80);
+    }
+  };
+  if (delayMs > 0) {
+    setTimeout(run, Math.max(0, Number(delayMs) || 0));
+    return;
+  }
+  run();
+}
 let sidebarCompact = localStorage.getItem("sidebar_compact") === "1";
 let authMode = "login";
 let uiThemeSettings = {
@@ -196,13 +241,13 @@ let uiThemeSettings = {
   default_theme: "classic",
   allowed_themes: ["classic", "dark", "light", "moon", "newyear", "summer", "autumn", "winter", "spring", "japan", "greenland"],
 };
-let currentTab = "sales";
+let currentTab = shouldForceMobileCalendarStart() ? "social" : "sales";
 let currentProductsSubtab = "catalog";
 let currentReviewsSubtab = "reviews";
 let currentAdsSubtab = "campaigns";
 let currentAccountingSubtab = "overview";
 let currentHelpSubtab = "docs";
-let currentSocialSubtab = "chat";
+let currentSocialSubtab = shouldForceMobileCalendarStart() ? "calendar" : "chat";
 const moduleLoadState = new Map();
 const moduleInflightState = new Map();
 const MODULE_CACHE_TTL_MS = 30 * 60 * 1000;
@@ -3179,7 +3224,12 @@ function onMobileQuickNavChanged(sourceId = "mobileQuickNav") {
 }
 
 function setupMobileClientMode() {
-  if (!mobileClientMode) return;
+  if (!shouldForceMobileCalendarStart()) return;
+  currentSocialSubtab = "calendar";
+  try {
+    sessionStorage.setItem("seo_wibe_last_tab", "social");
+    sessionStorage.setItem("seo_wibe_last_social_subtab", "calendar");
+  } catch (_) {}
   document.body.classList.add("mobile-client-mode");
   if (mobileApkMode) document.body.classList.add("mobile-apk-mode");
   const drawer = document.getElementById("mobileDrawerControls");
@@ -3189,6 +3239,8 @@ function setupMobileClientMode() {
   syncMobileDrawerSelectors();
   refreshMobileQuickNavOptions();
   syncMobileQuickNavSelection();
+  applyMobileCalendarStartupRoute(0);
+  applyMobileCalendarStartupRoute(220);
 }
 
 async function register() {
@@ -3494,7 +3546,7 @@ async function ensureAuth(allowFallback = true) {
         const storedRaw = String(sessionStorage.getItem("seo_wibe_last_tab") || "").trim();
         const storedTab = normalizeLegacyTabName(storedRaw).tab;
         let initialTab = isTabAvailable(storedTab) ? storedTab : resolveInitialTab();
-        if (mobileClientMode) {
+        if (shouldForceMobileCalendarStart()) {
           // Mobile app should open the social hub on Calendar by default.
           currentSocialSubtab = "calendar";
           if (isTabAvailable("social")) initialTab = "social";
@@ -12922,6 +12974,11 @@ applyButtonTooltips();
 setupMobileClientMode();
 initHoverTips();
 window.__socialHooksRequested = true;
+window.addEventListener("seo-wibe-auth", () => {
+  applyMobileCalendarStartupRoute(0);
+  applyMobileCalendarStartupRoute(180);
+  applyMobileCalendarStartupRoute(650);
+});
 ensureAuth();
 
 window.addEventListener("resize", () => {
