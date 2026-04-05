@@ -136,6 +136,7 @@ let salesLoadInflightKey = "";
 let salesLastRequestSignature = "";
 let salesLastLoadedAt = 0;
 let salesAutoLoadTimer = null;
+let salesBootstrapRetryTimer = null;
 let accountingOverview = null;
 let accountingChartRows = [];
 let accountingAnalysisRows = [];
@@ -2840,6 +2841,34 @@ function isTabAvailable(tabCode) {
   return false;
 }
 
+function salesDashboardHasRenderableContent() {
+  const statsHost = document.getElementById("stats");
+  const trendMeta = document.getElementById("dashboardTrendMeta");
+  const trendChart = document.getElementById("dashboardTrendChart");
+  return Boolean(
+    (statsHost && statsHost.children && statsHost.children.length > 0)
+    || String(trendMeta?.textContent || "").trim()
+    || (trendChart && trendChart.querySelector && trendChart.querySelector("svg, canvas, .trend-empty, .trend-point"))
+  );
+}
+
+function scheduleSalesBootstrapRetry(delayMs = 900) {
+  if (salesBootstrapRetryTimer) {
+    clearTimeout(salesBootstrapRetryTimer);
+  }
+  salesBootstrapRetryTimer = setTimeout(async () => {
+    salesBootstrapRetryTimer = null;
+    if (currentTab !== "sales") return;
+    if (salesDashboardHasRenderableContent()) return;
+    const inflight = moduleInflightState.get("sales");
+    if (inflight) {
+      await inflight.catch(() => null);
+    }
+    if (currentTab !== "sales" || salesDashboardHasRenderableContent()) return;
+    await runModuleLoader("sales", loadSalesBundle, { force: true, maxAgeMs: 0 }).catch(() => null);
+  }, Math.max(250, Number(delayMs) || 0));
+}
+
 function showTab(name, btn = null) {
   const mapped = normalizeLegacyTabName(name);
   if (mapped.productsSubtab) currentProductsSubtab = mapped.productsSubtab;
@@ -2882,6 +2911,7 @@ function showTab(name, btn = null) {
     setTimeout(() => {
       if (currentTab === "sales") renderSalesStats();
     }, 120);
+    scheduleSalesBootstrapRetry();
   }
   if (targetTab === "products") runModuleLoader("products", loadProductsWorkspace);
   if (targetTab === "reviews") runModuleLoader("reviews", loadReviewsWorkspace);
@@ -10391,6 +10421,8 @@ async function loadDashboard() {
     maxRetries: 1,
   }).catch(() => null);
   if (!d) return false;
+  const statsHost = document.getElementById("stats");
+  if (!statsHost) return false;
 
   const stats = [
     [tr("Товаров", "Products"), d.total_products],
@@ -10401,7 +10433,7 @@ async function loadDashboard() {
   ];
 
   const maxVal = Math.max(...stats.map((x) => x[1]), 1);
-  document.getElementById("stats").innerHTML = stats
+  statsHost.innerHTML = stats
     .map(([name, val]) => {
       const pct = Math.max(4, Math.round((val / maxVal) * 100));
       return `
