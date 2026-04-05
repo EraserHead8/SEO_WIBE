@@ -6,6 +6,7 @@ __pycache__/
 seo_wibe.db
 127.0.0.1
 .DS_Store
+.idea/
 android-sdk/
 android/seo-wibe-mobile/.gradle/
 android/seo-wibe-mobile/.gradle-home/
@@ -21,3 +22,16 @@ android/seo-wibe-mobile/*.keystore
 *.db-wal
 app/static/uploads/
 android/seo-wibe-mobile/*.bak*
+
+# Server/local sync artifacts and backups
+_backup/
+_backup_*/
+_backup_codex_*/
+backups/
+*.bak_*
+*.preupload_*
+*.codex_*
+*.from_server
+*.from_server.*
+*.tmpwrite
+*.server.current.py

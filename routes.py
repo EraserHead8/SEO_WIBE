@@ -109,6 +109,8 @@ from app.schemas import (
     AccountingDataOut,
     AccountingExpenseIn,
     AccountingExpenseListOut,
+    AccountingMonthlyMetaOut,
+    AccountingMonthlySummaryOut,
     AccountingExpenseOut,
     AccountingPurchasePriceImportOut,
     AccountingSettingsIn,
@@ -218,7 +220,7 @@ from app.schemas import (
     UiSettingsIn,
     UiSettingsOut,
 )
-from app.services.accounting import build_accounting_payload
+from app.services.accounting import build_accounting_monthly_summary, build_accounting_payload
 from app.services.sales import build_sales_report
 from app.services.market_cache import (
     build_market_cache_key,
@@ -507,6 +509,28 @@ def _accounting_payload_has_data(payload: dict[str, Any] | None) -> bool:
                     return True
             except Exception:
                 continue
+    return False
+
+
+def _accounting_monthly_payload_has_data(payload: dict[str, Any] | None) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    months = payload.get("months")
+    if not isinstance(months, list) or not months:
+        return False
+    for row in months:
+        if not isinstance(row, dict):
+            continue
+        for section in ("wb", "ozon", "total"):
+            part = row.get(section)
+            if not isinstance(part, dict):
+                continue
+            for key in ("turnover", "orders", "units", "buyouts", "cogs", "net_profit"):
+                try:
+                    if abs(float(part.get(key) or 0.0)) > 1e-9:
+                        return True
+                except Exception:
+                    continue
     return False
 
 
@@ -7736,6 +7760,242 @@ def accounting_data(
         chart=data.get("chart") or [],
         analysis_rows=rows,
         warnings=[_decode_mojibake_text(str(x)).strip() for x in (data.get("warnings") or []) if _decode_mojibake_text(str(x)).strip()],
+    )
+
+
+@router.get("/accounting/monthly-summary", response_model=AccountingMonthlySummaryOut)
+def accounting_monthly_summary(
+    months: int = 12,
+    tz: str = "Europe/Moscow",
+    fast: bool = True,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "accounting")
+    month_count = max(1, min(12, int(months or 12)))
+    tz_name = str(tz or "Europe/Moscow").strip() or "Europe/Moscow"
+    try:
+        ZoneInfo(tz_name)
+    except Exception:
+        tz_name = "UTC"
+
+    wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
+    ozon_key = _get_active_marketplace_api_key(db, user.id, "ozon")
+    settings_row = _get_or_create_accounting_settings(db, user)
+    settings_payload = {
+        "vat_rate": float(round(settings_row.vat_rate or 0.0, 2)),
+        "tax_rate": float(round(settings_row.tax_rate or 0.0, 2)),
+        "additional_rate": float(round(settings_row.additional_rate or 0.0, 2)),
+        "fixed_cost_per_month": float(round(settings_row.fixed_cost_per_month or 0.0, 2)),
+    }
+
+    expense_rows = db.scalars(
+        select(AccountingExpense)
+        .where(AccountingExpense.user_id == user.id)
+        .order_by(AccountingExpense.id.asc())
+    ).all()
+    products_payload = _collect_product_cost_payload(db, user, "all")
+    expenses_payload = _collect_accounting_expense_payload(expense_rows)
+
+    expense_sig_raw = "|".join(
+        [
+            ";".join(
+                [
+                    str(int(row.id)),
+                    _normalize_accounting_marketplace(row.marketplace),
+                    f"{float(round(row.amount or 0.0, 2)):.2f}",
+                    row.period_from.isoformat(),
+                    row.period_to.isoformat(),
+                    "1" if bool(row.is_active) else "0",
+                    row.updated_at.isoformat() if row.updated_at else "",
+                ]
+            )
+            for row in expense_rows
+        ]
+    )
+    products_sig_raw = "|".join(
+        sorted(
+            [
+                ";".join(
+                    [
+                        str(x.get("marketplace") or ""),
+                        str(x.get("external_id") or ""),
+                        str(x.get("article") or ""),
+                        f"{float(round(_to_float_safe(x.get('purchase_price'), 0.0), 2)):.2f}",
+                    ]
+                )
+                for x in products_payload
+            ]
+        )
+    )
+
+    cache_key = build_market_cache_key(
+        {
+            "kind": "accounting_monthly",
+            "months": month_count,
+            "tz": tz_name,
+            "wb_key_rev": _secret_revision(wb_key),
+            "ozon_key_rev": _secret_revision(ozon_key),
+            "settings": settings_payload,
+            "expense_sig": hashlib.sha1(expense_sig_raw.encode("utf-8")).hexdigest(),
+            "products_sig": hashlib.sha1(products_sig_raw.encode("utf-8")).hexdigest(),
+        }
+    )
+
+    previous_same_key_payload: dict[str, Any] | None = None
+    prev_same_key_row = db.scalar(
+        select(MarketplaceApiCache).where(
+            MarketplaceApiCache.user_id == int(user.id),
+            MarketplaceApiCache.module_code == "accounting_monthly",
+            MarketplaceApiCache.marketplace == "all",
+            MarketplaceApiCache.cache_key == cache_key,
+        )
+    )
+    if prev_same_key_row and str(prev_same_key_row.payload_json or "").strip():
+        try:
+            parsed_prev = json.loads(str(prev_same_key_row.payload_json or ""))
+            if isinstance(parsed_prev, dict):
+                previous_same_key_payload = parsed_prev
+        except Exception:
+            previous_same_key_payload = None
+
+    if bool(fast):
+        quick_data: dict[str, Any] | None = None
+        quick_meta: dict[str, Any] = {}
+        if _accounting_monthly_payload_has_data(previous_same_key_payload):
+            quick_data = dict(previous_same_key_payload or {})
+            quick_meta = {"source": "db-same-key-fastpath", "age_sec": -1, "cache_key": cache_key}
+        else:
+            probe_data, probe_meta = _market_cache_latest_payload(
+                db,
+                user_id=int(user.id),
+                module_code="accounting_monthly",
+                marketplace="all",
+                max_age_sec=14 * 24 * 60 * 60,
+                exclude_cache_keys={cache_key},
+                scan_limit=180,
+            )
+            if _accounting_monthly_payload_has_data(probe_data):
+                quick_data = dict(probe_data or {})
+                quick_meta = probe_meta or {"source": "db-latest-module-fastpath", "age_sec": -1}
+
+        if _accounting_monthly_payload_has_data(quick_data):
+            meta = dict((quick_data or {}).get("meta") or {})
+            quick_warnings = [
+                _decode_mojibake_text(str(x or "")).strip()
+                for x in list(meta.get("warnings") or [])
+                if _decode_mojibake_text(str(x or "")).strip()
+            ]
+            quick_warnings.append("Cached monthly summary is shown. Live refresh is running in background.")
+            months_rows = list((quick_data or {}).get("months") or [])
+            meta_payload = {
+                "source": str(quick_meta.get("source") or meta.get("source") or "cache"),
+                "partial": True,
+                "warnings": list(dict.fromkeys([x for x in quick_warnings if x])),
+                "generated_at": str(meta.get("generated_at") or datetime.utcnow().replace(microsecond=0).isoformat() + "Z"),
+            }
+            _audit(
+                db,
+                user,
+                action="accounting_monthly_read",
+                details=(
+                    f"months={month_count};tz={tz_name};rows={len(months_rows)};"
+                    f"source={meta_payload.get('source')};fast=1"
+                ),
+                module_code="accounting",
+                entity_type="accounting_monthly_report",
+                status="partial",
+            )
+            db.commit()
+            return AccountingMonthlySummaryOut(
+                months=months_rows,
+                meta=AccountingMonthlyMetaOut(**meta_payload),
+            )
+
+    data, monthly_cache_meta = get_or_refresh_market_cache(
+        db,
+        user_id=int(user.id),
+        module_code="accounting_monthly",
+        marketplace="all",
+        cache_key=cache_key,
+        ttl_sec=max(180, _market_cache_ttl("accounting_monthly", fast_mode=bool(fast))),
+        fetcher=lambda: build_accounting_monthly_summary(
+            months=month_count,
+            tz_name=tz_name,
+            wb_api_key=wb_key,
+            ozon_api_key=ozon_key,
+            products=products_payload,
+            expenses=expenses_payload,
+            settings=settings_payload,
+        ),
+        stale_if_error_sec=6 * 60 * 60,
+        prefer_stale_sec=2 * 60 * 60,
+    )
+
+    warnings_now = []
+    if isinstance(data, dict):
+        meta_now = data.get("meta") if isinstance(data.get("meta"), dict) else {}
+        warnings_now = [str(x or "") for x in (meta_now.get("warnings") or [])]
+
+    if _warnings_indicate_upstream_failure(warnings_now) and not _accounting_monthly_payload_has_data(data):
+        fallback_data: dict[str, Any] | None = None
+        fallback_meta: dict[str, Any] = {}
+        if _accounting_monthly_payload_has_data(previous_same_key_payload):
+            fallback_data = previous_same_key_payload
+            fallback_meta = {"source": "db-same-key-fallback", "age_sec": -1, "cache_key": cache_key}
+        else:
+            probe_data, probe_meta = _market_cache_latest_payload(
+                db,
+                user_id=int(user.id),
+                module_code="accounting_monthly",
+                marketplace="all",
+                max_age_sec=14 * 24 * 60 * 60,
+                exclude_cache_keys={cache_key},
+                scan_limit=180,
+            )
+            if _accounting_monthly_payload_has_data(probe_data):
+                fallback_data = probe_data
+                fallback_meta = probe_meta or {"source": "db-latest-module-fallback", "age_sec": -1}
+        if _accounting_monthly_payload_has_data(fallback_data):
+            data = fallback_data or {}
+            monthly_cache_meta = fallback_meta or {"source": "db-latest-module-fallback", "age_sec": -1}
+            existing_meta = data.get("meta") if isinstance(data.get("meta"), dict) else {}
+            merged_warnings = [str(x or "") for x in list(existing_meta.get("warnings") or []) if str(x or "").strip()]
+            merged_warnings.append("Showing last stable monthly summary due temporary upstream API limits.")
+            data["meta"] = {
+                **existing_meta,
+                "warnings": list(dict.fromkeys(merged_warnings)),
+                "partial": True,
+            }
+
+    months_rows = list((data or {}).get("months") or []) if isinstance(data, dict) else []
+    meta_payload_raw = (data or {}).get("meta") if isinstance((data or {}).get("meta"), dict) else {}
+    meta_payload = {
+        "source": str(monthly_cache_meta.get("source") or meta_payload_raw.get("source") or "live"),
+        "partial": bool(meta_payload_raw.get("partial") or False),
+        "warnings": [
+            _decode_mojibake_text(str(x or "")).strip()
+            for x in list(meta_payload_raw.get("warnings") or [])
+            if _decode_mojibake_text(str(x or "")).strip()
+        ],
+        "generated_at": str(meta_payload_raw.get("generated_at") or datetime.utcnow().replace(microsecond=0).isoformat() + "Z"),
+    }
+
+    _audit(
+        db,
+        user,
+        action="accounting_monthly_read",
+        details=(
+            f"months={month_count};tz={tz_name};rows={len(months_rows)};"
+            f"source={meta_payload.get('source')};fast={1 if bool(fast) else 0}"
+        ),
+        module_code="accounting",
+        entity_type="accounting_monthly_report",
+    )
+    db.commit()
+    return AccountingMonthlySummaryOut(
+        months=months_rows,
+        meta=AccountingMonthlyMetaOut(**meta_payload),
     )
 
 
