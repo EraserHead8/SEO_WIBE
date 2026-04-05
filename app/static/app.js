@@ -2720,7 +2720,45 @@ async function loadProductsWorkspace() {
   await loadKeywords();
 }
 
-async function preloadModulesInBackground({ force = false } = {}) {
+function getModuleLoaderForTab(tabCode) {
+  const code = String(tabCode || "").trim().toLowerCase();
+  if (code === "sales") return { key: "sales", load: loadSalesBundle };
+  if (code === "products") return { key: "products", load: loadProductsWorkspace };
+  if (code === "reviews") return { key: "reviews", load: loadReviewsWorkspace };
+  if (code === "accounting") return { key: "accounting", load: loadAccountingWorkspace };
+  if (code === "ads") return { key: "ads", load: loadAdsWorkspace };
+  if (code === "social") return { key: "social", load: () => (typeof loadSocialWorkspace === "function" ? loadSocialWorkspace() : Promise.resolve()) };
+  if (code === "profile") return { key: "profile", load: loadProfile };
+  if (code === "billing") return { key: "billing", load: loadBilling };
+  if (code === "help") return { key: "help", load: loadHelpWorkspace };
+  return null;
+}
+
+async function preloadModulesInBackground({ force = false, scope = "light" } = {}) {
+  const safeScope = String(scope || "light").trim().toLowerCase();
+  if (safeScope === "active") {
+    const activeStep = getModuleLoaderForTab(currentTab);
+    if (!activeStep) return;
+    await runModuleLoader(activeStep.key, activeStep.load, {
+      force,
+      maxAgeMs: force ? 0 : MODULE_CACHE_TTL_MS,
+    });
+    return;
+  }
+  if (safeScope !== "full") {
+    const lightQueue = [
+      { key: "profile", load: loadProfile, enabled: () => enabledModules.has("user_profile") },
+      { key: "help", load: loadHelpWorkspace, enabled: () => enabledModules.has("help_center") || enabledModules.has("ai_assistant") },
+    ];
+    for (const step of lightQueue) {
+      if (!step.enabled()) continue;
+      await runModuleLoader(step.key, step.load, {
+        force,
+        maxAgeMs: force ? 0 : MODULE_CACHE_TTL_MS,
+      });
+    }
+    return;
+  }
   const queue = [
     { key: "sales", load: loadSalesBundle, enabled: () => !modulesLoaded || enabledModules.has("sales_stats") },
     { key: "products", load: loadProductsWorkspace, enabled: () => true },
@@ -2744,7 +2782,7 @@ async function refreshModulesInBackground() {
   const prev = suppressAlerts;
   suppressAlerts = true;
   try {
-    await preloadModulesInBackground({ force: true });
+    await preloadModulesInBackground({ force: true, scope: "active" });
   } finally {
     suppressAlerts = prev;
   }
@@ -3560,13 +3598,9 @@ async function ensureAuth(allowFallback = true) {
         showTab(initialTab, document.querySelector(`.nav-btn[data-tab='${initialTab}']`));
         appUiBootstrapped = true;
         setTimeout(() => {
-          if (currentTab === "sales" && initialTab === "sales") {
-            runModuleLoader("sales", loadSalesBundle, { force: true, maxAgeMs: 0 });
-          }
-        }, 120);
-        setTimeout(() => {
-          preloadModulesInBackground({ force: true });
-        }, 250);
+          // Avoid hammering all module APIs right after login. A light preload is enough.
+          preloadModulesInBackground({ force: false, scope: "light" });
+        }, 3000);
       }
     } finally {
       suppressAlerts = prevAlerts;
@@ -10351,7 +10385,11 @@ async function recheckDue() {
 }
 
 async function loadDashboard() {
-  const d = await requestJson("/api/dashboard", { headers: authHeaders() }).catch(() => null);
+  const d = await requestJson("/api/dashboard", {
+    headers: authHeaders(),
+    timeoutMs: 20000,
+    maxRetries: 1,
+  }).catch(() => null);
   if (!d) return false;
 
   const stats = [
@@ -10375,15 +10413,24 @@ async function loadDashboard() {
     })
     .join("");
 
-  const points = await loadTrend({ days: 21 });
-  renderTrendChart("dashboardTrendChart", "dashboardTrendMeta", points);
+  loadTrend({ days: 21 })
+    .then((points) => {
+      renderTrendChart("dashboardTrendChart", "dashboardTrendMeta", points);
+    })
+    .catch(() => {
+      renderTrendChart("dashboardTrendChart", "dashboardTrendMeta", []);
+    });
   return true;
 }
 
 async function loadSalesBundle() {
-  const dashOk = await loadDashboard();
-  const salesOk = await loadSalesStats();
-  return dashOk !== false && salesOk !== false;
+  const [dashRes, salesRes] = await Promise.allSettled([
+    loadDashboard(),
+    loadSalesStats(),
+  ]);
+  const dashOk = dashRes.status === "fulfilled" ? dashRes.value !== false : false;
+  const salesOk = salesRes.status === "fulfilled" ? salesRes.value !== false : false;
+  return dashOk || salesOk;
 }
 
 function initSalesPeriodDefaults() {
