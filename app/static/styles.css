@@ -384,6 +384,7 @@ body[data-theme="light"] .review-type-pill {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-left: auto;
 }
 .auth-lang-select {
   min-width: 84px;
@@ -3992,15 +3993,16 @@ body[data-theme="light"] .hover-tip {
 
 @media (max-width: 980px) {
   .auth-toolbar {
-    flex-direction: column;
+    flex-direction: row;
     align-items: flex-start;
+    flex-wrap: wrap;
   }
   .auth-toolbar-controls {
-    width: 100%;
+    width: auto;
+    margin-left: auto;
   }
-  .auth-toolbar-controls .chip-btn,
   .auth-toolbar-controls .chip-select {
-    flex: 1 1 0;
+    flex: 0 0 auto;
   }
   .auth-hero {
     display: flex;
@@ -9004,6 +9006,9 @@ button,
   #authSection .auth-toolbar {
     padding: 10px;
     gap: 10px;
+    flex-direction: row;
+    align-items: flex-start;
+    flex-wrap: wrap;
   }
 
   #authSection .auth-toolbar-nav {
@@ -9011,15 +9016,16 @@ button,
   }
 
   #authSection .auth-toolbar-controls {
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: auto;
+    margin-left: auto;
+    display: flex;
+    align-items: flex-start;
     gap: 8px;
   }
 
   #authSection .auth-toolbar-controls .chip-select {
-    width: 100%;
-    min-width: 0;
+    width: auto;
+    min-width: 72px;
   }
 
   #authSection .auth-card.auth-hero {
@@ -9896,7 +9902,7 @@ body.mobile-client-mode #mobileDrawerControls {
   display: grid !important;
 }
 
-body.mobile-client-mode #appSection .topbar-controls > :not(#mobileNavToggle) {
+body.mobile-client-mode #appSection .topbar-controls > :not(#mobileNavToggle):not(#mobileChatCompactHead) {
   display: none !important;
 }
 
@@ -9924,6 +9930,10 @@ body.mobile-client-mode #appSection .topbar-controls {
 body.mobile-client-mode #appSection .topbar-title p {
   margin-top: 4px;
   font-size: 13px;
+}
+
+body.mobile-client-mode #appSection .topbar-controls #mobileChatCompactHead:not(.hidden) {
+  display: inline-flex !important;
 }
 
 body.mobile-client-mode #social > .panel:first-child {
@@ -9999,7 +10009,8 @@ body.mobile-apk-mode #appSection .topbar-controls {
   transform: translateY(-50%);
 }
 
-body.mobile-apk-mode #appSection .topbar-controls #mobileNavToggle {
+body.mobile-apk-mode #appSection .topbar-controls #mobileNavToggle,
+body.mobile-client-mode #appSection .topbar-controls #mobileNavToggle {
   min-width: 36px;
   min-height: 36px;
   border: 1px solid rgba(171, 204, 236, 0.46);
@@ -10012,7 +10023,8 @@ body.mobile-apk-mode #appSection .topbar-controls #mobileNavToggle {
   box-shadow: 0 4px 10px rgba(25, 67, 113, 0.08);
 }
 
-body.mobile-apk-mode #appSection .mobile-chat-compact-head {
+body.mobile-apk-mode #appSection .mobile-chat-compact-head,
+body.mobile-client-mode #appSection .mobile-chat-compact-head {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -10020,7 +10032,8 @@ body.mobile-apk-mode #appSection .mobile-chat-compact-head {
   max-width: calc(100vw - 88px);
 }
 
-body.mobile-apk-mode #appSection .mobile-chat-compact-back {
+body.mobile-apk-mode #appSection .mobile-chat-compact-back,
+body.mobile-client-mode #appSection .mobile-chat-compact-back {
   width: 30px;
   min-width: 30px;
   height: 30px;
@@ -10031,38 +10044,48 @@ body.mobile-apk-mode #appSection .mobile-chat-compact-back {
   border-radius: 50%;
 }
 
-body.mobile-apk-mode #appSection .mobile-chat-compact-avatar {
+body.mobile-apk-mode #appSection .mobile-chat-compact-avatar,
+body.mobile-client-mode #appSection .mobile-chat-compact-avatar {
   width: 36px;
   height: 36px;
 }
 
-body.mobile-apk-mode #appSection .mobile-chat-compact-title {
+body.mobile-apk-mode #appSection .mobile-chat-compact-title,
+body.mobile-client-mode #appSection .mobile-chat-compact-title {
   color: #17324f;
   font-size: 18px;
   font-weight: 700;
 }
 
-body.mobile-apk-mode #appSection .mobile-chat-compact-subtitle {
+body.mobile-apk-mode #appSection .mobile-chat-compact-subtitle,
+body.mobile-client-mode #appSection .mobile-chat-compact-subtitle {
   color: rgba(33, 62, 94, 0.74);
   font-size: 13px;
 }
 
-body.mobile-apk-mode #appSection .mobile-chat-compact-subtitle.online-now {
+body.mobile-apk-mode #appSection .mobile-chat-compact-subtitle.online-now,
+body.mobile-client-mode #appSection .mobile-chat-compact-subtitle.online-now {
   color: #0d9d63;
 }
 
 body.mobile-apk-mode.social-thread-open #appSection .topbar-title,
-body.mobile-apk-mode #appSection.social-thread-open .topbar-title {
+body.mobile-apk-mode #appSection.social-thread-open .topbar-title,
+body.mobile-client-mode.social-thread-open #appSection .topbar-title,
+body.mobile-client-mode #appSection.social-thread-open .topbar-title {
   display: none !important;
 }
 
 body.mobile-apk-mode.social-thread-open #appSection .topbar,
-body.mobile-apk-mode #appSection.social-thread-open .topbar {
+body.mobile-apk-mode #appSection.social-thread-open .topbar,
+body.mobile-client-mode.social-thread-open #appSection .topbar,
+body.mobile-client-mode #appSection.social-thread-open .topbar {
   grid-template-columns: minmax(0, 1fr) !important;
 }
 
 body.mobile-apk-mode.social-thread-open #appSection .topbar-controls,
-body.mobile-apk-mode #appSection.social-thread-open .topbar-controls {
+body.mobile-apk-mode #appSection.social-thread-open .topbar-controls,
+body.mobile-client-mode.social-thread-open #appSection .topbar-controls,
+body.mobile-client-mode #appSection.social-thread-open .topbar-controls {
   width: 100% !important;
   margin-left: 0 !important;
   display: flex;
@@ -10076,7 +10099,9 @@ body.mobile-apk-mode #appSection.social-thread-open .topbar-controls {
 }
 
 body.mobile-apk-mode.social-thread-open #appSection .topbar-controls #mobileNavToggle,
-body.mobile-apk-mode #appSection.social-thread-open .topbar-controls #mobileNavToggle {
+body.mobile-apk-mode #appSection.social-thread-open .topbar-controls #mobileNavToggle,
+body.mobile-client-mode.social-thread-open #appSection .topbar-controls #mobileNavToggle,
+body.mobile-client-mode #appSection.social-thread-open .topbar-controls #mobileNavToggle {
   position: absolute;
   left: auto;
   right: 0;
@@ -10085,7 +10110,9 @@ body.mobile-apk-mode #appSection.social-thread-open .topbar-controls #mobileNavT
 }
 
 body.mobile-apk-mode.social-thread-open #appSection .mobile-chat-compact-head:not(.hidden),
-body.mobile-apk-mode #appSection.social-thread-open .mobile-chat-compact-head:not(.hidden) {
+body.mobile-apk-mode #appSection.social-thread-open .mobile-chat-compact-head:not(.hidden),
+body.mobile-client-mode.social-thread-open #appSection .mobile-chat-compact-head:not(.hidden),
+body.mobile-client-mode #appSection.social-thread-open .mobile-chat-compact-head:not(.hidden) {
   display: flex !important;
   width: 100%;
   max-width: none;
@@ -10098,7 +10125,9 @@ body.mobile-apk-mode #appSection.social-thread-open .mobile-chat-compact-head:no
 }
 
 body.mobile-apk-mode.social-thread-open #appSection .mobile-chat-compact-back,
-body.mobile-apk-mode #appSection.social-thread-open .mobile-chat-compact-back {
+body.mobile-apk-mode #appSection.social-thread-open .mobile-chat-compact-back,
+body.mobile-client-mode.social-thread-open #appSection .mobile-chat-compact-back,
+body.mobile-client-mode #appSection.social-thread-open .mobile-chat-compact-back {
   position: absolute;
   left: 0;
   top: 50%;
@@ -10107,12 +10136,16 @@ body.mobile-apk-mode #appSection.social-thread-open .mobile-chat-compact-back {
 }
 
 body.mobile-apk-mode.social-thread-open #appSection .mobile-chat-compact-avatar,
-body.mobile-apk-mode #appSection.social-thread-open .mobile-chat-compact-avatar {
+body.mobile-apk-mode #appSection.social-thread-open .mobile-chat-compact-avatar,
+body.mobile-client-mode.social-thread-open #appSection .mobile-chat-compact-avatar,
+body.mobile-client-mode #appSection.social-thread-open .mobile-chat-compact-avatar {
   margin-right: 10px;
 }
 
 body.mobile-apk-mode.social-thread-open #appSection .mobile-chat-compact-text,
-body.mobile-apk-mode #appSection.social-thread-open .mobile-chat-compact-text {
+body.mobile-apk-mode #appSection.social-thread-open .mobile-chat-compact-text,
+body.mobile-client-mode.social-thread-open #appSection .mobile-chat-compact-text,
+body.mobile-client-mode #appSection.social-thread-open .mobile-chat-compact-text {
   max-width: min(68vw, 320px);
   text-align: left;
 }

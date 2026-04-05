@@ -3192,7 +3192,6 @@ function socialSyncMobileChatChrome(row = null) {
   const body = document.body;
   const shell = document.getElementById("appSection");
   const isMobileShell = socialIsMobileClientShell() || socialIsMobileApkShell();
-  const isApkShell = socialIsMobileApkShell();
   const inSocialChat = typeof currentTab !== "undefined"
     && String(currentTab || "") === "social"
     && String(socialState.currentSubtab || "") === "chat";
@@ -3213,7 +3212,7 @@ function socialSyncMobileChatChrome(row = null) {
     && Boolean(activeThread)
     && layoutOpen
     && !sidebarVisible;
-  const show = isApkShell && threadOpen;
+  const show = isMobileShell && threadOpen;
   const listMode = isMobileShell && inSocialChat && !threadOpen;
   const textWrap = titleNode.closest(".mobile-chat-compact-text");
   const openProfile = () => socialOpenCurrentParticipantProfile();
@@ -3284,12 +3283,7 @@ function socialSyncMobileChatChrome(row = null) {
 function socialSyncTopMenuButtonMode() {
   const btn = document.getElementById("mobileNavToggle");
   if (!btn) return;
-  const inSocialChat = String(currentTab || "") === "social"
-    && String(socialState.currentSubtab || "") === "chat";
-  const mobileShell = socialIsMobileClientShell() || socialIsMobileApkShell();
-  const threadMode = mobileShell
-    && inSocialChat
-    && Boolean(document.body?.classList?.contains("social-thread-open"));
+  const threadMode = false;
   btn.dataset.menuMode = threadMode ? "thread" : "modules";
   btn.classList.toggle("is-thread-menu", threadMode);
   btn.textContent = threadMode ? "\u22EE" : "\u2630";
@@ -5240,6 +5234,45 @@ function socialTaskAssigneeMeta(task) {
   `;
 }
 
+function socialTaskProjectLabel(task) {
+  const direct = socialDecodeUiText(
+    task?.project_title
+    || task?.project_name
+    || task?.project?.title
+    || task?.project?.name
+    || ""
+  );
+  if (String(direct || "").trim()) return String(direct).trim();
+  const projectId = Number(task?.project_id || task?.project?.id || 0);
+  if (projectId > 0) {
+    const match = (Array.isArray(socialState.projects) ? socialState.projects : []).find((row) => Number(row?.id || 0) === projectId);
+    const title = socialDecodeUiText(match?.title || match?.name || "");
+    if (String(title || "").trim()) return String(title).trim();
+  }
+  return "";
+}
+
+function socialTaskKindLabel(task) {
+  return String(task?.task_kind || "company") === "personal"
+    ? tr("Личное", "Personal")
+    : tr("Проект", "Project");
+}
+
+function socialTaskProjectMeta(task) {
+  const personal = String(task?.task_kind || "company") === "personal";
+  const projectName = socialTaskProjectLabel(task);
+  const pillClass = personal ? "personal" : "company";
+  const name = personal
+    ? tr("Моя личная задача", "My personal task")
+    : (projectName || tr("Проект не указан", "Project not specified"));
+  return `
+    <div class="social-task-project-line">
+      <span class="social-task-project-pill ${pillClass}">${escapeHtml(socialTaskKindLabel(task))}</span>
+      <span class="social-task-project-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+    </div>
+  `;
+}
+
 function socialTaskIsCompleted(task) {
   const status = String(task?.status || task?.state || task?.workflow_state || task?.completion_status || "")
     .trim()
@@ -5438,9 +5471,10 @@ function socialRenderTasks() {
 function socialNormalizeTaskCardsAfterRender(hostNode = null) {
   const host = hostNode || document.getElementById("socialTasksBoard");
   if (!host) return;
+  const taskRows = Array.isArray(socialState.tasks) ? socialState.tasks : [];
+  const taskMap = new Map(taskRows.map((task) => [Number(task?.id || 0), task]));
   host.querySelectorAll(".social-task-check").forEach((btn) => {
-    const done = btn.classList.contains("is-done");
-    btn.innerHTML = done ? "&#10003;" : "";
+    btn.innerHTML = "&#10003;";
     btn.setAttribute("title", tr("\u041e\u0442\u043c\u0435\u0442\u0438\u0442\u044c \u0432\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u043d\u043e\u0439", "Mark done"));
     btn.setAttribute("aria-label", tr("\u041e\u0442\u043c\u0435\u0442\u0438\u0442\u044c \u0432\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u043d\u043e\u0439", "Mark done"));
   });
@@ -5455,6 +5489,26 @@ function socialNormalizeTaskCardsAfterRender(hostNode = null) {
   host.querySelectorAll(".social-task-assignee-name").forEach((node) => {
     if (!String(node.textContent || "").trim()) {
       node.textContent = tr("\u0411\u0435\u0437 \u0438\u0441\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044f", "No assignee");
+    }
+  });
+  host.querySelectorAll(".social-task-item[data-task-id]").forEach((card) => {
+    const taskId = Number(card.getAttribute("data-task-id") || 0);
+    if (!taskId) return;
+    const task = taskMap.get(taskId);
+    if (!task) return;
+    const kind = card.querySelector(".social-task-kind");
+    if (kind) {
+      kind.textContent = socialTaskKindLabel(task);
+      kind.setAttribute("title", socialTaskProjectLabel(task) || socialTaskKindLabel(task));
+    }
+    const stack = card.querySelector(".social-task-meta-stack");
+    if (stack) {
+      let line = stack.querySelector(".social-task-project-line");
+      if (!line) {
+        line = document.createElement("div");
+        stack.insertBefore(line, stack.firstChild || null);
+      }
+      line.outerHTML = socialTaskProjectMeta(task);
     }
   });
 }
@@ -8171,7 +8225,10 @@ async function socialLoadNotes() {
 }
 
 function socialNotePreviewText(note) {
-  const raw = socialNormalizeNoteText(note?.content || "").replace(/\s+/g, " ").trim();
+  const raw = socialNormalizeNoteText(note?.content || "")
+    .replace(/\r/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
   return raw || tr("Пустая заметка", "Empty note");
 }
 
@@ -8190,6 +8247,26 @@ function socialNoteUpdatedLabel(note) {
   });
 }
 
+function socialNoteCardTitle(note) {
+  const title = String(note?.title || "").trim();
+  if (title) return title;
+  return currentLang === "en" ? "Text note" : "Текстовая заметка";
+}
+
+function socialNoteCardDateLabel(note) {
+  const value = String(note?.updated_at || "").trim();
+  if (!value) return "-";
+  const parsed = socialParseDateSafe(value);
+  if (!(parsed instanceof Date) || Number.isNaN(parsed.getTime())) {
+    return value.replace("T", " ").slice(0, 10);
+  }
+  const now = new Date();
+  const options = parsed.getFullYear() === now.getFullYear()
+    ? { day: "numeric", month: "short" }
+    : { day: "numeric", month: "short", year: "numeric" };
+  return parsed.toLocaleDateString(currentLang === "en" ? "en-GB" : "ru-RU", options);
+}
+
 function socialNoteCardFill(coverRaw) {
   const cover = String(coverRaw || "#eaf2ff").trim() || "#eaf2ff";
   return `linear-gradient(180deg, color-mix(in srgb, ${cover} 58%, #ffffff), color-mix(in srgb, ${cover} 26%, #ffffff))`;
@@ -8199,15 +8276,16 @@ function socialRenderNotesList() {
   const host = document.getElementById("socialNotesList");
   if (!host) return;
   const compactNotes = socialIsAppShellLike() || socialIsCompactMobileViewport();
-  const cardHeight = compactNotes ? 176 : 196;
+  const cardHeight = compactNotes ? 246 : 278;
+  const previewHeight = compactNotes ? 162 : 186;
   host.style.setProperty("display", "grid", "important");
   host.style.setProperty(
     "grid-template-columns",
-    compactNotes ? "repeat(3, minmax(94px, 1fr))" : "repeat(auto-fit, minmax(124px, 1fr))",
+    compactNotes ? "repeat(3, minmax(96px, 1fr))" : "repeat(auto-fit, minmax(168px, 1fr))",
     "important"
   );
   host.style.setProperty("grid-auto-rows", `${cardHeight}px`, "important");
-  host.style.setProperty("gap", "10px", "important");
+  host.style.setProperty("gap", compactNotes ? "18px 12px" : "22px 18px", "important");
   host.style.setProperty("width", "100%", "important");
   host.style.setProperty("min-width", "0", "important");
   host.style.setProperty("max-width", "100%", "important");
@@ -8243,11 +8321,28 @@ function socialRenderNotesList() {
     });
   }
   const rows = Array.isArray(socialState.notes) ? socialState.notes : [];
-  host.innerHTML = rows.map((row) => {
+  const createCard = `
+    <div class="social-note-row social-note-create-card" data-action="create-note">
+      <button class="social-note-main social-note-create-main" type="button">
+        <span class="social-note-surface social-note-create-surface">
+          <span class="social-note-surface-inner social-note-create-inner">
+            <span class="social-note-create-plus" aria-hidden="true">+</span>
+            <span class="social-note-create-label">${escapeHtml(tr("Новая заметка", "New note"))}</span>
+          </span>
+        </span>
+        <span class="social-note-caption">
+          <b class="social-note-title">${escapeHtml(tr("Создать заметку", "Create note"))}</b>
+          <span class="social-note-date">${escapeHtml(tr("Быстрое добавление", "Quick add"))}</span>
+        </span>
+      </button>
+    </div>
+  `;
+  host.innerHTML = createCard + rows.map((row) => {
     const active = Number(row.id) === Number(socialState.currentNoteId || 0);
     const title = String(row.title || tr("Без названия", "Untitled")).trim() || tr("Без названия", "Untitled");
     const preview = socialNotePreviewText(row);
-    const updated = socialNoteUpdatedLabel(row);
+    const cardTitle = socialNoteCardTitle(row);
+    const updated = socialNoteCardDateLabel(row);
     const sizeLabel = `${String(row.content || "").trim().length} ${tr("симв.", "chars")}`;
     const cover = socialGetNoteCoverColor(row.id);
     const fill = socialNoteCardFill(cover);
@@ -8255,18 +8350,36 @@ function socialRenderNotesList() {
       ? `socialOpenNoteEditor(${Number(row.id)})`
       : `socialSelectNote(${Number(row.id)})`;
     return `
-      <div class="social-note-row ${active ? "active" : ""}" data-note-id="${Number(row.id)}" style="--sw-note-cover:${escapeHtml(cover)};--sw-note-card-fill:${escapeHtml(fill)};background:${escapeHtml(fill)};background-color:${escapeHtml(cover)};background-image:${escapeHtml(fill)}" onclick="${clickHandler}">
+      <div class="social-note-row ${active ? "active" : ""}" data-note-id="${Number(row.id)}" style="--sw-note-cover:${escapeHtml(cover)};--sw-note-card-fill:${escapeHtml(fill)};--sw-note-preview-height:${previewHeight}px;background:${escapeHtml(fill)};background-color:${escapeHtml(cover)};background-image:${escapeHtml(fill)}" onclick="${clickHandler}">
         <button class="social-note-main" data-note-id="${Number(row.id)}" type="button" style="background:transparent;background-color:transparent;background-image:none" onclick="${clickHandler}">
-          <b>${escapeHtml(title)}</b>
-          <div class="social-note-snippet">${escapeHtml(preview)}</div>
-          <div class="social-note-meta">
-            <span>${escapeHtml(updated)}</span>
-            <span>${escapeHtml(sizeLabel)}</span>
-          </div>
+          <span class="social-note-surface">
+            <span class="social-note-surface-inner">
+              <span class="social-note-snippet">${escapeHtml(preview)}</span>
+            </span>
+          </span>
+          <span class="social-note-caption">
+            <b class="social-note-title">${escapeHtml(cardTitle)}</b>
+            <span class="social-note-date">${escapeHtml(updated)}</span>
+          </span>
         </button>
       </div>
     `;
   }).join("") || `<div class="hint">${tr("Заметок пока нет", "No notes yet")}</div>`;
+  const createCardNode = host.querySelector(".social-note-create-card");
+  if (createCardNode) {
+    createCardNode.style.cursor = "pointer";
+    createCardNode.style.setProperty("min-width", "0", "important");
+    createCardNode.style.setProperty("width", "100%", "important");
+    createCardNode.style.setProperty("height", `${cardHeight}px`, "important");
+    createCardNode.style.setProperty("min-height", `${cardHeight}px`, "important");
+    createCardNode.style.setProperty("max-height", `${cardHeight}px`, "important");
+    createCardNode.style.setProperty("overflow", "visible", "important");
+    createCardNode.onclick = async () => {
+      if (typeof window.socialCreateNote === "function") {
+        await window.socialCreateNote();
+      }
+    };
+  }
   host.querySelectorAll(".social-note-row[data-note-id]").forEach((row) => {
     const noteId = Number(row.getAttribute("data-note-id") || 0);
     if (!noteId) return;
@@ -8277,14 +8390,16 @@ function socialRenderNotesList() {
     row.style.setProperty("height", `${cardHeight}px`, "important");
     row.style.setProperty("min-height", `${cardHeight}px`, "important");
     row.style.setProperty("max-height", `${cardHeight}px`, "important");
-    row.style.setProperty("overflow", "hidden", "important");
+    row.style.setProperty("overflow", "visible", "important");
     row.style.setProperty("word-break", "break-word", "important");
     const main = row.querySelector(".social-note-main");
     if (main) {
       main.style.setProperty("display", "grid", "important");
-      main.style.setProperty("grid-template-rows", "auto 1fr auto", "important");
+      main.style.setProperty("grid-template-rows", `var(--sw-note-preview-height, ${previewHeight}px) auto`, "important");
+      main.style.setProperty("gap", compactNotes ? "10px" : "12px", "important");
       main.style.setProperty("height", "100%", "important");
-      main.style.setProperty("overflow", "hidden", "important");
+      main.style.setProperty("padding", "0", "important");
+      main.style.setProperty("overflow", "visible", "important");
       main.style.setProperty("word-break", "break-word", "important");
     }
     row.onclick = () => {
@@ -8535,19 +8650,21 @@ function socialOpenNoteEditor(noteId) {
           <span>${escapeHtml(tr("\u0422\u0435\u043a\u0441\u0442", "Text"))}</span>
           <textarea id="socialNoteModalContent" rows="10">${escapeHtml(socialNormalizeNoteText(note?.content || ""))}</textarea>
         </label>
-        <label>
-          <span>${escapeHtml(tr("\u0426\u0432\u0435\u0442 \u043e\u0431\u043b\u043e\u0436\u043a\u0438", "Cover color"))}</span>
-          <div id="socialNoteModalColors" class="sw-note-colors">${socialNoteModalColorsMarkup(id)}</div>
-        </label>
-        <div class="social-note-files-head">
-          <b>${escapeHtml(tr("\u0424\u0430\u0439\u043b\u044b", "Files"))}</b>
-          <input id="socialNoteModalUpload" type="file" multiple hidden onchange="socialUploadNoteFilesFromEditor(${id}, 'socialNoteModalUpload')" />
-          <button class="btn-secondary" type="button" onclick="document.getElementById('socialNoteModalUpload').click()">${escapeHtml(tr("\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0444\u0430\u0439\u043b\u044b", "Add files"))}</button>
-        </div>
-        <div id="socialNoteModalFilesList">${socialNoteModalFilesMarkup(note)}</div>
         <details class="sw-note-settings">
           <summary>${escapeHtml(tr("\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u0437\u0430\u043c\u0435\u0442\u043a\u0438", "Note settings"))}</summary>
-          <button class="btn-danger" type="button" onclick="socialDeleteNoteFromEditorSettings(${id})">${escapeHtml(tr("\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0437\u0430\u043c\u0435\u0442\u043a\u0443", "Delete note"))}</button>
+          <div class="sw-note-settings-body">
+            <label>
+              <span>${escapeHtml(tr("\u0426\u0432\u0435\u0442 \u043e\u0431\u043b\u043e\u0436\u043a\u0438", "Cover color"))}</span>
+              <div id="socialNoteModalColors" class="sw-note-colors">${socialNoteModalColorsMarkup(id)}</div>
+            </label>
+            <div class="social-note-files-head">
+              <b>${escapeHtml(tr("\u0424\u0430\u0439\u043b\u044b", "Files"))}</b>
+              <input id="socialNoteModalUpload" type="file" multiple hidden onchange="socialUploadNoteFilesFromEditor(${id}, 'socialNoteModalUpload')" />
+              <button class="btn-secondary" type="button" onclick="document.getElementById('socialNoteModalUpload').click()">${escapeHtml(tr("\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0444\u0430\u0439\u043b\u044b", "Add files"))}</button>
+            </div>
+            <div id="socialNoteModalFilesList">${socialNoteModalFilesMarkup(note)}</div>
+            <button class="btn-danger" type="button" onclick="socialDeleteNoteFromEditorSettings(${id})">${escapeHtml(tr("\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0437\u0430\u043c\u0435\u0442\u043a\u0443", "Delete note"))}</button>
+          </div>
         </details>
         <div class="actions">
           <button type="button" class="btn-secondary" onclick="socialCloseModal()">${escapeHtml(tr("\u041e\u0442\u043c\u0435\u043d\u0430", "Cancel"))}</button>
@@ -11239,18 +11356,30 @@ socialMaybeStartHooks();
     window.switchSocialSubtab = function patchedSwitchSocialSubtab(tab, loadNow = true) {
       const result = originalSwitchSocialSubtab.call(this, tab, loadNow);
       if (String(tab || "").trim().toLowerCase() === "calendar") {
-        setTimeout(() => {
+        const recoverCalendarGrid = async (allowReload = false) => {
           try {
             ensureCalendarUi();
+            const isCalendarVisible = String(window.currentTab || currentTab || "").trim().toLowerCase() === "social"
+              && String(window.currentSocialSubtab || currentSocialSubtab || "").trim().toLowerCase() === "calendar";
+            if (!isCalendarVisible) return;
             const dayCount = document.querySelectorAll("#socialCalendarGrid .social-day[data-day-key]").length;
-            if (!dayCount && typeof window.socialRenderCalendar === "function") {
+            if (dayCount > 0) return;
+            if (allowReload && typeof window.socialLoadCalendar === "function") {
+              await Promise.resolve(window.socialLoadCalendar());
+            } else if (typeof window.socialRenderCalendar === "function") {
               window.socialRenderCalendar();
             }
           } catch (_) {}
+        };
+        setTimeout(() => {
+          void recoverCalendarGrid(true);
         }, 60);
         setTimeout(() => {
-          try { ensureCalendarUi(); } catch (_) {}
+          void recoverCalendarGrid(false);
         }, 220);
+        setTimeout(() => {
+          void recoverCalendarGrid(false);
+        }, 520);
       }
       return result;
     };
@@ -11357,6 +11486,9 @@ socialMaybeStartHooks();
     const sidebar = root.querySelector(".social-notes-sidebar");
     sidebar?.querySelectorAll(":scope > button").forEach((node) => node.remove?.());
     let fab = document.getElementById("socialNotesFab");
+    const notesVisible = !root.classList.contains("hidden")
+      && String(window.currentTab || currentTab || "").trim().toLowerCase() === "social"
+      && String(window.currentSocialSubtab || currentSocialSubtab || "").trim().toLowerCase() === "notes";
     if (!fab) {
       fab = document.createElement("button");
       fab.id = "socialNotesFab";
@@ -11372,10 +11504,33 @@ socialMaybeStartHooks();
           await window.socialCreateNote();
         }
       });
-      root.appendChild(fab);
-    } else if (fab.parentElement !== root) {
-      root.appendChild(fab);
+      document.body.appendChild(fab);
+    } else if (fab.parentElement !== document.body) {
+      document.body.appendChild(fab);
     }
+    fab.classList.remove("hidden");
+    fab.style.setProperty("display", notesVisible ? "grid" : "none", "important");
+    let inlineCreate = document.getElementById("socialNotesCreateInline");
+    if (!inlineCreate) {
+      inlineCreate = document.createElement("button");
+      inlineCreate.id = "socialNotesCreateInline";
+      inlineCreate.className = "social-notes-create-inline";
+      inlineCreate.type = "button";
+      inlineCreate.setAttribute("aria-label", window.tr("Создать заметку", "Create note"));
+      inlineCreate.setAttribute("title", window.tr("Создать заметку", "Create note"));
+      inlineCreate.innerHTML = '<span aria-hidden="true">+</span>';
+      inlineCreate.addEventListener("click", async (event) => {
+        if (event?.preventDefault) event.preventDefault();
+        if (event?.stopPropagation) event.stopPropagation();
+        if (typeof window.socialCreateNote === "function") {
+          await window.socialCreateNote();
+        }
+      });
+      root.appendChild(inlineCreate);
+    } else if (inlineCreate.parentElement !== root) {
+      root.appendChild(inlineCreate);
+    }
+    inlineCreate.style.setProperty("display", notesVisible ? "grid" : "none", "important");
     host.querySelectorAll(".social-note-delete, [class*='note-delete'], [class*='note-remove'], [class*='note-close'], [data-action='delete'], button[onclick*='socialDeleteNote']").forEach((node) => {
       if (node?.remove) node.remove();
     });

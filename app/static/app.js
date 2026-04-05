@@ -2643,6 +2643,22 @@ async function loadCurrentModules() {
   return true;
 }
 
+async function ensureModuleAccess(moduleCodes, opts = {}) {
+  const codes = (Array.isArray(moduleCodes) ? moduleCodes : [moduleCodes])
+    .map((code) => String(code || "").trim())
+    .filter(Boolean);
+  if (!codes.length) return true;
+  if (codes.some((code) => enabledModules.has(code))) return true;
+  if (!token) return false;
+  const maxAgeMs = Math.max(0, Number(opts.maxAgeMs || 120000));
+  const ageMs = Date.now() - Number(lastModulesLoadAt || 0);
+  const shouldReload = !modulesLoaded || !lastModulesLoadAt || ageMs > maxAgeMs;
+  if (shouldReload) {
+    await loadCurrentModules().catch(() => false);
+  }
+  return codes.some((code) => enabledModules.has(code));
+}
+
 async function loadUiThemeSettings() {
   const data = await requestJson("/api/ui/settings", { headers: authHeaders() }).catch(() => null);
   if (!data || typeof data !== "object") return;
@@ -2971,19 +2987,6 @@ function handleMobileBackPress() {
   return true;
 }
 function handleTopMenuButton() {
-  if (mobileClientMode && String(currentTab || "") === "social") {
-    const subtab = String(currentSocialSubtab || window.socialState?.currentSubtab || "chat");
-    const currentThreadId = Number(window.socialState?.currentThreadId || 0);
-    const threadOpen = typeof window.socialIsThreadOpen === "function"
-      ? Boolean(window.socialIsThreadOpen())
-      : currentThreadId > 0;
-    if (subtab === "chat" && (threadOpen || currentThreadId > 0) && typeof window.socialOpenThreadMenu === "function") {
-      try {
-        const opened = window.socialOpenThreadMenu();
-        if (opened !== false) return;
-      } catch (_) {}
-    }
-  }
   toggleMobileNav();
 }
 
@@ -4079,6 +4082,7 @@ async function loadHelpWorkspace() {
 }
 
 async function loadReviewsWorkspace() {
+  await ensureModuleAccess(["wb_reviews_ai", "wb_questions_ai", "returns"]);
   const hasReviews = enabledModules.has("wb_reviews_ai");
   const hasQuestions = enabledModules.has("wb_questions_ai");
   const hasReturns = enabledModules.has("returns");
@@ -4556,7 +4560,7 @@ async function loadWbReviews() {
     clearTimeout(reviewBackgroundReloadTimer);
     reviewBackgroundReloadTimer = null;
   }
-  if (!enabledModules.has("wb_reviews_ai")) {
+  if (!(await ensureModuleAccess("wb_reviews_ai"))) {
     setTableMessage("wbReviewsTable", 7, tr("Модуль отзывов отключен администратором.", "Reviews module is disabled by admin."));
     updateReviewLoadStatus(tr("Модуль отключен.", "Module is disabled."));
     return;
@@ -4967,7 +4971,7 @@ async function sendReviewReply(reviewId) {
 }
 
 async function loadQuestionsWorkspace() {
-  if (!enabledModules.has("wb_questions_ai")) return;
+  if (!(await ensureModuleAccess("wb_questions_ai"))) return;
   normalizeFeedbackDateDefaults("questions", "questionDateFrom", "questionDateTo");
   await loadQuestionAiSettings();
   await loadAiDocs();
@@ -5156,7 +5160,7 @@ async function loadWbQuestions() {
     clearTimeout(questionBackgroundReloadTimer);
     questionBackgroundReloadTimer = null;
   }
-  if (!enabledModules.has("wb_questions_ai")) {
+  if (!(await ensureModuleAccess("wb_questions_ai"))) {
     setTableMessage("wbQuestionsTable", 6, tr("Модуль вопросов отключен администратором.", "Questions module is disabled by admin."));
     updateQuestionLoadStatus(tr("Модуль отключен.", "Module is disabled."));
     return;
@@ -6019,7 +6023,7 @@ async function hydrateReturnsRowsFromDetails(rows, marketplace) {
 }
 
 async function loadReturns() {
-  if (!enabledModules.has("returns")) {
+  if (!(await ensureModuleAccess("returns"))) {
     setTableMessage("returnsTable", 6, tr("Модуль возвратов отключен администратором.", "Returns module is disabled by admin."));
     const status = document.getElementById("returnsLoadStatus");
     if (status) status.textContent = tr("Модуль отключен.", "Module is disabled.");

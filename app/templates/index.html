@@ -31,8 +31,6 @@
           <a href="#authSection" onclick="switchAuthMode('register'); return false;">Регистрация</a>
         </nav>
         <div class="auth-toolbar-controls">
-          <button id="authToolbarLoginBtn" class="chip-btn active" type="button" onclick="switchAuthMode('login')">Вход</button>
-          <button id="authToolbarRegisterBtn" class="chip-btn" type="button" onclick="switchAuthMode('register')">Регистрация</button>
           <select id="authLangSelect" class="chip-select auth-lang-select" onchange="changeAuthLang()">
             <option value="ru">RU</option>
             <option value="en">EN</option>
@@ -1425,22 +1423,29 @@
 
         <div id="socialSubtabTasks" class="hidden">
           <div class="panel">
-            <div class="social-task-toolbar social-task-toolbar--v2">
-              <div class="social-task-toolbar-main">
-                <button type="button" onclick="socialOpenProjectModal()">Новый проект</button>
-                <button class="btn-secondary" type="button" onclick="socialOpenTaskModal()">Новая задача</button>
-                <select id="socialTaskProjectFilter" onchange="socialLoadTasks()"><option value="">Все проекты</option></select>
-                <select id="socialTaskKindFilter" onchange="socialLoadTasks()">
-                  <option value="all">Все задачи</option>
-                  <option value="company">Проектные</option>
-                  <option value="personal">МОИ ЗАДАЧИ</option>
-                </select>
-                <label class="check"><input id="socialTaskIncludeDone" type="checkbox" onchange="socialLoadTasks()" /> Показать выполненные</label>
-              </div>
-              <div class="social-task-toolbar-side">
-                <button class="btn-secondary" type="button" onclick="socialOpenProjectMembersModal()">Участники проекта</button>
-                <button class="btn-secondary" type="button" onclick="socialLoadTasks()">Обновить</button>
-              </div>
+            <div class="social-task-quickbar">
+              <button class="social-task-create-fab icon-only-btn" type="button" onclick="socialOpenTaskModal()" aria-label="Новая задача" title="Новая задача" data-tip="Новая задача">
+                <span aria-hidden="true">+</span>
+              </button>
+              <details class="social-task-toolbar-foldout">
+                <summary>Проекты и фильтры</summary>
+                <div class="social-task-toolbar social-task-toolbar--v2">
+                  <div class="social-task-toolbar-main">
+                    <button type="button" onclick="socialOpenProjectModal()">Новый проект</button>
+                    <select id="socialTaskProjectFilter" onchange="socialLoadTasks()"><option value="">Все проекты</option></select>
+                    <select id="socialTaskKindFilter" onchange="socialLoadTasks()">
+                      <option value="all">Все задачи</option>
+                      <option value="company">Проектные</option>
+                      <option value="personal">МОИ ЗАДАЧИ</option>
+                    </select>
+                    <label class="check"><input id="socialTaskIncludeDone" type="checkbox" onchange="socialLoadTasks()" /> Показать выполненные</label>
+                  </div>
+                  <div class="social-task-toolbar-side">
+                    <button class="btn-secondary" type="button" onclick="socialOpenProjectMembersModal()">Участники проекта</button>
+                    <button class="btn-secondary" type="button" onclick="socialLoadTasks()">Обновить</button>
+                  </div>
+                </div>
+              </details>
             </div>
             <div id="socialTasksBoard" class="social-tasks-board"></div>
           </div>

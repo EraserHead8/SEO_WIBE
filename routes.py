@@ -10418,6 +10418,7 @@ def _social_emit_due_reminders(db: Session, *, user_id: int, actor_key: str, act
     ).all()
     for row in task_rows:
         due_iso = _to_utc_iso(row.due_date)[:16]
+        task_title = _social_notification_source_text(row.title, "Задача")
         _social_push_notification(
             db,
             user_id=safe_user_id,
@@ -10425,7 +10426,7 @@ def _social_emit_due_reminders(db: Session, *, user_id: int, actor_key: str, act
             kind="task_reminder",
             dedupe_key=f"task_due:{int(row.id)}:{due_iso}:{safe_actor_key}",
             title="\u041d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u0435 \u043e \u0437\u0430\u0434\u0430\u0447\u0435",
-            body=f"{str(row.title or '')[:140]} - \u0434\u0435\u0434\u043b\u0430\u0439\u043d {due_iso.replace('T', ' ')} UTC",
+            body=f"{task_title[:140]} - \u0434\u0435\u0434\u043b\u0430\u0439\u043d {due_iso.replace('T', ' ')} UTC",
             payload={"task_id": int(row.id), "kind": "task", "assignee": actor_nick},
         )
     event_rows = db.scalars(
@@ -10438,6 +10439,7 @@ def _social_emit_due_reminders(db: Session, *, user_id: int, actor_key: str, act
     for row in event_rows:
         if not bool(getattr(row, "reminder_enabled", True)):
             continue
+        event_title = _social_notification_source_text(row.title, "Событие")
         reminder_offsets = _social_calendar_reminder_offsets(
             getattr(row, "reminder_offsets_json", ""),
             fallback_default=True,
@@ -10463,7 +10465,7 @@ def _social_emit_due_reminders(db: Session, *, user_id: int, actor_key: str, act
                     kind="calendar_reminder",
                     dedupe_key=f"calendar_due:{int(row.id)}:{start_iso}:{int(offset_min)}:{safe_actor_key}",
                     title="\u041d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u0435 \u043a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044f",
-                    body=f"{str(row.title or '')[:140]} - {start_iso.replace('T', ' ')} UTC - -{int(offset_min)}m",
+                    body=f"{event_title[:140]} - {start_iso.replace('T', ' ')} UTC - -{int(offset_min)}m",
                     payload={
                         "event_id": int(row.id),
                         "source_event_id": int(row.id),
@@ -10582,14 +10584,16 @@ def _social_emit_due_announcements(db: Session, *, user_id: int, actor_key: str)
             continue
         if not _social_announcement_is_for_user(row, safe_user_id):
             continue
+        ann_title = _social_notification_source_text(row.title, "Объявление")
+        ann_body = _social_notification_source_text(row.body, "")
         _social_push_notification(
             db,
             user_id=safe_user_id,
             recipient_key=safe_actor_key,
             kind="announcement",
             dedupe_key=f"announcement:{ann_id}:{safe_actor_key}",
-            title=str(row.title or "Р В Р’В Р РЋРІР‚С”Р В Р’В Р вЂ™Р’В±Р В Р Р‹Р В РІР‚В°Р В Р Р‹Р В Р РЏР В Р’В Р В РІР‚В Р В Р’В Р вЂ™Р’В»Р В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚ВР В Р’В Р вЂ™Р’Вµ")[:255],
-            body=str(row.body or "")[:5000],
+            title=ann_title[:255] or "Объявление",
+            body=ann_body[:5000],
             payload={"announcement_id": ann_id, "kind": "announcement"},
         )
 
@@ -10608,8 +10612,19 @@ def _social_push_notification(
     key = str(dedupe_key or "").strip()[:120]
     if not key:
         return
-    safe_title = (_decode_mojibake_text(title or "") or str(title or "")).strip()
-    safe_body = _decode_mojibake_text(body or "")
+    safe_title, safe_body = _social_notification_display_text(
+        db,
+        kind=kind,
+        title=title,
+        body=body,
+        payload=payload or {},
+    )
+    safe_payload = _social_notification_payload_with_display(
+        payload,
+        kind=kind,
+        title=safe_title,
+        body=safe_body,
+    )
     existing = db.scalar(
         select(SocialNotification).where(
             SocialNotification.user_id == int(user_id),
@@ -10628,7 +10643,7 @@ def _social_push_notification(
             dedupe_key=key,
             title=safe_title[:255],
             body=safe_body[:5000],
-            payload_json=json.dumps(payload or {}, ensure_ascii=False),
+            payload_json=json.dumps(safe_payload, ensure_ascii=False),
             is_read=False,
         )
     )
@@ -13909,7 +13924,9 @@ def social_chat_send_message(
             SocialChatThreadMember.actor_key.notin_(actor_aliases),
         )
     ).all()
-    thread_title = str(thread.title if thread else "Р В Р’В Р вЂ™Р’В§Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ў").strip() or "Р В Р’В Р вЂ™Р’В§Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ў"
+    thread_title = _social_notification_source_text(thread.title if thread else "Чат", "Чат") or "Чат"
+    sender_name = _social_notification_source_text(actor_nick, "Пользователь")
+    preview = _social_notification_source_text(text_msg, "Сообщение")
     for rcpt in recipients:
         _social_push_notification(
             db,
@@ -13917,13 +13934,15 @@ def social_chat_send_message(
             recipient_key=str(rcpt.actor_key or ""),
             kind="chat_message",
             dedupe_key=f"chat:{message.id}:{rcpt.actor_key}",
-            title=f"Р В Р’В Р РЋРЎС™Р В Р’В Р РЋРІР‚СћР В Р’В Р В РІР‚В Р В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’Вµ Р В Р Р‹Р В РЎвЂњР В Р’В Р РЋРІР‚СћР В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В±Р В Р Р‹Р Р†Р вЂљР’В°Р В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚ВР В Р’В Р вЂ™Р’Вµ: {thread_title}",
-            body=f"{actor_nick}: {text_msg[:180]}",
+            title=f"Новое сообщение: {thread_title}",
+            body=f"{sender_name}: {preview[:180]}",
             payload={
                 "thread_id": thread_id,
                 "message_id": int(message.id),
                 "sender_key": actor_key,
                 "sender_nick": actor_nick,
+                "thread_title": thread_title[:120],
+                "preview": preview[:180],
             },
         )
     detail_payload = {
@@ -14053,8 +14072,9 @@ def social_chat_send_file(
             SocialChatThreadMember.actor_key.notin_(actor_aliases),
         )
     ).all()
-    thread_title = str(thread.title or "Р В Р’В Р вЂ™Р’В§Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ў").strip() or "Р В Р’В Р вЂ™Р’В§Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ў"
-    preview = safe_text or f"Р РЋР вЂљР РЋРЎСџР Р†Р вЂљРЎС™Р В РІР‚в„– {original_name}"
+    thread_title = _social_notification_source_text(thread.title or "Чат", "Чат") or "Чат"
+    preview = _social_notification_source_text(safe_text or f"Файл: {original_name}", "Файл")
+    sender_name = _social_notification_source_text(actor_nick, "Пользователь")
     for rcpt in recipients:
         _social_push_notification(
             db,
@@ -14062,13 +14082,15 @@ def social_chat_send_file(
             recipient_key=str(rcpt.actor_key or ""),
             kind="chat_message",
             dedupe_key=f"chat:{message.id}:{rcpt.actor_key}",
-            title=f"Р В Р’В Р РЋРЎС™Р В Р’В Р РЋРІР‚СћР В Р’В Р В РІР‚В Р В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’Вµ Р В Р Р‹Р В РЎвЂњР В Р’В Р РЋРІР‚СћР В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В±Р В Р Р‹Р Р†Р вЂљР’В°Р В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚ВР В Р’В Р вЂ™Р’Вµ: {thread_title}",
-            body=f"{actor_nick}: {preview[:180]}",
+            title=f"Новое сообщение: {thread_title}",
+            body=f"{sender_name}: {preview[:180]}",
             payload={
                 "thread_id": int(thread_id),
                 "message_id": int(message.id),
                 "sender_key": actor_key,
                 "sender_nick": actor_nick,
+                "thread_title": thread_title[:120],
+                "preview": preview[:180],
             },
         )
     _audit(
@@ -14138,15 +14160,21 @@ def social_chat_toggle_reaction(
         reactions.pop(emoji, None)
     message.reactions_json = json.dumps(reactions, ensure_ascii=False)
     if str(message.sender_key or "") != actor_key:
+        sender_name = _social_notification_source_text(actor_nick, "Пользователь")
         _social_push_notification(
             db,
             user_id=int(message.sender_user_id or user.id),
             recipient_key=str(message.sender_key or ""),
             kind="chat_reaction",
             dedupe_key=f"chat_reaction:{int(message.id)}:{actor_key}:{emoji}:{1 if exists_idx < 0 else 0}",
-            title="Р В Р’В Р вЂ™Р’В Р В Р’В Р вЂ™Р’ВµР В Р’В Р вЂ™Р’В°Р В Р’В Р РЋРІР‚СњР В Р Р‹Р Р†Р вЂљР’В Р В Р’В Р РЋРІР‚ВР В Р Р‹Р В Р РЏ Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В° Р В Р Р‹Р В РЎвЂњР В Р’В Р РЋРІР‚СћР В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В±Р В Р Р‹Р Р†Р вЂљР’В°Р В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚ВР В Р’В Р вЂ™Р’Вµ",
-            body=f"{actor_nick}: {emoji}",
-            payload={"thread_id": int(thread_id), "message_id": int(message.id), "emoji": emoji},
+            title="Новая реакция на сообщение",
+            body=f"{sender_name}: {emoji}",
+            payload={
+                "thread_id": int(thread_id),
+                "message_id": int(message.id),
+                "emoji": emoji,
+                "sender_nick": actor_nick,
+            },
         )
     _audit(
         db,
@@ -14179,6 +14207,7 @@ def social_mark_chat_read(
     ensure_module_enabled(db, user, "social_hub")
     actor_key, actor_nick, _ = _social_actor_identity(db, user)
     actor_aliases = _social_actor_alias_keys(db, actor_key)
+    notification_keys = list(dict.fromkeys([actor_key, *actor_aliases]))
     thread = db.get(SocialChatThread, int(thread_id or 0))
     if not thread:
         raise HTTPException(status_code=404, detail="Р В Р’В Р вЂ™Р’В§Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ў Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’Вµ Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦")
@@ -14211,7 +14240,7 @@ def social_mark_chat_read(
     # Mark related chat notifications as read for this thread.
     notif_rows = db.scalars(
         select(SocialNotification).where(
-            SocialNotification.recipient_key.in_(actor_aliases),
+            SocialNotification.recipient_key.in_(notification_keys),
             SocialNotification.kind == "chat_message",
             SocialNotification.is_read.is_(False),
         )
@@ -14557,8 +14586,8 @@ def _social_task_can_view(db: Session, task: SocialTask, *, actor_aliases: set[s
 
     if task.project_id:
         member_keys = _social_task_project_member_keys(db, int(task.project_id))
-        if member_keys:
-            return bool(actor_aliases & member_keys)
+        if member_keys and bool(actor_aliases & member_keys):
+            return True
 
     return bool((creator_key and creator_key in actor_aliases) or (assignee_key and assignee_key in actor_aliases) or is_owner)
 
@@ -14677,6 +14706,7 @@ def social_tasks_list(
 
         if assignee_key and assignee_key in actor_aliases:
             if due_local < now_local:
+                task_title = _social_notification_source_text(task.title, "Задача")
                 _social_push_notification(
                     db,
                     user_id=user.id,
@@ -14684,7 +14714,7 @@ def social_tasks_list(
                     kind="task_overdue",
                     dedupe_key=f"task_overdue:{task.id}:{now_local.date().isoformat()}:{assignee_key}",
                     title="Task overdue",
-                    body=f"{str(task.title or '')[:120]} - deadline passed.",
+                    body=f"{task_title[:120]} - deadline passed.",
                     payload={"task_id": int(task.id), "assignee": actor_nick},
                 )
                 notif_created = True
@@ -14692,6 +14722,7 @@ def social_tasks_list(
                 delta_sec = (due_local - now_local).total_seconds()
                 if 0 < delta_sec <= (3 * 3600):
                     slot = due_local.strftime("%Y%m%d%H")
+                    task_title = _social_notification_source_text(task.title, "Задача")
                     _social_push_notification(
                         db,
                         user_id=user.id,
@@ -14699,12 +14730,13 @@ def social_tasks_list(
                         kind="task_reminder",
                         dedupe_key=f"task_reminder_3h:{task.id}:{slot}:{assignee_key}",
                         title="Deadline in less than 3 hours",
-                        body=f"{str(task.title or '')[:120]} - reminder before deadline.",
+                        body=f"{task_title[:120]} - reminder before deadline.",
                         payload={"task_id": int(task.id), "assignee": actor_nick},
                     )
                     notif_created = True
 
         if due_local < now_local and creator_key and creator_key not in {assignee_key, ""} and creator_key in actor_aliases:
+            task_title = _social_notification_source_text(task.title, "Задача")
             _social_push_notification(
                 db,
                 user_id=user.id,
@@ -14712,7 +14744,7 @@ def social_tasks_list(
                 kind="task_overdue",
                 dedupe_key=f"task_overdue:{task.id}:{now_local.date().isoformat()}:{creator_key}",
                 title="Task overdue",
-                body=f"{str(task.title or '')[:120]} - assignee missed deadline.",
+                body=f"{task_title[:120]} - assignee missed deadline.",
                 payload={"task_id": int(task.id), "assignee": str(task.assignee_nick or "")},
             )
             notif_created = True
@@ -14806,6 +14838,8 @@ def social_create_task(
     db.flush()
 
     if assignee_key != actor_key:
+        task_title = _social_notification_source_text(title, "Задача")
+        sender_name = _social_notification_source_text(actor_nick, "Пользователь")
         _social_push_notification(
             db,
             user_id=user.id,
@@ -14813,7 +14847,7 @@ def social_create_task(
             kind="task_assigned",
             dedupe_key=f"task_assigned:{task.id}:{int(datetime.utcnow().timestamp())}",
             title="New assigned task",
-            body=f"{actor_nick}: {title[:180]}",
+            body=f"{sender_name}: {task_title[:180]}",
             payload={"task_id": int(task.id)},
         )
 
@@ -14926,6 +14960,8 @@ def social_update_task(
             task.completed_at = None
 
     if str(task.assignee_key or "") != old_assignee:
+        task_title = _social_notification_source_text(task.title, "Задача")
+        sender_name = _social_notification_source_text(actor_nick, "Пользователь")
         _social_push_notification(
             db,
             user_id=user.id,
@@ -14933,11 +14969,13 @@ def social_update_task(
             kind="task_assigned",
             dedupe_key=f"task_assigned:{task.id}:{int(datetime.utcnow().timestamp())}",
             title="Task reassigned",
-            body=f"{actor_nick}: {str(task.title or '')[:180]}",
+            body=f"{sender_name}: {task_title[:180]}",
             payload={"task_id": int(task.id)},
         )
 
     if old_status != "done" and str(task.status or "") == "done" and str(task.creator_key or "") != actor_key:
+        task_title = _social_notification_source_text(task.title, "Задача")
+        sender_name = _social_notification_source_text(actor_nick, "Пользователь")
         _social_push_notification(
             db,
             user_id=user.id,
@@ -14945,7 +14983,7 @@ def social_update_task(
             kind="task_done",
             dedupe_key=f"task_done:{task.id}:{int(datetime.utcnow().timestamp())}",
             title="Task completed",
-            body=f"{actor_nick} completed task: {str(task.title or '')[:140]}",
+            body=f"{sender_name} completed task: {task_title[:140]}",
             payload={"task_id": int(task.id)},
         )
 
@@ -15104,6 +15142,8 @@ def social_add_task_comment(
     for recipient in recipients:
         if not recipient:
             continue
+        sender_name = _social_notification_source_text(actor_nick, "Пользователь")
+        comment_preview = _social_notification_source_text(text_comment, "Комментарий")
         _social_push_notification(
             db,
             user_id=user.id,
@@ -15111,7 +15151,7 @@ def social_add_task_comment(
             kind="task_comment",
             dedupe_key=f"task_comment:{task.id}:{int(datetime.utcnow().timestamp())}:{recipient}",
             title="New task comment",
-            body=f"{actor_nick}: {text_comment[:180]}",
+            body=f"{sender_name}: {comment_preview[:180]}",
             payload={"task_id": int(task.id)},
         )
 
@@ -16330,6 +16370,18 @@ def _apply_known_mojibake_replacements(text: str) -> str:
     return fixed
 
 
+def _collapse_mojibake_spacing(text: str) -> str:
+    value = str(text or "")
+    if not value:
+        return ""
+    # Some payloads come as "Р В Р..." with inserted spaces; collapse them before decode scoring.
+    value = value.replace("\u00a0", " ")
+    value = re.sub(r"([РСВÐÑ])\s+(?=[РСВÐÑА-Яа-яA-Za-z0-9])", r"\1", value)
+    value = re.sub(r"(?:\b[РСВÐÑ]\b(?:\s+)){2,}\b[РСВÐÑ]\b", lambda m: re.sub(r"\s+", "", m.group(0)), value)
+    value = re.sub(r"\s{2,}", " ", value).strip()
+    return value
+
+
 def _mojibake_score(text: str) -> int:
     value = str(text or "")
     rare = sum(
@@ -16346,7 +16398,7 @@ def _cyrillic_score(text: str) -> int:
 
 
 def _decode_mojibake_text(value: Any) -> str:
-    raw = _apply_known_mojibake_replacements(str(value or ""))
+    raw = _collapse_mojibake_spacing(_apply_known_mojibake_replacements(str(value or "")))
     if not raw:
         return ""
     if _mojibake_score(raw) <= 0:
@@ -16391,13 +16443,442 @@ def _decode_mojibake_text(value: Any) -> str:
     best_score = _mojibake_score(raw)
     best_signal = _signal_score(raw)
     for candidate in candidates:
+        candidate = _collapse_mojibake_spacing(candidate)
         score = _mojibake_score(candidate)
         signal = _signal_score(candidate)
         if score < best_score or (score == best_score and signal > best_signal + 1):
             best = candidate
             best_score = score
             best_signal = signal
-    return _apply_known_mojibake_replacements(best)
+    return _collapse_mojibake_spacing(_apply_known_mojibake_replacements(best))
+
+
+def _social_notification_clean_text(value: Any) -> str:
+    return " ".join(_decode_mojibake_text(value).split())
+
+
+def _social_notification_meaningful_text(value: Any) -> str:
+    text = _social_notification_clean_text(value)
+    if not text:
+        return ""
+    if text.lower() in {"true", "false", "null", "none", "undefined", "nan"}:
+        return ""
+    compact = "".join(text.split())
+    if compact and all(ch.isdigit() or ch in ":.-+/()" for ch in compact):
+        return ""
+    if not any(ch.isalpha() for ch in text):
+        return ""
+    return text
+
+
+def _social_notification_source_text(value: Any, fallback: str = "") -> str:
+    text = _social_notification_meaningful_text(value)
+    if text:
+        return text
+    return _social_notification_clean_text(fallback)
+
+
+def _social_notification_is_displayable_text(value: Any) -> bool:
+    text = _social_notification_clean_text(value)
+    if not text:
+        return False
+    if text.lower() in {"true", "false", "null", "none", "undefined", "nan", "без текста"}:
+        return False
+    compact = "".join(text.split())
+    if compact and all(ch.isdigit() or ch in ":.-+/()" for ch in compact):
+        return False
+    if not any(ch.isalpha() for ch in text):
+        return False
+    # Tiny numeric labels like "19" or "5" are usually ids, dates, or corrupted previews.
+    if len(compact) <= 3 and any(ch.isdigit() for ch in compact) and not any(ch.isalpha() for ch in compact):
+        return False
+    return True
+
+
+def _social_notification_flatten_values(value: Any, out: list[str] | None = None) -> list[str]:
+    if out is None:
+        out = []
+    if value is None:
+        return out
+    if isinstance(value, dict):
+        for item in value.values():
+            _social_notification_flatten_values(item, out)
+        return out
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            _social_notification_flatten_values(item, out)
+        return out
+    out.append(str(value))
+    return out
+
+
+def _social_notification_kind_label(kind: str) -> str:
+    safe = str(kind or "").strip().lower()
+    if "chat_reaction" in safe:
+        return "Новая реакция"
+    if "chat" in safe:
+        return "Новое сообщение"
+    if "task" in safe:
+        return "Задачи"
+    if "calendar" in safe or "event" in safe or "reminder" in safe:
+        return "Календарь"
+    if "announcement" in safe:
+        return "Объявление"
+    return "Уведомление"
+
+
+def _social_notification_effective_kind(kind: str, payload: Any) -> str:
+    safe_kind = str(kind or "").strip().lower()
+    if safe_kind and any(token in safe_kind for token in ("chat", "message", "task", "calendar", "event", "reminder", "announcement", "reaction")):
+        return safe_kind
+    payload_dict = payload if isinstance(payload, dict) else {}
+
+    def _payload_has(*keys: str) -> bool:
+        for key in keys:
+            value = payload_dict.get(key)
+            if _social_notification_is_displayable_text(value):
+                return True
+            try:
+                if int(value or 0) > 0:
+                    return True
+            except Exception:
+                continue
+        return False
+
+    if _payload_has("task_id", "source_task_id", "taskId", "record_id"):
+        return "task"
+    if _payload_has("event_id", "source_event_id", "calendar_event_id", "eventId"):
+        return "calendar_event"
+    if _payload_has("message_id", "chat_message_id", "messageId", "chatMessageId", "source_message_id"):
+        return "chat_message"
+    if _payload_has("thread_id", "chat_id", "threadId", "chatId"):
+        return "chat"
+    if _payload_has("announcement_id", "source_announcement_id", "announcementId"):
+        return "announcement"
+    if _payload_has("sender_nick", "sender_name", "actor_nick", "author", "emoji"):
+        return "chat_reaction"
+    return safe_kind
+
+
+def _social_pick_notification_text(candidates: list[Any], fallback: str = "") -> str:
+    variants: list[str] = []
+    for item in candidates:
+        for raw in _social_notification_flatten_values(item):
+            text = _social_notification_meaningful_text(raw)
+            if text:
+                variants.append(text)
+    if not variants:
+        return _social_notification_clean_text(fallback)
+    unique = list(dict.fromkeys(variants))
+    unique.sort(key=lambda text: (_mojibake_score(text), -len(text)))
+    return unique[0]
+
+
+def _social_notification_resolve_entity_display(
+    db: Session,
+    *,
+    kind: str,
+    payload: dict[str, Any] | None,
+) -> tuple[str, str]:
+    safe_payload = payload if isinstance(payload, dict) else {}
+    safe_kind = _social_notification_effective_kind(kind or safe_payload.get("kind") or "", safe_payload)
+
+    def _payload_int(*keys: str) -> int:
+        for key in keys:
+            try:
+                value = int(safe_payload.get(key) or 0)
+            except Exception:
+                value = 0
+            if value > 0:
+                return value
+        return 0
+
+    task_id = _payload_int("task_id", "source_task_id", "taskId", "record_id")
+    if task_id > 0 and "task" in safe_kind:
+        row = db.scalar(select(SocialTask).where(SocialTask.id == task_id))
+        if row:
+            entity_title = _social_notification_source_text(getattr(row, "title", ""), "Задача")
+            entity_body = _social_pick_notification_text(
+                [getattr(row, "description", ""), getattr(row, "title", "")],
+                entity_title,
+            )
+            return entity_title[:255], entity_body[:5000]
+        return "", ""
+    event_id = _payload_int("event_id", "source_event_id", "calendar_event_id", "eventId", "record_id")
+    if event_id > 0 and ("calendar" in safe_kind or "event" in safe_kind or "reminder" in safe_kind):
+        row = db.scalar(select(SocialCalendarEvent).where(SocialCalendarEvent.id == event_id))
+        if row:
+            entity_title = _social_notification_source_text(getattr(row, "title", ""), "Событие")
+            entity_body = _social_pick_notification_text(
+                [getattr(row, "description", ""), getattr(row, "location", ""), getattr(row, "title", "")],
+                entity_title,
+            )
+            return entity_title[:255], entity_body[:5000]
+        return "", ""
+    announcement_id = _payload_int("announcement_id", "source_announcement_id", "announcementId", "record_id")
+    if announcement_id > 0 and "announcement" in safe_kind:
+        row = db.scalar(select(SocialAnnouncement).where(SocialAnnouncement.id == announcement_id))
+        if row:
+            entity_title = _social_notification_source_text(getattr(row, "title", ""), "Объявление")
+            entity_body = _social_pick_notification_text([getattr(row, "body", ""), getattr(row, "title", "")], entity_title)
+            return entity_title[:255], entity_body[:5000]
+        return "", ""
+
+    message_id = _payload_int("message_id", "chat_message_id", "messageId", "chatMessageId", "source_message_id")
+    if message_id > 0 and ("chat" in safe_kind or "message" in safe_kind):
+        thread_id = _payload_int("thread_id", "chat_id", "threadId", "chatId")
+        thread_title = ""
+        if thread_id > 0:
+            thread_row = db.scalar(select(SocialChatThread).where(SocialChatThread.id == thread_id))
+            if thread_row:
+                thread_title = _social_notification_source_text(getattr(thread_row, "title", ""), "Чат")
+        row = db.scalar(select(SocialChatMessage).where(SocialChatMessage.id == message_id))
+        if row:
+            sender_name = _social_notification_source_text(getattr(row, "sender_nick", ""), "")
+            message_text = _social_pick_notification_text(
+                [getattr(row, "text", ""), safe_payload.get("preview"), safe_payload.get("message_text")],
+                "",
+            )
+            entity_title = _social_notification_kind_label(safe_kind)
+            if thread_title and _social_notification_is_displayable_text(thread_title):
+                entity_title = f"Новое сообщение: {thread_title}"
+            entity_body = ": ".join(part for part in [sender_name, message_text] if part) or message_text or thread_title or entity_title
+            return entity_title[:255], entity_body[:5000]
+        return "", ""
+
+    thread_id = _payload_int("thread_id", "chat_id", "threadId", "chatId")
+    if thread_id > 0 and "chat" in safe_kind:
+        row = db.scalar(select(SocialChatThread).where(SocialChatThread.id == thread_id))
+        if row:
+            thread_title = _social_notification_source_text(getattr(row, "title", ""), "Чат")
+            entity_title = f"Новое сообщение: {thread_title}" if thread_title else _social_notification_kind_label(safe_kind)
+            entity_body = thread_title or entity_title
+            return entity_title[:255], entity_body[:5000]
+        return "", ""
+    return "", ""
+
+
+def _social_notification_resolve_entity_preview(
+    db: Session,
+    *,
+    kind: str,
+    payload: dict[str, Any] | None,
+) -> str:
+    entity_title, entity_body = _social_notification_resolve_entity_display(
+        db,
+        kind=kind,
+        payload=payload,
+    )
+    return entity_body or entity_title
+
+
+def _social_notification_display_text(
+    db: Session | None,
+    *,
+    kind: str,
+    title: Any,
+    body: Any,
+    payload: Any,
+) -> tuple[str, str]:
+    payload_dict = payload if isinstance(payload, dict) else {}
+    safe_kind = _social_notification_effective_kind(kind, payload_dict)
+    title_fallback = _social_notification_kind_label(safe_kind or kind)
+    safe_title = _social_pick_notification_text(
+        [
+            payload_dict.get("display_title"),
+            title,
+            payload_dict.get("display_kind"),
+            payload_dict.get("title"),
+            payload_dict.get("notification_title"),
+            payload_dict.get("subject"),
+            payload_dict.get("summary"),
+            payload_dict.get("chat_title"),
+            payload_dict.get("chat_name"),
+            payload_dict.get("thread_name"),
+            payload_dict.get("thread_title"),
+            payload_dict.get("event_title"),
+            payload_dict.get("task_title"),
+            payload_dict.get("announcement_title"),
+            payload_dict.get("message_title"),
+            payload_dict.get("sender_nick"),
+            payload_dict.get("sender_name"),
+            payload_dict.get("actor_nick"),
+            payload_dict.get("author"),
+        ],
+        title_fallback,
+    ) or title_fallback
+    if "chat" in safe_kind:
+        thread_title = _social_pick_notification_text(
+            [
+                payload_dict.get("thread_title"),
+                payload_dict.get("chat_title"),
+                payload_dict.get("title"),
+            ],
+            "",
+        )
+        if thread_title and safe_title == title_fallback:
+            safe_title = f"Новое сообщение: {thread_title}"
+    safe_body = _social_pick_notification_text(
+        [
+            payload_dict.get("display_body"),
+            body,
+            payload_dict.get("body"),
+            payload_dict.get("notification_body"),
+            payload_dict.get("text"),
+            payload_dict.get("message_text"),
+            payload_dict.get("preview_text"),
+            payload_dict.get("preview"),
+            payload_dict.get("message"),
+            payload_dict.get("content"),
+            payload_dict.get("snippet"),
+            payload_dict.get("note"),
+            payload_dict.get("description"),
+            payload_dict.get("task_description"),
+            payload_dict.get("event_description"),
+        ],
+        "",
+    )
+    if not safe_body and "chat" in safe_kind:
+        sender = _social_pick_notification_text(
+            [
+                payload_dict.get("sender_nick"),
+                payload_dict.get("sender_name"),
+                payload_dict.get("actor_nick"),
+                payload_dict.get("author"),
+            ],
+            "",
+        )
+        preview = _social_pick_notification_text(
+            [
+                payload_dict.get("preview"),
+                payload_dict.get("text"),
+                payload_dict.get("message"),
+                body,
+            ],
+            "",
+        )
+        safe_body = ": ".join(part for part in [sender, preview] if part)
+    if not safe_body and "reaction" in safe_kind:
+        safe_body = _social_pick_notification_text(
+            [
+                payload_dict.get("sender_nick"),
+                payload_dict.get("actor_nick"),
+                payload_dict.get("emoji"),
+            ],
+            "",
+        )
+    title_needs_fallback = (
+        not _social_notification_is_displayable_text(safe_title)
+        or safe_title == title_fallback
+    )
+    body_needs_fallback = (
+        not _social_notification_is_displayable_text(safe_body)
+        or safe_body == "Без текста"
+    )
+    if db is not None and (
+        title_needs_fallback
+        or body_needs_fallback
+        or _mojibake_score(safe_title) > 0
+        or _mojibake_score(safe_body) > 0
+    ):
+        entity_title, entity_body = _social_notification_resolve_entity_display(
+            db,
+            kind=kind,
+            payload=payload_dict,
+        )
+        if entity_title or entity_body:
+            if title_needs_fallback or _mojibake_score(safe_title) > 0:
+                safe_title = (entity_title or entity_body or title_fallback)[:255]
+            if body_needs_fallback or _mojibake_score(safe_body) > 0:
+                safe_body = (entity_body or entity_title or safe_body or "Без текста")[:5000]
+        elif title_needs_fallback and title_fallback:
+            safe_title = title_fallback
+    if not safe_body:
+        safe_body = "Без текста"
+    return safe_title[:255], safe_body[:5000]
+
+
+def _social_notification_payload_with_display(
+    payload: Any,
+    *,
+    kind: str,
+    title: str,
+    body: str,
+) -> dict[str, Any]:
+    payload_dict = dict(payload) if isinstance(payload, dict) else {}
+    safe_kind_value = _social_notification_effective_kind(kind, payload_dict)
+    safe_title = _social_notification_source_text(title, _social_notification_kind_label(safe_kind_value or kind))[:255]
+    safe_body = _social_notification_source_text(body, "Без текста")[:5000]
+    safe_kind = _social_notification_kind_label(safe_kind_value)
+    preview_fallback = _social_pick_notification_text(
+        [
+            payload_dict.get("display_body"),
+            payload_dict.get("notification_body"),
+            payload_dict.get("body"),
+            payload_dict.get("preview"),
+            payload_dict.get("preview_text"),
+            payload_dict.get("message_text"),
+            payload_dict.get("text"),
+            payload_dict.get("message"),
+            payload_dict.get("content"),
+            safe_body,
+        ],
+        safe_body,
+    )[:5000]
+    if (
+        not _social_notification_is_displayable_text(preview_fallback)
+        or _mojibake_score(preview_fallback) > 0
+    ):
+        if _social_notification_is_displayable_text(safe_body) and _mojibake_score(safe_body) <= 0:
+            preview_fallback = safe_body[:5000]
+        elif _social_notification_is_displayable_text(safe_title) and _mojibake_score(safe_title) <= 0:
+            preview_fallback = safe_title[:5000]
+        else:
+            preview_fallback = _social_notification_kind_label(safe_kind_value or kind)[:5000]
+
+    def _set_payload_text(keys: list[str], value: str, limit: int) -> None:
+        safe_value = _social_notification_source_text(value, "")[:limit]
+        if not safe_value:
+            return
+        for item_key in keys:
+            current = payload_dict.get(item_key)
+            if not _social_notification_is_displayable_text(current) or _mojibake_score(current) > 0:
+                payload_dict[item_key] = safe_value
+
+    def _force_payload_text(keys: list[str], value: str, limit: int) -> None:
+        safe_value = _social_notification_source_text(value, "")[:limit]
+        if not safe_value:
+            return
+        for item_key in keys:
+            payload_dict[item_key] = safe_value
+
+    payload_dict["display_title"] = safe_title
+    payload_dict["display_body"] = safe_body
+    payload_dict["display_kind"] = safe_kind
+    payload_dict["kind"] = str(safe_kind_value or kind or payload_dict.get("kind") or "").strip()
+    _force_payload_text(["notification_title", "title", "subject", "summary"], safe_title, 255)
+    _force_payload_text(["notification_body", "body", "preview", "preview_text", "message_text"], preview_fallback, 5000)
+    _set_payload_text(["notification_title", "title", "subject", "summary"], safe_title, 255)
+    _set_payload_text(
+        [
+            "notification_body",
+            "body",
+            "preview",
+            "preview_text",
+            "message_text",
+            "text",
+            "message",
+            "content",
+            "snippet",
+            "note",
+            "description",
+            "task_description",
+            "event_description",
+        ],
+        preview_fallback,
+        5000,
+    )
+    return payload_dict
 
 
 def _social_note_delete_disk_file(url: str) -> None:
@@ -16442,6 +16923,18 @@ def _social_note_to_out(db: Session, row: SocialNote) -> SocialNoteOut:
     )
 
 
+def _social_note_actor_alias_set(db: Session, actor_key: str) -> set[str]:
+    return {str(item or "").strip() for item in _social_actor_alias_keys(db, actor_key) if str(item or "").strip()}
+
+
+def _social_note_is_accessible(row: SocialNote | None, user_id: int, actor_aliases: set[str]) -> bool:
+    if not row:
+        return False
+    row_user_id = int(getattr(row, "user_id", 0) or 0)
+    row_actor_key = str(getattr(row, "actor_key", "") or "").strip()
+    return row_user_id == int(user_id) and row_actor_key in actor_aliases
+
+
 @router.get("/social/notes", response_model=list[SocialNoteOut])
 def social_notes_list(
     user: User = Depends(get_current_user),
@@ -16449,11 +16942,12 @@ def social_notes_list(
 ):
     ensure_module_enabled(db, user, "social_hub")
     actor_key, _, _ = _social_actor_identity(db, user)
+    actor_aliases = _social_note_actor_alias_set(db, actor_key)
     rows = db.scalars(
         select(SocialNote)
         .where(
             SocialNote.user_id == user.id,
-            SocialNote.actor_key == actor_key,
+            SocialNote.actor_key.in_(actor_aliases),
         )
         .order_by(SocialNote.updated_at.desc(), SocialNote.id.desc())
     ).all()
@@ -16467,13 +16961,15 @@ def social_create_note(
     db: Session = Depends(get_db),
 ):
     ensure_module_enabled(db, user, "social_hub")
-    actor_key, _, _ = _social_actor_identity(db, user)
+    actor_ctx = _social_actor_store_context(db, user)
     row = SocialNote(
         user_id=user.id,
-        actor_key=actor_key,
-        title=_decode_mojibake_text(payload.title or "").strip()[:255] or "Р В Р’В Р РЋРЎС™Р В Р’В Р РЋРІР‚СћР В Р’В Р В РІР‚В Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р В Р РЏ Р В Р’В Р вЂ™Р’В·Р В Р’В Р вЂ™Р’В°Р В Р’В Р РЋР’ВР В Р’В Р вЂ™Р’ВµР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В°",
+        actor_key=str(actor_ctx["store_key"] or "").strip(),
+        title=_decode_mojibake_text(payload.title or "").strip()[:255] or "Новая заметка",
         content=_decode_mojibake_text(payload.content or "")[:20000],
     )
+    if not str(row.title or "").strip() or _mojibake_score(str(row.title or "")) > 0:
+        row.title = "Новая заметка"
     db.add(row)
     db.flush()
     _audit(
@@ -16498,11 +16994,15 @@ def social_update_note(
 ):
     ensure_module_enabled(db, user, "social_hub")
     actor_key, _, _ = _social_actor_identity(db, user)
+    actor_aliases = _social_note_actor_alias_set(db, actor_key)
     row = db.get(SocialNote, note_id)
-    if not row or int(row.user_id) != int(user.id) or str(row.actor_key or "") != actor_key:
-        raise HTTPException(status_code=404, detail="Р В Р’В Р Р†Р вЂљРІР‚СњР В Р’В Р вЂ™Р’В°Р В Р’В Р РЋР’ВР В Р’В Р вЂ™Р’ВµР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В° Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’Вµ Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°")
-    row.title = _decode_mojibake_text(payload.title or "").strip()[:255] or "Р В Р’В Р Р†Р вЂљР’ВР В Р’В Р вЂ™Р’ВµР В Р’В Р вЂ™Р’В· Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В·Р В Р’В Р В РІР‚В Р В Р’В Р вЂ™Р’В°Р В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚ВР В Р Р‹Р В Р РЏ"
+    note_owner_ok = _social_note_is_accessible(row, int(user.id), actor_aliases)
+    if not note_owner_ok:
+        raise HTTPException(status_code=404, detail="Заметка не найдена")
+    row.title = _decode_mojibake_text(payload.title or "").strip()[:255] or "Без названия"
     row.content = _decode_mojibake_text(payload.content or "")[:20000]
+    if not str(row.title or "").strip() or _mojibake_score(str(row.title or "")) > 0:
+        row.title = "Без названия"
     _audit(
         db,
         user,
@@ -16524,18 +17024,21 @@ def social_note_upload_file(
     db: Session = Depends(get_db),
 ):
     ensure_module_enabled(db, user, "social_hub")
+    actor_ctx = _social_actor_store_context(db, user)
     actor_key, _, _ = _social_actor_identity(db, user)
+    actor_aliases = _social_note_actor_alias_set(db, actor_key)
     row = db.get(SocialNote, note_id)
-    if not row or int(row.user_id) != int(user.id) or str(row.actor_key or "") != actor_key:
-        raise HTTPException(status_code=404, detail="Р В Р’В Р Р†Р вЂљРІР‚СњР В Р’В Р вЂ™Р’В°Р В Р’В Р РЋР’ВР В Р’В Р вЂ™Р’ВµР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В° Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’Вµ Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°")
+    note_owner_ok = _social_note_is_accessible(row, int(user.id), actor_aliases)
+    if not note_owner_ok:
+        raise HTTPException(status_code=404, detail="Заметка не найдена")
     if not file or not file.filename:
-        raise HTTPException(status_code=400, detail="Р В Р’В Р вЂ™Р’В¤Р В Р’В Р вЂ™Р’В°Р В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р’В Р вЂ™Р’В» Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’Вµ Р В Р’В Р В РІР‚В Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р вЂ™Р’В±Р В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’В°Р В Р’В Р В РІР‚В¦")
+        raise HTTPException(status_code=400, detail="Файл не выбран")
     raw = file.file.read()
     if not raw:
-        raise HTTPException(status_code=400, detail="Р В Р’В Р вЂ™Р’В¤Р В Р’В Р вЂ™Р’В°Р В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р’В Р вЂ™Р’В» Р В Р’В Р РЋРІР‚вЂќР В Р Р‹Р РЋРІР‚СљР В Р Р‹Р В РЎвЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚СћР В Р’В Р Р†РІР‚С›РІР‚вЂњ")
+        raise HTTPException(status_code=400, detail="Файл пустой")
     max_size = 12 * 1024 * 1024
     if len(raw) > max_size:
-        raise HTTPException(status_code=400, detail="Р В Р’В Р вЂ™Р’В¤Р В Р’В Р вЂ™Р’В°Р В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р’В Р вЂ™Р’В» Р В Р Р‹Р В РЎвЂњР В Р’В Р вЂ™Р’В»Р В Р’В Р РЋРІР‚ВР В Р Р‹Р В РІР‚С™Р В Р’В Р РЋРІР‚СњР В Р’В Р РЋРІР‚СћР В Р’В Р РЋР’В Р В Р’В Р вЂ™Р’В±Р В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В Р вЂ°Р В Р Р‹Р В РІР‚С™Р В Р’В Р РЋРІР‚СћР В Р’В Р Р†РІР‚С›РІР‚вЂњ (Р В Р’В Р СћРІР‚ВР В Р’В Р РЋРІР‚Сћ 12 Р В Р’В Р РЋРЎв„ўР В Р’В Р Р†Р вЂљР’В)")
+        raise HTTPException(status_code=400, detail="Файл слишком большой (максимум 12 МБ)")
     original_name = _social_note_clean_filename(file.filename or "file")
     ext = _social_note_guess_ext(original_name, str(file.content_type or ""))
     storage_name = f"note-{int(row.id)}-{secrets.token_hex(8)}{ext}"
@@ -16545,7 +17048,7 @@ def social_note_upload_file(
     file_row = SocialNoteFile(
         note_id=int(row.id),
         user_id=user.id,
-        actor_key=actor_key,
+        actor_key=str(actor_ctx["store_key"] or "").strip(),
         filename=original_name[:255],
         url=url[:500],
         content_type=str(file.content_type or "application/octet-stream")[:120],
@@ -16582,19 +17085,21 @@ def social_note_delete_file(
 ):
     ensure_module_enabled(db, user, "social_hub")
     actor_key, _, _ = _social_actor_identity(db, user)
+    actor_aliases = _social_note_actor_alias_set(db, actor_key)
     row = db.get(SocialNote, note_id)
-    if not row or int(row.user_id) != int(user.id) or str(row.actor_key or "") != actor_key:
-        raise HTTPException(status_code=404, detail="Р В Р’В Р Р†Р вЂљРІР‚СњР В Р’В Р вЂ™Р’В°Р В Р’В Р РЋР’ВР В Р’В Р вЂ™Р’ВµР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В° Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’Вµ Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°")
+    note_owner_ok = _social_note_is_accessible(row, int(user.id), actor_aliases)
+    if not note_owner_ok:
+        raise HTTPException(status_code=404, detail="Заметка не найдена")
     file_row = db.scalar(
         select(SocialNoteFile).where(
             SocialNoteFile.id == file_id,
             SocialNoteFile.note_id == int(row.id),
             SocialNoteFile.user_id == user.id,
-            SocialNoteFile.actor_key == actor_key,
+            SocialNoteFile.actor_key.in_(actor_aliases),
         )
     )
     if not file_row:
-        raise HTTPException(status_code=404, detail="Р В Р’В Р вЂ™Р’В¤Р В Р’В Р вЂ™Р’В°Р В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р’В Р вЂ™Р’В» Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’Вµ Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦")
+        raise HTTPException(status_code=404, detail="Файл не найден")
     _social_note_delete_disk_file(str(file_row.url or ""))
     db.delete(file_row)
     row.updated_at = datetime.utcnow()
@@ -16611,7 +17116,7 @@ def social_note_delete_file(
         entity_id=str(file_id or ""),
     )
     db.commit()
-    return MessageOut(message="Р В Р’В Р вЂ™Р’В¤Р В Р’В Р вЂ™Р’В°Р В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р’В Р вЂ™Р’В» Р В Р Р‹Р РЋРІР‚СљР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В»Р В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦")
+    return MessageOut(message="Файл удален")
 
 
 @router.delete("/social/notes/{note_id}", response_model=MessageOut)
@@ -16622,14 +17127,16 @@ def social_delete_note(
 ):
     ensure_module_enabled(db, user, "social_hub")
     actor_key, _, _ = _social_actor_identity(db, user)
+    actor_aliases = _social_note_actor_alias_set(db, actor_key)
     row = db.get(SocialNote, note_id)
-    if not row or int(row.user_id) != int(user.id) or str(row.actor_key or "") != actor_key:
-        raise HTTPException(status_code=404, detail="Р В Р’В Р Р†Р вЂљРІР‚СњР В Р’В Р вЂ™Р’В°Р В Р’В Р РЋР’ВР В Р’В Р вЂ™Р’ВµР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В° Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’Вµ Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°")
+    note_owner_ok = _social_note_is_accessible(row, int(user.id), actor_aliases)
+    if not note_owner_ok:
+        raise HTTPException(status_code=404, detail="Заметка не найдена")
     files = db.scalars(
         select(SocialNoteFile).where(
             SocialNoteFile.note_id == int(row.id),
             SocialNoteFile.user_id == user.id,
-            SocialNoteFile.actor_key == actor_key,
+            SocialNoteFile.actor_key.in_(actor_aliases),
         )
     ).all()
     for file_row in files:
@@ -16646,7 +17153,7 @@ def social_delete_note(
     )
     db.delete(row)
     db.commit()
-    return MessageOut(message="Р В Р’В Р Р†Р вЂљРІР‚СњР В Р’В Р вЂ™Р’В°Р В Р’В Р РЋР’ВР В Р’В Р вЂ™Р’ВµР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В° Р В Р Р‹Р РЋРІР‚СљР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В»Р В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°")
+    return MessageOut(message="Заметка удалена")
 
 
 @router.get("/social/notifications", response_model=dict[str, Any])
@@ -16659,11 +17166,12 @@ def social_notifications(
     ensure_module_enabled(db, user, "social_hub")
     actor_key, actor_nick, _ = _social_actor_identity(db, user)
     actor_aliases = _social_actor_alias_keys(db, actor_key)
+    notification_keys = list(dict.fromkeys([actor_key, *actor_aliases]))
     _social_emit_due_reminders(db, user_id=int(user.id), actor_key=actor_key, actor_nick=actor_nick)
     safe_limit = max(10, min(int(limit or 40), 200))
     query = select(SocialNotification).where(
         SocialNotification.user_id == int(user.id),
-        SocialNotification.recipient_key.in_(actor_aliases),
+        SocialNotification.recipient_key.in_(notification_keys),
     )
     if int(since_id or 0) > 0:
         query = query.where(SocialNotification.id > int(since_id))
@@ -16673,27 +17181,63 @@ def social_notifications(
         .select_from(SocialNotification)
         .where(
             SocialNotification.user_id == int(user.id),
-            SocialNotification.recipient_key.in_(actor_aliases),
+            SocialNotification.recipient_key.in_(notification_keys),
             SocialNotification.is_read.is_(False),
         )
     ) or 0
     data_rows = []
+    repaired_any = False
     for row in reversed(rows):
         payload: dict[str, Any]
         try:
             payload = json.loads(str(row.payload_json or "{}"))
         except Exception:
             payload = {}
+        original_payload = dict(payload) if isinstance(payload, dict) else {}
+        safe_title, safe_body = _social_notification_display_text(
+            db,
+            kind=str(row.kind or ""),
+            title=row.title,
+            body=row.body,
+            payload=payload,
+        )
+        payload = _social_notification_payload_with_display(
+            payload,
+            kind=str(row.kind or ""),
+            title=safe_title,
+            body=safe_body,
+        )
+        payload_repaired = payload != original_payload
+        raw_title = str(row.title or "")
+        raw_body = str(row.body or "")
+        if (
+            (
+                not _social_notification_is_displayable_text(raw_title)
+                or _mojibake_score(raw_title) > 0
+            )
+            or (
+                not _social_notification_is_displayable_text(raw_body)
+                or _mojibake_score(raw_body) > 0
+            )
+        ) and (safe_title != raw_title[:255] or safe_body != raw_body[:5000]):
+            row.title = safe_title[:255]
+            row.body = safe_body[:5000]
+            payload_repaired = True
+        if payload_repaired:
+            row.payload_json = json.dumps(payload, ensure_ascii=False)
+            repaired_any = True
         data_rows.append(
             SocialNotificationOut(
                 id=int(row.id),
                 kind=str(row.kind or ""),
-                title=_decode_mojibake_text(str(row.title or "")),
-                body=_decode_mojibake_text(str(row.body or "")),
+                title=safe_title,
+                body=safe_body,
                 payload=payload,
                 created_at=_to_utc_iso(row.created_at),
             ).model_dump()
         )
+    if repaired_any:
+        db.commit()
     return {"unread": int(unread), "rows": data_rows}
 
 
@@ -16705,6 +17249,7 @@ def social_notifications_read_all(
     ensure_module_enabled(db, user, "social_hub")
     actor_key, _, _ = _social_actor_identity(db, user)
     actor_aliases = _social_actor_alias_keys(db, actor_key)
+    notification_keys = list(dict.fromkeys([actor_key, *actor_aliases]))
     db.execute(
         text(
             """
@@ -16717,11 +17262,12 @@ def social_notifications_read_all(
         ),
         {
             "user_id": int(user.id),
-            "k1": actor_aliases[0] if actor_aliases else actor_key,
-            "k2": actor_aliases[1] if len(actor_aliases) > 1 else actor_aliases[0] if actor_aliases else actor_key,
+            "k1": notification_keys[0] if notification_keys else actor_key,
+            "k2": notification_keys[1] if len(notification_keys) > 1 else notification_keys[0] if notification_keys else actor_key,
         },
     )
     db.commit()
+    return MessageOut(message="OK")
     return MessageOut(message="Р В Р’В Р РЋРІР‚С”Р В Р’В Р РЋРІР‚Сњ")
 
 
