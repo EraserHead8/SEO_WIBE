@@ -13,7 +13,7 @@ from app.models import ApiCredential
 from app.services.ads_cache import sync_wb_campaign_snapshots
 from app.services.market_cache import build_market_cache_key, get_or_refresh_market_cache
 from app.services.sales import build_sales_report
-from app.services.task_queue import dequeue_task, queue_available, queue_depth
+from app.services.task_queue import compact_queue, dequeue_task, queue_available, queue_depth
 from app.services.wb_bidder import run_bidder_rules
 from app.services.wb_modules import fetch_ozon_ads_campaigns, fetch_wb_campaigns
 
@@ -68,7 +68,7 @@ def _handle_sync_wb_snapshots(payload: dict[str, Any]) -> None:
         wb_key = _active_key(db, user_id, "wb")
         if not wb_key:
             return
-        sync_wb_campaign_snapshots(db, user_id, wb_key)
+        sync_wb_campaign_snapshots(db, user_id, wb_key, background=True)
     finally:
         db.close()
 
@@ -284,6 +284,8 @@ def run_worker() -> None:
         if not queue_available():
             time.sleep(_IDLE_SLEEP_SEC)
             continue
+        if queue_depth() > 80:
+            compact_queue(max_age_sec=20 * 60)
         task = dequeue_task(timeout_sec=10)
         if not task:
             continue

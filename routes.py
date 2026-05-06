@@ -16,7 +16,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from datetime import date, datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Request, Response
@@ -303,6 +303,7 @@ from app.services.wb_modules import (
     fetch_wb_reviews,
     fetch_wb_reviews_fast,
     generate_review_reply,
+    WbRateLimitError,
     post_ozon_question_reply,
     post_ozon_review_reply,
     post_wb_question_reply,
@@ -373,6 +374,50 @@ def _market_cache_ttl(module_code: str, *, fast_mode: bool = False) -> int:
     if fast_mode:
         return max(45, int(base * 0.7))
     return base
+
+
+def _get_feedback_market_cache(
+    db: Session,
+    *,
+    user_id: int,
+    module_code: str,
+    marketplace: str,
+    cache_key: str,
+    ttl_sec: int,
+    fetcher: Callable[[], Any],
+    stale_if_error_sec: int = 20 * 60,
+    prefer_stale_sec: int = 0,
+) -> tuple[Any, dict[str, Any]]:
+    try:
+        return get_or_refresh_market_cache(
+            db,
+            user_id=user_id,
+            module_code=module_code,
+            marketplace=marketplace,
+            cache_key=cache_key,
+            ttl_sec=ttl_sec,
+            fetcher=fetcher,
+            stale_if_error_sec=stale_if_error_sec,
+            prefer_stale_sec=prefer_stale_sec,
+        )
+    except WbRateLimitError as exc:
+        latest, latest_meta = _market_cache_latest_payload(
+            db,
+            user_id=user_id,
+            module_code=module_code,
+            marketplace=marketplace,
+            max_age_sec=24 * 60 * 60,
+        )
+        if latest is not None:
+            latest_meta = dict(latest_meta or {})
+            latest_meta["source"] = "db-latest-rate-limit-fallback"
+            latest_meta["stale"] = True
+            latest_meta["error"] = str(exc or "WB API returned 429")[:500]
+            return latest, latest_meta
+        raise HTTPException(
+            status_code=429,
+            detail="WB API returned 429 rate limit. Try again later or wait for cached data to refresh.",
+        )
 
 
 def _market_cache_latest_payload(
@@ -532,6 +577,111 @@ def _accounting_monthly_payload_has_data(payload: dict[str, Any] | None) -> bool
                 except Exception:
                     continue
     return False
+
+
+def _quick_accounting_monthly_from_sales_cache(
+    sales_payload: dict[str, Any] | None,
+    *,
+    month_count: int,
+    tz_name: str,
+) -> dict[str, Any]:
+    try:
+        tzinfo = ZoneInfo(str(tz_name or "Europe/Moscow").strip() or "Europe/Moscow")
+    except Exception:
+        tzinfo = ZoneInfo("UTC")
+    today = datetime.now(tzinfo).date()
+    first_month = date(today.year, today.month, 1)
+
+    def shift_month(month_start: date, delta: int) -> date:
+        index = (month_start.year * 12 + month_start.month - 1) + int(delta)
+        return date(index // 12, (index % 12) + 1, 1)
+
+    def month_end(month_start: date) -> date:
+        return shift_month(month_start, 1) - timedelta(days=1)
+
+    def kpi() -> dict[str, Any]:
+        return {
+            "turnover": 0.0,
+            "orders": 0,
+            "units": 0,
+            "buyouts": 0,
+            "cogs": 0.0,
+            "commission": 0.0,
+            "acquiring": 0.0,
+            "logistics": 0.0,
+            "storage": 0.0,
+            "penalties": 0.0,
+            "ad_spend": 0.0,
+            "marketplace_expense": 0.0,
+            "custom_expenses": 0.0,
+            "other_expenses": 0.0,
+            "tax_amount": 0.0,
+            "vat_amount": 0.0,
+            "tax_total": 0.0,
+            "operating_profit": 0.0,
+            "net_profit": 0.0,
+            "margin": 0.0,
+        }
+
+    def add_kpi(target: dict[str, Any], row: dict[str, Any]) -> None:
+        target["turnover"] = round(float(target.get("turnover") or 0.0) + _to_float_safe(row.get("revenue"), 0.0), 2)
+        target["orders"] = int(target.get("orders") or 0) + _to_int_safe(row.get("orders"))
+        target["units"] = int(target.get("units") or 0) + _to_int_safe(row.get("units"))
+        target["buyouts"] = int(target.get("buyouts") or 0) + _to_int_safe(row.get("buyouts"))
+        for key in ("commission", "logistics", "storage", "penalties", "ad_spend", "other_expenses"):
+            source_key = "other_expense" if key == "other_expenses" else key
+            target[key] = round(float(target.get(key) or 0.0) + _to_float_safe(row.get(source_key), 0.0), 2)
+        expense = sum(_to_float_safe(target.get(key), 0.0) for key in ("commission", "logistics", "storage", "penalties", "ad_spend", "other_expenses"))
+        target["marketplace_expense"] = round(expense, 2)
+        target["operating_profit"] = round(_to_float_safe(target.get("turnover"), 0.0) - expense, 2)
+        target["net_profit"] = target["operating_profit"]
+        turnover = _to_float_safe(target.get("turnover"), 0.0)
+        target["margin"] = round((target["net_profit"] / turnover) * 100, 2) if turnover > 0 else 0.0
+
+    months: list[dict[str, Any]] = []
+    index_by_key: dict[str, dict[str, Any]] = {}
+    for offset in range(max(1, min(12, int(month_count or 12)))):
+        start = shift_month(first_month, -offset)
+        key = f"{start.year:04d}-{start.month:02d}"
+        row = {
+            "month_key": key,
+            "label": key,
+            "date_from": start.isoformat(),
+            "date_to": month_end(start).isoformat(),
+            "wb": kpi(),
+            "ozon": kpi(),
+            "total": kpi(),
+        }
+        months.append(row)
+        index_by_key[key] = row
+
+    rows = list((sales_payload or {}).get("rows") or []) if isinstance(sales_payload, dict) else []
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        mp = str(item.get("marketplace") or "").strip().lower()
+        if mp not in {"wb", "ozon"}:
+            continue
+        day_text = str(item.get("date") or item.get("occurred_at") or "").strip()[:10]
+        try:
+            day = date.fromisoformat(day_text)
+        except Exception:
+            continue
+        slot = index_by_key.get(f"{day.year:04d}-{day.month:02d}")
+        if not slot:
+            continue
+        add_kpi(slot[mp], item)
+        add_kpi(slot["total"], item)
+
+    return {
+        "months": months,
+        "meta": {
+            "source": "sales-cache-fastpath",
+            "partial": True,
+            "warnings": ["Показан быстрый расчет по последнему кэшу продаж. Полная бухгалтерская детализация обновится после фоновой загрузки."],
+            "generated_at": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+        },
+    }
 
 
 def _accounting_payload_needs_finance_fallback(payload: dict[str, Any] | None, warnings: list[str] | None = None) -> bool:
@@ -2607,7 +2757,7 @@ def wb_reviews(
             max_pages=8,
         )
 
-    data, cache_meta = get_or_refresh_market_cache(
+    data, cache_meta = _get_feedback_market_cache(
         db,
         user_id=int(user.id),
         module_code="wb_reviews_ai",
@@ -2616,6 +2766,7 @@ def wb_reviews(
         ttl_sec=_market_cache_ttl("wb_reviews_ai", fast_mode=fast),
         fetcher=_load_reviews_payload,
         stale_if_error_sec=20 * 60,
+        prefer_stale_sec=24 * 60 * 60 if fast else 0,
     )
     new_rows = _filter_claimed_feedback_rows(
         db,
@@ -2778,7 +2929,7 @@ def ozon_reviews(
             enrich_products=not fast,
         )
 
-    data, cache_meta = get_or_refresh_market_cache(
+    data, cache_meta = _get_feedback_market_cache(
         db,
         user_id=int(user.id),
         module_code="wb_reviews_ai",
@@ -2787,6 +2938,7 @@ def ozon_reviews(
         ttl_sec=_market_cache_ttl("wb_reviews_ai", fast_mode=fast),
         fetcher=_load_reviews_payload,
         stale_if_error_sec=20 * 60,
+        prefer_stale_sec=24 * 60 * 60 if fast else 0,
     )
     new_rows = _filter_claimed_feedback_rows(
         db,
@@ -2951,7 +3103,7 @@ def wb_questions(
             max_pages=8,
         )
 
-    data, cache_meta = get_or_refresh_market_cache(
+    data, cache_meta = _get_feedback_market_cache(
         db,
         user_id=int(user.id),
         module_code="wb_questions_ai",
@@ -2960,6 +3112,7 @@ def wb_questions(
         ttl_sec=_market_cache_ttl("wb_questions_ai", fast_mode=fast),
         fetcher=_load_questions_payload,
         stale_if_error_sec=20 * 60,
+        prefer_stale_sec=24 * 60 * 60 if fast else 0,
     )
     new_rows = _filter_claimed_feedback_rows(
         db,
@@ -3136,7 +3289,7 @@ def ozon_questions(
             enrich_products=not fast,
         )
 
-    data, cache_meta = get_or_refresh_market_cache(
+    data, cache_meta = _get_feedback_market_cache(
         db,
         user_id=int(user.id),
         module_code="wb_questions_ai",
@@ -3145,6 +3298,7 @@ def ozon_questions(
         ttl_sec=_market_cache_ttl("wb_questions_ai", fast_mode=fast),
         fetcher=_load_questions_payload,
         stale_if_error_sec=20 * 60,
+        prefer_stale_sec=24 * 60 * 60 if fast else 0,
     )
     new_rows = _filter_claimed_feedback_rows(
         db,
@@ -3654,7 +3808,7 @@ def wb_ads_campaigns(
                 "sync_wb_snapshots",
                 {"user_id": int(user.id)},
                 dedupe_key=f"wb_snapshots:{int(user.id)}",
-                dedupe_ttl_sec=120,
+                dedupe_ttl_sec=15 * 60,
             )
             refresh_queued = bool(queue_result.get("queued"))
             queue_depth_now = queue_depth()
@@ -3863,7 +4017,7 @@ def wb_ads_campaigns_sync(user: User = Depends(get_current_user), db: Session = 
         "sync_wb_snapshots",
         {"user_id": int(user.id)},
         dedupe_key=f"wb_snapshots:{int(user.id)}",
-        dedupe_ttl_sec=120,
+        dedupe_ttl_sec=15 * 60,
     )
     if not payload.get("queued") and not payload.get("ok"):
         payload = sync_wb_campaign_snapshots(db, user.id, wb_key)
@@ -7135,44 +7289,65 @@ def sales_stats(
             force_fresh_wb=force_fresh_wb,
         )
 
-    try:
-        payload, sales_cache_meta = get_or_refresh_market_cache(
+    payload: dict[str, Any] | None = None
+    sales_cache_meta: dict[str, Any] = {}
+    if use_live_mode and not force_refresh:
+        fast_payload, fast_meta = _market_cache_latest_payload(
             db,
             user_id=int(user.id),
             module_code="sales_stats",
             marketplace=selected_market,
-            cache_key=sales_cache_key,
-            ttl_sec=sales_ttl_sec,
-            fetcher=lambda: _load_sales_payload(
-                left,
-                right,
-                prefer_live=use_live_mode,
-                force_fresh_wb=bool(force_refresh),
-            ),
-            stale_if_error_sec=20 * 60,
-            prefer_stale_sec=sales_prefer_stale_sec,
-            force_refresh=bool(force_refresh),
+            max_age_sec=12 * 60 * 60,
+            scan_limit=120,
         )
-    except Exception as exc:
-        sales_cache_meta = {"source": "error", "age_sec": -1}
-        payload = {
-            "rows": [],
-            "chart": [],
-            "totals": {
-                "orders": 0,
-                "units": 0,
-                "buyouts": 0,
-                "revenue": 0.0,
-                "returns": 0,
-                "ad_spend": 0.0,
-                "penalties": 0.0,
-                "days": 0,
-                "gross_profit": 0.0,
-            },
-            "warnings": [f"Sales stats load failed: {str(exc or '')[:220]}"],
-            "granularity": "day",
-            "timezone": tz_name,
-        }
+        if _sales_payload_has_data(fast_payload):
+            payload = fast_payload or {}
+            sales_cache_meta = {
+                **(fast_meta or {}),
+                "source": "db-latest-live-fastpath",
+                "stale": True,
+                "cache_key": str((fast_meta or {}).get("cache_key") or ""),
+            }
+
+    if payload is None:
+        try:
+            payload, sales_cache_meta = get_or_refresh_market_cache(
+                db,
+                user_id=int(user.id),
+                module_code="sales_stats",
+                marketplace=selected_market,
+                cache_key=sales_cache_key,
+                ttl_sec=sales_ttl_sec,
+                fetcher=lambda: _load_sales_payload(
+                    left,
+                    right,
+                    prefer_live=use_live_mode,
+                    force_fresh_wb=bool(force_refresh),
+                ),
+                stale_if_error_sec=20 * 60,
+                prefer_stale_sec=max(sales_prefer_stale_sec, 30 * 60 if use_live_mode else 0),
+                force_refresh=bool(force_refresh),
+            )
+        except Exception as exc:
+            sales_cache_meta = {"source": "error", "age_sec": -1}
+            payload = {
+                "rows": [],
+                "chart": [],
+                "totals": {
+                    "orders": 0,
+                    "units": 0,
+                    "buyouts": 0,
+                    "revenue": 0.0,
+                    "returns": 0,
+                    "ad_spend": 0.0,
+                    "penalties": 0.0,
+                    "days": 0,
+                    "gross_profit": 0.0,
+                },
+                "warnings": [f"Sales stats load failed: {str(exc or '')[:220]}"],
+                "granularity": "day",
+                "timezone": tz_name,
+            }
 
     rows = payload.get("rows") if isinstance(payload, dict) else []
     chart = payload.get("chart") if isinstance(payload, dict) else []
@@ -7901,6 +8076,39 @@ def accounting_monthly_summary(
                 details=(
                     f"months={month_count};tz={tz_name};rows={len(months_rows)};"
                     f"source={meta_payload.get('source')};fast=1"
+                ),
+                module_code="accounting",
+                entity_type="accounting_monthly_report",
+                status="partial",
+            )
+            db.commit()
+            return AccountingMonthlySummaryOut(
+                months=months_rows,
+                meta=AccountingMonthlyMetaOut(**meta_payload),
+            )
+        sales_probe, _sales_probe_meta = _market_cache_latest_payload(
+            db,
+            user_id=int(user.id),
+            module_code="sales_stats",
+            marketplace="all",
+            max_age_sec=14 * 24 * 60 * 60,
+            scan_limit=180,
+        )
+        if _sales_payload_has_data(sales_probe):
+            quick_data = _quick_accounting_monthly_from_sales_cache(
+                sales_probe,
+                month_count=month_count,
+                tz_name=tz_name,
+            )
+            months_rows = list((quick_data or {}).get("months") or [])
+            meta_payload = dict((quick_data or {}).get("meta") or {})
+            _audit(
+                db,
+                user,
+                action="accounting_monthly_read",
+                details=(
+                    f"months={month_count};tz={tz_name};rows={len(months_rows)};"
+                    "source=sales-cache-fastpath;fast=1"
                 ),
                 module_code="accounting",
                 entity_type="accounting_monthly_report",

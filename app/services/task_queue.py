@@ -49,6 +49,65 @@ def queue_depth() -> int:
         return 0
 
 
+def compact_queue(
+    *,
+    max_age_sec: int = 30 * 60,
+    keep_latest_per_signature: bool = True,
+    max_scan: int = 5000,
+) -> dict[str, int]:
+    client = _get_client()
+    if client is None:
+        return {"ok": 0, "depth_before": 0, "depth_after": 0, "removed": 0}
+    name = queue_name()
+    try:
+        rows = client.lrange(name, 0, max(0, int(max_scan or 0) - 1))
+    except Exception:
+        return {"ok": 0, "depth_before": 0, "depth_after": queue_depth(), "removed": 0}
+
+    now_ts = time.time()
+    max_age = max(60, int(max_age_sec or 0))
+    seen: set[str] = set()
+    kept: list[str] = []
+    removed = 0
+    for raw in rows:
+        parsed: dict[str, Any] | None = None
+        try:
+            candidate = json.loads(str(raw or ""))
+            if isinstance(candidate, dict):
+                parsed = candidate
+        except Exception:
+            parsed = None
+        if not parsed:
+            removed += 1
+            continue
+        queued_at = float(parsed.get("queued_at") or 0.0)
+        if queued_at > 0 and (now_ts - queued_at) > max_age:
+            removed += 1
+            continue
+        signature = _task_signature(parsed)
+        if keep_latest_per_signature and signature:
+            if signature in seen:
+                removed += 1
+                continue
+            seen.add(signature)
+        kept.append(str(raw or ""))
+
+    try:
+        with client.pipeline() as pipe:
+            pipe.delete(name)
+            if kept:
+                pipe.rpush(name, *kept)
+            pipe.execute()
+    except Exception:
+        return {"ok": 0, "depth_before": len(rows), "depth_after": queue_depth(), "removed": 0}
+    return {
+        "ok": 1,
+        "depth_before": len(rows),
+        "depth_after": len(kept),
+        "removed": max(0, removed),
+    }
+
+
 def enqueue_task(
     task_type: str,
     payload: dict[str, Any] | None = None,
@@ -147,3 +206,15 @@ def _dedupe_cache_name(task_type: str, dedupe_key: str) -> str:
     raw = f"{task_type}:{dedupe_key}"
     digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:24]
     return f"{prefix}:{task_type}:{digest}"
+
+
+def _task_signature(task: dict[str, Any]) -> str:
+    task_type = str(task.get("type") or "").strip().lower()
+    payload = task.get("payload") if isinstance(task.get("payload"), dict) else {}
+    if not task_type:
+        return ""
+    try:
+        normalized = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
+    except Exception:
+        normalized = str(payload or "")
+    return f"{task_type}:{hashlib.sha1(normalized.encode('utf-8')).hexdigest()[:24]}"

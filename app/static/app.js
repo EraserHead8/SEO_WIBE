@@ -346,7 +346,7 @@ function clearChartHost(host) {
 
 const authHeaders = () => {
   const headers = { "Content-Type": "application/json" };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (token && !forceCookieAuth) headers["Authorization"] = `Bearer ${token}`;
   return headers;
 };
 
@@ -1550,6 +1550,28 @@ function applyUiLanguage() {
     isEn ? "Penalties" : "Штрафы",
   ]);
   setCheckLabel("#sales .sales-chart-controls label:nth-of-type(1)", "WB");
+  setOptions("#salesMarketplace", [
+    isEn ? "All marketplaces" : "Все маркетплейсы",
+    "WB",
+    "Ozon",
+  ]);
+  setOptions("#accountingTemplateMarketplace", [
+    isEn ? "Template: WB + Ozon" : "Шаблон: WB + Ozon",
+    isEn ? "Template: WB only" : "Шаблон: только WB",
+    isEn ? "Template: Ozon only" : "Шаблон: только Ozon",
+  ]);
+  setOptions("#salesMetricMode", [
+    isEn ? "Units" : "Штуки",
+    isEn ? "Buyouts" : "Выкупы",
+    isEn ? "Revenue" : "Выручка",
+    isEn ? "Income" : "Приход",
+    isEn ? "Expense" : "Расход",
+    isEn ? "Net" : "Изменение баланса",
+    isEn ? "Orders" : "Заказы",
+    isEn ? "Returns" : "Отказы",
+    isEn ? "Ads Spend" : "Реклама",
+    isEn ? "Penalties" : "Штрафы",
+  ]);
   setCheckLabel("#sales .sales-chart-controls label:nth-of-type(2)", "Ozon");
 
   const placeholders = [
@@ -3617,7 +3639,7 @@ async function ensureAuth(allowFallback = true) {
         const storedRaw = String(sessionStorage.getItem("seo_wibe_last_tab") || "").trim();
         const storedTab = normalizeLegacyTabName(storedRaw).tab;
         let initialTab = isTabAvailable(storedTab) ? storedTab : resolveInitialTab();
-        if (shouldForceMobileCalendarStart()) {
+      if (shouldForceMobileCalendarStart()) {
           // Mobile app should open the social hub on Calendar by default.
           currentSocialSubtab = "calendar";
           if (isTabAvailable("social")) initialTab = "social";
@@ -3698,6 +3720,7 @@ function renderMobileDrawerUser() {
   }
   const actorEmail = normalizeAppText(String(me.actor_email || me.email || "").trim(), "-");
   const name = normalizeAppText(String(me.actor_nick || actorEmail || "-"), actorEmail || "-");
+  const isOwner = Boolean(me.actor_is_owner);
   const fixedRoleText = me.role === "admin"
     ? tr("Админ", "Admin")
     : (isOwner ? tr("Владелец", "Owner") : tr("Участник", "Member"));
@@ -3730,7 +3753,7 @@ function renderTopbarUser() {
   const isOwner = Boolean(me.actor_is_owner);
   const roleText = me.role === "admin"
     ? tr("Админ", "Admin")
-    : (isOwner ? tr("????????", "Owner") : tr("?????????", "Member"));
+    : (isOwner ? tr("Владелец", "Owner") : tr("Участник", "Member"));
   const initials = computeAvatarInitials(name, actorEmail);
   const avatarText = document.getElementById("topbarAvatarText");
   const avatarName = document.getElementById("topbarAvatarName");
@@ -3748,7 +3771,7 @@ function renderTopbarUser() {
   setTopbarAvatarImage(avatarImg, avatarUrl, { fallbackTextNode: avatarText });
   setTopbarAvatarImage(popAvatarImg, avatarUrl, { wrapper: popAvatar, fallbackTextNode: popAvatarText });
   if (popName) popName.textContent = name;
-  if (popRole) popRole.textContent = fixedRoleText;
+  if (popRole) popRole.textContent = roleText;
   if (popEmail) popEmail.textContent = actorEmail || "-";
   renderProfileMenuIntro();
   btn.classList.remove("hidden");
@@ -4696,6 +4719,10 @@ async function loadWbReviews() {
         if (runToken !== reviewLoadToken) return;
         reviewLoadProgress.active = false;
         const msg = String(e?.message || "").trim();
+        if (isMarketplaceRateLimitError(msg)) {
+          updateReviewLoadStatus(tr("WB API временно ограничил запросы. Показаны последние доступные данные.", "WB API is rate-limited. Showing the latest available data."));
+          return;
+        }
         if (isMarketplaceKeyError(msg)) {
           updateReviewLoadStatus(tr("Проверьте API-ключи WB/Ozon в разделе «Профиль».", "Check WB/Ozon API keys in Profile."));
           return;
@@ -4729,6 +4756,12 @@ async function loadWbReviews() {
       updateReviewLoadStatus(tr("Проверьте API-ключи WB/Ozon в разделе «Профиль».", "Check WB/Ozon API keys in Profile."));
       return;
     }
+    if (isMarketplaceRateLimitError(fastMsg)) {
+      reviewLoadProgress.active = false;
+      updateReviewLoadStatus(tr("WB API временно ограничил запросы. Повторите позже.", "WB API is temporarily rate-limited. Try again later."));
+      setTableMessage("wbReviewsTable", 7, tr("WB API временно ограничил запросы. Ozon-отзывы доступны, WB обновится после снятия лимита.", "WB API is temporarily rate-limited. Ozon reviews are available; WB will refresh after the limit clears."));
+      return;
+    }
     requestFullReload();
     return;
   }
@@ -4740,6 +4773,11 @@ async function loadWbReviews() {
     if (raw) raw.textContent = tr("Ошибка отрисовки отзывов.", "Reviews rendering failed.");
   });
   if (runToken !== reviewLoadToken) return;
+  if (marketplace === "wb") {
+    reviewLoadProgress.active = false;
+    updateReviewLoadStatus();
+    return;
+  }
   reviewLoadProgress.active = true;
   updateReviewLoadStatus(tr("Быстрая загрузка готова, догружаем полный список...", "Fast load complete, fetching full list..."));
   requestFullReload();
@@ -5097,6 +5135,15 @@ function isMarketplaceKeyError(message) {
   );
 }
 
+function isMarketplaceRateLimitError(message) {
+  const lowered = String(message || "").toLowerCase();
+  if (!lowered) return false;
+  return lowered.includes("429")
+    || lowered.includes("rate limit")
+    || lowered.includes("rate-limited")
+    || lowered.includes("лимит");
+}
+
 function formatReturnsWarnings(warnings = []) {
   const out = [];
   for (const raw of warnings) {
@@ -5295,6 +5342,10 @@ async function loadWbQuestions() {
         if (runToken !== questionLoadToken) return;
         questionLoadProgress.active = false;
         const msg = String(e?.message || "").trim();
+        if (isMarketplaceRateLimitError(msg)) {
+          updateQuestionLoadStatus(tr("WB API временно ограничил запросы. Показаны последние доступные данные.", "WB API is rate-limited. Showing the latest available data."));
+          return;
+        }
         if (isMarketplaceKeyError(msg)) {
           updateQuestionLoadStatus(tr("Проверьте API-ключи WB/Ozon в разделе «Профиль».", "Check WB/Ozon API keys in Profile."));
           return;
@@ -5327,6 +5378,12 @@ async function loadWbQuestions() {
       updateQuestionLoadStatus(tr("Проверьте API-ключи WB/Ozon в разделе «Профиль».", "Check WB/Ozon API keys in Profile."));
       return;
     }
+    if (isMarketplaceRateLimitError(fastMsg)) {
+      questionLoadProgress.active = false;
+      updateQuestionLoadStatus(tr("WB API временно ограничил запросы. Повторите позже.", "WB API is temporarily rate-limited. Try again later."));
+      setTableMessage("wbQuestionsTable", 6, tr("WB API временно ограничил запросы. Ozon-вопросы доступны, WB обновится после снятия лимита.", "WB API is temporarily rate-limited. Ozon questions are available; WB will refresh after the limit clears."));
+      return;
+    }
     requestFullReload();
     return;
   }
@@ -5338,6 +5395,11 @@ async function loadWbQuestions() {
     if (raw) raw.textContent = tr("Ошибка отрисовки вопросов.", "Questions rendering failed.");
   });
   if (runToken !== questionLoadToken) return;
+  if (marketplace === "wb") {
+    questionLoadProgress.active = false;
+    updateQuestionLoadStatus();
+    return;
+  }
   questionLoadProgress.active = true;
   updateQuestionLoadStatus(tr("Быстрая загрузка готова, догружаем полный список...", "Fast load complete, fetching full list..."));
   requestFullReload();
@@ -10614,15 +10676,15 @@ function renderSalesTotals() {
     <article class="sales-kpi"><span>${tr("Выкупы", "Buyouts")}</span><strong>${formatInt(totals.buyouts)}</strong></article>
     <article class="sales-kpi"><span>${tr("Выручка", "Revenue")}</span><strong>${formatMoney(totals.revenue)}</strong></article>
     <article class="sales-kpi"><span>${tr("Отказы", "Returns")}</span><strong>${formatInt(totals.returns)}</strong></article>
-    <article class="sales-kpi"><span>${tr("???????", "Ads spend")}</span><strong>${formatMoney(totals.ad_spend)}</strong></article>
+    <article class="sales-kpi"><span>${tr("Реклама", "Ads spend")}</span><strong>${formatMoney(totals.ad_spend)}</strong></article>
     <article class="sales-kpi"><span>${tr("Валовая прибыль", "Gross Profit")}</span><strong>${formatMoney(totals.gross_profit)}</strong></article>
   `;
   if (extraHost) {
     extraHost.innerHTML = `
-      <article class="sales-kpi"><span>${tr("????? ???????", "Orders amount")}</span><strong>${formatMoney(totals.order_amount)}</strong></article>
-      <article class="sales-kpi"><span>${tr("????? ???????", "Buyouts amount")}</span><strong>${formatMoney(totals.buyout_amount)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Сумма заказов", "Orders amount")}</span><strong>${formatMoney(totals.order_amount)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Сумма выкупов", "Buyouts amount")}</span><strong>${formatMoney(totals.buyout_amount)}</strong></article>
       <article class="sales-kpi"><span>${tr("Приход", "Income")}</span><strong>${formatMoney(totals.income)}</strong></article>
-      <article class="sales-kpi"><span>${tr("??????", "Expense")}</span><strong>${formatMoney(totals.expense)}</strong></article>
+      <article class="sales-kpi"><span>${tr("Расход", "Expense")}</span><strong>${formatMoney(totals.expense)}</strong></article>
       <article class="sales-kpi"><span>${tr("Изм. баланса", "Net change")}</span><strong>${formatMoney(totals.net)}</strong></article>
       <article class="sales-kpi"><span>${tr("Штрафы", "Penalties")}</span><strong>${formatMoney(totals.penalties)}</strong></article>
       <article class="sales-kpi"><span>${tr("Комиссия", "Commission")}</span><strong>${formatMoney(totals.commission)}</strong></article>
@@ -10994,14 +11056,14 @@ function renderSalesChart(points) {
     units: tr("Штуки", "Units"),
     orders: tr("Заказы", "Orders"),
     buyouts: tr("Выкупы", "Buyouts"),
-    order_amount: tr("????? ???????", "Orders amount"),
-    buyout_amount: tr("????? ???????", "Buyouts amount"),
+    order_amount: tr("Сумма заказов", "Orders amount"),
+    buyout_amount: tr("Сумма выкупов", "Buyouts amount"),
     revenue: tr("Выручка", "Revenue"),
     income: tr("Приход", "Income"),
-    expense: tr("??????", "Expense"),
+    expense: tr("Расход", "Expense"),
     net: tr("Изменение баланса", "Net change"),
     returns: tr("Отказы", "Returns"),
-    ad_spend: tr("???????", "Ads Spend"),
+    ad_spend: tr("Реклама", "Ads Spend"),
     penalties: tr("Штрафы", "Penalties"),
     commission: tr("Комиссия", "Commission"),
     logistics: tr("Логистика", "Logistics"),

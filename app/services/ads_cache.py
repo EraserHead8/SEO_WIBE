@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import hashlib
 import json
@@ -49,7 +49,13 @@ def is_wb_snapshot_stale(db: Session, user_id: int) -> bool:
     return (datetime.utcnow() - latest.synced_at).total_seconds() > WB_ADS_SNAPSHOT_TTL_SEC
 
 
-def sync_wb_campaign_snapshots(db: Session, user_id: int, wb_api_key: str) -> dict[str, Any]:
+def sync_wb_campaign_snapshots(
+    db: Session,
+    user_id: int,
+    wb_api_key: str,
+    *,
+    background: bool = False,
+) -> dict[str, Any]:
     if not (wb_api_key or "").strip():
         return {"ok": False, "count": 0, "error": "WB API key is empty"}
     now = time.monotonic()
@@ -61,12 +67,12 @@ def sync_wb_campaign_snapshots(db: Session, user_id: int, wb_api_key: str) -> di
     fetched = fetch_wb_campaigns(
         wb_api_key.strip(),
         enrich=False,
-        fast_mode=False,
-        max_attempts=12,
+        fast_mode=bool(background),
+        max_attempts=3 if background else 12,
     )
     if not isinstance(fetched, list):
         fetched = []
-    if fetched:
+    if fetched and not background:
         fetched = _hydrate_campaign_rows_with_summaries(wb_api_key.strip(), fetched)
         fetched = _hydrate_campaign_rows_with_stats(wb_api_key.strip(), fetched)
     seen_ids: set[int] = set()
@@ -130,22 +136,14 @@ def sync_wb_campaign_snapshots(db: Session, user_id: int, wb_api_key: str) -> di
             row.synced_at = ts
             changed += 1
 
-    try:
-        db.commit()
-    except Exception as exc:
-        db.rollback()
-        return {
-            "ok": False,
-            "count": len(seen_ids),
-            "changed": changed,
-            "error": str(exc),
-        }
+    db.commit()
     return {
         "ok": True,
         "count": len(seen_ids),
         "changed": changed,
         "synced_at": ts.isoformat(),
     }
+
 
 def _hydrate_campaign_rows_with_summaries(wb_api_key: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ids = sorted({_campaign_id_from_row(row) for row in rows if _campaign_id_from_row(row) > 0})
@@ -356,6 +354,4 @@ def _safe_json_loads(raw: str) -> Any:
         return json.loads(raw or "")
     except Exception:
         return None
-
-
 

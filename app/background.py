@@ -142,7 +142,7 @@ async def wb_ads_snapshot_sync_loop():
         await asyncio.sleep(12 * 60 + random.randint(30, 90))
         if not queue_enabled():
             continue
-        if queue_depth() > 120:
+        if queue_depth() > 40:
             continue
         db = SessionLocal()
         try:
@@ -168,7 +168,7 @@ async def wb_ads_snapshot_sync_loop():
                     "sync_wb_snapshots",
                     {"user_id": safe_uid},
                     dedupe_key=f"wb_snapshots:{safe_uid}",
-                    dedupe_ttl_sec=8 * 60,
+                    dedupe_ttl_sec=45 * 60,
                 )
         except Exception:
             db.rollback()
@@ -181,11 +181,11 @@ async def marketplace_cache_warmup_loop():
         await asyncio.sleep(180 + random.randint(20, 45))
         if not queue_enabled():
             continue
-        if queue_depth() > 60:
+        if queue_depth() > 20:
             continue
         db = SessionLocal()
         try:
-            _warm_marketplace_cache_for_recent_users(db, user_limit=4, warm_budget=10)
+            _warm_marketplace_cache_for_recent_users(db, user_limit=2, warm_budget=4)
             _cleanup_market_cache_rows(db, max_age_hours=96)
             db.commit()
         except Exception:

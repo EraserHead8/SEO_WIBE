@@ -11,7 +11,12 @@ from app.config import settings
 
 
 WB_TIMEOUT = httpx.Timeout(connect=6.0, read=18.0, write=18.0, pool=18.0)
+WB_FAST_TIMEOUT = httpx.Timeout(connect=3.0, read=6.0, write=6.0, pool=6.0)
 OZON_TIMEOUT = httpx.Timeout(connect=6.0, read=22.0, write=22.0, pool=22.0)
+
+
+class WbRateLimitError(RuntimeError):
+    pass
 
 
 def fetch_wb_reviews(
@@ -570,7 +575,7 @@ def generate_review_reply(
             f"Имя клиента: {customer_name or '[не указано]'}\n"
             f"РўРѕРІР°СЂ: {product}\n"
             f"РњР°СЂРєРµС‚РїР»РµР№СЃ: {mp}\n\n"
-            "????????? ?????? ????? ?????? ???????."
+            "Сформируй готовый ответ для клиента."
         )
     else:
         system_prompt = custom_prompt or (
@@ -585,7 +590,7 @@ def generate_review_reply(
             f"РўРѕРІР°СЂ: {product}\n"
             f"РњР°СЂРєРµС‚РїР»РµР№СЃ: {mp}\n"
             f"РћС†РµРЅРєР°: {rating if rating is not None else 'РЅРµ СѓРєР°Р·Р°РЅР°'}\n\n"
-            "????????? ?????? ????? ?????? ???????."
+            "Сформируй готовый ответ для клиента."
         )
     payload = {
         "messages": [
@@ -782,7 +787,7 @@ def generate_help_assistant_reply(
                 "content": (
                     f"Р’РѕРїСЂРѕСЃ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ:\n{q or '[Р±РµР· С‚РµРєСЃС‚Р°]'}\n\n"
                     f"РљРѕРЅС‚РµРєСЃС‚:\n{ctx or '[РєРѕРЅС‚РµРєСЃС‚ РЅРµ РїРµСЂРµРґР°РЅ]'}\n\n"
-                    "????????? ???????? ????? ?? ?????."
+                    "Сформируй понятный ответ на вопрос."
                 ),
             },
         ],
@@ -1340,7 +1345,15 @@ def fetch_wb_campaigns(
 
     discovered_ids: list[int] = []
     for method, endpoint, payload in attempts:
-        data = _request_wb_json(method, endpoint, api_key=api_key, payload=payload)
+        data = _request_wb_json(
+            method,
+            endpoint,
+            api_key=api_key,
+            payload=payload,
+            max_attempts=1 if fast_mode else 4,
+            retry_rate_limit=not fast_mode,
+            timeout=WB_FAST_TIMEOUT if fast_mode else None,
+        )
         if data is None:
             continue
         discovered_ids.extend(_extract_campaign_ids(data))
@@ -1355,7 +1368,15 @@ def fetch_wb_campaigns(
         ("GET", "https://advert-api.wildberries.ru/adv/v1/promotion/count", None),
         ("POST", "https://advert-api.wildberries.ru/adv/v1/promotion/count", {}),
     ):
-        count_data = _request_wb_json(method, endpoint, api_key=api_key, payload=payload)
+        count_data = _request_wb_json(
+            method,
+            endpoint,
+            api_key=api_key,
+            payload=payload,
+            max_attempts=1 if fast_mode else 4,
+            retry_rate_limit=not fast_mode,
+            timeout=WB_FAST_TIMEOUT if fast_mode else None,
+        )
         if count_data is None:
             continue
         discovered_ids.extend(_extract_campaign_ids(count_data))
@@ -2429,7 +2450,14 @@ def _fetch_wb_question_rows(
             params["isAnswered"] = is_answered
         if isinstance(stars, int) and 1 <= stars <= 5:
             params["rating"] = stars
-        data = _request_wb_json("GET", endpoint, api_key=api_key, params=params)
+        data = _request_wb_json(
+            "GET",
+            endpoint,
+            api_key=api_key,
+            params=params,
+            max_attempts=1,
+            retry_rate_limit=False,
+        )
         if data is None:
             break
         page_rows = _extract_wb_question_rows(data)
@@ -2462,7 +2490,14 @@ def _fetch_wb_feedback_rows(
             params["isAnswered"] = is_answered
         if isinstance(stars, int) and 1 <= stars <= 5:
             params["rating"] = stars
-        data = _request_wb_json("GET", endpoint, api_key=api_key, params=params)
+        data = _request_wb_json(
+            "GET",
+            endpoint,
+            api_key=api_key,
+            params=params,
+            max_attempts=1,
+            retry_rate_limit=False,
+        )
         if data is None:
             break
         page_rows = _extract_wb_feedback_rows(data)
@@ -2598,19 +2633,24 @@ def _request_wb_json(
     api_key: str,
     params: dict[str, Any] | None = None,
     payload: dict[str, Any] | list[Any] | None = None,
+    *,
+    max_attempts: int = 4,
+    retry_rate_limit: bool = True,
+    timeout: httpx.Timeout | None = None,
 ) -> dict[str, Any] | list[dict[str, Any]] | None:
     token = api_key.strip()
     if not token:
         return None
     safe_method = str(method or "GET").strip().upper() or "GET"
     auth_variants = [token, f"Bearer {token}"]
-    max_attempts = 4
+    safe_max_attempts = max(1, min(4, int(max_attempts or 1)))
+    request_timeout = timeout or WB_TIMEOUT
     for auth_value in auth_variants:
         headers = {"Authorization": auth_value, "Content-Type": "application/json"}
-        for attempt in range(max_attempts):
+        for attempt in range(safe_max_attempts):
             response = None
             try:
-                with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
+                with httpx.Client(timeout=request_timeout, follow_redirects=True) as client:
                     if safe_method == "POST":
                         response = client.post(url, headers=headers, params=params, json=payload)
                     elif safe_method == "PATCH":
@@ -2622,17 +2662,21 @@ def _request_wb_json(
             except Exception:
                 response = None
             if response is None:
-                if attempt < (max_attempts - 1):
+                if attempt < (safe_max_attempts - 1):
                     time.sleep(0.35 * (attempt + 1))
                 continue
             if response.status_code == 429:
-                if attempt < (max_attempts - 1):
+                if not retry_rate_limit:
+                    body = _safe_response_text(response)
+                    raise WbRateLimitError(body or "WB API returned 429")
+                if attempt < (safe_max_attempts - 1):
                     time.sleep(_wb_retry_delay_sec(response, attempt))
                     continue
-                break
+                body = _safe_response_text(response)
+                raise WbRateLimitError(body or "WB API returned 429")
             if response.status_code in {401, 403}:
                 break
-            if response.status_code in {408, 425, 500, 502, 503, 504} and attempt < (max_attempts - 1):
+            if response.status_code in {408, 425, 500, 502, 503, 504} and attempt < (safe_max_attempts - 1):
                 time.sleep(0.5 * (attempt + 1))
                 continue
             if response.status_code >= 400:
@@ -2646,7 +2690,7 @@ def _request_wb_json(
                     return parsed
                 return {"value": parsed}
             except Exception:
-                if attempt < (max_attempts - 1):
+                if attempt < (safe_max_attempts - 1):
                     time.sleep(0.3 * (attempt + 1))
                     continue
                 return {"raw": body_text[:2000]}
@@ -3757,19 +3801,19 @@ def _fallback_reply(review_text: str, product_name: str, stars: int | None, revi
     clean_product = product_name.replace('"', " ").replace("'", " ").replace("\\", " ").strip()
     greeting = _build_greeting(reviewer_name)
     if stars is None:
-        return f"{greeting} ??????? ?? ????? ? ?????? {clean_product}. ?? ????? ???????? ????? ? ??????????? ?????????? ? ????? ???????."
+        return f"{greeting} Спасибо за отзыв о товаре {clean_product}. Мы уже передали обратную связь в профильный отдел."
     if stars >= 5:
-        return f"{greeting} ??????? ?? ??????? ?????? ?????? {clean_product}. ??????????, ??? ??????? ???."
+        return f"{greeting} Спасибо за высокую оценку товара {clean_product}. Приятно, что выбрали нас."
     if stars == 4:
-        return f"{greeting} ??????? ?? ????? ? ?????? {clean_product}. ?????????? ?? ?????? ? ????? ????????????, ???? ??????????, ??? ????? ????????."
+        return f"{greeting} Спасибо за отзыв о товаре {clean_product}. Постараемся сделать сервис ещё удобнее, чтобы заслужить максимальную оценку."
     if stars <= 2:
         return (
-            f"{greeting} ??????? ?? ????? ? ?????? {clean_product}. "
-            "????????, ??? ???????? ????? ????????. ??????????, ???????? ??????? ?? ????? ????? ?????? ???????, "
+            f"{greeting} Спасибо за отзыв о товаре {clean_product}. "
+            "Нам жаль, что впечатление оказалось не лучшим. Пожалуйста, опишите ситуацию чуть подробнее, "
             "мы направим товар на проверку и разберемся в причине."
         )
     return (
-        f"{greeting} ??????? ?? ????? ? ?????? {clean_product}. "
+        f"{greeting} Спасибо за отзыв о товаре {clean_product}. "
         "Нам важно ваше мнение, пожалуйста, уточните детали, чтобы мы могли улучшить качество."
     )
 
@@ -3779,9 +3823,9 @@ def _fallback_question_reply(question_text: str, product_name: str, reviewer_nam
     greeting = _build_greeting(reviewer_name)
     q = " ".join((question_text or "").split())
     if not q:
-        return f"{greeting} ??????? ?? ?????? ?? ?????? {clean_product}. ????????, ??????????, ??????, ? ?? ????????? ??????."
+        return f"{greeting} Спасибо за вопрос по товару {clean_product}. Пожалуйста, уточните детали, и мы оперативно поможем."
     return (
-        f"{greeting} ??????? ?? ?????? ?? ?????? {clean_product}. "
+        f"{greeting} Спасибо за вопрос по товару {clean_product}. "
         "Проверим по вашей ситуации и подскажем точные параметры. "
         "Если можете, уточните нужный размер/модель и условия использования."
     )

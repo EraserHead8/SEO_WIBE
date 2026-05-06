@@ -1634,6 +1634,11 @@ function socialApplySharedPollState() {
   }
 }
 
+function socialShouldPollAnnouncements() {
+  if (document.hidden) return false;
+  return currentTab === "social";
+}
+
 async function socialPollNotifications() {
   if (socialState.notificationsPollInFlight) return;
   socialState.notificationsPollInFlight = true;
@@ -1648,7 +1653,19 @@ async function socialPollNotifications() {
       socialApplySharedPollState();
       return;
     }
-    const data = await socialRequest(`/api/social/notifications?since_id=${socialState.lastNotificationId}&limit=60`).catch(() => null);
+    let pollError = null;
+    const data = await socialRequest(`/api/social/notifications?since_id=${socialState.lastNotificationId}&limit=60`).catch((e) => {
+      pollError = e;
+      return null;
+    });
+    if (!data && [401, 403].includes(Number(pollError?.status || 0))) {
+      socialStopGlobalHooks();
+      try { window.__socialHooksRequested = false; } catch (_) {}
+      try {
+        if (typeof window.scheduleEnsureAuth === "function") window.scheduleEnsureAuth(600, true);
+      } catch (_) {}
+      return;
+    }
     if (!data || typeof data !== "object") return;
     socialState.unreadCount = Number(data.unread || 0);
     socialSetBell(socialState.unreadCount);
@@ -1692,16 +1709,19 @@ async function socialPollNotifications() {
       last_notification_id: Number(socialState.lastNotificationId || 0),
       stamp: socialNowMs(),
     });
-    socialLoadPendingAnnouncements().catch(() => null);
+    if (socialShouldPollAnnouncements()) {
+      socialLoadPendingAnnouncements().catch(() => null);
+    }
   } finally {
     socialState.notificationsPollInFlight = false;
   }
 }
 
 function socialNextPollDelayMs() {
-  if (document.hidden) return 30000;
+  if (document.hidden) return 90000;
   if (currentTab === "social" && socialState.currentSubtab === "chat") return 10000;
-  return 16000;
+  if (currentTab === "social") return 20000;
+  return 60000;
 }
 
 function socialScheduleNotificationsPoll(immediate = false) {
@@ -1728,8 +1748,10 @@ function socialStartGlobalHooks() {
   socialRequestDesktopPermission();
   socialApplySharedPollState();
   socialSetBell(socialState.unreadCount || 0);
-  socialScheduleNotificationsPoll(true);
-  socialLoadPendingAnnouncements().catch(() => null);
+  socialScheduleNotificationsPoll(currentTab === "social");
+  if (socialShouldPollAnnouncements()) {
+    socialLoadPendingAnnouncements().catch(() => null);
+  }
 }
 
 function socialStopGlobalHooks() {
@@ -1890,6 +1912,12 @@ function switchSocialSubtab(tab, loadNow = true) {
   });
   if (typeof socialCloseNotificationCenter === "function") {
     try { socialCloseNotificationCenter(); } catch (_) {}
+  }
+  if (socialState.globalHooksStarted) {
+    socialScheduleNotificationsPoll(true);
+    if (socialShouldPollAnnouncements()) {
+      socialLoadPendingAnnouncements().catch(() => null);
+    }
   }
   if (safe === "chat") socialEnsureChatListToolbar();
   socialSyncMobileChatChrome();
@@ -5292,6 +5320,44 @@ function socialTaskIsCompleted(task) {
   return Boolean(task?.completed_at || task?.done_at || task?.closed_at || task?.finished_at || task?.resolved_at);
 }
 
+function socialRenderTasksFallback(host, rows) {
+  if (!host) return;
+  const safeRows = Array.isArray(rows) ? rows : [];
+  if (!safeRows.length) {
+    host.innerHTML = `<div class="hint">${tr("Задач пока нет", "No tasks yet")}</div>`;
+    return;
+  }
+  const cards = safeRows.map((task) => {
+    const id = Number(task?.id || 0);
+    const title = escapeHtml(socialDecodeUiText(task?.title || "-") || "-");
+    const rawProject = String(task?.project_title || task?.project_name || "").trim();
+    const project = rawProject ? escapeHtml(socialDecodeUiText(rawProject) || rawProject) : "";
+    const assigneeRaw = String(task?.assignee_nick || task?.creator_nick || task?.assignee_key || "").trim();
+    const assignee = assigneeRaw
+      ? escapeHtml(socialDecodeUiText(assigneeRaw) || assigneeRaw)
+      : escapeHtml(tr("Без исполнителя", "No assignee"));
+    const dueRaw = String(task?.due_date || task?.due_at || task?.deadline_at || "").trim();
+    const due = dueRaw
+      ? escapeHtml(dueRaw.replace("T", " ").slice(0, 16))
+      : escapeHtml(tr("Без дедлайна", "No deadline"));
+    return `
+      <article class="social-task-item social-task-item-fallback" data-task-id="${id}">
+        <div class="social-task-content" onclick="socialOpenTaskModal(${id})">
+          <div class="social-task-title-row">
+            <b class="social-task-title-text">${title}</b>
+          </div>
+          <div class="social-task-meta-stack">
+            ${project ? `<div class="social-task-subline"><span>${project}</span></div>` : ""}
+            <div class="social-task-subline"><span>${due}</span></div>
+            <div class="social-task-subline"><span>${assignee}</span></div>
+          </div>
+        </div>
+      </article>
+    `;
+  }).join("");
+  host.innerHTML = `<div class="social-task-board-v2"><section class="social-task-bucket" data-bucket="fallback"><header><h4>${escapeHtml(tr("Задачи", "Tasks"))}</h4><span>${safeRows.length}</span></header><div class="social-task-bucket-list">${cards}</div></section></div>`;
+}
+
 async function socialLoadTasks(opts = {}) {
   const projectId = document.getElementById("socialTaskProjectFilter")?.value || "";
   const kind = document.getElementById("socialTaskKindFilter")?.value || "all";
@@ -5307,7 +5373,7 @@ async function socialLoadTasks(opts = {}) {
     host.innerHTML = `<div class="hint">${tr("Загрузка задач...", "Loading tasks...")}</div>`;
   }
 
-  const rows = await socialRequest(`/api/social/tasks${qp.toString() ? `?${qp.toString()}` : ""}`).catch((e) => {
+  const rows = await socialRequest(`/api/social/tasks${qp.toString() ? `?${qp.toString()}` : ""}`, { timeoutMs: 15000 }).catch((e) => {
     if (typeof socialShowToast === "function") {
       socialShowToast(tr("Ошибка загрузки", "Loading error"), e.message || tr("Не удалось загрузить задачи", "Failed to load tasks"));
     }
@@ -5326,7 +5392,12 @@ async function socialLoadTasks(opts = {}) {
 
   socialState.tasks = rows;
   socialState.tasksLastGood = rows;
-  socialRenderTasks();
+  try {
+    socialRenderTasks();
+  } catch (error) {
+    try { console.error("socialLoadTasks render failed", error); } catch (_) {}
+    socialRenderTasksFallback(host, rows);
+  }
 }
 
 function socialRenderTasks() {
@@ -9169,7 +9240,10 @@ window.resetSocialState = resetSocialState;
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) return;
   socialApplySharedPollState();
-  socialScheduleNotificationsPoll(true);
+  socialScheduleNotificationsPoll(currentTab === "social");
+  if (socialShouldPollAnnouncements()) {
+    socialLoadPendingAnnouncements().catch(() => null);
+  }
 });
 
 socialMaybeStartHooks();
