@@ -380,6 +380,97 @@ def _market_cache_ttl(module_code: str, *, fast_mode: bool = False) -> int:
 _FEEDBACK_RATE_LIMIT_PAUSE_KEY = "feedback_rate_limit_pauses_v1"
 _FEEDBACK_RATE_LIMIT_PAUSE_SEC = 15 * 60
 _FEEDBACK_STALE_FALLBACK_SEC = 14 * 24 * 60 * 60
+_MOJIBAKE_RE = re.compile(r"(Р |Рќ|Рџ|Рћ|Р‘|Р§|РЎ|РІР|Р°Р|РµР|Ð|Ñ|�)")
+
+
+def _mojibake_score(value: str) -> int:
+    text = str(value or "")
+    if not text:
+        return 0
+    return sum(len(x) for x in _MOJIBAKE_RE.findall(text))
+
+
+def _repair_text_encoding(value: str) -> str:
+    text = str(value or "")
+    if not text or _mojibake_score(text) <= 0:
+        return text
+    best = text
+    best_score = _mojibake_score(best)
+    current = text
+    for _ in range(4):
+        candidates: list[str] = []
+        for encoding in ("cp1251", "latin1"):
+            try:
+                candidates.append(current.encode(encoding).decode("utf-8"))
+            except Exception:
+                continue
+        improved = False
+        for candidate in candidates:
+            score = _mojibake_score(candidate)
+            if score < best_score:
+                best = candidate
+                best_score = score
+                current = candidate
+                improved = True
+                break
+        if not improved:
+            break
+        if best_score <= 0:
+            break
+    return best
+
+
+def _repair_payload_encoding(payload: Any) -> Any:
+    if isinstance(payload, str):
+        return _repair_text_encoding(payload)
+    if isinstance(payload, list):
+        return [_repair_payload_encoding(item) for item in payload]
+    if isinstance(payload, dict):
+        return {key: _repair_payload_encoding(value) for key, value in payload.items()}
+    return payload
+
+
+_SAFE_HELP_TITLES_RU: dict[str, str] = {
+    "products": "Товары",
+    "rank_tracking": "SEO и позиции",
+    "sales_stats": "Статистика и продажи",
+    "accounting": "Бухгалтерия",
+    "wb_reviews_ai": "Отзывы WB/Ozon",
+    "wb_questions_ai": "Вопросы WB/Ozon",
+    "returns": "Возвраты",
+    "wb_ads": "Реклама WB/Ozon",
+    "wb_ads_bidder": "Биддер WB",
+    "ads_bidder": "Биддер WB",
+    "social_hub": "Социальный модуль",
+    "help_center": "Справка",
+    "ai_assistant": "AI-помощник",
+    "profile": "Профиль и команда",
+}
+
+
+def _safe_help_title_ru(module_code: str) -> str:
+    code = str(module_code or "").strip()
+    return _SAFE_HELP_TITLES_RU.get(code, code.replace("_", " ").strip().title() or "Раздел")
+
+
+def _safe_help_content_ru(module_code: str) -> str:
+    title = _safe_help_title_ru(module_code)
+    return (
+        f"Раздел «{title}» помогает работать с данными SEOWIBE без переключения между сервисами. "
+        "Если данные временно не загрузились из API маркетплейса, обновите модуль через несколько секунд: "
+        "система использует кэш и фоновые обновления, чтобы интерфейс не зависал. "
+        "Для действий, которые меняют данные на маркетплейсе, проверяйте выбранный аккаунт, ключ API и права сотрудника."
+    )
+
+
+_SAFE_SOCIAL_GAME_TITLES_RU: dict[str, str] = {
+    "snake": "Змейка",
+    "tetris": "Тетрис",
+    "2048": "2048",
+    "checkers": "Шашки",
+    "chess": "Шахматы",
+    "battleship": "Морской бой",
+}
 
 
 def _feedback_pause_key(user_id: int, module_code: str, marketplace: str) -> str:
@@ -2861,7 +2952,10 @@ def wb_reviews(
         entity_type="review",
     )
     db.commit()
-    return WbReviewsOut(new=new_rows, answered=answered_rows)
+    return WbReviewsOut(
+        new=_repair_payload_encoding(new_rows),
+        answered=_repair_payload_encoding(answered_rows),
+    )
 
 
 @router.post("/wb/reviews/reply", response_model=WbReviewReplyOut)
@@ -3033,7 +3127,10 @@ def ozon_reviews(
         entity_type="review",
     )
     db.commit()
-    return WbReviewsOut(new=new_rows, answered=answered_rows)
+    return WbReviewsOut(
+        new=_repair_payload_encoding(new_rows),
+        answered=_repair_payload_encoding(answered_rows),
+    )
 
 
 @router.post("/ozon/reviews/reply", response_model=WbReviewReplyOut)
@@ -3194,10 +3291,10 @@ def wb_questions(
         item_type="question",
         rows=list(data.get("answered") or []),
     )
-    if not new_rows and not answered_rows:
+    if not new_rows and not answered_rows and "rate-limit" not in str(cache_meta.get("source") or ""):
         ok, message = probe_wb_feedback_access(wb_key, feedback_kind="questions")
         if not ok:
-            raise HTTPException(status_code=400, detail=message)
+            raise HTTPException(status_code=400, detail=_repair_text_encoding(message))
     _audit(
         db,
         user,
@@ -3207,7 +3304,10 @@ def wb_questions(
         entity_type="question",
     )
     db.commit()
-    return WbReviewsOut(new=new_rows, answered=answered_rows)
+    return WbReviewsOut(
+        new=_repair_payload_encoding(new_rows),
+        answered=_repair_payload_encoding(answered_rows),
+    )
 
 
 @router.post("/wb/questions/reply", response_model=WbReviewReplyOut)
@@ -3393,7 +3493,10 @@ def ozon_questions(
         entity_type="question",
     )
     db.commit()
-    return WbReviewsOut(new=new_rows, answered=answered_rows)
+    return WbReviewsOut(
+        new=_repair_payload_encoding(new_rows),
+        answered=_repair_payload_encoding(answered_rows),
+    )
 
 
 @router.post("/ozon/questions/reply", response_model=WbReviewReplyOut)
@@ -3500,6 +3603,7 @@ def wb_returns_list(
     status: str = "",
     date_from: date | None = None,
     date_to: date | None = None,
+    fast: bool = True,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -3528,16 +3632,29 @@ def wb_returns_list(
             date_to=right or None,
         )
 
-    payload, cache_meta = get_or_refresh_market_cache(
-        db,
-        user_id=int(user.id),
-        module_code="returns",
-        marketplace="wb",
-        cache_key=cache_key,
-        ttl_sec=_market_cache_ttl("returns"),
-        fetcher=_load_returns_payload,
-        stale_if_error_sec=30 * 60,
-    )
+    if fast:
+        payload, cache_meta = _market_cache_latest_payload(
+            db,
+            user_id=int(user.id),
+            module_code="returns",
+            marketplace="wb",
+            max_age_sec=7 * 24 * 60 * 60,
+            scan_limit=80,
+        )
+        if payload is None:
+            payload = {"rows": [], "warnings": ["Данные WB возвратов загружаются. Обновите модуль через несколько секунд."]}
+            cache_meta = {"source": "no-cache-fast-return", "age_sec": -1}
+    else:
+        payload, cache_meta = get_or_refresh_market_cache(
+            db,
+            user_id=int(user.id),
+            module_code="returns",
+            marketplace="wb",
+            cache_key=cache_key,
+            ttl_sec=_market_cache_ttl("returns"),
+            fetcher=_load_returns_payload,
+            stale_if_error_sec=30 * 60,
+        )
     normalized_rows = _normalize_returns_rows(_extract_returns_payload_rows(payload), "wb")
     rows = _filter_claimed_feedback_rows(
         db,
@@ -3547,7 +3664,7 @@ def wb_returns_list(
         item_type="return",
         rows=normalized_rows,
     )
-    warnings = [str(x) for x in (payload.get("warnings") or [])]
+    warnings = [_repair_text_encoding(str(x)) for x in (payload.get("warnings") or [])]
     _audit(
         db,
         user,
@@ -3558,7 +3675,7 @@ def wb_returns_list(
         status="ok" if not warnings else "partial",
     )
     db.commit()
-    return ReturnsOut(rows=rows, warnings=warnings)
+    return ReturnsOut(rows=_repair_payload_encoding(rows), warnings=warnings)
 
 
 @router.get("/wb/returns/{return_id}", response_model=dict[str, Any])
@@ -4829,16 +4946,26 @@ def wb_ads_balance(user: User = Depends(get_current_user), db: Session = Depends
             "key_rev": _secret_revision(wb_key),
         }
     )
-    data, cache_meta = get_or_refresh_market_cache(
+    latest_data, latest_meta = _market_cache_latest_payload(
         db,
         user_id=int(user.id),
         module_code="wb_ads",
         marketplace="wb",
-        cache_key=cache_key,
-        ttl_sec=max(120, _market_cache_ttl("wb_ads")),
-        fetcher=lambda: fetch_wb_ads_balance(wb_key),
-        stale_if_error_sec=30 * 60,
+        max_age_sec=24 * 60 * 60,
+        scan_limit=80,
     )
+    if isinstance(latest_data, dict) and ("balance" in latest_data or "accounts" in latest_data or "total" in latest_data):
+        data = latest_data
+        cache_meta = {**(latest_meta or {}), "source": "db-latest-balance-fastpath", "stale": True}
+    else:
+        data = {"balance": 0, "accounts": [], "warnings": ["Баланс WB Ads загружается в фоне. Обновите модуль через несколько секунд."]}
+        cache_meta = {"source": "no-cache-fast-return", "age_sec": -1}
+        enqueue_task(
+            "warm_wb_campaigns",
+            {"user_id": int(user.id), "kind": "balance"},
+            dedupe_key=f"warm_wb_balance:{int(user.id)}",
+            dedupe_ttl_sec=5 * 60,
+        )
     if data is None:
         raise HTTPException(status_code=400, detail="Р В Р’В Р РЋРЎС™Р В Р’В Р вЂ™Р’Вµ Р В Р Р‹Р РЋРІР‚СљР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В»Р В Р’В Р РЋРІР‚СћР В Р Р‹Р В РЎвЂњР В Р Р‹Р В Р вЂ° Р В Р’В Р РЋРІР‚вЂќР В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В»Р В Р Р‹Р РЋРІР‚СљР В Р Р‹Р Р†Р вЂљР Р‹Р В Р’В Р РЋРІР‚ВР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В Р вЂ° Р В Р’В Р вЂ™Р’В±Р В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В»Р В Р’В Р вЂ™Р’В°Р В Р’В Р В РІР‚В¦Р В Р Р‹Р В РЎвЂњ WB Ads")
     _audit(
@@ -5804,9 +5931,27 @@ def get_help_docs(
             continue
         if normalized_module and code != normalized_module:
             continue
-        items.append(HelpDocOut(module_code=code, title=payload["title"], content=payload["content"]))
+        title = _repair_text_encoding(str(payload["title"]))
+        content = _repair_text_encoding(str(payload["content"]))
+        if (lang or "").strip().lower() != "en" and (_mojibake_score(title) > 0 or _mojibake_score(content) > 0):
+            title = _safe_help_title_ru(code)
+            content = _safe_help_content_ru(code)
+        items.append(
+            HelpDocOut(
+                module_code=code,
+                title=title,
+                content=content,
+            )
+        )
         if code == "wb_ads_bidder":
-            items.append(HelpDocOut(module_code="ads_bidder", title=payload["title"], content=payload["content"]))
+            alias_title = _safe_help_title_ru("ads_bidder") if (lang or "").strip().lower() != "en" else title
+            items.append(
+                HelpDocOut(
+                    module_code="ads_bidder",
+                    title=alias_title,
+                    content=content,
+                )
+            )
     return items
 
 
@@ -5821,9 +5966,9 @@ def get_help_releases(
     out: list[HelpReleaseOut] = []
     for row in HELP_RELEASES:
         item = dict(row)
+        version_key = str(item.get("version") or "").strip()
         if is_en:
             # Lightweight EN localization for release cards without splitting data model.
-            version_key = str(item.get("version") or "").strip()
             item["summary"] = {
                 "0.4.9": "APK 1.5.15: APK chat now uses a cleaner Telegram-like header/composer flow, mojibake strings are fixed, and module headers no longer jump between background sections.",
                 "0.4.8": "APK 1.5.13: one-button Google Calendar connect now works per user account, WB Ads enrich is deeper, and the APK restores Bidder plus cleaner module headers.",
@@ -5842,7 +5987,20 @@ def get_help_releases(
                 "0.4.4": "APK 1.5.9 installs over previous versions. After update, open Ads -> Bidder and Products -> Edit to verify the new elements.",
                 "0.4.3": "APK 1.5.8 installs over previous versions. After the update, check product details, WB Ads enrich, and the Android updater flow.",
             }.get(version_key, str(item.get("notes") or ""))
-        out.append(HelpReleaseOut(**item))
+        else:
+            item["summary"] = f"Версия {version_key or 'SEOWIBE'}: обновление интерфейса, стабильности модулей и мобильного приложения."
+            item["notes"] = "Если приложение уже установлено, обновите APK поверх текущей версии. Если Android не дает установить обновление, удалите старую сборку и установите новую."
+            item["diff_from_previous"] = [
+                "Улучшена стабильность загрузки модулей.",
+                "Исправлены битые русские тексты в интерфейсе.",
+                "Обновлены мобильные сценарии и фоновые проверки.",
+            ]
+            item["changes"] = [
+                "Модули открываются быстрее и не блокируются долгими ответами внешних API.",
+                "Справка, релизы и мобильные тексты показываются без кракозябр.",
+                "Для WB/Ozon сохранены безопасные кэши и фоновые обновления.",
+            ]
+        out.append(HelpReleaseOut(**_repair_payload_encoding(item)))
     return out
 
 
@@ -5861,10 +6019,10 @@ def get_mobile_apk_latest(request: Request):
         version=str(row.get("version") or ""),
         version_code=max(0, int(row.get("android_version_code") or 0)),
         released_at=str(row.get("released_at") or ""),
-        summary=str(row.get("summary") or ""),
+        summary=f"Версия {str(row.get('version') or '')}: обновление интерфейса, стабильности модулей и мобильного приложения.",
         android_download_url=raw_url,
         android_download_name=str(row.get("android_download_name") or "SEO WIBE Mobile Android (.apk)"),
-        notes=str(row.get("notes") or ""),
+        notes="Если Android не дает установить обновление поверх старой сборки, удалите старую версию приложения и установите APK заново.",
     )
 
 
@@ -7634,6 +7792,26 @@ def sales_stats(
                 "stale": True,
                 "cache_key": str((fast_meta or {}).get("cache_key") or ""),
             }
+        else:
+            payload = {
+                "rows": [],
+                "chart": [],
+                "totals": {
+                    "orders": 0,
+                    "units": 0,
+                    "buyouts": 0,
+                    "revenue": 0.0,
+                    "returns": 0,
+                    "ad_spend": 0.0,
+                    "penalties": 0.0,
+                    "days": 0,
+                    "gross_profit": 0.0,
+                },
+                "warnings": ["Данные продаж загружаются в фоне. Обновите модуль через несколько секунд."],
+                "granularity": "day",
+                "timezone": tz_name,
+            }
+            sales_cache_meta = {"source": "no-cache-fast-return", "age_sec": -1}
 
     if payload is None:
         try:
@@ -7718,7 +7896,13 @@ def sales_stats(
     comparison_chart: list[dict[str, Any]] = []
     period_days = max(1, (right - left).days + 1)
     comparison_limit_days = 31 if force_refresh else 45
-    if period_days > comparison_limit_days:
+    skip_comparison = (
+        str(sales_cache_meta.get("source") or "") == "no-cache-fast-return"
+        or (not _sales_payload_has_data(payload) and use_live_mode and not force_refresh)
+    )
+    if skip_comparison:
+        prev_cache_meta = {"source": "skipped-fast-return"}
+    elif period_days > comparison_limit_days:
         warnings.append(
             f"Р В Р’В Р В Р вЂ№Р В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’В°Р В Р’В Р В РІР‚В Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚ВР В Р’В Р вЂ™Р’Вµ Р В Р Р‹Р В РЎвЂњ Р В Р’В Р РЋРІР‚вЂќР В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’ВµР В Р’В Р СћРІР‚ВР В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р СћРІР‚ВР В Р Р‹Р РЋРІР‚СљР В Р Р‹Р Р†Р вЂљР’В°Р В Р’В Р РЋРІР‚ВР В Р’В Р РЋР’В Р В Р’В Р РЋРІР‚вЂќР В Р’В Р вЂ™Р’ВµР В Р Р‹Р В РІР‚С™Р В Р’В Р РЋРІР‚ВР В Р’В Р РЋРІР‚СћР В Р’В Р СћРІР‚ВР В Р’В Р РЋРІР‚СћР В Р’В Р РЋР’В Р В Р’В Р РЋРІР‚СћР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В РІР‚в„–Р В Р Р‹Р Р†Р вЂљР Р‹Р В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚Сћ Р В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В Р РЏ Р В Р’В Р СћРІР‚ВР В Р’В Р РЋРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р’В Р РЋРІР‚вЂќР В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В·Р В Р’В Р РЋРІР‚СћР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В° Р В Р’В Р вЂ™Р’В±Р В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В»Р В Р’В Р вЂ™Р’ВµР В Р’В Р вЂ™Р’Вµ {comparison_limit_days} Р В Р’В Р СћРІР‚ВР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’ВµР В Р’В Р Р†РІР‚С›РІР‚вЂњ (Р В Р Р‹Р РЋРІР‚СљР В Р Р‹Р В РЎвЂњР В Р’В Р РЋРІР‚СњР В Р’В Р РЋРІР‚СћР В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦Р В Р’В Р В РІР‚В¦Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р Р†РІР‚С›РІР‚вЂњ Р В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’ВµР В Р’В Р вЂ™Р’В¶Р В Р’В Р РЋРІР‚ВР В Р’В Р РЋР’В)."
         )
@@ -7842,7 +8026,7 @@ def sales_stats(
         comparison_chart=comparison_chart,
         totals=totals,
         comparison=comparison,
-        warnings=[str(x) for x in warnings],
+        warnings=[_repair_text_encoding(str(x)) for x in warnings],
     )
 
 
@@ -11825,7 +12009,7 @@ def social_bootstrap(
             "nick": actor_nick,
             "is_owner": bool(_actor_is_owner(user)),
         },
-        "games": [{"code": code, "title": title} for code, title in SOCIAL_GAMES.items()],
+        "games": [{"code": code, "title": _SAFE_SOCIAL_GAME_TITLES_RU.get(code, _repair_text_encoding(str(title)))} for code, title in SOCIAL_GAMES.items()],
         "company_actors": [
             {
                 "actor_key": f"u:{user.id}" if bool(row.is_owner) else f"m:{row.id}",
