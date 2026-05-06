@@ -487,6 +487,35 @@ class WorkItemClaim(Base):
     user: Mapped["User"] = relationship()
 
 
+class FeedbackAutoReplyLog(Base):
+    __tablename__ = "feedback_auto_reply_logs"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "marketplace",
+            "item_type",
+            "item_external_id",
+            name="uq_feedback_auto_reply_item",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    marketplace: Mapped[str] = mapped_column(String(30), index=True)
+    item_type: Mapped[str] = mapped_column(String(30), index=True)
+    item_external_id: Mapped[str] = mapped_column(String(128), index=True)
+    rating: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(30), default="planned", index=True)
+    reply_text: Mapped[str] = mapped_column(Text, default="")
+    error: Mapped[str] = mapped_column(String(1000), default="")
+    payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    user: Mapped["User"] = relationship()
+
+
 class SocialGameScore(Base):
     __tablename__ = "social_game_scores"
     __table_args__ = (

@@ -1,21 +1,28 @@
 from __future__ import annotations
 
+import json
 import signal
 import time
-from datetime import date
+from datetime import date, datetime
 import hashlib
 from typing import Any
 
 from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import ApiCredential
+from app.models import ApiCredential, AuditLog, FeedbackAutoReplyLog, UserAiSettings
 from app.services.ads_cache import sync_wb_campaign_snapshots
 from app.services.market_cache import build_market_cache_key, get_or_refresh_market_cache
 from app.services.sales import build_sales_report
 from app.services.task_queue import compact_queue, dequeue_task, queue_available, queue_depth
 from app.services.wb_bidder import run_bidder_rules
-from app.services.wb_modules import fetch_ozon_ads_campaigns, fetch_wb_campaigns
+from app.services.wb_modules import (
+    fetch_ozon_ads_campaigns,
+    fetch_wb_campaigns,
+    generate_review_reply,
+    post_ozon_review_reply,
+    post_wb_review_reply,
+)
 
 
 _RUNNING = True
@@ -26,6 +33,7 @@ _TASK_MAX_AGE_SEC = {
     "warm_ozon_campaigns": 6 * 60,
     "sync_wb_snapshots": 12 * 60,
     "wb_bidder_run": 5 * 60,
+    "feedback_auto_replies": 30 * 60,
 }
 _MARKET_CACHE_TTL_SEC = {
     "sales_stats": 120,
@@ -216,6 +224,148 @@ def _handle_wb_bidder_run(payload: dict[str, Any]) -> None:
         db.close()
 
 
+def _handle_feedback_auto_replies(payload: dict[str, Any]) -> None:
+    user_id = int(payload.get("user_id") or 0)
+    if user_id <= 0:
+        return
+    raw_candidates = payload.get("candidates")
+    if not isinstance(raw_candidates, list):
+        return
+    try:
+        limit = int(payload.get("limit") or 20)
+    except Exception:
+        limit = 20
+    limit = max(1, min(limit, 50))
+    candidates = [x for x in raw_candidates if isinstance(x, dict)][:limit]
+    if not candidates:
+        return
+
+    db = SessionLocal()
+    try:
+        wb_key = _active_key(db, user_id, "wb")
+        ozon_key = _active_key(db, user_id, "ozon")
+        settings_row = db.scalar(select(UserAiSettings).where(UserAiSettings.user_id == user_id))
+        prompt = str(settings_row.prompt or "").strip() if settings_row else ""
+        stop_marketplaces: set[str] = set()
+
+        for candidate in candidates:
+            marketplace = str(candidate.get("marketplace") or "").strip().lower()
+            item_id = str(candidate.get("item_external_id") or "").strip()
+            if marketplace not in {"wb", "ozon"} or not item_id:
+                continue
+            log = db.scalar(
+                select(FeedbackAutoReplyLog).where(
+                    FeedbackAutoReplyLog.user_id == user_id,
+                    FeedbackAutoReplyLog.marketplace == marketplace,
+                    FeedbackAutoReplyLog.item_type == "review",
+                    FeedbackAutoReplyLog.item_external_id == item_id,
+                )
+            )
+            if not log:
+                log = FeedbackAutoReplyLog(
+                    user_id=user_id,
+                    marketplace=marketplace,
+                    item_type="review",
+                    item_external_id=item_id,
+                    rating=int(candidate.get("rating") or 0),
+                    status="planned",
+                    payload_json=json.dumps(candidate, ensure_ascii=False),
+                    created_at=datetime.utcnow(),
+                    updated_at=datetime.utcnow(),
+                )
+                db.add(log)
+                db.flush()
+            if str(log.status or "").strip().lower() == "sent":
+                continue
+            if marketplace in stop_marketplaces:
+                log.status = "skipped"
+                log.error = "Skipped because marketplace rate limit was hit earlier in this run"
+                log.updated_at = datetime.utcnow()
+                db.add(log)
+                db.commit()
+                continue
+
+            api_key = wb_key if marketplace == "wb" else ozon_key
+            if not api_key:
+                log.status = "error"
+                log.error = f"{marketplace.upper()} API key is missing"
+                log.updated_at = datetime.utcnow()
+                db.add(log)
+                db.commit()
+                continue
+
+            try:
+                log.status = "sending"
+                log.error = ""
+                log.updated_at = datetime.utcnow()
+                db.add(log)
+                db.commit()
+
+                reply = generate_review_reply(
+                    review_text=str(candidate.get("text") or ""),
+                    product_name=str(candidate.get("product") or ""),
+                    stars=int(candidate.get("rating") or 0),
+                    prompt=prompt,
+                    reviewer_name=str(candidate.get("reviewer_name") or ""),
+                    marketplace=marketplace,
+                    content_kind="review",
+                )
+                reply = " ".join(str(reply or "").split())
+                if len(reply) < 2:
+                    raise RuntimeError("Generated reply is empty")
+
+                if marketplace == "wb":
+                    ok, message = post_wb_review_reply(api_key, item_id, reply)
+                else:
+                    ok, message = post_ozon_review_reply(api_key, item_id, reply)
+                if not ok:
+                    msg = str(message or "Marketplace API rejected reply")[:1000]
+                    if "429" in msg:
+                        stop_marketplaces.add(marketplace)
+                    raise RuntimeError(msg)
+
+                log.status = "sent"
+                log.reply_text = reply[:3000]
+                log.error = ""
+                log.sent_at = datetime.utcnow()
+                log.updated_at = datetime.utcnow()
+                db.add(
+                    AuditLog(
+                        user_id=user_id,
+                        action=f"{marketplace}_review_auto_reply_sent",
+                        details=json.dumps({"review_id": item_id, "rating": int(candidate.get("rating") or 0)}, ensure_ascii=False)[:1200],
+                        module_code="wb_reviews_ai",
+                        entity_type="review",
+                        entity_id=item_id[:120],
+                        status="ok",
+                    )
+                )
+                db.add(log)
+                db.commit()
+            except Exception as exc:
+                log.status = "error"
+                log.error = str(exc or "auto reply failed")[:1000]
+                log.updated_at = datetime.utcnow()
+                db.add(
+                    AuditLog(
+                        user_id=user_id,
+                        action=f"{marketplace}_review_auto_reply_failed",
+                        details=json.dumps({"review_id": item_id, "error": log.error}, ensure_ascii=False)[:1200],
+                        module_code="wb_reviews_ai",
+                        entity_type="review",
+                        entity_id=item_id[:120],
+                        status="error",
+                    )
+                )
+                db.add(log)
+                db.commit()
+            time.sleep(1.2 if marketplace == "wb" else 0.7)
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
 def _parse_iso_date(raw: str) -> date | None:
     text = str(raw or "").strip()
     if not text:
@@ -274,6 +424,9 @@ def process_task(task: dict[str, Any]) -> None:
         return
     if task_type == "wb_bidder_run":
         _handle_wb_bidder_run(payload)
+        return
+    if task_type == "feedback_auto_replies":
+        _handle_feedback_auto_replies(payload)
         return
 
 

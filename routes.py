@@ -45,6 +45,7 @@ from app.models import (
     AuditLog,
     BillingAccount,
     BillingEvent,
+    FeedbackAutoReplyLog,
     AccountingExpense,
     AccountingSettings,
     ModuleAccess,
@@ -376,6 +377,54 @@ def _market_cache_ttl(module_code: str, *, fast_mode: bool = False) -> int:
     return base
 
 
+_FEEDBACK_RATE_LIMIT_PAUSE_KEY = "feedback_rate_limit_pauses_v1"
+_FEEDBACK_RATE_LIMIT_PAUSE_SEC = 15 * 60
+_FEEDBACK_STALE_FALLBACK_SEC = 14 * 24 * 60 * 60
+
+
+def _feedback_pause_key(user_id: int, module_code: str, marketplace: str) -> str:
+    return ":".join(
+        [
+            str(int(user_id or 0)),
+            str(module_code or "").strip().lower(),
+            str(marketplace or "").strip().lower(),
+        ]
+    )
+
+
+def _feedback_pause_map(db: Session) -> dict[str, float]:
+    try:
+        payload = json.loads(_get_system_setting(db, _FEEDBACK_RATE_LIMIT_PAUSE_KEY) or "{}")
+    except Exception:
+        payload = {}
+    if not isinstance(payload, dict):
+        return {}
+    now_ts = datetime.utcnow().timestamp()
+    out: dict[str, float] = {}
+    for key, value in payload.items():
+        try:
+            until = float(value or 0)
+        except Exception:
+            continue
+        if until > now_ts:
+            out[str(key)] = until
+    if len(out) != len(payload):
+        _set_system_setting(db, _FEEDBACK_RATE_LIMIT_PAUSE_KEY, json.dumps(out, ensure_ascii=False))
+    return out
+
+
+def _feedback_is_rate_limited(db: Session, *, user_id: int, module_code: str, marketplace: str) -> bool:
+    key = _feedback_pause_key(user_id, module_code, marketplace)
+    until = float(_feedback_pause_map(db).get(key) or 0.0)
+    return until > datetime.utcnow().timestamp()
+
+
+def _feedback_mark_rate_limited(db: Session, *, user_id: int, module_code: str, marketplace: str) -> None:
+    pauses = _feedback_pause_map(db)
+    pauses[_feedback_pause_key(user_id, module_code, marketplace)] = datetime.utcnow().timestamp() + _FEEDBACK_RATE_LIMIT_PAUSE_SEC
+    _set_system_setting(db, _FEEDBACK_RATE_LIMIT_PAUSE_KEY, json.dumps(pauses, ensure_ascii=False, sort_keys=True))
+
+
 def _get_feedback_market_cache(
     db: Session,
     *,
@@ -388,6 +437,20 @@ def _get_feedback_market_cache(
     stale_if_error_sec: int = 20 * 60,
     prefer_stale_sec: int = 0,
 ) -> tuple[Any, dict[str, Any]]:
+    if marketplace == "wb" and _feedback_is_rate_limited(db, user_id=user_id, module_code=module_code, marketplace=marketplace):
+        latest, latest_meta = _market_cache_latest_payload(
+            db,
+            user_id=user_id,
+            module_code=module_code,
+            marketplace=marketplace,
+            max_age_sec=_FEEDBACK_STALE_FALLBACK_SEC,
+        )
+        if latest is not None:
+            latest_meta = dict(latest_meta or {})
+            latest_meta["source"] = "db-latest-rate-limit-pause"
+            latest_meta["stale"] = True
+            latest_meta["error"] = "WB API is paused after 429"
+            return latest, latest_meta
     try:
         return get_or_refresh_market_cache(
             db,
@@ -401,12 +464,13 @@ def _get_feedback_market_cache(
             prefer_stale_sec=prefer_stale_sec,
         )
     except WbRateLimitError as exc:
+        _feedback_mark_rate_limited(db, user_id=user_id, module_code=module_code, marketplace=marketplace)
         latest, latest_meta = _market_cache_latest_payload(
             db,
             user_id=user_id,
             module_code=module_code,
             marketplace=marketplace,
-            max_age_sec=24 * 60 * 60,
+            max_age_sec=_FEEDBACK_STALE_FALLBACK_SEC,
         )
         if latest is not None:
             latest_meta = dict(latest_meta or {})
@@ -3781,6 +3845,268 @@ def wb_save_ai_settings(payload: ReviewAiSettingsIn, user: User = Depends(get_cu
     )
     db.commit()
     return ReviewAiSettingsOut(reply_mode=row.reply_mode, prompt=row.prompt)
+
+
+@router.post("/feedback/auto-replies/dry-run")
+def feedback_auto_replies_dry_run(payload: dict[str, Any], user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "wb_reviews_ai")
+    result = _build_feedback_auto_reply_candidates(db, user, payload, persist=False)
+    _audit(
+        db,
+        user,
+        action="feedback_auto_replies_dry_run",
+        details=json.dumps({k: result.get(k) for k in ("eligible", "skipped", "warnings")}, ensure_ascii=False)[:1200],
+        module_code="wb_reviews_ai",
+        entity_type="auto_reply",
+    )
+    db.commit()
+    return result
+
+
+@router.post("/feedback/auto-replies/start")
+def feedback_auto_replies_start(payload: dict[str, Any], user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "wb_reviews_ai")
+    confirm = bool(payload.get("confirm"))
+    if not confirm:
+        raise HTTPException(status_code=400, detail="confirm=true is required before publishing automatic replies.")
+    result = _build_feedback_auto_reply_candidates(db, user, payload, persist=True)
+    candidates = list(result.get("candidates") or [])
+    if not candidates:
+        db.commit()
+        return {**result, "queued": False, "reason": "no_candidates"}
+    queue_result = enqueue_task(
+        "feedback_auto_replies",
+        {
+            "user_id": int(user.id),
+            "actor_email": str(user.email or ""),
+            "min_stars": int(result.get("min_stars") or 4),
+            "limit": len(candidates),
+            "candidates": candidates,
+        },
+        dedupe_key=f"feedback_auto_replies:{int(user.id)}:{hashlib.sha1(json.dumps(candidates, sort_keys=True, default=str).encode('utf-8')).hexdigest()[:16]}",
+        dedupe_ttl_sec=15 * 60,
+    )
+    _audit(
+        db,
+        user,
+        action="feedback_auto_replies_queued",
+        details=json.dumps({"queued": queue_result, "eligible": len(candidates)}, ensure_ascii=False)[:1200],
+        module_code="wb_reviews_ai",
+        entity_type="auto_reply",
+    )
+    db.commit()
+    return {**result, "queued": bool(queue_result.get("queued")), "queue": queue_result}
+
+
+@router.get("/feedback/auto-replies/status")
+def feedback_auto_replies_status(limit: int = 50, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "wb_reviews_ai")
+    rows = db.scalars(
+        select(FeedbackAutoReplyLog)
+        .where(FeedbackAutoReplyLog.user_id == int(user.id))
+        .order_by(FeedbackAutoReplyLog.updated_at.desc(), FeedbackAutoReplyLog.id.desc())
+        .limit(max(1, min(int(limit or 50), 200)))
+    ).all()
+    counts = {
+        status: int(
+            db.scalar(
+                select(func.count()).select_from(FeedbackAutoReplyLog).where(
+                    FeedbackAutoReplyLog.user_id == int(user.id),
+                    FeedbackAutoReplyLog.status == status,
+                )
+            )
+            or 0
+        )
+        for status in ("planned", "sending", "sent", "skipped", "error")
+    }
+    return {
+        "counts": counts,
+        "rows": [
+            {
+                "id": row.id,
+                "marketplace": row.marketplace,
+                "item_type": row.item_type,
+                "item_external_id": row.item_external_id,
+                "rating": row.rating,
+                "status": row.status,
+                "error": row.error,
+                "updated_at": row.updated_at.isoformat() if row.updated_at else "",
+                "sent_at": row.sent_at.isoformat() if row.sent_at else "",
+            }
+            for row in rows
+        ],
+    }
+
+
+def _build_feedback_auto_reply_candidates(
+    db: Session,
+    user: User,
+    payload: dict[str, Any],
+    *,
+    persist: bool,
+) -> dict[str, Any]:
+    raw_markets = payload.get("marketplaces")
+    if not isinstance(raw_markets, list):
+        raw_markets = ["wb", "ozon"]
+    marketplaces: list[str] = []
+    for item in raw_markets:
+        market = str(item or "").strip().lower()
+        if market in {"wb", "ozon"} and market not in marketplaces:
+            marketplaces.append(market)
+    if not marketplaces:
+        marketplaces = ["wb", "ozon"]
+
+    try:
+        min_stars = int(payload.get("min_stars") or payload.get("stars") or 4)
+    except Exception:
+        min_stars = 4
+    min_stars = max(1, min(min_stars, 5))
+    try:
+        limit = int(payload.get("limit") or 50)
+    except Exception:
+        limit = 50
+    limit = max(1, min(limit, 200))
+    allow_stale_wb = bool(payload.get("allow_stale_wb")) or not persist
+
+    warnings: list[str] = []
+    skipped: dict[str, int] = {
+        "missing_key": 0,
+        "already_answered": 0,
+        "low_rating": 0,
+        "duplicate": 0,
+        "missing_id": 0,
+        "stale_wb": 0,
+    }
+    candidates: list[dict[str, Any]] = []
+
+    def _row_rating(row: dict[str, Any]) -> int:
+        try:
+            return int(row.get("stars") or row.get("rating") or row.get("score") or 0)
+        except Exception:
+            return 0
+
+    def _append_market_candidates(marketplace: str, data: dict[str, Any], cache_meta: dict[str, Any]) -> None:
+        rows = [x for x in (data.get("new") if isinstance(data, dict) else []) or [] if isinstance(x, dict)]
+        is_stale = bool(cache_meta.get("stale")) or "rate-limit" in str(cache_meta.get("source") or "")
+        if marketplace == "wb" and is_stale and not allow_stale_wb:
+            skipped["stale_wb"] += len(rows)
+            warnings.append("WB reviews are from stale cache after 429; start was blocked for WB. Re-run with allow_stale_wb=true only after manual review.")
+            return
+        for row in rows:
+            if len(candidates) >= limit:
+                return
+            item_id = _feedback_synthetic_id(row, marketplace)
+            if not item_id:
+                skipped["missing_id"] += 1
+                continue
+            if bool(row.get("is_answered")) or str(row.get("answer") or "").strip():
+                skipped["already_answered"] += 1
+                continue
+            rating = _row_rating(row)
+            if rating < min_stars:
+                skipped["low_rating"] += 1
+                continue
+            existing = db.scalar(
+                select(FeedbackAutoReplyLog).where(
+                    FeedbackAutoReplyLog.user_id == int(user.id),
+                    FeedbackAutoReplyLog.marketplace == marketplace,
+                    FeedbackAutoReplyLog.item_type == "review",
+                    FeedbackAutoReplyLog.item_external_id == item_id,
+                )
+            )
+            if existing and str(existing.status or "").strip().lower() in {"planned", "sending", "sent"}:
+                skipped["duplicate"] += 1
+                continue
+            candidate = {
+                "marketplace": marketplace,
+                "item_type": "review",
+                "item_external_id": item_id,
+                "rating": rating,
+                "product": str(row.get("product") or "")[:300],
+                "article": str(row.get("article") or "")[:120],
+                "text": str(row.get("text") or "")[:3000],
+                "reviewer_name": str(row.get("user") or "")[:160],
+                "date": str(row.get("date") or row.get("created_at") or "")[:80],
+                "stale": bool(is_stale),
+            }
+            candidates.append(candidate)
+            if persist:
+                if existing:
+                    existing.status = "planned"
+                    existing.rating = rating
+                    existing.error = ""
+                    existing.payload_json = json.dumps(candidate, ensure_ascii=False)
+                    existing.updated_at = datetime.utcnow()
+                    db.add(existing)
+                else:
+                    db.add(
+                        FeedbackAutoReplyLog(
+                            user_id=int(user.id),
+                            marketplace=marketplace,
+                            item_type="review",
+                            item_external_id=item_id,
+                            rating=rating,
+                            status="planned",
+                            payload_json=json.dumps(candidate, ensure_ascii=False),
+                            created_at=datetime.utcnow(),
+                            updated_at=datetime.utcnow(),
+                        )
+                    )
+
+    for marketplace in marketplaces:
+        api_key = _get_active_marketplace_api_key(db, int(user.id), marketplace)
+        if not api_key:
+            skipped["missing_key"] += 1
+            warnings.append(f"{marketplace.upper()} API key is missing")
+            continue
+        key_rev = _secret_revision(api_key)
+        try:
+            if marketplace == "wb":
+                cache_key = build_market_cache_key(
+                    {"kind": "auto_reviews", "marketplace": "wb", "stars": 0, "date_from": "", "date_to": "", "fast": 1, "key_rev": key_rev}
+                )
+                data, cache_meta = _get_feedback_market_cache(
+                    db,
+                    user_id=int(user.id),
+                    module_code="wb_reviews_ai",
+                    marketplace="wb",
+                    cache_key=cache_key,
+                    ttl_sec=_market_cache_ttl("wb_reviews_ai", fast_mode=True),
+                    fetcher=lambda key=api_key: fetch_wb_reviews_fast(key, stars=None, date_from=None, date_to=None),
+                    stale_if_error_sec=30 * 60,
+                    prefer_stale_sec=10 * 60,
+                )
+            else:
+                cache_key = build_market_cache_key(
+                    {"kind": "auto_reviews", "marketplace": "ozon", "stars": 0, "date_from": "", "date_to": "", "fast": 1, "key_rev": key_rev}
+                )
+                data, cache_meta = _get_feedback_market_cache(
+                    db,
+                    user_id=int(user.id),
+                    module_code="wb_reviews_ai",
+                    marketplace="ozon",
+                    cache_key=cache_key,
+                    ttl_sec=_market_cache_ttl("wb_reviews_ai", fast_mode=True),
+                    fetcher=lambda key=api_key: fetch_ozon_reviews(key, stars=None, max_pages=2, enrich_products=False),
+                    stale_if_error_sec=30 * 60,
+                    prefer_stale_sec=10 * 60,
+                )
+            _append_market_candidates(marketplace, data if isinstance(data, dict) else {}, cache_meta or {})
+        except HTTPException as exc:
+            warnings.append(f"{marketplace.upper()} skipped: {exc.detail}")
+        except Exception as exc:
+            warnings.append(f"{marketplace.upper()} skipped: {str(exc or '')[:220]}")
+
+    return {
+        "dry_run": not persist,
+        "min_stars": min_stars,
+        "limit": limit,
+        "marketplaces": marketplaces,
+        "eligible": len(candidates),
+        "candidates": candidates,
+        "skipped": skipped,
+        "warnings": warnings[:12],
+    }
 
 
 @router.get("/wb/ads/campaigns", response_model=WbCampaignsOut)
