@@ -745,6 +745,32 @@
           <p class="hint">Можно адаптировать стиль ответа под бренд, добавить ограничения и уточнить желаемый тон общения.</p>
           <div id="reviewLoadStatus" class="hint load-status">-</div>
         </div>
+        <div class="panel auto-reply-panel">
+          <div class="auto-reply-head">
+            <div>
+              <h3>Автоответы на отзывы 4/5</h3>
+              <p class="hint">Сначала проверьте dry-run: он покажет, какие отзывы попадут в очередь, без публикации ответов.</p>
+            </div>
+            <span id="autoReplyKillBadge" class="auto-reply-badge">стоп выключен</span>
+          </div>
+          <div class="auto-reply-grid">
+            <label class="auto-reply-check"><input id="autoReplyWb" type="checkbox" checked /> WB</label>
+            <label class="auto-reply-check"><input id="autoReplyOzon" type="checkbox" checked /> Ozon</label>
+            <select id="autoReplyMinStars">
+              <option value="5">только 5</option>
+              <option value="4" selected>4 и 5</option>
+            </select>
+            <input id="autoReplyLimit" type="number" min="1" max="200" value="50" />
+          </div>
+          <div class="auto-reply-actions">
+            <button class="btn-secondary" type="button" onclick="runAutoReplyDryRun()">Проверить без отправки</button>
+            <button type="button" onclick="queueAutoReplies()">Поставить в очередь</button>
+            <button class="btn-secondary" type="button" onclick="loadAutoReplyStatus()">Журнал</button>
+            <button class="btn-danger" type="button" onclick="setAutoReplyKillSwitch(true)">Аварийный стоп</button>
+            <button class="btn-secondary" type="button" onclick="setAutoReplyKillSwitch(false)">Снять стоп</button>
+          </div>
+          <div id="autoReplyStatusBox" class="auto-reply-status hint">Журнал автоответов пока не загружен.</div>
+        </div>
         <div class="table-card">
           <table class="reviews-table feedback-cards-table">
             <thead>

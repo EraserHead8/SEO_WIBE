@@ -3983,6 +3983,8 @@ def feedback_auto_replies_dry_run(payload: dict[str, Any], user: User = Depends(
 @router.post("/feedback/auto-replies/start")
 def feedback_auto_replies_start(payload: dict[str, Any], user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     ensure_module_enabled(db, user, "wb_reviews_ai")
+    if _feedback_auto_reply_kill_switch_enabled(db, int(user.id)):
+        raise HTTPException(status_code=409, detail="Emergency stop is enabled for automatic feedback replies.")
     confirm = bool(payload.get("confirm"))
     if not confirm:
         raise HTTPException(status_code=400, detail="confirm=true is required before publishing automatic replies.")
@@ -4015,6 +4017,31 @@ def feedback_auto_replies_start(payload: dict[str, Any], user: User = Depends(ge
     return {**result, "queued": bool(queue_result.get("queued")), "queue": queue_result}
 
 
+@router.post("/feedback/auto-replies/kill-switch")
+def feedback_auto_replies_kill_switch(payload: dict[str, Any], user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "wb_reviews_ai")
+    enabled = bool(payload.get("enabled"))
+    value = json.dumps(
+        {
+            "enabled": enabled,
+            "updated_at": datetime.utcnow().isoformat(),
+            "user_id": int(user.id),
+        },
+        ensure_ascii=False,
+    )
+    _set_system_setting(db, _feedback_auto_reply_kill_switch_key(int(user.id)), value)
+    _audit(
+        db,
+        user,
+        action="feedback_auto_replies_kill_switch",
+        details=json.dumps({"enabled": enabled}, ensure_ascii=False),
+        module_code="wb_reviews_ai",
+        entity_type="auto_reply",
+    )
+    db.commit()
+    return {"enabled": enabled}
+
+
 @router.get("/feedback/auto-replies/status")
 def feedback_auto_replies_status(limit: int = 50, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     ensure_module_enabled(db, user, "wb_reviews_ai")
@@ -4038,6 +4065,7 @@ def feedback_auto_replies_status(limit: int = 50, user: User = Depends(get_curre
     }
     return {
         "counts": counts,
+        "kill_switch": _feedback_auto_reply_kill_switch_enabled(db, int(user.id)),
         "rows": [
             {
                 "id": row.id,
@@ -4053,6 +4081,21 @@ def feedback_auto_replies_status(limit: int = 50, user: User = Depends(get_curre
             for row in rows
         ],
     }
+
+
+def _feedback_auto_reply_kill_switch_key(user_id: int) -> str:
+    return f"feedback_auto_reply_kill_switch:{int(user_id)}"
+
+
+def _feedback_auto_reply_kill_switch_enabled(db: Session, user_id: int) -> bool:
+    raw = _get_system_setting(db, _feedback_auto_reply_kill_switch_key(int(user_id)))
+    if not raw:
+        return False
+    try:
+        payload = json.loads(raw)
+    except Exception:
+        return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+    return bool(payload.get("enabled")) if isinstance(payload, dict) else False
 
 
 def _build_feedback_auto_reply_candidates(
@@ -7899,6 +7942,7 @@ def sales_stats(
     skip_comparison = (
         str(sales_cache_meta.get("source") or "") == "no-cache-fast-return"
         or (not _sales_payload_has_data(payload) and use_live_mode and not force_refresh)
+        or (use_live_mode and not force_refresh)
     )
     if skip_comparison:
         prev_cache_meta = {"source": "skipped-fast-return"}

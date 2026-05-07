@@ -83,6 +83,7 @@ let enabledModules = new Set();
 let wbReviewRows = [];
 const wbReviewDrafts = new Map();
 let currentReviewMarketplace = "wb";
+let lastAutoReplyDryRun = null;
 const feedbackInFlight = {
   reviewGenerate: new Set(),
   reviewSend: new Set(),
@@ -4181,6 +4182,7 @@ async function loadReviewsWorkspace() {
   switchReviewsSubtab(next, false);
   if (next === "reviews" && hasReviews) {
     await loadReviewAiSettings();
+    await loadAutoReplyStatus(false);
     await loadWbReviews();
   } else if (next === "questions" && hasQuestions) {
     await loadQuestionAiSettings();
@@ -4247,6 +4249,157 @@ async function saveReviewAiSettings() {
   });
   if (!data) return;
   alert(tr("AI-настройки сохранены", "AI settings saved"));
+}
+
+function getAutoReplyPayload(extra = {}) {
+  const marketplaces = [];
+  if (document.getElementById("autoReplyWb")?.checked) marketplaces.push("wb");
+  if (document.getElementById("autoReplyOzon")?.checked) marketplaces.push("ozon");
+  const minStars = Number(document.getElementById("autoReplyMinStars")?.value || 4);
+  const limit = Number(document.getElementById("autoReplyLimit")?.value || 50);
+  return {
+    marketplaces: marketplaces.length ? marketplaces : ["wb", "ozon"],
+    min_stars: Math.max(1, Math.min(5, Number.isFinite(minStars) ? minStars : 4)),
+    limit: Math.max(1, Math.min(200, Number.isFinite(limit) ? limit : 50)),
+    ...extra,
+  };
+}
+
+function setAutoReplyStatus(message, tone = "") {
+  const box = document.getElementById("autoReplyStatusBox");
+  if (!box) return;
+  box.classList.toggle("is-danger", tone === "danger");
+  box.classList.toggle("is-ok", tone === "ok");
+  box.innerHTML = message;
+}
+
+function updateAutoReplyKillBadge(enabled) {
+  const badge = document.getElementById("autoReplyKillBadge");
+  if (!badge) return;
+  badge.classList.toggle("is-on", Boolean(enabled));
+  badge.textContent = enabled ? "аварийный стоп включен" : "стоп выключен";
+}
+
+function renderAutoReplyStatus(data, mode = "status") {
+  const counts = data?.counts || {};
+  const rows = Array.isArray(data?.rows) ? data.rows : [];
+  updateAutoReplyKillBadge(Boolean(data?.kill_switch));
+  if (mode === "dry-run") {
+    const candidates = Array.isArray(data?.candidates) ? data.candidates : [];
+    const warnings = Array.isArray(data?.warnings) ? data.warnings : [];
+    const skipped = data?.skipped || {};
+    const preview = candidates.slice(0, 6).map((item) => {
+      const market = String(item.marketplace || "").toUpperCase();
+      const product = escapeHtml(item.product || "товар без названия");
+      const rating = escapeHtml(item.rating || "");
+      const text = escapeHtml(item.text || "отзыв без текста").slice(0, 180);
+      return `<div class="auto-reply-row"><b>${market} ${rating}★</b><span>${product}</span><small>${text}</small></div>`;
+    }).join("");
+    const warningHtml = warnings.length
+      ? `<div class="auto-reply-warning">${warnings.map((x) => escapeHtml(x)).join("<br>")}</div>`
+      : "";
+    setAutoReplyStatus(
+      `<b>Dry-run готов:</b> найдено ${Number(data?.eligible || 0)} отзывов для очереди. ` +
+      `Пропущено: дублей ${Number(skipped.duplicate || 0)}, уже отвеченных ${Number(skipped.already_answered || 0)}, ниже оценки ${Number(skipped.low_rating || 0)}.` +
+      warningHtml +
+      (preview ? `<div class="auto-reply-preview">${preview}</div>` : "<div>Подходящих отзывов нет.</div>"),
+      candidates.length ? "ok" : ""
+    );
+    return;
+  }
+  const rowHtml = rows.slice(0, 8).map((row) => {
+    const market = escapeHtml(String(row.marketplace || "").toUpperCase());
+    const status = escapeHtml(row.status || "");
+    const rating = escapeHtml(row.rating || "");
+    const error = row.error ? `<small>${escapeHtml(row.error)}</small>` : "";
+    return `<div class="auto-reply-row"><b>${market} ${rating}★</b><span>${status}</span>${error}</div>`;
+  }).join("");
+  setAutoReplyStatus(
+    `<b>Журнал:</b> запланировано ${Number(counts.planned || 0)}, отправляется ${Number(counts.sending || 0)}, отправлено ${Number(counts.sent || 0)}, ошибок ${Number(counts.error || 0)}, пропущено ${Number(counts.skipped || 0)}.` +
+    (rowHtml ? `<div class="auto-reply-preview">${rowHtml}</div>` : "<div>Записей пока нет.</div>"),
+    Number(counts.error || 0) ? "danger" : ""
+  );
+}
+
+async function loadAutoReplyStatus(showErrors = true) {
+  if (!enabledModules.has("wb_reviews_ai")) return null;
+  const data = await requestJson("/api/feedback/auto-replies/status?limit=20", {
+    headers: authHeaders(),
+    timeoutMs: 30000,
+  }).catch((e) => {
+    if (showErrors) setAutoReplyStatus(escapeHtml(e.message || "Не удалось загрузить журнал автоответов."), "danger");
+    return null;
+  });
+  if (!data) return null;
+  renderAutoReplyStatus(data);
+  return data;
+}
+
+async function runAutoReplyDryRun() {
+  if (!enabledModules.has("wb_reviews_ai")) return;
+  setAutoReplyStatus("Проверяю отзывы без отправки...");
+  const payload = getAutoReplyPayload();
+  const data = await requestJson("/api/feedback/auto-replies/dry-run", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+    timeoutMs: 60000,
+  }).catch((e) => {
+    setAutoReplyStatus(escapeHtml(e.message || "Dry-run не выполнен."), "danger");
+    return null;
+  });
+  if (!data) return;
+  lastAutoReplyDryRun = { at: Date.now(), eligible: Number(data.eligible || 0), payload };
+  renderAutoReplyStatus(data, "dry-run");
+}
+
+async function queueAutoReplies() {
+  if (!enabledModules.has("wb_reviews_ai")) return;
+  const basePayload = getAutoReplyPayload();
+  const dryRunFresh = lastAutoReplyDryRun
+    && (Date.now() - Number(lastAutoReplyDryRun.at || 0) < 10 * 60 * 1000)
+    && JSON.stringify(lastAutoReplyDryRun.payload || {}) === JSON.stringify(basePayload);
+  if (!dryRunFresh) {
+    alert("Сначала нажмите «Проверить без отправки». Это защита от случайной массовой публикации.");
+    return;
+  }
+  if (!Number(lastAutoReplyDryRun.eligible || 0)) {
+    alert("Dry-run не нашел отзывов для автоответа.");
+    return;
+  }
+  const ok = confirm(`Поставить в очередь ${lastAutoReplyDryRun.eligible} автоответов? Они будут опубликованы в WB/Ozon от имени вашего магазина.`);
+  if (!ok) return;
+  setAutoReplyStatus("Ставлю автоответы в очередь...");
+  const data = await requestJson("/api/feedback/auto-replies/start", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ ...basePayload, confirm: true }),
+    timeoutMs: 60000,
+  }).catch((e) => {
+    setAutoReplyStatus(escapeHtml(e.message || "Не удалось поставить автоответы в очередь."), "danger");
+    return null;
+  });
+  if (!data) return;
+  setAutoReplyStatus(data.queued ? "Очередь автоответов запущена. Обновляю журнал..." : "Подходящих отзывов для очереди нет.", data.queued ? "ok" : "");
+  setTimeout(() => loadAutoReplyStatus(false), 1200);
+}
+
+async function setAutoReplyKillSwitch(enabled) {
+  if (!enabledModules.has("wb_reviews_ai")) return;
+  const flag = Boolean(enabled);
+  if (flag && !confirm("Включить аварийный стоп? Новые автоответы из очереди будут пропускаться.")) return;
+  const data = await requestJson("/api/feedback/auto-replies/kill-switch", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ enabled: flag }),
+    timeoutMs: 30000,
+  }).catch((e) => {
+    setAutoReplyStatus(escapeHtml(e.message || "Не удалось изменить аварийный стоп."), "danger");
+    return null;
+  });
+  if (!data) return;
+  updateAutoReplyKillBadge(Boolean(data.enabled));
+  await loadAutoReplyStatus(false);
 }
 
 function getReviewsMarketplace() {

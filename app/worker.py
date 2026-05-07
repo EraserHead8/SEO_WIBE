@@ -10,7 +10,7 @@ from typing import Any
 from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import ApiCredential, AuditLog, FeedbackAutoReplyLog, UserAiSettings
+from app.models import ApiCredential, AuditLog, FeedbackAutoReplyLog, SystemSetting, UserAiSettings
 from app.services.ads_cache import sync_wb_campaign_snapshots
 from app.services.market_cache import build_market_cache_key, get_or_refresh_market_cache
 from app.services.sales import build_sales_report
@@ -49,6 +49,20 @@ def _shutdown(*_args) -> None:
 def _secret_revision(*values: str) -> str:
     raw = "|".join(str(v or "").strip() for v in values)
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
+
+
+def _feedback_auto_reply_kill_switch_enabled(db, user_id: int) -> bool:
+    row = db.scalar(
+        select(SystemSetting).where(SystemSetting.key == f"feedback_auto_reply_kill_switch:{int(user_id)}")
+    )
+    raw = str(row.value or "").strip() if row else ""
+    if not raw:
+        return False
+    try:
+        payload = json.loads(raw)
+    except Exception:
+        return raw.lower() in {"1", "true", "yes", "on"}
+    return bool(payload.get("enabled")) if isinstance(payload, dict) else False
 
 
 def _market_cache_ttl(module_code: str) -> int:
@@ -276,6 +290,13 @@ def _handle_feedback_auto_replies(payload: dict[str, Any]) -> None:
                 db.add(log)
                 db.flush()
             if str(log.status or "").strip().lower() == "sent":
+                continue
+            if _feedback_auto_reply_kill_switch_enabled(db, user_id):
+                log.status = "skipped"
+                log.error = "Automatic feedback replies stopped by emergency switch"
+                log.updated_at = datetime.utcnow()
+                db.add(log)
+                db.commit()
                 continue
             if marketplace in stop_marketplaces:
                 log.status = "skipped"
