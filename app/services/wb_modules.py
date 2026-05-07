@@ -294,6 +294,50 @@ def post_wb_review_reply(api_key: str, feedback_id: str, text: str) -> tuple[boo
     return False, "Не удалось авторизоваться в WB API"
 
 
+def post_wb_review_reply(api_key: str, feedback_id: str, text: str) -> tuple[bool, str]:
+    if not str(feedback_id or "").strip():
+        return False, "Не указан ID отзыва"
+    reply = " ".join(str(text or "").split())
+    if len(reply) < 2:
+        return False, "Ответ слишком короткий"
+    if len(reply) > 3000:
+        return False, "Ответ слишком длинный (максимум 3000 символов)"
+
+    endpoint = "https://feedbacks-api.wildberries.ru/api/v1/feedbacks/answer"
+    payload = {"id": str(feedback_id or "").strip(), "text": reply}
+    for auth_value in (str(api_key or "").strip(), f"Bearer {str(api_key or '').strip()}"):
+        if not auth_value.strip():
+            continue
+        headers = {"Authorization": auth_value, "Content-Type": "application/json"}
+        for attempt in range(3):
+            response = None
+            try:
+                with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
+                    response = client.post(endpoint, headers=headers, json=payload)
+            except Exception:
+                response = None
+            if response is None:
+                if attempt < 2:
+                    time.sleep(0.35 * (attempt + 1))
+                    continue
+                break
+            if response.status_code in {200, 204}:
+                return True, "Ответ отправлен"
+            if response.status_code in {401, 403}:
+                break
+            if response.status_code in {408, 425, 500, 502, 503, 504} and attempt < 2:
+                time.sleep(0.45 * (attempt + 1))
+                continue
+            body = _safe_response_text(response)
+            if response.status_code == 429:
+                return False, (
+                    "WB временно ограничил отправку ответов: слишком много запросов (429). "
+                    "Черновик ответа сохранен. Подождите несколько минут и попробуйте отправить снова."
+                )
+            return False, f"WB API вернул {response.status_code}: {body}"
+    return False, "Не удалось авторизоваться в WB API"
+
+
 def post_wb_question_reply(api_key: str, question_id: str | int, text: str, *, state: str | None = None) -> tuple[bool, str]:
     raw_id = str(question_id or "").strip()
     if not raw_id:

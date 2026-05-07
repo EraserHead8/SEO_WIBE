@@ -1868,9 +1868,12 @@ async function requestJson(url, opts = {}) {
       }
 
       const payload = parsed.ok ? parsed.payload : {};
-      const detail = payload && typeof payload === "object"
+      let detail = payload && typeof payload === "object"
         ? String(payload.detail || payload.message || "").trim()
         : "";
+      if (detail && typeof decodePossiblyMojibake === "function") {
+        detail = String(decodePossiblyMojibake(detail) || detail).trim();
+      }
       const err = makeRequestError(
         detail || parsed.rawText || (currentLang === "en" ? "Request error" : "Ошибка запроса"),
         {
@@ -5140,6 +5143,13 @@ async function renderWbReviews() {
   updateReviewLoadStatus();
 }
 
+function feedbackRateLimitMessage(action = "send") {
+  if (action === "send") {
+    return "WB \u0432\u0440\u0435\u043c\u0435\u043d\u043d\u043e \u043e\u0433\u0440\u0430\u043d\u0438\u0447\u0438\u043b \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0443 \u043e\u0442\u0432\u0435\u0442\u043e\u0432 (429). \u0427\u0435\u0440\u043d\u043e\u0432\u0438\u043a \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d. \u041f\u043e\u0434\u043e\u0436\u0434\u0438\u0442\u0435 \u043d\u0435\u0441\u043a\u043e\u043b\u044c\u043a\u043e \u043c\u0438\u043d\u0443\u0442 \u0438 \u043d\u0430\u0436\u043c\u0438\u0442\u0435 \u00ab\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c\u00bb \u0441\u043d\u043e\u0432\u0430.";
+  }
+  return "WB \u0432\u0440\u0435\u043c\u0435\u043d\u043d\u043e \u043e\u0433\u0440\u0430\u043d\u0438\u0447\u0438\u043b \u0437\u0430\u043f\u0440\u043e\u0441\u044b (429). \u041f\u043e\u0434\u043e\u0436\u0434\u0438\u0442\u0435 \u043d\u0435\u0441\u043a\u043e\u043b\u044c\u043a\u043e \u043c\u0438\u043d\u0443\u0442 \u0438 \u043f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u0435.";
+}
+
 async function generateReviewReply(reviewId) {
   const reviewIdText = String(reviewId || "").trim();
   if (!reviewIdText) return;
@@ -5168,7 +5178,13 @@ async function generateReviewReply(reviewId) {
       }),
       tr(`Генерация зависит от AI-конфигурации сервиса (${mpLabel}).`, `Generation depends on AI settings (${mpLabel}).`)
     ).catch((e) => {
-      alert(e.message);
+      const message = typeof decodePossiblyMojibake === "function"
+        ? String(decodePossiblyMojibake(e.message || "") || e.message || "")
+        : String(e.message || "");
+      const isRateLimit = Number(e.status || 0) === 429 || message.includes("429") || message.toLowerCase().includes("too many requests");
+      const friendly = isRateLimit ? feedbackRateLimitMessage("request") : message;
+      updateReviewLoadStatus(friendly);
+      alert(friendly);
       return null;
     });
     if (!data) return;
@@ -5199,13 +5215,19 @@ async function sendReviewReply(reviewId) {
         headers: authHeaders(),
         body: JSON.stringify({ id: reviewIdText, text }),
         timeoutMs: 120000,
-        retryOnPost: true,
-        maxRetries: 3,
+        retryOnPost: false,
+        maxRetries: 0,
         retryBaseDelayMs: 420,
       }),
       tr("Ответ отправляется в карточку отзыва через API маркетплейса.", "Reply is sent to marketplace review card via API.")
     ).catch((e) => {
-      alert(e.message);
+      const message = typeof decodePossiblyMojibake === "function"
+        ? String(decodePossiblyMojibake(e.message || "") || e.message || "")
+        : String(e.message || "");
+      const isRateLimit = Number(e.status || 0) === 429 || message.includes("429") || message.toLowerCase().includes("too many requests");
+      const friendly = isRateLimit ? feedbackRateLimitMessage("send") : message;
+      updateReviewLoadStatus(friendly);
+      alert(friendly);
       return null;
     });
     if (!data) return;

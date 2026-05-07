@@ -722,6 +722,12 @@ body[data-theme="light"] .review-type-pill {
   text-overflow: ellipsis;
 }
 
+.nav-btn > *,
+.module-subtabs .chip-btn > *,
+.mobile-drawer-nav-item > * {
+  pointer-events: none;
+}
+
 .sidebar-toggle {
   width: 100%;
 }

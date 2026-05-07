@@ -430,6 +430,13 @@ def _repair_payload_encoding(payload: Any) -> Any:
     return payload
 
 
+def _feedback_reply_http_error(message: Any) -> HTTPException:
+    detail = _repair_text_encoding(str(message or "")).strip() or "Не удалось отправить ответ."
+    lowered = detail.lower()
+    status_code = 429 if ("429" in lowered or "too many requests" in lowered) else 400
+    return HTTPException(status_code=status_code, detail=detail)
+
+
 _SAFE_HELP_TITLES_RU: dict[str, str] = {
     "products": "Товары",
     "rank_tracking": "SEO и позиции",
@@ -2991,7 +2998,7 @@ def wb_reply_review(payload: WbReviewReplyIn, user: User = Depends(get_current_u
     )
     db.commit()
     if not ok:
-        raise HTTPException(status_code=400, detail=message)
+        raise _feedback_reply_http_error(message)
     return WbReviewReplyOut(ok=True, message=message)
 
 
@@ -3168,7 +3175,7 @@ def ozon_reply_review(payload: WbReviewReplyIn, user: User = Depends(get_current
     )
     db.commit()
     if not ok:
-        raise HTTPException(status_code=400, detail=message)
+        raise _feedback_reply_http_error(message)
     return WbReviewReplyOut(ok=True, message=message)
 
 
@@ -3362,7 +3369,7 @@ def wb_reply_question(payload: WbReviewReplyIn, user: User = Depends(get_current
     )
     db.commit()
     if not ok:
-        raise HTTPException(status_code=400, detail=message)
+        raise _feedback_reply_http_error(message)
     return WbReviewReplyOut(ok=True, message=message)
 
 
@@ -3540,7 +3547,7 @@ def ozon_reply_question(payload: WbReviewReplyIn, user: User = Depends(get_curre
     )
     db.commit()
     if not ok:
-        raise HTTPException(status_code=400, detail=message)
+        raise _feedback_reply_http_error(message)
     return WbReviewReplyOut(ok=True, message=message)
 
 
