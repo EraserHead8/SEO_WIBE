@@ -4352,8 +4352,39 @@ async function runAutoReplyDryRun() {
     return null;
   });
   if (!data) return;
-  lastAutoReplyDryRun = { at: Date.now(), eligible: Number(data.eligible || 0), payload };
+  lastAutoReplyDryRun = { at: Date.now(), eligible: Number(data.eligible || 0), payload, data };
   renderAutoReplyStatus(data, "dry-run");
+}
+
+async function legacyQueueAutoReplies() {
+  if (!enabledModules.has("wb_reviews_ai")) return;
+  const basePayload = getAutoReplyPayload();
+  const dryRunFresh = lastAutoReplyDryRun
+    && (Date.now() - Number(lastAutoReplyDryRun.at || 0) < 10 * 60 * 1000)
+    && JSON.stringify(lastAutoReplyDryRun.payload || {}) === JSON.stringify(basePayload);
+  if (!dryRunFresh) {
+    alert("Сначала нажмите «Проверить без отправки». Это защита от случайной массовой публикации.");
+    return;
+  }
+  if (!Number(lastAutoReplyDryRun.eligible || 0)) {
+    alert("Dry-run не нашел отзывов для автоответа.");
+    return;
+  }
+  const ok = confirm(`Поставить в очередь ${lastAutoReplyDryRun.eligible} автоответов? Они будут опубликованы в WB/Ozon от имени вашего магазина.`);
+  if (!ok) return;
+  setAutoReplyStatus("Ставлю автоответы в очередь...");
+  const data = await requestJson("/api/feedback/auto-replies/start", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ ...basePayload, confirm: true, from_dry_run: true, allow_stale_wb: basePayload.marketplaces.includes("wb") }),
+    timeoutMs: 60000,
+  }).catch((e) => {
+    setAutoReplyStatus(escapeHtml(e.message || "Не удалось поставить автоответы в очередь."), "danger");
+    return null;
+  });
+  if (!data) return;
+  setAutoReplyStatus(data.queued ? "Очередь автоответов запущена. Обновляю журнал..." : "Подходящих отзывов для очереди нет.", data.queued ? "ok" : "");
+  setTimeout(() => loadAutoReplyStatus(false), 1200);
 }
 
 async function queueAutoReplies() {
@@ -4376,14 +4407,27 @@ async function queueAutoReplies() {
   const data = await requestJson("/api/feedback/auto-replies/start", {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ ...basePayload, confirm: true }),
+    body: JSON.stringify({ ...basePayload, confirm: true, from_dry_run: true, allow_stale_wb: basePayload.marketplaces.includes("wb") }),
     timeoutMs: 60000,
   }).catch((e) => {
     setAutoReplyStatus(escapeHtml(e.message || "Не удалось поставить автоответы в очередь."), "danger");
     return null;
   });
   if (!data) return;
-  setAutoReplyStatus(data.queued ? "Очередь автоответов запущена. Обновляю журнал..." : "Подходящих отзывов для очереди нет.", data.queued ? "ok" : "");
+  if (!data.queued) {
+    const skipped = data.skipped || {};
+    const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+    const warningHtml = warnings.length ? `<div class="auto-reply-warning">${warnings.map((x) => escapeHtml(x)).join("<br>")}</div>` : "";
+    setAutoReplyStatus(
+      `Подходящих отзывов для очереди нет. Причина: ${escapeHtml(data.reason || "no_candidates")}. ` +
+      `Пропущено: дублей ${Number(skipped.duplicate || 0)}, уже отвеченных ${Number(skipped.already_answered || 0)}, ` +
+      `без текста ${Number(skipped.empty_text || 0)}, с прежней 404-ошибкой ${Number(skipped.previous_error || 0)}, WB-кэш ${Number(skipped.stale_wb || 0)}.` +
+      warningHtml,
+      "danger"
+    );
+    return;
+  }
+  setAutoReplyStatus("Очередь автоответов запущена. Обновляю журнал...", "ok");
   setTimeout(() => loadAutoReplyStatus(false), 1200);
 }
 

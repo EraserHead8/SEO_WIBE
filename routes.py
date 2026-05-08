@@ -4006,11 +4006,19 @@ def feedback_auto_replies_start(payload: dict[str, Any], user: User = Depends(ge
     confirm = bool(payload.get("confirm"))
     if not confirm:
         raise HTTPException(status_code=400, detail="confirm=true is required before publishing automatic replies.")
+    if not isinstance(payload, dict):
+        payload = {}
+    # Dry-run already makes the user review the exact candidate set. WB can be
+    # rate-limited and served from a fresh fallback cache; do not silently drop
+    # those candidates between dry-run and queue start.
+    if bool(payload.get("from_dry_run")) and "allow_stale_wb" not in payload:
+        payload = {**payload, "allow_stale_wb": True}
     result = _build_feedback_auto_reply_candidates(db, user, payload, persist=True)
     candidates = list(result.get("candidates") or [])
     if not candidates:
         db.commit()
-        return {**result, "queued": False, "reason": "no_candidates"}
+        reason = "stale_wb_blocked" if int((result.get("skipped") or {}).get("stale_wb") or 0) else "no_candidates"
+        return {**result, "queued": False, "reason": reason}
     queue_result = enqueue_task(
         "feedback_auto_replies",
         {
@@ -4092,7 +4100,7 @@ def feedback_auto_replies_status(limit: int = 50, user: User = Depends(get_curre
                 "item_external_id": row.item_external_id,
                 "rating": row.rating,
                 "status": row.status,
-                "error": row.error,
+                "error": _repair_text_encoding(str(row.error or "")),
                 "updated_at": row.updated_at.isoformat() if row.updated_at else "",
                 "sent_at": row.sent_at.isoformat() if row.sent_at else "",
             }
@@ -4154,6 +4162,8 @@ def _build_feedback_auto_reply_candidates(
         "duplicate": 0,
         "missing_id": 0,
         "stale_wb": 0,
+        "empty_text": 0,
+        "previous_error": 0,
     }
     candidates: list[dict[str, Any]] = []
 
@@ -4184,6 +4194,10 @@ def _build_feedback_auto_reply_candidates(
             if rating < min_stars:
                 skipped["low_rating"] += 1
                 continue
+            review_text = str(row.get("text") or "").strip()
+            if marketplace == "ozon" and not review_text:
+                skipped["empty_text"] += 1
+                continue
             existing = db.scalar(
                 select(FeedbackAutoReplyLog).where(
                     FeedbackAutoReplyLog.user_id == int(user.id),
@@ -4195,6 +4209,11 @@ def _build_feedback_auto_reply_candidates(
             if existing and str(existing.status or "").strip().lower() in {"planned", "sending", "sent"}:
                 skipped["duplicate"] += 1
                 continue
+            if existing and str(existing.status or "").strip().lower() == "error":
+                existing_error = _repair_text_encoding(str(existing.error or "")).lower()
+                if "404" in existing_error or "not found" in existing_error:
+                    skipped["previous_error"] += 1
+                    continue
             candidate = {
                 "marketplace": marketplace,
                 "item_type": "review",
@@ -4202,7 +4221,7 @@ def _build_feedback_auto_reply_candidates(
                 "rating": rating,
                 "product": str(row.get("product") or "")[:300],
                 "article": str(row.get("article") or "")[:120],
-                "text": str(row.get("text") or "")[:3000],
+                "text": review_text[:3000],
                 "reviewer_name": str(row.get("user") or "")[:160],
                 "date": str(row.get("date") or row.get("created_at") or "")[:80],
                 "stale": bool(is_stale),

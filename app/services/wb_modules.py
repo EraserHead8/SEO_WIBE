@@ -22,7 +22,7 @@ class WbRateLimitError(RuntimeError):
 
 _WB_FEEDBACK_THROTTLE_LOCK = threading.Lock()
 _WB_FEEDBACK_LAST_REQUEST_AT: dict[str, float] = {}
-_WB_FEEDBACK_MIN_INTERVAL_SEC = 0.42
+_WB_FEEDBACK_MIN_INTERVAL_SEC = 0.8
 
 
 def _wb_feedback_throttle(api_key: str) -> None:
@@ -535,6 +535,55 @@ def post_ozon_review_reply(api_key: str, review_id: str, text: str) -> tuple[boo
                 body = _safe_response_text(response)
                 if body:
                     last_error = f"Ozon API РІРµСЂРЅСѓР» {response.status_code}: {body}"
+                break
+    return False, last_error
+
+
+def post_ozon_review_reply(api_key: str, review_id: str, text: str) -> tuple[bool, str]:
+    raw_id = str(review_id or "").strip()
+    if not raw_id:
+        return False, "Ozon review ID is missing"
+    reply = " ".join(str(text or "").split())
+    if len(reply) < 2:
+        return False, "Reply is too short"
+    if len(reply) > 3000:
+        return False, "Reply is too long (maximum 3000 characters)"
+
+    id_values: list[Any] = [raw_id]
+    try:
+        int_id = int(raw_id)
+    except Exception:
+        int_id = None
+    if int_id is not None:
+        id_values.append(int_id)
+
+    payloads: list[dict[str, Any]] = []
+    for id_value in id_values:
+        payloads.append({"review_id": id_value, "text": reply})
+        payloads.append({"id": id_value, "text": reply})
+
+    endpoints = [
+        "https://api-seller.ozon.ru/v1/review/comment/create",
+        "https://api-seller.ozon.ru/v1/review/comment/update",
+        "https://api-seller.ozon.ru/v1/review/comment",
+    ]
+    last_error = "Failed to send reply to Ozon API"
+    for endpoint in endpoints:
+        for payload in payloads:
+            for attempt in range(3):
+                response = _request_ozon_response("POST", endpoint, api_key=api_key, payload=payload)
+                if response is None:
+                    if attempt < 2:
+                        time.sleep(0.35 * (attempt + 1))
+                        continue
+                    break
+                if response.status_code < 400:
+                    return True, "Reply sent"
+                body = _safe_response_text(response)
+                last_error = f"Ozon API returned {response.status_code}: {body}" if body else f"Ozon API returned {response.status_code}"
+                if response.status_code in {408, 425, 429, 500, 502, 503, 504} and attempt < 2:
+                    time.sleep(0.45 * (attempt + 1))
+                    continue
                 break
     return False, last_error
 
