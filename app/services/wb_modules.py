@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 import math
+import threading
 import time
 from typing import Any
 
@@ -17,6 +18,28 @@ OZON_TIMEOUT = httpx.Timeout(connect=6.0, read=22.0, write=22.0, pool=22.0)
 
 class WbRateLimitError(RuntimeError):
     pass
+
+
+_WB_FEEDBACK_THROTTLE_LOCK = threading.Lock()
+_WB_FEEDBACK_LAST_REQUEST_AT: dict[str, float] = {}
+_WB_FEEDBACK_MIN_INTERVAL_SEC = 0.42
+
+
+def _wb_feedback_throttle(api_key: str) -> None:
+    token = str(api_key or "").strip()
+    if not token:
+        return
+    # WB limit is shared by all Feedbacks/Questions methods for one seller account:
+    # 3 requests per second, 333 ms interval. Keep a small safety gap.
+    key = token[-24:] if len(token) > 24 else token
+    with _WB_FEEDBACK_THROTTLE_LOCK:
+        now = time.monotonic()
+        last = float(_WB_FEEDBACK_LAST_REQUEST_AT.get(key) or 0.0)
+        wait = _WB_FEEDBACK_MIN_INTERVAL_SEC - (now - last)
+        if wait > 0:
+            time.sleep(min(1.2, wait))
+            now = time.monotonic()
+        _WB_FEEDBACK_LAST_REQUEST_AT[key] = now
 
 
 def fetch_wb_reviews(
@@ -167,6 +190,7 @@ def probe_wb_feedback_access(api_key: str, feedback_kind: str = "reviews") -> tu
     for auth_value in (token, f"Bearer {token}"):
         headers = {"Authorization": auth_value, "Content-Type": "application/json"}
         try:
+            _wb_feedback_throttle(token)
             with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
                 response = client.get(endpoint, headers=headers, params=params)
         except Exception:
@@ -255,7 +279,7 @@ def fetch_wb_campaign_details(api_key: str, campaign_id: int) -> dict[str, Any]:
     }
 
 
-def post_wb_review_reply(api_key: str, feedback_id: str, text: str) -> tuple[bool, str]:
+def _legacy_post_wb_review_reply_unused(api_key: str, feedback_id: str, text: str) -> tuple[bool, str]:
     if not feedback_id.strip():
         return False, "РќРµ СѓРєР°Р·Р°РЅ ID РѕС‚Р·С‹РІР°"
     reply = " ".join(text.split())
@@ -312,6 +336,7 @@ def post_wb_review_reply(api_key: str, feedback_id: str, text: str) -> tuple[boo
         for attempt in range(3):
             response = None
             try:
+                _wb_feedback_throttle(api_key)
                 with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
                     response = client.post(endpoint, headers=headers, json=payload)
             except Exception:
@@ -429,6 +454,7 @@ def post_wb_question_reply(api_key: str, question_id: str | int, text: str, *, s
                 for attempt in range(3):
                     response = None
                     try:
+                        _wb_feedback_throttle(token)
                         with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
                             if method == "PATCH":
                                 response = client.patch(endpoint, headers=headers, json=payload)
@@ -2694,6 +2720,7 @@ def _request_wb_json(
         for attempt in range(safe_max_attempts):
             response = None
             try:
+                _wb_feedback_throttle(token)
                 with httpx.Client(timeout=request_timeout, follow_redirects=True) as client:
                     if safe_method == "POST":
                         response = client.post(url, headers=headers, params=params, json=payload)

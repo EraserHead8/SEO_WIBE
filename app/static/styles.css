@@ -1484,6 +1484,12 @@ button {
   color: #031632;
   background: linear-gradient(120deg, var(--neon), #73e5ff);
   cursor: pointer;
+  max-width: 100%;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+  line-height: 1.2;
 }
 
 .btn-with-icon {
@@ -1517,7 +1523,9 @@ button {
 }
 
 .btn-label {
-  white-space: nowrap;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .btn-icon-only-auto {

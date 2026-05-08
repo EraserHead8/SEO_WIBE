@@ -519,7 +519,12 @@ def _feedback_is_rate_limited(db: Session, *, user_id: int, module_code: str, ma
 
 def _feedback_mark_rate_limited(db: Session, *, user_id: int, module_code: str, marketplace: str) -> None:
     pauses = _feedback_pause_map(db)
-    pauses[_feedback_pause_key(user_id, module_code, marketplace)] = datetime.utcnow().timestamp() + _FEEDBACK_RATE_LIMIT_PAUSE_SEC
+    until = datetime.utcnow().timestamp() + _FEEDBACK_RATE_LIMIT_PAUSE_SEC
+    pauses[_feedback_pause_key(user_id, module_code, marketplace)] = until
+    if str(marketplace or "").strip().lower() == "wb":
+        # WB applies one shared limit to the whole Feedbacks/Questions category.
+        for sibling_module in ("wb_reviews_ai", "wb_questions_ai"):
+            pauses[_feedback_pause_key(user_id, sibling_module, "wb")] = until
     _set_system_setting(db, _FEEDBACK_RATE_LIMIT_PAUSE_KEY, json.dumps(pauses, ensure_ascii=False, sort_keys=True))
 
 
@@ -2998,6 +3003,9 @@ def wb_reply_review(payload: WbReviewReplyIn, user: User = Depends(get_current_u
     )
     db.commit()
     if not ok:
+        if "429" in str(message or "") or "too many requests" in str(message or "").lower():
+            _feedback_mark_rate_limited(db, user_id=int(user.id), module_code="wb_reviews_ai", marketplace="wb")
+            db.commit()
         raise _feedback_reply_http_error(message)
     return WbReviewReplyOut(ok=True, message=message)
 
@@ -3175,6 +3183,9 @@ def ozon_reply_review(payload: WbReviewReplyIn, user: User = Depends(get_current
     )
     db.commit()
     if not ok:
+        if "429" in str(message or "") or "too many requests" in str(message or "").lower():
+            _feedback_mark_rate_limited(db, user_id=int(user.id), module_code="wb_questions_ai", marketplace="wb")
+            db.commit()
         raise _feedback_reply_http_error(message)
     return WbReviewReplyOut(ok=True, message=message)
 
