@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 import hashlib
+import json
 import math
+import os
+import tempfile
 import threading
 import time
 from typing import Any
@@ -24,6 +27,7 @@ class WbRateLimitError(RuntimeError):
 _WB_FEEDBACK_THROTTLE_LOCK = threading.Lock()
 _WB_FEEDBACK_LAST_REQUEST_AT: dict[str, float] = {}
 _WB_FEEDBACK_MIN_INTERVAL_SEC = 1.4
+_WB_FEEDBACK_THROTTLE_FILE = os.path.join(tempfile.gettempdir(), "seo_wibe_wb_feedback_throttle_v1.json")
 
 
 def _wb_feedback_throttle(api_key: str) -> None:
@@ -31,8 +35,15 @@ def _wb_feedback_throttle(api_key: str) -> None:
     if not token:
         return
     # WB limit is shared by all Feedbacks/Questions methods for one seller account:
-    # 3 requests per second, 333 ms interval. Keep a small safety gap.
+    # 3 requests per second, 333 ms interval. Keep a large safety gap because
+    # reads, manual replies and the worker can run in separate processes.
     key = token[-24:] if len(token) > 24 else token
+    if _wb_feedback_file_throttle(key):
+        return
+    _wb_feedback_memory_throttle(key)
+
+
+def _wb_feedback_memory_throttle(key: str) -> None:
     with _WB_FEEDBACK_THROTTLE_LOCK:
         now = time.monotonic()
         last = float(_WB_FEEDBACK_LAST_REQUEST_AT.get(key) or 0.0)
@@ -41,6 +52,51 @@ def _wb_feedback_throttle(api_key: str) -> None:
             time.sleep(min(3.0, wait))
             now = time.monotonic()
         _WB_FEEDBACK_LAST_REQUEST_AT[key] = now
+
+
+def _wb_feedback_file_throttle(key: str) -> bool:
+    if os.name != "posix":
+        return False
+    try:
+        import fcntl  # type: ignore
+    except Exception:
+        return False
+    try:
+        with open(_WB_FEEDBACK_THROTTLE_FILE, "a+", encoding="utf-8") as fh:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+            fh.seek(0)
+            raw = fh.read().strip()
+            try:
+                payload = json.loads(raw) if raw else {}
+            except Exception:
+                payload = {}
+            if not isinstance(payload, dict):
+                payload = {}
+            now = time.time()
+            last = float(payload.get(key) or 0.0)
+            wait = _WB_FEEDBACK_MIN_INTERVAL_SEC - (now - last)
+            if wait > 0:
+                time.sleep(min(5.0, wait))
+                now = time.time()
+            payload[key] = now
+            # Keep the tiny file tidy if several old keys accumulated.
+            cutoff = now - 3600
+            cleaned: dict[str, float] = {}
+            for raw_key, raw_value in payload.items():
+                try:
+                    value = float(raw_value or 0)
+                except Exception:
+                    continue
+                if value >= cutoff:
+                    cleaned[str(raw_key)] = value
+            payload = cleaned
+            fh.seek(0)
+            fh.truncate()
+            json.dump(payload, fh, ensure_ascii=False, sort_keys=True)
+            fh.flush()
+            return True
+    except Exception:
+        return False
 
 
 def fetch_wb_reviews(
@@ -2663,8 +2719,9 @@ def _fetch_wb_question_rows(
             endpoint,
             api_key=api_key,
             params=params,
-            max_attempts=1,
-            retry_rate_limit=False,
+            max_attempts=3,
+            retry_rate_limit=True,
+            timeout=WB_FAST_TIMEOUT if max_pages <= 1 else WB_TIMEOUT,
         )
         if data is None:
             break
@@ -2703,8 +2760,9 @@ def _fetch_wb_feedback_rows(
             endpoint,
             api_key=api_key,
             params=params,
-            max_attempts=1,
-            retry_rate_limit=False,
+            max_attempts=3,
+            retry_rate_limit=True,
+            timeout=WB_FAST_TIMEOUT if max_pages <= 1 else WB_TIMEOUT,
         )
         if data is None:
             break

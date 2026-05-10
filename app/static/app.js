@@ -4948,6 +4948,8 @@ async function loadWbReviews() {
     }
     await renderWbReviews();
     if (raw) raw.textContent = JSON.stringify(payload, null, 2);
+    const warnings = Array.isArray(payload?.warnings) ? payload.warnings.filter(Boolean) : [];
+    if (warnings.length) updateReviewLoadStatus(warnings.join(" | "));
     markModuleLoaded("reviews");
   };
 
@@ -5598,6 +5600,8 @@ async function loadWbQuestions() {
     }
     await renderWbQuestions();
     if (raw) raw.textContent = JSON.stringify(payload, null, 2);
+    const warnings = Array.isArray(payload?.warnings) ? payload.warnings.filter(Boolean) : [];
+    if (warnings.length) updateQuestionLoadStatus(warnings.join(" | "));
     markModuleLoaded("reviews");
   };
 

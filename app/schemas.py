@@ -328,6 +328,7 @@ class WbReviewOut(BaseModel):
 class WbReviewsOut(BaseModel):
     new: list[WbReviewOut]
     answered: list[WbReviewOut]
+    warnings: list[str] = Field(default_factory=list)
 
 
 class WbReviewReplyIn(BaseModel):

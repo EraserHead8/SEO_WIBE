@@ -378,7 +378,7 @@ def _market_cache_ttl(module_code: str, *, fast_mode: bool = False) -> int:
 
 
 _FEEDBACK_RATE_LIMIT_PAUSE_KEY = "feedback_rate_limit_pauses_v1"
-_FEEDBACK_RATE_LIMIT_PAUSE_SEC = 15 * 60
+_FEEDBACK_RATE_LIMIT_PAUSE_SEC = 45 * 60
 _FEEDBACK_STALE_FALLBACK_SEC = 14 * 24 * 60 * 60
 _MOJIBAKE_RE = re.compile(r"(Р |Рќ|Рџ|Рћ|Р‘|Р§|РЎ|РІР|Р°Р|РµР|Ð|Ñ|�)")
 
@@ -528,6 +528,25 @@ def _feedback_mark_rate_limited(db: Session, *, user_id: int, module_code: str, 
     _set_system_setting(db, _FEEDBACK_RATE_LIMIT_PAUSE_KEY, json.dumps(pauses, ensure_ascii=False, sort_keys=True))
 
 
+def _empty_feedback_rate_limit_payload(message: str) -> dict[str, Any]:
+    return {"new": [], "answered": [], "warnings": [message]}
+
+
+def _feedback_cache_warnings(cache_meta: dict[str, Any] | None) -> list[str]:
+    meta = dict(cache_meta or {})
+    source = str(meta.get("source") or "").lower()
+    error = _repair_text_encoding(str(meta.get("error") or "")).strip()
+    warnings: list[str] = []
+    if "rate-limit" in source or "pause" in source or "429" in error or "too many requests" in error.lower():
+        warnings.append(
+            "WB временно ограничил запросы (429). "
+            "Сервис поставил WB на паузу и не будет повторно дергать API до снятия лимита."
+        )
+    if meta.get("stale") and not warnings:
+        warnings.append("Показаны последние сохраненные данные, потому что API маркетплейса временно недоступен.")
+    return warnings
+
+
 def _get_feedback_market_cache(
     db: Session,
     *,
@@ -554,6 +573,13 @@ def _get_feedback_market_cache(
             latest_meta["stale"] = True
             latest_meta["error"] = "WB API is paused after 429"
             return latest, latest_meta
+        return _empty_feedback_rate_limit_payload(
+            "WB временно ограничил запросы (429). Кэша пока нет, повторим загрузку после паузы."
+        ), {
+            "source": "empty-rate-limit-pause",
+            "stale": True,
+            "error": "WB API is paused after 429 and no cache is available",
+        }
     try:
         return get_or_refresh_market_cache(
             db,
@@ -581,10 +607,13 @@ def _get_feedback_market_cache(
             latest_meta["stale"] = True
             latest_meta["error"] = str(exc or "WB API returned 429")[:500]
             return latest, latest_meta
-        raise HTTPException(
-            status_code=429,
-            detail="WB API returned 429 rate limit. Try again later or wait for cached data to refresh.",
-        )
+        return _empty_feedback_rate_limit_payload(
+            "WB временно ограничил запросы (429). Кэша пока нет, повторим загрузку после паузы."
+        ), {
+            "source": "empty-rate-limit-fallback",
+            "stale": True,
+            "error": str(exc or "WB API returned 429")[:500],
+        }
 
 
 def _market_cache_latest_payload(
@@ -2951,10 +2980,10 @@ def wb_reviews(
         item_type="review",
         rows=list(data.get("answered") or []),
     )
-    if not new_rows and not answered_rows:
+    if not new_rows and not answered_rows and "rate-limit" not in str(cache_meta.get("source") or ""):
         ok, message = probe_wb_feedback_access(wb_key, feedback_kind="reviews")
         if not ok:
-            raise HTTPException(status_code=400, detail=message)
+            raise HTTPException(status_code=400, detail=_repair_text_encoding(message))
     _audit(
         db,
         user,
@@ -2967,6 +2996,7 @@ def wb_reviews(
     return WbReviewsOut(
         new=_repair_payload_encoding(new_rows),
         answered=_repair_payload_encoding(answered_rows),
+        warnings=_feedback_cache_warnings(cache_meta),
     )
 
 
@@ -3146,6 +3176,7 @@ def ozon_reviews(
     return WbReviewsOut(
         new=_repair_payload_encoding(new_rows),
         answered=_repair_payload_encoding(answered_rows),
+        warnings=_feedback_cache_warnings(cache_meta),
     )
 
 
@@ -3327,6 +3358,7 @@ def wb_questions(
     return WbReviewsOut(
         new=_repair_payload_encoding(new_rows),
         answered=_repair_payload_encoding(answered_rows),
+        warnings=_feedback_cache_warnings(cache_meta),
     )
 
 
