@@ -1537,6 +1537,14 @@ button {
   place-items: center;
 }
 
+.feedback-ai-save-btn {
+  min-width: 132px;
+  padding-inline: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .icon-only-btn {
   width: 48px;
   min-width: 48px;
@@ -1934,15 +1942,21 @@ tbody tr:hover {
 .review-type-pill {
   border: 1px solid rgba(133, 165, 255, 0.35);
   border-radius: 999px;
-  padding: 2px 6px;
-  font-size: 12px;
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 1;
   color: #d8e7ff;
   background: rgba(9, 21, 55, 0.6);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
+  width: auto;
+  min-width: 42px;
   height: 24px;
+  box-sizing: border-box;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  letter-spacing: 0.02em;
 }
 .return-status-pill {
   width: auto;
@@ -5155,6 +5169,16 @@ tbody tr:hover td {
   background: color-mix(in oklab, var(--ds-accent) 16%, #f0f6ff);
   color: color-mix(in oklab, var(--ds-accent) 70%, #2f4f7a);
   border: 1px solid color-mix(in oklab, var(--ds-accent) 22%, #c1d6ef);
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 1;
+  width: auto;
+  min-width: 42px;
+  height: 24px;
+  box-sizing: border-box;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  letter-spacing: 0.02em;
 }
 
 /* Restore classic tabular view for reviews/questions on desktop. */

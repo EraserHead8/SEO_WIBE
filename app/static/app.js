@@ -1108,6 +1108,7 @@ function applyModuleActionIcons() {
       btn.classList.contains("nav-btn")
       || btn.classList.contains("icon-only-btn")
       || btn.classList.contains("icon-action-btn")
+      || btn.classList.contains("feedback-ai-save-btn")
       || btn.classList.contains("chip-btn")
       || btn.classList.contains("profile-section-row")
       || btn.classList.contains("help-chip-btn")
@@ -1385,9 +1386,9 @@ function applyUiLanguage() {
   setText("#socialSubtabCalculatorBtn", isEn ? "Calculator" : "Калькулятор");
   setText("#socialSubtabNotesBtn", isEn ? "Notes" : "Заметки");
   setText("#reviews .grid-6 button.btn-secondary", isEn ? "Refresh Reviews" : "Обновить отзывы");
-  setText("#reviews .grid-2 button", isEn ? "Save AI Settings" : "Сохранить AI-настройки");
+  setText("#reviews .grid-2 .feedback-ai-save-btn", isEn ? "Save AI" : "Сохранить AI");
   setText("#reviewsSubtabQuestions .grid-6 button.btn-secondary", isEn ? "Refresh Questions" : "Обновить вопросы");
-  setText("#reviewsSubtabQuestions .grid-2 button", isEn ? "Save AI Settings" : "Сохранить AI-настройки");
+  setText("#reviewsSubtabQuestions .grid-2 .feedback-ai-save-btn", isEn ? "Save AI" : "Сохранить AI");
   setText("#reviewsSubtabQuestions .grid-4 button:nth-of-type(1)", isEn ? "Upload to Knowledge Base" : "Загрузить в базу знаний");
   setText("#reviewsSubtabQuestions .grid-4 button:nth-of-type(2)", isEn ? "Delete Selected Document" : "Удалить выбранный документ");
   setText("#campaignDetailModal .campaign-modal-head h3", isEn ? "WB Campaign Details" : "Детали кампании WB");
