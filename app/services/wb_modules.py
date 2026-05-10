@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+import hashlib
 import math
 import threading
 import time
@@ -22,7 +23,7 @@ class WbRateLimitError(RuntimeError):
 
 _WB_FEEDBACK_THROTTLE_LOCK = threading.Lock()
 _WB_FEEDBACK_LAST_REQUEST_AT: dict[str, float] = {}
-_WB_FEEDBACK_MIN_INTERVAL_SEC = 0.8
+_WB_FEEDBACK_MIN_INTERVAL_SEC = 1.4
 
 
 def _wb_feedback_throttle(api_key: str) -> None:
@@ -37,7 +38,7 @@ def _wb_feedback_throttle(api_key: str) -> None:
         last = float(_WB_FEEDBACK_LAST_REQUEST_AT.get(key) or 0.0)
         wait = _WB_FEEDBACK_MIN_INTERVAL_SEC - (now - last)
         if wait > 0:
-            time.sleep(min(1.2, wait))
+            time.sleep(min(3.0, wait))
             now = time.monotonic()
         _WB_FEEDBACK_LAST_REQUEST_AT[key] = now
 
@@ -363,6 +364,52 @@ def post_wb_review_reply(api_key: str, feedback_id: str, text: str) -> tuple[boo
     return False, "Не удалось авторизоваться в WB API"
 
 
+def post_wb_review_reply(api_key: str, feedback_id: str, text: str) -> tuple[bool, str]:
+    raw_id = str(feedback_id or "").strip()
+    if not raw_id:
+        return False, "WB review ID is missing"
+    reply = " ".join(_repair_mojibake_text(text).split())
+    if len(reply) < 2:
+        return False, "Reply is too short"
+    if len(reply) > 3000:
+        return False, "Reply is too long (maximum 3000 characters)"
+
+    endpoint = "https://feedbacks-api.wildberries.ru/api/v1/feedbacks/answer"
+    payload = {"id": raw_id, "text": reply}
+    for auth_value in (str(api_key or "").strip(), f"Bearer {str(api_key or '').strip()}"):
+        if not auth_value.strip():
+            continue
+        headers = {"Authorization": auth_value, "Content-Type": "application/json"}
+        for attempt in range(3):
+            response = None
+            try:
+                _wb_feedback_throttle(api_key)
+                with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
+                    response = client.post(endpoint, headers=headers, json=payload)
+            except Exception:
+                response = None
+            if response is None:
+                if attempt < 2:
+                    time.sleep(0.5 * (attempt + 1))
+                    continue
+                break
+            if response.status_code in {200, 204}:
+                return True, "Reply sent"
+            if response.status_code in {401, 403}:
+                break
+            if response.status_code == 429:
+                if attempt < 2:
+                    time.sleep(_wb_retry_delay_sec(response, attempt))
+                    continue
+                return False, "WB temporarily rate-limited reply publishing (429). The draft is saved; wait a few minutes and send again."
+            if response.status_code in {408, 425, 500, 502, 503, 504} and attempt < 2:
+                time.sleep(0.7 * (attempt + 1))
+                continue
+            body = _safe_response_text(response)
+            return False, f"WB API returned {response.status_code}: {body}"
+    return False, "Failed to authenticate in WB API"
+
+
 def post_wb_question_reply(api_key: str, question_id: str | int, text: str, *, state: str | None = None) -> tuple[bool, str]:
     raw_id = str(question_id or "").strip()
     if not raw_id:
@@ -668,13 +715,15 @@ def generate_review_reply(
     provider: str = "openai",
     base_url: str = "",
     fallback_chain: list[dict[str, Any]] | None = None,
+    previous_replies: list[str] | None = None,
     trace: dict[str, Any] | None = None,
 ) -> str:
-    review = (review_text or "").strip()
+    review = _repair_mojibake_text(review_text).strip()
     product = (product_name or "").strip() or "С‚РѕРІР°СЂ"
     rating = stars if isinstance(stars, int) else None
-    custom_prompt = (prompt or "").strip()
-    customer_name = _sanitize_person_name(reviewer_name)
+    product = _repair_mojibake_text(product_name).strip() or "товар"
+    custom_prompt = _repair_mojibake_text(prompt).strip()
+    customer_name = _sanitize_person_name(_repair_mojibake_text(reviewer_name))
     mp = "Ozon" if (marketplace or "").strip().lower() == "ozon" else "WB"
     kind = "question" if (content_kind or "").strip().lower() == "question" else "review"
 
@@ -711,6 +760,46 @@ def generate_review_reply(
             f"РћС†РµРЅРєР°: {rating if rating is not None else 'РЅРµ СѓРєР°Р·Р°РЅР°'}\n\n"
             "Сформируй готовый ответ для клиента."
         )
+    previous_clean: list[str] = []
+    for item in previous_replies or []:
+        text = " ".join(_repair_mojibake_text(item).split())
+        if text and text not in previous_clean:
+            previous_clean.append(text[:220])
+        if len(previous_clean) >= 8:
+            break
+    style_options = [
+        "тепло и по делу, без канцелярита",
+        "коротко, благодарно, с акцентом на опыт покупателя",
+        "спокойно и профессионально, без одинаковых фраз",
+        "дружелюбно, но без излишней восторженности",
+        "лаконично, с конкретной реакцией на текст отзыва",
+        "естественно, как ответ живого менеджера магазина",
+    ]
+    seed = int(hashlib.sha1(f"{mp}|{product}|{review}|{rating}".encode("utf-8", errors="ignore")).hexdigest()[:8], 16)
+    style_hint = style_options[seed % len(style_options)]
+    previous_block = "\n".join(f"- {text}" for text in previous_clean) or "- пока нет"
+    base_system_prompt = custom_prompt or (
+        "Ты менеджер магазина на маркетплейсе. Пиши на русском языке, вежливо, естественно и коротко. "
+        "Не выдумывай факты о товаре, доставке, скидках, гарантии или составе. "
+        "Не начинай все ответы одинаково. Не используй шаблонные фразы, если они уже есть в предыдущих ответах. "
+        "Ответ должен быть готов к публикации клиенту без кавычек, Markdown и служебных пометок."
+    )
+    system_prompt = (
+        f"{base_system_prompt}\n\n"
+        f"Стиль для этого ответа: {style_hint}.\n"
+        "Обязательно учитывай текст отзыва и оценку. Для 4-5 звезд не обещай исправлений без причины, лучше поблагодари и отметь конкретику из отзыва. "
+        "Если отзыв короткий или без деталей, ответь нейтрально и не повторяй предыдущие формулировки."
+    )
+    user_prompt = (
+        f"Маркетплейс: {mp}\n"
+        f"Тип: {'вопрос' if kind == 'question' else 'отзыв'}\n"
+        f"Товар: {product}\n"
+        f"Оценка: {rating if rating is not None else 'не указана'}\n"
+        f"Имя клиента: {customer_name or 'не указано'}\n"
+        f"Текст клиента:\n{review or '[текста нет]'}\n\n"
+        f"Последние опубликованные ответы, которые нельзя копировать:\n{previous_block}\n\n"
+        "Сформируй один новый ответ. Он должен отличаться от предыдущих по началу и формулировкам."
+    )
     payload = {
         "messages": [
             {"role": "system", "content": system_prompt},
@@ -827,7 +916,7 @@ def generate_review_reply(
                 item["error"] = "empty_reply"
                 attempts.append(item)
                 continue
-            answer = " ".join(reply.split())
+            answer = " ".join(_repair_mojibake_text(reply).split())
             item["ok"] = True
             attempts.append(item)
             if isinstance(trace, dict):
@@ -3917,6 +4006,36 @@ def _safe_response_text(response: httpx.Response) -> str:
     return compact[:220]
 
 
+def _mojibake_score(text: str) -> int:
+    value = str(text or "")
+    if not value:
+        return 0
+    markers = ("Ð", "Ñ", "Â", "�", "вЂ", "в„", "РЎ", "Р ", "Рџ", "Рќ", "Рћ", "СЃ", "С‚", "Р°", "Рµ")
+    return sum(value.count(marker) for marker in markers)
+
+
+def _repair_mojibake_text(value: Any) -> str:
+    raw = str(value or "")
+    if not raw or _mojibake_score(raw) <= 0:
+        return raw
+    candidates = {raw}
+    queue = [raw]
+    for _ in range(3):
+        if not queue:
+            break
+        current = queue.pop(0)
+        for encoding in ("cp1251", "latin1", "cp1252"):
+            for errors in ("strict", "ignore"):
+                try:
+                    candidate = current.encode(encoding, errors=errors).decode("utf-8", errors=errors)
+                except Exception:
+                    continue
+                if candidate and candidate not in candidates:
+                    candidates.add(candidate)
+                    queue.append(candidate)
+    return min(candidates, key=lambda item: (_mojibake_score(item), -len(item)))
+
+
 def _fallback_reply(review_text: str, product_name: str, stars: int | None, reviewer_name: str = "") -> str:
     clean_product = product_name.replace('"', " ").replace("'", " ").replace("\\", " ").strip()
     greeting = _build_greeting(reviewer_name)
@@ -4002,6 +4121,56 @@ def _sanitize_person_name(value: str) -> str:
     if len(compact) < 2:
         return ""
     return compact[:42]
+
+
+def _build_greeting(reviewer_name: str) -> str:
+    safe_name = _sanitize_person_name(_repair_mojibake_text(reviewer_name))
+    return f"Здравствуйте, {safe_name}!" if safe_name else "Здравствуйте!"
+
+
+def _fallback_reply(review_text: str, product_name: str, stars: int | None, reviewer_name: str = "") -> str:
+    clean_product = _repair_mojibake_text(product_name).replace('"', " ").replace("'", " ").replace("\\", " ").strip() or "товар"
+    greeting = _build_greeting(reviewer_name)
+    if stars is None:
+        return f"{greeting} Спасибо за отзыв о товаре {clean_product}. Мы передали обратную связь команде и учтем ее в работе."
+    if stars >= 5:
+        variants = [
+            f"{greeting} Спасибо за высокую оценку товара {clean_product}. Рады, что покупка оставила хорошее впечатление.",
+            f"{greeting} Благодарим за отзыв и отличную оценку. Приятно знать, что товар {clean_product} вам подошел.",
+            f"{greeting} Спасибо, что поделились впечатлением. Очень рады, что вы остались довольны товаром {clean_product}.",
+        ]
+    elif stars == 4:
+        variants = [
+            f"{greeting} Спасибо за отзыв о товаре {clean_product}. Учтем ваши замечания и постараемся сделать опыт покупки еще лучше.",
+            f"{greeting} Благодарим за оценку и обратную связь. Ваш отзыв поможет нам улучшать товар {clean_product} и сервис.",
+            f"{greeting} Спасибо, что написали нам. Рады, что товар {clean_product} в целом понравился, замечания обязательно учтем.",
+        ]
+    elif stars <= 2:
+        variants = [
+            f"{greeting} Спасибо, что написали о товаре {clean_product}. Нам жаль, что впечатление оказалось не лучшим. Передадим информацию на проверку.",
+            f"{greeting} Благодарим за обратную связь. Сожалеем, что товар {clean_product} не оправдал ожидания, разберемся в ситуации.",
+            f"{greeting} Спасибо за отзыв. Нам важно разобраться, что пошло не так с товаром {clean_product}, поэтому передадим информацию ответственным коллегам.",
+        ]
+    else:
+        variants = [
+            f"{greeting} Спасибо за отзыв о товаре {clean_product}. Нам важно ваше мнение, оно помогает улучшать качество и сервис.",
+            f"{greeting} Благодарим за обратную связь по товару {clean_product}. Мы внимательно относимся к таким комментариям.",
+            f"{greeting} Спасибо, что поделились впечатлением о товаре {clean_product}. Ваш отзыв поможет нам стать лучше.",
+        ]
+    seed = int(hashlib.sha1(f"{clean_product}|{review_text}|{stars}".encode("utf-8", errors="ignore")).hexdigest()[:8], 16)
+    return variants[seed % len(variants)]
+
+
+def _fallback_question_reply(question_text: str, product_name: str, reviewer_name: str = "") -> str:
+    clean_product = _repair_mojibake_text(product_name).replace('"', " ").replace("'", " ").replace("\\", " ").strip() or "товар"
+    greeting = _build_greeting(reviewer_name)
+    q = " ".join(_repair_mojibake_text(question_text).split())
+    if not q:
+        return f"{greeting} Спасибо за вопрос по товару {clean_product}. Пожалуйста, уточните детали, и мы оперативно поможем."
+    return (
+        f"{greeting} Спасибо за вопрос по товару {clean_product}. "
+        "Проверим информацию и подскажем точные параметры. Если можете, уточните нужный размер, модель или условия использования."
+    )
 
 
 def _extract_answer_text(*values: Any) -> str:

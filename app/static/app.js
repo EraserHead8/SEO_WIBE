@@ -4324,6 +4324,47 @@ function renderAutoReplyStatus(data, mode = "status") {
   );
 }
 
+function renderAutoReplyStatus(data, mode = "status") {
+  const counts = data?.counts || {};
+  const rows = Array.isArray(data?.rows) ? data.rows : [];
+  updateAutoReplyKillBadge(Boolean(data?.kill_switch));
+  if (mode === "dry-run") {
+    const candidates = Array.isArray(data?.candidates) ? data.candidates : [];
+    const warnings = Array.isArray(data?.warnings) ? data.warnings : [];
+    const skipped = data?.skipped || {};
+    const preview = candidates.slice(0, 6).map((item) => {
+      const market = String(item.marketplace || "").toUpperCase();
+      const product = escapeHtml(item.product || "товар без названия");
+      const rating = escapeHtml(item.rating || "");
+      const text = escapeHtml(item.text || "отзыв без текста").slice(0, 180);
+      return `<div class="auto-reply-row"><b>${market} ${rating}&#9733;</b><span>${product}</span><small>${text}</small></div>`;
+    }).join("");
+    const warningHtml = warnings.length
+      ? `<div class="auto-reply-warning">${warnings.map((x) => escapeHtml(x)).join("<br>")}</div>`
+      : "";
+    setAutoReplyStatus(
+      `<b>Dry-run готов:</b> найдено ${Number(data?.eligible || 0)} отзывов для очереди. ` +
+      `Пропущено: дублей ${Number(skipped.duplicate || 0)}, уже отвеченных ${Number(skipped.already_answered || 0)}, ниже оценки ${Number(skipped.low_rating || 0)}, без текста ${Number(skipped.empty_text || 0)}.` +
+      warningHtml +
+      (preview ? `<div class="auto-reply-preview">${preview}</div>` : "<div>Подходящих отзывов нет.</div>"),
+      candidates.length ? "ok" : ""
+    );
+    return;
+  }
+  const rowHtml = rows.slice(0, 8).map((row) => {
+    const market = escapeHtml(String(row.marketplace || "").toUpperCase());
+    const status = escapeHtml(row.status || "");
+    const rating = escapeHtml(row.rating || "");
+    const error = row.error ? `<small>${escapeHtml(row.error)}</small>` : "";
+    return `<div class="auto-reply-row"><b>${market} ${rating}&#9733;</b><span>${status}</span>${error}</div>`;
+  }).join("");
+  setAutoReplyStatus(
+    `<b>Журнал:</b> запланировано ${Number(counts.planned || 0)}, отправляется ${Number(counts.sending || 0)}, отправлено ${Number(counts.sent || 0)}, ошибок ${Number(counts.error || 0)}, пропущено ${Number(counts.skipped || 0)}.` +
+    (rowHtml ? `<div class="auto-reply-preview">${rowHtml}</div>` : "<div>Записей пока нет.</div>"),
+    Number(counts.error || 0) ? "danger" : ""
+  );
+}
+
 async function loadAutoReplyStatus(showErrors = true) {
   if (!enabledModules.has("wb_reviews_ai")) return null;
   const data = await requestJson("/api/feedback/auto-replies/status?limit=20", {
@@ -5047,6 +5088,12 @@ async function renderWbReviews() {
     pill.className = "review-type-pill";
     pill.textContent = status === "new" ? "??" : "?";
     pill.dataset.tip = status === "new" ? tr("Новый отзыв", "New review") : tr("Отвеченный отзыв", "Answered review");
+    pill.textContent = status === "new" ? "NEW" : "\u2713";
+    pill.dataset.tip = status === "new" ? tr("Новый отзыв", "New review") : tr("Отвеченный отзыв", "Answered review");
+    pill.textContent = status === "new" ? "NEW" : "\u2713";
+    pill.dataset.tip = status === "new" ? tr("Новый вопрос", "New question") : tr("Отвеченный вопрос", "Answered question");
+    pill.textContent = status === "new" ? "NEW" : "\u2713";
+    pill.dataset.tip = status === "new" ? tr("Новый отзыв", "New review") : tr("Отвеченный отзыв", "Answered review");
     meta.appendChild(pill);
     const dateBadge = document.createElement("span");
     dateBadge.className = "feedback-meta-badge";
@@ -5060,6 +5107,8 @@ async function renderWbReviews() {
       const ratingVal = Math.max(1, Math.min(5, Number(stars || 0)));
       starBadge.classList.add(`feedback-rating-${ratingVal}`);
       starBadge.textContent = `? ${stars}`;
+      starBadge.dataset.tip = tr("Оценка покупателя", "Customer rating");
+      starBadge.textContent = `\u2605 ${stars}`;
       starBadge.dataset.tip = tr("Оценка покупателя", "Customer rating");
       meta.appendChild(starBadge);
     }
@@ -5685,6 +5734,8 @@ async function renderWbQuestions() {
     const pill = document.createElement("span");
     pill.className = "review-type-pill";
     pill.textContent = status === "new" ? "??" : "?";
+    pill.dataset.tip = status === "new" ? tr("Новый вопрос", "New question") : tr("Отвеченный вопрос", "Answered question");
+    pill.textContent = status === "new" ? "NEW" : "\u2713";
     pill.dataset.tip = status === "new" ? tr("Новый вопрос", "New question") : tr("Отвеченный вопрос", "Answered question");
     meta.appendChild(pill);
     const dateBadge = document.createElement("span");

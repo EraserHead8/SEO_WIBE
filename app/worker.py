@@ -7,7 +7,7 @@ from datetime import date, datetime
 import hashlib
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import desc, select
 
 from app.db import SessionLocal
 from app.models import ApiCredential, AuditLog, FeedbackAutoReplyLog, SystemSetting, UserAiSettings
@@ -330,6 +330,20 @@ def _handle_feedback_auto_replies(payload: dict[str, Any]) -> None:
                     reviewer_name=str(candidate.get("reviewer_name") or ""),
                     marketplace=marketplace,
                     content_kind="review",
+                    previous_replies=[
+                        str(text or "")
+                        for text in db.scalars(
+                            select(FeedbackAutoReplyLog.reply_text)
+                            .where(
+                                FeedbackAutoReplyLog.user_id == user_id,
+                                FeedbackAutoReplyLog.marketplace == marketplace,
+                                FeedbackAutoReplyLog.status == "sent",
+                                FeedbackAutoReplyLog.reply_text != "",
+                            )
+                            .order_by(desc(FeedbackAutoReplyLog.sent_at), desc(FeedbackAutoReplyLog.id))
+                            .limit(8)
+                        ).all()
+                    ],
                 )
                 reply = " ".join(str(reply or "").split())
                 if len(reply) < 2:

@@ -3035,6 +3035,7 @@ def wb_generate_reply(payload: GenerateReviewReplyIn, user: User = Depends(get_c
         provider=str(runtime.get("provider") or ""),
         base_url=str(runtime.get("base_url") or ""),
         fallback_chain=list(runtime.get("fallback_chain") or []),
+        previous_replies=_feedback_recent_reply_texts(db, int(user.id), "wb"),
         trace=ai_trace,
     )
     trace_attempts = [x for x in (ai_trace.get("attempts") or []) if isinstance(x, dict)]
@@ -3215,6 +3216,7 @@ def ozon_generate_reply(payload: GenerateReviewReplyIn, user: User = Depends(get
         provider=str(runtime.get("provider") or ""),
         base_url=str(runtime.get("base_url") or ""),
         fallback_chain=list(runtime.get("fallback_chain") or []),
+        previous_replies=_feedback_recent_reply_texts(db, int(user.id), "ozon"),
         trace=ai_trace,
     )
     trace_attempts = [x for x in (ai_trace.get("attempts") or []) if isinstance(x, dict)]
@@ -3409,6 +3411,7 @@ def wb_generate_question_reply(payload: GenerateReviewReplyIn, user: User = Depe
         provider=str(runtime.get("provider") or ""),
         base_url=str(runtime.get("base_url") or ""),
         fallback_chain=list(runtime.get("fallback_chain") or []),
+        previous_replies=_feedback_recent_reply_texts(db, int(user.id), "wb"),
         trace=ai_trace,
     )
     trace_attempts = [x for x in (ai_trace.get("attempts") or []) if isinstance(x, dict)]
@@ -3587,6 +3590,7 @@ def ozon_generate_question_reply(payload: GenerateReviewReplyIn, user: User = De
         provider=str(runtime.get("provider") or ""),
         base_url=str(runtime.get("base_url") or ""),
         fallback_chain=list(runtime.get("fallback_chain") or []),
+        previous_replies=_feedback_recent_reply_texts(db, int(user.id), "ozon"),
         trace=ai_trace,
     )
     trace_attempts = [x for x in (ai_trace.get("attempts") or []) if isinstance(x, dict)]
@@ -4124,6 +4128,21 @@ def _feedback_auto_reply_kill_switch_enabled(db: Session, user_id: int) -> bool:
     return bool(payload.get("enabled")) if isinstance(payload, dict) else False
 
 
+def _feedback_recent_reply_texts(db: Session, user_id: int, marketplace: str, limit: int = 8) -> list[str]:
+    rows = db.scalars(
+        select(FeedbackAutoReplyLog.reply_text)
+        .where(
+            FeedbackAutoReplyLog.user_id == int(user_id),
+            FeedbackAutoReplyLog.marketplace == str(marketplace or "").strip().lower(),
+            FeedbackAutoReplyLog.status == "sent",
+            FeedbackAutoReplyLog.reply_text != "",
+        )
+        .order_by(FeedbackAutoReplyLog.sent_at.desc(), FeedbackAutoReplyLog.id.desc())
+        .limit(max(1, min(int(limit or 8), 20)))
+    ).all()
+    return [_repair_text_encoding(str(text or "")) for text in rows if str(text or "").strip()]
+
+
 def _build_feedback_auto_reply_candidates(
     db: Session,
     user: User,
@@ -4194,7 +4213,7 @@ def _build_feedback_auto_reply_candidates(
             if rating < min_stars:
                 skipped["low_rating"] += 1
                 continue
-            review_text = str(row.get("text") or "").strip()
+            review_text = _repair_text_encoding(str(row.get("text") or "")).strip()
             if marketplace == "ozon" and not review_text:
                 skipped["empty_text"] += 1
                 continue
@@ -4219,10 +4238,10 @@ def _build_feedback_auto_reply_candidates(
                 "item_type": "review",
                 "item_external_id": item_id,
                 "rating": rating,
-                "product": str(row.get("product") or "")[:300],
-                "article": str(row.get("article") or "")[:120],
+                "product": _repair_text_encoding(str(row.get("product") or ""))[:300],
+                "article": _repair_text_encoding(str(row.get("article") or ""))[:120],
                 "text": review_text[:3000],
-                "reviewer_name": str(row.get("user") or "")[:160],
+                "reviewer_name": _repair_text_encoding(str(row.get("user") or ""))[:160],
                 "date": str(row.get("date") or row.get("created_at") or "")[:80],
                 "stale": bool(is_stale),
             }
