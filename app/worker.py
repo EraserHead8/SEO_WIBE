@@ -23,6 +23,7 @@ from app.services.wb_modules import (
     post_ozon_review_reply,
     post_wb_review_reply,
     sanitize_marketplace_reply_text,
+    wait_wb_feedback_auto_reply_slot,
 )
 
 
@@ -300,8 +301,8 @@ def _handle_feedback_auto_replies(payload: dict[str, Any]) -> None:
                 db.commit()
                 continue
             if marketplace in stop_marketplaces:
-                log.status = "skipped"
-                log.error = "Skipped because marketplace rate limit was hit earlier in this run"
+                log.status = "queued"
+                log.error = "Queued because marketplace rate limit was hit earlier in this run"
                 log.updated_at = datetime.utcnow()
                 db.add(log)
                 db.commit()
@@ -353,8 +354,13 @@ def _handle_feedback_auto_replies(payload: dict[str, Any]) -> None:
                 reply = sanitize_marketplace_reply_text(reply)
                 if len(reply) < 2:
                     raise RuntimeError("Generated reply is empty")
+                log.reply_text = reply[:3000]
+                log.updated_at = datetime.utcnow()
+                db.add(log)
+                db.commit()
 
                 if marketplace == "wb":
+                    wait_wb_feedback_auto_reply_slot(api_key)
                     ok, message = post_wb_review_reply(api_key, item_id, reply)
                 else:
                     ok, message = post_ozon_review_reply(api_key, item_id, reply)
