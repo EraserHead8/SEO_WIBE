@@ -24,6 +24,7 @@ from app.services.wb_modules import (
     post_wb_review_reply,
     sanitize_marketplace_reply_text,
     wait_wb_feedback_auto_reply_slot,
+    wb_feedback_auto_reply_wait_left_sec,
 )
 
 
@@ -360,7 +361,20 @@ def _handle_feedback_auto_replies(payload: dict[str, Any]) -> None:
                 db.commit()
 
                 if marketplace == "wb":
-                    wait_wb_feedback_auto_reply_slot(api_key)
+                    wait_left = wb_feedback_auto_reply_wait_left_sec(api_key)
+                    if wait_left > 5:
+                        wait_minutes = max(1, int((wait_left + 59) // 60))
+                        log.status = "queued"
+                        log.error = f"Waiting for WB rate-limit window, about {wait_minutes} min left"
+                        log.updated_at = datetime.utcnow()
+                        db.add(log)
+                        db.commit()
+                        wait_wb_feedback_auto_reply_slot(api_key)
+                        log.status = "sending"
+                        log.error = ""
+                        log.updated_at = datetime.utcnow()
+                        db.add(log)
+                        db.commit()
                     ok, message = post_wb_review_reply(api_key, item_id, reply)
                 else:
                     ok, message = post_ozon_review_reply(api_key, item_id, reply)

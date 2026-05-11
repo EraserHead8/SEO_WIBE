@@ -101,9 +101,15 @@ def _wb_feedback_file_throttle(key: str) -> bool:
 
 
 def wait_wb_feedback_auto_reply_slot(api_key: str, *, interval_sec: int = 12 * 60 + 15) -> None:
+    wait = wb_feedback_auto_reply_wait_left_sec(api_key, interval_sec=interval_sec)
+    if wait > 0:
+        time.sleep(wait)
+
+
+def wb_feedback_auto_reply_wait_left_sec(api_key: str, *, interval_sec: int = 12 * 60 + 15) -> float:
     token = str(api_key or "").strip()
     if not token or os.name != "posix":
-        return
+        return 0.0
     key = token[-24:] if len(token) > 24 else token
     try:
         with open(_WB_FEEDBACK_THROTTLE_FILE, "a+", encoding="utf-8") as fh:
@@ -114,10 +120,8 @@ def wait_wb_feedback_auto_reply_slot(api_key: str, *, interval_sec: int = 12 * 6
                 payload = {}
             last = float(payload.get(key) or 0.0)
     except Exception:
-        return
-    wait = max(0.0, float(interval_sec or 0) - (time.time() - last))
-    if wait > 0:
-        time.sleep(wait)
+        return 0.0
+    return max(0.0, float(interval_sec or 0) - (time.time() - last))
 
 
 def fetch_wb_reviews(

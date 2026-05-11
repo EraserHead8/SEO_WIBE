@@ -143,7 +143,13 @@ def enqueue_task(
             )
             if not inserted:
                 return {"ok": True, "queued": False, "reason": "duplicate", "depth": queue_depth()}
-        client.lpush(queue_name(), json.dumps(item, ensure_ascii=False))
+        raw_item = json.dumps(item, ensure_ascii=False)
+        if safe_type == "feedback_auto_replies":
+            # The worker uses BRPOP, so RPUSH puts urgent feedback jobs at the
+            # next-consumed end instead of behind dashboard warmup tasks.
+            client.rpush(queue_name(), raw_item)
+        else:
+            client.lpush(queue_name(), raw_item)
         return {"ok": True, "queued": True, "depth": queue_depth()}
     except Exception as exc:
         if dedupe_name:
