@@ -803,7 +803,7 @@ def _sales_payload_for_market(payload: dict[str, Any] | None, marketplace: str) 
         return None
     market = str(marketplace or "").strip().lower()
     rows = [
-        dict(row)
+        _normalize_sales_market_row(dict(row), market)
         for row in (payload.get("rows") or [])
         if isinstance(row, dict) and str(row.get("marketplace") or "").strip().lower() == market
     ]
@@ -813,6 +813,8 @@ def _sales_payload_for_market(payload: dict[str, Any] | None, marketplace: str) 
     for key in _SALES_MARKET_METRICS:
         totals[key] = totals_src.get(f"{market}_{key}", 0)
         totals[f"{other_market}_{key}"] = 0
+    if market == "wb":
+        _normalize_wb_sales_totals(totals)
     chart: list[dict[str, Any]] = []
     for point in (payload.get("chart") or []):
         if not isinstance(point, dict):
@@ -831,6 +833,104 @@ def _sales_payload_for_market(payload: dict[str, Any] | None, marketplace: str) 
     out["chart"] = chart
     out["totals"] = totals
     out["warnings"] = list(dict.fromkeys([x for x in warnings if str(x).strip()]))
+    return out
+
+
+def _normalize_sales_market_row(row: dict[str, Any], marketplace: str) -> dict[str, Any]:
+    market = str(marketplace or row.get("marketplace") or "").strip().lower()
+    row["marketplace"] = market or row.get("marketplace")
+    if market != "wb":
+        return row
+    orders = _to_int_safe(row.get("orders"))
+    units = _to_int_safe(row.get("units"))
+    buyouts = _to_int_safe(row.get("buyouts"))
+    returns = _to_int_safe(row.get("returns"))
+    if units <= 0 and buyouts > 0:
+        units = buyouts
+        row["units"] = units
+    if orders <= 0 and (buyouts > 0 or returns > 0 or units > 0):
+        row["orders"] = max(units, buyouts + returns, buyouts, returns)
+    if _to_float_safe(row.get("order_amount")) <= 0 and _to_float_safe(row.get("revenue")) > 0:
+        row["order_amount"] = row.get("revenue")
+    return row
+
+
+def _normalize_wb_sales_totals(totals: dict[str, Any]) -> None:
+    orders = _to_int_safe(totals.get("orders"))
+    units = _to_int_safe(totals.get("units"))
+    buyouts = _to_int_safe(totals.get("buyouts"))
+    returns = _to_int_safe(totals.get("returns"))
+    if units <= 0 and buyouts > 0:
+        units = buyouts
+        totals["units"] = units
+        totals["wb_units"] = units
+    if orders <= 0 and (buyouts > 0 or returns > 0 or units > 0):
+        orders = max(units, buyouts + returns, buyouts, returns)
+        totals["orders"] = orders
+        totals["wb_orders"] = orders
+    if _to_float_safe(totals.get("order_amount")) <= 0 and _to_float_safe(totals.get("revenue")) > 0:
+        totals["order_amount"] = totals.get("revenue")
+        totals["wb_order_amount"] = totals.get("revenue")
+
+
+def _merge_sales_market_payload(base: dict[str, Any], market_payload: dict[str, Any], marketplace: str) -> dict[str, Any]:
+    if not isinstance(base, dict) or not isinstance(market_payload, dict):
+        return base
+    market = str(marketplace or "").strip().lower()
+    out = dict(base)
+    base_rows = [
+        row
+        for row in (out.get("rows") or [])
+        if not (isinstance(row, dict) and str(row.get("marketplace") or "").strip().lower() == market)
+    ]
+    market_rows = [
+        _normalize_sales_market_row(dict(row), market)
+        for row in (market_payload.get("rows") or [])
+        if isinstance(row, dict)
+    ]
+    out["rows"] = base_rows + market_rows
+
+    totals = dict(out.get("totals") if isinstance(out.get("totals"), dict) else {})
+    market_totals = dict(market_payload.get("totals") if isinstance(market_payload.get("totals"), dict) else {})
+    if market == "wb":
+        _normalize_wb_sales_totals(market_totals)
+    int_metrics = {"orders", "units", "buyouts", "returns", "days"}
+    for key in _SALES_MARKET_METRICS:
+        value = market_totals.get(key, 0)
+        totals[f"{market}_{key}"] = value
+        if key in int_metrics:
+            totals[key] = _to_int_safe(totals.get(key)) + _to_int_safe(value)
+        else:
+            totals[key] = float(round(_to_float_safe(totals.get(key)) + _to_float_safe(value), 2))
+    totals[f"{market}_days"] = market_totals.get("days", totals.get(f"{market}_days", 0))
+    out["totals"] = totals
+
+    base_chart = [dict(x) for x in (out.get("chart") or []) if isinstance(x, dict)]
+    market_chart = [dict(x) for x in (market_payload.get("chart") or []) if isinstance(x, dict)]
+    if market_chart:
+        by_key: dict[str, dict[str, Any]] = {}
+        for point in base_chart:
+            key = str(point.get("date") or point.get("time") or point.get("label") or len(by_key))
+            by_key[key] = point
+        for point in market_chart:
+            key = str(point.get("date") or point.get("time") or point.get("label") or len(by_key))
+            target = by_key.setdefault(key, {"date": point.get("date"), "time": point.get("time"), "label": point.get("label")})
+            for metric in _SALES_MARKET_METRICS:
+                prefixed = f"{market}_{metric}"
+                value = point.get(prefixed, point.get(metric))
+                if value is None:
+                    continue
+                target[prefixed] = value
+                if metric in int_metrics:
+                    target[metric] = _to_int_safe(target.get(metric)) + _to_int_safe(value)
+                else:
+                    target[metric] = float(round(_to_float_safe(target.get(metric)) + _to_float_safe(value), 2))
+        out["chart"] = list(by_key.values())
+
+    warnings = [str(x) for x in (out.get("warnings") or []) if str(x).strip()]
+    warnings.extend(str(x) for x in (market_payload.get("warnings") or []) if str(x).strip())
+    warnings.append(f"WB: показаны последние стабильные данные из кеша, потому что текущий запрос к API ограничен.")
+    out["warnings"] = list(dict.fromkeys(warnings))
     return out
 
 
@@ -8195,6 +8295,30 @@ def sales_stats(
     chart = chart if isinstance(chart, list) else []
     totals = totals if isinstance(totals, dict) else {}
     warnings = warnings if isinstance(warnings, list) else []
+    if selected_market == "all" and not _sales_payload_has_market_data(payload, "wb") and _warnings_indicate_upstream_failure(warnings):
+        wb_fallback_payload, wb_fallback_meta = _sales_latest_market_fallback_payload(
+            db,
+            user_id=int(user.id),
+            marketplace="wb",
+            max_age_sec=7 * 24 * 60 * 60,
+            exclude_cache_keys={str(sales_cache_meta.get("cache_key") or "").strip()},
+            scan_limit=180,
+        )
+        if _sales_payload_has_data(wb_fallback_payload):
+            payload = _merge_sales_market_payload(payload if isinstance(payload, dict) else {}, wb_fallback_payload or {}, "wb")
+            sales_cache_meta = {
+                **(sales_cache_meta or {}),
+                "source": f"{sales_cache_meta.get('source') or 'live'}+wb-fallback",
+                "wb_fallback_source": str((wb_fallback_meta or {}).get("source") or ""),
+            }
+            rows = payload.get("rows") if isinstance(payload, dict) else []
+            chart = payload.get("chart") if isinstance(payload, dict) else []
+            totals = payload.get("totals") if isinstance(payload, dict) else {}
+            warnings = payload.get("warnings") if isinstance(payload, dict) else []
+            rows = rows if isinstance(rows, list) else []
+            chart = chart if isinstance(chart, list) else []
+            totals = totals if isinstance(totals, dict) else {}
+            warnings = warnings if isinstance(warnings, list) else []
     if (not _sales_payload_has_data(payload)) and _warnings_indicate_upstream_failure(warnings):
         fallback_payload, fallback_meta = _market_cache_latest_payload(
             db,
