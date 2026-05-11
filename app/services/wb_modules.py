@@ -107,15 +107,7 @@ def fetch_wb_reviews(
     max_pages: int = 12,
 ) -> dict[str, list[dict[str, Any]]]:
     new_rows = _fetch_reviews_by_answer_state(api_key, is_answered=False, stars=stars, max_pages=max_pages)
-    answered_rows = _fetch_reviews_by_answer_state(api_key, is_answered=True, stars=stars, max_pages=max_pages)
-    if not answered_rows:
-        mixed_rows = _fetch_reviews_mixed(api_key, stars=stars, max_pages=max_pages)
-        if mixed_rows:
-            for item in mixed_rows:
-                if _looks_answered_feedback(item):
-                    answered_rows.append(item)
-                else:
-                    new_rows.append(item)
+    answered_rows: list[dict[str, Any]] = []
     new_rows = _dedupe_review_rows(new_rows)
     answered_rows = _dedupe_review_rows(answered_rows)
     normalized_new = [_normalize_review_row(item, is_answered=False) for item in new_rows]
@@ -131,14 +123,14 @@ def fetch_wb_reviews_fast(
     date_from: str | None = None,
     date_to: str | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
-    rows = _fetch_reviews_mixed(api_key, stars=stars, max_pages=1, include_archive=False)
-    if not rows:
-        rows = _fetch_reviews_by_answer_state(api_key, is_answered=False, stars=stars, max_pages=1, include_archive=False)
-        rows.extend(_fetch_reviews_by_answer_state(api_key, is_answered=True, stars=stars, max_pages=1, include_archive=False))
+    # WB Basic tokens can be limited to one heavy feedback-list request per minute.
+    # Load the actionable unanswered inbox first and avoid spending the slot on a
+    # mixed request without the required isAnswered parameter.
+    rows = _fetch_reviews_by_answer_state(api_key, is_answered=False, stars=stars, max_pages=1, include_archive=False)
     rows = _dedupe_review_rows(rows)
     normalized_all = [_normalize_review_row(item, is_answered=_looks_answered_feedback(item)) for item in rows]
     normalized_new = [row for row in normalized_all if not row.get("is_answered")]
-    normalized_answered = [row for row in normalized_all if row.get("is_answered")]
+    normalized_answered: list[dict[str, Any]] = []
     normalized_new = _filter_rows_by_period(normalized_new, date_from=date_from, date_to=date_to)
     normalized_answered = _filter_rows_by_period(normalized_answered, date_from=date_from, date_to=date_to)
     return {"new": normalized_new, "answered": normalized_answered}
@@ -175,15 +167,7 @@ def fetch_wb_questions(
     max_pages: int = 12,
 ) -> dict[str, list[dict[str, Any]]]:
     new_rows = _fetch_wb_questions_by_answer_state(api_key, is_answered=False, stars=stars, max_pages=max_pages)
-    answered_rows = _fetch_wb_questions_by_answer_state(api_key, is_answered=True, stars=stars, max_pages=max_pages)
-    if not answered_rows:
-        mixed_rows = _fetch_wb_questions_mixed(api_key, stars=stars, max_pages=max_pages)
-        if mixed_rows:
-            for item in mixed_rows:
-                if _looks_answered_feedback(item):
-                    answered_rows.append(item)
-                else:
-                    new_rows.append(item)
+    answered_rows: list[dict[str, Any]] = []
 
     new_rows = _dedupe_review_rows(new_rows)
     answered_rows = _dedupe_review_rows(answered_rows)
@@ -200,14 +184,11 @@ def fetch_wb_questions_fast(
     date_from: str | None = None,
     date_to: str | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
-    rows = _fetch_wb_questions_mixed(api_key, stars=stars, max_pages=1, include_archive=False)
-    if not rows:
-        rows = _fetch_wb_questions_by_answer_state(api_key, is_answered=False, stars=stars, max_pages=1, include_archive=False)
-        rows.extend(_fetch_wb_questions_by_answer_state(api_key, is_answered=True, stars=stars, max_pages=1, include_archive=False))
+    rows = _fetch_wb_questions_by_answer_state(api_key, is_answered=False, stars=stars, max_pages=1, include_archive=False)
     rows = _dedupe_review_rows(rows)
     normalized_all = [_normalize_wb_question_row(item, is_answered=_looks_answered_feedback(item)) for item in rows]
     normalized_new = [row for row in normalized_all if not row.get("is_answered")]
-    normalized_answered = [row for row in normalized_all if row.get("is_answered")]
+    normalized_answered: list[dict[str, Any]] = []
     normalized_new = _filter_rows_by_period(normalized_new, date_from=date_from, date_to=date_to)
     normalized_answered = _filter_rows_by_period(normalized_answered, date_from=date_from, date_to=date_to)
     return {"new": normalized_new, "answered": normalized_answered}

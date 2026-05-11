@@ -66,24 +66,19 @@ def build_sales_report(
 
     if selected in {"all", "wb"}:
         if wb_api_key.strip():
-            wb_rows, wb_warn = _fetch_wb_sales_rows(
+            # WB statistics/report methods are very tightly rate-limited. Use one
+            # reportDetailByPeriod source for both sales and finance metrics instead
+            # of cascading sales + orders + finance requests on every dashboard load.
+            wb_rows, wb_warn = _fetch_wb_sales_rows_report_detail(
                 wb_api_key.strip(),
                 date_from=date_from,
                 date_to=date_to,
                 ignore_cache=bool(force_fresh_wb),
-                cache_ttl_sec=wb_sales_cache_ttl_sec,
+                cache_ttl_sec=wb_report_detail_cache_ttl_sec,
             )
             collected.extend(wb_rows)
-            warnings.extend(wb_warn)
-            wb_orders_rows, wb_orders_warn = _fetch_wb_orders_rows(
-                wb_api_key.strip(),
-                date_from=date_from,
-                date_to=date_to,
-                ignore_cache=bool(force_fresh_wb),
-                cache_ttl_sec=wb_orders_cache_ttl_sec,
-            )
-            collected.extend(wb_orders_rows)
-            warnings.extend(wb_orders_warn)
+            if wb_warn:
+                warnings.append(wb_warn)
             wb_finance_rows, wb_finance_warn = _fetch_wb_financial_rows_report_detail(
                 wb_api_key.strip(),
                 date_from=date_from,
@@ -1069,8 +1064,8 @@ def _fetch_wb_sales_rows_report_detail(api_key: str, date_from: date, date_to: d
                 "date": day.isoformat(),
                 "occurred_at": str(item.get("sale_dt") or item.get("saleDt") or item.get("order_dt") or item.get("rr_dt") or ""),
                 "marketplace": "wb",
-                "orders": 0,
-                "units": 0,
+                "orders": 1,
+                "units": units,
                 "buyouts": units,
                 "order_amount": 0.0,
                 "buyout_amount": sale_amount,

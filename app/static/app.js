@@ -6466,7 +6466,7 @@ async function loadReturns() {
     if (warnings.length) {
       const cleaned = formatReturnsWarnings(warnings);
       statusEl.textContent = cleaned.length
-        ? cleaned.join(" ? ")
+        ? cleaned.join(" • ")
         : tr("Возвраты загружены с предупреждениями.", "Returns loaded with warnings.");
     } else {
       statusEl.textContent = tr("Возвраты загружены", "Returns loaded");
@@ -7768,7 +7768,7 @@ function renderCampaignDetail(data) {
     `${tr("???????", "Created")}: ${summary.created_at || "-"}`,
     `${tr("Обновлена", "Updated")}: ${summary.updated_at || "-"}`,
   ];
-  summaryEl.textContent = summaryRows.join(" ? ");
+  summaryEl.textContent = summaryRows.join(" • ");
 
   productsEl.innerHTML = "";
   const products = Array.isArray(data?.products) ? data.products : [];
@@ -8246,7 +8246,7 @@ function renderAdsAnalyticsRows() {
     const rowWarnings = [];
     if (row.summary_has_context === false) rowWarnings.push(currentLang === "en" ? "Name/status still partial" : "Название/статус ещё частичные");
     if (row.stat_has_context === false) rowWarnings.push(currentLang === "en" ? "Metrics not loaded for selected period" : "Метрики за период не загружены");
-    if (rowWarnings.length) rowEl.title = rowWarnings.join(" ? ");
+    if (rowWarnings.length) rowEl.title = rowWarnings.join(" • ");
     rowEl.innerHTML = `
       <td>${escapeHtml(row.campaign_id ?? "-")}</td>
       <td>${escapeHtml(row.name ?? "-")}</td>
@@ -11233,7 +11233,7 @@ function renderSalesChart(points) {
   if (showWb) {
     series.push({
       key: "wb",
-      label: `WB ? ${currentLabel}`,
+      label: `WB • ${currentLabel}`,
       color: palette.wb.current,
       values: resolveMarketplaceSeries(chartPoints, currentMaps, "wb"),
     });
@@ -11241,7 +11241,7 @@ function renderSalesChart(points) {
   if (showOzon) {
     series.push({
       key: "ozon",
-      label: `Ozon ? ${currentLabel}`,
+      label: `Ozon • ${currentLabel}`,
       color: palette.ozon.current,
       values: resolveMarketplaceSeries(chartPoints, currentMaps, "ozon"),
     });
@@ -11255,7 +11255,7 @@ function renderSalesChart(points) {
     if (showWb) {
       series.push({
         key: "wb_prev",
-        label: `WB ? ${compareLabel}`,
+        label: `WB • ${compareLabel}`,
         color: palette.wb.previous,
         values: alignCompareValues("wb"),
       });
@@ -11263,7 +11263,7 @@ function renderSalesChart(points) {
     if (showOzon) {
       series.push({
         key: "ozon_prev",
-        label: `Ozon ? ${compareLabel}`,
+        label: `Ozon • ${compareLabel}`,
         color: palette.ozon.previous,
         values: alignCompareValues("ozon"),
       });
@@ -11370,7 +11370,7 @@ function renderSalesChart(points) {
       const total = item.values.reduce((acc, val) => acc + Number(val || 0), 0);
       return `<span class="trend-series-item" style="--series-color:${item.color}">${escapeHtml(item.label)} <b>${escapeHtml(formatValue(total))}</b></span>`;
     })
-    .join(" ? ");
+    .join(" • ");
   const topSeries = series[0] || { values: [] };
   const topValues = Array.isArray(topSeries.values) ? topSeries.values : [];
   const peak = topValues.length ? Math.max(...topValues) : 0;
@@ -11687,12 +11687,13 @@ async function loadSalesStats(retryAttempt = 0, forceRefresh = false) {
       prevFrom.setDate(prevFrom.getDate() - diffDays);
       compare_from = toYmd(prevFrom);
       compare_to = toYmd(prevTo);
-      salesCurrentLabel = diffDays === 0
-        ? tr("???????", "Today")
-        : tr("Текущий период", "Current period");
-      salesCompareLabel = diffDays === 0
-        ? tr("Вчера", "Yesterday")
-        : tr("Предыдущий период", "Previous period");
+      if (diffDays === 0) {
+        salesCurrentLabel = tr("Сегодня", "Today");
+        salesCompareLabel = tr("Вчера", "Yesterday");
+      } else {
+        salesCurrentLabel = tr("Текущий период", "Current period");
+        salesCompareLabel = tr("Предыдущий период", "Previous period");
+      }
     }
   }
   const qp = new URLSearchParams();
@@ -12077,7 +12078,7 @@ function renderProfileData(data) {
   const companySummary = document.getElementById("profileCompanySummary");
   if (companySummary) {
     const parts = [String(data.company_name || "").trim(), String(data.full_name || "").trim()].filter(Boolean);
-    companySummary.textContent = parts.join(" ? ") || "-";
+    companySummary.textContent = parts.join(" • ") || "-";
   }
   const planSummaryShort = document.getElementById("profilePlanSummaryShort");
   if (planSummaryShort) {
@@ -13238,7 +13239,7 @@ function renderHelpAssistantHistory() {
       if (item?.module_code) metaBits.push(`#${String(item.module_code)}`);
       if (item?.provider) metaBits.push(String(item.provider));
       if (item?.service_name) metaBits.push(String(item.service_name));
-      const meta = metaBits.join(" ? ");
+      const meta = metaBits.join(" • ");
       return `
         <article class="help-card selected">
           <header class="help-card-head">
