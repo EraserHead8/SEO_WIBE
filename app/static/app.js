@@ -5327,6 +5327,16 @@ async function sendReviewReply(reviewId) {
       return null;
     });
     if (!data) return;
+    if (data.queued || data.ok === false) {
+      const queuedMessage = typeof decodePossiblyMojibake === "function"
+        ? String(decodePossiblyMojibake(data.message || "") || data.message || feedbackRateLimitMessage("send"))
+        : String(data.message || feedbackRateLimitMessage("send"));
+      wbReviewDrafts.set(key, text);
+      applyDraftToVisibleInputs("#wbReviewsTable .review-reply-input", reviewIdText, text);
+      updateReviewLoadStatus(queuedMessage);
+      alert(queuedMessage);
+      return;
+    }
     const row = wbReviewRows.find((x) => String(x?.id || "") === reviewIdText);
     if (row) {
       row.answer = text;

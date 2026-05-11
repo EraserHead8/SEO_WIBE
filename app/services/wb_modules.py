@@ -5,6 +5,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import tempfile
 import threading
 import time
@@ -359,7 +360,7 @@ def _legacy_post_wb_review_reply_unused(api_key: str, feedback_id: str, text: st
 def post_wb_review_reply(api_key: str, feedback_id: str, text: str) -> tuple[bool, str]:
     if not str(feedback_id or "").strip():
         return False, "Не указан ID отзыва"
-    reply = " ".join(str(text or "").split())
+    reply = sanitize_marketplace_reply_text(text)
     if len(reply) < 2:
         return False, "Ответ слишком короткий"
     if len(reply) > 3000:
@@ -405,7 +406,7 @@ def post_wb_review_reply(api_key: str, feedback_id: str, text: str) -> tuple[boo
     raw_id = str(feedback_id or "").strip()
     if not raw_id:
         return False, "WB review ID is missing"
-    reply = " ".join(_repair_mojibake_text(text).split())
+    reply = sanitize_marketplace_reply_text(text)
     if len(reply) < 2:
         return False, "Reply is too short"
     if len(reply) > 3000:
@@ -627,7 +628,7 @@ def post_ozon_review_reply(api_key: str, review_id: str, text: str) -> tuple[boo
     raw_id = str(review_id or "").strip()
     if not raw_id:
         return False, "Ozon review ID is missing"
-    reply = " ".join(str(text or "").split())
+    reply = sanitize_marketplace_reply_text(text)
     if len(reply) < 2:
         return False, "Reply is too short"
     if len(reply) > 3000:
@@ -837,6 +838,11 @@ def generate_review_reply(
         f"Последние опубликованные ответы, которые нельзя копировать:\n{previous_block}\n\n"
         "Сформируй один новый ответ. Он должен отличаться от предыдущих по началу и формулировкам."
     )
+    system_prompt += (
+        "\n\nВажно: верни только финальный текст ответа покупателю. "
+        "Не добавляй вступления вроде «Вот вариант ответа», пояснения, Markdown, разделители, кавычки или несколько вариантов."
+    )
+    user_prompt += "\n\nВерни только текст, который можно сразу публиковать клиенту."
     payload = {
         "messages": [
             {"role": "system", "content": system_prompt},
@@ -953,7 +959,7 @@ def generate_review_reply(
                 item["error"] = "empty_reply"
                 attempts.append(item)
                 continue
-            answer = " ".join(_repair_mojibake_text(reply).split())
+            answer = sanitize_marketplace_reply_text(reply, fallback=fallback)
             item["ok"] = True
             attempts.append(item)
             if isinstance(trace, dict):
@@ -991,7 +997,7 @@ def generate_review_reply(
                 "error": "all_attempts_failed",
             }
         )
-    return fallback
+    return sanitize_marketplace_reply_text(fallback, fallback=fallback)
 
 
 def generate_help_assistant_reply(
@@ -4073,6 +4079,52 @@ def _repair_mojibake_text(value: Any) -> str:
                     candidates.add(candidate)
                     queue.append(candidate)
     return min(candidates, key=lambda item: (_mojibake_score(item), -len(item)))
+
+
+_REPLY_META_PREFIX_RE = re.compile(
+    r"^\s*(?:"
+    r"(?:вот\s+)?(?:готовый\s+)?(?:вариант\s+)?ответ(?:а)?(?:\s+клиенту|\s+для\s+клиента|\s+для\s+отзыва|\s+на\s+отзыв)?"
+    r"|можно\s+ответить\s+так"
+    r"|текст\s+ответа"
+    r"|ответ\s+покупателю"
+    r"|готовый\s+текст"
+    r")\s*(?:[,—-]\s*[^:]{0,220})?:\s*",
+    re.IGNORECASE,
+)
+
+
+def sanitize_marketplace_reply_text(value: Any, fallback: str = "") -> str:
+    """Return only customer-facing reply text, without AI meta-introductions."""
+    text = _repair_mojibake_text(value)
+    text = text.replace("\ufeff", " ").strip()
+    if not text:
+        return " ".join(_repair_mojibake_text(fallback).split())
+
+    text = re.sub(r"^```(?:\w+)?\s*", "", text.strip())
+    text = re.sub(r"\s*```$", "", text.strip())
+    text = re.sub(r"^\s*[\"'«“”„]+|[\"'«»“”„]+$", "", text.strip())
+
+    # Models sometimes return: "Вот вариант ответа...: --- Здравствуйте..."
+    # Keep the part after the divider only when the first part is a meta preface.
+    divider_match = re.search(r"(?:^|\n)\s*(?:---+|—{2,}|-{2,})\s*(?:\n|$)", text)
+    if divider_match:
+        before = text[: divider_match.start()]
+        after = text[divider_match.end() :]
+        if _REPLY_META_PREFIX_RE.search(before + ":") and after.strip():
+            text = after.strip()
+
+    for _ in range(4):
+        previous = text
+        text = _REPLY_META_PREFIX_RE.sub("", text).strip()
+        text = re.sub(r"^\s*(?:[-–—•*]|\d+[.)])\s*", "", text).strip()
+        text = re.sub(r"^\s*[\"'«“”„]+|[\"'«»“”„]+$", "", text.strip())
+        if text == previous:
+            break
+
+    text = re.sub(r"\s+", " ", text).strip(" -–—")
+    if len(text) < 2:
+        return " ".join(_repair_mojibake_text(fallback).split())
+    return text[:3000]
 
 
 def _fallback_reply(review_text: str, product_name: str, stars: int | None, reviewer_name: str = "") -> str:

@@ -341,6 +341,7 @@ class WbReviewReplyIn(BaseModel):
 class WbReviewReplyOut(BaseModel):
     ok: bool
     message: str
+    queued: bool = False
 
 
 class ReturnActionIn(BaseModel):

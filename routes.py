@@ -309,6 +309,7 @@ from app.services.wb_modules import (
     post_ozon_review_reply,
     post_wb_question_reply,
     post_wb_review_reply,
+    sanitize_marketplace_reply_text,
     update_wb_campaign_state,
     fetch_wb_returns,
     fetch_wb_return_details,
@@ -435,6 +436,57 @@ def _feedback_reply_http_error(message: Any) -> HTTPException:
     lowered = detail.lower()
     status_code = 429 if ("429" in lowered or "too many requests" in lowered) else 400
     return HTTPException(status_code=status_code, detail=detail)
+
+
+def _store_rate_limited_feedback_reply(
+    db: Session,
+    user: User,
+    *,
+    marketplace: str,
+    item_type: str,
+    item_external_id: str,
+    reply_text: str,
+    rating: int = 0,
+    error: str = "",
+) -> FeedbackAutoReplyLog:
+    market = str(marketplace or "").strip().lower()[:30]
+    kind = str(item_type or "review").strip().lower()[:30] or "review"
+    item_id = str(item_external_id or "").strip()[:128]
+    reply = sanitize_marketplace_reply_text(reply_text)
+    payload = {
+        "marketplace": market,
+        "item_type": kind,
+        "item_external_id": item_id,
+        "rating": int(rating or 0),
+        "manual_reply": True,
+        "reply_text": reply,
+    }
+    log = db.scalar(
+        select(FeedbackAutoReplyLog).where(
+            FeedbackAutoReplyLog.user_id == int(user.id),
+            FeedbackAutoReplyLog.marketplace == market,
+            FeedbackAutoReplyLog.item_type == kind,
+            FeedbackAutoReplyLog.item_external_id == item_id,
+        )
+    )
+    if not log:
+        log = FeedbackAutoReplyLog(
+            user_id=int(user.id),
+            marketplace=market,
+            item_type=kind,
+            item_external_id=item_id,
+            rating=int(rating or 0),
+            created_at=datetime.utcnow(),
+        )
+        db.add(log)
+        db.flush()
+    log.status = "queued"
+    log.reply_text = reply[:3000]
+    log.error = _repair_text_encoding(str(error or "WB API returned 429"))[:1000]
+    log.payload_json = json.dumps(payload, ensure_ascii=False)
+    log.updated_at = datetime.utcnow()
+    db.add(log)
+    return log
 
 
 _SAFE_HELP_TITLES_RU: dict[str, str] = {
@@ -702,6 +754,128 @@ def _sales_payload_has_data(payload: dict[str, Any] | None) -> bool:
         except Exception:
             continue
     return False
+
+
+_SALES_MARKET_METRICS = (
+    "orders",
+    "units",
+    "buyouts",
+    "order_amount",
+    "buyout_amount",
+    "revenue",
+    "returns",
+    "ad_spend",
+    "penalties",
+    "income",
+    "expense",
+    "net",
+    "commission",
+    "logistics",
+    "storage",
+    "deductions",
+    "acceptance",
+    "other_expense",
+    "gross_profit",
+)
+
+
+def _sales_payload_has_market_data(payload: dict[str, Any] | None, marketplace: str) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    market = str(marketplace or "").strip().lower()
+    rows = payload.get("rows")
+    if isinstance(rows, list):
+        for row in rows:
+            if isinstance(row, dict) and str(row.get("marketplace") or "").strip().lower() == market:
+                return True
+    totals = payload.get("totals") if isinstance(payload.get("totals"), dict) else {}
+    for key in _SALES_MARKET_METRICS:
+        try:
+            if abs(float(totals.get(f"{market}_{key}") or 0.0)) > 1e-9:
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _sales_payload_for_market(payload: dict[str, Any] | None, marketplace: str) -> dict[str, Any] | None:
+    if not isinstance(payload, dict):
+        return None
+    market = str(marketplace or "").strip().lower()
+    rows = [
+        dict(row)
+        for row in (payload.get("rows") or [])
+        if isinstance(row, dict) and str(row.get("marketplace") or "").strip().lower() == market
+    ]
+    totals_src = payload.get("totals") if isinstance(payload.get("totals"), dict) else {}
+    totals = dict(totals_src)
+    other_market = "ozon" if market == "wb" else "wb"
+    for key in _SALES_MARKET_METRICS:
+        totals[key] = totals_src.get(f"{market}_{key}", 0)
+        totals[f"{other_market}_{key}"] = 0
+    chart: list[dict[str, Any]] = []
+    for point in (payload.get("chart") or []):
+        if not isinstance(point, dict):
+            continue
+        next_point = dict(point)
+        next_point["marketplace"] = market
+        for key in _SALES_MARKET_METRICS:
+            prefixed = f"{market}_{key}"
+            if prefixed in point:
+                next_point[key] = point.get(prefixed)
+        chart.append(next_point)
+    warnings = [str(x) for x in (payload.get("warnings") or [])]
+    warnings.append(f"Показаны последние стабильные данные {market.upper()} из общего кеша из-за временного лимита API.")
+    out = dict(payload)
+    out["rows"] = rows
+    out["chart"] = chart
+    out["totals"] = totals
+    out["warnings"] = list(dict.fromkeys([x for x in warnings if str(x).strip()]))
+    return out
+
+
+def _sales_latest_market_fallback_payload(
+    db: Session,
+    *,
+    user_id: int,
+    marketplace: str,
+    max_age_sec: int = 7 * 24 * 60 * 60,
+    exclude_cache_keys: set[str] | None = None,
+    scan_limit: int = 180,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    market = str(marketplace or "").strip().lower()
+    now = datetime.utcnow()
+    excluded = {str(x or "").strip() for x in (exclude_cache_keys or set()) if str(x or "").strip()}
+    rows = db.scalars(
+        select(MarketplaceApiCache)
+        .where(
+            MarketplaceApiCache.user_id == int(user_id),
+            MarketplaceApiCache.module_code == "sales_stats",
+            MarketplaceApiCache.marketplace == "all",
+        )
+        .order_by(MarketplaceApiCache.fetched_at.desc(), MarketplaceApiCache.id.desc())
+        .limit(max(20, min(int(scan_limit or 180), 500)))
+    ).all()
+    for row in rows:
+        if excluded and str(row.cache_key or "").strip() in excluded:
+            continue
+        fetched_at = row.fetched_at or row.last_hit_at
+        if not fetched_at:
+            continue
+        age_sec = max(0, int((now - fetched_at).total_seconds()))
+        if age_sec > max(60, int(max_age_sec or 0)):
+            continue
+        try:
+            payload = json.loads(str(row.payload_json or ""))
+        except Exception:
+            continue
+        if _sales_payload_has_market_data(payload if isinstance(payload, dict) else None, market):
+            return _sales_payload_for_market(payload, market), {
+                "source": f"db-latest-all-{market}-fallback",
+                "age_sec": age_sec,
+                "cache_key": str(row.cache_key or ""),
+            }
+    return None, {}
 
 
 def _accounting_payload_has_data(payload: dict[str, Any] | None) -> bool:
@@ -3014,12 +3188,13 @@ def wb_reply_review(payload: WbReviewReplyIn, user: User = Depends(get_current_u
         item_type="review",
         item_external_id=str(payload.id or "").strip(),
     )
-    ok, message = post_wb_review_reply(wb_key, payload.id, payload.text)
+    reply_text = sanitize_marketplace_reply_text(payload.text)
+    ok, message = post_wb_review_reply(wb_key, payload.id, reply_text)
     detail_payload = {
         "review_id": str(payload.id or ""),
         "ok": bool(ok),
         "marketplace": "wb",
-        "reply": str(payload.text or "")[:800],
+        "reply": reply_text[:800],
     }
     _audit(
         db,
@@ -3035,7 +3210,25 @@ def wb_reply_review(payload: WbReviewReplyIn, user: User = Depends(get_current_u
     if not ok:
         if "429" in str(message or "") or "too many requests" in str(message or "").lower():
             _feedback_mark_rate_limited(db, user_id=int(user.id), module_code="wb_reviews_ai", marketplace="wb")
+            _store_rate_limited_feedback_reply(
+                db,
+                user,
+                marketplace="wb",
+                item_type="review",
+                item_external_id=str(payload.id or ""),
+                reply_text=reply_text,
+                error=message,
+            )
             db.commit()
+            return WbReviewReplyOut(
+                ok=False,
+                queued=True,
+                message=(
+                    "WB временно ограничил отправку ответов (429). "
+                    "Текст сохранен в очереди/черновике, не публиковался. "
+                    "Повторите отправку после паузы WB."
+                ),
+            )
         raise _feedback_reply_http_error(message)
     return WbReviewReplyOut(ok=True, message=message)
 
@@ -4123,7 +4316,7 @@ def feedback_auto_replies_status(limit: int = 50, user: User = Depends(get_curre
             )
             or 0
         )
-        for status in ("planned", "sending", "sent", "skipped", "error")
+        for status in ("planned", "queued", "sending", "sent", "skipped", "error")
     }
     return {
         "counts": counts,
@@ -7915,6 +8108,16 @@ def sales_stats(
             max_age_sec=12 * 60 * 60,
             scan_limit=120,
         )
+        if selected_market == "wb" and not _sales_payload_has_market_data(fast_payload, "wb"):
+            fast_payload, fast_meta = _sales_latest_market_fallback_payload(
+                db,
+                user_id=int(user.id),
+                marketplace="wb",
+                max_age_sec=7 * 24 * 60 * 60,
+                scan_limit=180,
+            )
+            if fast_meta:
+                fast_meta["source"] = "db-latest-all-wb-fastpath"
         if _sales_payload_has_data(fast_payload):
             payload = fast_payload or {}
             sales_cache_meta = {
@@ -8002,6 +8205,16 @@ def sales_stats(
             exclude_cache_keys={str(sales_cache_meta.get("cache_key") or "").strip()},
             scan_limit=140,
         )
+        if selected_market == "wb" and not _sales_payload_has_market_data(fallback_payload, "wb"):
+            fallback_payload, fallback_meta = _sales_latest_market_fallback_payload(
+                db,
+                user_id=int(user.id),
+                max_age_sec=7 * 24 * 60 * 60,
+                exclude_cache_keys={str(sales_cache_meta.get("cache_key") or "").strip()},
+                scan_limit=180,
+            )
+            if fallback_meta:
+                fallback_meta["source"] = "db-latest-all-wb-fallback"
         if _sales_payload_has_data(fallback_payload):
             payload = fallback_payload or {}
             sales_cache_meta = fallback_meta or {"source": "db-latest-module-fallback", "age_sec": -1}

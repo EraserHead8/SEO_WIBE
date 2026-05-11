@@ -22,6 +22,7 @@ from app.services.wb_modules import (
     generate_review_reply,
     post_ozon_review_reply,
     post_wb_review_reply,
+    sanitize_marketplace_reply_text,
 )
 
 
@@ -322,30 +323,34 @@ def _handle_feedback_auto_replies(payload: dict[str, Any]) -> None:
                 db.add(log)
                 db.commit()
 
-                reply = generate_review_reply(
-                    review_text=str(candidate.get("text") or ""),
-                    product_name=str(candidate.get("product") or ""),
-                    stars=int(candidate.get("rating") or 0),
-                    prompt=prompt,
-                    reviewer_name=str(candidate.get("reviewer_name") or ""),
-                    marketplace=marketplace,
-                    content_kind="review",
-                    previous_replies=[
-                        str(text or "")
-                        for text in db.scalars(
-                            select(FeedbackAutoReplyLog.reply_text)
-                            .where(
-                                FeedbackAutoReplyLog.user_id == user_id,
-                                FeedbackAutoReplyLog.marketplace == marketplace,
-                                FeedbackAutoReplyLog.status == "sent",
-                                FeedbackAutoReplyLog.reply_text != "",
-                            )
-                            .order_by(desc(FeedbackAutoReplyLog.sent_at), desc(FeedbackAutoReplyLog.id))
-                            .limit(8)
-                        ).all()
-                    ],
-                )
-                reply = " ".join(str(reply or "").split())
+                manual_reply = bool(candidate.get("manual_reply")) or bool(str(candidate.get("reply_text") or log.reply_text or "").strip())
+                if manual_reply:
+                    reply = sanitize_marketplace_reply_text(candidate.get("reply_text") or log.reply_text)
+                else:
+                    reply = generate_review_reply(
+                        review_text=str(candidate.get("text") or ""),
+                        product_name=str(candidate.get("product") or ""),
+                        stars=int(candidate.get("rating") or 0),
+                        prompt=prompt,
+                        reviewer_name=str(candidate.get("reviewer_name") or ""),
+                        marketplace=marketplace,
+                        content_kind="review",
+                        previous_replies=[
+                            str(text or "")
+                            for text in db.scalars(
+                                select(FeedbackAutoReplyLog.reply_text)
+                                .where(
+                                    FeedbackAutoReplyLog.user_id == user_id,
+                                    FeedbackAutoReplyLog.marketplace == marketplace,
+                                    FeedbackAutoReplyLog.status == "sent",
+                                    FeedbackAutoReplyLog.reply_text != "",
+                                )
+                                .order_by(desc(FeedbackAutoReplyLog.sent_at), desc(FeedbackAutoReplyLog.id))
+                                .limit(8)
+                            ).all()
+                        ],
+                    )
+                reply = sanitize_marketplace_reply_text(reply)
                 if len(reply) < 2:
                     raise RuntimeError("Generated reply is empty")
 
@@ -378,7 +383,8 @@ def _handle_feedback_auto_replies(payload: dict[str, Any]) -> None:
                 db.add(log)
                 db.commit()
             except Exception as exc:
-                log.status = "error"
+                is_rate_limited = "429" in str(exc or "") or "too many requests" in str(exc or "").lower()
+                log.status = "queued" if is_rate_limited else "error"
                 log.error = str(exc or "auto reply failed")[:1000]
                 log.updated_at = datetime.utcnow()
                 db.add(
