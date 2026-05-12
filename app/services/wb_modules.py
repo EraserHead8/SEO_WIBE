@@ -28,16 +28,21 @@ class WbRateLimitError(RuntimeError):
 _WB_FEEDBACK_THROTTLE_LOCK = threading.Lock()
 _WB_FEEDBACK_LAST_REQUEST_AT: dict[str, float] = {}
 _WB_FEEDBACK_MIN_INTERVAL_SEC = 1.4
+_WB_FEEDBACK_PAGE_TAKE = 5000
+_WB_QUESTION_PAGE_TAKE = 10000
 _WB_FEEDBACK_THROTTLE_FILE = os.path.join(tempfile.gettempdir(), "seo_wibe_wb_feedback_throttle_v1.json")
+
+
+def _is_wb_feedback_api_url(url: str) -> bool:
+    return "feedbacks-api.wildberries.ru" in str(url or "").lower()
 
 
 def _wb_feedback_throttle(api_key: str) -> None:
     token = str(api_key or "").strip()
     if not token:
         return
-    # WB limit is shared by all Feedbacks/Questions methods for one seller account:
-    # 3 requests per second, 333 ms interval. Keep a large safety gap because
-    # reads, manual replies and the worker can run in separate processes.
+    # WB has one shared Feedbacks/Questions bucket per seller account.
+    # Keep an inter-process guard and honor server-provided 429 cooldowns.
     key = token[-24:] if len(token) > 24 else token
     if _wb_feedback_file_throttle(key):
         return
@@ -196,9 +201,15 @@ def fetch_wb_reviews(
     stars: int | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
-    max_pages: int = 12,
+    max_pages: int = 1,
 ) -> dict[str, list[dict[str, Any]]]:
-    new_rows = _fetch_reviews_by_answer_state(api_key, is_answered=False, stars=stars, max_pages=max_pages)
+    new_rows = _fetch_reviews_by_answer_state(
+        api_key,
+        is_answered=False,
+        stars=stars,
+        max_pages=max_pages,
+        include_archive=False,
+    )
     answered_rows: list[dict[str, Any]] = []
     new_rows = _dedupe_review_rows(new_rows)
     answered_rows = _dedupe_review_rows(answered_rows)
@@ -215,9 +226,8 @@ def fetch_wb_reviews_fast(
     date_from: str | None = None,
     date_to: str | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
-    # WB Basic tokens can be limited to one heavy feedback-list request per minute.
-    # Load the actionable unanswered inbox first and avoid spending the slot on a
-    # mixed request without the required isAnswered parameter.
+    # Load only the actionable unanswered inbox and avoid archive/mixed requests:
+    # every Feedbacks/Questions call shares the same WB rate-limit bucket.
     rows = _fetch_reviews_by_answer_state(api_key, is_answered=False, stars=stars, max_pages=1, include_archive=False)
     rows = _dedupe_review_rows(rows)
     normalized_all = [_normalize_review_row(item, is_answered=_looks_answered_feedback(item)) for item in rows]
@@ -518,6 +528,12 @@ def post_wb_review_reply(api_key: str, feedback_id: str, text: str) -> tuple[boo
         for attempt in range(3):
             response = None
             try:
+                wait_left = wb_feedback_auto_reply_wait_left_sec(api_key)
+                if wait_left > 5:
+                    retry_sec = int(wait_left + 0.999)
+                    return False, f"WB Feedbacks/Questions cooldown is active after 429. Retry automatically after {retry_sec} sec."
+                if wait_left > 0:
+                    wait_wb_feedback_auto_reply_slot(api_key)
                 _wb_feedback_throttle(api_key)
                 with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
                     response = client.post(endpoint, headers=headers, json=payload)
@@ -639,6 +655,12 @@ def post_wb_question_reply(api_key: str, question_id: str | int, text: str, *, s
                 for attempt in range(3):
                     response = None
                     try:
+                        wait_left = wb_feedback_auto_reply_wait_left_sec(token)
+                        if wait_left > 5:
+                            last_error = f"WB Feedbacks/Questions cooldown is active after 429. Retry automatically after {int(wait_left + 0.999)} sec."
+                            return False, last_error
+                        if wait_left > 0:
+                            wait_wb_feedback_auto_reply_slot(token)
                         _wb_feedback_throttle(token)
                         with httpx.Client(timeout=WB_TIMEOUT, follow_redirects=True) as client:
                             if method == "PATCH":
@@ -662,7 +684,15 @@ def post_wb_question_reply(api_key: str, question_id: str | int, text: str, *, s
                         body = _safe_response_text(response)
                         last_error = f"WB API returned {response.status_code}: {body}" if body else f"WB API returned {response.status_code}"
                         break
-                    if response.status_code in {408, 409, 425, 429, 500, 502, 503, 504} and attempt < 2:
+                    if response.status_code == 429:
+                        retry_delay = _wb_retry_delay_sec(response, attempt)
+                        _wb_feedback_record_rate_limit(token, retry_delay)
+                        if attempt < 2 and retry_delay <= 30:
+                            time.sleep(retry_delay)
+                            continue
+                        last_error = f"WB temporarily rate-limited question publishing (429). Retry automatically after {int(retry_delay + 0.999)} sec."
+                        return False, last_error
+                    if response.status_code in {408, 409, 425, 500, 502, 503, 504} and attempt < 2:
                         time.sleep(0.45 * (attempt + 1))
                         continue
                     body = _safe_response_text(response)
@@ -2759,7 +2789,7 @@ def _fetch_reviews_by_answer_state(
     is_answered: bool,
     stars: int | None,
     max_pages: int = 12,
-    include_archive: bool = True,
+    include_archive: bool = False,
 ) -> list[dict[str, Any]]:
     endpoints = ["https://feedbacks-api.wildberries.ru/api/v1/feedbacks"]
     if include_archive:
@@ -2792,7 +2822,7 @@ def _fetch_wb_questions_by_answer_state(
     is_answered: bool,
     stars: int | None,
     max_pages: int = 12,
-    include_archive: bool = True,
+    include_archive: bool = False,
 ) -> list[dict[str, Any]]:
     endpoints = ["https://feedbacks-api.wildberries.ru/api/v1/questions"]
     if include_archive:
@@ -2827,9 +2857,11 @@ def _fetch_wb_question_rows(
     stars: int | None,
     max_pages: int = 12,
 ) -> list[dict[str, Any]]:
-    take = 100
+    # WB docs allow up to 10,000 questions per request. One large page is much
+    # cheaper than burning several Feedbacks/Questions rate-limit slots.
+    take = _WB_QUESTION_PAGE_TAKE
     skip = 0
-    max_pages = max(1, min(int(max_pages or 1), 20))
+    max_pages = max(1, min(int(max_pages or 1), 2))
     all_rows: list[dict[str, Any]] = []
     for _ in range(max_pages):
         params: dict[str, Any] = {"take": take, "skip": skip}
@@ -2868,9 +2900,11 @@ def _fetch_wb_feedback_rows(
     stars: int | None,
     max_pages: int = 12,
 ) -> list[dict[str, Any]]:
-    take = 100
+    # WB docs allow up to 5,000 feedbacks per request. This keeps auto-replies
+    # and the UI from spending the shared WB rate-limit bucket on pagination.
+    take = _WB_FEEDBACK_PAGE_TAKE
     skip = 0
-    max_pages = max(1, min(int(max_pages or 1), 20))
+    max_pages = max(1, min(int(max_pages or 1), 2))
     all_rows: list[dict[str, Any]] = []
     for _ in range(max_pages):
         params: dict[str, Any] = {"take": take, "skip": skip}
@@ -3034,12 +3068,18 @@ def _request_wb_json(
     auth_variants = [token, f"Bearer {token}"]
     safe_max_attempts = max(1, min(4, int(max_attempts or 1)))
     request_timeout = timeout or WB_TIMEOUT
+    uses_feedback_bucket = _is_wb_feedback_api_url(url)
     for auth_value in auth_variants:
         headers = {"Authorization": auth_value, "Content-Type": "application/json"}
         for attempt in range(safe_max_attempts):
             response = None
             try:
-                _wb_feedback_throttle(token)
+                if uses_feedback_bucket:
+                    wait_left = wb_feedback_auto_reply_wait_left_sec(token)
+                    if wait_left > 5:
+                        retry_sec = int(wait_left + 0.999)
+                        raise WbRateLimitError(f"WB Feedbacks/Questions cooldown is active. Retry automatically after {retry_sec} sec.")
+                    _wb_feedback_throttle(token)
                 with httpx.Client(timeout=request_timeout, follow_redirects=True) as client:
                     if safe_method == "POST":
                         response = client.post(url, headers=headers, params=params, json=payload)
@@ -3049,6 +3089,8 @@ def _request_wb_json(
                         response = client.request("DELETE", url, headers=headers, params=params, json=payload)
                     else:
                         response = client.get(url, headers=headers, params=params)
+            except WbRateLimitError:
+                raise
             except Exception:
                 response = None
             if response is None:
@@ -3057,7 +3099,8 @@ def _request_wb_json(
                 continue
             if response.status_code == 429:
                 retry_delay = _wb_retry_delay_sec(response, attempt)
-                _wb_feedback_record_rate_limit(token, retry_delay)
+                if uses_feedback_bucket:
+                    _wb_feedback_record_rate_limit(token, retry_delay)
                 if not retry_rate_limit:
                     body = _safe_response_text(response)
                     raise WbRateLimitError(body or "WB API returned 429")
