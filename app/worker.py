@@ -14,7 +14,7 @@ from app.models import ApiCredential, AuditLog, FeedbackAutoReplyLog, SystemSett
 from app.services.ads_cache import sync_wb_campaign_snapshots
 from app.services.market_cache import build_market_cache_key, get_or_refresh_market_cache
 from app.services.sales import build_sales_report
-from app.services.task_queue import compact_queue, dequeue_task, queue_available, queue_depth
+from app.services.task_queue import compact_queue, dequeue_task, enqueue_task, queue_available, queue_depth
 from app.services.wb_bidder import run_bidder_rules
 from app.services.wb_modules import (
     fetch_ozon_ads_campaigns,
@@ -42,6 +42,8 @@ _MARKET_CACHE_TTL_SEC = {
     "sales_stats": 120,
     "wb_ads": 120,
 }
+_PENDING_FEEDBACK_REQUEUE_INTERVAL_SEC = 30
+_LAST_PENDING_FEEDBACK_REQUEUE_AT = 0.0
 
 
 def _shutdown(*_args) -> None:
@@ -66,6 +68,81 @@ def _feedback_auto_reply_kill_switch_enabled(db, user_id: int) -> bool:
     except Exception:
         return raw.lower() in {"1", "true", "yes", "on"}
     return bool(payload.get("enabled")) if isinstance(payload, dict) else False
+
+
+def _candidate_from_pending_feedback_log(log: FeedbackAutoReplyLog) -> dict[str, Any]:
+    try:
+        payload = json.loads(str(log.payload_json or "{}"))
+    except Exception:
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+    payload.update(
+        {
+            "marketplace": str(log.marketplace or "").strip().lower(),
+            "item_type": str(log.item_type or "review").strip().lower() or "review",
+            "item_external_id": str(log.item_external_id or "").strip(),
+            "rating": int(log.rating or 0),
+        }
+    )
+    if str(log.reply_text or "").strip():
+        payload["manual_reply"] = True
+        payload["reply_text"] = str(log.reply_text or "")
+    return payload
+
+
+def _enqueue_pending_feedback_auto_replies(*, force: bool = False) -> None:
+    global _LAST_PENDING_FEEDBACK_REQUEUE_AT
+    now = time.monotonic()
+    if not force and now - _LAST_PENDING_FEEDBACK_REQUEUE_AT < _PENDING_FEEDBACK_REQUEUE_INTERVAL_SEC:
+        return
+    _LAST_PENDING_FEEDBACK_REQUEUE_AT = now
+
+    db = SessionLocal()
+    try:
+        rows = db.scalars(
+            select(FeedbackAutoReplyLog)
+            .where(FeedbackAutoReplyLog.status.in_(["planned", "queued"]))
+            .order_by(FeedbackAutoReplyLog.updated_at.asc(), FeedbackAutoReplyLog.id.asc())
+            .limit(50)
+        ).all()
+        if not rows:
+            return
+
+        grouped: dict[int, list[FeedbackAutoReplyLog]] = {}
+        for row in rows:
+            if not str(row.marketplace or "").strip() or not str(row.item_external_id or "").strip():
+                continue
+            grouped.setdefault(int(row.user_id or 0), []).append(row)
+
+        for user_id, user_rows in grouped.items():
+            if user_id <= 0 or not user_rows:
+                continue
+            wb_wait_left = 0.0
+            if any(str(row.marketplace or "").strip().lower() == "wb" for row in user_rows):
+                wb_wait_left = wb_feedback_auto_reply_wait_left_sec(_active_key(db, user_id, "wb"))
+
+            candidates: list[dict[str, Any]] = []
+            for row in user_rows:
+                if str(row.marketplace or "").strip().lower() == "wb" and wb_wait_left > 5:
+                    wait_minutes = max(1, int((wb_wait_left + 59) // 60))
+                    row.status = "queued"
+                    row.error = f"Waiting for WB rate-limit window, about {wait_minutes} min left"
+                    row.updated_at = datetime.utcnow()
+                    db.add(row)
+                    continue
+                candidates.append(_candidate_from_pending_feedback_log(row))
+            db.commit()
+            if not candidates:
+                continue
+            enqueue_task(
+                "feedback_auto_replies",
+                {"user_id": user_id, "limit": min(50, len(candidates)), "candidates": candidates[:50]},
+                dedupe_key=f"pending_feedback_auto_replies:{user_id}",
+                dedupe_ttl_sec=_PENDING_FEEDBACK_REQUEUE_INTERVAL_SEC,
+            )
+    finally:
+        db.close()
 
 
 def _market_cache_ttl(module_code: str) -> int:
@@ -369,12 +446,10 @@ def _handle_feedback_auto_replies(payload: dict[str, Any]) -> None:
                         log.updated_at = datetime.utcnow()
                         db.add(log)
                         db.commit()
+                        stop_marketplaces.add(marketplace)
+                        continue
+                    if wait_left > 0:
                         wait_wb_feedback_auto_reply_slot(api_key)
-                        log.status = "sending"
-                        log.error = ""
-                        log.updated_at = datetime.utcnow()
-                        db.add(log)
-                        db.commit()
                     ok, message = post_wb_review_reply(api_key, item_id, reply)
                 else:
                     ok, message = post_ozon_review_reply(api_key, item_id, reply)
@@ -498,7 +573,10 @@ def run_worker() -> None:
         if not queue_available():
             time.sleep(_IDLE_SLEEP_SEC)
             continue
-        if queue_depth() > 80:
+        depth = queue_depth()
+        if depth == 0:
+            _enqueue_pending_feedback_auto_replies()
+        elif depth > 80:
             compact_queue(max_age_sec=20 * 60)
         task = dequeue_task(timeout_sec=10)
         if not task:

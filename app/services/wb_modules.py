@@ -74,22 +74,41 @@ def _wb_feedback_file_throttle(key: str) -> bool:
             if not isinstance(payload, dict):
                 payload = {}
             now = time.time()
-            last = float(payload.get(key) or 0.0)
+            raw_entry = payload.get(key)
+            if isinstance(raw_entry, dict):
+                last = float(raw_entry.get("last") or 0.0)
+                cooldown_until = float(raw_entry.get("cooldown_until") or 0.0)
+            else:
+                last = float(raw_entry or 0.0)
+                cooldown_until = 0.0
+            cooldown_wait = cooldown_until - now
+            if cooldown_wait > 0:
+                time.sleep(min(5.0, cooldown_wait))
+                now = time.time()
             wait = _WB_FEEDBACK_MIN_INTERVAL_SEC - (now - last)
             if wait > 0:
                 time.sleep(min(5.0, wait))
                 now = time.time()
-            payload[key] = now
+            payload[key] = {
+                "last": now,
+                "cooldown_until": cooldown_until if cooldown_until > now else 0.0,
+            }
             # Keep the tiny file tidy if several old keys accumulated.
             cutoff = now - 3600
-            cleaned: dict[str, float] = {}
+            cleaned: dict[str, Any] = {}
             for raw_key, raw_value in payload.items():
                 try:
-                    value = float(raw_value or 0)
+                    if isinstance(raw_value, dict):
+                        value = max(
+                            float(raw_value.get("last") or 0),
+                            float(raw_value.get("cooldown_until") or 0),
+                        )
+                    else:
+                        value = float(raw_value or 0)
                 except Exception:
                     continue
                 if value >= cutoff:
-                    cleaned[str(raw_key)] = value
+                    cleaned[str(raw_key)] = raw_value
             payload = cleaned
             fh.seek(0)
             fh.truncate()
@@ -100,13 +119,54 @@ def _wb_feedback_file_throttle(key: str) -> bool:
         return False
 
 
-def wait_wb_feedback_auto_reply_slot(api_key: str, *, interval_sec: int = 12 * 60 + 15) -> None:
+def _wb_feedback_record_rate_limit(api_key: str, retry_after_sec: float) -> None:
+    token = str(api_key or "").strip()
+    if not token or os.name != "posix":
+        return
+    key = token[-24:] if len(token) > 24 else token
+    retry_after = max(0.0, min(20 * 60.0, float(retry_after_sec or 0.0)))
+    if retry_after <= 0:
+        return
+    try:
+        import fcntl  # type: ignore
+    except Exception:
+        return
+    try:
+        with open(_WB_FEEDBACK_THROTTLE_FILE, "a+", encoding="utf-8") as fh:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+            fh.seek(0)
+            raw = fh.read().strip()
+            try:
+                payload = json.loads(raw) if raw else {}
+            except Exception:
+                payload = {}
+            if not isinstance(payload, dict):
+                payload = {}
+            now = time.time()
+            raw_entry = payload.get(key)
+            if isinstance(raw_entry, dict):
+                last = float(raw_entry.get("last") or now)
+            else:
+                last = float(raw_entry or now)
+            payload[key] = {
+                "last": last,
+                "cooldown_until": max(float((raw_entry or {}).get("cooldown_until") or 0.0) if isinstance(raw_entry, dict) else 0.0, now + retry_after),
+            }
+            fh.seek(0)
+            fh.truncate()
+            json.dump(payload, fh, ensure_ascii=False, sort_keys=True)
+            fh.flush()
+    except Exception:
+        return
+
+
+def wait_wb_feedback_auto_reply_slot(api_key: str, *, interval_sec: float = _WB_FEEDBACK_MIN_INTERVAL_SEC) -> None:
     wait = wb_feedback_auto_reply_wait_left_sec(api_key, interval_sec=interval_sec)
     if wait > 0:
         time.sleep(wait)
 
 
-def wb_feedback_auto_reply_wait_left_sec(api_key: str, *, interval_sec: int = 12 * 60 + 15) -> float:
+def wb_feedback_auto_reply_wait_left_sec(api_key: str, *, interval_sec: float = _WB_FEEDBACK_MIN_INTERVAL_SEC) -> float:
     token = str(api_key or "").strip()
     if not token or os.name != "posix":
         return 0.0
@@ -118,10 +178,17 @@ def wb_feedback_auto_reply_wait_left_sec(api_key: str, *, interval_sec: int = 12
             payload = json.loads(raw) if raw else {}
             if not isinstance(payload, dict):
                 payload = {}
-            last = float(payload.get(key) or 0.0)
+            raw_entry = payload.get(key)
+            if isinstance(raw_entry, dict):
+                last = float(raw_entry.get("last") or 0.0)
+                cooldown_until = float(raw_entry.get("cooldown_until") or 0.0)
+            else:
+                last = float(raw_entry or 0.0)
+                cooldown_until = 0.0
     except Exception:
         return 0.0
-    return max(0.0, float(interval_sec or 0) - (time.time() - last))
+    now = time.time()
+    return max(0.0, float(interval_sec or 0) - (now - last), cooldown_until - now)
 
 
 def fetch_wb_reviews(
@@ -397,6 +464,12 @@ def post_wb_review_reply(api_key: str, feedback_id: str, text: str) -> tuple[boo
             continue
         headers = {"Authorization": auth_value, "Content-Type": "application/json"}
         for attempt in range(3):
+            wait_left = wb_feedback_auto_reply_wait_left_sec(api_key)
+            if wait_left > 5:
+                retry_sec = int(wait_left + 0.999)
+                return False, f"WB rate limit cooldown is active (429). Retry automatically after {retry_sec} sec."
+            if wait_left > 0:
+                wait_wb_feedback_auto_reply_slot(api_key)
             response = None
             try:
                 _wb_feedback_throttle(api_key)
@@ -460,10 +533,13 @@ def post_wb_review_reply(api_key: str, feedback_id: str, text: str) -> tuple[boo
             if response.status_code in {401, 403}:
                 break
             if response.status_code == 429:
-                if attempt < 2:
-                    time.sleep(_wb_retry_delay_sec(response, attempt))
+                retry_delay = _wb_retry_delay_sec(response, attempt)
+                _wb_feedback_record_rate_limit(api_key, retry_delay)
+                if attempt < 2 and retry_delay <= 30:
+                    time.sleep(retry_delay)
                     continue
-                return False, "WB temporarily rate-limited reply publishing (429). The draft is saved; wait a few minutes and send again."
+                retry_sec = int(retry_delay + 0.999)
+                return False, f"WB temporarily rate-limited reply publishing (429). Retry automatically after {retry_sec} sec."
             if response.status_code in {408, 425, 500, 502, 503, 504} and attempt < 2:
                 time.sleep(0.7 * (attempt + 1))
                 continue
@@ -2944,11 +3020,13 @@ def _request_wb_json(
                     time.sleep(0.35 * (attempt + 1))
                 continue
             if response.status_code == 429:
+                retry_delay = _wb_retry_delay_sec(response, attempt)
+                _wb_feedback_record_rate_limit(token, retry_delay)
                 if not retry_rate_limit:
                     body = _safe_response_text(response)
                     raise WbRateLimitError(body or "WB API returned 429")
-                if attempt < (safe_max_attempts - 1):
-                    time.sleep(_wb_retry_delay_sec(response, attempt))
+                if attempt < (safe_max_attempts - 1) and retry_delay <= 30:
+                    time.sleep(retry_delay)
                     continue
                 body = _safe_response_text(response)
                 raise WbRateLimitError(body or "WB API returned 429")
@@ -2989,8 +3067,8 @@ def _wb_retry_delay_sec(response: httpx.Response, attempt: int) -> float:
         except Exception:
             continue
         if value > 0:
-            return min(12.0, max(0.5, value))
-    return min(8.0, 0.9 * (attempt + 1))
+            return min(20 * 60.0, max(0.5, value))
+    return min(30.0, 1.5 * (attempt + 1))
 
 
 def _request_ozon_json(
