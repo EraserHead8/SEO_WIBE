@@ -5125,6 +5125,7 @@ async function renderWbReviews() {
       const author = document.createElement("div");
       author.className = "cell-meta-small";
       author.textContent = `${currentLang === "en" ? "Author" : "Автор"}: ${row.user}`;
+      if (currentLang !== "en") author.textContent = `\u0410\u0432\u0442\u043e\u0440: ${row.user}`;
       head.appendChild(author);
     }
     card.appendChild(head);
@@ -5181,6 +5182,7 @@ async function renderWbReviews() {
     replyInput.className = "review-reply-input";
     replyInput.dataset.itemId = reviewId;
     replyInput.placeholder = currentLang === "en" ? "Reply text to customer" : "Текст ответа клиенту";
+    if (currentLang !== "en") replyInput.placeholder = "\u0422\u0435\u043a\u0441\u0442 \u043e\u0442\u0432\u0435\u0442\u0430 \u043a\u043b\u0438\u0435\u043d\u0442\u0443";
     const draftKey = reviewDraftKey(currentReviewMarketplace, reviewId);
     replyInput.value = wbReviewDrafts.get(draftKey) ?? row?.answer ?? "";
     replyInput.oninput = () => wbReviewDrafts.set(draftKey, replyInput.value);
@@ -5195,6 +5197,7 @@ async function renderWbReviews() {
       onClick: () => generateReviewReply(reviewId),
       secondary: true,
     });
+    btnGenerate.dataset.tip = tr("\u0421\u0433\u0435\u043d\u0435\u0440\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u043e\u0442\u0432\u0435\u0442", "Generate reply");
     const btnSend = makeIconActionButton({
       icon: status === "answered" ? "&#9998;" : "&#10148;",
       tip: status === "answered" ? tr("Обновить ответ", "Update reply") : tr("Отправить ответ", "Send reply"),
@@ -8337,8 +8340,15 @@ function updateSalesLoadStatus(message = "") {
       : (state === "partial"
         ? tr("?????????? ?????? ????????? ????????", "Sales statistics partially loaded")
         : tr("?????????? ?????? ?????????", "Sales statistics loaded")));
+  const fixedTitle = currentLang === "en"
+    ? title
+    : (active
+      ? "\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u0441\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0438 \u043f\u0440\u043e\u0434\u0430\u0436"
+      : (state === "error"
+        ? "\u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0441\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0438 \u043f\u0440\u043e\u0434\u0430\u0436"
+        : (state === "partial" ? "\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0430 \u043f\u0440\u043e\u0434\u0430\u0436 \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043d\u0430 \u0447\u0430\u0441\u0442\u0438\u0447\u043d\u043e" : "\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0430 \u043f\u0440\u043e\u0434\u0430\u0436 \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043d\u0430")));
   holder.innerHTML = buildLoadStatusHtml({
-    title,
+    title: fixedTitle,
     loaded,
     total,
     active,
@@ -10780,6 +10790,18 @@ async function loadDashboard() {
   ];
 
   const maxVal = Math.max(...stats.map((x) => x[1]), 1);
+  if (currentLang !== "en") {
+    stats[0][0] = "Товаров";
+    stats[1][0] = "SEO задач";
+    stats[2][0] = "Применено";
+    stats[3][0] = "В работе";
+    stats[4][0] = "Топ-5";
+    stats[0][0] = "\u0422\u043e\u0432\u0430\u0440\u043e\u0432";
+    stats[1][0] = "SEO \u0437\u0430\u0434\u0430\u0447";
+    stats[2][0] = "\u041f\u0440\u0438\u043c\u0435\u043d\u0435\u043d\u043e";
+    stats[3][0] = "\u0412 \u0440\u0430\u0431\u043e\u0442\u0435";
+    stats[4][0] = "\u0422\u043e\u043f-5";
+  }
   statsHost.innerHTML = stats
     .map(([name, val]) => {
       const pct = Math.max(4, Math.round((val / maxVal) * 100));
@@ -10964,6 +10986,23 @@ function renderSalesTotals() {
     <article class="sales-kpi"><span>${tr("Реклама", "Ads spend")}</span><strong>${formatMoney(totals.ad_spend)}</strong></article>
     <article class="sales-kpi"><span>${tr("Валовая прибыль", "Gross Profit")}</span><strong>${formatMoney(totals.gross_profit)}</strong></article>
   `;
+  if (currentLang !== "en") {
+    const today = toYmd(new Date());
+    const isTodayRange = String(document.getElementById("salesDateFrom")?.value || "") === today
+      && String(document.getElementById("salesDateTo")?.value || "") === today;
+    const labels = isTodayRange
+      ? ["Заказано сегодня", "Штук сегодня", "Выкупов сегодня", "Выручка сегодня", "Отказов сегодня", "Реклама сегодня", "Валовая прибыль"]
+      : ["Заказы", "Штуки", "Выкупы", "Выручка", "Отказы", "Реклама", "Валовая прибыль"];
+    host.querySelectorAll(".sales-kpi span").forEach((node, idx) => {
+      if (labels[idx]) node.textContent = labels[idx];
+    });
+    const fixedLabels = isTodayRange
+      ? ["\u0417\u0430\u043a\u0430\u0437\u0430\u043d\u043e \u0441\u0435\u0433\u043e\u0434\u043d\u044f", "\u0428\u0442\u0443\u043a \u0441\u0435\u0433\u043e\u0434\u043d\u044f", "\u0412\u044b\u043a\u0443\u043f\u043e\u0432 \u0441\u0435\u0433\u043e\u0434\u043d\u044f", "\u0412\u044b\u0440\u0443\u0447\u043a\u0430 \u0441\u0435\u0433\u043e\u0434\u043d\u044f", "\u041e\u0442\u043a\u0430\u0437\u043e\u0432 \u0441\u0435\u0433\u043e\u0434\u043d\u044f", "\u0420\u0435\u043a\u043b\u0430\u043c\u0430 \u0441\u0435\u0433\u043e\u0434\u043d\u044f", "\u0412\u0430\u043b\u043e\u0432\u0430\u044f \u043f\u0440\u0438\u0431\u044b\u043b\u044c"]
+      : ["\u0417\u0430\u043a\u0430\u0437\u044b", "\u0428\u0442\u0443\u043a\u0438", "\u0412\u044b\u043a\u0443\u043f\u044b", "\u0412\u044b\u0440\u0443\u0447\u043a\u0430", "\u041e\u0442\u043a\u0430\u0437\u044b", "\u0420\u0435\u043a\u043b\u0430\u043c\u0430", "\u0412\u0430\u043b\u043e\u0432\u0430\u044f \u043f\u0440\u0438\u0431\u044b\u043b\u044c"];
+    host.querySelectorAll(".sales-kpi span").forEach((node, idx) => {
+      if (fixedLabels[idx]) node.textContent = fixedLabels[idx];
+    });
+  }
   if (extraHost) {
     extraHost.innerHTML = `
       <article class="sales-kpi"><span>${tr("Сумма заказов", "Orders amount")}</span><strong>${formatMoney(totals.order_amount)}</strong></article>
@@ -10979,6 +11018,25 @@ function renderSalesTotals() {
       <article class="sales-kpi"><span>${tr("Приемка", "Acceptance")}</span><strong>${formatMoney(totals.acceptance)}</strong></article>
       <article class="sales-kpi"><span>${tr("Прочие расходы", "Other expense")}</span><strong>${formatMoney(totals.other_expense)}</strong></article>
     `;
+    if (currentLang !== "en") {
+      const extraLabels = [
+        "\u0421\u0443\u043c\u043c\u0430 \u0437\u0430\u043a\u0430\u0437\u043e\u0432",
+        "\u0421\u0443\u043c\u043c\u0430 \u0432\u044b\u043a\u0443\u043f\u043e\u0432",
+        "\u041f\u0440\u0438\u0445\u043e\u0434",
+        "\u0420\u0430\u0441\u0445\u043e\u0434",
+        "\u0418\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u0435 \u0431\u0430\u043b\u0430\u043d\u0441\u0430",
+        "\u0428\u0442\u0440\u0430\u0444\u044b",
+        "\u041a\u043e\u043c\u0438\u0441\u0441\u0438\u044f",
+        "\u041b\u043e\u0433\u0438\u0441\u0442\u0438\u043a\u0430",
+        "\u0425\u0440\u0430\u043d\u0435\u043d\u0438\u0435",
+        "\u0423\u0434\u0435\u0440\u0436\u0430\u043d\u0438\u044f",
+        "\u041f\u0440\u0438\u0435\u043c\u043a\u0430",
+        "\u041f\u0440\u043e\u0447\u0438\u0435 \u0440\u0430\u0441\u0445\u043e\u0434\u044b",
+      ];
+      extraHost.querySelectorAll(".sales-kpi span").forEach((node, idx) => {
+        if (extraLabels[idx]) node.textContent = extraLabels[idx];
+      });
+  }
   }
   if (extraWrap) {
     extraWrap.classList.toggle("hidden", !Object.keys(totals).length);
@@ -12061,6 +12119,12 @@ function renderProfileData(data) {
     `;
   }
 
+  if (currentLang !== "en" && planSummaryTable) {
+      ["\u0422\u0430\u0440\u0438\u0444", "\u0421\u0442\u0430\u0442\u0443\u0441", "\u0426\u0435\u043d\u0430/\u043c\u0435\u0441.", "\u041f\u0440\u043e\u0434\u043b\u0435\u043d\u0438\u0435"].forEach((label, idx) => {
+        const cell = planSummaryTable.querySelectorAll("td:first-child")[idx];
+        if (cell) cell.textContent = label;
+      });
+  }
   const credentials = Array.isArray(data.credentials) ? data.credentials : [];
   const keysTable = document.getElementById("profileKeysTable");
   if (keysTable) {
@@ -12088,13 +12152,13 @@ function renderProfileData(data) {
   const companySummary = document.getElementById("profileCompanySummary");
   if (companySummary) {
     const parts = [String(data.company_name || "").trim(), String(data.full_name || "").trim()].filter(Boolean);
-    companySummary.textContent = parts.join(" • ") || "-";
+    companySummary.textContent = parts.join(" \u2022 ") || "-";
   }
   const planSummaryShort = document.getElementById("profilePlanSummaryShort");
   if (planSummaryShort) {
     const code = String(data.plan_code || "-").trim() || "-";
     const status = String(data.plan_status || "-").trim() || "-";
-    planSummaryShort.textContent = `${code} ? ${status}`;
+    planSummaryShort.textContent = `${code} \u2022 ${status}`;
   }
   const keysSummaryShort = document.getElementById("profileKeysSummaryShort");
   if (keysSummaryShort) {
@@ -12105,8 +12169,8 @@ function renderProfileData(data) {
   if (aiSummaryShort) {
     const effective = profileAiState?.effective || null;
     aiSummaryShort.textContent = effective
-      ? `${effective.provider || "-"} ? ${effective.model || "-"}`
-      : tr("Не выбран", "Not selected");
+      ? `${effective.provider || "-"} \u2022 ${effective.model || "-"}`
+      : tr("\u041d\u0435 \u0432\u044b\u0431\u0440\u0430\u043d", "Not selected");
   }
   const teamSummaryShort = document.getElementById("profileTeamSummaryShort");
   if (teamSummaryShort) {
