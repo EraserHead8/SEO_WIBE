@@ -3509,7 +3509,7 @@ def ozon_reply_review(payload: WbReviewReplyIn, user: User = Depends(get_current
     db.commit()
     if not ok:
         if "429" in str(message or "") or "too many requests" in str(message or "").lower():
-            _feedback_mark_rate_limited(db, user_id=int(user.id), module_code="wb_questions_ai", marketplace="wb")
+            _feedback_mark_rate_limited(db, user_id=int(user.id), module_code="wb_reviews_ai", marketplace="ozon")
             db.commit()
         raise _feedback_reply_http_error(message)
     return WbReviewReplyOut(ok=True, message=message)

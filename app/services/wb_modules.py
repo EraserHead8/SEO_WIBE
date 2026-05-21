@@ -764,42 +764,34 @@ def post_ozon_review_reply(api_key: str, review_id: str, text: str) -> tuple[boo
     if len(reply) > 3000:
         return False, "Reply is too long (maximum 3000 characters)"
 
-    id_values: list[Any] = [raw_id]
-    try:
-        int_id = int(raw_id)
-    except Exception:
-        int_id = None
-    if int_id is not None:
-        id_values.append(int_id)
-
-    payloads: list[dict[str, Any]] = []
-    for id_value in id_values:
-        payloads.append({"review_id": id_value, "text": reply})
-        payloads.append({"id": id_value, "text": reply})
-
-    endpoints = [
-        "https://api-seller.ozon.ru/v1/review/comment/create",
-        "https://api-seller.ozon.ru/v1/review/comment/update",
-        "https://api-seller.ozon.ru/v1/review/comment",
-    ]
+    endpoint = "https://api-seller.ozon.ru/v1/review/comment/create"
+    payload = {
+        "review_id": raw_id,
+        "text": reply,
+        "mark_review_as_processed": True,
+    }
     last_error = "Failed to send reply to Ozon API"
-    for endpoint in endpoints:
-        for payload in payloads:
-            for attempt in range(3):
-                response = _request_ozon_response("POST", endpoint, api_key=api_key, payload=payload)
-                if response is None:
-                    if attempt < 2:
-                        time.sleep(0.35 * (attempt + 1))
-                        continue
-                    break
-                if response.status_code < 400:
-                    return True, "Reply sent"
-                body = _safe_response_text(response)
-                last_error = f"Ozon API returned {response.status_code}: {body}" if body else f"Ozon API returned {response.status_code}"
-                if response.status_code in {408, 425, 429, 500, 502, 503, 504} and attempt < 2:
-                    time.sleep(0.45 * (attempt + 1))
-                    continue
-                break
+    for attempt in range(3):
+        response = _request_ozon_response("POST", endpoint, api_key=api_key, payload=payload)
+        if response is None:
+            if attempt < 2:
+                time.sleep(0.35 * (attempt + 1))
+                continue
+            break
+        if response.status_code < 400:
+            return True, "Reply sent"
+        body = _safe_response_text(response)
+        if response.status_code == 404 and "page not found" in body.lower():
+            last_error = (
+                "Ozon review comment API returned 404. "
+                "Check that the seller account has access to review replies via API."
+            )
+        else:
+            last_error = f"Ozon API returned {response.status_code}: {body}" if body else f"Ozon API returned {response.status_code}"
+        if response.status_code in {408, 425, 429, 500, 502, 503, 504} and attempt < 2:
+            time.sleep(0.45 * (attempt + 1))
+            continue
+        break
     return False, last_error
 
 
