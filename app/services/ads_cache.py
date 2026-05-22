@@ -39,14 +39,24 @@ def get_wb_snapshot_rows(db: Session, user_id: int) -> list[dict[str, Any]]:
 
 
 def is_wb_snapshot_stale(db: Session, user_id: int) -> bool:
+    return bool(get_wb_snapshot_meta(db, user_id).get("stale"))
+
+
+def get_wb_snapshot_meta(db: Session, user_id: int) -> dict[str, Any]:
     latest = db.scalar(
         select(WbAdsCampaignSnapshot)
         .where(WbAdsCampaignSnapshot.user_id == user_id)
         .order_by(WbAdsCampaignSnapshot.synced_at.desc(), WbAdsCampaignSnapshot.id.desc())
     )
     if not latest or not latest.synced_at:
-        return True
-    return (datetime.utcnow() - latest.synced_at).total_seconds() > WB_ADS_SNAPSHOT_TTL_SEC
+        return {"stale": True, "age_sec": None, "synced_at": ""}
+    age_sec = max(0, int((datetime.utcnow() - latest.synced_at).total_seconds()))
+    return {
+        "stale": age_sec > WB_ADS_SNAPSHOT_TTL_SEC,
+        "age_sec": age_sec,
+        "synced_at": latest.synced_at.isoformat(),
+        "ttl_sec": WB_ADS_SNAPSHOT_TTL_SEC,
+    }
 
 
 def sync_wb_campaign_snapshots(

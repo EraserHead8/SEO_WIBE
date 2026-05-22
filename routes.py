@@ -232,6 +232,7 @@ from app.services.task_queue import enqueue_task, queue_available, queue_depth, 
 from app.telemetry import collect_perf_metrics
 from app.services.ads_cache import (
     get_wb_snapshot_rows,
+    get_wb_snapshot_meta,
     is_wb_snapshot_stale,
     sync_wb_campaign_snapshots,
 )
@@ -4679,35 +4680,32 @@ def wb_ads_campaigns(
         raise HTTPException(status_code=400, detail="Р В Р’В Р В Р вЂ№Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљР Р‹Р В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В»Р В Р’В Р вЂ™Р’В° Р В Р Р‹Р В РЎвЂњР В Р’В Р РЋРІР‚СћР В Р Р‹Р Р†Р вЂљР’В¦Р В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’В°Р В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚ВР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р вЂ™Р’Вµ API Р В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В РІР‚в„–Р В Р Р‹Р Р†Р вЂљР Р‹ Р В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В Р РЏ wb")
     rows = get_wb_snapshot_rows(db, user.id)
     source = "snapshot"
-    stale = is_wb_snapshot_stale(db, user.id)
+    snapshot_meta = get_wb_snapshot_meta(db, user.id)
+    stale = bool(snapshot_meta.get("stale"))
     refresh_queued = False
     queue_depth_now = 0
-    queue_available_now = False
+    queue_available_now = queue_available()
     if not rows or stale:
-        should_queue_refresh = not (bool(fast) and bool(rows))
-        if should_queue_refresh:
-            queue_depth_now = queue_depth()
-            queue_available_now = queue_available()
-            queue_result = enqueue_task(
-                "sync_wb_snapshots",
-                {"user_id": int(user.id)},
-                dedupe_key=f"wb_snapshots:{int(user.id)}",
-                dedupe_ttl_sec=15 * 60,
-            )
-            refresh_queued = bool(queue_result.get("queued"))
-            queue_depth_now = queue_depth()
-            force_sync_now = bool(not rows and not queue_available_now) or bool(stale and queue_depth_now > 220 and not fast)
-            if force_sync_now:
-                sync_wb_campaign_snapshots(db, user.id, wb_key)
-                rows = get_wb_snapshot_rows(db, user.id)
-                source = "sync-fallback" if not rows else "sync-refresh"
-                stale = is_wb_snapshot_stale(db, user.id)
-            elif not rows:
-                source = "snapshot-empty"
-            else:
-                source = "snapshot+queue-refresh"
+        queue_depth_now = queue_depth()
+        queue_result = enqueue_task(
+            "sync_wb_snapshots",
+            {"user_id": int(user.id)},
+            dedupe_key=f"wb_snapshots:{int(user.id)}",
+            dedupe_ttl_sec=15 * 60,
+        )
+        refresh_queued = bool(queue_result.get("queued"))
+        queue_depth_now = queue_depth()
+        force_sync_now = bool(not rows and not queue_available_now) or bool(stale and queue_depth_now > 220 and not fast)
+        if force_sync_now:
+            sync_wb_campaign_snapshots(db, user.id, wb_key)
+            rows = get_wb_snapshot_rows(db, user.id)
+            snapshot_meta = get_wb_snapshot_meta(db, user.id)
+            source = "sync-fallback" if not rows else "sync-refresh"
+            stale = bool(snapshot_meta.get("stale"))
+        elif not rows:
+            source = "snapshot-empty"
         else:
-            source = "snapshot-stale-fast"
+            source = "snapshot+queue-refresh"
     def _collect_placeholder_campaign_ids(items: list[dict[str, Any]]) -> list[int]:
         out: list[int] = []
         for item in items:
@@ -4890,6 +4888,9 @@ def wb_ads_campaigns(
             "fast_mode": bool(fast),
             "hydrate": bool(allow_live_hydration),
             "stale": stale,
+            "snapshot_age_sec": snapshot_meta.get("age_sec"),
+            "snapshot_synced_at": snapshot_meta.get("synced_at"),
+            "snapshot_ttl_sec": snapshot_meta.get("ttl_sec"),
             "count": len(rows),
             "refresh_queued": refresh_queued,
             "queue_available": queue_available_now,
