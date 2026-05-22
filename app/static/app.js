@@ -137,6 +137,7 @@ let salesLoadInflightKey = "";
 let salesLastRequestSignature = "";
 let salesLastLoadedAt = 0;
 let salesAutoLoadTimer = null;
+let salesLiveRefreshTimer = null;
 let salesBootstrapRetryTimer = null;
 let accountingOverview = null;
 let accountingChartRows = [];
@@ -5707,11 +5708,6 @@ async function loadWbQuestions() {
     if (raw) raw.textContent = tr("Ошибка отрисовки вопросов.", "Questions rendering failed.");
   });
   if (runToken !== questionLoadToken) return;
-  if (marketplace === "wb") {
-    questionLoadProgress.active = false;
-    updateQuestionLoadStatus();
-    return;
-  }
   questionLoadProgress.active = true;
   updateQuestionLoadStatus(tr("Быстрая загрузка готова, догружаем полный список...", "Fast load complete, fetching full list..."));
   requestFullReload();
@@ -10988,6 +10984,18 @@ function scheduleSalesReload(delayMs = 260) {
   }, Math.max(0, Number(delayMs) || 0));
 }
 
+function scheduleSalesLiveRefresh(delayMs = 18000) {
+  if (salesLiveRefreshTimer) {
+    clearTimeout(salesLiveRefreshTimer);
+  }
+  salesLiveRefreshTimer = setTimeout(() => {
+    salesLiveRefreshTimer = null;
+    if (currentTab === "sales") {
+      loadSalesStats().catch(() => null);
+    }
+  }, Math.max(3000, Number(delayMs) || 18000));
+}
+
 function toYmd(d) {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, "0");
@@ -12053,6 +12061,14 @@ async function loadSalesStats(retryAttempt = 0, forceRefresh = false) {
   }
   updateSalesLoadStatus();
   renderSalesStats();
+  const shouldPollWarmSales = !forceRefresh && warnings.some((item) => {
+    const text = String(item || "").toLowerCase();
+    return text.includes("догру") || text.includes("фон") || text.includes("background");
+  });
+  if (shouldPollWarmSales) {
+    updateSalesLoadStatus(tr("Данные показаны. WB догружается в фоне...", "Data is visible. WB is refreshing in background..."));
+    scheduleSalesLiveRefresh();
+  }
   if (retryAttempt === 0) {
     salesLastRequestSignature = requestSignature;
     salesLastLoadedAt = Date.now();

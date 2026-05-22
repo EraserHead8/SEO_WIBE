@@ -66,19 +66,39 @@ def build_sales_report(
 
     if selected in {"all", "wb"}:
         if wb_api_key.strip():
-            # WB statistics/report methods are very tightly rate-limited. Use one
-            # reportDetailByPeriod source for both sales and finance metrics instead
-            # of cascading sales + orders + finance requests on every dashboard load.
-            wb_rows, wb_warn = _fetch_wb_sales_rows_report_detail(
-                wb_api_key.strip(),
-                date_from=date_from,
-                date_to=date_to,
-                ignore_cache=bool(force_fresh_wb),
-                cache_ttl_sec=wb_report_detail_cache_ttl_sec,
-            )
-            collected.extend(wb_rows)
-            if wb_warn:
-                warnings.append(wb_warn)
+            wb_live_rows: list[dict[str, Any]] = []
+            use_live_wb_streams = bool(prefer_live or force_fresh_wb or date_to >= datetime.utcnow().date())
+            if use_live_wb_streams:
+                order_rows, order_warn = _fetch_wb_orders_rows(
+                    wb_api_key.strip(),
+                    date_from=date_from,
+                    date_to=date_to,
+                    ignore_cache=bool(force_fresh_wb),
+                    cache_ttl_sec=wb_orders_cache_ttl_sec,
+                )
+                sales_rows, sales_warn = _fetch_wb_sales_rows(
+                    wb_api_key.strip(),
+                    date_from=date_from,
+                    date_to=date_to,
+                    ignore_cache=bool(force_fresh_wb),
+                    cache_ttl_sec=wb_sales_cache_ttl_sec,
+                )
+                wb_live_rows = list(order_rows) + list(sales_rows)
+                collected.extend(wb_live_rows)
+                warnings.extend(order_warn)
+                warnings.extend(sales_warn)
+
+            if not _rows_have_any_metric(wb_live_rows, "orders", "buyouts", "revenue", "order_amount"):
+                wb_rows, wb_warn = _fetch_wb_sales_rows_report_detail(
+                    wb_api_key.strip(),
+                    date_from=date_from,
+                    date_to=date_to,
+                    ignore_cache=bool(force_fresh_wb),
+                    cache_ttl_sec=wb_report_detail_cache_ttl_sec,
+                )
+                collected.extend(wb_rows)
+                if wb_warn:
+                    warnings.append(wb_warn)
             wb_finance_rows, wb_finance_warn = _fetch_wb_financial_rows_report_detail(
                 wb_api_key.strip(),
                 date_from=date_from,
@@ -87,7 +107,10 @@ def build_sales_report(
                 cache_ttl_sec=wb_report_detail_cache_ttl_sec,
             )
             collected.extend(wb_finance_rows)
-            warnings.extend(wb_finance_warn)
+            if wb_live_rows and wb_finance_warn:
+                warnings.append("WB финансы за свежий период догрузятся после обновления отчета WB; заказы и продажи уже показаны.")
+            else:
+                warnings.extend(wb_finance_warn)
         else:
             warnings.append("WB ключ не подключен.")
 
@@ -139,6 +162,19 @@ def build_sales_report(
         "granularity": resolved_granularity,
         "timezone": timezone,
     }
+
+
+def _rows_have_any_metric(rows: list[dict[str, Any]], *metrics: str) -> bool:
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict):
+            continue
+        for metric in metrics:
+            try:
+                if abs(float(row.get(metric) or 0.0)) > 1e-9:
+                    return True
+            except Exception:
+                continue
+    return False
 
 
 def _build_sales_totals(rows: list[dict[str, Any]]) -> dict[str, Any]:

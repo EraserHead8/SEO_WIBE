@@ -269,7 +269,7 @@ def fetch_wb_questions(
     max_pages: int = 12,
 ) -> dict[str, list[dict[str, Any]]]:
     new_rows = _fetch_wb_questions_by_answer_state(api_key, is_answered=False, stars=stars, max_pages=max_pages)
-    answered_rows: list[dict[str, Any]] = []
+    answered_rows = _fetch_wb_questions_by_answer_state(api_key, is_answered=True, stars=stars, max_pages=max_pages)
 
     new_rows = _dedupe_review_rows(new_rows)
     answered_rows = _dedupe_review_rows(answered_rows)
@@ -2877,9 +2877,9 @@ def _fetch_wb_questions_by_answer_state(
     max_pages: int = 12,
     include_archive: bool = False,
 ) -> list[dict[str, Any]]:
+    # WB does not expose a separate questions/archive endpoint. Answered and
+    # archived questions are returned from the same endpoint with isAnswered=true.
     endpoints = ["https://feedbacks-api.wildberries.ru/api/v1/questions"]
-    if include_archive:
-        endpoints.append("https://feedbacks-api.wildberries.ru/api/v1/questions/archive")
     all_rows: list[dict[str, Any]] = []
     for endpoint in endpoints:
         rows = _fetch_wb_question_rows(api_key, endpoint=endpoint, is_answered=is_answered, stars=stars, max_pages=max_pages)
@@ -2894,12 +2894,10 @@ def _fetch_wb_questions_mixed(
     max_pages: int = 12,
     include_archive: bool = True,
 ) -> list[dict[str, Any]]:
-    endpoints = ["https://feedbacks-api.wildberries.ru/api/v1/questions"]
-    if include_archive:
-        endpoints.append("https://feedbacks-api.wildberries.ru/api/v1/questions/archive")
     rows: list[dict[str, Any]] = []
-    for endpoint in endpoints:
-        rows.extend(_fetch_wb_question_rows(api_key, endpoint=endpoint, is_answered=None, stars=stars, max_pages=max_pages))
+    endpoint = "https://feedbacks-api.wildberries.ru/api/v1/questions"
+    rows.extend(_fetch_wb_question_rows(api_key, endpoint=endpoint, is_answered=False, stars=stars, max_pages=max_pages))
+    rows.extend(_fetch_wb_question_rows(api_key, endpoint=endpoint, is_answered=True, stars=stars, max_pages=max_pages))
     return _dedupe_review_rows(rows)
 
 
@@ -2910,6 +2908,12 @@ def _fetch_wb_question_rows(
     stars: int | None,
     max_pages: int = 12,
 ) -> list[dict[str, Any]]:
+    if is_answered is None:
+        rows: list[dict[str, Any]] = []
+        rows.extend(_fetch_wb_question_rows(api_key, endpoint=endpoint, is_answered=False, stars=stars, max_pages=max_pages))
+        rows.extend(_fetch_wb_question_rows(api_key, endpoint=endpoint, is_answered=True, stars=stars, max_pages=max_pages))
+        return _dedupe_review_rows(rows)
+
     # WB docs allow up to 10,000 questions per request. One large page is much
     # cheaper than burning several Feedbacks/Questions rate-limit slots.
     take = _WB_QUESTION_PAGE_TAKE
