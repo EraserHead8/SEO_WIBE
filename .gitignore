@@ -27,6 +27,7 @@ android/seo-wibe-mobile/*.bak*
 _backup/
 _backup_*/
 _backup_codex_*/
+_codex_backup_*/
 backups/
 *.bak_*
 *.preupload_*
