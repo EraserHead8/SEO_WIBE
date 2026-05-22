@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 from datetime import datetime, timedelta
 from typing import Any
@@ -19,6 +20,71 @@ from app.services.wb_modules import (
 
 WB_ADS_SNAPSHOT_TTL_SEC = 55 * 60
 _WB_SYNC_LOCK: dict[int, float] = {}
+_DASH_VALUES = {"-", "\u2014", "\u0432\u0402\u201d"}
+_CAMPAIGN_NAME_KEYS = (
+    "name",
+    "campaignName",
+    "campaign_name",
+    "subject",
+    "title",
+    "advertName",
+    "advert_name",
+    "advertTitle",
+    "campaignTitle",
+)
+_MOJIBAKE_MARKERS = (
+    "\u0420\u00a0",
+    "\u0420\u00b0",
+    "\u0420\u00b1",
+    "\u0420\u2019",
+    "\u0420\u040e",
+    "\u0420\u045e",
+    "\u0420\u0402",
+    "\u0420\u0452",
+    "\u0420\u0409",
+    "\u0420\u040b",
+    "\u0421\u0403",
+    "\u0421\u0453",
+    "\u0421\u201a",
+    "\u00d0",
+    "\u00d1",
+    "\u00c3",
+    "\u00e2\u20ac",
+    "\ufffd",
+)
+_MOJIBAKE_PAIR_RE = re.compile(r"(?:\u0420[\u00a0-\u00bf\u0402-\u040f\u0452-\u045f]|\u0421[\u00a0-\u00bf\u0402-\u040f\u0452-\u045f]|\u00d0.|\u00d1.)")
+
+
+def _campaign_fallback_name(campaign_id: int) -> str:
+    return f"\u041a\u0430\u043c\u043f\u0430\u043d\u0438\u044f {campaign_id}" if campaign_id > 0 else ""
+
+
+def _looks_mojibake_text(value: Any) -> bool:
+    text = str(value or "").strip()
+    if not text:
+        return False
+    if any(marker in text for marker in _MOJIBAKE_MARKERS):
+        return True
+    return len(_MOJIBAKE_PAIR_RE.findall(text)) >= 2
+
+
+def _sanitize_campaign_snapshot_payload(payload: dict[str, Any], campaign_id: int) -> dict[str, Any]:
+    out = dict(payload or {})
+    has_clean_name = False
+    for key in _CAMPAIGN_NAME_KEYS:
+        if key not in out:
+            continue
+        text = str(out.get(key) or "").strip()
+        if not text:
+            continue
+        if _looks_mojibake_text(text):
+            out[key] = ""
+            continue
+        if text not in _DASH_VALUES:
+            has_clean_name = True
+    if not has_clean_name and campaign_id > 0:
+        out["name"] = _campaign_fallback_name(campaign_id)
+    return out
 
 
 def get_wb_snapshot_rows(db: Session, user_id: int) -> list[dict[str, Any]]:
@@ -34,7 +100,7 @@ def get_wb_snapshot_rows(db: Session, user_id: int) -> list[dict[str, Any]]:
     for row in rows:
         payload = _safe_json_loads(row.payload_json)
         if isinstance(payload, dict):
-            out.append(payload)
+            out.append(_sanitize_campaign_snapshot_payload(payload, row.campaign_id))
     return out
 
 
@@ -95,6 +161,7 @@ def sync_wb_campaign_snapshots(
         cid = _campaign_id_from_row(incoming_row)
         if cid <= 0:
             continue
+        incoming_row = _sanitize_campaign_snapshot_payload(incoming_row, cid)
         seen_ids.add(cid)
         row = db.scalar(
             select(WbAdsCampaignSnapshot).where(
@@ -107,6 +174,7 @@ def sync_wb_campaign_snapshots(
             previous_payload = _safe_json_loads(row.payload_json)
             if isinstance(previous_payload, dict):
                 merged_row = _merge_snapshot_payload(previous_payload, incoming_row, campaign_id=cid)
+        merged_row = _sanitize_campaign_snapshot_payload(merged_row, cid)
         payload = json.dumps(merged_row, ensure_ascii=False, sort_keys=True)
         payload_hash = hashlib.sha1(payload.encode("utf-8")).hexdigest()
         status = str(merged_row.get("status") or "")
@@ -258,10 +326,12 @@ def _is_placeholder_name(value: str, campaign_id: int) -> bool:
     text = str(value or "").strip().lower()
     if not text:
         return True
-    if text.startswith("кампания ") or text.startswith("campaign "):
+    if _looks_mojibake_text(text):
+        return True
+    if text.startswith("\u043a\u0430\u043c\u043f\u0430\u043d\u0438\u044f ") or text.startswith("campaign "):
         if campaign_id <= 0:
             return True
-        return text in {f"кампания {campaign_id}", f"campaign {campaign_id}"}
+        return text in {f"\u043a\u0430\u043c\u043f\u0430\u043d\u0438\u044f {campaign_id}", f"campaign {campaign_id}"}
     return False
 
 
@@ -291,8 +361,10 @@ def _merge_snapshot_payload(existing: dict[str, Any], incoming: dict[str, Any], 
 
     def _copy_if_name_placeholder(*keys: str) -> None:
         cur = _pick_text(out, *keys)
+        if _looks_mojibake_text(cur):
+            cur = ""
         fallback = _pick_text(prev, *keys)
-        if not fallback:
+        if not fallback or _looks_mojibake_text(fallback):
             return
         if not cur or _is_placeholder_name(cur, campaign_id):
             if not _is_placeholder_name(fallback, campaign_id):
@@ -327,7 +399,7 @@ def _merge_snapshot_payload(existing: dict[str, Any], incoming: dict[str, Any], 
     ):
         _copy_metric_if_missing(*metric_keys)
 
-    return out
+    return _sanitize_campaign_snapshot_payload(out, campaign_id)
 
 
 def sync_wb_campaign_snapshots_for_all_users(db: Session) -> dict[str, int]:

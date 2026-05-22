@@ -7073,8 +7073,41 @@ function getCampaignRowId(row) {
   return String(row?.advertId || row?.advert_id || row?.campaignId || row?.campaign_id || row?.id || row?.adId || "");
 }
 
+function campaignFallbackName(campaignId = "") {
+  const id = String(campaignId || "").trim();
+  if (!id || id === "-") return "-";
+  return currentLang === "en" ? `Campaign ${id}` : `\u041a\u0430\u043c\u043f\u0430\u043d\u0438\u044f ${id}`;
+}
+
+function rawCampaignName(row) {
+  return String(row?.name || row?.campaignName || row?.campaign_name || row?.subject || row?.title || "").trim();
+}
+
+function isBrokenCampaignName(value) {
+  const text = String(value || "").trim();
+  if (!text) return false;
+  const score = typeof _mojibakeScore === "function" ? Number(_mojibakeScore(text) || 0) : 0;
+  if (score >= 3) return true;
+  return /(?:\u0420[\u00a0\u00b0-\u00bf\u2019\u0402-\u040f\u0452-\u045f]|\u0421[\u00a0\u00b0-\u00bf\u0402-\u040f\u0452-\u045f]|\u0420\u00a0|\u00d0|\u00d1|\u00c3|\u00e2\u20ac|\uFFFD)/.test(text);
+}
+
+function safeCampaignName(row, campaignId = "", { fallback = true } = {}) {
+  const id = campaignId || getCampaignRowId(row);
+  const raw = rawCampaignName(row);
+  let name = raw;
+  if (name) {
+    try {
+      name = String(decodePossiblyMojibake(name) || name).trim();
+    } catch (_) {}
+  }
+  if (!name || isBrokenCampaignName(name) || isPlaceholderCampaignName(name, id)) {
+    return fallback ? campaignFallbackName(id) : "";
+  }
+  return name;
+}
+
 function campaignHasContext(row) {
-  const name = String(row?.name || row?.campaignName || row?.campaign_name || row?.subject || row?.title || "").trim();
+  const name = safeCampaignName(row, getCampaignRowId(row), { fallback: false });
   const status = String(row?.status || row?.state || "").trim();
   const type = String(row?.type || row?.adType || row?.campaignType || row?.typeId || "").trim();
   const budget = String(row?.dailyBudget || row?.budget || row?.sum || "").trim();
@@ -7131,8 +7164,7 @@ function isPlaceholderCampaignName(name, campaignId = "") {
 
 function campaignHasRealName(row) {
   const cid = getCampaignRowId(row);
-  const name = String(row?.name || row?.campaignName || row?.campaign_name || row?.subject || row?.title || "").trim();
-  return Boolean(name) && !isPlaceholderCampaignName(name, cid);
+  return Boolean(safeCampaignName(row, cid, { fallback: false }));
 }
 
 function campaignHasStats(row) {
@@ -7151,8 +7183,9 @@ function mergeCampaignSummaryIntoRow(row, summary) {
   if (!summary || typeof summary !== "object") return row;
   const next = { ...row };
   const currentId = getCampaignRowId(next) || String(summary.campaign_id || "");
-  if (summary.name && (isPlaceholderCampaignName(next.name, currentId) || String(next.name || "").trim() === "-")) {
-    next.name = summary.name;
+  const summaryName = safeCampaignName({ name: summary.name }, currentId, { fallback: false });
+  if (summaryName && !safeCampaignName(next, currentId, { fallback: false })) {
+    next.name = summaryName;
   }
   if ((!next.status || next.status === "-") && summary.status) next.status = summary.status;
   if ((!next.type || next.type === "-") && summary.type) next.type = summary.type;
@@ -7613,7 +7646,7 @@ function getFilteredCampaignRows() {
   const maxBudget = Number(document.getElementById("wbAdsBudgetMax")?.value || "");
   const rows = wbCampaignRows.filter((row) => {
     const id = getCampaignRowId(row);
-    const name = String(row?.name || row?.campaignName || row?.campaign_name || row?.subject || row?.title || "").trim();
+    const name = safeCampaignName(row, id);
     const statusRaw = String(row?.status ?? row?.state ?? "").trim();
     const typeRaw = String(row?.type ?? row?.adType ?? row?.campaignType ?? row?.typeId ?? "").trim();
     const statusMeta = campaignStatusMeta(statusRaw);
@@ -7641,8 +7674,8 @@ function getFilteredCampaignRows() {
   rows.sort((a, b) => {
     const aid = Number(getCampaignRowId(a) || 0);
     const bid = Number(getCampaignRowId(b) || 0);
-    const aname = String(a?.name || a?.campaignName || a?.campaign_name || a?.subject || a?.title || "").toLowerCase();
-    const bname = String(b?.name || b?.campaignName || b?.campaign_name || b?.subject || b?.title || "").toLowerCase();
+    const aname = safeCampaignName(a, aid).toLowerCase();
+    const bname = safeCampaignName(b, bid).toLowerCase();
     const ab = parseCampaignBudget(a);
     const bb = parseCampaignBudget(b);
     const as = Number(campaignStatusMeta(a?.status ?? a?.state ?? "").code || 0);
@@ -7714,7 +7747,7 @@ function renderWbCampaignRows() {
   for (const row of rows) {
     const rowId = getCampaignRowId(row);
     const id = rowId || "-";
-    const name = row.name || row.campaignName || row.campaign_name || row.subject || row.title || (id !== "-" ? (currentLang === "en" ? `Campaign ${id}` : `Кампания ${id}`) : "-");
+    const name = safeCampaignName(row, id);
     const statusMeta = campaignStatusMeta(row.status || row.state || "-");
     const typeMeta = campaignTypeMeta(row.type || row.adType || row.campaignType || row.typeId || "-");
     const status = normalizeCampaignStatus(row.status || row.state || "-");
@@ -7948,7 +7981,7 @@ async function openCampaignDetailModal(campaignId) {
   if (summaryEl) {
     const baseRow = wbCampaignRows.find((row) => Number(getCampaignRowId(row) || 0) === currentCampaignDetailId) || null;
     if (baseRow) {
-      const baseName = String(baseRow?.name || baseRow?.campaignName || baseRow?.campaign_name || baseRow?.subject || baseRow?.title || "").trim();
+      const baseName = safeCampaignName(baseRow, currentCampaignDetailId);
       const baseStatus = normalizeCampaignStatus(baseRow?.status || baseRow?.state || "-");
       const baseType = normalizeCampaignType(baseRow?.type || baseRow?.adType || baseRow?.campaignType || baseRow?.typeId || "-");
       summaryEl.textContent = tr(
@@ -8342,6 +8375,8 @@ function renderAdsAnalyticsRows() {
     return;
   }
   for (const row of adsAnalyticsRows) {
+    const rowCampaignId = String(row.campaign_id ?? row.id ?? "").trim();
+    const rowName = safeCampaignName(row, rowCampaignId);
     const ctrVal = parseCampaignMetric(row, "ctr", 2);
     const rowEl = document.createElement("tr");
     const rowWarnings = [];
@@ -8350,7 +8385,7 @@ function renderAdsAnalyticsRows() {
     if (rowWarnings.length) rowEl.title = rowWarnings.join(" • ");
     rowEl.innerHTML = `
       <td>${escapeHtml(row.campaign_id ?? "-")}</td>
-      <td>${escapeHtml(row.name ?? "-")}</td>
+      <td>${escapeHtml(rowName)}</td>
       <td>${escapeHtml(normalizeCampaignStatus(row.status ?? "-"))}</td>
       <td>${escapeHtml(normalizeCampaignType(row.type ?? "-"))}</td>
       <td>${escapeHtml(String(row.budget ?? "-"))}</td>
@@ -8486,6 +8521,8 @@ function renderAdsRecommendationsInsights() {
   }
   const topRows = adsRecommendationRows.slice(0, 8);
   host.innerHTML = topRows.map((row) => {
+    const rowCampaignId = String(row?.campaign_id || row?.id || "").trim();
+    const rowName = safeCampaignName(row, rowCampaignId);
     const prio = String(row?.priority || "low").toLowerCase();
     const prioLabel = prio === "high"
       ? tr("Высокий", "High")
@@ -8503,7 +8540,7 @@ function renderAdsRecommendationsInsights() {
     return `
       <article class="ads-rec-insight-card ${escapeHtml(prio)}">
         <header>
-          <strong>#${escapeHtml(String(row?.campaign_id || "-"))} ${escapeHtml(String(row?.name || "-"))}</strong>
+          <strong>#${escapeHtml(String(row?.campaign_id || "-"))} ${escapeHtml(rowName)}</strong>
           <span>${escapeHtml(prioLabel)}</span>
         </header>
         <div class="ads-rec-insight-title">${escapeHtml(String(row?.recommendation || "-"))}</div>
@@ -8679,6 +8716,8 @@ function renderAdsRecommendationsRows() {
     return;
   }
   for (const row of adsRecommendationRows) {
+    const rowCampaignId = String(row.campaign_id ?? row.id ?? "").trim();
+    const rowName = safeCampaignName(row, rowCampaignId);
     const ctrVal = parseCampaignMetric(row, "ctr", 2);
     const actionCode = String(row.action || "").trim();
     const actionLabel = actionCode
@@ -8691,7 +8730,7 @@ function renderAdsRecommendationsRows() {
     const rowEl = document.createElement("tr");
     rowEl.innerHTML = `
       <td>${escapeHtml(row.campaign_id ?? "-")}</td>
-      <td>${escapeHtml(row.name ?? "-")}</td>
+      <td>${escapeHtml(rowName)}</td>
       <td>${escapeHtml(normalizeCampaignStatus(row.status ?? "-"))}</td>
       <td>${escapeHtml(normalizeCampaignType(row.type ?? "-"))}</td>
       <td>${escapeHtml(parseCampaignMetric(row, "views"))}</td>
@@ -8722,9 +8761,7 @@ function getCampaignLookupName(campaignId) {
   if (!key) return "";
   const row = getCampaignLookupRow(key);
   if (!row || typeof row !== "object") return "";
-  const name = String(row?.name || row?.campaignName || row?.campaign_name || row?.subject || row?.title || "").trim();
-  if (!name || isPlaceholderCampaignName(name, key)) return "";
-  return name;
+  return safeCampaignName(row, key, { fallback: false });
 }
 
 function refreshWbBidderCampaignHints() {
@@ -8737,7 +8774,7 @@ function refreshWbBidderCampaignHints() {
     const id = String(getCampaignRowId(row) || row?.campaign_id || row?.id || "").trim();
     if (!id || seen.has(id)) continue;
     seen.add(id);
-    const name = getCampaignLookupName(id) || (currentLang === "en" ? `Campaign ${id}` : `Кампания ${id}`);
+    const name = getCampaignLookupName(id) || campaignFallbackName(id);
     const status = normalizeCampaignStatus(row?.status || row?.state || "-");
     const type = normalizeCampaignType(row?.type || row?.adType || row?.campaignType || row?.typeId || "-");
     const meta = [name, status, type].filter((part) => String(part || "").trim() && String(part || "").trim() !== "-");

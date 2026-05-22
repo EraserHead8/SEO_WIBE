@@ -2650,6 +2650,40 @@ def _merge_campaign_summary(base: dict[str, Any], extra: dict[str, Any]) -> dict
     return merged
 
 
+_WB_MOJIBAKE_CAMPAIGN_MARKERS = (
+    "\u0420\u00a0",
+    "\u0420\u00b0",
+    "\u0420\u00b1",
+    "\u0420\u2019",
+    "\u0420\u040e",
+    "\u0420\u045e",
+    "\u0420\u0402",
+    "\u0420\u0452",
+    "\u0420\u0409",
+    "\u0420\u040b",
+    "\u0421\u0403",
+    "\u0421\u0453",
+    "\u0421\u201a",
+    "\u00d0",
+    "\u00d1",
+    "\u00c3",
+    "\u00e2\u20ac",
+    "\ufffd",
+)
+_WB_MOJIBAKE_CAMPAIGN_PAIR_RE = re.compile(
+    r"(?:\u0420[\u00a0-\u00bf\u0402-\u040f\u0452-\u045f]|\u0421[\u00a0-\u00bf\u0402-\u040f\u0452-\u045f]|\u00d0.|\u00d1.)"
+)
+
+
+def _is_mojibake_campaign_text(value: Any) -> bool:
+    text = str(value or "").strip()
+    if not text:
+        return False
+    if any(marker in text for marker in _WB_MOJIBAKE_CAMPAIGN_MARKERS):
+        return True
+    return len(_WB_MOJIBAKE_CAMPAIGN_PAIR_RE.findall(text)) >= 2
+
+
 def _extract_campaign_summary(data: dict[str, Any] | list[dict[str, Any]], campaign_id: int) -> dict[str, Any]:
     campaign_id_text = str(campaign_id)
     rows = _extract_wb_campaign_rows(data)
@@ -2688,11 +2722,13 @@ def _extract_campaign_summary(data: dict[str, Any] | list[dict[str, Any]], campa
     ]
     name = ""
     for candidate in name_candidates:
-        text = str(candidate or "").strip()
+        text = _repair_mojibake_text(candidate).strip()
         if not text:
             continue
+        if _is_mojibake_campaign_text(text):
+            continue
         low = text.lower()
-        if low.startswith("кампания ") or low.startswith("campaign "):
+        if low.startswith("\u043a\u0430\u043c\u043f\u0430\u043d\u0438\u044f ") or low.startswith("campaign "):
             if not name:
                 name = text
             continue
