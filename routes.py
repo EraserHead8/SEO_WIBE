@@ -3093,7 +3093,7 @@ def delete_credential(marketplace: str, user: User = Depends(get_current_user), 
         select(ApiCredential).where(ApiCredential.user_id == user.id, ApiCredential.marketplace == market)
     ).all()
     if not creds:
-        raise HTTPException(status_code=404, detail="Р В Р’В Р РЋРІвЂћСћР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В РІР‚в„–Р В Р Р‹Р Р†Р вЂљР Р‹ Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’Вµ Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦")
+        raise HTTPException(status_code=404, detail="Ключ не найден")
 
     for cred in creds:
         db.delete(cred)
@@ -3107,7 +3107,7 @@ def delete_credential(marketplace: str, user: User = Depends(get_current_user), 
         entity_id=market,
     )
     db.commit()
-    return MessageOut(message="Р В Р’В Р РЋРІвЂћСћР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В РІР‚в„–Р В Р Р‹Р Р†Р вЂљР Р‹ Р В Р Р‹Р РЋРІР‚СљР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В»Р В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦")
+    return MessageOut(message="Ключ удален")
 
 
 @router.get("/keywords", response_model=list[KeywordOut])
@@ -9968,7 +9968,7 @@ def admin_users(_: User = Depends(get_admin_user), db: Session = Depends(get_db)
 def admin_user_profile(user_id: int, _: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     target = db.get(User, user_id)
     if not target:
-        raise HTTPException(status_code=404, detail="Р В Р’В Р РЋРЎСџР В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В Р вЂ°Р В Р’В Р вЂ™Р’В·Р В Р’В Р РЋРІР‚СћР В Р’В Р В РІР‚В Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р вЂ™Р’ВµР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В Р вЂ° Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’Вµ Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦")
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
     db.commit()
     return _build_admin_user_profile_payload(db, target)
 
@@ -10586,7 +10586,7 @@ def admin_save_credential(payload: AdminCredentialIn, me: User = Depends(get_adm
     marketplace = validate_marketplace(payload.marketplace)
     user = db.get(User, payload.user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="Р В Р’В Р РЋРЎСџР В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В Р вЂ°Р В Р’В Р вЂ™Р’В·Р В Р’В Р РЋРІР‚СћР В Р’В Р В РІР‚В Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р вЂ™Р’ВµР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В Р вЂ° Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’Вµ Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦")
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
 
     creds = db.scalars(
         select(ApiCredential)
@@ -10620,10 +10620,10 @@ def admin_save_credential(payload: AdminCredentialIn, me: User = Depends(get_adm
 def admin_delete_credential(credential_id: int, _: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     cred = db.get(ApiCredential, credential_id)
     if not cred:
-        raise HTTPException(status_code=404, detail="Р В Р’В Р РЋРІвЂћСћР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В РІР‚в„–Р В Р Р‹Р Р†Р вЂљР Р‹ Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’Вµ Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р’В Р Р†РІР‚С›РІР‚вЂњР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦")
+        raise HTTPException(status_code=404, detail="Ключ не найден")
     db.delete(cred)
     db.commit()
-    return MessageOut(message="Р В Р’В Р РЋРІвЂћСћР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В РІР‚в„–Р В Р Р‹Р Р†Р вЂљР Р‹ Р В Р Р‹Р РЋРІР‚СљР В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В»Р В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦")
+    return MessageOut(message="Ключ удален")
 
 
 @router.get("/admin/ai/global", response_model=dict[str, Any])

@@ -5076,6 +5076,9 @@ async function renderWbReviews() {
     const status = normalizeReviewStatus(row);
     const rowEl = document.createElement("tr");
     const reviewId = String(row?.id || "").trim();
+    const reviewHasText = Boolean(String(row?.text || "").trim());
+    const reviewHasMedia = Array.isArray(row?.photos) && row.photos.some((x) => typeof x === "string" && x.trim());
+    const reviewHasContent = reviewHasText || reviewHasMedia;
     const tdWrap = document.createElement("td");
     tdWrap.colSpan = 7;
     tdWrap.className = "feedback-card-cell";
@@ -5087,6 +5090,9 @@ async function renderWbReviews() {
     const meta = document.createElement("div");
     meta.className = "feedback-meta-row";
     const reviewMp = (currentReviewMarketplace || "wb").trim().toLowerCase() === "ozon" ? "ozon" : "wb";
+    const canReply = row?.can_reply !== false && !(reviewMp === "ozon" && !reviewHasContent);
+    const replyBlockReason = String(row?.reply_block_reason || "").trim()
+      || tr("Ozon не разрешает отвечать на отзывы без текста, фото и видео (только оценка).", "Ozon does not allow replies to empty rating-only reviews.");
     const pill = document.createElement("span");
     pill.className = "review-type-pill";
     pill.textContent = status === "new" ? "??" : "?";
@@ -5144,7 +5150,9 @@ async function renderWbReviews() {
     const body = document.createElement("div");
     body.className = "cell-main-text";
     body.classList.add("feedback-customer-text");
-    body.textContent = row?.text || "-";
+    body.textContent = row?.text || (reviewMp === "ozon"
+      ? (reviewHasMedia ? tr("Отзыв с фото без текста", "Photo review without text") : tr("Отзыв без текста, фото и видео (только оценка)", "Empty rating-only review"))
+      : "-");
     textBlock.appendChild(body);
     card.appendChild(textBlock);
 
@@ -5183,6 +5191,10 @@ async function renderWbReviews() {
     replyInput.dataset.itemId = reviewId;
     replyInput.placeholder = currentLang === "en" ? "Reply text to customer" : "Текст ответа клиенту";
     if (currentLang !== "en") replyInput.placeholder = "\u0422\u0435\u043a\u0441\u0442 \u043e\u0442\u0432\u0435\u0442\u0430 \u043a\u043b\u0438\u0435\u043d\u0442\u0443";
+    if (!canReply) {
+      replyInput.disabled = true;
+      replyInput.placeholder = replyBlockReason;
+    }
     const draftKey = reviewDraftKey(currentReviewMarketplace, reviewId);
     replyInput.value = wbReviewDrafts.get(draftKey) ?? row?.answer ?? "";
     replyInput.oninput = () => wbReviewDrafts.set(draftKey, replyInput.value);
@@ -5208,6 +5220,11 @@ async function renderWbReviews() {
       btnSend.disabled = true;
       btnGenerate.dataset.tip = tr("У записи нет ID", "Record has no ID");
       btnSend.dataset.tip = tr("У записи нет ID", "Record has no ID");
+    } else if (!canReply) {
+      btnGenerate.disabled = true;
+      btnSend.disabled = true;
+      btnGenerate.dataset.tip = replyBlockReason;
+      btnSend.dataset.tip = replyBlockReason;
     }
     wrap.append(btnGenerate, btnSend);
     card.appendChild(wrap);
@@ -5255,6 +5272,10 @@ async function generateReviewReply(reviewId) {
   if (feedbackInFlight.reviewGenerate.has(reviewIdText)) return;
   const row = wbReviewRows.find((x) => String(x?.id || "") === reviewIdText);
   if (!row) return alert(tr("Отзыв не найден", "Review not found"));
+  const rowHasMedia = Array.isArray(row?.photos) && row.photos.some((x) => typeof x === "string" && x.trim());
+  if (currentReviewMarketplace === "ozon" && (row?.can_reply === false || (!String(row?.text || "").trim() && !rowHasMedia))) {
+    return alert(String(row?.reply_block_reason || "").trim() || tr("Ozon не разрешает отвечать на отзывы без текста, фото и видео (только оценка).", "Ozon does not allow replies to empty rating-only reviews."));
+  }
   const endpoint = `${getReviewsEndpoint(currentReviewMarketplace)}/generate-reply`;
   const mpLabel = currentReviewMarketplace === "ozon" ? "Ozon" : "WB";
   feedbackInFlight.reviewGenerate.add(reviewIdText);
@@ -5300,6 +5321,11 @@ async function sendReviewReply(reviewId) {
   const reviewIdText = String(reviewId || "").trim();
   if (!reviewIdText) return;
   if (feedbackInFlight.reviewSend.has(reviewIdText)) return;
+  const row = wbReviewRows.find((x) => String(x?.id || "") === reviewIdText);
+  const rowHasMedia = row && Array.isArray(row?.photos) && row.photos.some((x) => typeof x === "string" && x.trim());
+  if (currentReviewMarketplace === "ozon" && row && (row?.can_reply === false || (!String(row?.text || "").trim() && !rowHasMedia))) {
+    return alert(String(row?.reply_block_reason || "").trim() || tr("Ozon не разрешает отвечать на отзывы без текста, фото и видео (только оценка).", "Ozon does not allow replies to empty rating-only reviews."));
+  }
   const key = reviewDraftKey(currentReviewMarketplace, reviewIdText);
   const text = (wbReviewDrafts.get(key) || "").trim();
   if (!text) return alert(tr("Введите или сгенерируйте текст ответа", "Enter or generate reply text"));
@@ -5340,11 +5366,11 @@ async function sendReviewReply(reviewId) {
       alert(queuedMessage);
       return;
     }
-    const row = wbReviewRows.find((x) => String(x?.id || "") === reviewIdText);
-    if (row) {
-      row.answer = text;
-      row.is_answered = true;
-      row._type = "answered";
+    const sentRow = wbReviewRows.find((x) => String(x?.id || "") === reviewIdText);
+    if (sentRow) {
+      sentRow.answer = text;
+      sentRow.is_answered = true;
+      sentRow._type = "answered";
     }
     wbReviewDrafts.set(key, text);
     applyDraftToVisibleInputs("#wbReviewsTable .review-reply-input", reviewIdText, text);

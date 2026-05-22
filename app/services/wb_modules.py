@@ -781,7 +781,10 @@ def post_ozon_review_reply(api_key: str, review_id: str, text: str) -> tuple[boo
         if response.status_code < 400:
             return True, "Reply sent"
         body = _safe_response_text(response)
-        if response.status_code == 404 and "page not found" in body.lower():
+        body_lower = body.lower()
+        if response.status_code == 400 and "cannot comment on empty review" in body_lower:
+            return False, "Ozon не разрешает отвечать на отзывы без текста, фото и видео (только оценка). Такой отзыв нужно обработать в кабинете Ozon."
+        if response.status_code == 404 and "page not found" in body_lower:
             last_error = (
                 "Ozon review comment API returned 404. "
                 "Check that the seller account has access to review replies via API."
@@ -3320,6 +3323,19 @@ def _normalize_ozon_review_row(
         row.get("photo_urls"),
     )
     status = _pick_first_str(core.get("status"), row.get("status")).lower()
+    try:
+        video_count = int(
+            core.get("videos_amount")
+            or core.get("video_amount")
+            or core.get("videos_count")
+            or row.get("videos_amount")
+            or row.get("video_amount")
+            or row.get("videos_count")
+            or 0
+        )
+    except Exception:
+        video_count = 0
+    can_reply = bool(str(text or "").strip() or photos or video_count > 0)
     is_answered = bool(
         answer_text
         or _is_truthy(core.get("is_answered"))
@@ -3341,6 +3357,8 @@ def _normalize_ozon_review_row(
         "user": user_name,
         "answer": answer_text,
         "is_answered": is_answered,
+        "can_reply": can_reply,
+        "reply_block_reason": "" if can_reply else "Ozon не разрешает отвечать на отзывы без текста, фото и видео (только оценка).",
         "photos": photos,
     }
 

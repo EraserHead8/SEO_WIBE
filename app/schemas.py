@@ -322,6 +322,8 @@ class WbReviewOut(BaseModel):
     user: str
     answer: str
     is_answered: bool
+    can_reply: bool = True
+    reply_block_reason: str = ""
     photos: list[str] = Field(default_factory=list)
 
 
