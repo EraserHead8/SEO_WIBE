@@ -11563,8 +11563,13 @@ def _social_parse_reactions(raw: str | None) -> dict[str, list[dict[str, str]]]:
     return out
 
 
-def _social_message_delivery_meta(db: Session, row: SocialChatMessage) -> tuple[str, int, int]:
-    cache: dict[str, str] = {}
+def _social_message_delivery_meta(
+    db: Session,
+    row: SocialChatMessage,
+    members: list[SocialChatThreadMember] | None = None,
+    canonical_cache: dict[str, str] | None = None,
+) -> tuple[str, int, int]:
+    cache: dict[str, str] = canonical_cache if canonical_cache is not None else {}
 
     def _canon(raw_key: str) -> str:
         key = str(raw_key or "").strip().lower()
@@ -11577,9 +11582,10 @@ def _social_message_delivery_meta(db: Session, row: SocialChatMessage) -> tuple[
         return safe
 
     sender_key = _canon(str(row.sender_key or ""))
-    members = db.scalars(
-        select(SocialChatThreadMember).where(SocialChatThreadMember.thread_id == int(row.thread_id))
-    ).all()
+    if members is None:
+        members = db.scalars(
+            select(SocialChatThreadMember).where(SocialChatThreadMember.thread_id == int(row.thread_id))
+        ).all()
     recipient_reads: dict[str, int] = {}
     for member in members:
         raw_key = str(member.actor_key or "").strip().lower()
@@ -11596,17 +11602,58 @@ def _social_message_delivery_meta(db: Session, row: SocialChatMessage) -> tuple[
     return status, int(read_by), int(total)
 
 
-def _social_message_to_out(db: Session, actor_key: str, row: SocialChatMessage) -> SocialChatMessageOut:
+def _social_cached_nick_by_key(db: Session, actor_key: str, cache: dict[str, str] | None = None) -> str:
+    key = str(actor_key or "").strip().lower()
+    if cache is None:
+        return _social_current_nick_by_key(db, key)
+    if key not in cache:
+        cache[key] = _social_current_nick_by_key(db, key)
+    return cache.get(key, "")
+
+
+def _social_cached_avatar_by_key(db: Session, actor_key: str, cache: dict[str, str] | None = None) -> str:
+    key = str(actor_key or "").strip().lower()
+    if cache is None:
+        return _social_current_avatar_by_key(db, key)
+    if key not in cache:
+        cache[key] = _social_current_avatar_by_key(db, key)
+    return cache.get(key, "")
+
+
+def _social_cached_canonical_actor_key(db: Session, actor_key: str, cache: dict[str, str] | None = None) -> str:
+    key = str(actor_key or "").strip().lower()
+    if cache is None:
+        return _social_canonical_actor_key(db, key)
+    if key not in cache:
+        cache[key] = _social_canonical_actor_key(db, key)
+    return cache.get(key, "")
+
+
+def _social_message_to_out(
+    db: Session,
+    actor_key: str,
+    row: SocialChatMessage,
+    *,
+    delivery_members: list[SocialChatThreadMember] | None = None,
+    canonical_cache: dict[str, str] | None = None,
+    nick_cache: dict[str, str] | None = None,
+    avatar_cache: dict[str, str] | None = None,
+) -> SocialChatMessageOut:
     sender_key = str(row.sender_key or "")
-    sender_nick = _social_current_nick_by_key(db, sender_key) or str(row.sender_nick or "")
-    safe_sender_key = _social_canonical_actor_key(db, sender_key.strip().lower())
-    safe_actor_key = _social_canonical_actor_key(db, str(actor_key or "").strip().lower())
+    sender_nick = _social_cached_nick_by_key(db, sender_key, nick_cache) or str(row.sender_nick or "")
+    safe_sender_key = _social_cached_canonical_actor_key(db, sender_key, canonical_cache)
+    safe_actor_key = _social_cached_canonical_actor_key(db, str(actor_key or "").strip().lower(), canonical_cache)
     is_mine = bool(safe_sender_key and safe_actor_key and safe_sender_key == safe_actor_key)
     delivery_status: str | None = None
     delivery_read_by = 0
     delivery_total = 0
     if is_mine:
-        delivery_status, delivery_read_by, delivery_total = _social_message_delivery_meta(db, row)
+        delivery_status, delivery_read_by, delivery_total = _social_message_delivery_meta(
+            db,
+            row,
+            members=delivery_members,
+            canonical_cache=canonical_cache,
+        )
     reply_payload: dict[str, Any] | None = None
     reply_id = int(row.reply_to_message_id or 0)
     if reply_id > 0:
@@ -11616,7 +11663,7 @@ def _social_message_to_out(db: Session, actor_key: str, row: SocialChatMessage) 
             reply_payload = {
                 "id": int(reply_row.id),
                 "sender_key": reply_sender_key,
-                "sender_nick": _social_current_nick_by_key(db, reply_sender_key) or str(reply_row.sender_nick or ""),
+                "sender_nick": _social_cached_nick_by_key(db, reply_sender_key, nick_cache) or str(reply_row.sender_nick or ""),
                 "text": str(reply_row.text or "")[:500],
             }
     parsed_reactions = _social_parse_reactions(getattr(row, "reactions_json", "") or "{}")
@@ -11637,7 +11684,7 @@ def _social_message_to_out(db: Session, actor_key: str, row: SocialChatMessage) 
         thread_id=int(row.thread_id),
         sender_key=sender_key,
         sender_nick=sender_nick,
-        sender_avatar=_social_current_avatar_by_key(db, sender_key) or None,
+        sender_avatar=_social_cached_avatar_by_key(db, sender_key, avatar_cache) or None,
         text=str(row.text or ""),
         created_at=_to_utc_iso(row.created_at),
         reply_to=reply_payload,
@@ -11693,6 +11740,29 @@ def _social_clean_group_member_keys(
     return out
 
 
+_SOCIAL_CHAT_BLOCKED_UPLOAD_EXTS = {
+    ".html",
+    ".htm",
+    ".svg",
+    ".svgz",
+    ".js",
+    ".mjs",
+    ".css",
+    ".xml",
+    ".xhtml",
+}
+_SOCIAL_CHAT_BLOCKED_UPLOAD_CONTENT_TYPES = {
+    "text/html",
+    "image/svg+xml",
+    "application/javascript",
+    "text/javascript",
+    "text/css",
+    "application/xhtml+xml",
+    "application/xml",
+    "text/xml",
+}
+
+
 def _social_chat_storage_dir() -> Path:
     static_root = Path(__file__).resolve().parent.parent / "static"
     target_dir = static_root / "uploads" / "social_chat"
@@ -11718,11 +11788,28 @@ def _social_chat_guess_ext(filename: str, content_type: str) -> str:
     return ".bin"
 
 
-def _social_thread_to_out(db: Session, actor_key: str, row: SocialChatThread, member_row: SocialChatThreadMember) -> SocialChatThreadOut:
-    last = _social_thread_last_message(db, row.id)
+def _social_thread_to_out(
+    db: Session,
+    actor_key: str,
+    row: SocialChatThread,
+    member_row: SocialChatThreadMember,
+    *,
+    last_message_by_thread: dict[int, SocialChatMessage] | None = None,
+    unread_by_thread: dict[int, int] | None = None,
+    participants_by_thread: dict[int, list[SocialChatThreadMember]] | None = None,
+    last_activity_by_actor: dict[str, datetime] | None = None,
+    nick_cache: dict[str, str] | None = None,
+    avatar_cache: dict[str, str] | None = None,
+) -> SocialChatThreadOut:
+    thread_id = int(row.id)
+    last = (
+        last_message_by_thread.get(thread_id)
+        if last_message_by_thread is not None
+        else _social_thread_last_message(db, row.id)
+    )
     last_payload: dict[str, Any] = {}
     if last:
-        last_avatar = _social_current_avatar_by_key(db, str(last.sender_key or ""))
+        last_avatar = _social_cached_avatar_by_key(db, str(last.sender_key or ""), avatar_cache)
         last_payload = {
             "id": int(last.id),
             "sender_key": str(last.sender_key or ""),
@@ -11731,27 +11818,37 @@ def _social_thread_to_out(db: Session, actor_key: str, row: SocialChatThread, me
             "text": str(last.text or ""),
             "created_at": _to_utc_iso(last.created_at),
         }
-    unread = db.scalar(
-        select(func.count())
-        .select_from(SocialChatMessage)
-        .where(
-            SocialChatMessage.thread_id == row.id,
-            SocialChatMessage.id > int(member_row.last_read_message_id or 0),
-            SocialChatMessage.sender_key != actor_key,
-        )
-    ) or 0
-    participants_rows = db.scalars(
-        select(SocialChatThreadMember)
-        .where(SocialChatThreadMember.thread_id == row.id)
-        .order_by(SocialChatThreadMember.id.asc())
-    ).all()
+    if unread_by_thread is not None:
+        unread = int(unread_by_thread.get(thread_id, 0) or 0)
+    else:
+        unread = db.scalar(
+            select(func.count())
+            .select_from(SocialChatMessage)
+            .where(
+                SocialChatMessage.thread_id == row.id,
+                SocialChatMessage.id > int(member_row.last_read_message_id or 0),
+                SocialChatMessage.sender_key != actor_key,
+            )
+        ) or 0
+    if participants_by_thread is not None:
+        participants_rows = participants_by_thread.get(thread_id, [])
+    else:
+        participants_rows = db.scalars(
+            select(SocialChatThreadMember)
+            .where(SocialChatThreadMember.thread_id == row.id)
+            .order_by(SocialChatThreadMember.id.asc())
+        ).all()
     participant_keys = [str(x.actor_key or "").strip().lower() for x in participants_rows if str(x.actor_key or "").strip()]
-    last_activity = _social_last_activity_map(db, participant_keys)
+    last_activity = (
+        last_activity_by_actor
+        if last_activity_by_actor is not None
+        else _social_last_activity_map(db, participant_keys)
+    )
     participants = []
     for x in participants_rows:
         key = str(x.actor_key or "")
-        current_nick = _social_current_nick_by_key(db, key) or str(x.actor_nick or "")
-        avatar_url = _social_current_avatar_by_key(db, key)
+        current_nick = _social_cached_nick_by_key(db, key, nick_cache) or str(x.actor_nick or "")
+        avatar_url = _social_cached_avatar_by_key(db, key, avatar_cache)
         if current_nick and current_nick != str(x.actor_nick or ""):
             x.actor_nick = current_nick[:120]
         last_seen = last_activity.get(key.strip().lower())
@@ -14534,16 +14631,102 @@ def social_chat_threads(
             migrated.last_read_message_id = int(row.last_read_message_id or 0)
         db.delete(row)
         mine.append(migrated)
-    out: list[SocialChatThreadOut] = []
+    member_thread_ids = [int(x.thread_id or 0) for x in mine if int(x.thread_id or 0) > 0]
+    threads_by_id: dict[int, SocialChatThread] = {}
+    if member_thread_ids:
+        thread_rows = db.scalars(
+            select(SocialChatThread).where(SocialChatThread.id.in_(member_thread_ids))
+        ).all()
+        threads_by_id = {int(x.id): x for x in thread_rows}
+
+    visible_pairs: list[tuple[SocialChatThreadMember, SocialChatThread]] = []
     for member_row in mine:
-        thread = db.get(SocialChatThread, member_row.thread_id)
+        thread = threads_by_id.get(int(member_row.thread_id or 0))
         if not thread:
             continue
         if str(thread.kind or "") == "global":
             continue
         if thread.kind in {"company", "group"} and int(thread.owner_user_id or 0) != int(user.id):
             continue
-        out.append(_social_thread_to_out(db, actor_key, thread, member_row))
+        visible_pairs.append((member_row, thread))
+
+    visible_thread_ids = [int(thread.id) for _, thread in visible_pairs]
+    last_message_by_thread: dict[int, SocialChatMessage] = {}
+    participants_by_thread: dict[int, list[SocialChatThreadMember]] = {}
+    unread_by_thread: dict[int, int] = {}
+    last_activity_by_actor: dict[str, datetime] = {}
+    nick_cache: dict[str, str] = {}
+    avatar_cache: dict[str, str] = {}
+
+    if visible_thread_ids:
+        last_ids = [
+            int(raw_id)
+            for _, raw_id in db.execute(
+                select(
+                    SocialChatMessage.thread_id,
+                    func.max(SocialChatMessage.id).label("last_id"),
+                )
+                .where(SocialChatMessage.thread_id.in_(visible_thread_ids))
+                .group_by(SocialChatMessage.thread_id)
+            ).all()
+            if int(raw_id or 0) > 0
+        ]
+        if last_ids:
+            last_rows = db.scalars(
+                select(SocialChatMessage).where(SocialChatMessage.id.in_(last_ids))
+            ).all()
+            last_message_by_thread = {int(x.thread_id): x for x in last_rows}
+
+        participant_rows = db.scalars(
+            select(SocialChatThreadMember)
+            .where(SocialChatThreadMember.thread_id.in_(visible_thread_ids))
+            .order_by(SocialChatThreadMember.thread_id.asc(), SocialChatThreadMember.id.asc())
+        ).all()
+        participant_keys: list[str] = []
+        for participant in participant_rows:
+            tid = int(participant.thread_id or 0)
+            participants_by_thread.setdefault(tid, []).append(participant)
+            key = str(participant.actor_key or "").strip().lower()
+            if key:
+                participant_keys.append(key)
+        last_activity_by_actor = _social_last_activity_map(db, list(dict.fromkeys(participant_keys)))
+
+        mine_member_ids = [int(member_row.id) for member_row, _ in visible_pairs if int(member_row.id or 0) > 0]
+        if mine_member_ids:
+            unread_rows = db.execute(
+                select(
+                    SocialChatMessage.thread_id,
+                    func.count(SocialChatMessage.id).label("unread_count"),
+                )
+                .join(
+                    SocialChatThreadMember,
+                    SocialChatThreadMember.thread_id == SocialChatMessage.thread_id,
+                )
+                .where(
+                    SocialChatThreadMember.id.in_(mine_member_ids),
+                    SocialChatMessage.id > func.coalesce(SocialChatThreadMember.last_read_message_id, 0),
+                    SocialChatMessage.sender_key.notin_(actor_aliases),
+                )
+                .group_by(SocialChatMessage.thread_id)
+            ).all()
+            unread_by_thread = {int(tid): int(count or 0) for tid, count in unread_rows}
+
+    out: list[SocialChatThreadOut] = []
+    for member_row, thread in visible_pairs:
+        out.append(
+            _social_thread_to_out(
+                db,
+                actor_key,
+                thread,
+                member_row,
+                last_message_by_thread=last_message_by_thread,
+                unread_by_thread=unread_by_thread,
+                participants_by_thread=participants_by_thread,
+                last_activity_by_actor=last_activity_by_actor,
+                nick_cache=nick_cache,
+                avatar_cache=avatar_cache,
+            )
+        )
     out.sort(key=lambda x: (x.unread, x.last_message.get("id", 0)), reverse=True)
     db.commit()
     return out
@@ -15308,6 +15491,7 @@ def social_chat_actor_directory(
 def social_chat_messages(
     thread_id: int,
     before_id: int = 0,
+    since_id: int = 0,
     limit: int = 80,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -15340,16 +15524,44 @@ def social_chat_messages(
         if not member_row:
             raise HTTPException(status_code=403, detail="Р В Р’В Р РЋРЎС™Р В Р’В Р вЂ™Р’ВµР В Р Р‹Р Р†Р вЂљРЎв„ў Р В Р’В Р СћРІР‚ВР В Р’В Р РЋРІР‚СћР В Р Р‹Р В РЎвЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р РЋРІР‚СљР В Р’В Р РЋРІР‚вЂќР В Р’В Р вЂ™Р’В° Р В Р’В Р РЋРІР‚Сњ Р В Р Р‹Р Р†Р вЂљР Р‹Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р РЋРІР‚Сљ")
     safe_limit = max(20, min(int(limit or 80), 200))
+    safe_before_id = int(before_id or 0)
+    safe_since_id = int(since_id or 0)
     query = select(SocialChatMessage).where(SocialChatMessage.thread_id == thread_id)
-    if int(before_id or 0) > 0:
+    if safe_before_id > 0:
         query = query.where(SocialChatMessage.id < int(before_id))
-    rows = db.scalars(query.order_by(SocialChatMessage.id.desc()).limit(safe_limit)).all()
-    rows = list(reversed(rows))
+        rows = db.scalars(query.order_by(SocialChatMessage.id.desc()).limit(safe_limit)).all()
+        rows = list(reversed(rows))
+    elif safe_since_id > 0:
+        rows = db.scalars(
+            query.where(SocialChatMessage.id > safe_since_id)
+            .order_by(SocialChatMessage.id.asc())
+            .limit(safe_limit)
+        ).all()
+    else:
+        rows = db.scalars(query.order_by(SocialChatMessage.id.desc()).limit(safe_limit)).all()
+        rows = list(reversed(rows))
     if rows:
         member_row.last_read_message_id = max(int(member_row.last_read_message_id or 0), int(rows[-1].id))
         member_row.updated_at = datetime.utcnow()
     db.commit()
-    return [_social_message_to_out(db, actor_key, row) for row in rows]
+    delivery_members = db.scalars(
+        select(SocialChatThreadMember).where(SocialChatThreadMember.thread_id == int(thread_id))
+    ).all()
+    canonical_cache: dict[str, str] = {}
+    nick_cache: dict[str, str] = {}
+    avatar_cache: dict[str, str] = {}
+    return [
+        _social_message_to_out(
+            db,
+            actor_key,
+            row,
+            delivery_members=delivery_members,
+            canonical_cache=canonical_cache,
+            nick_cache=nick_cache,
+            avatar_cache=avatar_cache,
+        )
+        for row in rows
+    ]
 
 
 @router.post("/social/chat/messages/{thread_id}", response_model=SocialChatMessageOut)
@@ -15517,7 +15729,10 @@ def social_chat_send_file(
         limit_mb = max_size // (1024 * 1024)
         raise HTTPException(status_code=400, detail=f"File is too large (max {limit_mb} MB)")
     original_name = _social_chat_clean_filename(file.filename or "file")
-    ext = _social_chat_guess_ext(original_name, str(file.content_type or ""))
+    content_type = str(file.content_type or "application/octet-stream").split(";", 1)[0].strip().lower()
+    ext = _social_chat_guess_ext(original_name, content_type)
+    if ext in _SOCIAL_CHAT_BLOCKED_UPLOAD_EXTS or content_type in _SOCIAL_CHAT_BLOCKED_UPLOAD_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail="Этот тип файла нельзя отправлять в чат")
     reply_id = int(reply_to_message_id or 0) if reply_to_message_id else 0
     if reply_id > 0:
         reply_row = db.get(SocialChatMessage, reply_id)
@@ -15549,7 +15764,7 @@ def social_chat_send_file(
     attachment = {
         "url": url,
         "filename": original_name[:255],
-        "content_type": str(file.content_type or "application/octet-stream")[:120],
+        "content_type": content_type[:120],
         "size_bytes": len(raw),
     }
     message = SocialChatMessage(

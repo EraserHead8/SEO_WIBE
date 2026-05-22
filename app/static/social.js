@@ -23,6 +23,7 @@ let socialState = {
   chatMessagesSignatureByThread: {},
   chatMessagesInflightByThread: {},
   chatMessagesRequestSeqByThread: {},
+  chatMessagesLastFullRefreshAtByThread: {},
   chatManualClosedUntil: 0,
   loadingMessagesThreadId: 0,
   actors: [],
@@ -1832,6 +1833,7 @@ function resetSocialState() {
     chatMessagesSignatureByThread: {},
     chatMessagesInflightByThread: {},
     chatMessagesRequestSeqByThread: {},
+    chatMessagesLastFullRefreshAtByThread: {},
     chatManualClosedUntil: 0,
     toastsSeen: new Set(),
     currencyRates: null,
@@ -1937,7 +1939,7 @@ function switchSocialSubtab(tab, loadNow = true) {
         if (currentTab === "social" && socialState.currentSubtab === "chat") {
           socialLoadThreads({ silent: true, ensureCurrentMessages: false }).catch(() => null);
           if (socialState.currentThreadId) {
-            socialLoadMessages(socialState.currentThreadId, { silent: true }).catch(() => null);
+            socialLoadMessages(socialState.currentThreadId, { silent: true, incremental: true }).catch(() => null);
           }
         }
       }, 12000);
@@ -3745,7 +3747,7 @@ async function socialDeleteCurrentGroupThreadLegacyMojibake() {
   const row = socialGetCurrentThread();
   const threadId = Number(row?.id || 0);
   if (!threadId || String(row?.kind || "") !== "group") return;
-  const title = String(row?.title || tr("СЌС‚Сѓ РіСЂСѓРїРїСѓ", "this group")).trim();
+  const title = String(row?.title || tr("эту группу", "this group")).trim();
   const ok = confirm(tr(`Удалить группу "${title}"? Это действие необратимо.`, `Delete group "${title}"? This action cannot be undone.`));
   if (!ok) return;
   const result = await socialRequest(`/api/social/chat/groups/${threadId}`, {
@@ -3907,7 +3909,7 @@ function socialOpenGroupParticipants() {
     const online = socialIsParticipantOnline(p);
     const state = online
       ? tr("онлайн", "online now")
-      : (socialFormatLastSeen(p?.last_seen_at || "") || tr("РЅРµС‚ РґР°РЅРЅС‹С…", "unknown"));
+      : (socialFormatLastSeen(p?.last_seen_at || "") || tr("нет данных", "unknown"));
     return `
       <button type="button" class="social-participant-row" data-social-profile-actor="${escapeHtml(actorKey)}">
         <span class="social-participant-avatar">${socialAvatarMarkup(p?.avatar_url || "", nick, "xs")}</span>
@@ -4226,13 +4228,16 @@ function socialOpenMessageContext(messageId, event) {
   const fallbackY = Number(event?.clientY || 0) || Number(rect?.top || 0) + Math.max(18, Math.min(30, Number(rect?.height || 0) * 0.45));
   socialState.chatContextX = fallbackX;
   socialState.chatContextY = fallbackY;
-  const quick = ["👍", "❤️", "😂", "🔥", "👏", "😮"];
+  const quickSafe = ["👍", "❤️", "😂", "🔥", "👏", "😮"];
+  const replyLabel = tr("Ответить", "Reply");
   menu.innerHTML = `
     <button type="button" class="social-chat-context-btn" onclick="socialContextReply()">${tr("Ответить", "Reply")}</button>
     <div class="social-chat-context-reactions">
-      ${quick.map((emoji) => `<button type="button" class="social-chat-context-emoji" onclick="socialContextReact('${escapeHtml(emoji)}')">${emoji}</button>`).join("")}
+      ${quickSafe.map((emoji) => `<button type="button" class="social-chat-context-emoji" onclick="socialContextReact('${escapeHtml(emoji)}')">${emoji}</button>`).join("")}
     </div>
   `;
+  const replyButton = menu.querySelector(".social-chat-context-btn");
+  if (replyButton) replyButton.textContent = replyLabel;
   menu.style.left = "0px";
   menu.style.top = "0px";
   menu.style.maxWidth = "min(260px, calc(100vw - 20px))";
@@ -4310,14 +4315,15 @@ function socialMessageAttachmentsHtml(message) {
     if (!url) return "";
     const name = String(item?.filename || "file").trim() || "file";
     const ctype = String(item?.content_type || "").toLowerCase();
-    const isImage = ctype.startsWith("image/") || /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(url);
+    const isImage = (ctype.startsWith("image/") && ctype !== "image/svg+xml") || /\.(png|jpg|jpeg|gif|webp)$/i.test(url);
     if (isImage) {
       return `<a class="tg-attach tg-attach-image" href="${escapeHtml(url)}" data-image-alt="${escapeHtml(name)}" onclick="return socialOpenImageFromAttachment(event)"><img src="${escapeHtml(url)}" alt="${escapeHtml(name)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" /></a>`;
     }
-    return `<a class="tg-attach tg-attach-file" href="${escapeHtml(url)}" target="_blank" rel="noopener">📎 ${escapeHtml(name)}</a>`;
+    return `<a class="tg-attach tg-attach-file" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">📎 ${escapeHtml(name)}</a>`;
   }).join("");
-  if (!body) return "";
-  return `<div class="tg-msg-attachments">${body}</div>`;
+  const safeBody = body.replace(/\u0440\u045F\u201C\u040B/g, "📎");
+  if (!safeBody) return "";
+  return `<div class="tg-msg-attachments">${safeBody}</div>`;
 }
 
 function socialMessageReactionsHtml(message) {
@@ -4637,13 +4643,32 @@ async function socialLoadMessages(threadId, opts = {}) {
   socialState.loadingMessagesThreadId = id;
   const runLoad = async () => {
   try {
-  const limit = Number(opts.limit || 80);
+  const existingMessages = Array.isArray(socialState.chatMessages) ? socialState.chatMessages : [];
+  const newestKnownId = existingMessages.reduce((maxId, row) => {
+    const rowId = Number(row?.id || 0);
+    return rowId > maxId ? rowId : maxId;
+  }, 0);
+  const lastFullRefreshAt = Number(socialState.chatMessagesLastFullRefreshAtByThread?.[id] || 0);
+  const fullRefreshDue = lastFullRefreshAt > 0 && (Date.now() - lastFullRefreshAt) > 90000;
+  const useIncremental = !beforeId
+    && Boolean(opts.incremental)
+    && newestKnownId > 0
+    && lastFullRefreshAt > 0
+    && !fullRefreshDue
+    && !opts.forceFull
+    && !opts.forceBottom
+    && !opts.bypassUnchanged
+    && !opts.ensureVisible;
+  const limit = Number(opts.limit || (useIncremental ? 60 : 80));
   const host = document.getElementById("socialChatMessages");
   const prevScrollHeight = host ? host.scrollHeight : 0;
   const prevScrollTop = host ? host.scrollTop : 0;
   const atBottom = host ? (host.scrollHeight - host.scrollTop - host.clientHeight < 40) : true;
   const hasRenderedMessages = socialHasRenderedMessages(host);
-  const rows = await socialRequest(`/api/social/chat/messages/${id}?limit=${limit}${beforeId ? `&before_id=${beforeId}` : ""}`).catch((e) => {
+  const queryParts = [`limit=${encodeURIComponent(String(limit))}`];
+  if (beforeId) queryParts.push(`before_id=${encodeURIComponent(String(beforeId))}`);
+  if (useIncremental) queryParts.push(`since_id=${encodeURIComponent(String(newestKnownId))}`);
+  const rows = await socialRequest(`/api/social/chat/messages/${id}?${queryParts.join("&")}`).catch((e) => {
     if (!opts.silent && e?.message) alert(e.message);
     return null;
   });
@@ -4657,6 +4682,51 @@ async function socialLoadMessages(threadId, opts = {}) {
         host.innerHTML = `<div class="hint social-chat-error">${escapeHtml(tr("Не удалось загрузить сообщения. Потяните вниз или откройте чат снова.", "Failed to load messages. Pull to refresh or reopen the chat."))}</div>`;
       }
     }
+    return;
+  }
+  if (useIncremental) {
+    if (!rows.length) return;
+    const positiveById = new Map();
+    const localPending = [];
+    for (const row of existingMessages) {
+      const rowId = Number(row?.id || 0);
+      if (rowId > 0) {
+        positiveById.set(rowId, row);
+      } else if (rowId < 0) {
+        localPending.push(row);
+      }
+    }
+    rows.forEach((row) => {
+      const rowId = Number(row?.id || 0);
+      if (rowId > 0) positiveById.set(rowId, row);
+    });
+    const recentServerMine = new Set(
+      rows
+        .filter((row) => row?.is_mine)
+        .map((row) => String(row?.text || "").trim())
+        .filter(Boolean)
+    );
+    const safePending = localPending.filter((row) => {
+      const text = String(row?.text || "").trim();
+      return !(row?.is_mine && text && recentServerMine.has(text));
+    });
+    const nextRows = [
+      ...Array.from(positiveById.values()).sort((a, b) => Number(a?.id || 0) - Number(b?.id || 0)),
+      ...safePending,
+    ];
+    const prevSig = String(socialState.chatMessagesSignatureByThread?.[id] || "");
+    const nextSig = signatureOf(nextRows);
+    socialState.chatMessages = nextRows;
+    socialState.chatMessagesSignatureByThread[id] = nextSig;
+    socialState.chatOldestId = nextRows.length ? Number(nextRows[0].id || 0) : 0;
+    if (nextSig === prevSig && !opts.forceBottom) return;
+    socialRenderChatMessages({
+      keepOffset: false,
+      prevScrollHeight,
+      prevScrollTop,
+      wasAtBottom: atBottom,
+      forceBottom: atBottom,
+    });
     return;
   }
   const currentThread = (socialState.chatThreads || []).find((x) => Number(x?.id || 0) === id) || null;
@@ -4691,6 +4761,9 @@ async function socialLoadMessages(threadId, opts = {}) {
   socialState.chatMessagesSignatureByThread[id] = beforeId
     ? signatureOf(socialState.chatMessages || [])
     : nextSig;
+  if (!beforeId) {
+    socialState.chatMessagesLastFullRefreshAtByThread[id] = Date.now();
+  }
   socialState.chatOldestId = socialState.chatMessages.length ? Number(socialState.chatMessages[0].id || 0) : 0;
   socialState.chatHasMore = rows.length >= limit;
   if (unchanged) return;
@@ -5043,7 +5116,7 @@ function socialOpenGroupEditor(editCurrent = false) {
     return `
       <label class="check">
         <input type="checkbox" data-group-member="${escapeHtml(actorKey)}" ${forceChecked ? "checked" : ""} ${disabled} />
-        ${escapeHtml(row.nick || actorKey)}${isMe ? ` (${escapeHtml(tr("РІС‹", "you"))})` : ""}
+      ${escapeHtml(row.nick || actorKey)}${isMe ? ` (${escapeHtml(tr("вы", "you"))})` : ""}
       </label>
     `;
   }).join("");

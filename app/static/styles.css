@@ -6689,6 +6689,8 @@ body[data-theme="dark"] .landing-band .band-stats span {
   gap: 12px;
   transition: background 0.15s ease;
   color: inherit;
+  cursor: pointer;
+  contain: content;
 }
 
 .social-thread-item.active {
@@ -6886,6 +6888,8 @@ body[data-theme="dark"] .landing-band .band-stats span {
 .social-chat-messages {
   padding: 18px 18px 12px;
   overflow: auto;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -6901,6 +6905,12 @@ body[data-theme="dark"] .landing-band .band-stats span {
   border: 1px dashed var(--line);
   border-radius: 12px;
   background: color-mix(in oklab, var(--panel-bg) 84%, #ffffff);
+}
+
+.social-chat-error {
+  color: #b42318;
+  border-color: color-mix(in oklab, #b42318 36%, var(--line));
+  background: color-mix(in oklab, #fff5f5 72%, var(--panel-bg));
 }
 
 .social-chat-load {
@@ -6932,6 +6942,18 @@ body[data-theme="dark"] .landing-band .band-stats span {
   gap: 8px;
   max-width: 86%;
   --tg-user-accent: var(--accent);
+  animation: social-chat-message-in 0.14s ease-out;
+}
+
+@keyframes social-chat-message-in {
+  from {
+    opacity: 0.72;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .tg-msg-row.mine {
@@ -6959,6 +6981,7 @@ body[data-theme="dark"] .landing-band .band-stats span {
   position: relative;
   border-radius: 14px;
   padding: 8px 10px 6px;
+  max-width: 100%;
   background: var(--panel-bg);
   border: 1px solid color-mix(in oklab, var(--line) 80%, transparent);
   border-left: 3px solid color-mix(in oklab, var(--tg-user-accent) 70%, transparent);
@@ -7105,6 +7128,7 @@ body[data-theme="dark"] .landing-band .band-stats span {
 .tg-msg-text {
   white-space: pre-wrap;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .tg-msg-reply {
@@ -7350,6 +7374,11 @@ body.social-image-viewer-open {
   border: 1px solid var(--line);
   border-radius: 18px;
   padding: 6px 8px;
+}
+
+.social-chat-input-wrap:focus-within {
+  border-color: color-mix(in oklab, var(--accent) 48%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 12%, transparent);
 }
 
 .social-chat-compose textarea {
