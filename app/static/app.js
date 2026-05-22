@@ -6938,7 +6938,10 @@ async function loadWbAdCampaigns(options = {}) {
     wbAdsLoadToken += 1;
     const runToken = wbAdsLoadToken;
     wbAdsLoadProgress = { active: true, total: 0, loaded: 0, failed: 0 };
-    updateWbAdsLoadStatus(tr("Загрузка списка кампаний…", "Loading campaign list..."));
+    updateWbAdsLoadStatus(force
+      ? tr("Запускаем обновление кампаний…", "Starting campaign refresh...")
+      : tr("Загрузка списка кампаний…", "Loading campaign list...")
+    );
 
     const formatAdsLoadError = (err) => {
       const status = Number(err?.status || 0);
@@ -6980,30 +6983,28 @@ async function loadWbAdCampaigns(options = {}) {
       }
     };
 
-    const fastResult = await requestCampaigns(true, 90000);
+    if (force) {
+      await requestJson("/api/wb/ads/campaigns/sync", {
+        method: "POST",
+        headers: authHeaders(),
+        timeoutMs: 25000,
+      }).catch(() => null);
+      updateWbAdsLoadStatus(tr("Берем свежий снимок кампаний…", "Loading the latest campaign snapshot..."));
+    }
+
+    const fastResult = await requestCampaigns(true, force ? 45000 : 25000);
     let data = fastResult.payload;
     let lastError = fastResult.error;
 
-    if (data) {
-      const total = Array.isArray(data.campaigns) ? data.campaigns.length : 0;
-      const placeholderCount = Number(data?.meta?.placeholder_count || 0);
-      const summaryHydrated = Number(data?.meta?.summary_hydrated || 0);
-      const statsHydrated = Number(data?.meta?.stats_hydrated || 0);
-      const shouldUpgrade = total > 0 && (placeholderCount > 0 || summaryHydrated < Math.min(total, 24) || statsHydrated < Math.min(total, 24));
-      if (shouldUpgrade) {
-        const fullResult = await requestCampaigns(false, 150000);
-        if (fullResult.payload && Array.isArray(fullResult.payload.campaigns) && fullResult.payload.campaigns.length) {
-          data = fullResult.payload;
-        } else if (fullResult.error) {
-          lastError = fullResult.error;
-        }
-      }
-    } else {
-      const fullResult = await requestCampaigns(false, 150000);
-      data = fullResult.payload;
-      if (!data) {
-        lastError = fullResult.error || lastError;
-      }
+    if (!data && !force) {
+      await requestJson("/api/wb/ads/campaigns/sync", {
+        method: "POST",
+        headers: authHeaders(),
+        timeoutMs: 25000,
+      }).catch(() => null);
+      const retryFast = await requestCampaigns(true, 45000);
+      data = retryFast.payload;
+      if (!data) lastError = retryFast.error || lastError;
     }
 
     if (!data) {
@@ -7018,7 +7019,7 @@ async function loadWbAdCampaigns(options = {}) {
         headers: authHeaders(),
         timeoutMs: 25000,
       }).catch(() => null);
-      const retry = (await requestCampaigns(false, 150000)).payload || (await requestCampaigns(true, 120000)).payload;
+      const retry = (await requestCampaigns(true, 45000)).payload;
       if (retry && Array.isArray(retry.campaigns)) data = retry;
     }
 
@@ -7101,7 +7102,7 @@ async function loadWbAdCampaigns(options = {}) {
       })
       .catch(() => null);
     markModuleLoaded("ads");
-    void enrichWbCampaignRows(runToken).catch(() => null);
+    void enrichWbCampaignRows(runToken, { force }).catch(() => null);
   })();
 
   wbAdsLoadInflight = runTask.finally(() => {
@@ -7233,7 +7234,7 @@ function updateWbAdsLoadStatus(message = "") {
   });
 }
 
-async function enrichWbCampaignRows(runToken) {
+async function enrichWbCampaignRows(runToken, options = {}) {
   const allIds = wbCampaignRows
     .map((row) => Number(getCampaignRowId(row) || 0))
     .filter((id) => id > 0);
@@ -7252,7 +7253,8 @@ async function enrichWbCampaignRows(runToken) {
       .map((row) => Number(getCampaignRowId(row) || 0))
       .filter((id) => id > 0)
   )];
-  const pending = pendingRaw.slice(0, 2400);
+  const autoEnrichLimit = Boolean(options && options.force) ? 240 : 120;
+  const pending = pendingRaw.slice(0, autoEnrichLimit);
   const deferredCount = Math.max(0, pendingRaw.length - pending.length);
   if (!pending.length) {
     wbAdsLoadProgress.active = false;
@@ -7284,8 +7286,8 @@ async function enrichWbCampaignRows(runToken) {
   wbAdsLoadProgress.failed = 0;
   updateWbAdsLoadStatus();
 
-  const batchSize = pending.length > 700 ? 30 : (pending.length > 320 ? 22 : (pending.length > 140 ? 14 : 8));
-  const requestEnrichChunk = async (ids, timeoutMs = 120000) => requestJson("/api/wb/ads/campaigns/enrich", {
+  const batchSize = pending.length > 80 ? 12 : 8;
+  const requestEnrichChunk = async (ids, timeoutMs = 45000) => requestJson("/api/wb/ads/campaigns/enrich", {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({ ids }),
@@ -7341,7 +7343,7 @@ async function enrichWbCampaignRows(runToken) {
   for (let i = 0; i < pending.length; i += batchSize) {
     if (runToken !== wbAdsLoadToken) return;
     const chunk = pending.slice(i, i + batchSize);
-    const payload = await requestEnrichChunk(chunk, 120000);
+    const payload = await requestEnrichChunk(chunk, 45000);
 
     if (!payload) {
       partialFallback = true;
@@ -7349,7 +7351,7 @@ async function enrichWbCampaignRows(runToken) {
       for (let j = 0; j < chunk.length; j += fallbackBatchSize) {
         if (runToken !== wbAdsLoadToken) return;
         const subChunk = chunk.slice(j, j + fallbackBatchSize);
-        const subPayload = await requestEnrichChunk(subChunk, 90000);
+        const subPayload = await requestEnrichChunk(subChunk, 30000);
         if (!subPayload) {
           hardTransportErrors += subChunk.length;
           continue;

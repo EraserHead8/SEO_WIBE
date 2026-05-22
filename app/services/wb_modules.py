@@ -1882,6 +1882,9 @@ def fetch_wb_campaign_stats_bulk(
     campaign_ids: list[int],
     date_from: str | None = None,
     date_to: str | None = None,
+    *,
+    retry_unresolved: bool = True,
+    fast_mode: bool = False,
 ) -> dict[str, dict[str, Any]]:
     ids = [int(x) for x in campaign_ids if int(x) > 0]
     ids = sorted(set(ids))
@@ -1897,6 +1900,8 @@ def fetch_wb_campaign_stats_bulk(
         "https://advert-api.wb.ru/adv/v3/fullstats",
         "https://advert-api.wildberries.ru/adv/v3/fullstats",
     ]
+    request_timeout = WB_FAST_TIMEOUT if fast_mode else WB_TIMEOUT
+    request_attempts = 2 if fast_mode else 4
 
     def _request_stats_chunk(chunk_ids: list[int]) -> list[dict[str, Any]]:
         safe_chunk = [int(x) for x in chunk_ids if int(x) > 0]
@@ -1905,7 +1910,14 @@ def fetch_wb_campaign_stats_bulk(
         ids_csv = ",".join(str(x) for x in safe_chunk)
         for endpoint in endpoints:
             params = {"ids": ids_csv, "beginDate": left.isoformat(), "endDate": right.isoformat()}
-            data = _request_wb_json("GET", endpoint, api_key=api_key, params=params)
+            data = _request_wb_json(
+                "GET",
+                endpoint,
+                api_key=api_key,
+                params=params,
+                max_attempts=request_attempts,
+                timeout=request_timeout,
+            )
             dict_rows = _as_dict_list(data) if data is not None else []
             if dict_rows:
                 return dict_rows
@@ -1918,7 +1930,14 @@ def fetch_wb_campaign_stats_bulk(
                 {"advertIds": safe_chunk, "beginDate": left.isoformat(), "endDate": right.isoformat()},
             ]
             for payload in payload_variants:
-                pdata = _request_wb_json("POST", endpoint, api_key=api_key, payload=payload)
+                pdata = _request_wb_json(
+                    "POST",
+                    endpoint,
+                    api_key=api_key,
+                    payload=payload,
+                    max_attempts=request_attempts,
+                    timeout=request_timeout,
+                )
                 dict_rows = _as_dict_list(pdata) if pdata is not None else []
                 if dict_rows:
                     return dict_rows
@@ -1942,6 +1961,9 @@ def fetch_wb_campaign_stats_bulk(
         if not cid:
             continue
         stats[cid] = _build_campaign_stat_row(row)
+
+    if not retry_unresolved:
+        return stats
 
     unresolved_ids = [cid for cid in ids if not bool((stats.get(str(cid)) or {}).get("stat_has_context"))]
     retry_limit = 18 if len(ids) > 180 else (28 if len(ids) > 80 else 40)

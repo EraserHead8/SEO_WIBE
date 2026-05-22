@@ -149,7 +149,7 @@ def _hydrate_campaign_rows_with_summaries(wb_api_key: str, rows: list[dict[str, 
     ids = sorted({_campaign_id_from_row(row) for row in rows if _campaign_id_from_row(row) > 0})
     if not ids:
         return rows
-    fallback_cap = max(120, min(1200, len(ids)))
+    fallback_cap = max(16, min(80, len(ids) // 4 + 16))
     try:
         summary_map = fetch_wb_campaign_summaries(wb_api_key, ids, fallback_limit=fallback_cap)
     except Exception:
@@ -189,7 +189,14 @@ def _hydrate_campaign_rows_with_stats(wb_api_key: str, rows: list[dict[str, Any]
     if not ids:
         return rows
     try:
-        stats_map = fetch_wb_campaign_stats_bulk(wb_api_key, ids, date_from=None, date_to=None)
+        stats_map = fetch_wb_campaign_stats_bulk(
+            wb_api_key,
+            ids,
+            date_from=None,
+            date_to=None,
+            retry_unresolved=False,
+            fast_mode=True,
+        )
     except Exception:
         stats_map = {}
     if not isinstance(stats_map, dict):
@@ -203,9 +210,17 @@ def _hydrate_campaign_rows_with_stats(wb_api_key: str, rows: list[dict[str, Any]
         if not bool(stat.get("stat_has_context")):
             unresolved_ids.append(cid)
     if unresolved_ids:
-        for cid in unresolved_ids[:240]:
+        retry_cap = 0 if len(ids) > 120 else (8 if len(ids) > 48 else 16)
+        for cid in unresolved_ids[:retry_cap]:
             try:
-                one_map = fetch_wb_campaign_stats_bulk(wb_api_key, [cid], date_from=None, date_to=None)
+                one_map = fetch_wb_campaign_stats_bulk(
+                    wb_api_key,
+                    [cid],
+                    date_from=None,
+                    date_to=None,
+                    retry_unresolved=False,
+                    fast_mode=True,
+                )
             except Exception:
                 one_map = {}
             one_stat = one_map.get(str(cid)) if isinstance(one_map, dict) else None

@@ -360,6 +360,22 @@ _MARKET_CACHE_TTL_SEC = {
     "wb_ads_analytics": 180,
     "wb_ads_recommendations": 180,
 }
+
+
+def _request_uses_https(request: Request) -> bool:
+    forwarded_proto = str(request.headers.get("x-forwarded-proto") or "").split(",", 1)[0].strip().lower()
+    return forwarded_proto == "https" or str(request.url.scheme or "").lower() == "https"
+
+
+def _set_auth_cookie(response: Response, request: Request, token: str) -> None:
+    response.set_cookie(
+        "seo_wibe_token",
+        token,
+        httponly=True,
+        secure=_request_uses_https(request),
+        samesite="lax",
+        path="/",
+    )
 SOCIAL_GOOGLE_OAUTH_TOKENS_KEY = "social_google_oauth_tokens"
 SOCIAL_CALENDAR_SYNC_STATUS_KEY = "social_calendar_sync_status"
 SOCIAL_GOOGLE_OAUTH_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
@@ -2839,7 +2855,7 @@ def register(payload: RegisterRequest, request: Request, response: Response, db:
     db.commit()
 
     token = create_access_token(f"u:{user.id}")
-    response.set_cookie("seo_wibe_token", token, httponly=True, samesite="lax", path="/")
+    _set_auth_cookie(response, request, token)
     return TokenResponse(access_token=token)
 
 
@@ -2861,7 +2877,7 @@ def login(payload: LoginRequest, request: Request, response: Response, db: Sessi
         )
         db.commit()
         token = create_access_token(f"u:{user.id}")
-        response.set_cookie("seo_wibe_token", token, httponly=True, samesite="lax", path="/")
+        _set_auth_cookie(response, request, token)
         return TokenResponse(access_token=token)
 
     member = db.scalar(
@@ -2891,7 +2907,7 @@ def login(payload: LoginRequest, request: Request, response: Response, db: Sessi
             )
             db.commit()
             token = create_access_token(f"m:{member.id}")
-            response.set_cookie("seo_wibe_token", token, httponly=True, samesite="lax", path="/")
+            _set_auth_cookie(response, request, token)
             return TokenResponse(access_token=token)
     _audit(
         db,
@@ -4653,6 +4669,7 @@ def _build_feedback_auto_reply_candidates(
 @router.get("/wb/ads/campaigns", response_model=WbCampaignsOut)
 def wb_ads_campaigns(
     fast: bool = True,
+    hydrate: bool = False,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -4679,7 +4696,7 @@ def wb_ads_campaigns(
             )
             refresh_queued = bool(queue_result.get("queued"))
             queue_depth_now = queue_depth()
-            force_sync_now = bool(not rows) or bool(stale and queue_depth_now > 220 and not fast)
+            force_sync_now = bool(not rows and not queue_available_now) or bool(stale and queue_depth_now > 220 and not fast)
             if force_sync_now:
                 sync_wb_campaign_snapshots(db, user.id, wb_key)
                 rows = get_wb_snapshot_rows(db, user.id)
@@ -4704,7 +4721,9 @@ def wb_ads_campaigns(
         return out
 
     placeholder_ids = _collect_placeholder_campaign_ids(rows)
-    if (not fast) and stale and rows and len(placeholder_ids) >= max(6, int(len(rows) * 0.35)):
+    allow_live_hydration = bool(hydrate) and (not fast)
+
+    if allow_live_hydration and stale and rows and len(placeholder_ids) >= max(6, int(len(rows) * 0.35)):
         # Snapshot can stay stale while queue is busy. If many rows are placeholders,
         # run direct sync for this user to avoid blank campaign names on UI.
         try:
@@ -4716,7 +4735,7 @@ def wb_ads_campaigns(
             pass
         placeholder_ids = _collect_placeholder_campaign_ids(rows)
 
-    if (not fast) and placeholder_ids:
+    if allow_live_hydration and placeholder_ids:
         preview_ids = sorted(set(placeholder_ids))[:600]
         placeholder_key = build_market_cache_key(
             {
@@ -4765,8 +4784,8 @@ def wb_ads_campaigns(
     ids = sorted({_to_int_safe(_campaign_id_from_any(row)) for row in rows if _to_int_safe(_campaign_id_from_any(row)) > 0})
     hydrated_stats: dict[str, dict[str, Any]] = {}
     hydrated_summaries: dict[str, dict[str, Any]] = {}
-    hydrate_ids = ids[:360]
-    if (not fast) and hydrate_ids:
+    hydrate_ids = ids[:120]
+    if allow_live_hydration and hydrate_ids:
         summary_hydrate_key = build_market_cache_key(
             {
                 "kind": "wb_campaigns_hydrate_summaries",
@@ -4809,7 +4828,14 @@ def wb_ads_campaigns(
                 marketplace="wb",
                 cache_key=stats_hydrate_key,
                 ttl_sec=max(120, _market_cache_ttl("wb_ads_analytics")),
-                fetcher=lambda: fetch_wb_campaign_stats_bulk(wb_key, hydrate_ids, date_from=None, date_to=None),
+                fetcher=lambda: fetch_wb_campaign_stats_bulk(
+                    wb_key,
+                    hydrate_ids,
+                    date_from=None,
+                    date_to=None,
+                    retry_unresolved=False,
+                    fast_mode=True,
+                ),
                 stale_if_error_sec=45 * 60,
                 prefer_stale_sec=20 * 60,
             )
@@ -4862,6 +4888,7 @@ def wb_ads_campaigns(
         meta={
             "source": source,
             "fast_mode": bool(fast),
+            "hydrate": bool(allow_live_hydration),
             "stale": stale,
             "count": len(rows),
             "refresh_queued": refresh_queued,
@@ -5101,7 +5128,14 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
                 marketplace="wb",
                 cache_key=stats_cache_key,
                 ttl_sec=max(120, _market_cache_ttl("wb_ads_analytics")),
-                fetcher=lambda: fetch_wb_campaign_stats_bulk(wb_key, stats_fetch_ids, date_from=None, date_to=None),
+                fetcher=lambda: fetch_wb_campaign_stats_bulk(
+                    wb_key,
+                    stats_fetch_ids,
+                    date_from=None,
+                    date_to=None,
+                    retry_unresolved=False,
+                    fast_mode=True,
+                ),
                 stale_if_error_sec=45 * 60,
                 prefer_stale_sec=60 * 60,
             )
@@ -5121,7 +5155,14 @@ def wb_ads_campaigns_enrich(payload: CampaignIdsIn, user: User = Depends(get_cur
                 warnings.append("stats_retry_timeout")
                 break
             try:
-                one_map = fetch_wb_campaign_stats_bulk(wb_key, [int(cid)], date_from=None, date_to=None)
+                one_map = fetch_wb_campaign_stats_bulk(
+                    wb_key,
+                    [int(cid)],
+                    date_from=None,
+                    date_to=None,
+                    retry_unresolved=False,
+                    fast_mode=True,
+                )
             except Exception:
                 one_map = {}
             one = one_map.get(str(cid)) if isinstance(one_map, dict) else None
@@ -5816,6 +5857,8 @@ def wb_ads_analytics(
                 ids,
                 date_from=date_from.isoformat() if date_from else None,
                 date_to=date_to.isoformat() if date_to else None,
+                retry_unresolved=False,
+                fast_mode=True,
             ),
             stale_if_error_sec=30 * 60,
             prefer_stale_sec=20 * 60,
@@ -5839,6 +5882,8 @@ def wb_ads_analytics(
                     [int(cid)],
                     date_from=date_from.isoformat() if date_from else None,
                     date_to=date_to.isoformat() if date_to else None,
+                    retry_unresolved=False,
+                    fast_mode=True,
                 )
             except Exception:
                 one_map = {}
@@ -6055,6 +6100,8 @@ def wb_ads_recommendations(
                 ids,
                 date_from=date_from.isoformat() if date_from else None,
                 date_to=date_to.isoformat() if date_to else None,
+                retry_unresolved=False,
+                fast_mode=True,
             ),
             stale_if_error_sec=30 * 60,
         )
