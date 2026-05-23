@@ -2,8 +2,8 @@
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -12,6 +12,11 @@ try:
     from app.api.routes import router
 except Exception:
     from routes import router
+try:
+    from routes import _repair_payload_encoding
+except Exception:  # pragma: no cover
+    def _repair_payload_encoding(payload):
+        return payload
 from app.background import marketplace_cache_warmup_loop, seo_recheck_loop, wb_ads_bidder_loop, wb_ads_snapshot_sync_loop
 from app.db import Base, engine, ensure_admin_emails, run_lightweight_migrations
 from app.config import settings
@@ -41,6 +46,15 @@ def static_v(path: str = "") -> str:
 
 
 templates.env.globals["static_v"] = static_v
+
+
+@app.exception_handler(HTTPException)
+async def clean_http_exception_detail(_request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=int(exc.status_code or 500),
+        content={"detail": _repair_payload_encoding(exc.detail)},
+        headers=exc.headers,
+    )
 
 
 @app.middleware("http")

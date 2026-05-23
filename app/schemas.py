@@ -126,6 +126,7 @@ class ProductPageOut(BaseModel):
     page: int = 1
     page_size: int = 30
     total_pages: int = 0
+    meta: dict[str, Any] = Field(default_factory=dict)
 
 
 class SeoGenerateRequest(BaseModel):

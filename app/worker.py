@@ -3,22 +3,26 @@ from __future__ import annotations
 import json
 import signal
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import hashlib
 from typing import Any
 
 from sqlalchemy import desc, select
 
 from app.db import SessionLocal
-from app.models import ApiCredential, AuditLog, FeedbackAutoReplyLog, SystemSetting, UserAiSettings
+from app.models import ApiCredential, AuditLog, FeedbackAutoReplyLog, Product, SystemSetting, UserAiSettings
 from app.services.ads_cache import sync_wb_campaign_snapshots
 from app.services.market_cache import build_market_cache_key, get_or_refresh_market_cache
+from app.services.marketplace import enrich_ozon_category_names
 from app.services.sales import build_sales_report
 from app.services.task_queue import compact_queue, dequeue_task, enqueue_task, queue_available, queue_depth
 from app.services.wb_bidder import run_bidder_rules
 from app.services.wb_modules import (
     fetch_ozon_ads_campaigns,
+    fetch_wb_campaign_summaries,
+    fetch_wb_campaign_stats_bulk,
     fetch_wb_campaigns,
+    fetch_wb_campaign_details,
     generate_review_reply,
     post_ozon_review_reply,
     post_wb_review_reply,
@@ -33,14 +37,18 @@ _IDLE_SLEEP_SEC = 2
 _TASK_MAX_AGE_SEC = {
     "warm_sales_cache": 6 * 60,
     "warm_wb_campaigns": 6 * 60,
+    "warm_wb_ads_analytics": 6 * 60,
+    "warm_wb_campaign_details": 6 * 60,
     "warm_ozon_campaigns": 6 * 60,
     "sync_wb_snapshots": 12 * 60,
     "wb_bidder_run": 5 * 60,
     "feedback_auto_replies": 30 * 60,
+    "enrich_ozon_categories": 20 * 60,
 }
 _MARKET_CACHE_TTL_SEC = {
     "sales_stats": 120,
     "wb_ads": 120,
+    "wb_ads_analytics": 120,
 }
 _PENDING_FEEDBACK_REQUEUE_INTERVAL_SEC = 30
 _LAST_PENDING_FEEDBACK_REQUEUE_AT = 0.0
@@ -263,6 +271,135 @@ def _handle_warm_wb_campaigns(payload: dict[str, Any]) -> None:
         db.close()
 
 
+def _handle_warm_wb_ads_analytics(payload: dict[str, Any]) -> None:
+    user_id = int(payload.get("user_id") or 0)
+    if user_id <= 0:
+        return
+    raw_ids = payload.get("ids")
+    ids: list[int] = []
+    if isinstance(raw_ids, list):
+        for item in raw_ids:
+            try:
+                cid = int(item)
+            except Exception:
+                continue
+            if cid > 0:
+                ids.append(cid)
+    ids = sorted(set(ids))[:160]
+    if not ids:
+        return
+    left = str(payload.get("date_from") or "").strip()
+    right = str(payload.get("date_to") or "").strip()
+    today = date.today()
+    if not _parse_iso_date(left):
+        left = (today - timedelta(days=6)).isoformat()
+    if not _parse_iso_date(right):
+        right = today.isoformat()
+    do_summaries = bool(payload.get("summaries", True))
+    do_stats = bool(payload.get("stats", True))
+    if not do_summaries and not do_stats:
+        return
+
+    db = SessionLocal()
+    try:
+        wb_key = _active_key(db, user_id, "wb")
+        if not wb_key:
+            return
+        key_rev = _secret_revision(wb_key)
+        if do_summaries:
+            summary_key = build_market_cache_key(
+                {
+                    "kind": "wb_campaign_summaries_analytics",
+                    "ids": ids,
+                    "key_rev": key_rev,
+                }
+            )
+            get_or_refresh_market_cache(
+                db,
+                user_id=int(user_id),
+                module_code="wb_ads",
+                marketplace="wb",
+                cache_key=summary_key,
+                ttl_sec=_market_cache_ttl("wb_ads"),
+                fetcher=lambda: fetch_wb_campaign_summaries(
+                    wb_key,
+                    ids,
+                    fallback_limit=0,
+                    detail_lookup_limit=0,
+                ),
+                stale_if_error_sec=45 * 60,
+                force_refresh=True,
+            )
+        if do_stats:
+            stats_key = build_market_cache_key(
+                {
+                    "kind": "wb_campaign_stats",
+                    "ids": ids,
+                    "date_from": left,
+                    "date_to": right,
+                    "key_rev": key_rev,
+                }
+            )
+            get_or_refresh_market_cache(
+                db,
+                user_id=int(user_id),
+                module_code="wb_ads_analytics",
+                marketplace="wb",
+                cache_key=stats_key,
+                ttl_sec=_market_cache_ttl("wb_ads_analytics"),
+                fetcher=lambda: fetch_wb_campaign_stats_bulk(
+                    wb_key,
+                    ids,
+                    date_from=left,
+                    date_to=right,
+                    retry_unresolved=False,
+                    fast_mode=True,
+                ),
+                stale_if_error_sec=45 * 60,
+                force_refresh=True,
+            )
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
+def _handle_warm_wb_campaign_details(payload: dict[str, Any]) -> None:
+    user_id = int(payload.get("user_id") or 0)
+    campaign_id = int(payload.get("campaign_id") or 0)
+    if user_id <= 0 or campaign_id <= 0:
+        return
+    db = SessionLocal()
+    try:
+        wb_key = _active_key(db, user_id, "wb")
+        if not wb_key:
+            return
+        cache_key = build_market_cache_key(
+            {
+                "kind": "wb_campaign_details",
+                "campaign_id": int(campaign_id),
+                "key_rev": _secret_revision(wb_key),
+            }
+        )
+        get_or_refresh_market_cache(
+            db,
+            user_id=int(user_id),
+            module_code="wb_ads",
+            marketplace="wb",
+            cache_key=cache_key,
+            ttl_sec=_market_cache_ttl("wb_ads"),
+            fetcher=lambda: fetch_wb_campaign_details(wb_key, campaign_id=campaign_id),
+            stale_if_error_sec=45 * 60,
+            force_refresh=True,
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
 def _handle_warm_ozon_campaigns(payload: dict[str, Any]) -> None:
     user_id = int(payload.get("user_id") or 0)
     if user_id <= 0:
@@ -286,6 +423,87 @@ def _handle_warm_ozon_campaigns(payload: dict[str, Any]) -> None:
             stale_if_error_sec=30 * 60,
         )
         db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
+def _handle_enrich_ozon_categories(payload: dict[str, Any]) -> None:
+    user_id = int(payload.get("user_id") or 0)
+    if user_id <= 0:
+        return
+    try:
+        limit = int(payload.get("limit") or 800)
+    except Exception:
+        limit = 800
+    limit = max(50, min(limit, 2000))
+
+    placeholder_values = {
+        "",
+        "-",
+        "n/a",
+        "na",
+        "none",
+        "null",
+        "unknown",
+        "без категории",
+        "не указано",
+        "нет категории",
+        "not set",
+        "uncategorized",
+    }
+
+    def _is_placeholder_category(value: str) -> bool:
+        text = " ".join(str(value or "").replace("\u00a0", " ").split()).strip().lower()
+        return text in placeholder_values
+
+    db = SessionLocal()
+    try:
+        ozon_key = _active_key(db, user_id, "ozon")
+        if not ozon_key:
+            return
+        rows = db.scalars(
+            select(Product)
+            .where(Product.user_id == int(user_id), Product.marketplace == "ozon")
+            .order_by(Product.id.desc())
+            .limit(max(limit, min(limit * 2, 4000)))
+        ).all()
+        missing_rows = [row for row in rows if _is_placeholder_category(str(row.category_name or ""))][:limit]
+        if not missing_rows:
+            return
+        refs = [
+            {
+                "article": str(row.article or ""),
+                "external_id": str(row.external_id or ""),
+            }
+            for row in missing_rows
+        ]
+        mapped = enrich_ozon_category_names(ozon_key, refs)
+        if not mapped:
+            return
+        changed = 0
+        for row in missing_rows:
+            if not _is_placeholder_category(str(row.category_name or "")):
+                continue
+            key = (str(row.article or "").strip().lower(), str(row.external_id or "").strip())
+            next_category = str(mapped.get(key) or "").strip()
+            if not next_category:
+                continue
+            row.category_name = next_category[:255]
+            changed += 1
+        if changed:
+            db.add(
+                AuditLog(
+                    user_id=user_id,
+                    action="ozon_categories_enriched",
+                    details=json.dumps({"checked": len(missing_rows), "changed": changed}, ensure_ascii=False)[:1200],
+                    module_code="products",
+                    entity_type="product",
+                    status="ok",
+                )
+            )
+            db.commit()
     except Exception:
         db.rollback()
     finally:
@@ -529,9 +747,10 @@ def _should_drop_task(task: dict[str, Any]) -> bool:
         return True
     depth = max(0, int(queue_depth() or 0))
     # Keep worker responsive under burst load: stale warmup jobs are safe to drop.
-    if depth > 400 and task_type in {"warm_sales_cache", "warm_wb_campaigns", "warm_ozon_campaigns"} and age_sec > 20:
+    warmup_tasks = {"warm_sales_cache", "warm_wb_campaigns", "warm_wb_ads_analytics", "warm_wb_campaign_details", "warm_ozon_campaigns", "enrich_ozon_categories"}
+    if depth > 400 and task_type in warmup_tasks and age_sec > 20:
         return True
-    if depth > 600 and task_type in {"warm_sales_cache", "warm_wb_campaigns", "warm_ozon_campaigns"} and age_sec > 45:
+    if depth > 600 and task_type in warmup_tasks and age_sec > 45:
         return True
     # Snapshot/bidder tasks are useful only when fresh; when queue is deep keep latest jobs.
     if depth > 700 and task_type in {"sync_wb_snapshots", "wb_bidder_run"} and age_sec > 60:
@@ -555,8 +774,17 @@ def process_task(task: dict[str, Any]) -> None:
     if task_type == "warm_wb_campaigns":
         _handle_warm_wb_campaigns(payload)
         return
+    if task_type == "warm_wb_ads_analytics":
+        _handle_warm_wb_ads_analytics(payload)
+        return
+    if task_type == "warm_wb_campaign_details":
+        _handle_warm_wb_campaign_details(payload)
+        return
     if task_type == "warm_ozon_campaigns":
         _handle_warm_ozon_campaigns(payload)
+        return
+    if task_type == "enrich_ozon_categories":
+        _handle_enrich_ozon_categories(payload)
         return
     if task_type == "wb_bidder_run":
         _handle_wb_bidder_run(payload)

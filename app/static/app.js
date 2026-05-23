@@ -68,6 +68,8 @@ let productPage = 1;
 let productPageSize = 30;
 let productTotal = 0;
 let productTotalPages = 0;
+let productCategoryLoadMeta = null;
+let productCategoryRefreshTimer = null;
 const PRODUCT_PAGE_SIZE_OPTIONS = [30, 50, 100, 200, 500, 1000];
 let selectedProductId = null;
 let selectedProductDetails = null;
@@ -108,6 +110,7 @@ let questionLoadToken = 0;
 let wbCampaignRows = [];
 let selectedWbCampaignId = "";
 const wbCampaignDetailCache = new Map();
+let campaignDetailRefreshTimer = null;
 let wbAdsBalanceData = null;
 let currentCampaignDetailId = 0;
 let wbAdsLoadProgress = { active: false, total: 0, loaded: 0, failed: 0 };
@@ -117,6 +120,9 @@ let wbAdsEnrichSignature = "";
 let wbAdsEnrichSignatureAt = 0;
 let adsAnalyticsRows = [];
 let adsAnalyticsMeta = {};
+let adsAnalyticsRefreshTimer = null;
+let adsAnalyticsRefreshSignature = "";
+let adsAnalyticsRefreshAttempts = 0;
 let adsRecommendationRows = [];
 let adsRecLoadProgress = { active: false, total: 0, loaded: 0 };
 let adsRecLoadToken = 0;
@@ -762,6 +768,55 @@ function __legacyTr(ru, en) {
   return _repairUiCandidate(value);
 }
 
+const RU_FALLBACK_BY_EN = {
+  "Generate reply": "Сгенерировать ответ",
+  "Select a file first.": "Сначала выберите файл.",
+  "API record state/status": "Состояние записи API",
+  "Status": "Статус",
+  "Created": "Создано",
+  "Updated": "Обновлено",
+  "Amount": "Сумма",
+  "Warehouse": "Склад",
+  "Running": "Работает",
+  "Spend": "Расход",
+  "Bid": "Ставка",
+  "Rates were not returned by API.": "Ставки не вернулись из API.",
+  "Stats are unavailable from API.": "Статистика недоступна из API.",
+  "Recommendations loaded": "Рекомендации загружены",
+  "Sales statistics partially loaded": "Статистика продаж загружена частично",
+  "Sales statistics loaded": "Статистика продаж загружена",
+  "Recommendations": "Рекомендации",
+  "Medium priority": "Средний приоритет",
+  "Medium": "Средний",
+  "Low": "Низкий",
+  "Strategy": "Стратегия",
+  "Edit product": "Редактировать товар",
+  "Saving product card changes...": "Сохраняем изменения карточки товара...",
+  "Plan": "Тариф",
+  "Load state": "Состояние загрузки",
+  "Recommendations are temporarily unavailable.": "Рекомендации временно недоступны.",
+  "Recommendations are currently unavailable. Check API key and date range, then refresh the module.": "Рекомендации сейчас недоступны. Проверьте API-ключ и период, затем обновите модуль.",
+  "Recommendations are ready in cards and table. Start with high priority.": "Рекомендации готовы в карточках и таблице. Начните с высокого приоритета.",
+  "No actionable recommendations. Service returned neutral or insufficient data for selected period.": "Нет actionable-рекомендаций. За выбранный период недостаточно данных или показатели нейтральные.",
+  "No recommendation cards yet. Build recommendations for selected dates.": "Карточки рекомендаций пока пусты. Постройте рекомендации за выбранный период.",
+  "No recommendations for selected period.": "За выбранный период рекомендаций нет.",
+  "Details are fetched via several WB API methods.": "Детали загружаются через несколько методов API WB.",
+  "Server returned a malformed WB Ads response. Existing rows were preserved.": "Сервер вернул некорректный ответ WB Ads. Текущие строки сохранены.",
+};
+
+function russianFallbackFromEnglish(text) {
+  const value = String(text == null ? "" : text).trim();
+  if (!value) return "";
+  if (RU_FALLBACK_BY_EN[value]) return RU_FALLBACK_BY_EN[value];
+  let match = value.match(/^Generated jobs:\s*(\d+)$/i);
+  if (match) return `Сгенерировано задач: ${match[1]}`;
+  match = value.match(/^Stats rows:\s*(\d+)$/i);
+  if (match) return `Строк статистики: ${match[1]}`;
+  match = value.match(/^Editing rule\s*#(.+)$/i);
+  if (match) return `Редактирование правила #${match[1]}`;
+  return "";
+}
+
 // Harden translation decoding for double-encoded/space-split mojibake variants.
 function tr(ru, en) {
   const rawRu = String(ru == null ? "" : ru);
@@ -800,8 +855,11 @@ function tr(ru, en) {
     const broken = /\?{3,}|\uFFFD|(?:\u00D0.|\u00D1.|РІР‚|СЂСџ|[РѓР‰РЉР‹РЏС’С“С™СљС›Сџ])/u.test(current)
       || _mojibakeScore(current) >= 2
       || /(?:\b[\u0420\u0421\u0412\u00D0\u00D1]\b(?:\s|\u00A0)+){3,}/u.test(current);
+    const ruFallback = russianFallbackFromEnglish(decodedEn || rawEn);
     if (_looksReadableRussian(decodedRu) || _looksReadableCyrillic(decodedRu)) {
       value = decodedRu;
+    } else if (broken && ruFallback) {
+      value = ruFallback;
     } else if (broken && decodedEn) {
       value = decodedEn;
     }
@@ -1780,6 +1838,23 @@ async function requestJson(url, opts = {}) {
     return normalized.length > 280 ? `${normalized.slice(0, 277)}...` : normalized;
   };
 
+  const looksLikeHtmlError = (raw) => /<\s*!doctype|<\s*html|<\/\s*html|nginx|bad gateway/i.test(String(raw || ""));
+  const friendlyHttpMessage = (status, raw = "") => {
+    const code = Number(status || 0);
+    const htmlError = looksLikeHtmlError(raw);
+    if (code === 502 || code === 503 || code === 504) {
+      return currentLang === "en"
+        ? "Service is temporarily unavailable or restarting. Please retry in a few seconds."
+        : "Сервис временно недоступен или перезапускается. Повторите запрос через несколько секунд.";
+    }
+    if (htmlError) {
+      return currentLang === "en"
+        ? `Server returned an HTML error page${code ? ` (HTTP ${code})` : ""}. Please retry.`
+        : `Сервер вернул HTML-страницу ошибки${code ? ` (HTTP ${code})` : ""}. Повторите запрос.`;
+    }
+    return "";
+  };
+
   const makeRequestError = (message, extra = {}) => {
     const err = new Error(String(message || (currentLang === "en" ? "Request error" : "Ошибка запроса")));
     err.kind = String(extra.kind || "http");
@@ -1875,6 +1950,9 @@ async function requestJson(url, opts = {}) {
         : "";
       if (detail && typeof decodePossiblyMojibake === "function") {
         detail = String(decodePossiblyMojibake(detail) || detail).trim();
+      }
+      if (!detail) {
+        detail = friendlyHttpMessage(response.status, parsed.rawText);
       }
       const err = makeRequestError(
         detail || parsed.rawText || (currentLang === "en" ? "Request error" : "Ошибка запроса"),
@@ -4835,6 +4913,74 @@ function buildFeedbackSyntheticId(rawRow, marketplace = "") {
   return `${marketplace || "row"}-fb-${stableTextHash(fingerprint)}`;
 }
 
+function getFeedbackExternalId(row, marketplace = "") {
+  if (!row || typeof row !== "object") return "";
+  const candidates = [
+    row.feedbackId,
+    row.feedback_id,
+    row.reviewId,
+    row.review_id,
+    row.commentId,
+    row.comment_id,
+    row.id,
+  ];
+  const syntheticPrefix = `${String(marketplace || row._marketplace || "").trim().toLowerCase()}-fb-`;
+  for (const raw of candidates) {
+    const value = String(raw || "").trim();
+    if (!value) continue;
+    if (syntheticPrefix && value.toLowerCase().startsWith(syntheticPrefix)) continue;
+    if (/^[a-z]+-fb-[0-9a-f]{8}$/i.test(value)) continue;
+    return value;
+  }
+  return "";
+}
+
+function buildFeedbackCabinetUrl(row, marketplace = "wb") {
+  const mp = String(marketplace || row?._marketplace || "wb").trim().toLowerCase() === "ozon" ? "ozon" : "wb";
+  const feedbackId = getFeedbackExternalId(row, mp);
+  if (mp === "ozon") {
+    const url = new URL("https://seller.ozon.ru/app/reviews");
+    if (feedbackId) {
+      url.searchParams.set("review_id", feedbackId);
+      url.searchParams.set("search", feedbackId);
+    }
+    return url.toString();
+  }
+  const url = new URL("https://seller.wildberries.ru/content-ratings/feedback");
+  if (feedbackId) {
+    url.searchParams.set("feedbackId", feedbackId);
+    url.searchParams.set("search", feedbackId);
+  }
+  return url.toString();
+}
+
+function appendFeedbackCabinetLink(card, row, marketplace = "wb") {
+  if (!card) return;
+  const mp = String(marketplace || row?._marketplace || "wb").trim().toLowerCase() === "ozon" ? "ozon" : "wb";
+  const feedbackId = getFeedbackExternalId(row, mp);
+  const line = document.createElement("div");
+  line.className = "feedback-cabinet-line";
+
+  const link = document.createElement("a");
+  link.className = "btn-secondary feedback-cabinet-link";
+  link.href = buildFeedbackCabinetUrl(row, mp);
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.textContent = currentLang === "en" ? `Open in ${mp.toUpperCase()} cabinet` : `Открыть в ЛК ${mp.toUpperCase()}`;
+  link.dataset.tip = currentLang === "en"
+    ? "Opens the marketplace seller cabinet in a new tab."
+    : "Откроет личный кабинет маркетплейса в новой вкладке.";
+  line.appendChild(link);
+
+  const idHint = document.createElement("span");
+  idHint.className = "cell-meta-small feedback-cabinet-id";
+  idHint.textContent = feedbackId
+    ? (currentLang === "en" ? `Review ID: ${feedbackId}` : `ID отзыва: ${feedbackId}`)
+    : (currentLang === "en" ? "Review ID is unavailable in API response" : "ID отзыва не пришел в ответе API");
+  line.appendChild(idHint);
+  card.appendChild(line);
+}
+
 function isFeedbackAnsweredRow(row) {
   return Boolean(
     row?.is_answered ||
@@ -5156,6 +5302,7 @@ async function renderWbReviews() {
       : "-");
     textBlock.appendChild(body);
     card.appendChild(textBlock);
+    appendFeedbackCabinetLink(card, row, reviewMp);
 
     const photos = Array.isArray(row?.photos) ? row.photos.filter((x) => typeof x === "string" && x.trim()) : [];
     if (photos.length) {
@@ -7095,6 +7242,11 @@ function safeCampaignName(row, campaignId = "", { fallback = true } = {}) {
     try {
       name = String(decodePossiblyMojibake(name) || name).trim();
     } catch (_) {}
+    try {
+      if (typeof window !== "undefined" && typeof window.__repairMojibakeText === "function") {
+        name = String(window.__repairMojibakeText(name) || name).trim();
+      }
+    } catch (_) {}
   }
   if (!name || isBrokenCampaignName(name) || isPlaceholderCampaignName(name, id)) {
     return fallback ? campaignFallbackName(id) : "";
@@ -8000,9 +8152,9 @@ async function openCampaignDetailModal(campaignId) {
       tr(`Загружаем детали кампании ${campaignId}…`, `Loading campaign ${campaignId} details...`),
       () => requestJson(`/api/wb/ads/campaign-details?campaign_id=${campaignId}`, {
         headers: authHeaders(),
-        timeoutMs: 120000,
+        timeoutMs: 30000,
       }),
-      tr("???? ??????? ???? ????? ????????? ??????? API WB.", "Details are fetched via several WB API methods.")
+      tr("\u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u043c \u043a\u044d\u0448 \u0438 \u0434\u043e\u0433\u0440\u0443\u0436\u0430\u0435\u043c \u0441\u0432\u0435\u0436\u0438\u0435 \u0434\u0435\u0442\u0430\u043b\u0438 WB \u0432 \u0444\u043e\u043d\u0435.", "Showing cached details and loading fresh WB details in the background.")
     ).catch((e) => {
       alert(e.message);
       return null;
@@ -8019,10 +8171,27 @@ async function openCampaignDetailModal(campaignId) {
     wbCampaignDetailCache.set(cacheKey, payload);
   }
   renderCampaignDetail(payload.data || {});
+  const detailMeta = payload?.data?.meta && typeof payload.data.meta === "object" ? payload.data.meta : {};
+  if (detailMeta.refresh_queued && summaryEl) {
+    summaryEl.textContent = `${summaryEl.textContent}\n${tr("\u0421\u0432\u0435\u0436\u0438\u0435 \u0434\u0435\u0442\u0430\u043b\u0438 \u0434\u043e\u0433\u0440\u0443\u0436\u0430\u044e\u0442\u0441\u044f. \u041e\u043a\u043d\u043e \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u0441\u044f \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438.", "Fresh details are loading. This window will refresh automatically.")}`;
+    if (!campaignDetailRefreshTimer) {
+      campaignDetailRefreshTimer = setTimeout(() => {
+        campaignDetailRefreshTimer = null;
+        if (currentCampaignDetailId === Number(campaignId)) {
+          wbCampaignDetailCache.delete(String(campaignId));
+          openCampaignDetailModal(campaignId).catch(() => null);
+        }
+      }, 18000);
+    }
+  }
 }
 
 async function refreshCampaignDetails() {
   if (!currentCampaignDetailId) return;
+  if (campaignDetailRefreshTimer) {
+    clearTimeout(campaignDetailRefreshTimer);
+    campaignDetailRefreshTimer = null;
+  }
   wbCampaignDetailCache.delete(String(currentCampaignDetailId));
   await openCampaignDetailModal(currentCampaignDetailId);
 }
@@ -8172,6 +8341,9 @@ function buildAdsAnalyticsMetaLines(meta) {
   if (warnings.length) {
     lines.push(`${tr("????????? ????????", "Load state")}: ${warnings.join(" | ")}`);
   }
+  if (meta.refresh_queued) {
+    lines.push(tr("\u0421\u0432\u0435\u0436\u0438\u0435 \u0434\u0435\u0442\u0430\u043b\u0438 \u0434\u043e\u0433\u0440\u0443\u0436\u0430\u044e\u0442\u0441\u044f \u0432 \u0444\u043e\u043d\u0435. \u0422\u0430\u0431\u043b\u0438\u0446\u0430 \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u0441\u044f \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438.", "Fresh details are loading in the background. The table will refresh automatically."));
+  }
   const sourceParts = [];
   if (Array.isArray(meta.base_sources) && meta.base_sources.length) sourceParts.push(`base=${meta.base_sources.join(",")}`);
   if (Array.isArray(meta.summary_sources) && meta.summary_sources.length) sourceParts.push(`summary=${meta.summary_sources.join(",")}`);
@@ -8207,6 +8379,10 @@ function describeAdsAnalyticsLoadFailure(err) {
 }
 async function loadAdsAnalytics() {
   if (!enabledModules.has("wb_ads_analytics")) return;
+  if (adsAnalyticsRefreshTimer) {
+    clearTimeout(adsAnalyticsRefreshTimer);
+    adsAnalyticsRefreshTimer = null;
+  }
   const dateFrom = (document.getElementById("adsAnalyticsFrom")?.value || "").trim();
   const dateTo = (document.getElementById("adsAnalyticsTo")?.value || "").trim();
   const campaignId = Number(document.getElementById("adsAnalyticsCampaignId")?.value || 0);
@@ -8231,6 +8407,7 @@ async function loadAdsAnalytics() {
     partial_summary_ids: [],
     partial_stats_ids: [],
     temporary_unavailable: false,
+    refresh_queued: false,
     warnings: new Set(),
     base_sources: new Set(),
     summary_sources: new Set(),
@@ -8253,7 +8430,7 @@ async function loadAdsAnalytics() {
     }
     const data = await requestJson(`/api/wb/ads/analytics?${qp.toString()}`, {
       headers: authHeaders(),
-      timeoutMs: 120000,
+      timeoutMs: 45000,
     }).catch((e) => {
       adsAnalyticsMeta = {
         temporary_unavailable: false,
@@ -8288,6 +8465,7 @@ async function loadAdsAnalytics() {
     mergedMeta.partial_summary_count += Number(pageMeta.partial_summary_count || 0);
     mergedMeta.partial_stats_count += Number(pageMeta.partial_stats_count || 0);
     mergedMeta.temporary_unavailable = mergedMeta.temporary_unavailable || Boolean(pageMeta.temporary_unavailable);
+    mergedMeta.refresh_queued = mergedMeta.refresh_queued || Boolean(pageMeta.refresh_queued);
     if (Array.isArray(pageMeta.partial_summary_ids)) mergedMeta.partial_summary_ids.push(...pageMeta.partial_summary_ids.map((x) => Number(x || 0)).filter((x) => Number.isFinite(x) && x > 0));
     if (Array.isArray(pageMeta.partial_stats_ids)) mergedMeta.partial_stats_ids.push(...pageMeta.partial_stats_ids.map((x) => Number(x || 0)).filter((x) => Number.isFinite(x) && x > 0));
     if (Array.isArray(pageMeta.warnings)) pageMeta.warnings.forEach((code) => mergedMeta.warnings.add(String(code || "").trim()));
@@ -8317,6 +8495,7 @@ async function loadAdsAnalytics() {
     partial_summary_ids: [...new Set(mergedMeta.partial_summary_ids)].slice(0, 160),
     partial_stats_ids: [...new Set(mergedMeta.partial_stats_ids)].slice(0, 160),
     temporary_unavailable: mergedMeta.temporary_unavailable,
+    refresh_queued: mergedMeta.refresh_queued,
     warnings: [...mergedMeta.warnings].filter(Boolean),
     base_sources: [...mergedMeta.base_sources].filter(Boolean),
     summary_sources: [...mergedMeta.summary_sources].filter(Boolean),
@@ -8353,6 +8532,24 @@ async function loadAdsAnalytics() {
   }
   renderAdsAnalyticsRows();
   markModuleLoaded("ads");
+  const refreshSignature = `${dateFrom}|${dateTo}|${campaignId}`;
+  if (adsAnalyticsMeta.refresh_queued) {
+    if (adsAnalyticsRefreshSignature !== refreshSignature) {
+      adsAnalyticsRefreshSignature = refreshSignature;
+      adsAnalyticsRefreshAttempts = 0;
+    }
+    if (adsAnalyticsRefreshAttempts < 2 && !adsAnalyticsRefreshTimer) {
+      adsAnalyticsRefreshAttempts += 1;
+      adsAnalyticsRefreshTimer = setTimeout(() => {
+        adsAnalyticsRefreshTimer = null;
+        if (enabledModules.has("wb_ads_analytics")) {
+          loadAdsAnalytics().catch(() => null);
+        }
+      }, 18000);
+    }
+  } else if (adsAnalyticsRefreshSignature === refreshSignature) {
+    adsAnalyticsRefreshAttempts = 0;
+  }
 }
 
 function renderAdsAnalyticsRows() {
@@ -8707,7 +8904,7 @@ function renderAdsRecommendationsRows() {
   tbody.innerHTML = "";
   if (!adsRecommendationRows.length) {
     const rowEl = document.createElement("tr");
-    rowEl.innerHTML = `<td colspan="14">${currentLang === "en" ? "No recommendations for selected period." : "???????????? ?? ????????? ?????? ???."}</td>`;
+    rowEl.innerHTML = `<td colspan="14">${escapeHtml(tr("За выбранный период рекомендаций нет.", "No recommendations for selected period."))}</td>`;
     tbody.appendChild(rowEl);
     return;
   }
@@ -8881,7 +9078,7 @@ function applyWbBidderFieldHints() {
   ensureFieldCard("wbBidderTargetKind", isEn ? "Target type" : "Тип цели");
   ensureFieldCard("wbBidderTargetValue", isEn ? "Search phrase (for normquery)" : "Поисковая фраза (для normquery)", isEn ? "Used only in normquery mode." : "Используется только в режиме normquery.");
   ensureFieldCard("wbBidderPlacement", isEn ? "Placement" : "Площадка");
-  ensureFieldCard("wbBidderStrategy", isEn ? "Strategy" : "?????????");
+  ensureFieldCard("wbBidderStrategy", isEn ? "Strategy" : "Стратегия");
   ensureFieldCard("wbBidderDesiredBid", isEn ? "Target bid, RUB" : "Целевая ставка, ₽");
   ensureFieldCard("wbBidderMinBid", isEn ? "Minimum bid, RUB" : "Минимальная ставка, ₽");
   ensureFieldCard("wbBidderMaxBid", isEn ? "Maximum bid, RUB" : "Максимальная ставка, ₽");
@@ -8896,7 +9093,7 @@ function applyWbBidderFieldHints() {
   if (hint) {
     hint.textContent = isEn
       ? "campaign_id = campaign ID, nmID = product card ID. Step/position/clicks/cooldown are optimization controls. Bid values are in RUB."
-      : "campaign_id = ID ????????, nmID = ID ???????? ??????. ???? ???/???????/?????/cooldown ? ??? ????????? ???????????. ?????? ??????????? ? ??????.";
+      : "campaign_id = ID кампании, nmID = ID карточки товара. Шаг, позиция, клики и cooldown управляют оптимизацией. Ставки указываются в рублях.";
   }
 }
 
@@ -9350,9 +9547,18 @@ function syncProductsPagerControls() {
   const safeTotalPages = Math.max(0, Number(productTotalPages || 0));
   const effectiveTotalPages = safeTotalPages || 1;
   const totalItems = Math.max(0, Number(productTotal || 0));
-  const infoText = totalItems
+  let infoText = totalItems
     ? tr(`\u0421\u0442\u0440\u0430\u043d\u0438\u0446\u0430 ${safePage} \u0438\u0437 ${effectiveTotalPages} \u2022 \u0432\u0441\u0435\u0433\u043e \u0442\u043e\u0432\u0430\u0440\u043e\u0432: ${totalItems}`, `Page ${safePage} of ${effectiveTotalPages} \u2022 total products: ${totalItems}`)
     : tr("\u0422\u043e\u0432\u0430\u0440\u044b \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u044b", "No products found");
+  const categoryMeta = productCategoryLoadMeta && typeof productCategoryLoadMeta === "object" ? productCategoryLoadMeta : {};
+  const missingCategories = Number(categoryMeta.missing_ozon_categories || 0);
+  const localBackfilled = Number(categoryMeta.local_backfilled || 0);
+  const liveBackfilled = Number(categoryMeta.live_backfilled || 0);
+  if (categoryMeta.background_queued) {
+    infoText += tr(" \u2022 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438 Ozon \u0434\u043e\u0433\u0440\u0443\u0436\u0430\u044e\u0442\u0441\u044f", " \u2022 Ozon categories are loading");
+  } else if (missingCategories > 0 && (localBackfilled > 0 || liveBackfilled > 0)) {
+    infoText += tr(" \u2022 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b", " \u2022 categories updated");
+  }
 
   ["productPageSizeTop", "productPageSizeBottom"].forEach((id) => {
     const el = document.getElementById(id);
@@ -9484,6 +9690,7 @@ async function loadProducts() {
     productTotal = 0;
     productPage = 1;
     productTotalPages = 0;
+    productCategoryLoadMeta = null;
     syncCategoryFilterOptions([]);
     syncCategoryFilterState();
     syncProductsPagerControls();
@@ -9497,6 +9704,7 @@ async function loadProducts() {
 
   if (Array.isArray(data)) {
     currentProducts = data;
+    productCategoryLoadMeta = null;
     syncCategoryFilterOptions([]);
     syncCategoryFilterState();
     productTotal = data.length;
@@ -9504,6 +9712,9 @@ async function loadProducts() {
     productTotalPages = data.length ? 1 : 0;
   } else {
     currentProducts = Array.isArray(data.rows) ? data.rows : [];
+    productCategoryLoadMeta = (data.meta && typeof data.meta === "object" && data.meta.categories && typeof data.meta.categories === "object")
+      ? data.meta.categories
+      : null;
     const categoryList = Array.isArray(data.categories) ? data.categories : [];
     const optionsReset = syncCategoryFilterOptions(categoryList);
     const resetByState = syncCategoryFilterState();
@@ -9516,6 +9727,14 @@ async function loadProducts() {
     productPage = Math.max(1, Number(data.page || productPage || 1));
     productPageSize = normalizeProductPageSize(data.page_size || productPageSize);
     productTotalPages = Math.max(0, Number(data.total_pages || 0));
+    if (productCategoryLoadMeta?.background_queued && !productCategoryRefreshTimer) {
+      productCategoryRefreshTimer = setTimeout(() => {
+        productCategoryRefreshTimer = null;
+        if (String(currentTab || "") === "products") {
+          loadProducts().catch(() => null);
+        }
+      }, 12000);
+    }
   }
   syncProductsPagerControls();
 

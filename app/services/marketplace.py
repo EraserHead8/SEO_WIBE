@@ -63,10 +63,14 @@ def fetch_products_from_marketplace(marketplace: str, api_key: str, articles: li
         live = _fetch_wb_products(api_key, articles, import_all)
         if live is not None:
             return live
+        if str(api_key or "").strip():
+            raise RuntimeError("WB API did not return a product list")
     if httpx and marketplace == "ozon":
         live = _fetch_ozon_products(api_key, articles, import_all)
         if live is not None:
             return live
+        if str(api_key or "").strip():
+            raise RuntimeError("Ozon API did not return a product list")
 
     demo_names = [
         "Дымоходная труба 110 мм",

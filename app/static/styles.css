@@ -1796,6 +1796,21 @@ tbody tr:hover {
   display: grid;
   gap: 6px;
 }
+.feedback-cabinet-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.feedback-cabinet-link {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.feedback-cabinet-id {
+  overflow-wrap: anywhere;
+}
 .feedback-actions-row {
   margin-top: 2px;
 }

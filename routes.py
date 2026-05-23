@@ -597,6 +597,23 @@ def _feedback_mark_rate_limited(db: Session, *, user_id: int, module_code: str, 
     _set_system_setting(db, _FEEDBACK_RATE_LIMIT_PAUSE_KEY, json.dumps(pauses, ensure_ascii=False, sort_keys=True))
 
 
+def _feedback_clear_rate_limited(db: Session, *, user_id: int, module_code: str, marketplace: str) -> None:
+    pauses = _feedback_pause_map(db)
+    keys = {_feedback_pause_key(user_id, module_code, marketplace)}
+    if str(marketplace or "").strip().lower() == "wb":
+        keys.update(
+            _feedback_pause_key(user_id, sibling_module, "wb")
+            for sibling_module in ("wb_reviews_ai", "wb_questions_ai")
+        )
+    changed = False
+    for key in keys:
+        if key in pauses:
+            pauses.pop(key, None)
+            changed = True
+    if changed:
+        _set_system_setting(db, _FEEDBACK_RATE_LIMIT_PAUSE_KEY, json.dumps(pauses, ensure_ascii=False, sort_keys=True))
+
+
 def _empty_feedback_rate_limit_payload(message: str) -> dict[str, Any]:
     return {"new": [], "answered": [], "warnings": [message]}
 
@@ -611,6 +628,8 @@ def _feedback_cache_warnings(cache_meta: dict[str, Any] | None) -> list[str]:
             "WB временно ограничил запросы (429). "
             "Сервис поставил WB на паузу и не будет повторно дергать API до снятия лимита."
         )
+    if "db-stale-fastpath" in source and not error:
+        return warnings
     if meta.get("stale") and not warnings:
         warnings.append("Показаны последние сохраненные данные, потому что API маркетплейса временно недоступен.")
     return warnings
@@ -727,6 +746,43 @@ def _market_cache_latest_payload(
                 "cache_key": str(row.cache_key or ""),
             }
     return None, {}
+
+
+def _market_cache_exact_payload(
+    db: Session,
+    *,
+    user_id: int,
+    module_code: str,
+    marketplace: str,
+    cache_key: str,
+    max_age_sec: int = 24 * 60 * 60,
+) -> tuple[Any | None, dict[str, Any]]:
+    now = datetime.utcnow()
+    row = db.scalar(
+        select(MarketplaceApiCache).where(
+            MarketplaceApiCache.user_id == int(user_id),
+            MarketplaceApiCache.module_code == str(module_code or "").strip()[:80],
+            MarketplaceApiCache.marketplace == str(marketplace or "").strip()[:30],
+            MarketplaceApiCache.cache_key == str(cache_key or "").strip()[:120],
+        )
+    )
+    if not row:
+        return None, {}
+    fetched_at = row.fetched_at or row.last_hit_at
+    if not fetched_at:
+        return None, {}
+    age_sec = max(0, int((now - fetched_at).total_seconds()))
+    if age_sec > max(60, int(max_age_sec or 0)):
+        return None, {}
+    try:
+        payload = json.loads(str(row.payload_json or ""))
+    except Exception:
+        return None, {}
+    return payload, {
+        "source": "db-hit" if row.expires_at and row.expires_at > now else "db-stale-fastpath",
+        "age_sec": age_sec,
+        "cache_key": str(row.cache_key or ""),
+    }
 
 
 def _warnings_indicate_upstream_failure(warnings: list[Any]) -> bool:
@@ -3244,6 +3300,11 @@ def wb_reviews(
             max_pages=8,
         )
 
+    if _feedback_is_rate_limited(db, user_id=int(user.id), module_code="wb_reviews_ai", marketplace="wb"):
+        ok, _message = probe_wb_feedback_access(wb_key, feedback_kind="reviews")
+        if ok:
+            _feedback_clear_rate_limited(db, user_id=int(user.id), module_code="wb_reviews_ai", marketplace="wb")
+
     data, cache_meta = _get_feedback_market_cache(
         db,
         user_id=int(user.id),
@@ -3253,7 +3314,7 @@ def wb_reviews(
         ttl_sec=_market_cache_ttl("wb_reviews_ai", fast_mode=fast),
         fetcher=_load_reviews_payload,
         stale_if_error_sec=20 * 60,
-        prefer_stale_sec=24 * 60 * 60 if fast else 0,
+        prefer_stale_sec=5 * 60 if fast else 0,
     )
     new_rows = _filter_claimed_feedback_rows(
         db,
@@ -3452,7 +3513,7 @@ def ozon_reviews(
         ttl_sec=_market_cache_ttl("wb_reviews_ai", fast_mode=fast),
         fetcher=_load_reviews_payload,
         stale_if_error_sec=20 * 60,
-        prefer_stale_sec=24 * 60 * 60 if fast else 0,
+        prefer_stale_sec=5 * 60 if fast else 0,
     )
     new_rows = _filter_claimed_feedback_rows(
         db,
@@ -3625,6 +3686,11 @@ def wb_questions(
             max_pages=8,
         )
 
+    if _feedback_is_rate_limited(db, user_id=int(user.id), module_code="wb_questions_ai", marketplace="wb"):
+        ok, _message = probe_wb_feedback_access(wb_key, feedback_kind="questions")
+        if ok:
+            _feedback_clear_rate_limited(db, user_id=int(user.id), module_code="wb_questions_ai", marketplace="wb")
+
     data, cache_meta = _get_feedback_market_cache(
         db,
         user_id=int(user.id),
@@ -3634,7 +3700,7 @@ def wb_questions(
         ttl_sec=_market_cache_ttl("wb_questions_ai", fast_mode=fast),
         fetcher=_load_questions_payload,
         stale_if_error_sec=20 * 60,
-        prefer_stale_sec=24 * 60 * 60 if fast else 0,
+        prefer_stale_sec=5 * 60 if fast else 0,
     )
     new_rows = _filter_claimed_feedback_rows(
         db,
@@ -3825,7 +3891,7 @@ def ozon_questions(
         ttl_sec=_market_cache_ttl("wb_questions_ai", fast_mode=fast),
         fetcher=_load_questions_payload,
         stale_if_error_sec=20 * 60,
-        prefer_stale_sec=24 * 60 * 60 if fast else 0,
+        prefer_stale_sec=5 * 60 if fast else 0,
     )
     new_rows = _filter_claimed_feedback_rows(
         db,
@@ -5351,29 +5417,37 @@ def wb_ads_campaign_details(campaign_id: int, user: User = Depends(get_current_u
             "key_rev": _secret_revision(wb_key),
         }
     )
-    try:
-        data, cache_meta = get_or_refresh_market_cache(
-            db,
-            user_id=int(user.id),
-            module_code="wb_ads",
-            marketplace="wb",
-            cache_key=cache_key,
-            ttl_sec=_market_cache_ttl("wb_ads"),
-            fetcher=lambda: fetch_wb_campaign_details(wb_key, campaign_id=campaign_id),
-            stale_if_error_sec=45 * 60,
-            prefer_stale_sec=30 * 60,
-        )
-    except Exception as exc:
-        if not snapshot_payload:
-            raise
+    cached_detail, cached_meta = _market_cache_exact_payload(
+        db,
+        user_id=int(user.id),
+        module_code="wb_ads",
+        marketplace="wb",
+        cache_key=cache_key,
+        max_age_sec=24 * 60 * 60,
+    )
+    if isinstance(cached_detail, dict):
+        data = cached_detail
+        cache_meta = cached_meta
+    elif snapshot_payload:
         data = snapshot_payload
-        cache_meta = {
-            "source": "snapshot-fallback",
-            "stale": True,
-            "age_sec": 0,
-            "ttl_sec": 0,
-            "error": str(exc or "")[:240],
+        cache_meta = {"source": "snapshot-fastpath", "stale": True, "age_sec": 0, "ttl_sec": 0}
+    else:
+        data = {
+            "summary": {"campaign_id": int(campaign_id), "name": f"Кампания {int(campaign_id)}"},
+            "stats": {},
+            "products": [],
+            "rates": {},
+            "raw": {},
         }
+        cache_meta = {"source": "empty-fastpath", "stale": True, "age_sec": 0, "ttl_sec": 0}
+
+    queue_result = enqueue_task(
+        "warm_wb_campaign_details",
+        {"user_id": int(user.id), "campaign_id": int(campaign_id)},
+        dedupe_key=f"warm_wb_campaign_details:{int(user.id)}:{int(campaign_id)}",
+        dedupe_ttl_sec=2 * 60,
+    )
+    refresh_queued = bool(queue_result.get("queued"))
 
     if snapshot_payload and isinstance(data, dict):
         merged_data = dict(data)
@@ -5386,6 +5460,16 @@ def wb_ads_campaign_details(campaign_id: int, user: User = Depends(get_current_u
         if not merged_data.get("raw") and snapshot_payload.get("raw"):
             merged_data["raw"] = snapshot_payload.get("raw")
         data = merged_data
+    if isinstance(data, dict):
+        meta = data.get("meta") if isinstance(data.get("meta"), dict) else {}
+        meta.update(
+            {
+                "source": str(cache_meta.get("source") or ""),
+                "age_sec": int(cache_meta.get("age_sec") or 0),
+                "refresh_queued": refresh_queued,
+            }
+        )
+        data["meta"] = meta
 
     _audit(
         db,
@@ -5715,28 +5799,23 @@ def wb_ads_analytics(
     wb_key = _get_active_marketplace_api_key(db, user.id, "wb")
     if not wb_key:
         raise HTTPException(status_code=400, detail="Р В Р’В Р В Р вЂ№Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљР Р‹Р В Р’В Р вЂ™Р’В°Р В Р’В Р вЂ™Р’В»Р В Р’В Р вЂ™Р’В° Р В Р Р‹Р В РЎвЂњР В Р’В Р РЋРІР‚СћР В Р Р‹Р Р†Р вЂљР’В¦Р В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’В°Р В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚ВР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р вЂ™Р’Вµ API Р В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В РІР‚в„–Р В Р Р‹Р Р†Р вЂљР Р‹ Р В Р’В Р СћРІР‚ВР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В Р РЏ wb")
-    base_key = build_market_cache_key(
-        {
-            "kind": "wb_campaigns_base",
-            "key_rev": _secret_revision(wb_key),
-        }
-    )
+    snapshot_meta = get_wb_snapshot_meta(db, user.id)
+    rows = get_wb_snapshot_rows(db, user.id)
     base_error = ""
-    try:
-        rows, base_cache_meta = get_or_refresh_market_cache(
-            db,
-            user_id=int(user.id),
-            module_code="wb_ads",
-            marketplace="wb",
-            cache_key=base_key,
-            ttl_sec=_market_cache_ttl("wb_ads"),
-            fetcher=lambda: fetch_wb_campaigns(wb_key, enrich=False),
-            stale_if_error_sec=30 * 60,
+    base_cache_meta = {
+        "source": "snapshot",
+        "age_sec": snapshot_meta.get("age_sec"),
+        "synced_at": snapshot_meta.get("synced_at"),
+        "stale": bool(snapshot_meta.get("stale")),
+    }
+    if (not rows) or bool(snapshot_meta.get("stale")):
+        queue_result = enqueue_task(
+            "sync_wb_snapshots",
+            {"user_id": int(user.id)},
+            dedupe_key=f"wb_snapshots:{int(user.id)}",
+            dedupe_ttl_sec=15 * 60,
         )
-    except Exception as exc:
-        rows = []
-        base_cache_meta = {"source": "error", "age_sec": -1}
-        base_error = str(exc or "")[:220]
+        base_cache_meta["refresh_queued"] = bool(queue_result.get("queued"))
     rows = list(rows or [])
     base_summary_map: dict[str, dict[str, Any]] = {}
     for row in rows:
@@ -5790,26 +5869,19 @@ def wb_ads_analytics(
     summary_map: dict[str, dict[str, Any]] = {}
     summary_cache_meta: dict[str, Any] = {"source": "skip", "age_sec": -1}
     summary_error = ""
-    try:
-        summary_map, summary_cache_meta = get_or_refresh_market_cache(
-            db,
-            user_id=int(user.id),
-            module_code="wb_ads",
-            marketplace="wb",
-            cache_key=summary_key,
-            ttl_sec=max(120, _market_cache_ttl("wb_ads")),
-            fetcher=lambda: fetch_wb_campaign_summaries(
-                wb_key,
-                ids,
-                fallback_limit=max(8, min(28, len(ids) // 4 + 8)),
-            ),
-            stale_if_error_sec=30 * 60,
-            prefer_stale_sec=20 * 60,
-        )
-    except Exception as exc:
-        summary_map = {}
-        summary_cache_meta = {"source": "error", "age_sec": -1}
-        summary_error = str(exc or "")[:220]
+    cached_summary_map, cached_summary_meta = _market_cache_exact_payload(
+        db,
+        user_id=int(user.id),
+        module_code="wb_ads",
+        marketplace="wb",
+        cache_key=summary_key,
+        max_age_sec=24 * 60 * 60,
+    )
+    if isinstance(cached_summary_map, dict):
+        summary_map = cached_summary_map
+        summary_cache_meta = cached_summary_meta
+    else:
+        summary_cache_meta = {"source": "snapshot", "age_sec": int(base_cache_meta.get("age_sec") or 0)}
     for cid in ids:
         key = str(cid)
         existing = dict(base_summary_map.get(key) or {
@@ -5839,58 +5911,65 @@ def wb_ads_analytics(
         {
             "kind": "wb_campaign_stats",
             "ids": ids,
-            "date_from": date_from.isoformat() if date_from else "",
-            "date_to": date_to.isoformat() if date_to else "",
+            "date_from": left,
+            "date_to": right,
             "key_rev": _secret_revision(wb_key),
         }
     )
     stats_error = ""
-    try:
-        stats, stats_cache_meta = get_or_refresh_market_cache(
-            db,
-            user_id=int(user.id),
-            module_code="wb_ads_analytics",
-            marketplace="wb",
-            cache_key=stats_key,
-            ttl_sec=_market_cache_ttl("wb_ads_analytics"),
-            fetcher=lambda: fetch_wb_campaign_stats_bulk(
-                wb_key,
-                ids,
-                date_from=date_from.isoformat() if date_from else None,
-                date_to=date_to.isoformat() if date_to else None,
-                retry_unresolved=False,
-                fast_mode=True,
-            ),
-            stale_if_error_sec=30 * 60,
-            prefer_stale_sec=20 * 60,
-        )
-    except Exception as exc:
-        stats = {}
-        stats_cache_meta = {"source": "error", "age_sec": -1}
-        stats_error = str(exc or "")[:220]
+    stats: dict[str, dict[str, Any]] = {}
+    stats_cache_meta: dict[str, Any] = {"source": "snapshot", "age_sec": int(base_cache_meta.get("age_sec") or 0)}
+    for row in rows:
+        cid = _to_int_safe(_campaign_id_from_any(row))
+        if cid <= 0 or cid not in ids:
+            continue
+        snap_stat = _campaign_stat_from_base_row(row)
+        if snap_stat:
+            stats[str(cid)] = snap_stat
 
+    cached_stats, cached_stats_meta = _market_cache_exact_payload(
+        db,
+        user_id=int(user.id),
+        module_code="wb_ads_analytics",
+        marketplace="wb",
+        cache_key=stats_key,
+        max_age_sec=24 * 60 * 60,
+    )
+    if isinstance(cached_stats, dict):
+        for key, value in cached_stats.items():
+            if isinstance(value, dict):
+                stats[str(key)] = value
+        stats_cache_meta = cached_stats_meta
+
+    summary_fetch_needed = [
+        cid
+        for cid in ids
+        if (
+            not _campaign_summary_has_context(base_summary_map.get(str(cid)), cid)
+            or _campaign_name_is_placeholder(str((base_summary_map.get(str(cid)) or {}).get("name") or ""), cid)
+        )
+    ]
     unresolved_stats_ids = [
         cid
         for cid in ids
         if not _campaign_stat_has_context(stats.get(str(cid)))
     ]
-    if unresolved_stats_ids:
-        single_retry_limit = 12 if len(ids) > 220 else (18 if len(ids) > 80 else 26)
-        for cid in unresolved_stats_ids[:single_retry_limit]:
-            try:
-                one_map = fetch_wb_campaign_stats_bulk(
-                    wb_key,
-                    [int(cid)],
-                    date_from=date_from.isoformat() if date_from else None,
-                    date_to=date_to.isoformat() if date_to else None,
-                    retry_unresolved=False,
-                    fast_mode=True,
-                )
-            except Exception:
-                one_map = {}
-            one = one_map.get(str(cid)) if isinstance(one_map, dict) else None
-            if isinstance(one, dict) and one:
-                stats[str(cid)] = one
+    analytics_refresh_queued = False
+    if summary_fetch_needed or unresolved_stats_ids or not isinstance(cached_stats, dict) or not isinstance(cached_summary_map, dict):
+        queue_result = enqueue_task(
+            "warm_wb_ads_analytics",
+            {
+                "user_id": int(user.id),
+                "ids": ids,
+                "date_from": left,
+                "date_to": right,
+                "summaries": bool(summary_fetch_needed or not isinstance(cached_summary_map, dict)),
+                "stats": bool(unresolved_stats_ids or not isinstance(cached_stats, dict)),
+            },
+            dedupe_key=f"warm_wb_ads_analytics:{int(user.id)}:{stats_key[:32]}:{summary_key[:32]}",
+            dedupe_ttl_sec=2 * 60,
+        )
+        analytics_refresh_queued = bool(queue_result.get("queued"))
 
     out_rows: list[dict[str, Any]] = []
     partial_summary_ids: list[int] = []
@@ -5931,6 +6010,7 @@ def wb_ads_analytics(
             }
         )
     out_rows.sort(key=lambda x: _to_float_safe(x.get("spent"), 0.0), reverse=True)
+    out_rows = _repair_payload_encoding(out_rows)
     totals = {
         "views": float(round(sum(_to_float_safe(x.get("views"), 0.0) for x in out_rows if x.get("views") not in (None, "")), 3)),
         "clicks": float(round(sum(_to_float_safe(x.get("clicks"), 0.0) for x in out_rows if x.get("clicks") not in (None, "")), 3)),
@@ -5969,6 +6049,7 @@ def wb_ads_analytics(
         "summary_age_sec": int(summary_cache_meta.get("age_sec") or 0),
         "stats_source": str(stats_cache_meta.get("source") or ""),
         "stats_age_sec": int(stats_cache_meta.get("age_sec") or 0),
+        "refresh_queued": analytics_refresh_queued,
         "base_error": base_error,
         "summary_error": summary_error,
         "stats_error": stats_error,
@@ -6803,6 +6884,7 @@ def list_products(
     q: str = "",
     page: int = 1,
     page_size: int = 30,
+    hydrate_categories: bool = False,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -6875,6 +6957,12 @@ def list_products(
         safe_page_size = 30
     normalized_category_name = _normalized_category_expr()
     normalized_category_raw = func.lower(func.trim(func.coalesce(Product.category_name, "")))
+    category_meta: dict[str, Any] = {
+        "missing_ozon_categories": 0,
+        "local_backfilled": 0,
+        "live_backfilled": 0,
+        "background_queued": False,
+    }
 
     query = select(Product).where(
         Product.user_id == user.id,
@@ -6912,6 +7000,7 @@ def list_products(
             .limit(1200)
         ).all()
         if missing_ozon_rows:
+            category_meta["missing_ozon_categories"] = len(missing_ozon_rows)
             # 1) Fast local backfill: reuse known category from same article/external_id in DB.
             local_refs: dict[tuple[str, str], str] = {}
             known_rows = db.scalars(
@@ -6940,6 +7029,7 @@ def list_products(
                     local_refs[(article_key, external_key)] = category_text
 
             local_changed = False
+            local_changed_count = 0
             for row in missing_ozon_rows:
                 article_key = str(row.article or "").strip().lower()
                 external_key = str(row.external_id or "").strip()
@@ -6953,9 +7043,11 @@ def list_products(
                     if str(row.category_name or "").strip() != inferred:
                         row.category_name = inferred[:255]
                         local_changed = True
+                        local_changed_count += 1
+            category_meta["local_backfilled"] = local_changed_count
 
             ozon_key = _get_active_marketplace_api_key(db, user.id, "ozon")
-            if ozon_key:
+            if ozon_key and hydrate_categories:
                 refs = [
                     {
                         "article": str(row.article or ""),
@@ -6966,6 +7058,7 @@ def list_products(
                 mapped = enrich_ozon_category_names(ozon_key, refs)
                 if mapped:
                     changed = False
+                    live_changed_count = 0
                     for row in missing_ozon_rows:
                         current_category = str(row.category_name or "").strip()
                         if current_category and not _is_placeholder_category_value(current_category):
@@ -6978,13 +7071,31 @@ def list_products(
                             continue
                         row.category_name = next_category[:255]
                         changed = True
+                        live_changed_count += 1
+                    category_meta["live_backfilled"] = live_changed_count
                     if changed or local_changed:
                         db.flush()
+            elif ozon_key:
+                still_missing = [
+                    row
+                    for row in missing_ozon_rows
+                    if _is_placeholder_category_value(str(row.category_name or ""))
+                ]
+                if still_missing:
+                    queued = enqueue_task(
+                        "enrich_ozon_categories",
+                        {"user_id": int(user.id), "limit": min(1200, len(still_missing))},
+                        dedupe_key=f"enrich_ozon_categories:{int(user.id)}",
+                        dedupe_ttl_sec=10 * 60,
+                    )
+                    category_meta["background_queued"] = bool(queued.get("queued"))
+                if local_changed:
+                    db.flush()
             elif local_changed:
                 db.flush()
 
     categories_query = (
-        select(func.trim(Product.category_name))
+        select(func.trim(Product.category_name)).distinct()
         .where(
             Product.user_id == user.id,
             _owned_by_actor_or_owner_filter(Product, user),
@@ -7029,6 +7140,9 @@ def list_products(
         page=safe_page,
         page_size=safe_page_size,
         total_pages=total_pages,
+        meta={
+            "categories": category_meta,
+        },
     )
 
 
