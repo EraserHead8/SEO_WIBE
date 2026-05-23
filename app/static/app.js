@@ -111,6 +111,8 @@ let wbCampaignRows = [];
 let selectedWbCampaignId = "";
 const wbCampaignDetailCache = new Map();
 let campaignDetailRefreshTimer = null;
+let campaignDetailRefreshKey = "";
+let campaignDetailRefreshAttempts = 0;
 let wbAdsBalanceData = null;
 let currentCampaignDetailId = 0;
 let wbAdsLoadProgress = { active: false, total: 0, loaded: 0, failed: 0 };
@@ -8114,8 +8116,9 @@ function renderCampaignDetail(data) {
   rawEl.textContent = JSON.stringify(data?.raw || {}, null, 2);
 }
 
-async function openCampaignDetailModal(campaignId) {
+async function openCampaignDetailModal(campaignId, options = {}) {
   if (!campaignId || campaignId <= 0) return;
+  const silentRefresh = Boolean(options && options.silentRefresh);
   currentCampaignDetailId = Number(campaignId) || 0;
   const modal = document.getElementById("campaignDetailModal");
   if (!modal) return;
@@ -8126,7 +8129,7 @@ async function openCampaignDetailModal(campaignId) {
   const ratesEl = document.getElementById("campaignRatesRaw");
   const statsEl = document.getElementById("campaignStatsRaw");
   const rawEl = document.getElementById("campaignDetailRaw");
-  if (summaryEl) {
+  if (summaryEl && !silentRefresh) {
     const baseRow = wbCampaignRows.find((row) => Number(getCampaignRowId(row) || 0) === currentCampaignDetailId) || null;
     if (baseRow) {
       const baseName = safeCampaignName(baseRow, currentCampaignDetailId);
@@ -8140,10 +8143,12 @@ async function openCampaignDetailModal(campaignId) {
       summaryEl.textContent = tr("Загружаем детали кампании…", "Loading campaign details...");
     }
   }
-  if (productsEl) productsEl.innerHTML = "";
-  if (ratesEl) ratesEl.textContent = "-";
-  if (statsEl) statsEl.textContent = "-";
-  if (rawEl) rawEl.textContent = "-";
+  if (!silentRefresh) {
+    if (productsEl) productsEl.innerHTML = "";
+    if (ratesEl) ratesEl.textContent = "-";
+    if (statsEl) statsEl.textContent = "-";
+    if (rawEl) rawEl.textContent = "-";
+  }
 
   const cacheKey = String(campaignId);
   let payload = wbCampaignDetailCache.get(cacheKey) || null;
@@ -8156,11 +8161,11 @@ async function openCampaignDetailModal(campaignId) {
       }),
       tr("\u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u043c \u043a\u044d\u0448 \u0438 \u0434\u043e\u0433\u0440\u0443\u0436\u0430\u0435\u043c \u0441\u0432\u0435\u0436\u0438\u0435 \u0434\u0435\u0442\u0430\u043b\u0438 WB \u0432 \u0444\u043e\u043d\u0435.", "Showing cached details and loading fresh WB details in the background.")
     ).catch((e) => {
-      alert(e.message);
+      if (!silentRefresh) alert(e.message);
       return null;
     });
     if (!payload) {
-      if (summaryEl) {
+      if (summaryEl && !silentRefresh) {
         summaryEl.textContent = tr(
           "Не удалось загрузить детали кампании. Проверьте ключ WB Ads и повторите.",
           "Failed to load campaign details. Check WB Ads key and retry."
@@ -8174,15 +8179,23 @@ async function openCampaignDetailModal(campaignId) {
   const detailMeta = payload?.data?.meta && typeof payload.data.meta === "object" ? payload.data.meta : {};
   if (detailMeta.refresh_queued && summaryEl) {
     summaryEl.textContent = `${summaryEl.textContent}\n${tr("\u0421\u0432\u0435\u0436\u0438\u0435 \u0434\u0435\u0442\u0430\u043b\u0438 \u0434\u043e\u0433\u0440\u0443\u0436\u0430\u044e\u0442\u0441\u044f. \u041e\u043a\u043d\u043e \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u0441\u044f \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438.", "Fresh details are loading. This window will refresh automatically.")}`;
-    if (!campaignDetailRefreshTimer) {
+    const refreshKey = String(campaignId);
+    if (campaignDetailRefreshKey !== refreshKey) {
+      campaignDetailRefreshKey = refreshKey;
+      campaignDetailRefreshAttempts = 0;
+    }
+    if (!campaignDetailRefreshTimer && campaignDetailRefreshAttempts < 2) {
+      campaignDetailRefreshAttempts += 1;
       campaignDetailRefreshTimer = setTimeout(() => {
         campaignDetailRefreshTimer = null;
         if (currentCampaignDetailId === Number(campaignId)) {
           wbCampaignDetailCache.delete(String(campaignId));
-          openCampaignDetailModal(campaignId).catch(() => null);
+          openCampaignDetailModal(campaignId, { silentRefresh: true }).catch(() => null);
         }
       }, 18000);
     }
+  } else if (campaignDetailRefreshKey === String(campaignId)) {
+    campaignDetailRefreshAttempts = 0;
   }
 }
 
@@ -8192,6 +8205,8 @@ async function refreshCampaignDetails() {
     clearTimeout(campaignDetailRefreshTimer);
     campaignDetailRefreshTimer = null;
   }
+  campaignDetailRefreshKey = String(currentCampaignDetailId);
+  campaignDetailRefreshAttempts = 0;
   wbCampaignDetailCache.delete(String(currentCampaignDetailId));
   await openCampaignDetailModal(currentCampaignDetailId);
 }

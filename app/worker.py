@@ -389,7 +389,12 @@ def _handle_warm_wb_campaign_details(payload: dict[str, Any]) -> None:
             marketplace="wb",
             cache_key=cache_key,
             ttl_sec=_market_cache_ttl("wb_ads"),
-            fetcher=lambda: fetch_wb_campaign_details(wb_key, campaign_id=campaign_id),
+            fetcher=lambda: fetch_wb_campaign_details(
+                wb_key,
+                campaign_id=campaign_id,
+                fast_mode=True,
+                deadline_sec=12.0,
+            ),
             stale_if_error_sec=45 * 60,
             force_refresh=True,
         )

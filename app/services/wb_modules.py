@@ -377,28 +377,57 @@ def probe_ozon_feedback_access(api_key: str, feedback_kind: str = "reviews") -> 
     return False, f"Ozon API error {response.status_code}."
 
 
-def fetch_wb_campaign_details(api_key: str, campaign_id: int) -> dict[str, Any]:
+def fetch_wb_campaign_details(
+    api_key: str,
+    campaign_id: int,
+    *,
+    fast_mode: bool = False,
+    deadline_sec: float | None = None,
+) -> dict[str, Any]:
     summary: dict[str, Any] = {"campaign_id": campaign_id}
     raw: dict[str, Any] = {}
+    started_at = time.monotonic()
+    deadline = max(2.0, float(deadline_sec or (10.0 if fast_mode else 45.0)))
 
     for idx, item in enumerate(_campaign_detail_requests(campaign_id), start=1):
+        if (time.monotonic() - started_at) >= deadline:
+            break
         method = item.get("method", "GET")
         endpoint = str(item.get("endpoint") or "")
         params = item.get("params")
         payload = item.get("payload")
         if not endpoint:
             continue
-        data = _request_wb_json(method, endpoint, api_key=api_key, params=params, payload=payload)
+        data = _request_wb_json(
+            method,
+            endpoint,
+            api_key=api_key,
+            params=params,
+            payload=payload,
+            max_attempts=1 if fast_mode else 2,
+            retry_rate_limit=not fast_mode,
+            timeout=WB_FAST_TIMEOUT if fast_mode else WB_TIMEOUT,
+        )
         if data is None:
             continue
         raw[f"{idx}:{method}:{endpoint}"] = data
         summary = _merge_campaign_summary(summary, _extract_campaign_summary(data, campaign_id))
+        if fast_mode and _has_campaign_context(summary):
+            break
 
     rates: dict[str, Any] = {}
-    for campaign_type in ("search", "auto-cpm"):
-        data = fetch_wb_campaign_rates(api_key=api_key, campaign_id=campaign_id, campaign_type=campaign_type)
-        if data is not None:
-            rates[campaign_type] = data
+    if (time.monotonic() - started_at) < deadline:
+        for campaign_type in ("search", "auto-cpm"):
+            if (time.monotonic() - started_at) >= deadline:
+                break
+            data = fetch_wb_campaign_rates(
+                api_key=api_key,
+                campaign_id=campaign_id,
+                campaign_type=campaign_type,
+                fast_mode=fast_mode,
+            )
+            if data is not None:
+                rates[campaign_type] = data
 
     if summary.get("type") in (None, "", "-"):
         if "search" in rates and "auto-cpm" not in rates:
@@ -408,7 +437,14 @@ def fetch_wb_campaign_details(api_key: str, campaign_id: int) -> dict[str, Any]:
     if summary.get("status") in (None, "", "-") and rates:
         summary["status"] = "available"
 
-    stats = fetch_wb_campaign_stats(api_key=api_key, campaign_id=campaign_id, days=7)
+    stats = None
+    if (time.monotonic() - started_at) < deadline:
+        stats = fetch_wb_campaign_stats(
+            api_key=api_key,
+            campaign_id=campaign_id,
+            days=7,
+            fast_mode=fast_mode,
+        )
     products = _extract_campaign_products(list(raw.values()))
     return {
         "summary": summary,
@@ -416,6 +452,11 @@ def fetch_wb_campaign_details(api_key: str, campaign_id: int) -> dict[str, Any]:
         "rates": rates,
         "stats": stats or {},
         "raw": raw,
+        "meta": {
+            "live_elapsed_sec": round(time.monotonic() - started_at, 3),
+            "live_deadline_sec": deadline,
+            "live_partial": (time.monotonic() - started_at) >= deadline,
+        },
     }
 
 
@@ -2165,15 +2206,40 @@ def _fetch_wb_campaign_detail_map(
     return detail_map
 
 
-def fetch_wb_campaign_rates(api_key: str, campaign_id: int, campaign_type: str) -> dict[str, Any] | None:
+def fetch_wb_campaign_rates(
+    api_key: str,
+    campaign_id: int,
+    campaign_type: str,
+    *,
+    fast_mode: bool = False,
+) -> dict[str, Any] | None:
     ctype = (campaign_type or "").strip().lower()
     if ctype == "search":
-        endpoint = f"https://advert-api.wb.ru/adv/v1/search/{campaign_id}/rates"
+        endpoints = [
+            f"https://advert-api.wildberries.ru/adv/v1/search/{campaign_id}/rates",
+            f"https://advert-api.wb.ru/adv/v1/search/{campaign_id}/rates",
+        ]
     elif ctype == "auto-cpm":
-        endpoint = f"https://advert-api.wb.ru/adv/v1/auto-cpm/{campaign_id}/rates"
+        endpoints = [
+            f"https://advert-api.wildberries.ru/adv/v1/auto-cpm/{campaign_id}/rates",
+            f"https://advert-api.wb.ru/adv/v1/auto-cpm/{campaign_id}/rates",
+        ]
     else:
         return None
-    return _request_wb_json("GET", endpoint, api_key=api_key)
+    if fast_mode:
+        endpoints = endpoints[:1]
+    for endpoint in endpoints:
+        data = _request_wb_json(
+            "GET",
+            endpoint,
+            api_key=api_key,
+            max_attempts=1 if fast_mode else 2,
+            retry_rate_limit=not fast_mode,
+            timeout=WB_FAST_TIMEOUT if fast_mode else WB_TIMEOUT,
+        )
+        if isinstance(data, dict):
+            return data
+    return None
 
 
 def fetch_wb_normquery_bids(
@@ -2523,7 +2589,13 @@ def fetch_wb_ads_balance(api_key: str) -> dict[str, Any] | None:
     return None
 
 
-def fetch_wb_campaign_stats(api_key: str, campaign_id: int, days: int = 7) -> dict[str, Any] | None:
+def fetch_wb_campaign_stats(
+    api_key: str,
+    campaign_id: int,
+    days: int = 7,
+    *,
+    fast_mode: bool = False,
+) -> dict[str, Any] | None:
     end_date = date.today()
     safe_days = max(1, min(days, 30))
     begin_date = end_date - timedelta(days=safe_days - 1)
@@ -2543,18 +2615,37 @@ def fetch_wb_campaign_stats(api_key: str, campaign_id: int, days: int = 7) -> di
     ]
 
     endpoints = [
-        "https://advert-api.wb.ru/adv/v3/fullstats",
         "https://advert-api.wildberries.ru/adv/v3/fullstats",
+        "https://advert-api.wb.ru/adv/v3/fullstats",
     ]
+    if fast_mode:
+        payload_variants = []
+        endpoints = endpoints[:1]
     for endpoint in endpoints:
         for params in params_variants:
-            data = _request_wb_json("GET", endpoint, api_key=api_key, params=params)
+            data = _request_wb_json(
+                "GET",
+                endpoint,
+                api_key=api_key,
+                params=params,
+                max_attempts=1 if fast_mode else 2,
+                retry_rate_limit=not fast_mode,
+                timeout=WB_FAST_TIMEOUT if fast_mode else WB_TIMEOUT,
+            )
             if isinstance(data, dict):
                 return data
             if isinstance(data, list):
                 return {"items": data}
         for payload in payload_variants:
-            data = _request_wb_json("POST", endpoint, api_key=api_key, payload=payload)
+            data = _request_wb_json(
+                "POST",
+                endpoint,
+                api_key=api_key,
+                payload=payload,
+                max_attempts=1 if fast_mode else 2,
+                retry_rate_limit=not fast_mode,
+                timeout=WB_FAST_TIMEOUT if fast_mode else WB_TIMEOUT,
+            )
             if isinstance(data, dict):
                 return data
             if isinstance(data, list):

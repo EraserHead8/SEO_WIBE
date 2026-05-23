@@ -5441,13 +5441,33 @@ def wb_ads_campaign_details(campaign_id: int, user: User = Depends(get_current_u
         }
         cache_meta = {"source": "empty-fastpath", "stale": True, "age_sec": 0, "ttl_sec": 0}
 
+    def _detail_has_usable_context(payload: Any) -> bool:
+        if not isinstance(payload, dict):
+            return False
+        summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+        if not _campaign_summary_has_context(summary, campaign_id):
+            return False
+        products = payload.get("products")
+        rates = payload.get("rates") if isinstance(payload.get("rates"), dict) else {}
+        raw = payload.get("raw") if isinstance(payload.get("raw"), dict) else {}
+        stats = payload.get("stats") if isinstance(payload.get("stats"), dict) else {}
+        stats_items = stats.get("items") if isinstance(stats.get("items"), list) else []
+        return bool(products or rates or raw or stats_items or _campaign_stat_has_context(stats))
+
+    detail_complete = _detail_has_usable_context(data)
+    try:
+        cache_age_sec = int(cache_meta.get("age_sec") or 0)
+    except Exception:
+        cache_age_sec = 0
+    should_refresh_background = (not detail_complete) or cache_age_sec > 15 * 60
     queue_result = enqueue_task(
         "warm_wb_campaign_details",
         {"user_id": int(user.id), "campaign_id": int(campaign_id)},
         dedupe_key=f"warm_wb_campaign_details:{int(user.id)}:{int(campaign_id)}",
         dedupe_ttl_sec=2 * 60,
-    )
-    refresh_queued = bool(queue_result.get("queued"))
+    ) if should_refresh_background else {"ok": True, "queued": False, "reason": "fresh-enough"}
+    background_refresh_queued = bool(queue_result.get("queued")) or str(queue_result.get("reason") or "") == "duplicate"
+    refresh_queued = bool((not detail_complete) and background_refresh_queued)
 
     if snapshot_payload and isinstance(data, dict):
         merged_data = dict(data)
@@ -5460,12 +5480,16 @@ def wb_ads_campaign_details(campaign_id: int, user: User = Depends(get_current_u
         if not merged_data.get("raw") and snapshot_payload.get("raw"):
             merged_data["raw"] = snapshot_payload.get("raw")
         data = merged_data
+        detail_complete = _detail_has_usable_context(data)
+        refresh_queued = bool((not detail_complete) and background_refresh_queued)
     if isinstance(data, dict):
         meta = data.get("meta") if isinstance(data.get("meta"), dict) else {}
         meta.update(
             {
                 "source": str(cache_meta.get("source") or ""),
                 "age_sec": int(cache_meta.get("age_sec") or 0),
+                "detail_complete": detail_complete,
+                "background_refresh_queued": background_refresh_queued,
                 "refresh_queued": refresh_queued,
             }
         )
