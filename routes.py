@@ -6807,6 +6807,7 @@ def list_products(
     db: Session = Depends(get_db),
 ):
     placeholder_categories = {"", "-", "Р В Р вЂ Р В РІР‚С™Р Р†Р вЂљРЎСљ", "n/a", "na", "none", "null", "Р В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’ВµР В Р Р‹Р Р†Р вЂљРЎв„ў", "unknown"}
+    placeholder_categories.update({"без категории", "не указано", "нет категории", "not set", "uncategorized"})
 
     def _normalize_category_value(value: str) -> str:
         text = str(value or "").replace("\u00a0", " ")
@@ -6816,25 +6817,48 @@ def list_products(
     def _is_placeholder_category_value(value: str) -> bool:
         return _normalize_category_value(value) in placeholder_categories
 
-    def _normalized_category_expr():
+    def _category_label_expr():
         raw = func.coalesce(Product.category_name, "")
         # Normalize NBSP + repeated spaces so UI category option matches DB value.
-        return func.lower(
-            func.trim(
+        return func.trim(
+            func.replace(
                 func.replace(
                     func.replace(
-                        func.replace(raw, "\u00a0", " "),
-                        "  ",
+                        raw,
+                        "\u00a0",
                         " ",
                     ),
                     "  ",
                     " ",
-                )
+                ),
+                "  ",
+                " ",
             )
         )
 
+    def _normalized_category_expr():
+        return func.lower(_category_label_expr())
+
+    def _compact_category_label_expr():
+        return func.replace(_category_label_expr(), " ", "")
+
     def _compact_category_expr():
         return func.replace(_normalized_category_expr(), " ", "")
+
+    def _category_match_expr(label: str, normalized_key: str, compact_key: str):
+        clean_label = " ".join(str(label or "").replace("\u00a0", " ").split()).strip()
+        compact_label = clean_label.replace(" ", "")
+        match = or_(
+            _category_label_expr() == clean_label,
+            _normalized_category_expr() == normalized_key,
+        )
+        if compact_key and compact_key != normalized_key:
+            match = or_(
+                match,
+                _compact_category_expr() == compact_key,
+                _compact_category_label_expr() == compact_label,
+            )
+        return match
 
     safe_market = str(marketplace or "all").strip().lower()
     if safe_market not in {"all", "wb", "ozon"}:
@@ -6850,7 +6874,6 @@ def list_products(
     if safe_page_size not in PRODUCT_PAGE_SIZE_OPTIONS:
         safe_page_size = 30
     normalized_category_name = _normalized_category_expr()
-    compact_category_name = _compact_category_expr()
     normalized_category_raw = func.lower(func.trim(func.coalesce(Product.category_name, "")))
 
     query = select(Product).where(
@@ -6859,11 +6882,8 @@ def list_products(
     )
     if safe_market != "all":
         query = query.where(Product.marketplace == safe_market)
-    if safe_market != "all" and safe_category_key != "all":
-        category_match = normalized_category_name == safe_category_key
-        if safe_category_compact and safe_category_compact != safe_category_key:
-            category_match = or_(category_match, compact_category_name == safe_category_compact)
-        query = query.where(category_match)
+    if safe_category_key != "all":
+        query = query.where(_category_match_expr(safe_category, safe_category_key, safe_category_compact))
     if safe_q:
         pattern = f"%{safe_q}%"
         query = query.where(
@@ -6876,7 +6896,7 @@ def list_products(
             )
         )
 
-    if safe_market == "ozon":
+    if safe_market in {"all", "ozon"}:
         missing_ozon_rows = db.scalars(
             select(Product)
             .where(
@@ -6963,28 +6983,27 @@ def list_products(
             elif local_changed:
                 db.flush()
 
-    categories: list[str] = []
-    if safe_market != "all":
-        categories_query = (
-            select(func.trim(Product.category_name))
-            .where(
-                Product.user_id == user.id,
-                _owned_by_actor_or_owner_filter(Product, user),
-                Product.marketplace == safe_market,
-                ~normalized_category_raw.in_(list(placeholder_categories)),
-            )
-            .order_by(func.lower(func.trim(Product.category_name)).asc())
+    categories_query = (
+        select(func.trim(Product.category_name))
+        .where(
+            Product.user_id == user.id,
+            _owned_by_actor_or_owner_filter(Product, user),
+            ~normalized_category_raw.in_(list(placeholder_categories)),
         )
-        category_rows = db.scalars(categories_query).all()
-        by_normalized: dict[str, str] = {}
-        for raw in category_rows:
-            label = " ".join(str(raw or "").replace("\u00a0", " ").split()).strip()
-            if not label or _is_placeholder_category_value(label):
-                continue
-            normalized = _normalize_category_value(label)
-            if normalized not in by_normalized:
-                by_normalized[normalized] = label
-        categories = sorted(by_normalized.values(), key=lambda s: s.lower())
+        .order_by(func.lower(func.trim(Product.category_name)).asc())
+    )
+    if safe_market != "all":
+        categories_query = categories_query.where(Product.marketplace == safe_market)
+    category_rows = db.scalars(categories_query).all()
+    by_normalized: dict[str, str] = {}
+    for raw in category_rows:
+        label = " ".join(str(raw or "").replace("\u00a0", " ").split()).strip()
+        if not label or _is_placeholder_category_value(label):
+            continue
+        normalized = _normalize_category_value(label)
+        if normalized not in by_normalized:
+            by_normalized[normalized] = label
+    categories = sorted(by_normalized.values(), key=lambda s: s.lower())
 
     total = int(db.scalar(select(func.count()).select_from(query.subquery())) or 0)
     total_pages = max(1, math.ceil(total / safe_page_size)) if total else 0

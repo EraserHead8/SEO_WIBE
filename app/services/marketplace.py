@@ -27,6 +27,8 @@ WB_POSITION_OVERFLOW = 501
 
 _WB_SEARCH_CACHE: dict[tuple[str, int, int], tuple[float, list[dict[str, Any]] | None]] = {}
 _WB_ANALYTICS_CACHE: dict[tuple[str, str, str], tuple[float, int | None]] = {}
+_OZON_CATEGORY_TREE_CACHE: dict[str, tuple[float, dict[tuple[int, int], str]]] = {}
+_OZON_CATEGORY_TREE_TTL_SEC = 12 * 60 * 60
 _PUBLIC_BASE_URL = str(os.getenv("SEO_WIBE_PUBLIC_BASE_URL") or "https://seowibe.ru").strip().rstrip("/")
 
 
@@ -58,17 +60,11 @@ def fetch_products_from_marketplace(marketplace: str, api_key: str, articles: li
     Здесь добавляется реальная интеграция с WB/Ozon API.
     """
     if httpx and marketplace == "wb":
-        try:
-            live = _fetch_wb_products(api_key, articles, import_all)
-        except Exception:
-            live = None
+        live = _fetch_wb_products(api_key, articles, import_all)
         if live is not None:
             return live
     if httpx and marketplace == "ozon":
-        try:
-            live = _fetch_ozon_products(api_key, articles, import_all)
-        except Exception:
-            live = None
+        live = _fetch_ozon_products(api_key, articles, import_all)
         if live is not None:
             return live
 
@@ -877,49 +873,85 @@ def _fetch_wb_products(
     endpoint = "https://content-api.wildberries.ru/content/v2/get/cards/list"
     headers = {"Authorization": api_key, "Content-Type": "application/json"}
     page_limit = max(1, min(int(limit or 100), 100))
-    max_pages = 120 if import_all else 1
+    requested_articles = [str(x or "").strip() for x in articles or [] if str(x or "").strip()]
+    article_search_mode = bool(requested_articles and not import_all)
+    max_pages = 1000 if import_all else (3 if article_search_mode else 1)
     cards: list[dict[str, Any]] = []
-    cursor: dict[str, Any] = {}
-    seen_cursor: set[str] = set()
     with httpx.Client(timeout=timeout_sec) as client:
-        for _ in range(max_pages):
-            payload: dict[str, Any] = {
-                "settings": {
-                    "cursor": {"limit": page_limit, **cursor},
-                    "filter": {"withPhoto": -1},
+        searches = requested_articles[:100] if article_search_mode else [""]
+        for text_search in searches:
+            cursor: dict[str, Any] = {}
+            seen_cursor: set[str] = set()
+            for _ in range(max_pages):
+                filter_payload: dict[str, Any] = {"withPhoto": -1}
+                if text_search:
+                    filter_payload["textSearch"] = text_search
+                payload: dict[str, Any] = {
+                    "settings": {
+                        "sort": {"ascending": True},
+                        "cursor": {"limit": page_limit, **cursor},
+                        "filter": filter_payload,
+                    }
                 }
-            }
-            response = client.post(endpoint, headers=headers, json=payload)
-            if response.status_code >= 400:
-                if not cards:
-                    return None
-                break
-            data = response.json()
-            chunk = data.get("cards") or data.get("data", {}).get("cards") or []
-            if not isinstance(chunk, list) or not chunk:
-                break
-            cards.extend([row for row in chunk if isinstance(row, dict)])
-            if not import_all:
-                break
-            cursor_node = data.get("cursor") or data.get("data", {}).get("cursor") or {}
-            if not isinstance(cursor_node, dict):
-                break
-            next_cursor: dict[str, Any] = {}
-            for key in ("updatedAt", "nmID"):
-                value = cursor_node.get(key)
-                if value not in (None, ""):
-                    next_cursor[key] = value
-            marker = f"{next_cursor.get('updatedAt', '')}|{next_cursor.get('nmID', '')}"
-            if not next_cursor or marker in seen_cursor:
-                break
-            seen_cursor.add(marker)
-            cursor = next_cursor
+                response = None
+                for attempt in range(4):
+                    try:
+                        response = client.post(endpoint, headers=headers, json=payload)
+                    except Exception:
+                        response = None
+                    if response is not None and response.status_code not in {429, 500, 502, 503, 504}:
+                        break
+                    time.sleep(0.8 + attempt * 0.9)
+                if response is None:
+                    if not cards:
+                        return None
+                    break
+                if response.status_code >= 400:
+                    if not cards:
+                        return None
+                    break
+                data = response.json()
+                chunk = data.get("cards") or data.get("data", {}).get("cards") or []
+                if not isinstance(chunk, list) or not chunk:
+                    break
+                cards.extend([row for row in chunk if isinstance(row, dict)])
+                if not import_all and not article_search_mode:
+                    break
+                cursor_node = data.get("cursor") or data.get("data", {}).get("cursor") or {}
+                if not isinstance(cursor_node, dict):
+                    break
+                try:
+                    total_int = int(cursor_node.get("total") or 0)
+                except Exception:
+                    total_int = 0
+                if total_int > 0 and total_int < page_limit:
+                    break
+                if len(chunk) < page_limit:
+                    break
+                next_cursor: dict[str, Any] = {}
+                for key in ("updatedAt", "nmID"):
+                    value = cursor_node.get(key)
+                    if value not in (None, ""):
+                        next_cursor[key] = value
+                marker = f"{next_cursor.get('updatedAt', '')}|{next_cursor.get('nmID', '')}"
+                if not next_cursor or marker in seen_cursor:
+                    break
+                seen_cursor.add(marker)
+                cursor = next_cursor
+                if import_all:
+                    time.sleep(0.15)
 
     mapped: list[MarketplaceProduct] = []
+    seen_cards: set[tuple[str, str]] = set()
     for card in cards:
         article = str(card.get("vendorCode") or card.get("nmID") or "")
         if not article:
             continue
+        external_id = str(card.get("nmID") or "")
+        card_key = (article.strip().lower(), external_id.strip())
+        if card_key in seen_cards:
+            continue
+        seen_cards.add(card_key)
         name = str(card.get("title") or card.get("object") or "Товар")
         description = str(card.get("description") or "")
         barcode = _extract_wb_barcode(card)
@@ -929,7 +961,7 @@ def _fetch_wb_products(
         mapped.append(
             MarketplaceProduct(
                 article=article,
-                external_id=str(card.get("nmID") or ""),
+                external_id=external_id,
                 barcode=barcode,
                 photo_url=photo_url,
                 name=name,
@@ -941,14 +973,88 @@ def _fetch_wb_products(
         )
 
     if articles:
-        article_set = {x.strip() for x in articles if x.strip()}
-        mapped = [x for x in mapped if x.article in article_set]
+        article_set = {str(x or "").strip().lower() for x in articles if str(x or "").strip()}
+        mapped = [
+            x
+            for x in mapped
+            if str(x.article or "").strip().lower() in article_set
+            or str(x.external_id or "").strip().lower() in article_set
+        ]
     if not import_all:
         mapped = mapped[: min(30, len(mapped))]
     return mapped
 
 
-def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, limit: int = 100) -> list[MarketplaceProduct] | None:
+def _extract_ozon_info_items(data: Any) -> list[dict[str, Any]]:
+    if not isinstance(data, dict):
+        return []
+    direct = data.get("items")
+    if isinstance(direct, list):
+        return [row for row in direct if isinstance(row, dict)]
+    result = data.get("result")
+    if isinstance(result, list):
+        return [row for row in result if isinstance(row, dict)]
+    if isinstance(result, dict):
+        items = result.get("items")
+        if isinstance(items, list):
+            return [row for row in items if isinstance(row, dict)]
+    return []
+
+
+def _to_int_or_zero(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except Exception:
+        return 0
+
+
+def _fetch_ozon_category_lookup(client: Any, headers: dict[str, str]) -> dict[tuple[int, int], str]:
+    cache_key = str(headers.get("Client-Id") or "default")
+    now = time.time()
+    cached = _OZON_CATEGORY_TREE_CACHE.get(cache_key)
+    if cached and now - cached[0] < _OZON_CATEGORY_TREE_TTL_SEC:
+        return cached[1]
+
+    lookup: dict[tuple[int, int], str] = {}
+    try:
+        resp = client.post(
+            "https://api-seller.ozon.ru/v1/description-category/tree",
+            headers=headers,
+            json={"language": "RU"},
+        )
+        if resp.status_code >= 400:
+            return {}
+        data = resp.json()
+    except Exception:
+        return {}
+
+    roots = data.get("result") if isinstance(data, dict) else []
+    if isinstance(roots, dict):
+        roots = roots.get("categories") or roots.get("children") or []
+
+    def walk(nodes: Any, parent_category: str = "", parent_desc_id: int = 0) -> None:
+        if not isinstance(nodes, list):
+            return
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            category = str(node.get("category_name") or parent_category or "").strip()
+            desc_id = _to_int_or_zero(node.get("description_category_id")) or parent_desc_id
+            type_id = _to_int_or_zero(node.get("type_id"))
+            type_name = str(node.get("type_name") or "").strip()
+            if desc_id and category:
+                lookup.setdefault((desc_id, 0), category)
+            if desc_id and type_id:
+                lookup[(desc_id, type_id)] = type_name or category
+            walk(node.get("children") or [], category, desc_id)
+
+    walk(roots)
+    if lookup:
+        _OZON_CATEGORY_TREE_CACHE[cache_key] = (now, lookup)
+    return lookup
+
+
+def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, limit: int = 1000) -> list[MarketplaceProduct] | None:
     if not httpx:
         return None
     creds = _parse_ozon_credentials(api_key)
@@ -963,11 +1069,26 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
     }
     list_endpoint = "https://api-seller.ozon.ru/v3/product/list"
     info_endpoint = "https://api-seller.ozon.ru/v3/product/info/list"
-    list_limit = max(1, min(int(limit or 100), 100))
-    max_pages = 120 if import_all else 1
+    list_limit = max(1, min(int(limit or 1000), 1000))
+    max_pages = 1000 if import_all else 1
     product_ids: list[int] = []
     last_id = ""
+    info_items: list[dict[str, Any]] = []
+    category_lookup: dict[tuple[int, int], str] = {}
+    requested_articles = [str(x or "").strip() for x in articles or [] if str(x or "").strip()]
     with httpx.Client(timeout=25.0) as client:
+        if requested_articles and not import_all:
+            for idx in range(0, len(requested_articles), 1000):
+                chunk = requested_articles[idx : idx + 1000]
+                product_chunk = [int(x) for x in chunk if str(x).isdigit()]
+                info_resp = client.post(
+                    info_endpoint,
+                    headers=headers,
+                    json={"offer_id": chunk, "product_id": product_chunk, "sku": []},
+                )
+                if info_resp.status_code >= 400:
+                    continue
+                info_items.extend(_extract_ozon_info_items(info_resp.json()))
         for _ in range(max_pages):
             list_resp = client.post(
                 list_endpoint,
@@ -1004,10 +1125,10 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
             seen_ids.add(pid)
             unique_ids.append(pid)
         product_ids = unique_ids
-        if not product_ids:
+        if not product_ids and not info_items:
             return []
 
-        info_items: list[dict[str, Any]] = []
+        info_items = list(info_items)
         for idx in range(0, len(product_ids), 1000):
             chunk = product_ids[idx: idx + 1000]
             info_resp = client.post(info_endpoint, headers=headers, json={"product_id": chunk})
@@ -1015,9 +1136,45 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
                 if not info_items and idx == 0:
                     return None
                 continue
-            payload = info_resp.json().get("result", {}).get("items", [])
-            if isinstance(payload, list):
-                info_items.extend([row for row in payload if isinstance(row, dict)])
+            info_items.extend(_extract_ozon_info_items(info_resp.json()))
+        if info_items:
+            needs_category_lookup = any(
+                isinstance(row, dict)
+                and (
+                    _to_int_or_zero(row.get("description_category_id") or row.get("category_id"))
+                    or _to_int_or_zero(row.get("type_id"))
+                    or (
+                        isinstance(row.get("product_info"), dict)
+                        and (
+                            _to_int_or_zero(row["product_info"].get("description_category_id") or row["product_info"].get("category_id"))
+                            or _to_int_or_zero(row["product_info"].get("type_id"))
+                        )
+                    )
+                )
+                for row in info_items
+            )
+            if needs_category_lookup:
+                category_lookup = _fetch_ozon_category_lookup(client, headers)
+
+    deduped_info_items: list[dict[str, Any]] = []
+    seen_info_items: set[tuple[str, str]] = set()
+    for item in info_items:
+        item_map = item if isinstance(item, dict) else {}
+        source = item_map.get("product_info") if isinstance(item_map.get("product_info"), dict) else {}
+        offer = str(item_map.get("offer_id") or source.get("offer_id") or "").strip().lower()
+        product_id = str(
+            item_map.get("product_id")
+            or item_map.get("id")
+            or source.get("product_id")
+            or source.get("id")
+            or ""
+        ).strip()
+        info_key = (offer, product_id)
+        if info_key in seen_info_items:
+            continue
+        seen_info_items.add(info_key)
+        deduped_info_items.append(item_map)
+    info_items = deduped_info_items
 
     mapped: list[MarketplaceProduct] = []
     for item in info_items:
@@ -1037,7 +1194,7 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
         barcode = _extract_ozon_barcode(merged_source)
         photos = _dedupe_photo_urls(_extract_ozon_photos(merged_source) + _extract_ozon_photos(item_map))
         photo_url = photos[0] if photos else _extract_ozon_photo(merged_source)
-        category_name = _extract_ozon_category_name(merged_source)
+        category_name = _extract_ozon_category_name(merged_source, category_lookup) or _extract_ozon_category_name(item_map, category_lookup)
         mapped.append(
             MarketplaceProduct(
                 article=article,
@@ -1053,8 +1210,13 @@ def _fetch_ozon_products(api_key: str, articles: list[str], import_all: bool, li
         )
 
     if articles:
-        article_set = {x.strip() for x in articles if x.strip()}
-        mapped = [x for x in mapped if x.article in article_set]
+        article_set = {str(x or "").strip().lower() for x in articles if str(x or "").strip()}
+        mapped = [
+            x
+            for x in mapped
+            if str(x.article or "").strip().lower() in article_set
+            or str(x.external_id or "").strip().lower() in article_set
+        ]
     if not import_all:
         mapped = mapped[: min(30, len(mapped))]
     return mapped
@@ -1070,7 +1232,8 @@ def fetch_marketplace_product_details(marketplace: str, api_key: str, article: s
 
 
 def _fetch_wb_product_details(api_key: str, article: str, external_id: str = "") -> dict[str, Any]:
-    products = _fetch_wb_products(api_key, [article] if article else [], True, limit=200, timeout_sec=8.0) or []
+    lookup_values = [x for x in [article, external_id] if str(x or "").strip()]
+    products = _fetch_wb_products(api_key, lookup_values, False, limit=100, timeout_sec=8.0) or []
     norm_article = _normalize_code(article)
     norm_external = _normalize_code(external_id)
     best: MarketplaceProduct | dict[str, Any] | None = None
@@ -1186,15 +1349,17 @@ def _fetch_ozon_product_details(api_key: str, article: str, external_id: str = "
         return {"photos": [], "attributes": {}, "raw": {}}
     endpoint = "https://api-seller.ozon.ru/v3/product/info/list"
     price_info: dict[str, Any] = {}
+    category_lookup: dict[tuple[int, int], str] = {}
     try:
         with httpx.Client(timeout=25.0) as client:
             resp = client.post(endpoint, headers=headers, json=payload)
             if resp.status_code >= 400:
                 return {"photos": [], "attributes": {}, "raw": {}}
             data = resp.json()
+            category_lookup = _fetch_ozon_category_lookup(client, headers)
     except Exception:
         return {"photos": [], "attributes": {}, "raw": {}}
-    items = (data.get("result") or {}).get("items") or data.get("items") or []
+    items = _extract_ozon_info_items(data)
     if not items:
         return {"photos": [], "attributes": {}, "raw": {}}
     item = items[0] if isinstance(items, list) else {}
@@ -1370,7 +1535,7 @@ def _fetch_ozon_product_details(api_key: str, article: str, external_id: str = "
         return fallback
 
     attrs: dict[str, Any] = {
-        "category_name": _extract_ozon_category_name(merged_source),
+        "category_name": _extract_ozon_category_name(merged_source, category_lookup) or _extract_ozon_category_name(item_map, category_lookup),
         "name": str(merged_source.get("name") or "").strip(),
         "offer_id": str(merged_source.get("offer_id") or "").strip(),
         "product_id": str(merged_source.get("id") or merged_source.get("product_id") or "").strip(),
@@ -1603,6 +1768,7 @@ def enrich_ozon_category_names(api_key: str, refs: list[dict[str, str]]) -> dict
 
     try:
         with httpx.Client(timeout=25.0) as client:
+            category_lookup = _fetch_ozon_category_lookup(client, headers)
             chunks_offers = _chunks(offer_ids, 200) or [[]]
             chunks_products = _chunks(product_ids, 200) or [[]]
             total = max(len(chunks_offers), len(chunks_products))
@@ -1618,12 +1784,12 @@ def enrich_ozon_category_names(api_key: str, refs: list[dict[str, str]]) -> dict
                 if resp.status_code >= 400:
                     continue
                 data = resp.json()
-                items = (data.get("result") or {}).get("items") or data.get("items") or []
+                items = _extract_ozon_info_items(data)
                 for item in items:
                     source = item.get("product_info") or item
-                    category_name = _extract_ozon_category_name(source)
+                    category_name = _extract_ozon_category_name(source, category_lookup)
                     if not category_name:
-                        category_name = _extract_ozon_category_name(item)
+                        category_name = _extract_ozon_category_name(item, category_lookup)
                     if not category_name:
                         continue
                     offer = str(
@@ -1962,7 +2128,7 @@ def _extract_ozon_photos(source: dict[str, Any]) -> list[str]:
     return _dedupe_photo_urls(out)
 
 
-def _extract_ozon_category_name(source: dict[str, Any]) -> str:
+def _extract_ozon_category_name(source: dict[str, Any], category_lookup: dict[tuple[int, int], str] | None = None) -> str:
     if not isinstance(source, dict):
         return ""
     direct = str(source.get("category_name") or "").strip()
@@ -1976,6 +2142,16 @@ def _extract_ozon_category_name(source: dict[str, Any]) -> str:
     type_name = str(source.get("type_name") or source.get("category_title") or "").strip()
     if type_name:
         return type_name
+    desc_id = _to_int_or_zero(source.get("description_category_id") or source.get("category_id"))
+    type_id = _to_int_or_zero(source.get("type_id"))
+    if category_lookup and desc_id:
+        if type_id:
+            exact = str(category_lookup.get((desc_id, type_id)) or "").strip()
+            if exact:
+                return exact
+        parent = str(category_lookup.get((desc_id, 0)) or "").strip()
+        if parent:
+            return parent
     return ""
 
 

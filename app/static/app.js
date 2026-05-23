@@ -9278,16 +9278,21 @@ function normalizeProductPageSize(rawValue) {
   return 30;
 }
 
+function productCategoryKey(value) {
+  return String(value || "").replace(/\u00a0/g, " ").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 function syncCategoryFilterOptions(categories = []) {
   const selectEl = document.getElementById("productCategoryFilter");
   if (!selectEl) return false;
   const prev = String(selectEl.value || "all");
+  const prevKey = productCategoryKey(prev);
   const normalized = [];
   const seen = new Set();
   for (const raw of Array.isArray(categories) ? categories : []) {
-    const value = String(raw || "").trim();
+    const value = String(raw || "").replace(/\u00a0/g, " ").trim().replace(/\s+/g, " ");
     if (!value) continue;
-    const key = value.toLowerCase();
+    const key = productCategoryKey(value);
     if (seen.has(key)) continue;
     seen.add(key);
     normalized.push(value);
@@ -9298,7 +9303,8 @@ function syncCategoryFilterOptions(categories = []) {
     .concat(normalized.map((x) => `<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`))
     .join("");
   selectEl.innerHTML = optionsHtml;
-  const wanted = prev && [...selectEl.options].some((o) => o.value === prev) ? prev : "all";
+  const match = [...selectEl.options].find((o) => productCategoryKey(o.value) === prevKey);
+  const wanted = prevKey && match ? match.value : "all";
   selectEl.value = wanted;
   return wanted !== prev;
 }
@@ -9308,7 +9314,7 @@ function syncCategoryFilterState() {
   const categoryEl = document.getElementById("productCategoryFilter");
   if (!marketEl || !categoryEl) return false;
   const market = String(marketEl.value || "all").trim().toLowerCase();
-  const categoryEnabled = market === "wb" || market === "ozon";
+  const categoryEnabled = ["all", "wb", "ozon"].includes(market);
   const shouldResetToAll = !categoryEnabled && String(categoryEl.value || "all").toLowerCase() !== "all";
   const allLabel = currentLang === "en" ? "All categories" : "Все категории";
   if (!categoryEnabled && categoryEl.options.length > 1) {
@@ -9322,7 +9328,7 @@ function syncCategoryFilterState() {
   categoryEl.disabled = !categoryEnabled;
   categoryEl.title = categoryEnabled
     ? ""
-    : tr("Выберите WB или Ozon, чтобы фильтровать по категориям.", "Choose WB or Ozon to filter by categories.");
+    : tr("Категории появятся после загрузки товаров.", "Categories appear after products are loaded.");
   return shouldResetToAll;
 }
 
@@ -9454,7 +9460,7 @@ async function reloadProducts() {
 
 async function loadProducts() {
   const marketplace = String(document.getElementById("importMarketplace")?.value || "all").trim().toLowerCase();
-  const categoryEnabled = marketplace === "wb" || marketplace === "ozon";
+  const categoryEnabled = ["all", "wb", "ozon"].includes(marketplace);
   const category = String(document.getElementById("productCategoryFilter")?.value || "all").trim();
   const filter = (document.getElementById("productFilter")?.value || "").trim().toLowerCase();
   const categoryReset = syncCategoryFilterState();
@@ -9498,7 +9504,7 @@ async function loadProducts() {
     productTotalPages = data.length ? 1 : 0;
   } else {
     currentProducts = Array.isArray(data.rows) ? data.rows : [];
-    const categoryList = categoryEnabled && Array.isArray(data.categories) ? data.categories : [];
+    const categoryList = Array.isArray(data.categories) ? data.categories : [];
     const optionsReset = syncCategoryFilterOptions(categoryList);
     const resetByState = syncCategoryFilterState();
     if (optionsReset || resetByState) {
