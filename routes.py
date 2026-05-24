@@ -21,7 +21,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
-from sqlalchemy import String, cast, delete, func, or_, select, text
+from sqlalchemy import String, cast, delete, func, or_, select, text, update
 from sqlalchemy.orm import Session
 
 try:
@@ -16758,8 +16758,8 @@ def social_tasks_list(
                     recipient_key=str(task.assignee_key or ""),
                     kind="task_overdue",
                     dedupe_key=f"task_overdue:{task.id}:{now_local.date().isoformat()}:{assignee_key}",
-                    title="Task overdue",
-                    body=f"{task_title[:120]} - deadline passed.",
+                    title="Просрочена задача",
+                    body=f"{task_title[:120]} - срок выполнения прошел.",
                     payload={"task_id": int(task.id), "assignee": actor_nick},
                 )
                 notif_created = True
@@ -16774,8 +16774,8 @@ def social_tasks_list(
                         recipient_key=str(task.assignee_key or ""),
                         kind="task_reminder",
                         dedupe_key=f"task_reminder_3h:{task.id}:{slot}:{assignee_key}",
-                        title="Deadline in less than 3 hours",
-                        body=f"{task_title[:120]} - reminder before deadline.",
+                        title="Скоро дедлайн",
+                        body=f"{task_title[:120]} - напоминание перед сроком.",
                         payload={"task_id": int(task.id), "assignee": actor_nick},
                     )
                     notif_created = True
@@ -16788,8 +16788,8 @@ def social_tasks_list(
                 recipient_key=str(task.creator_key or ""),
                 kind="task_overdue",
                 dedupe_key=f"task_overdue:{task.id}:{now_local.date().isoformat()}:{creator_key}",
-                title="Task overdue",
-                body=f"{task_title[:120]} - assignee missed deadline.",
+                title="Просрочена задача",
+                body=f"{task_title[:120]} - исполнитель пропустил срок.",
                 payload={"task_id": int(task.id), "assignee": str(task.assignee_nick or "")},
             )
             notif_created = True
@@ -16891,7 +16891,7 @@ def social_create_task(
             recipient_key=assignee_key,
             kind="task_assigned",
             dedupe_key=f"task_assigned:{task.id}:{int(datetime.utcnow().timestamp())}",
-            title="New assigned task",
+            title="Назначена задача",
             body=f"{sender_name}: {task_title[:180]}",
             payload={"task_id": int(task.id)},
         )
@@ -17013,7 +17013,7 @@ def social_update_task(
             recipient_key=str(task.assignee_key or ""),
             kind="task_assigned",
             dedupe_key=f"task_assigned:{task.id}:{int(datetime.utcnow().timestamp())}",
-            title="Task reassigned",
+            title="Переназначена задача",
             body=f"{sender_name}: {task_title[:180]}",
             payload={"task_id": int(task.id)},
         )
@@ -17027,8 +17027,8 @@ def social_update_task(
             recipient_key=str(task.creator_key or ""),
             kind="task_done",
             dedupe_key=f"task_done:{task.id}:{int(datetime.utcnow().timestamp())}",
-            title="Task completed",
-            body=f"{sender_name} completed task: {task_title[:140]}",
+            title="Задача выполнена",
+            body=f"{sender_name}: {task_title[:140]} - выполнено.",
             payload={"task_id": int(task.id)},
         )
 
@@ -18563,6 +18563,14 @@ def _social_notification_kind_label(kind: str) -> str:
         return "Новая реакция"
     if "chat" in safe:
         return "Новое сообщение"
+    if "task_overdue" in safe:
+        return "Просрочена задача"
+    if "task_reminder" in safe:
+        return "Скоро дедлайн"
+    if "task_assigned" in safe:
+        return "Назначена задача"
+    if "task_done" in safe or "task_completed" in safe:
+        return "Задача выполнена"
     if "task" in safe:
         return "Задачи"
     if "calendar" in safe or "event" in safe or "reminder" in safe:
@@ -18570,6 +18578,31 @@ def _social_notification_kind_label(kind: str) -> str:
     if "announcement" in safe:
         return "Объявление"
     return "Уведомление"
+
+
+def _social_notification_is_boilerplate_task_text(kind: str, value: Any) -> bool:
+    safe_kind = str(kind or "").strip().lower()
+    if "task" not in safe_kind:
+        return False
+    text = _social_notification_clean_text(value).lower()
+    if not text:
+        return False
+    if text == safe_kind.replace("_", " "):
+        return True
+    return any(
+        token in text
+        for token in (
+            "task overdue",
+            "deadline in less than",
+            "new assigned task",
+            "task reassigned",
+            "task completed",
+            "deadline passed",
+            "assignee missed deadline",
+            "reminder before deadline",
+            "completed task:",
+        )
+    )
 
 
 def _social_notification_effective_kind(kind: str, payload: Any) -> str:
@@ -18812,14 +18845,46 @@ def _social_notification_display_text(
             ],
             "",
         )
+    title_boilerplate = _social_notification_is_boilerplate_task_text(safe_kind, safe_title)
+    body_boilerplate = _social_notification_is_boilerplate_task_text(safe_kind, safe_body)
+    if title_boilerplate:
+        safe_title = title_fallback
     title_needs_fallback = (
         not _social_notification_is_displayable_text(safe_title)
-        or safe_title == title_fallback
+        or (safe_title == title_fallback and not title_boilerplate)
     )
     body_needs_fallback = (
         not _social_notification_is_displayable_text(safe_body)
         or safe_body == "Без текста"
     )
+    if db is not None and "task" in safe_kind and body_boilerplate:
+        entity_title, entity_body = _social_notification_resolve_entity_display(
+            db,
+            kind=kind,
+            payload=payload_dict,
+        )
+        task_title = _social_notification_source_text(entity_title or entity_body, "Задача")
+        actor_name = _social_pick_notification_text(
+            [
+                payload_dict.get("actor_nick"),
+                payload_dict.get("sender_nick"),
+                payload_dict.get("sender_name"),
+                payload_dict.get("assignee"),
+                payload_dict.get("author"),
+            ],
+            "",
+        )
+        lower_body = safe_body.lower()
+        if "task_overdue" in safe_kind:
+            reason = "исполнитель пропустил срок" if "assignee missed deadline" in lower_body else "срок выполнения прошел"
+            safe_body = f"{task_title} — {reason}."
+        elif "task_reminder" in safe_kind:
+            safe_body = f"{task_title} — дедлайн скоро, проверьте задачу."
+        elif "task_done" in safe_kind or "task_completed" in safe_kind:
+            safe_body = f"{actor_name + ' — ' if actor_name else ''}{task_title}: выполнено."
+        elif "task_assigned" in safe_kind:
+            safe_body = f"{actor_name + ': ' if actor_name else ''}{task_title}"
+        body_needs_fallback = False
     if db is not None and (
         title_needs_fallback
         or body_needs_fallback
@@ -19278,6 +19343,7 @@ def social_notifications(
                 title=safe_title,
                 body=safe_body,
                 payload=payload,
+                is_read=bool(row.is_read),
                 created_at=_to_utc_iso(row.created_at),
             ).model_dump()
         )
@@ -19296,24 +19362,42 @@ def social_notifications_read_all(
     actor_aliases = _social_actor_alias_keys(db, actor_key)
     notification_keys = list(dict.fromkeys([actor_key, *actor_aliases]))
     db.execute(
-        text(
-            """
-            UPDATE social_notifications
-            SET is_read = 1
-            WHERE user_id = :user_id
-              AND recipient_key IN (:k1, :k2)
-              AND is_read = 0
-            """
-        ),
-        {
-            "user_id": int(user.id),
-            "k1": notification_keys[0] if notification_keys else actor_key,
-            "k2": notification_keys[1] if len(notification_keys) > 1 else notification_keys[0] if notification_keys else actor_key,
-        },
+        update(SocialNotification)
+        .where(
+            SocialNotification.user_id == int(user.id),
+            SocialNotification.recipient_key.in_(notification_keys),
+            SocialNotification.is_read.is_(False),
+        )
+        .values(is_read=True)
     )
     db.commit()
     return MessageOut(message="OK")
-    return MessageOut(message="Р В Р’В Р РЋРІР‚С”Р В Р’В Р РЋРІР‚Сњ")
+
+
+@router.post("/social/notifications/{notification_id}/read", response_model=MessageOut)
+def social_notification_read(
+    notification_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_module_enabled(db, user, "social_hub")
+    notif_id = int(notification_id or 0)
+    if notif_id <= 0:
+        raise HTTPException(status_code=400, detail="Некорректный ID уведомления")
+    actor_key, _, _ = _social_actor_identity(db, user)
+    actor_aliases = _social_actor_alias_keys(db, actor_key)
+    notification_keys = list(dict.fromkeys([actor_key, *actor_aliases]))
+    db.execute(
+        update(SocialNotification)
+        .where(
+            SocialNotification.user_id == int(user.id),
+            SocialNotification.id == notif_id,
+            SocialNotification.recipient_key.in_(notification_keys),
+        )
+        .values(is_read=True)
+    )
+    db.commit()
+    return MessageOut(message="OK")
 
 
 @router.get("/social/announcements/pending", response_model=dict[str, Any])

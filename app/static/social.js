@@ -1320,6 +1320,41 @@ async function socialMarkNotificationsReadAll(syncLocal = true) {
   }
 }
 
+async function socialMarkNotificationRead(notificationId, syncLocal = true) {
+  const id = Number(notificationId || 0);
+  if (!Number.isFinite(id) || id <= 0) return false;
+  const rows = Array.isArray(socialState.notificationRows) ? socialState.notificationRows : [];
+  const row = rows.find((item) => Number(item?.id || 0) === id) || null;
+  const wasUnread = Boolean(row && row.is_read === false);
+  if (syncLocal && row) {
+    row.is_read = true;
+    if (wasUnread) {
+      socialState.unreadCount = Math.max(0, Number(socialState.unreadCount || 0) - 1);
+      socialSetBell(socialState.unreadCount);
+      socialWriteSharedPollState({
+        unread: socialState.unreadCount,
+        last_notification_id: Number(socialState.lastNotificationId || 0),
+        stamp: socialNowMs(),
+      });
+    }
+  }
+  try {
+    await socialRequest(`/api/social/notifications/${id}/read`, {
+      method: "POST",
+      body: JSON.stringify({}),
+      timeoutMs: 12000,
+    });
+    return true;
+  } catch (_) {
+    if (syncLocal && row && wasUnread) {
+      row.is_read = false;
+      socialState.unreadCount = Number(socialState.unreadCount || 0) + 1;
+      socialSetBell(socialState.unreadCount);
+    }
+    return false;
+  }
+}
+
 function socialRenderNotificationCenter(rows = null) {
   let center = document.getElementById("socialNotificationCenter");
   if (!center) {
@@ -1335,8 +1370,9 @@ function socialRenderNotificationCenter(rows = null) {
     const safe = socialResolveNotificationText(row);
     const id = Number(row?.id || 0);
     const stamp = String(row?.created_at || "").replace("T", " ").slice(0, 16);
+    const isUnread = row?.is_read === false;
     return `
-      <article class="social-notif-item" data-notif-id="${id}">
+      <article class="social-notif-item${isUnread ? " is-unread" : ""}" data-notif-id="${id}">
         <div class="social-notif-item-head">
           <b>${escapeHtml(socialNotificationDisplayText(safe.title, tr("\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u0435", "Notification")))}</b>
           <small>${escapeHtml(stamp || "-")}</small>
@@ -1355,6 +1391,26 @@ function socialRenderNotificationCenter(rows = null) {
     </header>
     <div class="social-notif-list">${items || `<div class="hint">${escapeHtml(tr("\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u0439 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.", "No notifications yet."))}</div>`}</div>
   `;
+  center.querySelectorAll(".social-notif-item").forEach((node) => {
+    node.setAttribute("role", "button");
+    node.setAttribute("tabindex", "0");
+    node.setAttribute("aria-label", tr("\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0443\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u0435", "Open notification"));
+    const open = () => {
+      const id = Number(node.dataset.notifId || 0);
+      const row = sourceRows.find((item) => Number(item?.id || 0) === id);
+      if (!row) return;
+      socialMarkNotificationRead(id, true).catch(() => null);
+      node.classList.remove("is-unread");
+      socialToggleNotificationCenter(false);
+      socialOpenNotificationTarget(row);
+    };
+    node.onclick = open;
+    node.onkeydown = (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      open();
+    };
+  });
   socialEnsureNotificationCenterLayout(center);
   const shouldOpen = Boolean(socialState.notificationCenterOpen);
   center.classList.toggle("hidden", !shouldOpen);
@@ -1519,6 +1575,7 @@ function socialNotifyDesktop(row) {
     });
     n.onclick = () => {
       try { window.focus(); } catch (_) {}
+      socialMarkNotificationRead(Number(row?.id || 0), true).catch(() => null);
       socialOpenNotificationTarget(row);
       try { n.close(); } catch (_) {}
     };
@@ -9276,6 +9333,7 @@ window.socialLoadNotificationCenterRows = socialLoadNotificationCenterRows;
 window.socialToggleNotificationCenter = socialToggleNotificationCenter;
 window.socialCloseNotificationCenter = socialCloseNotificationCenter;
 window.socialMarkNotificationsReadAll = socialMarkNotificationsReadAll;
+window.socialMarkNotificationRead = socialMarkNotificationRead;
 window.socialMaybeStartHooks = socialMaybeStartHooks;
 window.socialToggleEmojiPicker = socialToggleEmojiPicker;
 window.socialInsertEmoji = socialInsertEmoji;

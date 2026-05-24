@@ -51,6 +51,22 @@
   height: auto !important;
   min-height: 72px !important;
   overflow: hidden !important;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.social-notif-item:hover,
+.social-notif-item:focus-visible {
+  border-color: color-mix(in srgb, var(--accent, #2f80ed) 44%, var(--line, #d9e2ef));
+  background: color-mix(in srgb, var(--panel-bg-soft, #f8fbff) 70%, #fff);
+  box-shadow: 0 8px 20px rgba(20, 48, 88, 0.12);
+  outline: none;
+}
+
+.social-notif-item.is-unread {
+  border-color: color-mix(in srgb, var(--accent, #2f80ed) 54%, var(--line, #d9e2ef));
+  background: color-mix(in srgb, var(--accent, #2f80ed) 7%, var(--panel-bg-soft, #f8fbff));
+  box-shadow: inset 3px 0 0 var(--accent, #2f80ed);
 }
 
 .social-notif-item-head {
