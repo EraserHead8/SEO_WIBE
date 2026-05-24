@@ -668,6 +668,7 @@ def _handle_feedback_auto_replies(payload: dict[str, Any]) -> None:
                         db,
                         user_id,
                         query_text=query_text,
+                        focus_text=str(candidate.get("text") or ""),
                         marketplace=marketplace,
                         content_kind="review",
                     )

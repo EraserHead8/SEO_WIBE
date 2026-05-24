@@ -3442,6 +3442,7 @@ def wb_generate_reply(payload: GenerateReviewReplyIn, user: User = Depends(get_c
         db,
         user,
         query_text=query_text,
+        focus_text=payload.review_text,
         marketplace="wb",
         content_kind="review",
     )
@@ -3645,6 +3646,7 @@ def ozon_generate_reply(payload: GenerateReviewReplyIn, user: User = Depends(get
         db,
         user,
         query_text=query_text,
+        focus_text=payload.review_text,
         marketplace="ozon",
         content_kind="review",
     )
@@ -3866,6 +3868,7 @@ def wb_generate_question_reply(payload: GenerateReviewReplyIn, user: User = Depe
         db,
         user,
         query_text=query_text,
+        focus_text=payload.review_text,
         marketplace="wb",
         content_kind="question",
     )
@@ -4065,6 +4068,7 @@ def ozon_generate_question_reply(payload: GenerateReviewReplyIn, user: User = De
         db,
         user,
         query_text=query_text,
+        focus_text=payload.review_text,
         marketplace="ozon",
         content_kind="question",
     )
@@ -4692,6 +4696,7 @@ def _feedback_product_ai_context(
     user: User,
     *,
     query_text: str,
+    focus_text: str = "",
     marketplace: str,
     content_kind: str,
 ) -> str:
@@ -4709,6 +4714,7 @@ def _feedback_product_ai_context(
         db,
         int(user.id),
         query_text=query_text,
+        focus_text=focus_text or query_text,
         marketplace=marketplace,
         content_kind=content_kind,
         owner_member_ids=owner_ids,

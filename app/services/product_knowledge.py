@@ -35,6 +35,7 @@ def build_product_ai_context(
     user_id: int,
     *,
     query_text: str,
+    focus_text: str = "",
     marketplace: str = "all",
     content_kind: str = "question",
     owner_member_ids: list[int] | None = None,
@@ -45,6 +46,7 @@ def build_product_ai_context(
     tokens = _query_tokens(query_text)
     if not tokens:
         return ""
+    focus_tokens = _query_tokens(focus_text) if str(focus_text or "").strip() else []
     rows = _load_candidate_products(
         db,
         user_id,
@@ -55,19 +57,30 @@ def build_product_ai_context(
     )
     if not rows:
         return ""
-    matches = _score_products(db, rows, tokens=tokens, query_text=query_text, marketplace=marketplace)
+    matches = _score_products(
+        db,
+        rows,
+        tokens=tokens,
+        focus_tokens=focus_tokens,
+        query_text=query_text,
+        marketplace=marketplace,
+    )
     if not matches:
         return ""
     picked = matches[: max(1, min(int(max_products or 1), 8))]
     for match in picked:
         match.attributes = _load_cached_product_attributes(db, match.product)
-    numeric_tokens = {token for token in tokens if token.isdigit() and len(token) <= 4}
-    missing_number_match = bool(numeric_tokens) and not any(match.matched_numbers & numeric_tokens for match in picked)
+    requested_specs = {
+        token
+        for token in (focus_tokens or tokens)
+        if _is_compact_numeric_spec(token)
+    }
+    missing_number_match = bool(requested_specs) and not any(match.matched_numbers & requested_specs for match in picked)
     return _format_product_context(
         picked,
         content_kind=content_kind,
         max_chars=max_chars,
-        requested_numbers=numeric_tokens,
+        requested_numbers=requested_specs,
         missing_number_match=missing_number_match,
     )
 
@@ -124,12 +137,15 @@ def _score_products(
     rows: list[Product],
     *,
     tokens: list[str],
+    focus_tokens: list[str] | None = None,
     query_text: str,
     marketplace: str,
 ) -> list[ProductMatch]:
     safe_market = str(marketplace or "all").strip().lower()
     token_set = set(tokens)
-    has_textual_query = any(not token.isdigit() and len(token) >= 3 for token in token_set)
+    focus_token_set = set(focus_tokens or [])
+    has_textual_query = any(not _is_numeric_spec_token(token) and len(token) >= 3 for token in token_set)
+    has_focus_specific = any(_is_specific_product_token(token) or _is_numeric_spec_token(token) for token in focus_token_set)
     matches: list[ProductMatch] = []
     for product in rows:
         fields = {
@@ -146,35 +162,43 @@ def _score_products(
             continue
         score = 0.0
         matched_textual = False
+        matched_focus = False
         exact_code_match = False
         matched_numbers: set[str] = set()
         for token in token_set:
             if not token:
                 continue
-            is_number = token.isdigit()
+            is_number = _is_numeric_spec_token(token)
+            is_focus = token in focus_token_set
             if token == fields["article"].lower() or token == fields["external_id"].lower() or token == fields["barcode"].lower():
-                score += 220
+                score += 260 if is_focus else 220
                 exact_code_match = True
-            elif token and not is_number and any(token in fields[key].lower() for key in ("article", "external_id", "barcode")):
-                score += 42
+                matched_focus = matched_focus or is_focus
+            elif token and any(token in fields[key].lower() for key in ("article", "external_id", "barcode")):
+                score += 78 if is_focus else (18 if is_number else 42)
+                matched_focus = matched_focus or is_focus
             if token in fields["name"].lower():
-                score += 5 if is_number else 18
+                score += _token_field_score(token, "name", is_focus=is_focus)
                 matched_textual = matched_textual or not is_number
+                matched_focus = matched_focus or is_focus
                 if is_number:
                     matched_numbers.add(token)
             if token in fields["category"].lower():
-                score += 3 if is_number else 10
+                score += _token_field_score(token, "category", is_focus=is_focus)
                 matched_textual = matched_textual or not is_number
+                matched_focus = matched_focus or is_focus
                 if is_number:
                     matched_numbers.add(token)
             if token in fields["keywords"].lower():
-                score += 2 if is_number else 9
+                score += _token_field_score(token, "keywords", is_focus=is_focus)
                 matched_textual = matched_textual or not is_number
+                matched_focus = matched_focus or is_focus
                 if is_number:
                     matched_numbers.add(token)
             if token in fields["description"].lower():
-                score += 1 if is_number else 5
+                score += _token_field_score(token, "description", is_focus=is_focus)
                 matched_textual = matched_textual or not is_number
+                matched_focus = matched_focus or is_focus
                 if is_number:
                     matched_numbers.add(token)
         query_low = _clean(query_text).lower()
@@ -187,6 +211,10 @@ def _score_products(
             score += 3
         if fields["description"]:
             score += 2
+        if has_focus_specific and matched_focus:
+            score += 35
+        elif has_focus_specific and name_low and name_low in query_low:
+            score -= 45
         if has_textual_query and not matched_textual and not exact_code_match:
             continue
         if score < 8:
@@ -320,10 +348,11 @@ def _price_summary(product: Product) -> str:
 
 def _query_tokens(text: str) -> list[str]:
     raw = _clean(text).lower()
-    words = re.findall(r"[a-zа-яё0-9_/-]{2,}", raw, flags=re.IGNORECASE)
+    words = re.findall(r"[a-zа-яё0-9_./,хx-]{2,}", raw, flags=re.IGNORECASE)
     stop = {
         "для", "что", "как", "или", "при", "это", "эта", "этот", "они", "она", "оно", "вам", "вас", "нас", "наш", "мы",
         "под", "над", "без", "есть", "можно", "нужно", "добрый", "день", "час", "товар", "ozon", "wb",
+        "на", "по", "от", "до", "из", "за", "ли", "же", "бы", "вы", "мы", "он", "она",
         "подойдет", "подходит", "подойдут", "подходят", "нужен", "нужна", "нужны", "какой", "какая", "какие",
         "скажите", "подскажите", "посоветуйте", "здравствуйте", "спасибо", "артикул", "номер", "код",
         "выбрать", "выбери", "выбрат", "характеристики", "характеристик", "размер", "размеры", "мм", "см",
@@ -332,7 +361,7 @@ def _query_tokens(text: str) -> list[str]:
     out: list[str] = []
     seen: set[str] = set()
     for word in words:
-        token = word.strip("-/_")
+        token = word.strip(" -_/.,;:()[]{}\"'")
         if not token or token in stop or token in seen:
             continue
         for variant in _token_variants(token):
@@ -350,6 +379,21 @@ def _token_variants(token: str) -> list[str]:
     if not base:
         return []
     variants = [base]
+    if re.search(r"\d", base):
+        for item in _numeric_token_variants(base):
+            if item and item not in variants:
+                variants.append(item)
+    if re.search(r"\d+[xх]\d+", base):
+        swapped = base.replace("x", "х")
+        if swapped not in variants:
+            variants.append(swapped)
+        swapped = base.replace("х", "x")
+        if swapped not in variants:
+            variants.append(swapped)
+        for part in re.split(r"[xх/]", base):
+            part = part.strip(" -_/.,;:")
+            if len(part) >= 2 and part not in variants:
+                variants.append(part)
     if re.search(r"[а-яё]", base, flags=re.IGNORECASE):
         stem = _russian_light_stem(base)
         if stem and stem != base:
@@ -361,9 +405,71 @@ def _token_variants(token: str) -> list[str]:
     return variants
 
 
+def _numeric_token_variants(token: str) -> list[str]:
+    raw = str(token or "").strip().lower()
+    variants: list[str] = []
+    swapped_decimal = raw.replace(",", ".") if "," in raw else raw.replace(".", ",")
+    if swapped_decimal != raw:
+        variants.append(swapped_decimal)
+    for match in re.finditer(r"\d+[.,]\d+", raw):
+        num = match.group(0)
+        for value in (num, num.replace(".", ","), num.replace(",", ".")):
+            if value not in variants:
+                variants.append(value)
+    for match in re.finditer(r"\d{2,4}(?:[xх/]\d{2,4})+", raw):
+        value = match.group(0)
+        for item in (value, value.replace("x", "х"), value.replace("х", "x")):
+            if item not in variants:
+                variants.append(item)
+    return variants
+
+
+def _is_numeric_spec_token(token: str) -> bool:
+    value = str(token or "").strip().lower()
+    if not value:
+        return False
+    if value.isdigit():
+        return True
+    return bool(
+        re.fullmatch(r"\d+[.,]\d+(?:мм|см|м)?", value)
+        or re.fullmatch(r"\d+(?:[xх/]\d+)+(?:мм|см|м)?", value)
+        or re.fullmatch(r"\d+(?:мм|см|м)", value)
+    )
+
+
+def _is_compact_numeric_spec(token: str) -> bool:
+    value = str(token or "").strip().lower()
+    if not _is_numeric_spec_token(value):
+        return False
+    if len(value) > 8:
+        return False
+    if value.endswith("м") and not value.endswith(("мм", "см")):
+        return False
+    return True
+
+
+def _token_field_score(token: str, field: str, *, is_focus: bool) -> int:
+    numeric = _is_numeric_spec_token(token)
+    if field == "name":
+        base = 18
+    elif field == "category":
+        base = 10
+    elif field == "keywords":
+        base = 9
+    else:
+        base = 5
+    if numeric:
+        base = 4 if not is_focus else (14 if not str(token or "").isdigit() else max(3, base // 2))
+    if is_focus:
+        base += 26 if numeric else 10
+    return base
+
+
 def _is_specific_product_token(token: str) -> bool:
     value = str(token or "").strip().lower()
-    if value.isdigit() or len(value) < 4:
+    if _is_numeric_spec_token(value):
+        return not value.isdigit()
+    if len(value) < 4:
         return False
     generic = {
         "труб", "труба", "трубы", "трубу", "трубе", "метр", "метра", "метров",
