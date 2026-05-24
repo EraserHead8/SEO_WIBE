@@ -1045,6 +1045,10 @@ def generate_review_reply(
         f"\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0435 \u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u043d\u043d\u044b\u0435 \u043e\u0442\u0432\u0435\u0442\u044b, \u043a\u043e\u0442\u043e\u0440\u044b\u0435 \u043d\u0435\u043b\u044c\u0437\u044f \u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c:\n{previous_block}\n\n"
         "\u0421\u0444\u043e\u0440\u043c\u0438\u0440\u0443\u0439 \u043e\u0434\u0438\u043d \u043d\u043e\u0432\u044b\u0439 \u0433\u043e\u0442\u043e\u0432\u044b\u0439 \u043e\u0442\u0432\u0435\u0442, \u043a\u043e\u0442\u043e\u0440\u044b\u0439 \u043c\u043e\u0436\u043d\u043e \u0441\u0440\u0430\u0437\u0443 \u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u0442\u044c \u043a\u043b\u0438\u0435\u043d\u0442\u0443."
     )
+    hard_rules = _build_reply_hard_rules(kind, product, review)
+    if hard_rules:
+        system_prompt += f"\n\n{hard_rules}"
+        user_prompt += f"\n\n{hard_rules}"
     payload = {
         "messages": [
             {"role": "system", "content": system_prompt},
@@ -4503,6 +4507,46 @@ def _fallback_question_reply(question_text: str, product_name: str, reviewer_nam
         "Проверим по вашей ситуации и подскажем точные параметры. "
         "Если можете, уточните нужный размер/модель и условия использования."
     )
+
+
+def _build_reply_hard_rules(kind: str, product_name: str, client_text: str) -> str:
+    safe_kind = "question" if str(kind or "").strip().lower() == "question" else "review"
+    product = _repair_mojibake_text(product_name).strip().lower()
+    text = _repair_mojibake_text(client_text).strip().lower()
+    rules = [
+        "ЖЕСТКИЕ ПРАВИЛА, их нельзя нарушать:",
+        "- Не пиши, что мы уже проверили или исправили карточку, если это явно не дано.",
+        "- Не обещай компенсацию, скидку, замену, возврат денег или личный чат.",
+        "- Не выдумывай факты о товаре, составе, размере, совместимости, наличии, гарантии или безопасности.",
+    ]
+    generic_product = (
+        not product
+        or product in {"товар", "товар ozon", "товар wb"}
+        or product.startswith("товар ozon")
+        or product.startswith("товар wb")
+    )
+    if safe_kind == "question" and generic_product:
+        rules.append(
+            "- Текущий товар не определен. ЗАПРЕЩЕНО отвечать 'да, подойдет' или 'нет, не подойдет'. "
+            "Ответь осторожно: нужно сверить точные характеристики в карточке товара, например размер, материал, внутренний диаметр и условия монтажа."
+        )
+    technical_markers = (
+        "электр",
+        "статич",
+        "инфракрас",
+        "заземл",
+        "напряж",
+        "безопас",
+        "монтаж",
+        "пленк",
+        "плёнк",
+    )
+    if safe_kind == "question" and any(marker in text for marker in technical_markers):
+        rules.append(
+            "- Текущий вопрос технический. ЗАПРЕЩЕНО утверждать, что товар точно безопасен/подходит "
+            "или что статическое электричество будет/не будет. Пиши: нужно сверить характеристики, инструкцию и требования монтажа."
+        )
+    return "\n".join(rules)
 
 
 def _resolve_ai_chat_endpoint(provider: str, base_url: str) -> str:
