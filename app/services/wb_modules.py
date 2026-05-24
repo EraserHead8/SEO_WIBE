@@ -926,7 +926,14 @@ def generate_review_reply(
     product = (product_name or "").strip() or "С‚РѕРІР°СЂ"
     rating = stars if isinstance(stars, int) else None
     product = _repair_mojibake_text(product_name).strip() or "товар"
-    custom_prompt = _repair_mojibake_text(prompt).strip()
+    raw_prompt = str(prompt or "").strip()
+    repaired_prompt = _repair_mojibake_text(raw_prompt).strip()
+    product_context_marker = "Контекст из модуля товаров SEO WIBE."
+    custom_prompt = (
+        raw_prompt
+        if product_context_marker in raw_prompt and product_context_marker not in repaired_prompt
+        else repaired_prompt
+    )
     customer_name = _sanitize_person_name(_repair_mojibake_text(reviewer_name))
     mp = "Ozon" if (marketplace or "").strip().lower() == "ozon" else "WB"
     kind = "question" if (content_kind or "").strip().lower() == "question" else "review"
@@ -1045,7 +1052,20 @@ def generate_review_reply(
         f"\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0435 \u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u043d\u043d\u044b\u0435 \u043e\u0442\u0432\u0435\u0442\u044b, \u043a\u043e\u0442\u043e\u0440\u044b\u0435 \u043d\u0435\u043b\u044c\u0437\u044f \u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c:\n{previous_block}\n\n"
         "\u0421\u0444\u043e\u0440\u043c\u0438\u0440\u0443\u0439 \u043e\u0434\u0438\u043d \u043d\u043e\u0432\u044b\u0439 \u0433\u043e\u0442\u043e\u0432\u044b\u0439 \u043e\u0442\u0432\u0435\u0442, \u043a\u043e\u0442\u043e\u0440\u044b\u0439 \u043c\u043e\u0436\u043d\u043e \u0441\u0440\u0430\u0437\u0443 \u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u0442\u044c \u043a\u043b\u0438\u0435\u043d\u0442\u0443."
     )
-    hard_rules = _build_reply_hard_rules(kind, product, review)
+    product_context_excerpt = _extract_product_knowledge_context(custom_prompt)
+    if product_context_excerpt:
+        user_prompt += (
+            "\n\nТоварный контекст из каталога для этого ответа:\n"
+            f"{product_context_excerpt}\n\n"
+            "Если клиент спрашивает подбор или артикул и в контексте есть подходящая карточка, назови конкретный артикул из этого контекста."
+        )
+    has_product_knowledge_context = "Контекст из модуля товаров SEO WIBE" in custom_prompt
+    hard_rules = _build_reply_hard_rules(
+        kind,
+        product,
+        review,
+        has_product_knowledge_context=has_product_knowledge_context,
+    )
     if hard_rules:
         system_prompt += f"\n\n{hard_rules}"
         user_prompt += f"\n\n{hard_rules}"
@@ -1166,6 +1186,12 @@ def generate_review_reply(
                 attempts.append(item)
                 continue
             answer = sanitize_marketplace_reply_text(reply, fallback=fallback)
+            answer = _ensure_catalog_article_in_reply(
+                answer,
+                custom_prompt,
+                review,
+                marketplace=marketplace,
+            )
             item["ok"] = True
             attempts.append(item)
             if isinstance(trace, dict):
@@ -4509,7 +4535,97 @@ def _fallback_question_reply(question_text: str, product_name: str, reviewer_nam
     )
 
 
-def _build_reply_hard_rules(kind: str, product_name: str, client_text: str) -> str:
+def _extract_product_knowledge_context(prompt: str, max_chars: int = 4200) -> str:
+    marker = "Контекст из модуля товаров SEO WIBE."
+    text = str(prompt or "")
+    start = text.find(marker)
+    if start < 0:
+        return ""
+    section = text[start:]
+    for tail_marker in (
+        "\n\nРелевантные реальные примеры",
+        "\n\nЖЕСТКИЕ ПРАВИЛА",
+    ):
+        pos = section.find(tail_marker)
+        if pos > 0:
+            section = section[:pos]
+            break
+    return " ".join(section[: max(800, int(max_chars or 4200))].split())
+
+
+def _client_asks_catalog_article(text: str) -> bool:
+    low = _repair_mojibake_text(text).lower()
+    markers = (
+        "артикул",
+        "подберите",
+        "подобрать",
+        "подбор",
+        "какой",
+        "какая",
+        "какие",
+        "нужен",
+        "нужна",
+        "нужны",
+        "подойдет",
+        "подходит",
+        "совместим",
+    )
+    return any(marker in low for marker in markers)
+
+
+def _extract_first_catalog_market_article(prompt: str, marketplace: str) -> tuple[str, str]:
+    text = str(prompt or "")
+    market = str(marketplace or "").strip().lower()
+    if market == "ozon":
+        match = re.search(r"Ozon product_id:\s*([A-Za-zА-Яа-яЁё0-9_./-]+)", text)
+        return ("Ozon product_id", match.group(1).strip(".,;:") if match else "")
+    match = re.search(r"WB nmID/артикул WB:\s*([A-Za-zА-Яа-яЁё0-9_./-]+)", text)
+    return ("WB артикул", match.group(1).strip(".,;:") if match else "")
+
+
+def _extract_catalog_market_articles(prompt: str, marketplace: str) -> list[str]:
+    text = str(prompt or "")
+    market = str(marketplace or "").strip().lower()
+    pattern = (
+        r"Ozon product_id:\s*([A-Za-zА-Яа-яЁё0-9_./-]+)"
+        if market == "ozon"
+        else r"WB nmID/артикул WB:\s*([A-Za-zА-Яа-яЁё0-9_./-]+)"
+    )
+    values: list[str] = []
+    seen: set[str] = set()
+    for match in re.finditer(pattern, text):
+        value = match.group(1).strip(".,;:")
+        if value and value not in seen:
+            seen.add(value)
+            values.append(value)
+    return values
+
+
+def _ensure_catalog_article_in_reply(answer: str, prompt: str, client_text: str, *, marketplace: str) -> str:
+    clean_answer = sanitize_marketplace_reply_text(answer)
+    prompt_text = str(prompt or "")
+    if not clean_answer or "Контекст из модуля товаров SEO WIBE." not in prompt_text:
+        return clean_answer
+    if "точное совпадение не подтверждено" in prompt_text.lower():
+        return clean_answer
+    if not _client_asks_catalog_article(client_text):
+        return clean_answer
+    if any(article and article in clean_answer for article in _extract_catalog_market_articles(prompt_text, marketplace)):
+        return clean_answer
+    article_label, article = _extract_first_catalog_market_article(prompt_text, marketplace)
+    if not article or article in clean_answer:
+        return clean_answer
+    suffix = f" Подходящий вариант из каталога: {article_label} {article}."
+    return sanitize_marketplace_reply_text(f"{clean_answer.rstrip('.')}." + suffix)
+
+
+def _build_reply_hard_rules(
+    kind: str,
+    product_name: str,
+    client_text: str,
+    *,
+    has_product_knowledge_context: bool = False,
+) -> str:
     safe_kind = "question" if str(kind or "").strip().lower() == "question" else "review"
     product = _repair_mojibake_text(product_name).strip().lower()
     text = _repair_mojibake_text(client_text).strip().lower()
@@ -4525,10 +4641,18 @@ def _build_reply_hard_rules(kind: str, product_name: str, client_text: str) -> s
         or product.startswith("товар ozon")
         or product.startswith("товар wb")
     )
-    if safe_kind == "question" and generic_product:
+    if safe_kind == "question" and generic_product and not has_product_knowledge_context:
         rules.append(
             "- Текущий товар не определен. ЗАПРЕЩЕНО отвечать 'да, подойдет' или 'нет, не подойдет'. "
             "Ответь осторожно: нужно сверить точные характеристики в карточке товара, например размер, материал, внутренний диаметр и условия монтажа."
+        )
+    if safe_kind == "question" and has_product_knowledge_context:
+        rules.append(
+            "- Если в контексте из модуля товаров есть уверенно подходящая карточка, ОБЯЗАТЕЛЬНО опирайся на нее. "
+            "Когда клиент спрашивает артикул, подбор, размер, совместимость или просит что-то посоветовать, укажи конкретный артикул из контекста: "
+            "для WB это значение 'WB nmID/артикул WB', для Ozon это 'Ozon product_id'. "
+            "Не пиши 'артикул указан в карточке', если номер артикула есть в контексте. "
+            "Если в контексте указано, что точное совпадение по размеру не подтверждено, не называй товар точным подбором."
         )
     technical_markers = (
         "электр",

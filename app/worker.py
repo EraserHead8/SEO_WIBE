@@ -21,6 +21,7 @@ from app.services.feedback_learning import (
 )
 from app.services.market_cache import build_market_cache_key, get_or_refresh_market_cache
 from app.services.marketplace import enrich_ozon_category_names
+from app.services.product_knowledge import build_product_ai_context
 from app.services.sales import build_sales_report
 from app.services.task_queue import compact_queue, dequeue_task, enqueue_task, queue_available, queue_depth
 from app.services.wb_bidder import run_bidder_rules
@@ -655,14 +656,23 @@ def _handle_feedback_auto_replies(payload: dict[str, Any]) -> None:
                 if manual_reply:
                     reply = sanitize_marketplace_reply_text(candidate.get("reply_text") or log.reply_text)
                 else:
+                    query_text = f"{candidate.get('product') or ''} {candidate.get('text') or ''} {candidate.get('reviewer_name') or ''}"
                     learning_prompt = compose_feedback_learning_prompt(
                         db,
                         user_id,
                         "review",
-                        query_text=f"{candidate.get('product') or ''} {candidate.get('text') or ''} {candidate.get('reviewer_name') or ''}",
+                        query_text=query_text,
                         rating=int(candidate.get("rating") or 0),
                     )
-                    effective_prompt = append_learning_to_prompt(prompt, learning_prompt)
+                    product_prompt = build_product_ai_context(
+                        db,
+                        user_id,
+                        query_text=query_text,
+                        marketplace=marketplace,
+                        content_kind="review",
+                    )
+                    effective_prompt = append_learning_to_prompt(prompt, product_prompt)
+                    effective_prompt = append_learning_to_prompt(effective_prompt, learning_prompt)
                     reply = generate_review_reply(
                         review_text=str(candidate.get("text") or ""),
                         product_name=str(candidate.get("product") or ""),

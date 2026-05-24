@@ -236,6 +236,7 @@ from app.services.feedback_learning import (
     ensure_feedback_learning_profile,
     feedback_learning_settings_payload,
 )
+from app.services.product_knowledge import build_product_ai_context
 from app.telemetry import collect_perf_metrics
 from app.services.ads_cache import (
     get_wb_snapshot_rows,
@@ -3437,8 +3438,19 @@ def wb_generate_reply(payload: GenerateReviewReplyIn, user: User = Depends(get_c
         user.id,
         query_text=query_text,
     )
+    product_ctx = _feedback_product_ai_context(
+        db,
+        user,
+        query_text=query_text,
+        marketplace="wb",
+        content_kind="review",
+    )
     base_prompt = append_learning_to_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", learned_ctx)
-    prompt = _compose_ai_prompt(base_prompt, knowledge_ctx, content_kind="review")
+    prompt = _compose_ai_prompt(
+        base_prompt,
+        "\n\n".join(part for part in (knowledge_ctx, product_ctx) if part),
+        content_kind="review",
+    )
     ai_trace: dict[str, Any] = {}
     reply = generate_review_reply(
         review_text=payload.review_text,
@@ -3629,8 +3641,19 @@ def ozon_generate_reply(payload: GenerateReviewReplyIn, user: User = Depends(get
         user.id,
         query_text=query_text,
     )
+    product_ctx = _feedback_product_ai_context(
+        db,
+        user,
+        query_text=query_text,
+        marketplace="ozon",
+        content_kind="review",
+    )
     base_prompt = append_learning_to_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", learned_ctx)
-    prompt = _compose_ai_prompt(base_prompt, knowledge_ctx, content_kind="review")
+    prompt = _compose_ai_prompt(
+        base_prompt,
+        "\n\n".join(part for part in (knowledge_ctx, product_ctx) if part),
+        content_kind="review",
+    )
     ai_trace: dict[str, Any] = {}
     reply = generate_review_reply(
         review_text=payload.review_text,
@@ -3839,8 +3862,19 @@ def wb_generate_question_reply(payload: GenerateReviewReplyIn, user: User = Depe
         user.id,
         query_text=query_text,
     )
+    product_ctx = _feedback_product_ai_context(
+        db,
+        user,
+        query_text=query_text,
+        marketplace="wb",
+        content_kind="question",
+    )
     base_prompt = append_learning_to_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", learned_ctx)
-    prompt = _compose_ai_prompt(base_prompt, knowledge_ctx, content_kind="question")
+    prompt = _compose_ai_prompt(
+        base_prompt,
+        "\n\n".join(part for part in (knowledge_ctx, product_ctx) if part),
+        content_kind="question",
+    )
     ai_trace: dict[str, Any] = {}
     reply = generate_review_reply(
         review_text=payload.review_text,
@@ -4027,8 +4061,19 @@ def ozon_generate_question_reply(payload: GenerateReviewReplyIn, user: User = De
         user.id,
         query_text=query_text,
     )
+    product_ctx = _feedback_product_ai_context(
+        db,
+        user,
+        query_text=query_text,
+        marketplace="ozon",
+        content_kind="question",
+    )
     base_prompt = append_learning_to_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", learned_ctx)
-    prompt = _compose_ai_prompt(base_prompt, knowledge_ctx, content_kind="question")
+    prompt = _compose_ai_prompt(
+        base_prompt,
+        "\n\n".join(part for part in (knowledge_ctx, product_ctx) if part),
+        content_kind="question",
+    )
     ai_trace: dict[str, Any] = {}
     reply = generate_review_reply(
         review_text=payload.review_text,
@@ -4640,6 +4685,35 @@ def _feedback_recent_reply_texts(db: Session, user_id: int, marketplace: str, li
         .limit(max(1, min(int(limit or 8), 20)))
     ).all()
     return [_repair_text_encoding(str(text or "")) for text in rows if str(text or "").strip()]
+
+
+def _feedback_product_ai_context(
+    db: Session,
+    user: User,
+    *,
+    query_text: str,
+    marketplace: str,
+    content_kind: str,
+) -> str:
+    owner_ids: list[int] | None = None
+    include_unassigned = True
+    if not _actor_is_owner(user):
+        owner_ids = []
+        actor_id = _actor_member_id(user)
+        owner_id = _actor_owner_member_id(user)
+        if actor_id > 0:
+            owner_ids.append(actor_id)
+        if owner_id > 0 and owner_id not in owner_ids:
+            owner_ids.append(owner_id)
+    return build_product_ai_context(
+        db,
+        int(user.id),
+        query_text=query_text,
+        marketplace=marketplace,
+        content_kind=content_kind,
+        owner_member_ids=owner_ids,
+        include_unassigned_owner=include_unassigned,
+    )
 
 
 def _build_feedback_auto_reply_candidates(
