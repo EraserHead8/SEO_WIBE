@@ -229,6 +229,13 @@ from app.services.market_cache import (
     get_or_refresh_market_cache,
 )
 from app.services.task_queue import enqueue_task, queue_available, queue_depth, queue_enabled
+from app.services.feedback_learning import (
+    append_learning_to_prompt,
+    build_feedback_learning_profile,
+    compose_feedback_learning_prompt,
+    ensure_feedback_learning_profile,
+    feedback_learning_settings_payload,
+)
 from app.telemetry import collect_perf_metrics
 from app.services.ads_cache import (
     get_wb_snapshot_rows,
@@ -3416,12 +3423,22 @@ def wb_generate_reply(payload: GenerateReviewReplyIn, user: User = Depends(get_c
     ensure_module_enabled(db, user, "wb_reviews_ai")
     settings_row = _get_or_create_ai_settings(db, user.id)
     runtime = _resolve_user_ai_runtime(db, user.id)
+    query_text = f"{payload.product_name} {payload.review_text} {payload.reviewer_name}"
+    ensure_feedback_learning_profile(db, int(user.id), "review", allow_inline=True)
+    learned_ctx = compose_feedback_learning_prompt(
+        db,
+        int(user.id),
+        "review",
+        query_text=query_text,
+        rating=payload.stars,
+    )
     knowledge_ctx = _build_user_knowledge_context(
         db,
         user.id,
-        query_text=f"{payload.product_name} {payload.review_text} {payload.reviewer_name}",
+        query_text=query_text,
     )
-    prompt = _compose_ai_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", knowledge_ctx, content_kind="review")
+    base_prompt = append_learning_to_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", learned_ctx)
+    prompt = _compose_ai_prompt(base_prompt, knowledge_ctx, content_kind="review")
     ai_trace: dict[str, Any] = {}
     reply = generate_review_reply(
         review_text=payload.review_text,
@@ -3598,12 +3615,22 @@ def ozon_generate_reply(payload: GenerateReviewReplyIn, user: User = Depends(get
     ensure_module_enabled(db, user, "wb_reviews_ai")
     settings_row = _get_or_create_ai_settings(db, user.id)
     runtime = _resolve_user_ai_runtime(db, user.id)
+    query_text = f"{payload.product_name} {payload.review_text} {payload.reviewer_name}"
+    ensure_feedback_learning_profile(db, int(user.id), "review", allow_inline=True)
+    learned_ctx = compose_feedback_learning_prompt(
+        db,
+        int(user.id),
+        "review",
+        query_text=query_text,
+        rating=payload.stars,
+    )
     knowledge_ctx = _build_user_knowledge_context(
         db,
         user.id,
-        query_text=f"{payload.product_name} {payload.review_text} {payload.reviewer_name}",
+        query_text=query_text,
     )
-    prompt = _compose_ai_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", knowledge_ctx, content_kind="review")
+    base_prompt = append_learning_to_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", learned_ctx)
+    prompt = _compose_ai_prompt(base_prompt, knowledge_ctx, content_kind="review")
     ai_trace: dict[str, Any] = {}
     reply = generate_review_reply(
         review_text=payload.review_text,
@@ -3799,12 +3826,21 @@ def wb_generate_question_reply(payload: GenerateReviewReplyIn, user: User = Depe
     ensure_module_enabled(db, user, "wb_questions_ai")
     settings_row = _get_or_create_question_ai_settings(db, user.id)
     runtime = _resolve_user_ai_runtime(db, user.id)
+    query_text = f"{payload.product_name} {payload.review_text} {payload.reviewer_name}"
+    ensure_feedback_learning_profile(db, int(user.id), "question", allow_inline=True)
+    learned_ctx = compose_feedback_learning_prompt(
+        db,
+        int(user.id),
+        "question",
+        query_text=query_text,
+    )
     knowledge_ctx = _build_user_knowledge_context(
         db,
         user.id,
-        query_text=f"{payload.product_name} {payload.review_text} {payload.reviewer_name}",
+        query_text=query_text,
     )
-    prompt = _compose_ai_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", knowledge_ctx, content_kind="question")
+    base_prompt = append_learning_to_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", learned_ctx)
+    prompt = _compose_ai_prompt(base_prompt, knowledge_ctx, content_kind="question")
     ai_trace: dict[str, Any] = {}
     reply = generate_review_reply(
         review_text=payload.review_text,
@@ -3978,12 +4014,21 @@ def ozon_generate_question_reply(payload: GenerateReviewReplyIn, user: User = De
     ensure_module_enabled(db, user, "wb_questions_ai")
     settings_row = _get_or_create_question_ai_settings(db, user.id)
     runtime = _resolve_user_ai_runtime(db, user.id)
+    query_text = f"{payload.product_name} {payload.review_text} {payload.reviewer_name}"
+    ensure_feedback_learning_profile(db, int(user.id), "question", allow_inline=True)
+    learned_ctx = compose_feedback_learning_prompt(
+        db,
+        int(user.id),
+        "question",
+        query_text=query_text,
+    )
     knowledge_ctx = _build_user_knowledge_context(
         db,
         user.id,
-        query_text=f"{payload.product_name} {payload.review_text} {payload.reviewer_name}",
+        query_text=query_text,
     )
-    prompt = _compose_ai_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", knowledge_ctx, content_kind="question")
+    base_prompt = append_learning_to_prompt(settings_row.prompt if settings_row and settings_row.prompt else "", learned_ctx)
+    prompt = _compose_ai_prompt(base_prompt, knowledge_ctx, content_kind="question")
     ai_trace: dict[str, Any] = {}
     reply = generate_review_reply(
         review_text=payload.review_text,
@@ -4340,8 +4385,10 @@ def ozon_returns_detail(return_id: str, user: User = Depends(get_current_user), 
 def wb_questions_get_ai_settings(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     ensure_module_enabled(db, user, "wb_questions_ai")
     row = _get_or_create_question_ai_settings(db, user.id)
+    ensure_feedback_learning_profile(db, int(user.id), "question", allow_inline=True)
+    learning = feedback_learning_settings_payload(db, int(user.id), "question", manual_prompt=row.prompt)
     db.commit()
-    return ReviewAiSettingsOut(reply_mode=row.reply_mode, prompt=row.prompt)
+    return ReviewAiSettingsOut(reply_mode=row.reply_mode, prompt=row.prompt, **learning)
 
 
 @router.post("/wb/questions/ai-settings", response_model=ReviewAiSettingsOut)
@@ -4362,15 +4409,38 @@ def wb_questions_save_ai_settings(payload: ReviewAiSettingsIn, user: User = Depe
         entity_type="ai_settings",
     )
     db.commit()
-    return ReviewAiSettingsOut(reply_mode=row.reply_mode, prompt=row.prompt)
+    ensure_feedback_learning_profile(db, int(user.id), "question", allow_inline=True)
+    db.commit()
+    learning = feedback_learning_settings_payload(db, int(user.id), "question", manual_prompt=row.prompt)
+    return ReviewAiSettingsOut(reply_mode=row.reply_mode, prompt=row.prompt, **learning)
+
+
+@router.post("/wb/questions/ai-settings/learn", response_model=ReviewAiSettingsOut)
+def wb_questions_refresh_ai_learning(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "wb_questions_ai")
+    row = _get_or_create_question_ai_settings(db, user.id)
+    profile = build_feedback_learning_profile(db, int(user.id), "question", force=True)
+    _audit(
+        db,
+        user,
+        action="wb_questions_ai_learning_refreshed",
+        details=f"source_count={int(profile.source_count or 0)};status={profile.status}",
+        module_code="wb_questions_ai",
+        entity_type="ai_learning",
+    )
+    db.commit()
+    learning = feedback_learning_settings_payload(db, int(user.id), "question", manual_prompt=row.prompt)
+    return ReviewAiSettingsOut(reply_mode=row.reply_mode, prompt=row.prompt, **learning)
 
 
 @router.get("/wb/reviews/ai-settings", response_model=ReviewAiSettingsOut)
 def wb_get_ai_settings(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     ensure_module_enabled(db, user, "wb_reviews_ai")
     row = _get_or_create_ai_settings(db, user.id)
+    ensure_feedback_learning_profile(db, int(user.id), "review", allow_inline=True)
+    learning = feedback_learning_settings_payload(db, int(user.id), "review", manual_prompt=row.prompt)
     db.commit()
-    return ReviewAiSettingsOut(reply_mode=row.reply_mode, prompt=row.prompt)
+    return ReviewAiSettingsOut(reply_mode=row.reply_mode, prompt=row.prompt, **learning)
 
 
 @router.post("/wb/reviews/ai-settings", response_model=ReviewAiSettingsOut)
@@ -4391,7 +4461,28 @@ def wb_save_ai_settings(payload: ReviewAiSettingsIn, user: User = Depends(get_cu
         entity_type="ai_settings",
     )
     db.commit()
-    return ReviewAiSettingsOut(reply_mode=row.reply_mode, prompt=row.prompt)
+    ensure_feedback_learning_profile(db, int(user.id), "review", allow_inline=True)
+    db.commit()
+    learning = feedback_learning_settings_payload(db, int(user.id), "review", manual_prompt=row.prompt)
+    return ReviewAiSettingsOut(reply_mode=row.reply_mode, prompt=row.prompt, **learning)
+
+
+@router.post("/wb/reviews/ai-settings/learn", response_model=ReviewAiSettingsOut)
+def wb_refresh_ai_learning(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ensure_module_enabled(db, user, "wb_reviews_ai")
+    row = _get_or_create_ai_settings(db, user.id)
+    profile = build_feedback_learning_profile(db, int(user.id), "review", force=True)
+    _audit(
+        db,
+        user,
+        action="wb_reviews_ai_learning_refreshed",
+        details=f"source_count={int(profile.source_count or 0)};status={profile.status}",
+        module_code="wb_reviews_ai",
+        entity_type="ai_learning",
+    )
+    db.commit()
+    learning = feedback_learning_settings_payload(db, int(user.id), "review", manual_prompt=row.prompt)
+    return ReviewAiSettingsOut(reply_mode=row.reply_mode, prompt=row.prompt, **learning)
 
 
 @router.post("/feedback/auto-replies/dry-run")

@@ -145,6 +145,32 @@ class UserQuestionAiSettings(Base):
     user: Mapped["User"] = relationship(back_populates="question_ai_settings")
 
 
+class FeedbackLearningProfile(Base):
+    __tablename__ = "feedback_learning_profiles"
+    __table_args__ = (
+        UniqueConstraint("user_id", "content_kind", name="uq_feedback_learning_profile"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    content_kind: Mapped[str] = mapped_column(String(30), index=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    status: Mapped[str] = mapped_column(String(30), default="empty", index=True)
+    prompt_text: Mapped[str] = mapped_column(Text, default="")
+    examples_json: Mapped[str] = mapped_column(Text, default="[]")
+    stats_json: Mapped[str] = mapped_column(Text, default="{}")
+    source_hash: Mapped[str] = mapped_column(String(64), default="")
+    source_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_error: Mapped[str] = mapped_column(String(1000), default="")
+    generated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_source_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped["User"] = relationship()
+
+
 class UserKnowledgeDoc(Base):
     __tablename__ = "user_knowledge_docs"
 

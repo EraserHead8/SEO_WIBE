@@ -373,6 +373,9 @@ class ReviewAiSettingsIn(BaseModel):
 class ReviewAiSettingsOut(BaseModel):
     reply_mode: str
     prompt: str
+    learned_prompt: str = ""
+    effective_prompt: str = ""
+    learning_meta: dict[str, Any] = Field(default_factory=dict)
 
 
 class GenerateReviewReplyIn(BaseModel):

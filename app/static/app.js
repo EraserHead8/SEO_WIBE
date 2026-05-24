@@ -4310,6 +4310,47 @@ function toggleFeedbackPrompt(kind) {
   applyFeedbackPromptVisibility(key);
 }
 
+function renderFeedbackLearning(kind, data = {}) {
+  const key = String(kind || "").trim().toLowerCase() === "question" ? "question" : "review";
+  const prefix = key === "question" ? "question" : "review";
+  const learned = String(data?.learned_prompt || "").trim();
+  const meta = data?.learning_meta || {};
+  const panel = document.getElementById(`${prefix}LearningPanel`);
+  const metaBox = document.getElementById(`${prefix}LearningMeta`);
+  const promptBox = document.getElementById(`${prefix}LearnedPrompt`);
+  if (panel) panel.classList.toggle("is-empty", !learned);
+  if (promptBox) {
+    promptBox.textContent = learned || tr("Пока недостаточно реальных ответов для автообучения. Нажмите обновить после загрузки отвеченных отзывов/вопросов.", "Not enough real replies for learning yet. Refresh after loading answered reviews/questions.");
+  }
+  if (metaBox) {
+    const count = Number(meta.source_count || 0);
+    const status = String(meta.status || (learned ? "ready" : "empty"));
+    const generated = meta.generated_at ? String(meta.generated_at).slice(0, 16).replace("T", " ") : "-";
+    const next = meta.next_run_at ? String(meta.next_run_at).slice(0, 16).replace("T", " ") : "-";
+    metaBox.textContent = tr(
+      `Статус: ${status}; источников: ${count}; обновлено: ${generated}; следующее: ${next}`,
+      `Status: ${status}; sources: ${count}; updated: ${generated}; next: ${next}`
+    );
+  }
+}
+
+async function refreshFeedbackLearning(kind) {
+  const key = String(kind || "").trim().toLowerCase() === "question" ? "question" : "review";
+  const endpoint = key === "question" ? "/api/wb/questions/ai-settings/learn" : "/api/wb/reviews/ai-settings/learn";
+  const btn = document.getElementById(key === "question" ? "questionLearningRefreshBtn" : "reviewLearningRefreshBtn");
+  if (btn) btn.disabled = true;
+  const data = await requestJson(endpoint, {
+    method: "POST",
+    headers: authHeaders(),
+  }).catch((e) => {
+    alert(e.message);
+    return null;
+  });
+  if (btn) btn.disabled = false;
+  if (!data) return;
+  renderFeedbackLearning(key, data);
+}
+
 async function loadReviewAiSettings() {
   const data = await requestJson("/api/wb/reviews/ai-settings", { headers: authHeaders() }).catch(() => null);
   if (!data) return;
@@ -4317,6 +4358,7 @@ async function loadReviewAiSettings() {
   const modeInput = document.getElementById("reviewAiMode");
   if (promptInput) promptInput.value = data.prompt || "";
   if (modeInput) modeInput.value = data.reply_mode || "manual";
+  renderFeedbackLearning("review", data);
   applyFeedbackPromptVisibility("review");
 }
 
@@ -4334,6 +4376,7 @@ async function saveReviewAiSettings() {
   });
   if (!data) return;
   alert(tr("AI-настройки сохранены", "AI settings saved"));
+  renderFeedbackLearning("review", data);
 }
 
 function getAutoReplyPayload(extra = {}) {
@@ -5630,6 +5673,7 @@ async function loadQuestionAiSettings() {
   const modeInput = document.getElementById("questionAiMode");
   if (promptInput) promptInput.value = data.prompt || "";
   if (modeInput) modeInput.value = data.reply_mode || "manual";
+  renderFeedbackLearning("question", data);
   applyFeedbackPromptVisibility("question");
 }
 
@@ -5647,6 +5691,7 @@ async function saveQuestionAiSettings() {
   });
   if (!data) return;
   alert(tr("AI-настройки сохранены", "AI settings saved"));
+  renderFeedbackLearning("question", data);
 }
 
 async function loadAiDocs() {

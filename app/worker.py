@@ -12,6 +12,13 @@ from sqlalchemy import desc, select
 from app.db import SessionLocal
 from app.models import ApiCredential, AuditLog, FeedbackAutoReplyLog, Product, SystemSetting, UserAiSettings
 from app.services.ads_cache import sync_wb_campaign_snapshots
+from app.services.feedback_learning import (
+    append_learning_to_prompt,
+    build_feedback_learning_profile,
+    compose_feedback_learning_prompt,
+    enqueue_due_feedback_learning_jobs,
+    ensure_feedback_learning_profile,
+)
 from app.services.market_cache import build_market_cache_key, get_or_refresh_market_cache
 from app.services.marketplace import enrich_ozon_category_names
 from app.services.sales import build_sales_report
@@ -43,6 +50,7 @@ _TASK_MAX_AGE_SEC = {
     "sync_wb_snapshots": 12 * 60,
     "wb_bidder_run": 5 * 60,
     "feedback_auto_replies": 30 * 60,
+    "refresh_feedback_learning": 45 * 60,
     "enrich_ozon_categories": 20 * 60,
 }
 _MARKET_CACHE_TTL_SEC = {
@@ -52,6 +60,8 @@ _MARKET_CACHE_TTL_SEC = {
 }
 _PENDING_FEEDBACK_REQUEUE_INTERVAL_SEC = 30
 _LAST_PENDING_FEEDBACK_REQUEUE_AT = 0.0
+_FEEDBACK_LEARNING_REQUEUE_INTERVAL_SEC = 15 * 60
+_LAST_FEEDBACK_LEARNING_REQUEUE_AT = 0.0
 
 
 def _shutdown(*_args) -> None:
@@ -149,6 +159,20 @@ def _enqueue_pending_feedback_auto_replies(*, force: bool = False) -> None:
                 dedupe_key=f"pending_feedback_auto_replies:{user_id}",
                 dedupe_ttl_sec=_PENDING_FEEDBACK_REQUEUE_INTERVAL_SEC,
             )
+    finally:
+        db.close()
+
+
+def _enqueue_due_feedback_learning(*, force: bool = False) -> None:
+    global _LAST_FEEDBACK_LEARNING_REQUEUE_AT
+    now = time.monotonic()
+    if not force and now - _LAST_FEEDBACK_LEARNING_REQUEUE_AT < _FEEDBACK_LEARNING_REQUEUE_INTERVAL_SEC:
+        return
+    _LAST_FEEDBACK_LEARNING_REQUEUE_AT = now
+
+    db = SessionLocal()
+    try:
+        enqueue_due_feedback_learning_jobs(db, limit=16)
     finally:
         db.close()
 
@@ -563,6 +587,8 @@ def _handle_feedback_auto_replies(payload: dict[str, Any]) -> None:
         ozon_key = _active_key(db, user_id, "ozon")
         settings_row = db.scalar(select(UserAiSettings).where(UserAiSettings.user_id == user_id))
         prompt = str(settings_row.prompt or "").strip() if settings_row else ""
+        ensure_feedback_learning_profile(db, user_id, "review", allow_inline=True)
+        db.commit()
         stop_marketplaces: set[str] = set()
 
         for candidate in candidates:
@@ -629,11 +655,19 @@ def _handle_feedback_auto_replies(payload: dict[str, Any]) -> None:
                 if manual_reply:
                     reply = sanitize_marketplace_reply_text(candidate.get("reply_text") or log.reply_text)
                 else:
+                    learning_prompt = compose_feedback_learning_prompt(
+                        db,
+                        user_id,
+                        "review",
+                        query_text=f"{candidate.get('product') or ''} {candidate.get('text') or ''} {candidate.get('reviewer_name') or ''}",
+                        rating=int(candidate.get("rating") or 0),
+                    )
+                    effective_prompt = append_learning_to_prompt(prompt, learning_prompt)
                     reply = generate_review_reply(
                         review_text=str(candidate.get("text") or ""),
                         product_name=str(candidate.get("product") or ""),
                         stars=int(candidate.get("rating") or 0),
-                        prompt=prompt,
+                        prompt=effective_prompt,
                         reviewer_name=str(candidate.get("reviewer_name") or ""),
                         marketplace=marketplace,
                         content_kind="review",
@@ -725,6 +759,22 @@ def _handle_feedback_auto_replies(payload: dict[str, Any]) -> None:
         db.close()
 
 
+def _handle_refresh_feedback_learning(payload: dict[str, Any]) -> None:
+    user_id = int(payload.get("user_id") or 0)
+    if user_id <= 0:
+        return
+    content_kind = str(payload.get("content_kind") or "review").strip().lower()
+    force = bool(payload.get("force"))
+    db = SessionLocal()
+    try:
+        build_feedback_learning_profile(db, user_id, content_kind, force=force)
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
 def _parse_iso_date(raw: str) -> date | None:
     text = str(raw or "").strip()
     if not text:
@@ -797,6 +847,9 @@ def process_task(task: dict[str, Any]) -> None:
     if task_type == "feedback_auto_replies":
         _handle_feedback_auto_replies(payload)
         return
+    if task_type == "refresh_feedback_learning":
+        _handle_refresh_feedback_learning(payload)
+        return
 
 
 def run_worker() -> None:
@@ -809,6 +862,7 @@ def run_worker() -> None:
         depth = queue_depth()
         if depth == 0:
             _enqueue_pending_feedback_auto_replies()
+            _enqueue_due_feedback_learning()
         elif depth > 80:
             compact_queue(max_age_sec=20 * 60)
         task = dequeue_task(timeout_sec=10)

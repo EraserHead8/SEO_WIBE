@@ -741,6 +741,14 @@
           </div>
           <div id="reviewPromptWrap" class="feedback-prompt-wrap hidden">
             <textarea id="reviewAiPrompt" rows="3" placeholder="Промпт для генерации ответов (опционально)"></textarea>
+            <div id="reviewLearningPanel" class="feedback-learning-panel">
+              <div class="feedback-learning-head">
+                <strong>Автообучение по реальным ответам</strong>
+                <button id="reviewLearningRefreshBtn" class="btn-secondary" type="button" onclick="refreshFeedbackLearning('review')">Обновить обучение</button>
+              </div>
+              <div id="reviewLearningMeta" class="hint">Пока нет данных обучения.</div>
+              <pre id="reviewLearnedPrompt" class="feedback-learning-prompt"></pre>
+            </div>
           </div>
           <p class="hint">Можно адаптировать стиль ответа под бренд, добавить ограничения и уточнить желаемый тон общения.</p>
           <div id="reviewLoadStatus" class="hint load-status">-</div>
@@ -815,6 +823,14 @@
           </div>
           <div id="questionPromptWrap" class="feedback-prompt-wrap hidden">
             <textarea id="questionAiPrompt" rows="3" placeholder="Промпт для генерации ответов на вопросы (опционально)"></textarea>
+            <div id="questionLearningPanel" class="feedback-learning-panel">
+              <div class="feedback-learning-head">
+                <strong>Автообучение по реальным ответам</strong>
+                <button id="questionLearningRefreshBtn" class="btn-secondary" type="button" onclick="refreshFeedbackLearning('question')">Обновить обучение</button>
+              </div>
+              <div id="questionLearningMeta" class="hint">Пока нет данных обучения.</div>
+              <pre id="questionLearnedPrompt" class="feedback-learning-prompt"></pre>
+            </div>
           </div>
           <div class="grid-4 ads-toolbar-main">
             <input id="aiDocUploadInput" type="file" accept=".pdf,.txt,.md,.csv,.tsv,.json,.xml,.yml,.yaml,text/plain,application/pdf" />

@@ -155,6 +155,55 @@ def run_lightweight_migrations():
             if doc_cols and "owner_member_id" not in doc_cols:
                 conn.execute(text("ALTER TABLE user_knowledge_docs ADD COLUMN owner_member_id INTEGER"))
 
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS feedback_learning_profiles (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        user_id INTEGER NOT NULL,
+                        content_kind VARCHAR(30) NOT NULL,
+                        enabled BOOLEAN DEFAULT 1,
+                        status VARCHAR(30) DEFAULT 'empty',
+                        prompt_text TEXT DEFAULT '',
+                        examples_json TEXT DEFAULT '[]',
+                        stats_json TEXT DEFAULT '{}',
+                        source_hash VARCHAR(64) DEFAULT '',
+                        source_count INTEGER DEFAULT 0,
+                        last_error VARCHAR(1000) DEFAULT '',
+                        generated_at DATETIME,
+                        last_source_at DATETIME,
+                        next_run_at DATETIME,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE (user_id, content_kind),
+                        FOREIGN KEY(user_id) REFERENCES users (id)
+                    )
+                    """
+                )
+            )
+            learning_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(feedback_learning_profiles)"))}
+            if learning_cols:
+                for column_name, column_sql in (
+                    ("enabled", "ALTER TABLE feedback_learning_profiles ADD COLUMN enabled BOOLEAN DEFAULT 1"),
+                    ("status", "ALTER TABLE feedback_learning_profiles ADD COLUMN status VARCHAR(30) DEFAULT 'empty'"),
+                    ("prompt_text", "ALTER TABLE feedback_learning_profiles ADD COLUMN prompt_text TEXT DEFAULT ''"),
+                    ("examples_json", "ALTER TABLE feedback_learning_profiles ADD COLUMN examples_json TEXT DEFAULT '[]'"),
+                    ("stats_json", "ALTER TABLE feedback_learning_profiles ADD COLUMN stats_json TEXT DEFAULT '{}'"),
+                    ("source_hash", "ALTER TABLE feedback_learning_profiles ADD COLUMN source_hash VARCHAR(64) DEFAULT ''"),
+                    ("source_count", "ALTER TABLE feedback_learning_profiles ADD COLUMN source_count INTEGER DEFAULT 0"),
+                    ("last_error", "ALTER TABLE feedback_learning_profiles ADD COLUMN last_error VARCHAR(1000) DEFAULT ''"),
+                    ("generated_at", "ALTER TABLE feedback_learning_profiles ADD COLUMN generated_at DATETIME"),
+                    ("last_source_at", "ALTER TABLE feedback_learning_profiles ADD COLUMN last_source_at DATETIME"),
+                    ("next_run_at", "ALTER TABLE feedback_learning_profiles ADD COLUMN next_run_at DATETIME"),
+                    ("created_at", "ALTER TABLE feedback_learning_profiles ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP"),
+                    ("updated_at", "ALTER TABLE feedback_learning_profiles ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"),
+                ):
+                    if column_name not in learning_cols:
+                        conn.execute(text(column_sql))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_feedback_learning_profiles_user_id ON feedback_learning_profiles (user_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_feedback_learning_profiles_content_kind ON feedback_learning_profiles (content_kind)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_feedback_learning_profiles_status ON feedback_learning_profiles (status)"))
+
             claim_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(work_item_claims)"))}
             if claim_cols:
                 if "owner_member_id" not in claim_cols:
