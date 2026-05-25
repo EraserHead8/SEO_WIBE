@@ -525,7 +525,7 @@ _SAFE_HELP_TITLES_RU: dict[str, str] = {
     "wb_ads": "Реклама WB/Ozon",
     "wb_ads_bidder": "Биддер WB",
     "ads_bidder": "Биддер WB",
-    "social_hub": "Социальный модуль",
+    "social_hub": "Общее",
     "help_center": "Справка",
     "ai_assistant": "AI-помощник",
     "profile": "Профиль и команда",
@@ -2874,10 +2874,10 @@ def register(payload: RegisterRequest, request: Request, response: Response, db:
     email = payload.email.strip().lower()
     exists = db.scalar(select(User).where(User.email == email))
     if exists:
-        raise HTTPException(status_code=400, detail="Р В Р’В Р РЋРЎСџР В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В Р вЂ°Р В Р’В Р вЂ™Р’В·Р В Р’В Р РЋРІР‚СћР В Р’В Р В РІР‚В Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р вЂ™Р’ВµР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В Р вЂ° Р В Р Р‹Р РЋРІР‚СљР В Р’В Р вЂ™Р’В¶Р В Р’В Р вЂ™Р’Вµ Р В Р Р‹Р В РЎвЂњР В Р Р‹Р РЋРІР‚СљР В Р Р‹Р Р†Р вЂљР’В°Р В Р’В Р вЂ™Р’ВµР В Р Р‹Р В РЎвЂњР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р’В Р В РІР‚В Р В Р Р‹Р РЋРІР‚СљР В Р’В Р вЂ™Р’ВµР В Р Р‹Р Р†Р вЂљРЎв„ў")
+        raise HTTPException(status_code=400, detail="Пользователь уже существует")
     member_exists = db.scalar(select(TeamMember).where(TeamMember.email == email))
     if member_exists:
-        raise HTTPException(status_code=400, detail="Email Р В Р Р‹Р РЋРІР‚СљР В Р’В Р вЂ™Р’В¶Р В Р’В Р вЂ™Р’Вµ Р В Р’В Р РЋРІР‚ВР В Р Р‹Р В РЎвЂњР В Р’В Р РЋРІР‚вЂќР В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В Р вЂ°Р В Р’В Р вЂ™Р’В·Р В Р Р‹Р РЋРІР‚СљР В Р’В Р вЂ™Р’ВµР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В РЎвЂњР В Р Р‹Р В Р РЏ Р В Р Р‹Р В РЎвЂњР В Р’В Р РЋРІР‚СћР В Р Р‹Р Р†Р вЂљРЎв„ўР В Р Р‹Р В РІР‚С™Р В Р Р‹Р РЋРІР‚СљР В Р’В Р СћРІР‚ВР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚ВР В Р’В Р РЋРІР‚СњР В Р’В Р РЋРІР‚СћР В Р’В Р РЋР’В")
+        raise HTTPException(status_code=400, detail="Email уже используется сотрудником")
 
     users_count = db.scalar(select(func.count()).select_from(User)) or 0
     role = "admin" if users_count == 0 else "client"
@@ -2986,7 +2986,7 @@ def login(payload: LoginRequest, request: Request, response: Response, db: Sessi
         request=request,
     )
     db.commit()
-    raise HTTPException(status_code=401, detail="Р В Р’В Р РЋРЎС™Р В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В Р В Р’В Р вЂ™Р’ВµР В Р Р‹Р В РІР‚С™Р В Р’В Р В РІР‚В¦Р В Р Р‹Р Р†Р вЂљРІвЂћвЂ“Р В Р’В Р Р†РІР‚С›РІР‚вЂњ email Р В Р’В Р РЋРІР‚ВР В Р’В Р вЂ™Р’В»Р В Р’В Р РЋРІР‚В Р В Р’В Р РЋРІР‚вЂќР В Р’В Р вЂ™Р’В°Р В Р Р‹Р В РІР‚С™Р В Р’В Р РЋРІР‚СћР В Р’В Р вЂ™Р’В»Р В Р Р‹Р В Р вЂ°")
+    raise HTTPException(status_code=401, detail="Неверный email или пароль")
 
 
 @router.post("/auth/logout", response_model=MessageOut)

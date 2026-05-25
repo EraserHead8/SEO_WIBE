@@ -209,7 +209,7 @@
         <button class="nav-btn" data-tab="reviews" data-module="wb_reviews_ai" onclick="showTab('reviews', this)">Отзывы/Вопросы</button>
         <button class="nav-btn" data-tab="accounting" data-module="accounting" onclick="showTab('accounting', this)">Бухгалтерия</button>
         <button class="nav-btn" data-tab="ads" data-module="wb_ads" onclick="showTab('ads', this)">Реклама WB/Ozon</button>
-        <button class="nav-btn" data-tab="social" data-module="social_hub" onclick="showTab('social', this)">Социальный</button>
+        <button class="nav-btn" data-tab="social" data-module="social_hub" onclick="showTab('social', this)">Общее</button>
         <button class="nav-btn" data-tab="profile" data-module="user_profile" onclick="showTab('profile', this)">Профиль</button>
         <button class="nav-btn" data-tab="help" data-module="help_center" onclick="showTab('help', this)">Справка</button>
       </nav>
@@ -1843,7 +1843,7 @@
   <div id="socialModal" class="team-modal hidden" aria-modal="true" role="dialog" onclick="socialCloseModal(event)">
     <div class="team-modal-card social-modal-card" onclick="event.stopPropagation()">
       <div class="team-modal-head">
-        <h3 id="socialModalTitle">Социальный модуль</h3>
+        <h3 id="socialModalTitle">Общее</h3>
         <button class="campaign-close" type="button" onclick="socialCloseModal()">&times;</button>
       </div>
       <div id="socialModalHost"></div>
@@ -1876,7 +1876,7 @@
         [".nav-btn[data-tab='reviews']", pick("Отзывы/Вопросы", "Reviews/Questions")],
         [".nav-btn[data-tab='accounting']", pick("Бухгалтерия", "Accounting")],
         [".nav-btn[data-tab='ads']", pick("Реклама WB/Ozon", "Ads WB/Ozon")],
-        [".nav-btn[data-tab='social']", pick("Социальный", "Social Hub")],
+        [".nav-btn[data-tab='social']", pick("Общее", "Common")],
         [".nav-btn[data-tab='profile']", pick("Профиль", "Profile")],
         [".btn-danger.full[onclick='logout()']", pick("Выйти", "Logout")],
         ["#mobileDrawerQuickNav option[value='social_games']", pick("Игры", "Games")],
@@ -1943,7 +1943,7 @@
         [".nav-btn[data-tab='reviews']", pick("\u041e\u0442\u0437\u044b\u0432\u044b/\u0412\u043e\u043f\u0440\u043e\u0441\u044b", "Reviews/Questions")],
         [".nav-btn[data-tab='accounting']", pick("\u0411\u0443\u0445\u0433\u0430\u043b\u0442\u0435\u0440\u0438\u044f", "Accounting")],
         [".nav-btn[data-tab='ads']", pick("\u0420\u0435\u043a\u043b\u0430\u043c\u0430 WB/Ozon", "Ads WB/Ozon")],
-        [".nav-btn[data-tab='social']", pick("\u0421\u043e\u0446\u0438\u0430\u043b\u044c\u043d\u044b\u0439", "Social Hub")],
+        [".nav-btn[data-tab='social']", pick("\u041e\u0431\u0449\u0435\u0435", "Common")],
         [".nav-btn[data-tab='profile']", pick("\u041f\u0440\u043e\u0444\u0438\u043b\u044c", "Profile")],
         [".nav-btn[data-tab='help']", pick("\u0421\u043f\u0440\u0430\u0432\u043a\u0430", "Help")],
         [".btn-danger.full[onclick='logout()']", pick("\u0412\u044b\u0439\u0442\u0438", "Logout")],

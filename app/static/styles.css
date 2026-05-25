@@ -2048,7 +2048,12 @@ tbody tr:hover {
   grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr);
   gap: 12px;
 }
-.products-catalog-wrap .table-card,
+.products-catalog-wrap .table-card {
+  min-width: 0;
+  width: 100%;
+  overflow: auto;
+}
+
 .seo-split .table-card {
   min-width: 0;
   max-height: 520px;
@@ -2060,6 +2065,8 @@ tbody tr:hover {
 .products-catalog-wrap {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  min-width: 0;
 }
 .product-preview-card {
   display: grid;
@@ -4393,6 +4400,25 @@ button:hover,
   padding: 10px 12px;
   border-bottom: 1px solid rgba(132, 166, 255, 0.2);
   background: rgba(11, 22, 55, 0.5);
+}
+
+@media (min-width: 981px) {
+  #products,
+  #productsSubtabCatalog,
+  #products .products-catalog-wrap {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  #products .products-catalog-wrap .table-card {
+    width: 100%;
+    max-width: 100%;
+    height: calc(100vh - 270px);
+    height: max(520px, calc(100dvh - 270px));
+    max-height: none;
+    overflow: auto;
+  }
 }
 
 .team-member-row {

@@ -154,7 +154,7 @@ const MODULE_TITLES = {
   wb_ads_recommendations: { ru: "Рекомендации WB Ads", en: "WB Ads recommendations" },
   help_center: { ru: "Справка по модулям", en: "Help center" },
   ai_assistant: { ru: "AI помощник", en: "AI assistant" },
-  social_hub: { ru: "Социальный модуль", en: "Social hub" },
+  social_hub: { ru: "Общее", en: "Common" },
   billing: { ru: "Биллинг", en: "Billing" },
 };
 
@@ -188,7 +188,7 @@ const AUDIT_MODULE_TITLES = {
   user_profile: { ru: "Профиль", en: "Profile" },
   help_center: { ru: "Справка", en: "Help center" },
   ai_assistant: { ru: "AI помощник", en: "AI assistant" },
-  social_hub: { ru: "Социальный модуль", en: "Social hub" },
+  social_hub: { ru: "Общее", en: "Common" },
   admin: { ru: "Админка", en: "Admin panel" },
 };
 

@@ -68,6 +68,9 @@ let productPage = 1;
 let productPageSize = 30;
 let productTotal = 0;
 let productTotalPages = 0;
+let productsLoading = false;
+let productsLoadSeq = 0;
+let productPageSizePreferenceLoaded = false;
 let productCategoryLoadMeta = null;
 let productCategoryRefreshTimer = null;
 const PRODUCT_PAGE_SIZE_OPTIONS = [30, 50, 100, 200, 500, 1000];
@@ -372,7 +375,7 @@ const TAB_TITLES = {
   reviews: { ru: ["Отзывы/Вопросы", "Единый модуль обратной связи"], en: ["Reviews/Questions", "Unified customer feedback module"] },
   accounting: { ru: ["Бухгалтерия", "Прибыль, расходы и экономика WB/Ozon"], en: ["Accounting", "Profit, costs, and WB/Ozon economics"] },
   ads: { ru: ["Реклама WB/Ozon", "Кампании, аналитика и рекомендации"], en: ["WB/Ozon Ads", "Campaigns, analytics and recommendations"] },
-  social: { ru: ["Социальный", "Чаты, коммуникация и совместная работа"], en: ["Social Hub", "Break, communication and teamwork"] },
+  social: { ru: ["Общее", "Чаты, календарь, задачи и совместная работа"], en: ["Common", "Chats, calendar, tasks and teamwork"] },
   profile: { ru: ["Профиль", "Профиль компании, доступы команды и интеграции"], en: ["Profile", "Company profile, team access and integrations"] },
   billing: { ru: ["Биллинг", "Тарифы, лимиты, продление и история операций"], en: ["Billing", "Plans, limits, renewals and history"] },
   help: { ru: ["Справка", "Документация по модулям"], en: ["Help Center", "Module usage documentation"] },
@@ -507,7 +510,7 @@ const UI_TEXT = {
     nav_reviews: "Отзывы/Вопросы",
     nav_accounting: "Бухгалтерия",
     nav_ads: "Реклама WB/Ozon",
-    nav_social: "Социальный",
+    nav_social: "Общее",
     nav_profile: "Профиль",
     nav_help: "Справка",
     logout: "Выйти",
@@ -529,7 +532,7 @@ const UI_TEXT = {
     nav_reviews: "Reviews/Questions",
     nav_accounting: "Accounting",
     nav_ads: "WB/Ozon Ads",
-    nav_social: "Social Hub",
+    nav_social: "Common",
     nav_profile: "Profile",
     nav_help: "Help Center",
     logout: "Logout",
@@ -553,7 +556,7 @@ Object.assign(UI_TEXT.ru, {
   nav_reviews: "\u041e\u0442\u0437\u044b\u0432\u044b/\u0412\u043e\u043f\u0440\u043e\u0441\u044b",
   nav_accounting: "\u0411\u0443\u0445\u0433\u0430\u043b\u0442\u0435\u0440\u0438\u044f",
   nav_ads: "\u0420\u0435\u043a\u043b\u0430\u043c\u0430 WB/Ozon",
-  nav_social: "\u0421\u043e\u0446\u0438\u0430\u043b\u044c\u043d\u044b\u0439",
+  nav_social: "\u041e\u0431\u0449\u0435\u0435",
   nav_profile: "\u041f\u0440\u043e\u0444\u0438\u043b\u044c",
   nav_help: "\u0421\u043f\u0440\u0430\u0432\u043a\u0430",
   logout: "\u0412\u044b\u0439\u0442\u0438",
@@ -965,7 +968,7 @@ function moduleLabel(code) {
     user_profile: tr("Профиль", "Profile"),
     help_center: tr("Справка", "Help"),
     ai_assistant: tr("AI помощник", "AI Assistant"),
-    social_hub: tr("Социальный", "Social Hub"),
+    social_hub: tr("Общее", "Common"),
   };
   return labels[key] || key;
 }
@@ -9535,6 +9538,26 @@ function normalizeProductPageSize(rawValue) {
   return 30;
 }
 
+function restoreProductPageSizePreference() {
+  if (productPageSizePreferenceLoaded) return;
+  productPageSizePreferenceLoaded = true;
+  try {
+    const stored = Number(localStorage.getItem("seo_wibe_product_page_size") || 0);
+    if (PRODUCT_PAGE_SIZE_OPTIONS.includes(stored)) {
+      productPageSize = stored;
+    }
+  } catch (_) {}
+}
+
+function syncProductPageSizeControls() {
+  ["productPageSizeTop", "productPageSizeBottom"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const nextVal = String(productPageSize);
+    if (el.value !== nextVal) el.value = nextVal;
+  });
+}
+
 function productCategoryKey(value) {
   return String(value || "").replace(/\u00a0/g, " ").trim().replace(/\s+/g, " ").toLowerCase();
 }
@@ -9619,24 +9642,24 @@ function syncProductsPagerControls() {
   } else if (missingCategories > 0 && (localBackfilled > 0 || liveBackfilled > 0)) {
     infoText += tr(" \u2022 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b", " \u2022 categories updated");
   }
+  if (productsLoading) {
+    infoText = totalItems
+      ? tr(`\u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u043c \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0443 ${safePage}...`, `Loading page ${safePage}...`)
+      : tr("\u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u043c \u0442\u043e\u0432\u0430\u0440\u044b...", "Loading products...");
+  }
 
-  ["productPageSizeTop", "productPageSizeBottom"].forEach((id) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const nextVal = String(productPageSize);
-    if (el.value !== nextVal) el.value = nextVal;
-  });
+  syncProductPageSizeControls();
   ["productsPageInfoTop", "productsPageInfoBottom"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.textContent = infoText;
   });
   ["productsPrevTopBtn", "productsPrevBottomBtn"].forEach((id) => {
     const btn = document.getElementById(id);
-    if (btn) btn.disabled = safePage <= 1;
+    if (btn) btn.disabled = productsLoading || safePage <= 1;
   });
   ["productsNextTopBtn", "productsNextBottomBtn"].forEach((id) => {
     const btn = document.getElementById(id);
-    if (btn) btn.disabled = totalItems <= 0 || safePage >= effectiveTotalPages;
+    if (btn) btn.disabled = productsLoading || totalItems <= 0 || safePage >= effectiveTotalPages;
   });
   syncSelectedProductsActions();
 }
@@ -9654,17 +9677,21 @@ function setProductsPageSize(value) {
     return;
   }
   productPageSize = next;
+  try { localStorage.setItem("seo_wibe_product_page_size", String(next)); } catch (_) {}
+  syncProductPageSizeControls();
   productPage = 1;
   loadProducts();
 }
 
 function productsPrevPage() {
+  if (productsLoading) return;
   if (productPage <= 1) return;
   productPage -= 1;
   loadProducts();
 }
 
 function productsNextPage() {
+  if (productsLoading) return;
   if (productTotalPages > 0 && productPage >= productTotalPages) return;
   productPage += 1;
   loadProducts();
@@ -9725,6 +9752,12 @@ async function reloadProducts() {
 }
 
 async function loadProducts() {
+  restoreProductPageSizePreference();
+  const requestSeq = ++productsLoadSeq;
+  productsLoading = true;
+  productPageSize = normalizeProductPageSize(productPageSize);
+  syncProductsPagerControls();
+
   const marketplace = String(document.getElementById("importMarketplace")?.value || "all").trim().toLowerCase();
   const categoryEnabled = ["all", "wb", "ozon"].includes(marketplace);
   const category = String(document.getElementById("productCategoryFilter")?.value || "all").trim();
@@ -9733,9 +9766,8 @@ async function loadProducts() {
   if (categoryReset) {
     productPage = 1;
   }
-  productPageSize = normalizeProductPageSize(
-    document.getElementById("productPageSizeTop")?.value || document.getElementById("productPageSizeBottom")?.value || productPageSize
-  );
+  productPageSize = normalizeProductPageSize(productPageSize);
+  syncProductPageSizeControls();
 
   const qp = new URLSearchParams();
   qp.set("marketplace", ["all", "wb", "ozon"].includes(marketplace) ? marketplace : "all");
@@ -9745,6 +9777,8 @@ async function loadProducts() {
   if (filter) qp.set("q", filter);
 
   const data = await requestJson(`/api/products?${qp.toString()}`, { headers: authHeaders() }).catch(() => null);
+  if (requestSeq !== productsLoadSeq) return;
+  productsLoading = false;
   if (!data) {
     currentProducts = [];
     productTotal = 0;
@@ -9780,6 +9814,7 @@ async function loadProducts() {
     const resetByState = syncCategoryFilterState();
     if (optionsReset || resetByState) {
       productPage = 1;
+      productsLoading = false;
       await loadProducts();
       return;
     }
