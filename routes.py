@@ -20265,7 +20265,7 @@ def _build_user_knowledge_context(
     return "\n\n".join(parts)
 
 
-def _compose_ai_prompt(base_prompt: str, knowledge_context: str, content_kind: str) -> str:
+def _compose_ai_prompt_mojibake_legacy(base_prompt: str, knowledge_context: str, content_kind: str) -> str:
     base = (base_prompt or "").strip()
     docs = (knowledge_context or "").strip()
     anti_leak = (
