@@ -4631,7 +4631,7 @@ def _extract_product_knowledge_context(prompt: str, max_chars: int = 4200) -> st
 
 def _client_asks_catalog_article(text: str) -> bool:
     low = _repair_mojibake_text(text).lower()
-    if len(re.findall(r"\d{2,4}(?:[x\u0445/]\d{2,4})?|\d+[.,]\d+", low, flags=re.IGNORECASE)) >= 2:
+    if len(re.findall(r"\d+[.,]\d+|\d{2,4}(?:[x\u0445/]\d{2,4})?", low, flags=re.IGNORECASE)) >= 2:
         return True
     markers = (
         "артикул",
@@ -4729,12 +4729,29 @@ def _strip_article_claim_sentences(answer: str) -> str:
     return sanitize_marketplace_reply_text(" ".join(kept))
 
 
+def _has_internal_catalog_warning(answer: str) -> bool:
+    text = _repair_mojibake_text(answer).lower()
+    if "catalog_size_unconfirmed" in text:
+        return True
+    markers = (
+        "точное совпадение",
+        "совпадение не подтверждено",
+        "в найденных данных",
+        "в найденных карточках",
+        "служебная пометка",
+        "внутренняя проверка",
+        "контекст из модуля товаров",
+    )
+    return any(marker in text for marker in markers)
+
+
 def _safe_uncertain_catalog_reply(client_text: str) -> str:
-    numbers = re.findall(r"\d{2,4}(?:[xх/]\d{2,4})?|\d+[.,]\d+", str(client_text or ""), flags=re.IGNORECASE)
+    numbers = re.findall(r"\d+[.,]\d+|\d{2,4}(?:[xх/]\d{2,4})?", str(client_text or ""), flags=re.IGNORECASE)
     size_hint = f" по размерам {' и '.join(dict.fromkeys(numbers))}" if numbers else ""
     return (
-        f"Точное совпадение{size_hint} в найденных данных не подтверждено. "
-        "Пожалуйста, уточните нужный диаметр, размер юбки и условия монтажа, чтобы мы подсказали точный вариант."
+        f"Здравствуйте! Чтобы не ошибиться с подбором{size_hint}, нужно сверить посадочный диаметр, размер юбки/зонта "
+        "и способ монтажа с характеристиками товара. Уточните, пожалуйста, нужный посадочный размер и тип установки, "
+        "и мы подскажем подходящий вариант."
     )
 
 
@@ -4744,6 +4761,8 @@ def _ensure_catalog_article_in_reply(answer: str, prompt: str, client_text: str,
     has_catalog_context = "Контекст из модуля товаров SEO WIBE." in prompt_text
     if not clean_answer:
         return clean_answer
+    if _has_internal_catalog_warning(clean_answer):
+        return sanitize_marketplace_reply_text(_safe_uncertain_catalog_reply(client_text))
     if not has_catalog_context:
         if _client_asks_catalog_article(client_text) and _extract_answer_identifier_claims(clean_answer):
             return sanitize_marketplace_reply_text(_safe_uncertain_catalog_reply(client_text))
@@ -4751,7 +4770,7 @@ def _ensure_catalog_article_in_reply(answer: str, prompt: str, client_text: str,
     if not _client_asks_catalog_article(client_text):
         return clean_answer
     prompt_low = prompt_text.lower()
-    if "точное совпадение не подтверждено" in prompt_low:
+    if "catalog_size_unconfirmed" in prompt_low or "точное совпадение не подтверждено" in prompt_low:
         return sanitize_marketplace_reply_text(_safe_uncertain_catalog_reply(client_text))
 
     allowed_ids = {item.lower() for item in _extract_catalog_identifiers(prompt_text, marketplace) if item}
@@ -4807,7 +4826,7 @@ def _build_reply_hard_rules(
             "Когда клиент спрашивает артикул, подбор, размер, совместимость или просит что-то посоветовать, укажи конкретный артикул из контекста: "
             "для WB это значение 'WB nmID/артикул WB', для Ozon это 'Ozon product_id'. "
             "Не пиши 'артикул указан в карточке', если номер артикула есть в контексте. "
-            "Если в контексте указано, что точное совпадение по размеру не подтверждено, не называй товар точным подбором."
+            "Если в контексте есть [CATALOG_SIZE_UNCONFIRMED], не называй товар точным подбором и ответь клиенту естественно, без служебных формулировок."
         )
     technical_markers = (
         "электр",
