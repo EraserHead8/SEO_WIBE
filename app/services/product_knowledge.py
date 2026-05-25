@@ -76,7 +76,12 @@ def build_product_ai_context(
         if _is_compact_numeric_spec(token)
     }
     has_full_number_match = bool(requested_specs) and any(
-        requested_specs.issubset(match.matched_numbers)
+        _requested_specs_satisfied(
+            requested_specs,
+            match.matched_numbers,
+            query_text=query_text,
+            product=match.product,
+        )
         for match in picked
     )
     missing_number_match = bool(requested_specs) and not has_full_number_match
@@ -453,6 +458,87 @@ def _is_compact_numeric_spec(token: str) -> bool:
     if value.endswith("м") and not value.endswith(("мм", "см")):
         return False
     return True
+
+
+def _numeric_value(token: str) -> float | None:
+    text = str(token or "").strip().lower().replace(",", ".")
+    match = re.search(r"\d+(?:\.\d+)?", text)
+    if not match:
+        return None
+    try:
+        return float(match.group(0))
+    except Exception:
+        return None
+
+
+def _is_chimney_context(*parts: Any) -> bool:
+    text = " ".join(_clean(part).lower() for part in parts if part is not None)
+    markers = (
+        "дымоход",
+        "дымохода",
+        "дымох",
+        "зонт",
+        "зонт-д",
+        "зонт-к",
+        "труба",
+        "трубы",
+        "раструб",
+        "конденсат",
+        "дым",
+        "сэндвич",
+        "асбест",
+    )
+    return any(marker in text for marker in markers)
+
+
+def _numeric_spec_satisfied(requested: str, matched_numbers: set[str], *, chimney_context: bool) -> bool:
+    value = str(requested or "").strip().lower()
+    if value in matched_numbers:
+        return True
+    req_num = _numeric_value(value)
+    if req_num is None:
+        return False
+    for matched in matched_numbers:
+        matched_num = _numeric_value(matched)
+        if matched_num is None:
+            continue
+        if abs(req_num - matched_num) < 0.0001:
+            return True
+        # Factory chimney parts often use nominal diameters. A measured outer
+        # diameter like 160.3 mm should still be treated as nominal Ф160.
+        if (
+            chimney_context
+            and req_num >= 50
+            and matched_num >= 50
+            and abs(req_num - matched_num) <= 1.0
+            and round(req_num) == round(matched_num)
+        ):
+            return True
+    return False
+
+
+def _requested_specs_satisfied(
+    requested_specs: set[str],
+    matched_numbers: set[str],
+    *,
+    query_text: str,
+    product: Product,
+) -> bool:
+    if not requested_specs:
+        return False
+    if not matched_numbers:
+        return False
+    chimney_context = _is_chimney_context(
+        query_text,
+        product.name,
+        product.category_name,
+        product.current_description,
+        product.target_keywords,
+    )
+    return all(
+        _numeric_spec_satisfied(token, matched_numbers, chimney_context=chimney_context)
+        for token in requested_specs
+    )
 
 
 def _token_field_score(token: str, field: str, *, is_focus: bool) -> int:

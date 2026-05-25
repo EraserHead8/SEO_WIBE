@@ -4745,9 +4745,56 @@ def _has_internal_catalog_warning(answer: str) -> bool:
     return any(marker in text for marker in markers)
 
 
+def _reply_numeric_values(text: str) -> list[float]:
+    values: list[float] = []
+    for raw in re.findall(r"\d+[.,]\d+|\d{2,4}(?:[xх/]\d{2,4})?", str(text or ""), flags=re.IGNORECASE):
+        for part in re.split(r"[xх/]", raw):
+            item = part.strip().replace(",", ".")
+            try:
+                values.append(float(item))
+            except Exception:
+                continue
+    return values
+
+
+def _is_chimney_reply_context(*parts: Any) -> bool:
+    text = _repair_mojibake_text(" ".join(str(part or "") for part in parts)).lower()
+    markers = (
+        "дымоход",
+        "дымох",
+        "зонт",
+        "зонт-д",
+        "зонт-к",
+        "труба",
+        "раструб",
+        "конденсат",
+        "по дыму",
+        "по конденсату",
+        "сэндвич",
+        "асбест",
+        "430",
+    )
+    return any(marker in text for marker in markers)
+
+
+def _has_close_chimney_nominal_pair(text: str) -> bool:
+    values = _reply_numeric_values(text)
+    for idx, left in enumerate(values):
+        for right in values[idx + 1 :]:
+            if left >= 50 and right >= 50 and abs(left - right) <= 1.0 and round(left) == round(right):
+                return True
+    return False
+
+
 def _safe_uncertain_catalog_reply(client_text: str) -> str:
     numbers = re.findall(r"\d+[.,]\d+|\d{2,4}(?:[xх/]\d{2,4})?", str(client_text or ""), flags=re.IGNORECASE)
     size_hint = f" по размерам {' и '.join(dict.fromkeys(numbers))}" if numbers else ""
+    if _is_chimney_reply_context(client_text) and _has_close_chimney_nominal_pair(client_text):
+        return (
+            "Здравствуйте! Если у вас стандартная дымоходная труба этого номинального диаметра и нужен зонт типа Д, "
+            "то такой зонт обычно рассчитан на посадку этого размера. Небольшая разница в десятые доли миллиметра для "
+            "раструбного соединения допустима; важно только сверить сторону соединения по дыму/по конденсату."
+        )
     return (
         f"Здравствуйте! Чтобы не ошибиться с подбором{size_hint}, нужно сверить посадочный диаметр, размер юбки/зонта "
         "и способ монтажа с характеристиками товара. Уточните, пожалуйста, нужный посадочный размер и тип установки, "
@@ -4819,6 +4866,17 @@ def _build_reply_hard_rules(
         rules.append(
             "- Если в контексте товаров нет конкретной карточки, ЗАПРЕЩЕНО называть артикулы, product_id, nmID, SKU, штрихкоды "
             "или другие номера товаров. Не подбирай товар по памяти и не используй артикулы не из нашей базы."
+        )
+    if safe_kind == "question" and _is_chimney_reply_context(product_name, client_text):
+        rules.append(
+            "- Для дымоходных элементов учитывай предметную логику: Ф160 и фактический наружный размер около 160.3 мм обычно относятся "
+            "к одному номинальному размеру Ф160, потому что заводские элементы имеют раструбное соединение с посадочным зазором. "
+            "Не отвечай, что совпадения нет, только из-за десятых долей миллиметра."
+        )
+        rules.append(
+            "- Обозначения Д/К у дымоходных элементов связаны со стороной сборки: Д — по дыму, К — по конденсату. "
+            "Если клиент спрашивает, наденется ли зонт-Д Ф160 на трубу около 160 мм, отвечай: скорее всего подойдет для стандартной трубы Ф160, "
+            "но важно сверить нужную сторону соединения по дыму/по конденсату. Не обещай совместимость с нестандартной асбестовой трубой без проверки посадки."
         )
     if safe_kind == "question" and has_product_knowledge_context:
         rules.append(
