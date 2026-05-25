@@ -211,30 +211,73 @@ body.mobile-client-mode #socialToastHost {
 
 #socialSubtabCalendar #socialCalendarGrid .social-calendar-cells {
   display: grid !important;
+  grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  grid-auto-rows: minmax(96px, auto) !important;
+  align-items: stretch !important;
+}
+
+#socialSubtabCalendar #socialCalendarGrid .social-calendar-row.head {
+  display: grid !important;
+  grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
 }
 
 #socialSubtabCalendar .social-calendar-row.head span {
+  min-width: 0 !important;
   font-size: 13px !important;
   font-weight: 600 !important;
   color: var(--text-muted, #6b7a90) !important;
+  text-align: center !important;
 }
 
 #socialSubtabCalendar .social-day.rich {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 100% !important;
   min-height: 94px !important;
-  max-height: 112px !important;
+  max-height: none !important;
+  display: grid !important;
+  grid-template-rows: 30px minmax(0, 1fr) auto !important;
   padding: 5px !important;
   gap: 3px !important;
   align-content: start !important;
+  align-items: start !important;
+  justify-items: stretch !important;
   overflow: hidden !important;
 }
 
+#socialSubtabCalendar .social-day.muted {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  min-height: 94px !important;
+}
+
 #socialSubtabCalendar .social-day.rich .social-day-head {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  width: 100% !important;
+  min-width: 0 !important;
   min-height: 20px !important;
 }
 
 #socialSubtabCalendar .social-day.rich .social-day-head b {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 34px !important;
+  margin: 0 !important;
+  padding: 0 !important;
   font-size: 28px !important;
   font-weight: 700 !important;
+  line-height: 1 !important;
+}
+
+#socialSubtabCalendar .social-day.has-event b,
+#socialSubtabCalendar .social-day.has-task b {
+  padding: 0 !important;
 }
 
 #socialSubtabCalendar .social-day-preview-stack {
