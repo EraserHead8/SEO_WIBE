@@ -75,7 +75,11 @@ def build_product_ai_context(
         for token in (focus_tokens or tokens)
         if _is_compact_numeric_spec(token)
     }
-    missing_number_match = bool(requested_specs) and not any(match.matched_numbers & requested_specs for match in picked)
+    has_full_number_match = bool(requested_specs) and any(
+        requested_specs.issubset(match.matched_numbers)
+        for match in picked
+    )
+    missing_number_match = bool(requested_specs) and not has_full_number_match
     return _format_product_context(
         picked,
         content_kind=content_kind,
@@ -250,24 +254,26 @@ def _format_product_context(
         numbers = ", ".join(sorted(requested_numbers))
         parts.append(
             f"В обращении есть число/размер {numbers}, но в найденных карточках точное совпадение не подтверждено. "
-            "Не выдавай эти товары как точный подбор по размеру; лучше уточни параметры или скажи, что точного совпадения в найденных данных нет."
+            "Не выдавай эти товары как точный подбор по размеру; лучше уточни параметры или скажи, что точного совпадения в найденных данных нет. "
+            "Не называй артикулы, product_id, nmID, SKU или штрихкоды из вариантов ниже, пока совпадение по размеру не подтверждено."
         )
+    include_catalog_codes = not missing_number_match
     for idx, match in enumerate(matches, 1):
         product = match.product
         market = str(product.marketplace or "").strip().upper() or "-"
         article = _clean(product.article)
         external_id = _clean(product.external_id)
         code_parts = [f"площадка: {market}"]
-        if article:
+        if include_catalog_codes and article:
             code_parts.append(f"артикул продавца: {article}")
-        if external_id:
+        if include_catalog_codes and external_id:
             if market == "WB":
                 code_parts.append(f"WB nmID/артикул WB: {external_id}")
             elif market == "OZON":
                 code_parts.append(f"Ozon product_id: {external_id}")
             else:
                 code_parts.append(f"external_id: {external_id}")
-        if _clean(product.barcode):
+        if include_catalog_codes and _clean(product.barcode):
             code_parts.append(f"штрихкод: {_clean(product.barcode)}")
         if _clean(product.category_name):
             code_parts.append(f"категория: {_clean(product.category_name)}")

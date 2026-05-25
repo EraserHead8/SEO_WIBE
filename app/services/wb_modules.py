@@ -620,7 +620,9 @@ def post_wb_question_reply(api_key: str, question_id: str | int, text: str, *, s
     if len(reply) > 3000:
         return False, "Reply is too long (maximum 3000 characters)"
 
-    safe_state = str(state or "").strip().lower()
+    raw_state = str(state or "").strip()
+    state_low = raw_state.lower()
+    safe_state = "none" if state_low in {"reject", "rejected", "declined"} else "wbRu"
     int_id = None
     try:
         int_id = int(raw_id)
@@ -628,6 +630,7 @@ def post_wb_question_reply(api_key: str, question_id: str | int, text: str, *, s
         int_id = None
 
     payloads: list[dict[str, Any]] = []
+    payloads.append({"id": raw_id, "text": reply, "state": safe_state})
     base_variants: list[dict[str, Any]] = []
     for key in ("id", "questionId", "question_id"):
         base_variants.append({key: raw_id})
@@ -690,6 +693,21 @@ def post_wb_question_reply(api_key: str, question_id: str | int, text: str, *, s
     ]
 
     last_error = "Failed to send reply to WB API"
+    def _api_error_text(response: httpx.Response) -> str:
+        try:
+            data = response.json()
+        except Exception:
+            return ""
+        if not isinstance(data, dict):
+            return ""
+        error_text = str(data.get("errorText") or data.get("detail") or data.get("message") or "").strip()
+        additional = data.get("additionalErrors")
+        if bool(data.get("error")) or error_text or additional:
+            if additional and not error_text:
+                error_text = str(additional)
+            return error_text or "WB API returned an error response"
+        return ""
+
     for method, endpoint in request_matrix:
         for payload in unique_payloads:
             for headers in header_variants:
@@ -718,6 +736,10 @@ def post_wb_question_reply(api_key: str, question_id: str | int, text: str, *, s
                             continue
                         break
                     if response.status_code < 300:
+                        api_error = _api_error_text(response)
+                        if api_error:
+                            last_error = f"WB API returned success status with error: {api_error}"
+                            break
                         return True, "Reply sent"
                     if response.status_code in {401, 403}:
                         break
@@ -3406,6 +3428,9 @@ def _normalize_review_row(row: dict[str, Any], is_answered: bool) -> dict[str, A
         "created_at": created,
         "product": str(product.get("productName") or product.get("nmId") or ""),
         "article": str(product.get("nmId") or ""),
+        "product_id": str(product.get("nmId") or ""),
+        "offer_id": str(product.get("supplierArticle") or ""),
+        "external_id": str(product.get("nmId") or ""),
         "barcode": _pick_first_str(product.get("imtId"), product.get("barcode"), row.get("barcode")),
         "stars": stars,
         "text": text,
@@ -3442,14 +3467,34 @@ def _normalize_ozon_review_row(
         product.get("name") if isinstance(product, dict) else "",
         mapped.get("product"),
     )
-    article = _pick_first_str(
-        core.get("offer_id"),
-        core.get("sku"),
+    product_id = _pick_first_str(
         core.get("product_id"),
+        core.get("productId"),
+        product.get("id") if isinstance(product, dict) else "",
+        product.get("product_id") if isinstance(product, dict) else "",
+        row.get("product_id"),
+    )
+    offer_id = _pick_first_str(
+        core.get("offer_id"),
+        core.get("offerId"),
         product.get("offer_id") if isinstance(product, dict) else "",
+        product.get("offerId") if isinstance(product, dict) else "",
+        row.get("offer_id"),
+    )
+    sku_text = _pick_first_str(
+        core.get("sku"),
+        core.get("sku_id"),
         product.get("sku") if isinstance(product, dict) else "",
+        product.get("sku_id") if isinstance(product, dict) else "",
+        row.get("sku"),
+    )
+    article = _pick_first_str(
+        offer_id,
+        sku_text,
+        product_id,
         mapped.get("article"),
     )
+    sku_num = _to_int(sku_text)
     barcode = _pick_first_str(
         core.get("barcode"),
         product.get("barcode") if isinstance(product, dict) else "",
@@ -3534,7 +3579,11 @@ def _normalize_ozon_review_row(
         "created_at": created,
         "product": product_name or "Товар Ozon",
         "article": article,
+        "product_id": product_id,
+        "offer_id": offer_id,
+        "external_id": product_id or article,
         "barcode": barcode,
+        "sku": sku_num,
         "stars": stars,
         "text": text,
         "user": user_name,
@@ -3594,6 +3643,9 @@ def _normalize_wb_question_row(row: dict[str, Any], is_answered: bool) -> dict[s
         "created_at": created,
         "product": str(product.get("productName") or product.get("nmId") or row.get("productName") or "РўРѕРІР°СЂ WB"),
         "article": str(product.get("nmId") or row.get("nmId") or row.get("offerId") or ""),
+        "product_id": str(product.get("nmId") or row.get("nmId") or ""),
+        "offer_id": str(product.get("supplierArticle") or row.get("supplierArticle") or row.get("offerId") or ""),
+        "external_id": str(product.get("nmId") or row.get("nmId") or ""),
         "barcode": _pick_first_str(product.get("barcode"), row.get("barcode")),
         "stars": stars,
         "text": text,
@@ -3630,14 +3682,34 @@ def _normalize_ozon_question_row(
         product.get("name") if isinstance(product, dict) else "",
         mapped.get("product"),
     )
-    article = _pick_first_str(
-        core.get("offer_id"),
-        core.get("sku"),
+    product_id = _pick_first_str(
         core.get("product_id"),
+        core.get("productId"),
+        product.get("id") if isinstance(product, dict) else "",
+        product.get("product_id") if isinstance(product, dict) else "",
+        row.get("product_id"),
+    )
+    offer_id = _pick_first_str(
+        core.get("offer_id"),
+        core.get("offerId"),
         product.get("offer_id") if isinstance(product, dict) else "",
+        product.get("offerId") if isinstance(product, dict) else "",
+        row.get("offer_id"),
+    )
+    sku_text = _pick_first_str(
+        core.get("sku"),
+        core.get("sku_id"),
         product.get("sku") if isinstance(product, dict) else "",
+        product.get("sku_id") if isinstance(product, dict) else "",
+        row.get("sku"),
+    )
+    article = _pick_first_str(
+        offer_id,
+        sku_text,
+        product_id,
         mapped.get("article"),
     )
+    sku_num = _to_int(sku_text)
     barcode = _pick_first_str(
         core.get("barcode"),
         product.get("barcode") if isinstance(product, dict) else "",
@@ -3703,7 +3775,11 @@ def _normalize_ozon_question_row(
         "created_at": created,
         "product": product_name or "Товар Ozon",
         "article": article,
+        "product_id": product_id,
+        "offer_id": offer_id,
+        "external_id": product_id or article,
         "barcode": barcode,
+        "sku": sku_num,
         "stars": stars,
         "text": text,
         "user": user_name,
@@ -4555,6 +4631,8 @@ def _extract_product_knowledge_context(prompt: str, max_chars: int = 4200) -> st
 
 def _client_asks_catalog_article(text: str) -> bool:
     low = _repair_mojibake_text(text).lower()
+    if len(re.findall(r"\d{2,4}(?:[x\u0445/]\d{2,4})?|\d+[.,]\d+", low, flags=re.IGNORECASE)) >= 2:
+        return True
     markers = (
         "артикул",
         "подберите",
@@ -4601,21 +4679,93 @@ def _extract_catalog_market_articles(prompt: str, marketplace: str) -> list[str]
     return values
 
 
+def _extract_catalog_identifiers(prompt: str, marketplace: str) -> set[str]:
+    text = str(prompt or "")
+    values = set(_extract_catalog_market_articles(text, marketplace))
+    patterns = (
+        r"артикул продавца:\s*([A-Za-zА-Яа-яЁё0-9_./-]+)",
+        r"external_id:\s*([A-Za-zА-Яа-яЁё0-9_./-]+)",
+        r"SKU:\s*([A-Za-zА-Яа-яЁё0-9_./-]+)",
+        r"sku:\s*([A-Za-zА-Яа-яЁё0-9_./-]+)",
+    )
+    for pattern in patterns:
+        for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+            value = match.group(1).strip(".,;:")
+            if value:
+                values.add(value)
+    return values
+
+
+def _extract_answer_identifier_claims(answer: str) -> list[str]:
+    text = str(answer or "")
+    patterns = (
+        r"(?:артикул(?:\s+(?:WB|Ozon|товара|продавца))?|product[_\s-]?id|nm\s*id|nmID|SKU|код товара|номер товара)\s*[:№#-]?\s*([A-Za-zА-Яа-яЁё0-9_./-]{3,})",
+    )
+    values: list[str] = []
+    seen: set[str] = set()
+    for pattern in patterns:
+        for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+            value = match.group(1).strip(".,;:").lower()
+            if value and value not in seen:
+                seen.add(value)
+                values.append(value)
+    return values
+
+
+def _strip_article_claim_sentences(answer: str) -> str:
+    text = sanitize_marketplace_reply_text(answer)
+    if not text:
+        return ""
+    chunks = re.split(r"(?<=[.!?])\s+", text)
+    kept: list[str] = []
+    marker_re = re.compile(r"(артикул|product[_\s-]?id|nm\s*id|nmID|SKU|код товара|номер товара)", re.IGNORECASE)
+    for chunk in chunks:
+        clean = chunk.strip()
+        if not clean:
+            continue
+        if marker_re.search(clean):
+            continue
+        kept.append(clean)
+    return sanitize_marketplace_reply_text(" ".join(kept))
+
+
+def _safe_uncertain_catalog_reply(client_text: str) -> str:
+    numbers = re.findall(r"\d{2,4}(?:[xх/]\d{2,4})?|\d+[.,]\d+", str(client_text or ""), flags=re.IGNORECASE)
+    size_hint = f" по размерам {' и '.join(dict.fromkeys(numbers))}" if numbers else ""
+    return (
+        f"Точное совпадение{size_hint} в найденных данных не подтверждено. "
+        "Пожалуйста, уточните нужный диаметр, размер юбки и условия монтажа, чтобы мы подсказали точный вариант."
+    )
+
+
 def _ensure_catalog_article_in_reply(answer: str, prompt: str, client_text: str, *, marketplace: str) -> str:
     clean_answer = sanitize_marketplace_reply_text(answer)
     prompt_text = str(prompt or "")
-    if not clean_answer or "Контекст из модуля товаров SEO WIBE." not in prompt_text:
+    has_catalog_context = "Контекст из модуля товаров SEO WIBE." in prompt_text
+    if not clean_answer:
         return clean_answer
-    if "точное совпадение не подтверждено" in prompt_text.lower():
+    if not has_catalog_context:
+        if _client_asks_catalog_article(client_text) and _extract_answer_identifier_claims(clean_answer):
+            return sanitize_marketplace_reply_text(_safe_uncertain_catalog_reply(client_text))
         return clean_answer
     if not _client_asks_catalog_article(client_text):
         return clean_answer
-    if any(article and article in clean_answer for article in _extract_catalog_market_articles(prompt_text, marketplace)):
+    prompt_low = prompt_text.lower()
+    if "точное совпадение не подтверждено" in prompt_low:
+        return sanitize_marketplace_reply_text(_safe_uncertain_catalog_reply(client_text))
+
+    allowed_ids = {item.lower() for item in _extract_catalog_identifiers(prompt_text, marketplace) if item}
+    bad_claims = [claim for claim in _extract_answer_identifier_claims(clean_answer) if claim.lower() not in allowed_ids]
+    if bad_claims:
+        clean_answer = _strip_article_claim_sentences(clean_answer) or "Нашли подходящий вариант в нашем каталоге."
+
+    clean_answer_low = clean_answer.lower()
+    if any(article and article.lower() in clean_answer_low for article in _extract_catalog_market_articles(prompt_text, marketplace)):
         return clean_answer
     article_label, article = _extract_first_catalog_market_article(prompt_text, marketplace)
-    if not article or article in clean_answer:
+    if not article or article.lower() in clean_answer_low:
         return clean_answer
-    suffix = f" Подходящий вариант из каталога: {article_label} {article}."
+    suffix = f" Подходящий вариант из нашего каталога: {article_label} {article}."
     return sanitize_marketplace_reply_text(f"{clean_answer.rstrip('.')}." + suffix)
 
 
@@ -4645,6 +4795,11 @@ def _build_reply_hard_rules(
         rules.append(
             "- Текущий товар не определен. ЗАПРЕЩЕНО отвечать 'да, подойдет' или 'нет, не подойдет'. "
             "Ответь осторожно: нужно сверить точные характеристики в карточке товара, например размер, материал, внутренний диаметр и условия монтажа."
+        )
+    if safe_kind == "question" and not has_product_knowledge_context:
+        rules.append(
+            "- Если в контексте товаров нет конкретной карточки, ЗАПРЕЩЕНО называть артикулы, product_id, nmID, SKU, штрихкоды "
+            "или другие номера товаров. Не подбирай товар по памяти и не используй артикулы не из нашей базы."
         )
     if safe_kind == "question" and has_product_knowledge_context:
         rules.append(

@@ -3424,7 +3424,19 @@ def wb_generate_reply(payload: GenerateReviewReplyIn, user: User = Depends(get_c
     ensure_module_enabled(db, user, "wb_reviews_ai")
     settings_row = _get_or_create_ai_settings(db, user.id)
     runtime = _resolve_user_ai_runtime(db, user.id)
-    query_text = f"{payload.product_name} {payload.review_text} {payload.reviewer_name}"
+    query_text = " ".join(
+        str(part or "").strip()
+        for part in (
+            payload.product_name,
+            payload.product_article,
+            payload.product_id,
+            payload.offer_id,
+            payload.sku,
+            payload.review_text,
+            payload.reviewer_name,
+        )
+        if str(part or "").strip()
+    )
     ensure_feedback_learning_profile(db, int(user.id), "review", allow_inline=True)
     learned_ctx = compose_feedback_learning_prompt(
         db,
@@ -3628,7 +3640,19 @@ def ozon_generate_reply(payload: GenerateReviewReplyIn, user: User = Depends(get
     ensure_module_enabled(db, user, "wb_reviews_ai")
     settings_row = _get_or_create_ai_settings(db, user.id)
     runtime = _resolve_user_ai_runtime(db, user.id)
-    query_text = f"{payload.product_name} {payload.review_text} {payload.reviewer_name}"
+    query_text = " ".join(
+        str(part or "").strip()
+        for part in (
+            payload.product_name,
+            payload.product_article,
+            payload.product_id,
+            payload.offer_id,
+            payload.sku,
+            payload.review_text,
+            payload.reviewer_name,
+        )
+        if str(part or "").strip()
+    )
     ensure_feedback_learning_profile(db, int(user.id), "review", allow_inline=True)
     learned_ctx = compose_feedback_learning_prompt(
         db,
@@ -3851,7 +3875,19 @@ def wb_generate_question_reply(payload: GenerateReviewReplyIn, user: User = Depe
     ensure_module_enabled(db, user, "wb_questions_ai")
     settings_row = _get_or_create_question_ai_settings(db, user.id)
     runtime = _resolve_user_ai_runtime(db, user.id)
-    query_text = f"{payload.product_name} {payload.review_text} {payload.reviewer_name}"
+    query_text = " ".join(
+        str(part or "").strip()
+        for part in (
+            payload.product_name,
+            payload.product_article,
+            payload.product_id,
+            payload.offer_id,
+            payload.sku,
+            payload.review_text,
+            payload.reviewer_name,
+        )
+        if str(part or "").strip()
+    )
     ensure_feedback_learning_profile(db, int(user.id), "question", allow_inline=True)
     learned_ctx = compose_feedback_learning_prompt(
         db,
@@ -4051,7 +4087,19 @@ def ozon_generate_question_reply(payload: GenerateReviewReplyIn, user: User = De
     ensure_module_enabled(db, user, "wb_questions_ai")
     settings_row = _get_or_create_question_ai_settings(db, user.id)
     runtime = _resolve_user_ai_runtime(db, user.id)
-    query_text = f"{payload.product_name} {payload.review_text} {payload.reviewer_name}"
+    query_text = " ".join(
+        str(part or "").strip()
+        for part in (
+            payload.product_name,
+            payload.product_article,
+            payload.product_id,
+            payload.offer_id,
+            payload.sku,
+            payload.review_text,
+            payload.reviewer_name,
+        )
+        if str(part or "").strip()
+    )
     ensure_feedback_learning_profile(db, int(user.id), "question", allow_inline=True)
     learned_ctx = compose_feedback_learning_prompt(
         db,

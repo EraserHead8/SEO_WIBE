@@ -4915,6 +4915,10 @@ function normalizeFeedbackRow(rawRow, rowType, idx, marketplace) {
     created_at: normalizeFeedbackText(rawRow.created_at || rawRow.date || ""),
     product: normalizeFeedbackText(rawRow.product || ""),
     article: normalizeFeedbackText(rawRow.article || ""),
+    product_id: normalizeFeedbackText(rawRow.product_id || rawRow.productId || ""),
+    offer_id: normalizeFeedbackText(rawRow.offer_id || rawRow.offerId || ""),
+    external_id: normalizeFeedbackText(rawRow.external_id || rawRow.externalId || ""),
+    sku: rawRow.sku ?? null,
     barcode: normalizeFeedbackText(rawRow.barcode || ""),
     text: normalizeFeedbackText(rawRow.text || ""),
     answer: normalizeFeedbackText(rawRow.answer || ""),
@@ -6130,6 +6134,10 @@ async function generateQuestionReply(questionId) {
         body: JSON.stringify({
           review_text: row.text || "",
           product_name: row.product || "",
+          product_article: row.article || "",
+          product_id: row.product_id || row.productId || row.external_id || "",
+          offer_id: row.offer_id || row.offerId || "",
+          sku: row.sku || "",
           reviewer_name: row.user || "",
           stars: null,
         }),
@@ -6164,16 +6172,14 @@ async function sendQuestionReply(questionId) {
   if (!text) return alert(tr("Введите или сгенерируйте текст ответа", "Enter or generate reply text"));
   const payload = { id: questionIdText, text };
   if (currentQuestionMarketplace === "wb") {
-    const state = String(row?.state || "").trim();
-    if (state) payload.state = state;
+    payload.state = "wbRu";
   } else if (currentQuestionMarketplace === "ozon") {
-    const skuNum = Number(row?.sku || 0);
-    if (Number.isFinite(skuNum) && skuNum > 0) {
-      payload.sku = Math.trunc(skuNum);
-    } else {
-      const articleSku = Number(String(row?.article || "").trim());
-      if (Number.isFinite(articleSku) && articleSku > 0) {
-        payload.sku = Math.trunc(articleSku);
+    const skuCandidates = [row?.sku, row?.product_id, row?.productId, row?.external_id, row?.externalId, row?.article];
+    for (const rawSku of skuCandidates) {
+      const skuNum = Number(String(rawSku || "").trim());
+      if (Number.isFinite(skuNum) && skuNum > 0) {
+        payload.sku = Math.trunc(skuNum);
+        break;
       }
     }
     if (!payload.sku) {

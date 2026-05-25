@@ -315,6 +315,9 @@ class WbReviewOut(BaseModel):
     created_at: str
     product: str
     article: str
+    product_id: str = ""
+    offer_id: str = ""
+    external_id: str = ""
     barcode: str = ""
     state: str = ""
     sku: int | None = None
@@ -381,6 +384,10 @@ class ReviewAiSettingsOut(BaseModel):
 class GenerateReviewReplyIn(BaseModel):
     review_text: str = ""
     product_name: str = ""
+    product_article: str | int | None = ""
+    product_id: str | int | None = ""
+    offer_id: str | int | None = ""
+    sku: str | int | None = None
     reviewer_name: str = ""
     stars: int | None = None
 
