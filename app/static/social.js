@@ -37,6 +37,7 @@ let socialState = {
   calendarHistoryLayers: [],
   calendarHistoryBound: false,
   calendarHistoryClosingAll: false,
+  calendarEventSaveInFlight: false,
   notes: [],
   currentNoteId: 0,
   noteSaveTimer: null,
@@ -1863,6 +1864,7 @@ function resetSocialState() {
     calendarHistoryLayers: [],
     calendarHistoryBound: false,
     calendarHistoryClosingAll: false,
+    calendarEventSaveInFlight: false,
     notes: [],
     currentNoteId: 0,
     noteSaveTimer: null,
@@ -6597,17 +6599,25 @@ function socialCalendarCollapseHistoryToRoot() {
   if (!stack.length) {
     socialCloseModal({ force: true });
     socialHideCalendarDaySheet(true);
+    socialState.calendarGestureStackActive = false;
     return;
   }
-  socialState.calendarHistoryClosingAll = true;
-  try {
-    window.history?.go?.(-stack.length);
-    return;
-  } catch (_) {}
+  const depth = stack.length;
   stack.splice(0, stack.length);
-  socialState.calendarHistoryClosingAll = false;
   socialCloseModal({ force: true });
   socialHideCalendarDaySheet(true);
+  socialState.calendarGestureStackActive = false;
+  socialState.calendarHistoryClosingAll = true;
+  window.setTimeout?.(() => {
+    if (socialState.calendarHistoryClosingAll) {
+      socialState.calendarHistoryClosingAll = false;
+    }
+  }, 1200);
+  try {
+    window.history?.go?.(-depth);
+    return;
+  } catch (_) {}
+  socialState.calendarHistoryClosingAll = false;
 }
 
 function socialSetCalendarDaySheetOpen(open) {
@@ -7998,7 +8008,7 @@ async function socialOpenCalendarModal(eventId = 0, options = {}) {
         </div>
       </div>
       <div class="actions social-calendar-edit-footer">
-        <button type="button" onclick="socialSaveEvent(${safeEventId})">${row ? tr("\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c", "Save") : tr("\u0421\u043e\u0437\u0434\u0430\u0442\u044c", "Create")}</button>
+        <button id="socialEventSaveBtn" type="button" onclick="socialSaveEvent(${safeEventId})">${row ? tr("\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c", "Save") : tr("\u0421\u043e\u0437\u0434\u0430\u0442\u044c", "Create")}</button>
       </div>
     `
   );
@@ -8009,6 +8019,7 @@ async function socialOpenCalendarModal(eventId = 0, options = {}) {
 }
 
 async function socialSaveEvent(eventId = 0) {
+  if (socialState.calendarEventSaveInFlight) return;
   const startAt = String(document.getElementById("socialEventStart")?.value || "").trim();
   const endAt = String(document.getElementById("socialEventEnd")?.value || "").trim();
   const recurrenceKind = String(document.getElementById("socialEventRecurrenceKind")?.value || "none").trim().toLowerCase();
@@ -8035,17 +8046,41 @@ async function socialSaveEvent(eventId = 0) {
     alert(tr("\u0412\u0440\u0435\u043c\u044f \u043e\u043a\u043e\u043d\u0447\u0430\u043d\u0438\u044f \u043d\u0435 \u043c\u043e\u0436\u0435\u0442 \u0431\u044b\u0442\u044c \u0440\u0430\u043d\u044c\u0448\u0435 \u043d\u0430\u0447\u0430\u043b\u0430", "End time cannot be earlier than start time"));
     return;
   }
-  const requestPromise = eventId > 0
-    ? socialRequest(`/api/social/calendar/events/${Number(eventId)}`, { method: "PUT", body: JSON.stringify(payload) })
-    : socialRequest("/api/social/calendar/events", { method: "POST", body: JSON.stringify(payload) });
-  const saved = await requestPromise.catch((e) => {
-    alert(e.message);
-    return null;
-  });
-  if (!saved) return;
+  const saveBtn = document.getElementById("socialEventSaveBtn");
+  const previousText = String(saveBtn?.textContent || "").trim();
+  socialState.calendarEventSaveInFlight = true;
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = tr("\u0421\u043e\u0445\u0440\u0430\u043d\u044f\u044e...", "Saving...");
+  }
+  let saved = null;
+  try {
+    saved = eventId > 0
+      ? await socialRequest(`/api/social/calendar/events/${Number(eventId)}`, { method: "PUT", body: JSON.stringify(payload), timeoutMs: 12000 })
+      : await socialRequest("/api/social/calendar/events", { method: "POST", body: JSON.stringify(payload), timeoutMs: 12000 });
+  } catch (e) {
+    alert(e?.message || tr("\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0441\u043e\u0431\u044b\u0442\u0438\u0435", "Failed to save event"));
+  }
+  if (!saved) {
+    socialState.calendarEventSaveInFlight = false;
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = previousText || tr("\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c", "Save");
+    }
+    return;
+  }
   socialState.calendarSelectedDay = socialCalendarDayKey(saved?.start_at || payload.start_at) || socialState.calendarSelectedDay;
   socialCalendarCollapseHistoryToRoot();
-  await socialLoadCalendar();
+  try {
+    await socialLoadCalendar();
+  } catch (_) {}
+  socialState.calendarEventSaveInFlight = false;
+  if (typeof socialShowToast === "function") {
+    socialShowToast(
+      tr("\u0421\u043e\u0431\u044b\u0442\u0438\u0435 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u043e", "Event saved"),
+      saved?.is_public ? tr("\u0412\u0438\u0434\u043d\u043e \u0432\u0441\u0435\u043c", "Visible to everyone") : tr("\u041b\u0438\u0447\u043d\u043e\u0435", "Private")
+    );
+  }
 }
 
 async function socialDeleteEvent(eventId) {
