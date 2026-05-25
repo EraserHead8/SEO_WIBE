@@ -7255,8 +7255,8 @@ function socialOpenCalendarDaySheet(dayKey) {
         ${cards.join("") || `<div class="hint">${escapeHtml(tr("\u041d\u0430 \u044d\u0442\u043e\u0442 \u0434\u0435\u043d\u044c \u0437\u0430\u043f\u0438\u0441\u0435\u0439 \u043d\u0435\u0442.", "No records for this day."))}</div>`}
       </div>
       <div class="sw-day-sheet-foot">
-        <button type="button" class="sw-day-sheet-add" onclick="socialOpenCalendarQuickAddMenu()">${escapeHtml(tr(`Добавить на ${shortDateLabel}`, `Add on ${shortDateLabel}`))}</button>
-        <button type="button" class="social-calendar-fab social-calendar-fab-mini" aria-label="${escapeHtml(tr("Добавить", "Add"))}" title="${escapeHtml(tr("Добавить", "Add"))}" onclick="socialOpenCalendarQuickAddMenu()">+</button>
+        <button type="button" class="sw-day-sheet-add" onclick="socialOpenCalendarQuickAddMenu({ dayKey: '${safeDayKey}' })">${escapeHtml(tr(`Добавить на ${shortDateLabel}`, `Add on ${shortDateLabel}`))}</button>
+        <button type="button" class="social-calendar-fab social-calendar-fab-mini" aria-label="${escapeHtml(tr("Добавить", "Add"))}" title="${escapeHtml(tr("Добавить", "Add"))}" onclick="socialOpenCalendarQuickAddMenu({ dayKey: '${safeDayKey}' })">+</button>
       </div>
     </section>
   `;
@@ -7269,14 +7269,14 @@ function socialOpenCalendarDaySheet(dayKey) {
   const addBtn = sheet.querySelector(".sw-day-sheet-add");
   if (addBtn) {
     addBtn.textContent = tr(`Добавить на ${shortDateLabel}`, `Add on ${shortDateLabel}`);
-    addBtn.setAttribute("onclick", "socialOpenCalendarQuickAddMenu()");
+    addBtn.setAttribute("onclick", `socialOpenCalendarQuickAddMenu({ dayKey: '${safeDayKey}' })`);
   }
   const fabMini = sheet.querySelector(".social-calendar-fab-mini");
   if (fabMini) {
     fabMini.textContent = "+";
     fabMini.setAttribute("aria-label", tr("Добавить", "Add"));
     fabMini.setAttribute("title", tr("Добавить", "Add"));
-    fabMini.setAttribute("onclick", "socialOpenCalendarQuickAddMenu()");
+    fabMini.setAttribute("onclick", `socialOpenCalendarQuickAddMenu({ dayKey: '${safeDayKey}' })`);
   }
   backdrop.classList.remove("hidden");
   sheet.classList.remove("hidden");
@@ -7304,9 +7304,14 @@ function socialEnsureCalendarFab() {
 
 function socialOpenCalendarQuickAddMenu(options = {}) {
   const opts = options && typeof options === "object" ? options : {};
+  const rawRequestedDay = String(opts.dayKey || socialState.calendarSelectedDay || "").trim();
+  const requestedDay = /^\d{4}-\d{2}-\d{2}$/.test(rawRequestedDay) ? rawRequestedDay : "";
+  if (requestedDay) {
+    socialState.calendarSelectedDay = requestedDay;
+  }
   if (!opts.skipHistory) {
     socialCalendarPushHistoryLayer("quick-add", {
-      dayKey: String(socialState.calendarSelectedDay || "").trim(),
+      dayKey: requestedDay,
     });
   }
   socialHideCalendarDaySheet(true);
@@ -7314,17 +7319,21 @@ function socialOpenCalendarQuickAddMenu(options = {}) {
     tr("\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c", "Add"),
     `
       <div class="sw-calendar-quick-menu">
-        <button type="button" onclick="socialCalendarQuickCreate('event')">${escapeHtml(tr("\u0421\u043e\u0431\u044b\u0442\u0438\u0435", "Event"))}</button>
-        <button type="button" onclick="socialCalendarQuickCreate('reminder')">${escapeHtml(tr("\u041d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u0435", "Reminder"))}</button>
-        <button type="button" onclick="socialCalendarQuickCreate('task')">${escapeHtml(tr("\u0417\u0430\u0434\u0430\u0447\u0430", "Task"))}</button>
+        <button type="button" onclick="socialCalendarQuickCreate('event', '${escapeHtml(requestedDay)}')">${escapeHtml(tr("\u0421\u043e\u0431\u044b\u0442\u0438\u0435", "Event"))}</button>
+        <button type="button" onclick="socialCalendarQuickCreate('reminder', '${escapeHtml(requestedDay)}')">${escapeHtml(tr("\u041d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u0435", "Reminder"))}</button>
+        <button type="button" onclick="socialCalendarQuickCreate('task', '${escapeHtml(requestedDay)}')">${escapeHtml(tr("\u0417\u0430\u0434\u0430\u0447\u0430", "Task"))}</button>
       </div>
     `
   );
 }
 
-function socialCalendarQuickCreate(kind) {
+function socialCalendarQuickCreate(kind, dayKey = "") {
   const mode = String(kind || "event").trim().toLowerCase();
-  const selectedDay = String(socialState.calendarSelectedDay || "").trim();
+  const rawSelectedDay = String(dayKey || socialState.calendarSelectedDay || "").trim();
+  const selectedDay = /^\d{4}-\d{2}-\d{2}$/.test(rawSelectedDay) ? rawSelectedDay : "";
+  if (selectedDay) {
+    socialState.calendarSelectedDay = selectedDay;
+  }
   socialCloseModal({ force: true });
   if (mode === "task") {
     if (typeof switchSocialSubtab === "function") switchSocialSubtab("tasks", true);
@@ -7907,7 +7916,12 @@ async function socialOpenCalendarModal(eventId = 0, options = {}) {
     }
   }
 
-  const selectedDay = String(socialState.calendarSelectedDay || socialCalendarDayKey(new Date()) || socialCalendarDayKey(new Date())).trim();
+  const rawRequestedDay = String(opts.dayKey || "").trim();
+  const requestedDay = /^\d{4}-\d{2}-\d{2}$/.test(rawRequestedDay) ? rawRequestedDay : "";
+  const selectedDay = String(requestedDay || socialState.calendarSelectedDay || socialCalendarDayKey(new Date()) || socialCalendarDayKey(new Date())).trim();
+  if (!row && requestedDay) {
+    socialState.calendarSelectedDay = requestedDay;
+  }
   const startValue = socialCalendarDateTimeValue(row?.start_at || `${selectedDay}T09:00`);
   const endValue = socialCalendarDateTimeValue(row?.end_at || `${selectedDay}T10:00`);
   const reminderEnabled = row ? row?.reminder_enabled !== false : true;
@@ -9325,8 +9339,8 @@ function socialOpenCalendarDaySheet(dayKey) {
         ${cards.join("") || `<div class="hint">${escapeHtml(tr("На этот день записей нет.", "No records for this day."))}</div>`}
       </div>
       <div class="sw-day-sheet-foot">
-        <button type="button" class="sw-day-sheet-add" onclick="socialOpenCalendarQuickAddMenu()">${escapeHtml(tr(`Добавить на ${shortDateLabel}`, `Add on ${shortDateLabel}`))}</button>
-        <button type="button" class="social-calendar-fab social-calendar-fab-mini" aria-label="${escapeHtml(tr("Добавить", "Add"))}" title="${escapeHtml(tr("Добавить", "Add"))}" onclick="socialOpenCalendarQuickAddMenu()">+</button>
+        <button type="button" class="sw-day-sheet-add" onclick="socialOpenCalendarQuickAddMenu({ dayKey: '${safeDayKey}' })">${escapeHtml(tr(`Добавить на ${shortDateLabel}`, `Add on ${shortDateLabel}`))}</button>
+        <button type="button" class="social-calendar-fab social-calendar-fab-mini" aria-label="${escapeHtml(tr("Добавить", "Add"))}" title="${escapeHtml(tr("Добавить", "Add"))}" onclick="socialOpenCalendarQuickAddMenu({ dayKey: '${safeDayKey}' })">+</button>
       </div>
     </section>
   `;
@@ -13018,7 +13032,7 @@ socialMaybeStartHooks();
     }
     const addBtn = sheet.querySelector(".sw-day-sheet-add");
     if (addBtn) {
-      addBtn.setAttribute("onclick", "socialOpenCalendarQuickAddMenu()");
+      addBtn.setAttribute("onclick", `socialOpenCalendarQuickAddMenu({ dayKey: '${safeDayKey}' })`);
       try { addBtn.removeAttribute("title"); } catch (_) {}
     }
     const miniFab = sheet.querySelector(".social-calendar-fab-mini");

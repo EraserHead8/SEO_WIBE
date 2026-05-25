@@ -5351,8 +5351,8 @@ window.__seoWibeSamsungCalendarController = "v4";
           ${cards.join("") || `<div class="hint">${escHtml(trText("На этот день записей нет.", "No records for this day."))}</div>`}
         </div>
         <div class="sw-day-sheet-foot">
-          <button type="button" class="sw-day-sheet-add" onclick="socialOpenCalendarQuickAddMenu()">${escHtml(trText(`Добавить на ${shortDateLabel}`, `Add on ${shortDateLabel}`))}</button>
-          <button type="button" class="social-calendar-fab social-calendar-fab-mini" aria-label="${escHtml(trText("Добавить", "Add"))}" onclick="socialOpenCalendarQuickAddMenu()">+</button>
+          <button type="button" class="sw-day-sheet-add" onclick="socialOpenCalendarQuickAddMenu({ dayKey: '${safeDayKey}' })">${escHtml(trText(`Добавить на ${shortDateLabel}`, `Add on ${shortDateLabel}`))}</button>
+          <button type="button" class="social-calendar-fab social-calendar-fab-mini" aria-label="${escHtml(trText("Добавить", "Add"))}" onclick="socialOpenCalendarQuickAddMenu({ dayKey: '${safeDayKey}' })">+</button>
         </div>
       </section>
     `;
