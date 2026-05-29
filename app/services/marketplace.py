@@ -2186,8 +2186,14 @@ def _photo_identity_key(value: str) -> str:
     except Exception:
         return normalized.lower()
     path = str(parsed.path or "")
-    # WB/Ozon often return same image in tm/cXXX/big variants; collapse to one identity.
-    path = re.sub(r"/(tm|small|preview|big|orig|x1|x2|c\d+x\d+)/", "/", path, flags=re.IGNORECASE)
+    # WB/Ozon CDNs often expose one source image through size folders
+    # (big/c516x688/tm/wc1000/wc50/etc.); collapse those to one identity.
+    path = re.sub(
+        r"/(tm|small|preview|big|orig|x1|x2|c\d+x\d+|wc\d+(?:x\d+)?|w\d+h\d+|w\d+|h\d+|\d+x\d+)/",
+        "/",
+        path,
+        flags=re.IGNORECASE,
+    )
     path = re.sub(r"/+", "/", path).rstrip("/")
     return f"{parsed.netloc.lower()}{path.lower()}"
 
@@ -2196,9 +2202,17 @@ def _photo_variant_score(value: str) -> int:
     low = str(value or "").lower()
     score = 0
     if "/orig/" in low or "/big/" in low:
-        score += 300
-    if re.search(r"/c\d+x\d+/", low):
-        score += 220
+        score += 6000
+    best_dimension = 0
+    for match in re.finditer(r"/(?:c|wc)(\d+)(?:x(\d+))?/", low):
+        best_dimension = max(best_dimension, int(match.group(1) or 0), int(match.group(2) or 0))
+    for match in re.finditer(r"/w(\d+)h(\d+)/", low):
+        best_dimension = max(best_dimension, int(match.group(1) or 0), int(match.group(2) or 0))
+    for match in re.finditer(r"/[wh](\d+)/", low):
+        best_dimension = max(best_dimension, int(match.group(1) or 0))
+    for match in re.finditer(r"/(\d+)x(\d+)/", low):
+        best_dimension = max(best_dimension, int(match.group(1) or 0), int(match.group(2) or 0))
+    score += min(best_dimension, 5000)
     if "/x2/" in low:
         score += 180
     if "/x1/" in low:

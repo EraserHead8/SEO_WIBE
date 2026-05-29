@@ -6937,7 +6937,12 @@ def _product_photo_identity_key(value: str | None) -> str:
     except Exception:
         return normalized.lower()
     path = str(parsed.path or "")
-    path = re.sub(r"/(tm|small|preview|big|orig|x1|x2|c\d+x\d+)/", "/", path, flags=re.IGNORECASE)
+    path = re.sub(
+        r"/(tm|small|preview|big|orig|x1|x2|c\d+x\d+|wc\d+(?:x\d+)?|w\d+h\d+|w\d+|h\d+|\d+x\d+)/",
+        "/",
+        path,
+        flags=re.IGNORECASE,
+    )
     path = re.sub(r"/+", "/", path).rstrip("/")
     return f"{parsed.netloc.lower()}{path.lower()}"
 
@@ -6946,9 +6951,17 @@ def _product_photo_quality(value: str | None) -> int:
     low = str(value or "").lower()
     score = 0
     if "/orig/" in low or "/big/" in low:
-        score += 300
-    if re.search(r"/c\d+x\d+/", low):
-        score += 220
+        score += 6000
+    best_dimension = 0
+    for match in re.finditer(r"/(?:c|wc)(\d+)(?:x(\d+))?/", low):
+        best_dimension = max(best_dimension, int(match.group(1) or 0), int(match.group(2) or 0))
+    for match in re.finditer(r"/w(\d+)h(\d+)/", low):
+        best_dimension = max(best_dimension, int(match.group(1) or 0), int(match.group(2) or 0))
+    for match in re.finditer(r"/[wh](\d+)/", low):
+        best_dimension = max(best_dimension, int(match.group(1) or 0))
+    for match in re.finditer(r"/(\d+)x(\d+)/", low):
+        best_dimension = max(best_dimension, int(match.group(1) or 0), int(match.group(2) or 0))
+    score += min(best_dimension, 5000)
     if "/x2/" in low:
         score += 180
     if "/x1/" in low:
@@ -7414,7 +7427,7 @@ def product_details(
         detail_cache_key = build_market_cache_key(
             {
                 "kind": "product_details",
-                "parser_rev": 2,
+                "parser_rev": 3,
                 "product_id": int(product.id),
                 "marketplace": str(product.marketplace or "").strip().lower(),
                 "article": str(product.article or "").strip(),
@@ -9134,8 +9147,8 @@ def accounting_data(
                     str(int(row.id)),
                     _normalize_accounting_marketplace(row.marketplace),
                     f"{float(round(row.amount or 0.0, 2)):.2f}",
-                    row.period_from.isoformat(),
-                    row.period_to.isoformat(),
+                    _to_iso_or_none(row.start_date) or "",
+                    _to_iso_or_none(row.end_date) or "",
                     "1" if bool(row.is_active) else "0",
                     row.updated_at.isoformat() if row.updated_at else "",
                 ]
@@ -9389,8 +9402,8 @@ def accounting_monthly_summary(
                     str(int(row.id)),
                     _normalize_accounting_marketplace(row.marketplace),
                     f"{float(round(row.amount or 0.0, 2)):.2f}",
-                    row.period_from.isoformat(),
-                    row.period_to.isoformat(),
+                    _to_iso_or_none(row.start_date) or "",
+                    _to_iso_or_none(row.end_date) or "",
                     "1" if bool(row.is_active) else "0",
                     row.updated_at.isoformat() if row.updated_at else "",
                 ]

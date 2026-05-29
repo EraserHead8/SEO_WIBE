@@ -1,6 +1,8 @@
 import json
 import logging
+import re
 import time
+from urllib.parse import urlsplit
 
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.exc import OperationalError
@@ -86,11 +88,165 @@ def _run_sqlite_backfill_best_effort(label: str, statement: str) -> bool:
         raise
 
 
+def _normalize_product_photo_url(value: str | None) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    if raw.startswith("//"):
+        return f"https:{raw}"
+    malformed_static = re.match(r"^https?://static/(.+)$", raw, flags=re.IGNORECASE)
+    if malformed_static:
+        return f"/static/{str(malformed_static.group(1) or '').lstrip('/')}"
+    if raw.startswith("http://") or raw.startswith("https://"):
+        return raw
+    if raw.startswith("/static/"):
+        return raw
+    if raw.startswith("static/"):
+        return f"/{raw}"
+    if raw.startswith("/"):
+        return raw
+    return f"https://{raw.lstrip('/')}"
+
+
+def _product_photo_identity_key(value: str | None) -> str:
+    normalized = _normalize_product_photo_url(value)
+    if not normalized:
+        return ""
+    try:
+        parsed = urlsplit(normalized)
+    except Exception:
+        return normalized.lower()
+    path = str(parsed.path or "")
+    path = re.sub(
+        r"/(tm|small|preview|big|orig|x1|x2|c\d+x\d+|wc\d+(?:x\d+)?|w\d+h\d+|w\d+|h\d+|\d+x\d+)/",
+        "/",
+        path,
+        flags=re.IGNORECASE,
+    )
+    path = re.sub(r"/+", "/", path).rstrip("/")
+    return f"{parsed.netloc.lower()}{path.lower()}"
+
+
+def _product_photo_quality(value: str | None) -> int:
+    low = str(value or "").lower()
+    score = 0
+    if "/orig/" in low or "/big/" in low:
+        score += 6000
+    best_dimension = 0
+    for match in re.finditer(r"/(?:c|wc)(\d+)(?:x(\d+))?/", low):
+        best_dimension = max(best_dimension, int(match.group(1) or 0), int(match.group(2) or 0))
+    for match in re.finditer(r"/w(\d+)h(\d+)/", low):
+        best_dimension = max(best_dimension, int(match.group(1) or 0), int(match.group(2) or 0))
+    for match in re.finditer(r"/[wh](\d+)/", low):
+        best_dimension = max(best_dimension, int(match.group(1) or 0))
+    for match in re.finditer(r"/(\d+)x(\d+)/", low):
+        best_dimension = max(best_dimension, int(match.group(1) or 0), int(match.group(2) or 0))
+    score += min(best_dimension, 5000)
+    if "/x2/" in low:
+        score += 180
+    if "/x1/" in low:
+        score += 160
+    if "/tm/" in low or "/small/" in low or "/preview/" in low:
+        score += 80
+    if "?" not in low:
+        score += 5
+    return score
+
+
+def _normalize_product_photo_list(values) -> list[str]:
+    if isinstance(values, list):
+        source = values
+    elif values is None:
+        source = []
+    else:
+        source = [values]
+    order: list[str] = []
+    chosen: dict[str, tuple[str, int]] = {}
+    for item in source:
+        normalized = _normalize_product_photo_url(str(item or ""))
+        if not normalized:
+            continue
+        key = _product_photo_identity_key(normalized) or normalized.lower()
+        score = _product_photo_quality(normalized)
+        prev = chosen.get(key)
+        if prev is None:
+            chosen[key] = (normalized, score)
+            order.append(key)
+            continue
+        if score > prev[1]:
+            chosen[key] = (normalized, score)
+    return [chosen[key][0] for key in order if key in chosen]
+
+
+def _product_photo_values(photos_json: str | None, photo_url: str | None) -> list[str]:
+    values: list[str] = []
+    raw_json = str(photos_json or "").strip()
+    if raw_json:
+        try:
+            parsed = json.loads(raw_json)
+        except Exception:
+            parsed = []
+        if isinstance(parsed, list):
+            values.extend([str(x or "") for x in parsed])
+        elif parsed:
+            values.append(str(parsed))
+    if photo_url:
+        values.append(str(photo_url))
+    return values
+
+
+def _run_products_photo_cleanup_best_effort() -> None:
+    try:
+        updates: list[dict[str, str | int]] = []
+        with engine.begin() as conn:
+            conn.execute(text("PRAGMA busy_timeout=1500"))
+            rows = conn.execute(
+                text(
+                    """
+                    SELECT id, photo_url, photos_json
+                    FROM products
+                    WHERE coalesce(photo_url, '') <> ''
+                       OR coalesce(photos_json, '') NOT IN ('', '[]')
+                    """
+                )
+            ).mappings()
+            for row in rows:
+                current_photo = str(row.get("photo_url") or "")
+                current_json = str(row.get("photos_json") or "")
+                has_photo_json = current_json.strip() not in {"", "[]"}
+                cleaned = _normalize_product_photo_list(
+                    _product_photo_values(current_json if has_photo_json else "", current_photo)
+                )
+                next_photo = cleaned[0] if cleaned else ""
+                next_json = json.dumps(cleaned, ensure_ascii=False) if has_photo_json and cleaned else ("[]" if has_photo_json else current_json)
+                if current_photo != next_photo or current_json != next_json:
+                    updates.append(
+                        {
+                            "id": int(row.get("id") or 0),
+                            "photo_url": next_photo[:500],
+                            "photos_json": next_json,
+                        }
+                    )
+            if updates:
+                conn.execute(
+                    text("UPDATE products SET photo_url=:photo_url, photos_json=:photos_json WHERE id=:id"),
+                    updates,
+                )
+        if updates:
+            logger.info("Cleaned duplicate product photos for %s products", len(updates))
+    except OperationalError as exc:
+        if _is_sqlite_locked_error(exc):
+            logger.warning("Skipped product photo cleanup during startup because database is locked")
+            return
+        raise
+
+
 def run_lightweight_migrations():
     if not settings.database_url.startswith("sqlite"):
         return
 
     deferred_backfills: list[tuple[str, str]] = []
+    should_cleanup_product_photos = False
     try:
         with engine.begin() as conn:
             conn.execute(text("PRAGMA busy_timeout=1500"))
@@ -117,6 +273,8 @@ def run_lightweight_migrations():
                 conn.execute(text("ALTER TABLE products ADD COLUMN price_marketing FLOAT DEFAULT 0"))
             if product_cols and "owner_member_id" not in product_cols:
                 conn.execute(text("ALTER TABLE products ADD COLUMN owner_member_id INTEGER"))
+            if product_cols:
+                should_cleanup_product_photos = True
             if product_cols and "photo_url" in product_cols:
                 deferred_backfills.extend([
                     (
@@ -584,6 +742,8 @@ def run_lightweight_migrations():
 
     for label, statement in deferred_backfills:
         _run_sqlite_backfill_best_effort(label, statement)
+    if should_cleanup_product_photos:
+        _run_products_photo_cleanup_best_effort()
 
 def ensure_admin_emails():
     raw = settings.admin_emails or ""

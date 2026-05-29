@@ -10039,6 +10039,67 @@ function normalizeProductDetailValue(value) {
   return "";
 }
 
+function productPhotoIdentityKey(value) {
+  const text = normalizeProductDetailValue(value);
+  if (!text) return "";
+  let parsed = null;
+  try {
+    parsed = new URL(text, window.location.origin);
+  } catch (_) {
+    return text.toLowerCase();
+  }
+  const path = String(parsed.pathname || "")
+    .replace(/\/(tm|small|preview|big|orig|x1|x2|c\d+x\d+|wc\d+(?:x\d+)?|w\d+h\d+|w\d+|h\d+|\d+x\d+)\//gi, "/")
+    .replace(/\/+/g, "/")
+    .replace(/\/$/g, "");
+  return `${String(parsed.host || "").toLowerCase()}${path.toLowerCase()}`;
+}
+
+function productPhotoQuality(value) {
+  const low = String(value || "").toLowerCase();
+  let score = 0;
+  if (low.includes("/orig/") || low.includes("/big/")) score += 6000;
+  let bestDimension = 0;
+  const patterns = [
+    /\/(?:c|wc)(\d+)(?:x(\d+))?\//g,
+    /\/w(\d+)h(\d+)\//g,
+    /\/[wh](\d+)\//g,
+    /\/(\d+)x(\d+)\//g,
+  ];
+  patterns.forEach((pattern) => {
+    let match = pattern.exec(low);
+    while (match) {
+      bestDimension = Math.max(bestDimension, Number(match[1] || 0), Number(match[2] || 0));
+      match = pattern.exec(low);
+    }
+  });
+  score += Math.min(bestDimension, 5000);
+  if (low.includes("/x2/")) score += 180;
+  if (low.includes("/x1/")) score += 160;
+  if (low.includes("/tm/") || low.includes("/small/") || low.includes("/preview/")) score += 80;
+  if (!low.includes("?")) score += 5;
+  return score;
+}
+
+function dedupeProductPhotoUrls(values) {
+  const order = [];
+  const chosen = new Map();
+  (Array.isArray(values) ? values : [values]).forEach((value) => {
+    const text = normalizeProductDetailValue(value);
+    if (!text) return;
+    const key = productPhotoIdentityKey(text) || text.toLowerCase();
+    const score = productPhotoQuality(text);
+    const prev = chosen.get(key);
+    if (!prev) {
+      chosen.set(key, { url: text, score });
+      order.push(key);
+      return;
+    }
+    if (score > prev.score) chosen.set(key, { url: text, score });
+  });
+  return order.map((key) => chosen.get(key)?.url).filter(Boolean);
+}
+
 function getValueByPath(source, path) {
   if (!source || typeof source !== "object") return "";
   const chunks = String(path || "").split(".").filter(Boolean);
@@ -10057,7 +10118,7 @@ function extractProductDetailContext(details, fallbackProduct) {
   const attributesRaw = (details && details.attributes && typeof details.attributes === "object") ? details.attributes : {};
   const photosRaw = Array.isArray(details?.photos) ? details.photos : [];
   const knownPhoto = normalizeProductDetailValue(base.photo_url);
-  const photos = photosRaw.filter((x) => normalizeProductDetailValue(x)).map((x) => String(x));
+  let photos = dedupeProductPhotoUrls(photosRaw);
   if (!photos.length && knownPhoto) photos.push(knownPhoto);
 
   const rawCandidates = [raw];
@@ -10110,13 +10171,7 @@ function extractProductDetailContext(details, fallbackProduct) {
     return out;
   };
   const rawPhotoFallback = collectRawPhotos();
-  for (const url of rawPhotoFallback) {
-    const safe = String(url || "").trim();
-    if (!safe) continue;
-    if (!photos.some((x) => String(x || "").trim().toLowerCase() === safe.toLowerCase())) {
-      photos.push(safe);
-    }
-  }
+  photos = dedupeProductPhotoUrls([...photos, ...rawPhotoFallback]);
 
   const pickAttr = (...keys) => {
     for (const key of keys) {
@@ -10600,7 +10655,7 @@ async function openProductEditModal(productId) {
       tr("Детали карточки недоступны.", "Details are unavailable.")
     );
   }
-  productEditPhotoOrder = Array.isArray(context.photos) ? context.photos.map((x) => String(x || "")).filter(Boolean) : [];
+  productEditPhotoOrder = dedupeProductPhotoUrls(Array.isArray(context.photos) ? context.photos : []);
   productEditDragIndex = -1;
   if (!productEditPhotoOrder.length) {
     const fallbackPhoto = String(base.photo_url || "").trim();
@@ -10642,7 +10697,8 @@ function addProductEditPhoto(photoUrl, options = {}) {
   const clean = String(photoUrl || "").trim();
   if (!clean) return false;
   const current = Array.isArray(productEditPhotoOrder) ? productEditPhotoOrder.slice() : [];
-  const exists = current.some((item) => String(item || "").trim().toLowerCase() === clean.toLowerCase());
+  const cleanKey = productPhotoIdentityKey(clean) || clean.toLowerCase();
+  const exists = current.some((item) => (productPhotoIdentityKey(item) || String(item || "").trim().toLowerCase()) === cleanKey);
   if (exists) return false;
   if (prepend) {
     current.unshift(clean);
